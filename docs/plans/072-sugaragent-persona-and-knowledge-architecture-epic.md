@@ -1,0 +1,106 @@
+# Plan 072 -- SugarAgent Persona + Knowledge Architecture (child epic B of Strategy 001)
+
+Status: Locked (epic-review passed 2026-07-19, 3 rounds) -- stories execute as written in the stated EXECUTION ORDER; deviations need STOP + amendment + re-gate.
+Owner: nikki + claude
+Date: 2026-07-18
+
+Related:
+- Strategy 001 (docs/plans/strategy/001-agentified-npc-language-confluence-strategy.md) -- this is child epic B, the hinge: epics C (memory), E (judge), F (barks) all lean on the persona card and prompt structure built here
+- Plan 071 (foundation repair) -- MUST be complete first: 071.9 makes the gateway typecheckable (this epic extends gateway contracts and its tests ride 071.9's harness), 071.3 removed the embeddings chain, 071.1 gives the test alarm
+- Plan 022 (lore wiki) -- this epic completes 022's intent: the wiki becomes the ONLY authoring surface for character truth
+- Ground truth: 2026-07-18 foundational audit + Strategy 001's settled NPC Knowledge Model (read that section first; this epic implements it verbatim)
+
+---
+
+## Why now
+
+The audit's central finding: the pipeline enforces constraint but starves personality. The entire persona reaching the model today is `"Speak as {npcDisplayName}"` (prompt/template.ts) plus ONE plugin-wide `tone` config string, and at most 3 evidence snippets truncated to 180 chars each (stages/helpers.ts `summarizeEvidence`: `evidencePack.slice(0, 3).map(item => item.text.slice(0, 180))`) -- 540 characters of a rich world, chosen by retrieval scoring roulette. The grounding rules even instruct the model to use the "NPC profile" as grounded context, but no profile is ever passed. This is the structural root of the entertaining-vs-constrained fine line, and it blocks epics C/E/F, which need a persona to remember against, judge against, and bark from.
+
+Industry + research context (from the Strategy 001 sweep): writer-authored persona blocks in the prompt are the universal shipped pattern; persona drift is measurable within ~8 turns and mitigated by re-injection near the END of context; prompt caching makes a large stable persona prefix nearly free (reads ~0.1x) IF the prefix is byte-stable -- which today's prompt is not, because world state (quest/location/task lines) currently lives in the SYSTEM prompt and changes every turn.
+
+## Non-goals
+
+Cross-session memory (epic C). In-game clock / player facts / events (epic D). LLM judge, moderation (epic E). Barks, TTS (epic F). GitHub lore source, ingest durability (Strategy 001 watchlist). No sugarlang changes beyond what the prompt restructure forces (the constraint overlay moves prompt-halves; its content is untouched).
+
+## The NPC Knowledge Model (implemented by this epic; settled in Strategy 001)
+
+One source of truth: the NPC's lore page (`NpcDefinition.lorePageId`). Two access paths, three layers:
+1. Persona card (designated sections, e.g. `## Persona`, `## Voice`) -- whole-section fetch by page id at conversation start -> cached system prompt. Never searched, never truncated.
+2. Core knowledge (rest of the NPC's own page) -- same fetch, same moment -> cached system prompt.
+3. World lore (everything else in the wiki) -- per-turn vector search -> user message as evidence.
+
+What an NPC must ALWAYS know loads deterministically; what it MIGHT need retrieves probabilistically. Secrets never enter the prompt at all (withheld at load/retrieval; quest-stage scoping arrives later).
+
+## Design decisions (made here, epic-review ratifies)
+
+- D1 -- Persona sections STAY in the vector index. Other NPCs' conversations must be able to retrieve this NPC's page as world lore ("who is Maren?" asked of the baker). The owning NPC's redundancy is handled at retrieval instead: when the card is loaded, RetrieveStage EXCLUDES the NPC's own page_id. Today's behavior, stated precisely (review round 1): on every non-location-anchored grounded turn the PRIMARY search is eq-filtered to the NPC's own page (broadening only on zero results); `shouldPinNpcLore` additionally pins one own-page result only when the target is a location page. The inversion therefore flips the PRIMARY targeting (card loaded + non-location anchor -> `ne` own-page filter), not just the pin -- see 072.6.
+- D2 -- Prompt halves are re-drawn along the cache boundary. System prompt = engine identity/output rules + grounding rules + persona card + core knowledge + per-NPC voice directive: byte-stable for the whole session. EVERYTHING that varies per turn moves to the user message: world state lines (quest, location, proximity, task/activity/goal/movement -- today emitted into the system prompt by prompt/builder.ts `buildSharedSystemLines`), the sugarlang overlay (per-turn prescription; today spliced into the system prompt), plan directives, evidence, history, player text. This is a behavior-preserving relocation for the model but THE enabling move for caching.
+- D3 -- Card load failure degrades, never blocks. Missing/unfetchable lore page -> today's behavior (name + tone only) with stage diagnostics `fallbackReason: "persona-unavailable"`; the conversation still runs. A misauthored page must not brick an NPC.
+- D4 -- Per-NPC model override lives on NpcDefinition (authoring surface), not in lore frontmatter. Wiki pages are writer-space; model ids are engine config. Empty = gateway default.
+- D5 -- The plugin-wide `tone` config survives as a GAME-level fallback only; a `## Voice` section on the page wins. (One knob for game vibe, per-character voice where authored.)
+
+## Stories (EXECUTION ORDER)
+
+### 072.1 Lore-page authoring convention + parser contract
+
+Define and document the page contract: frontmatter `id` (exists, from 022 ingest), plus reserved section headings -- `## Persona`, `## Voice` feed the card verbatim; `## Secrets` is EXCLUDED from card, core knowledge, AND ingest (the strategy's secrets invariant, minimum viable form: a place to author unrevealable truths that never enter any prompt or index; quest-stage-gated revelation arrives at epics C/D/E); all other sections of the NPC's page are core knowledge. The authoring doc states plainly: until epic E, everything outside `## Secrets` is potentially player-visible. Designation rules must be pinned against the real splitter (review round 1): the existing `splitLoreSections` splits on ANY heading level (#{1,6}) and emits an implicit "Overview" section for pre-heading content -- define which levels/slugs count as designated sections and where implicit Overview lands (core knowledge). Implement designation as a pure function over the EXISTING parser output (frontmatter + sections with slugs), in the post-071.9 typecheckable gateway source -- one parser, three consumers (ingest chunking, lore/resolve, the card fetch). Unit tests: section designation, missing persona sections (legal -- card is then empty and only core knowledge loads), `## Secrets` exclusion on all three paths, malformed frontmatter, implicit-Overview handling. Exit: designation helper shared by ingest and the fetch path; docs/authoring page describing the convention with one worked example page.
+
+### 072.2 Card fetch rides the EXISTING lore/resolve route (was: new route; re-scoped review round 1)
+
+The gateway ALREADY serves parsed pages: `POST /api/sugaragent/lore/resolve` takes `pageIds[]` and returns per-page `{pageId, title, relativePath, sectionCount, body, sections: [{heading, slug, content}]}` with a `missingPageIds`-in-200 convention, behind the standard auth gate. Its ONE live consumer is sugarlang's compile lore-resolution client (used by preview-boot and editor support); the Studio sugaragent workspace hits only `/lore/status|pages|ingest`, never resolve, and `/lore/pages` exposes only sectionCount (no secrets surface there). Do NOT build a parallel route.
+
+This story shrinks to: (a) apply the 072.1 `## Secrets` exclusion to BOTH the `sections` array AND the `body` field (review round 2: resolve ships the raw page `body` alongside sections; sugarlang's type guard REQUIRES `body` to be a string and SILENTLY filters pages failing the guard -- so stripping sections alone leaks secrets via body, while dropping the body field silently empties sugarlang's scene-lexicon input, the worst failure mode. Strip secrets from both, or recompute `body` from the filtered sections; the field stays present either way); (b) decide where persona/core designation runs -- server-side enrichment of the resolve response vs client-side via the shared 072.1 helper (either is fine; pick in-story; the helper is pure either way); (c) keep the missingPageIds convention (no 404s). Accepted-risk note: this makes full lore pages fetchable by any authed game client by pageId -- already true for resolve's existing consumer; `## Secrets` exclusion is the mitigation until epic E. Unit tests per 071.9's harness: secrets exclusion asserted at BOTH the section level and the body level, sugarlang-guard compatibility (response still validates against the consumer's required shape), designation (if server-side), missing page. Exit: resolve route green in gateway unit tests + docker smoke; zero new routes.
+
+### 072.3 Session-start persona load in sugaragent
+
+New browser-side client (house shape: thin fetch client + provider wrapper, like the two surviving clients) called ONCE from `startSession` before the initial turn, hitting lore/resolve (072.2): fetch the page for `selection.lorePageId`, designate via the 072.1 helper (if client-side per 072.2's choice), store card + core knowledge in provider session state. Degrade per D3 (diagnostics, not failure; a page in `missingPageIds` IS the degraded path). One added round trip before the initial turn is accepted (startSession already awaits the full initial pipeline). No per-turn fetches. Exit: integration test -- persona card text appears VERBATIM in the turn-1 system prompt (asserted via debugLogging diagnostics, the mechanical proxy for "sounds like the page"); page-missing test asserts the degraded path + diagnostics.
+
+### 072.4 Prompt restructure along the cache boundary (D2)
+
+Rework prompt/builder.ts + template.ts (agent-mode-only post-071.2, which deletes buildScriptedPrompt): system prompt = identity/output rules + grounding rules + persona card + core knowledge + voice directive (byte-stable per session); user message gains the relocated world-state block, the sugarlang overlay, AND `MINIMAL_GREETING_INSTRUCTION` (review round 1: it is appended to the SYSTEM lines today and flips between the first-meeting turn and turn 2 -- exactly the boundary where the cache write must pay off; it moves to the user half with the rest). Session-stable items verified fine in the system half: tone (config) and the interactionMode slot (literal "agent"). GenerateStage's context type gains the persona fields; `buildSharedSystemLines` splits into stable/per-turn halves. The grounding rules' "NPC profile" phrase finally refers to something real. minimalGreetingMode keeps suppressing world-state detail (it suppresses the USER-message world block now) but the persona card still loads -- a beginner greeting should still sound like the character. Unit tests: byte-stability MUST span the minimal-greeting turn followed by a normal turn (two identical-context turns would pass vacuously), world state present in user message, overlay in user message. Exit: builder tests green; existing generate-stage tests updated, not weakened.
+
+### 072.5 Gateway generate route: structured system blocks + cache_control
+
+Extend the `/api/sugaragent/generate` contract: KEEP the existing `systemPrompt` string field (sugarlang's teacher/scripted/verify/chunk-extractor calls use the same route with it and stay untouched -- protected by this story's own gateway unit test for the string fallback, which is the real alarm; the 071.1 suite covers only sugaragent's pipeline) and ADD a block-array alternative with a cache breakpoint marker; the gateway maps it to Anthropic `system` content blocks with `cache_control` on the marked block (plain request JSON on the existing raw /v1/messages fetch; no SDK needed).
+
+Cache mechanics stated honestly (review round 1, verified against the current Anthropic docs): minimum cacheable prefix is MODEL-DEPENDENT and silently enforced -- ~1024 tokens (Sonnet 4.5), ~2048 (Sonnet 4.6 tier), ~4096 (Haiku 4.5 tier); shorter prefixes produce `cache_creation_input_tokens: 0` with no error. Our shared identity+grounding rules are ~150-250 tokens, far below every minimum -- so a cross-NPC shared-rules cache tier is ILLUSORY at our prompt sizes. Design accordingly: ONE breakpoint at the end of the full system prompt (rules + card + core knowledge); the cache unit is per-NPC (per model). Pass through the response usage fields (cache_read_input_tokens / cache_creation_input_tokens) so 072.7 can surface them. Gateway unit tests: block mapping, systemPrompt-string fallback, usage passthrough. Exit: turn 2 of a session shows nonzero cache reads against the real gateway (dev smoke; re-verified under the final model default in 072.7 -- see its exit).
+
+### 072.6 Retrieval rebalance: evidence budget + own-page exclusion (D1)
+
+- `summarizeEvidence` stops truncating to 3x180: forward up to `maxEvidenceResults` items with a per-item and total character budget sized for the model tier (config, defaults chosen in-story; the wiki's richness must actually reach the model). Note: maxResults is clamped to 8 in TWO places (browser client normalize + gateway handler) -- the budget work touches both if the ceiling moves; any new config keys sweep settings-schema/gatewayRuntimeConfigKeys deliberately (the cross-validator is one-directional, per 071.3).
+- Invert the PRIMARY own-page targeting (precise per D1): today the primary search eq-filters to the NPC's own page on non-location-anchored turns, broadening on zero results, and pins one own-page result only for location-anchored turns. When the card loaded: primary search uses a `ne` own-page filter (supported by the OpenAI filter schema -- `ComparisonFilter` includes `ne`; the browser-side eq-only `OpenAIVectorStoreFilter` type widens accordingly), and `broadenedBeyondLorePage` retry semantics rework to match. When the card failed to load (D3): keep today's eq-targeting as the fallback. The existing integration test "prefers the NPC lore page during retrieval before broadening" has its premise FLIPPED by this story -- rewrite it for both modes, do not weaken it.
+- Location-anchored lore (area/parent-area lorePageId resolution in RetrieveStage) is unchanged, including its eq filter.
+Exit: RetrieveStage unit tests for both modes (card-loaded vs degraded); evidence character budget visible in diagnostics.
+
+### 072.7 Model defaults + per-NPC override (D4) + cache observability
+
+- Gateway default model moves off `claude-sonnet-4-5` to the current small-fast tier (chosen in-story from live model ids; config override unchanged via `SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL`). Sugarlang is unaffected by the default change: it always sends an explicit model (its own env default).
+- `NpcDefinition` gains an optional agent model override (authoring: the NPC inspector's Lore Binding stack is the natural home; empty = default; normalizeNPCDefinition updated); GenerateStage passes it through the existing request `model` field (already defaulted server-side when empty). Note: model switches and per-NPC overrides each mean SEPARATE model-scoped caches.
+- Turn diagnostics gain cache usage (from 072.5's passthrough) + model id actually used. debugLogging gates remain per 071.8.
+- Cache-minimum interaction (the trap, review round 1): the small-fast tier's minimum cacheable prefix (~4096 tokens) is far above Sonnet 4.5's (~1024) -- an NPC whose rules+card+core total under the minimum SILENTLY stops caching the moment the default flips. The measured cost note must report per-NPC prompt sizes vs the minimum, and whether typical persona pages clear it; if most do not, the in-story model choice weighs a tier with a lower minimum against eating uncached input at small-tier prices (both may be fine -- decide on the measurements).
+- TTL honesty for the cost note: 5-minute cache TTL, ~1.25x write, ~0.1x read -- within a conversation this pays off from turn 2. The cache is prefix-keyed (not conversation-scoped): a new conversation with the same NPC + same model within 5 minutes of last use READS the existing entry; only conversations after a >5-minute gap pay a fresh write. The note measures average LLM turns per conversation (break-even is 2) rather than assuming steady traffic.
+Exit: hero-NPC override verified in an integration test; diagnostics show cache reads + model id; nonzero cache reads RE-VERIFIED under the new default model with a realistically-sized persona page; measured cost-per-turn + prompt-size-vs-minimum table lands in the epic wrap notes.
+
+### 072.8 Persona drift re-injection
+
+Append a compact persona digest near the END of the user message each turn, after history. Rule-based, not an LLM call -- pinned concretely: the first N lines of `## Persona` plus the `## Voice` section (N chosen in-story), computed once at session start alongside the card. Research grounding: drift onset ~8 turns; end-of-context re-injection is the mitigation; the digest lives in the UNCACHED half so it does not disturb 072.4's byte-stability (072.4 owns user-message block ordering; history is currently the last block -- the digest slots after it). Exit: builder unit test (digest present, positioned after history); a manual 15+ turn conversation reads in-character at the tail (verification recipe).
+
+## Verification recipe (nikki)
+
+1. `pnpm test` + `pnpm lint` green.
+2. Author one NPC's lore page with `## Persona` + `## Voice` + a few knowledge sections + a `## Secrets` section; ingest; talk to them in preview: they sound like the page (voice, mannerisms), reference their own life WITHOUT the conversation having to hit lucky retrieval, a 15+ turn conversation stays in character at the tail, and nothing from `## Secrets` ever appears (probe for it directly).
+3. Ask a DIFFERENT NPC about the first one: the answer comes via retrieval (layer 3 still serves cross-NPC lore).
+4. Break it on purpose: point an NPC at a nonexistent lorePageId -- conversation still works in degraded mode (name + game tone), diagnostics say persona-unavailable.
+5. Turn diagnostics on turn 2+: cache reads nonzero; model id is the new default (and the override id on a hero NPC).
+6. A quest-active, mid-placement conversation still shows: quest/location/task context respected (now from the user message) and sugarlang constraint applied (overlay relocated, behavior unchanged).
+
+## Epic wrap
+
+docs/api: plugin page gains the lore-page contract (`## Persona`/`## Voice` convention -> reference the authoring doc), the gateway page-fetch + structured-system routes, and the NpcDefinition model-override field. docs/authoring: the worked persona page example (072.1). Measured cost-per-turn note from 072.7.
+
+## Deferred (with revisit triggers)
+
+- Quest-stage-scoped knowledge gating (the TimeChara problem: an NPC knows different things at different story points): revisit at epic C/D when quest state and memory both feed the card fetch; code comment at the lore/resolve secrets-exclusion site (the fetch is the natural gate point; `## Secrets` from 072.1 is the static precursor of this gate).
+- Persona card caching across sessions browser-side (avoid refetch per conversation): revisit if session-start latency is felt; code comment at the 072.3 client.
+- Sugarlang overlay compression for cache friendliness (the overlay is per-turn by design; if its size ever dominates the uncached half, revisit with sugarlang).
+- Per-NPC voice affecting sugarlang's scripted adaptation (adapted lines could also honor `## Voice`): revisit at epic F alongside barks.
