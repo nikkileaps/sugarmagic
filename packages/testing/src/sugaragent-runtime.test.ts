@@ -27,6 +27,15 @@ function makeDefaultGatewayMock() {
         { status: 200, headers: { "content-type": "application/json" } }
       );
     }
+    // Plan 072.3 — startSession now loads persona via lore/resolve. Default to
+    // "page not found" so the persona degrades (D3) without affecting tests
+    // that don't assert on it.
+    if (url.endsWith("/api/sugaragent/lore/resolve")) {
+      return new Response(
+        JSON.stringify({ ok: true, pages: [], missingPageIds: [] }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
     throw new Error("Unexpected fetch in test: " + url);
   });
 }
@@ -655,5 +664,138 @@ describe("SugarAgent runtime provider", () => {
           ?.Generate?.fallbackReason
       )
     ).toBe("llm-retry-exhausted");
+  });
+
+  // Plan 072.3 — session-start persona load.
+  describe("persona load at session start", () => {
+    type PersonaDiag = {
+      pageId: string | null;
+      loaded: boolean;
+      fallbackReason: string | null;
+      personaSectionCount: number;
+      coreSectionCount: number;
+    };
+
+    function resolvePayloadFor(pageId: string) {
+      return {
+        ok: true,
+        pages: [
+          {
+            pageId,
+            title: "Maren",
+            relativePath: "npc/maren.md",
+            sectionCount: 3,
+            body: "## Persona\n\nWarm.\n\n## Voice\n\nCalls you 'love'.\n\n## Work\n\nBakes.",
+            sections: [
+              { heading: "Persona", slug: "persona", content: "Warm." },
+              { heading: "Voice", slug: "voice", content: "Calls you 'love'." },
+              { heading: "Work", slug: "work", content: "Bakes." }
+            ]
+          }
+        ],
+        missingPageIds: []
+      };
+    }
+
+    it("loads + designates the NPC's page once, hitting lore/resolve with the pageId", async () => {
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.endsWith("/api/sugaragent/lore/resolve")) {
+          return new Response(JSON.stringify(resolvePayloadFor("lore.npc.maren")), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (url.endsWith("/api/sugaragent/retrieve/search")) {
+          return new Response(
+            JSON.stringify({ results: [], requestId: "search-test" }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error("Unexpected fetch in test: " + url);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const host = createConversationHost({
+        providers: [resolveSugarAgentProvider()]
+      });
+      const initialTurn = await host.startSession({
+        conversationKind: "free-form",
+        npcDefinitionId: "npc:maren",
+        npcDisplayName: "Maren",
+        interactionMode: "agent",
+        lorePageId: "lore.npc.maren"
+      });
+
+      const resolveCalls = fetchMock.mock.calls.filter(([request]) =>
+        (typeof request === "string" ? request : request.toString()).endsWith(
+          "/api/sugaragent/lore/resolve"
+        )
+      );
+      expect(resolveCalls).toHaveLength(1);
+      const sentBody = JSON.parse(
+        (resolveCalls[0]?.[1] as RequestInit).body as string
+      );
+      expect(sentBody).toEqual({ pageIds: ["lore.npc.maren"] });
+
+      const persona = (
+        initialTurn?.diagnostics as { persona?: PersonaDiag } | undefined
+      )?.persona;
+      expect(persona).toMatchObject({
+        pageId: "lore.npc.maren",
+        loaded: true,
+        fallbackReason: null,
+        personaSectionCount: 2, // Persona + Voice
+        coreSectionCount: 1 // Work
+      });
+    });
+
+    it("degrades (persona-unavailable) when the page is missing, without failing the turn", async () => {
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.endsWith("/api/sugaragent/lore/resolve")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              pages: [],
+              missingPageIds: ["lore.npc.ghost"]
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.endsWith("/api/sugaragent/retrieve/search")) {
+          return new Response(
+            JSON.stringify({ results: [], requestId: "search-test" }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error("Unexpected fetch in test: " + url);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const host = createConversationHost({
+        providers: [resolveSugarAgentProvider()]
+      });
+      const initialTurn = await host.startSession({
+        conversationKind: "free-form",
+        npcDefinitionId: "npc:ghost",
+        npcDisplayName: "Ghost",
+        interactionMode: "agent",
+        lorePageId: "lore.npc.ghost"
+      });
+
+      // The turn still resolved (degrade, not fail).
+      expect(initialTurn?.text).toBeTruthy();
+      const persona = (
+        initialTurn?.diagnostics as { persona?: PersonaDiag } | undefined
+      )?.persona;
+      expect(persona).toMatchObject({
+        pageId: "lore.npc.ghost",
+        loaded: false,
+        fallbackReason: "persona-unavailable",
+        personaSectionCount: 0,
+        coreSectionCount: 0
+      });
+    });
   });
 });

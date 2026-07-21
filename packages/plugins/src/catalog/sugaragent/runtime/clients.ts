@@ -1,4 +1,11 @@
-import type { RetrievedEvidenceItem } from "./types";
+import type { LoadedPersona, RetrievedEvidenceItem } from "./types";
+// Pure classifier shared with the gateway (ingest) and lore/resolve. It has no
+// node/gateway dependencies, so importing it into the browser runtime is safe;
+// it is the "third consumer" (the card fetch) named in Plan 072.1.
+import {
+  designateLoreSections,
+  type DesignatableLoreSection
+} from "../../../deployment/gateway/lore-designation";
 
 export const OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE = "page_id";
 
@@ -233,5 +240,113 @@ export class SugarAgentGatewayVectorStoreProvider implements VectorStoreProvider
       filters: request.filters ?? undefined
     });
     return response.results;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Plan 072.3 — persona/core knowledge load via the existing lore/resolve route
+// ---------------------------------------------------------------------------
+
+export interface LoreResolveRequest {
+  pageIds: string[];
+}
+
+export interface ResolvedLorePageSection {
+  heading: string;
+  slug: string;
+  content: string;
+}
+
+export interface ResolvedLorePage {
+  pageId: string;
+  title: string;
+  relativePath: string;
+  sectionCount: number;
+  body: string;
+  sections: ResolvedLorePageSection[];
+}
+
+export interface LoreResolveResult {
+  ok: boolean;
+  pages: ResolvedLorePage[];
+  missingPageIds: string[];
+}
+
+/**
+ * Thin fetch client for the gateway's `POST /api/sugaragent/lore/resolve`
+ * (072.2 already excludes `## Secrets` from the response). House shape: baseUrl
+ * + BearerTokenGetter, `authHeaders` + `parseJsonResponse`.
+ */
+export class SugarAgentGatewayLoreClient {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly getBearerToken: BearerTokenGetter = async () => null
+  ) {}
+
+  async resolve(request: LoreResolveRequest): Promise<LoreResolveResult> {
+    const response = await fetch(
+      `${normalizeBaseUrl(this.baseUrl)}/api/sugaragent/lore/resolve`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeaders(this.getBearerToken))
+        },
+        body: JSON.stringify(request)
+      }
+    );
+
+    return parseJsonResponse<LoreResolveResult>(
+      response,
+      "SugarAgent gateway lore resolve"
+    );
+  }
+}
+
+export interface PersonaLoader {
+  /** Resolve + designate the NPC's page. Null/empty id -> degraded persona. */
+  loadPersona: (pageId: string | null) => Promise<LoadedPersona>;
+}
+
+function degradedPersona(pageId: string | null): LoadedPersona {
+  return {
+    pageId,
+    loaded: false,
+    fallbackReason: "persona-unavailable",
+    personaCard: [],
+    coreKnowledge: []
+  };
+}
+
+export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
+  constructor(private readonly client: SugarAgentGatewayLoreClient) {}
+
+  async loadPersona(pageId: string | null): Promise<LoadedPersona> {
+    const trimmed = typeof pageId === "string" ? pageId.trim() : "";
+    if (!trimmed) {
+      return degradedPersona(null);
+    }
+    const result = await this.client.resolve({ pageIds: [trimmed] });
+    const page = result.pages.find((entry) => entry.pageId === trimmed);
+    if (!page) {
+      // A page in missingPageIds (or absent) IS the degraded path (D3).
+      return degradedPersona(trimmed);
+    }
+    // `page.sections` matches DesignatableLoreSection structurally.
+    const { personaCard, coreKnowledge } = designateLoreSections(
+      page.sections as DesignatableLoreSection[]
+    );
+    const toCardSection = (section: DesignatableLoreSection) => ({
+      heading: section.heading,
+      slug: section.slug,
+      content: section.content
+    });
+    return {
+      pageId: trimmed,
+      loaded: true,
+      fallbackReason: null,
+      personaCard: personaCard.map(toCardSection),
+      coreKnowledge: coreKnowledge.map(toCardSection)
+    };
   }
 }

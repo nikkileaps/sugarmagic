@@ -85,6 +85,36 @@ export interface SugarAgentSessionHistoryEntry {
   text: string;
 }
 
+/**
+ * Plan 072.3 -- a designated section of the NPC's lore page, ready for the
+ * prompt. `## Secrets` is already excluded upstream (072.2 lore/resolve), so a
+ * loaded persona never carries secret content.
+ */
+export interface LoreCardSection {
+  heading: string;
+  slug: string;
+  content: string;
+}
+
+/**
+ * Plan 072.3 -- the NPC's persona/core knowledge loaded ONCE at session start
+ * from lore/resolve and held in session state for the prompt builder (072.4).
+ * Missing/unfetchable page degrades (D3): `loaded: false`, empty layers, a
+ * `fallbackReason` -- the conversation still runs on name + game tone.
+ */
+export interface LoadedPersona {
+  /** Requested page id; null when the NPC has no lorePageId. */
+  pageId: string | null;
+  /** true when the page resolved and was designated; false = degraded. */
+  loaded: boolean;
+  /** "persona-unavailable" when degraded, else null. */
+  fallbackReason: string | null;
+  /** `## Persona` + `## Voice`, in document order. */
+  personaCard: LoreCardSection[];
+  /** Everything else on the page (implicit Overview + other sections). */
+  coreKnowledge: LoreCardSection[];
+}
+
 export interface SugarAgentProviderState {
   sessionId: string;
   turnCount: number;
@@ -92,6 +122,8 @@ export interface SugarAgentProviderState {
   closeRequested: boolean;
   history: SugarAgentSessionHistoryEntry[];
   lastTurnDiagnostics: Record<string, TurnStageDiagnostics>;
+  /** Plan 072.3 -- loaded once at session start; undefined until then. */
+  persona?: LoadedPersona;
 }
 
 export type TurnIntent =

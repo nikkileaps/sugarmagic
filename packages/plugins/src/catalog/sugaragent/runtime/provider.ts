@@ -14,10 +14,13 @@ import {
   // Studio's vite middleware or the deployed Cloud Run gateway).
   SugarAgentGatewayLLMClient,
   SugarAgentGatewayLLMProvider,
+  SugarAgentGatewayLoreClient,
+  SugarAgentGatewayPersonaProvider,
   SugarAgentGatewayVectorStoreClient,
   SugarAgentGatewayVectorStoreProvider,
   type BearerTokenGetter,
   type LLMProvider,
+  type PersonaLoader,
   type VectorStoreProvider
 } from "./clients";
 import { createSugarAgentLogger, type SugarAgentLogger } from "./logger";
@@ -198,6 +201,7 @@ function resolveProviders(
 ): {
   llmProvider: LLMProvider | null;
   vectorStoreProvider: VectorStoreProvider | null;
+  personaLoader: PersonaLoader;
 } {
   const baseUrl = config.proxyBaseUrl.trim();
   // Story 47.9.5 — token source depends on gateway auth mode:
@@ -224,7 +228,61 @@ function resolveProviders(
     ),
     vectorStoreProvider: new SugarAgentGatewayVectorStoreProvider(
       new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken)
+    ),
+    personaLoader: new SugarAgentGatewayPersonaProvider(
+      new SugarAgentGatewayLoreClient(baseUrl, getBearerToken)
     )
+  };
+}
+
+/**
+ * Plan 072.3 -- load the NPC's persona + core knowledge ONCE at session start,
+ * before the initial turn. Never throws (D3): any failure degrades to a
+ * name-and-tone conversation with a `persona-unavailable` fallback reason.
+ */
+async function loadPersonaOnce(args: {
+  personaLoader: PersonaLoader;
+  lorePageId: string | null;
+  state: SugarAgentProviderState;
+  logger: SugarAgentLogger;
+}): Promise<void> {
+  const { personaLoader, lorePageId, state, logger } = args;
+  if (state.persona) return;
+  try {
+    state.persona = await personaLoader.loadPersona(lorePageId);
+  } catch (error) {
+    state.persona = {
+      pageId: lorePageId,
+      loaded: false,
+      fallbackReason: "persona-unavailable",
+      personaCard: [],
+      coreKnowledge: []
+    };
+    logger.logPluginEvent("persona-load-failed", {
+      pageId: lorePageId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+  logger.logPluginEvent("persona-loaded", {
+    pageId: state.persona.pageId,
+    loaded: state.persona.loaded,
+    fallbackReason: state.persona.fallbackReason,
+    personaSectionCount: state.persona.personaCard.length,
+    coreSectionCount: state.persona.coreKnowledge.length
+  });
+}
+
+/** Compact persona summary for turn diagnostics (D3 observability). */
+function summarizePersona(
+  persona: SugarAgentProviderState["persona"]
+): Record<string, unknown> | undefined {
+  if (!persona) return undefined;
+  return {
+    pageId: persona.pageId,
+    loaded: persona.loaded,
+    fallbackReason: persona.fallbackReason,
+    personaSectionCount: persona.personaCard.length,
+    coreSectionCount: persona.coreKnowledge.length
   };
 }
 
@@ -301,7 +359,8 @@ async function executePipeline(args: {
         turnCount: state.turnCount,
         historyLength: state.history.length,
         llmBackend: generate.llmBackend,
-        consecutiveFallbackTurns: state.consecutiveFallbackTurns
+        consecutiveFallbackTurns: state.consecutiveFallbackTurns,
+        persona: summarizePersona(state.persona)
       }
     };
   }
@@ -387,7 +446,8 @@ async function executePipeline(args: {
       turnCount: state.turnCount,
       historyLength: state.history.length,
       llmBackend: finalLlmBackend,
-      consecutiveFallbackTurns: state.consecutiveFallbackTurns
+      consecutiveFallbackTurns: state.consecutiveFallbackTurns,
+      persona: summarizePersona(state.persona)
     }
   };
 }
@@ -398,7 +458,7 @@ export function createSugarAgentConversationProvider(
   const logger = createSugarAgentLogger(
     config.debugLogging || config.proxyBaseUrl.trim().length > 0
   );
-  const { llmProvider, vectorStoreProvider } = resolveProviders(
+  const { llmProvider, vectorStoreProvider, personaLoader } = resolveProviders(
     config,
     logger
   );
@@ -435,6 +495,15 @@ export function createSugarAgentConversationProvider(
       });
 
       const state = ensureProviderState(context.execution.state);
+
+      // Plan 072.3 -- load persona/core once, before the initial turn.
+      await loadPersonaOnce({
+        personaLoader,
+        lorePageId: context.selection.lorePageId ?? null,
+        state,
+        logger
+      });
+
       const session: ConversationProviderSession = {
         advance: async (input, execution) => {
           const providerState = ensureProviderState(execution.state);
