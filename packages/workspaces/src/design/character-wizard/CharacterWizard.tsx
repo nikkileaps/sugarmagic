@@ -362,6 +362,16 @@ export function CharacterWizard(props: CharacterWizardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, editSession]);
 
+  // Reset characterName from the prop each time the wizard opens for a
+  // fresh (non-edit) session. Without this the name carries over from
+  // the previous open and the next commit clobbers a different
+  // character's asset files.
+  useEffect(() => {
+    if (!opened || editSession) return;
+    setCharacterName(defaultCharacterName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opened]);
+
   // Pre-seed from an existing model set via the Model field so the
   // user lands with the GLB already analysed and can skip straight to
   // Next without having to re-pick a file they already uploaded.
