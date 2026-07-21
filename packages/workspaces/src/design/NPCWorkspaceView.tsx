@@ -44,7 +44,10 @@ import type {
   DesignPreviewState,
   DesignPreviewStore
 } from "@sugarmagic/shell";
-import { createDefaultNPCDefinition } from "@sugarmagic/domain";
+import {
+  createDefaultNPCDefinition,
+  resolveCharacterAnimationBinding
+} from "@sugarmagic/domain";
 import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import { useVanillaStoreSelector } from "../use-vanilla-store";
@@ -80,14 +83,6 @@ export interface NPCWorkspaceViewProps {
    * Resolves to `null` when the user cancels.
    */
   onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
-  /**
-   * Triggers a file-picker that imports a character animation `.glb`
-   * via IO into the project. Resolves to the new
-   * `CharacterAnimationDefinition` so the inspector can bind it to a
-   * specific animation slot (idle / walk / run) on the selected NPC.
-   * Resolves to `null` when the user cancels.
-   */
-  onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
   /** Plan 062 §062.6 — Studio-side wizard services; null hides
    *  the rig-wizard launcher. */
   characterWizardServices: CharacterWizardServices | null;
@@ -251,27 +246,13 @@ export function useNPCWorkspaceView(
       (slot) => {
         const bindingId =
           selectedNPC.presentation.animationAssetBindings[slot] ?? null;
-        let animation: CharacterAnimationDefinition | null = null;
-        if (bindingId) {
-          animation =
-            characterAnimationDefinitions.find(
-              (d) => d.definitionId === bindingId
-            ) ?? null;
-          if (!animation) {
-            const lib = animationLibraryDefinitions.find(
-              (d) => d.definitionId === bindingId
-            );
-            if (lib) {
-              animation = {
-                definitionId: lib.definitionId,
-                definitionKind: "character-animation",
-                displayName: lib.displayName,
-                source: lib.source,
-                clipNames: lib.clipNames
-              };
-            }
-          }
-        }
+        const animation = bindingId
+          ? resolveCharacterAnimationBinding(
+              characterAnimationDefinitions,
+              animationLibraryDefinitions,
+              bindingId
+            )
+          : null;
         return {
           value: slot,
           label: NPC_ANIMATION_SLOT_LABELS[slot],

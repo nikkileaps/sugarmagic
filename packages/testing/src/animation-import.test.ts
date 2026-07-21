@@ -9,7 +9,10 @@
 import { describe, expect, it } from "vitest";
 import {
   analyzeSourceAssetFile,
-  importCharacterAnimationDefinitionFromFile
+  cozySeedDefinitionId,
+  importAnimationLibraryFromGlbFile,
+  importCharacterAnimationDefinitionFromFile,
+  seedCozyAnimations
 } from "@sugarmagic/io";
 
 function createGlbFromJson(json: unknown): ArrayBuffer {
@@ -123,5 +126,108 @@ describe("character animation GLB imports", () => {
     expect(analysis.contract).toBe("generic-model");
     expect(analysis.meshCount).toBe(0);
     expect(analysis.animationClipNames).toEqual(["Idle", "Walk"]);
+  });
+});
+
+const TEST_DESCRIPTOR = {
+  rootPath: ".",
+  projectFileName: "project.sgrmagic",
+  authoredAssetsPath: "assets",
+  exportsPath: "exports",
+  publishPath: "publish"
+} as const;
+
+function createRigAnimationGlb(nodeName: string): File {
+  return new File(
+    [
+      createGlbFromJson({
+        asset: { version: "2.0" },
+        scene: 0,
+        scenes: [{ nodes: [0] }],
+        nodes: [{ name: nodeName }],
+        animations: [
+          {
+            name: "Tail Wag",
+            channels: [{ sampler: 0, target: { node: 0, path: "rotation" } }],
+            samplers: [{ input: 0, output: 1, interpolation: "LINEAR" }]
+          }
+        ]
+      })
+    ],
+    "blender-export.glb",
+    { type: "model/gltf-binary" }
+  );
+}
+
+describe("animation library GLB imports", () => {
+  it("creates one library entry per clip, keyed off the filename + clip", async () => {
+    const { handle, writes } = createMemoryDirectoryHandle();
+    const result = await importAnimationLibraryFromGlbFile(
+      createRigAnimationGlb("DEF-hips"),
+      {
+        projectHandle: handle,
+        descriptor: TEST_DESCRIPTOR,
+        projectId: "little-world"
+      }
+    );
+
+    expect(result.definitions).toHaveLength(1);
+    expect(result.definitions[0]).toMatchObject({
+      definitionKind: "animation-library",
+      displayName: "Tail Wag",
+      origin: "imported",
+      clipNames: ["Tail Wag"]
+    });
+    expect(result.definitions[0]?.definitionId).toContain(
+      "little-world:animation-library:"
+    );
+    const writtenPath = result.definitions[0]?.source.relativeAssetPath;
+    expect(writtenPath).toMatch(/^assets\/animations\//);
+    expect(writes.has(writtenPath!)).toBe(true);
+  });
+
+  it("rejects GLBs whose animations target no standard-rig bones", async () => {
+    const { handle } = createMemoryDirectoryHandle();
+    await expect(
+      importAnimationLibraryFromGlbFile(createRigAnimationGlb("Armature"), {
+        projectHandle: handle,
+        descriptor: TEST_DESCRIPTOR,
+        projectId: "little-world"
+      })
+    ).rejects.toThrow(/No standard-rig bones/);
+  });
+});
+
+describe("cozy animation seed", () => {
+  it("generates the cozy clips once and skips ids already present", async () => {
+    const { handle, writes } = createMemoryDirectoryHandle();
+    const request = {
+      projectHandle: handle,
+      descriptor: TEST_DESCRIPTOR,
+      projectId: "little-world"
+    };
+
+    const first = await seedCozyAnimations(request, new Set());
+    expect(first.definitions.length).toBeGreaterThan(0);
+    for (const definition of first.definitions) {
+      expect(writes.has(definition.source.relativeAssetPath)).toBe(true);
+    }
+    // Well-known ids: the skip guard keys off cozySeedDefinitionId.
+    for (const definition of first.definitions) {
+      expect(
+        definition.definitionId.startsWith("little-world:animation-library:")
+      ).toBe(true);
+    }
+
+    const existing = new Set(first.definitions.map((d) => d.definitionId));
+    const second = await seedCozyAnimations(request, existing);
+    expect(second.definitions).toEqual([]);
+    expect(second.writtenAssets).toEqual([]);
+  });
+
+  it("derives stable well-known seed ids", () => {
+    expect(cozySeedDefinitionId("little-world", "cozy-idle")).toBe(
+      cozySeedDefinitionId("little-world", "cozy-idle")
+    );
   });
 });

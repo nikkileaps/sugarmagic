@@ -2535,19 +2535,25 @@ export function listCharacterModelDefinitions(
   return [...contentLibrary.characterModelDefinitions];
 }
 
-export function getCharacterAnimationDefinition(
-  contentLibrary: ContentLibrarySnapshot,
+/**
+ * Resolve an animation slot binding to a playable definition. Tries
+ * the per-character pool first, then falls through to the animation
+ * library pool: slots bound via AnimLib 4's "From Library" picker
+ * store the library definitionId directly, so a library entry is
+ * synthesized into a CharacterAnimationDefinition proxy on the fly.
+ * This is the single enforcer for that synthesis — workspace views
+ * and the runtime both resolve through here.
+ */
+export function resolveCharacterAnimationBinding(
+  characterAnimationDefinitions: CharacterAnimationDefinition[],
+  animationLibraryDefinitions: AnimationLibraryDefinition[] | undefined,
   definitionId: string
 ): CharacterAnimationDefinition | null {
-  const direct = contentLibrary.characterAnimationDefinitions.find(
+  const direct = characterAnimationDefinitions.find(
     (definition) => definition.definitionId === definitionId
   );
   if (direct) return direct;
-  // Fall through to the animation library pool so that slots bound
-  // via AnimLib 4's "From Library" picker (which stores the library
-  // definitionId directly) resolve correctly at runtime without
-  // requiring a CharacterAnimationDefinition proxy entry.
-  const lib = (contentLibrary.animationLibraryDefinitions ?? []).find(
+  const lib = (animationLibraryDefinitions ?? []).find(
     (definition) => definition.definitionId === definitionId
   );
   if (lib) {
@@ -2560,6 +2566,17 @@ export function getCharacterAnimationDefinition(
     };
   }
   return null;
+}
+
+export function getCharacterAnimationDefinition(
+  contentLibrary: ContentLibrarySnapshot,
+  definitionId: string
+): CharacterAnimationDefinition | null {
+  return resolveCharacterAnimationBinding(
+    contentLibrary.characterAnimationDefinitions,
+    contentLibrary.animationLibraryDefinitions,
+    definitionId
+  );
 }
 
 export function listCharacterAnimationDefinitions(

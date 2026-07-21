@@ -112,7 +112,6 @@ export interface DesignProductModeViewProps {
   onSelectKind: (kind: DesignWorkspaceKind) => void;
   onCommand: (command: SemanticCommand) => void;
   onImportCharacterModelDefinition: () => Promise<CharacterModelDefinition | null>;
-  onImportCharacterAnimationDefinition: () => Promise<CharacterAnimationDefinition | null>;
   /** Plan 062 §062.6 — Studio-side Character Wizard services;
    *  omitted/null hides the rig-wizard launcher. */
   characterWizardServices?: CharacterWizardServices | null;
@@ -180,7 +179,6 @@ export function useDesignProductModeView(
     onSelectKind,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition,
     characterWizardServices,
     onImportAsset,
     onGenerateItemThumbnail,
@@ -204,7 +202,6 @@ export function useDesignProductModeView(
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition,
     characterWizardServices: characterWizardServices ?? null
   });
 
@@ -220,7 +217,6 @@ export function useDesignProductModeView(
     designPreviewStore,
     onCommand,
     onImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition,
     characterWizardServices: characterWizardServices ?? null,
     renderInspectorSections: renderNPCInspectorSections
   });

@@ -138,7 +138,7 @@ function buildCozyClip(id: MotionGeneratorId): ArrayBuffer {
  * already present in `existingIds` (safe to call on every project
  * open without clobbering user edits).
  */
-export async function seedCozAnimations(
+export async function seedCozyAnimations(
   request: SeedAnimationLibraryRequest,
   existingIds: Set<string>
 ): Promise<SeedAnimationLibraryResult> {

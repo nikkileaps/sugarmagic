@@ -823,6 +823,13 @@ export function readClipRecipe(clipGlb: ArrayBuffer): unknown | null {
   return extras?.sugarmagicAnimation ?? null;
 }
 
+/** First animation's name in the clip, or null if absent/unnamed. */
+export function readClipName(clipGlb: ArrayBuffer): string | null {
+  const chunks = readGlb(clipGlb);
+  const name = chunks?.document.animations?.[0]?.name;
+  return typeof name === "string" && name.length > 0 ? name : null;
+}
+
 // ---- Tail track merge (Plan 064 §064.4) --------------------------------
 
 /** Longest animation input time in the clip (its loop duration). */

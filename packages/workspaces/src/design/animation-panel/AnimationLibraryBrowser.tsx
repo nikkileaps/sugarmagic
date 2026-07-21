@@ -27,6 +27,15 @@ export function AnimationLibraryBrowser({
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
+  // The modal stays mounted with `opened` toggled, so stale search
+  // text + selection would carry over to the next open (and invite
+  // assigning the wrong clip). Clear on every close path.
+  const handleClose = () => {
+    setQuery("");
+    setSelectedId(null);
+    onClose();
+  };
+
   const items = animationLibraryDefinitions.filter((d) =>
     query.trim()
       ? d.displayName.toLowerCase().includes(query.trim().toLowerCase())
@@ -38,7 +47,7 @@ export function AnimationLibraryBrowser({
   return (
     <Modal
       opened={opened}
-      onClose={onClose}
+      onClose={handleClose}
       title="Choose from Animation Library"
       size="md"
       styles={{
@@ -109,7 +118,7 @@ export function AnimationLibraryBrowser({
         p="xs"
         style={{ borderTop: "1px solid var(--sm-panel-border)", flex: "0 0 auto" }}
       >
-        <Button size="xs" variant="subtle" onClick={onClose}>
+        <Button size="xs" variant="subtle" onClick={handleClose}>
           Cancel
         </Button>
         <Button
@@ -118,7 +127,7 @@ export function AnimationLibraryBrowser({
           onClick={() => {
             if (selected) {
               onSelect(selected.definitionId);
-              onClose();
+              handleClose();
             }
           }}
         >

@@ -149,9 +149,8 @@ import {
   importPbrTextureSet,
   importMaskTextureDefinition,
   importTextureDefinition,
-  seedCozAnimations,
+  seedCozyAnimations,
   cozySeedDefinitionId,
-  importCharacterAnimationDefinition,
   importCharacterModelDefinition,
   importAudioClipDefinition,
   importAnimationLibraryFromGlbFile,
@@ -297,7 +296,7 @@ function handleProjectError(e: unknown) {
  */
 async function seedAnimationLibraryIfNeeded(
   handle: FileSystemDirectoryHandle,
-  descriptor: Parameters<typeof seedCozAnimations>[0]["descriptor"],
+  descriptor: Parameters<typeof seedCozyAnimations>[0]["descriptor"],
   projectId: string
 ) {
   const { session } = projectStore.getState();
@@ -309,7 +308,7 @@ async function seedAnimationLibraryIfNeeded(
   if (SLUGS.every((slug) => existing.has(cozySeedDefinitionId(projectId, slug)))) return;
 
   try {
-    const result = await seedCozAnimations(
+    const result = await seedCozyAnimations(
       { projectHandle: handle, descriptor, projectId },
       existing
     );
@@ -1483,47 +1482,6 @@ export function App() {
         error instanceof Error
           ? error.message
           : `Texture import failed: ${String(error)}`
-      );
-      return null;
-    }
-  }, []);
-
-  const handleImportCharacterAnimationDefinition = useCallback(async () => {
-    const {
-      handle,
-      descriptor,
-      session: currentSession
-    } = projectStore.getState();
-    if (!handle || !descriptor || !currentSession) return null;
-
-    try {
-      const result = await importCharacterAnimationDefinition({
-        projectHandle: handle,
-        descriptor,
-        projectId: currentSession.gameProject.identity.id
-      });
-      projectStore
-        .getState()
-        .updateSession(
-          addCharacterAnimationDefinitionToSession(
-            currentSession,
-            result.characterAnimationDefinition
-          )
-        );
-      if (result.warnings.length > 0) {
-        window.alert(
-          `Character animation import completed with warnings:\n\n- ${result.warnings.join("\n- ")}`
-        );
-      }
-      return result.characterAnimationDefinition;
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return null;
-      }
-      window.alert(
-        error instanceof Error
-          ? error.message
-          : `Character animation import failed: ${String(error)}`
       );
       return null;
     }
@@ -3018,8 +2976,6 @@ export function App() {
       shellStore.getState().setActiveDesignWorkspaceKind(kind),
     onCommand: dispatchCommand,
     onImportCharacterModelDefinition: handleImportCharacterModelDefinition,
-    onImportCharacterAnimationDefinition:
-      handleImportCharacterAnimationDefinition,
     characterWizardServices,
     onImportAsset: handleImportAsset,
     onGenerateItemThumbnail: handleGenerateItemThumbnail,

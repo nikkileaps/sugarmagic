@@ -61,8 +61,46 @@ library walk too.
 - Repainting weights (markers untouched) never touches
   animations — the new weights simply deform under the same clips.
 - Moving joint markers regenerates generated slots automatically
-  at the new skeleton scale, personality and pose intact; library
-  slots are re-copied.
+  at the new skeleton scale, personality and pose intact. Slots
+  bound to any non-generated clip (Quaternius library or a custom
+  Animation Library import) keep their OWN bytes, re-scaled to the
+  new hip height — a re-edit never swaps a custom clip back to a
+  bundled default.
+
+## Animation Library
+
+A project-level pool of reusable clips, separate from the
+per-character definitions above. Browse it under Libraries >
+Animations; assign a clip to a character slot from the Animations
+panel via the "Choose from Animation Library" browser.
+
+- `AnimationLibraryDefinition` (`packages/domain`) — kind
+  `"animation-library"`, with `origin: "generated" | "imported"`.
+  Session CRUD: `addAnimationLibraryDefinitionToSession` (upserts
+  by `definitionId`), `updateAnimationLibraryDefinitionInSession`,
+  `removeAnimationLibraryDefinitionFromSession`. Removal cascades:
+  any Player/NPC slot bound to the deleted entry is nulled, same
+  as per-character animation removal.
+- **Slot binding**: the browser stores the library `definitionId`
+  directly in `animationAssetBindings`. Resolution goes through
+  `resolveCharacterAnimationBinding` (the single enforcer, also
+  behind `getCharacterAnimationDefinition`): per-character pool
+  first, then the library pool, synthesizing a
+  `CharacterAnimationDefinition` proxy on the fly. Runtime playback
+  and the workspace previews both resolve through it.
+- **Import** (`packages/io` `importAnimationLibraryFromGlbFile`):
+  one library entry per animation action in a Blender GLB;
+  validates that tracks target standard-rig bone names, strips
+  meshes/materials to a skeleton-only clip, writes to
+  `assets/animations/`. Re-importing the same filename replaces
+  the existing entry in place (iterate on the Blender source).
+- **Seed** (`packages/io` `seedCozyAnimations`): generates the
+  three Cozy starter clips on project open, skipping well-known
+  ids (`cozySeedDefinitionId`) already in the session — safe to
+  call every open.
+
+Tests: `packages/testing/src/animation-library-definition.test.ts`
+and `animation-import.test.ts`.
 
 ## What lands in the project
 

@@ -40,6 +40,7 @@ import {
   readClipRecipe,
   mergeClipTracks,
   readClipDuration,
+  readClipName,
   readSkinWeightsFromGlb,
   readWizardRecipe,
   scaleClipHipsTranslation,
@@ -406,10 +407,10 @@ export function createCharacterWizardServices(
         // re-register or rebind them) — generated slots survive.
         // Marker-level edit: slots whose CURRENT clip carries a
         // motion recipe REGENERATE at the new skeleton's hip scale
-        // (personality + pose survive); library-bound slots
-        // re-fetch the library clip (generated.clips no longer
-        // carries library copies — generated is the default).
-        // Unbound slots take the generated default.
+        // (personality + pose survive); other bound slots (Quaternius
+        // library or custom AnimLib imports) keep their own bytes,
+        // re-scaled to the new hip height. Unbound slots take the
+        // generated default.
         clips: request.skipAnimations
           ? []
           : await Promise.all(
@@ -434,17 +435,26 @@ export function createCharacterWizardServices(
                   };
                 }
                 if (boundBytes) {
-                  return libraryClipForSlot(
-                    clip.slot,
-                    hipScale,
-                    hasTail
-                      ? {
-                          personality:
-                            createDefaultMotionRecipe(clip.slot).personality,
-                          seed: 1
-                        }
-                      : null
-                  );
+                  // Non-recipe bound clip (Quaternius library OR a
+                  // custom AnimLib import): KEEP the user's bytes and
+                  // re-scale hips to the new skeleton. Never re-fetch
+                  // the bundled default here — that silently replaced
+                  // custom library assignments with Quaternius clips.
+                  // boundBytes come from the clip's own source file
+                  // (standard maquette scale), so the scale doesn't
+                  // compound across edits.
+                  let bytes = scaleClipHipsTranslation(boundBytes, hipScale);
+                  if (hasTail) {
+                    bytes = overlayTailWag(
+                      bytes,
+                      createDefaultMotionRecipe(clip.slot).personality,
+                      1
+                    );
+                  }
+                  return {
+                    clipName: readClipName(boundBytes) ?? clip.clipName,
+                    bytes
+                  };
                 }
                 return { clipName: clip.clipName, bytes: clip.bytes };
               })
