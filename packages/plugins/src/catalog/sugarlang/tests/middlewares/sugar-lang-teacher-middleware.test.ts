@@ -32,6 +32,79 @@ import {
 } from "./test-helpers";
 
 describe("SugarLangTeacherMiddleware", () => {
+  // Story 071.5 — the prescription guard must sit BELOW the scripted-mode
+  // block. Prescription-less scripted dialogue still needs a constraint so
+  // the scripted middleware can adapt the authored text; hoisting the guard
+  // back above the block silently reintroduces the bypass.
+  it("scripted mode without a prescription still builds a constraint (empty targetVocab, synthetic rawPrescription), teacher not invoked", async () => {
+    const invokeTeacher = vi.fn();
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi
+            .fn()
+            .mockResolvedValue(createTestLearnerProfile())
+        },
+        teacher: {
+          invoke: invokeTeacher
+        }
+      })
+    });
+    const middleware = createSugarLangTeacherMiddleware({
+      services: services as never
+    });
+    const baseExecution = createTestExecution();
+    const execution = createTestExecution({
+      selection: {
+        ...baseExecution.selection,
+        interactionMode: "scripted"
+      }
+    });
+    // Deliberately no SUGARLANG_PRESCRIPTION_ANNOTATION.
+
+    await middleware.prepare?.(execution);
+
+    expect(invokeTeacher).not.toHaveBeenCalled();
+    expect(execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).toMatchObject({
+      targetVocab: {
+        introduce: [],
+        reinforce: [],
+        avoid: []
+      },
+      rawPrescription: {
+        rationale: {
+          summary: "scripted-mode-no-prescription"
+        }
+      }
+    });
+  });
+
+  it("non-scripted mode without a prescription returns without writing a constraint", async () => {
+    const invokeTeacher = vi.fn();
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi
+            .fn()
+            .mockResolvedValue(createTestLearnerProfile())
+        },
+        teacher: {
+          invoke: invokeTeacher
+        }
+      })
+    });
+    const middleware = createSugarLangTeacherMiddleware({
+      services: services as never
+    });
+    const execution = createTestExecution();
+    // Deliberately no SUGARLANG_PRESCRIPTION_ANNOTATION.
+
+    await middleware.prepare?.(execution);
+
+    expect(invokeTeacher).not.toHaveBeenCalled();
+    expect(execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).toBeUndefined();
+  });
+
   it("assembles a synthetic constraint for the pre-placement opening dialog without invoking the teacher", async () => {
     const invokeTeacher = vi.fn();
     const services = createServicesStub({

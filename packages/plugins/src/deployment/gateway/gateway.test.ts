@@ -104,6 +104,9 @@ afterEach(() => {
   delete process.env["SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS"];
   delete process.env["SUGARMAGIC_GATEWAY_SHARED_TOKEN"];
   vi.restoreAllMocks();
+  // restoreAllMocks does NOT undo vi.stubGlobal — without this, the first
+  // fetch-stubbing test leaves fetch mocked for the rest of the file.
+  vi.unstubAllGlobals();
 });
 
 // ---------------------------------------------------------------------------
@@ -427,13 +430,20 @@ describe("handleSugarAgentLoreStatus", () => {
   });
 
   it("returns 200 with sourceReady=false when LORE_SOURCE_PATH not set", async () => {
+    const savedLorePath = process.env["SUGARMAGIC_LORE_SOURCE_PATH"];
     delete process.env["SUGARMAGIC_LORE_SOURCE_PATH"];
-    const req = makeReq({ method: "GET", url: "/api/sugaragent/lore/status" });
-    const res = makeRes();
-    await handleSugarAgentLoreStatus(req, res);
-    expect(res.statusCode).toBe(200);
-    const body = JSON.parse(res.body) as { ok: boolean; sourceReady: boolean };
-    expect(body.ok).toBe(true);
-    expect(body.sourceReady).toBe(false);
+    try {
+      const req = makeReq({ method: "GET", url: "/api/sugaragent/lore/status" });
+      const res = makeRes();
+      await handleSugarAgentLoreStatus(req, res);
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { ok: boolean; sourceReady: boolean };
+      expect(body.ok).toBe(true);
+      expect(body.sourceReady).toBe(false);
+    } finally {
+      if (savedLorePath !== undefined) {
+        process.env["SUGARMAGIC_LORE_SOURCE_PATH"] = savedLorePath;
+      }
+    }
   });
 });

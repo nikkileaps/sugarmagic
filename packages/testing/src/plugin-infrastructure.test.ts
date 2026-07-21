@@ -54,7 +54,6 @@ import {
   normalizeGoogleCloudRunDeploymentTargetOverrides,
   parseBillingAccountList,
   parseTemplateVersionStamp,
-  verifySupabaseJwt,
   SUPABASE_JWT_VERIFIER_FUNCTION_NAME,
   SUPABASE_URL_ENV_VAR,
   type PluginSettingsSchemaField,
@@ -78,6 +77,9 @@ import {
   validateGatewayRuntimeConfigKey,
   validatePluginSettingsSchema
 } from "@sugarmagic/plugins";
+// Relative import on purpose: supabase-jwt.ts imports node:crypto at top
+// level, so it is kept off @sugarmagic/plugins' browser-consumed entry.
+import { verifySupabaseJwt } from "../../plugins/src/deployment/gateway/supabase-jwt";
 import {
   createRuntimeBootModel,
   createRuntimePluginManager,
@@ -2492,7 +2494,9 @@ describe("plugin infrastructure", () => {
     expect(content).toContain('from "node:crypto"');
     expect(content).toContain("function authorizeBearer(req)");
     expect(content).toContain("SUGARMAGIC_GATEWAY_SHARED_TOKEN");
-    expect(content).toContain("expectedBuf, presentedBuf");
+    // Rename-tolerant (esbuild may emit timingSafeEqual2) but still proves
+    // the timing-safe compare is what receives the two token buffers.
+    expect(content).toMatch(/timingSafeEqual\d*\(expectedBuf, presentedBuf\)/);
     expect(content).toContain("if (!authorizeBearer(req))");
     expect(content).toContain('error: "Unauthorized"');
 
@@ -2608,9 +2612,9 @@ describe("plugin infrastructure", () => {
   it("47.9 — JWT verifier (verifySupabaseJwt) verifies ES256 (JWKS) + HS256 (oct JWK) and rejects invalid / expired / wrong-aud / missing-header / kid-mismatch cases", async () => {
     // Story 071.9 — verifySupabaseJwt is now a proper TypeScript function in
     // packages/plugins/src/deployment/gateway/supabase-jwt.ts (bundled into
-    // the compiled gateway artifact). Import it directly from @sugarmagic/plugins
-    // instead of the old temp-file / dynamic-import approach. The function is
-    // the exact same code that runs in the Cloud Run gateway (no drift possible).
+    // the compiled gateway artifact). Import it directly instead of the old
+    // temp-file / dynamic-import approach. Drift between this TS source and
+    // the shipped bundle is guarded by core-compiled-freshness.test.ts.
     const {
       generateKeyPairSync,
       createPrivateKey,
@@ -2734,7 +2738,8 @@ describe("plugin infrastructure", () => {
     }
 
     process.env[SUPABASE_URL_ENV_VAR] = supabaseUrl;
-    // verifySupabaseJwt is imported at top of file from @sugarmagic/plugins
+    // verifySupabaseJwt is imported at top of file (relative path into
+    // packages/plugins; see the import comment there)
     const verify = (req: { headers: Record<string, string | undefined> }) =>
       verifySupabaseJwt(req as Parameters<typeof verifySupabaseJwt>[0]);
     try {

@@ -203,12 +203,5 @@ export const SUPABASE_URL_ENV_VAR = "SUGARMAGIC_SUGARPROFILE_SUPABASE_URL";
 export const SUPABASE_JWT_VERIFIER_FUNCTION_NAME = "verifySupabaseJwt";
 
 // Story 071.9 — buildSupabaseJwtVerifierSource() deleted. JWT verifier now lives
-// in packages/plugins/src/deployment/gateway/supabase-jwt.ts (typechecked TS).
-// Tests import verifySupabaseJwt directly from @sugarmagic/plugins.
-// @deprecated — remove after 071.9 verification confirms nothing calls this.
-export function buildSupabaseJwtVerifierSource(): never {
-  throw new Error(
-    "buildSupabaseJwtVerifierSource() was deleted in 071.9. " +
-    "The JWT verifier is now bundled into GATEWAY_CORE_COMPILED_SOURCE via supabase-jwt.ts."
-  );
-}
+// in packages/plugins/src/deployment/gateway/supabase-jwt.ts (typechecked TS),
+// bundled into GATEWAY_CORE_COMPILED_SOURCE.

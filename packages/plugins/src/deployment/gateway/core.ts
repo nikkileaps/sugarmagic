@@ -12,6 +12,9 @@ import {
   timingSafeEqual,
   verify as cryptoVerify
 } from "node:crypto";
+// Load-bearing despite looking unused: treeShaking is disabled in
+// compile-options.ts precisely so this import survives into the compiled
+// bundle for the supabase-jwt auth gate that buildGatewayServerFile injects.
 import { verifySupabaseJwt } from "./supabase-jwt";
 
 // ---------------------------------------------------------------------------

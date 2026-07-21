@@ -310,14 +310,16 @@ export {
 
 export {
   buildSupabaseManagedFiles,
-  buildSupabaseJwtVerifierSource,
   extractSupabaseProjectRef,
   getSugarProfileMigrationDirectory,
   SUPABASE_JWT_VERIFIER_FUNCTION_NAME,
   SUPABASE_MIGRATIONS_TEMPLATE_VERSION,
   SUPABASE_URL_ENV_VAR
 } from "./supabase";
-export { verifySupabaseJwt } from "./gateway/supabase-jwt";
+// NOTE: verifySupabaseJwt (gateway/supabase-jwt.ts) is deliberately NOT
+// re-exported here. It imports node:crypto at top level, and this package's
+// single entry is consumed by browser code (Studio, web target); tests that
+// need the function import it by relative path instead.
 
 export {
   CLOUD_RUN_TEMPLATE_VERSION,
@@ -579,7 +581,12 @@ function buildGatewayServerFile(
       "Run `pnpm --filter @sugarmagic/plugins build:gateway-source` to regenerate."
     );
   }
-  return asTextFile(`${getServiceDirectory(targetId, unit)}/server.mjs`, content);
+  // esbuild strips core.ts's header comment; re-add the managed-file marker
+  // the scaffold README points users at.
+  return asTextFile(
+    `${getServiceDirectory(targetId, unit)}/server.mjs`,
+    withHeader("//", content)
+  );
 }
 
 // MARKER_REPLACED_TEMPLATE: the ~1250-line buildGatewayServerFile template string

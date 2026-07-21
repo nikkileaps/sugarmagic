@@ -971,24 +971,27 @@ export function createRuntimeGameplaySessionController(
     questJournal.update(questManager.getJournalData());
   }
 
+  // Single enforcer for NPC interactable availability, used both at
+  // interactable creation and on every sync. Missing definition falls to
+  // the scripted/coordinator path.
+  function resolveNpcInteractableAvailability(npcDefinitionId: string): boolean {
+    const npcDefinition = npcDefinitions.find(
+      (candidate) => candidate.definitionId === npcDefinitionId
+    );
+    if (!npcDefinition || npcDefinition.interactionMode === "scripted") {
+      return questDialogueCoordinator.isNpcInteractableAvailable(npcDefinitionId);
+    }
+    return conversationProviders.length > 0;
+  }
+
   function syncNpcInteractionAvailability() {
-    const hasAgentCapability = conversationProviders.length > 0;
     for (const {
       npcDefinitionId,
       entity
     } of npcInteractableEntities.values()) {
       const interactable = world.getComponent(entity, Interactable);
       if (!interactable) continue;
-      const npcDefinition = npcDefinitions.find(
-        (candidate) => candidate.definitionId === npcDefinitionId
-      );
-      if (!npcDefinition || npcDefinition.interactionMode === "scripted") {
-        interactable.available =
-          questDialogueCoordinator.isNpcInteractableAvailable(npcDefinitionId);
-        continue;
-      }
-
-      interactable.available = hasAgentCapability;
+      interactable.available = resolveNpcInteractableAvailability(npcDefinitionId);
     }
   }
 
@@ -1129,9 +1132,7 @@ export function createRuntimeGameplaySessionController(
           presence.npcDefinitionId,
           `Talk to ${npcDefinition?.displayName ?? "NPC"}`,
           2.0,
-          npcDefinition?.interactionMode === "scripted"
-            ? questDialogueCoordinator.isNpcInteractableAvailable(presence.npcDefinitionId)
-            : conversationProviders.length > 0
+          resolveNpcInteractableAvailability(presence.npcDefinitionId)
         )
       );
       npcInteractableEntities.set(presence.presenceId, {

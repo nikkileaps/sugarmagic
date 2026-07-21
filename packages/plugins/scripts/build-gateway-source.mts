@@ -5,30 +5,14 @@ import { build } from "esbuild";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { buildGatewayCompileOptions } from "../src/deployment/gateway/compile-options";
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const gatewayDir = join(__dir, "../src/deployment/gateway");
 const coreTs = join(gatewayDir, "core.ts");
 const outputFile = join(gatewayDir, "core.compiled.ts");
 
-const result = await build({
-  entryPoints: [coreTs],
-  bundle: true,
-  write: false,
-  format: "esm",
-  target: "es2022",
-  platform: "node",
-  external: ["node:*"],
-  // Preserve /*! ... */ legal comments so the __GATEWAY_AUTH_GATE__
-  // placeholder survives for buildGatewayServerFile to inject into.
-  legalComments: "inline",
-  minify: false,
-  // Disable tree-shaking so verifySupabaseJwt and the JWKS helpers
-  // are included in all auth modes. They're dead code in none/bearer
-  // but the auth gate injection in buildGatewayServerFile may call
-  // them, and the compiled string can't retroactively add them.
-  treeShaking: false,
-});
+const result = await build(buildGatewayCompileOptions(coreTs));
 
 const compiled = result.outputFiles?.[0]?.text ?? "";
 
