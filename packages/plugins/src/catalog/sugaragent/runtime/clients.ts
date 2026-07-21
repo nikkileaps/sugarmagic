@@ -39,16 +39,35 @@ export interface VectorStoreProvider {
   searchLore: (request: VectorStoreSearchRequest) => Promise<RetrievedEvidenceItem[]>;
 }
 
+/** Plan 072.5 — a system content block; `cache: true` marks the cache breakpoint. */
+export interface GatewaySystemBlock {
+  text: string;
+  cache?: boolean;
+}
+
 export interface GatewayGenerateRequest {
   model?: string;
-  systemPrompt: string;
+  /** Legacy string form (sugarlang). Prefer systemBlocks for caching. */
+  systemPrompt?: string;
+  /** Plan 072.5 — structured system with a cache breakpoint (sugaragent). */
+  systemBlocks?: GatewaySystemBlock[];
   userPrompt: string;
   maxTokens?: number;
+}
+
+/** Plan 072.5 — Anthropic usage passthrough (incl. prompt-cache read/create). */
+export interface GatewayUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
 }
 
 export interface GatewayGenerateResult {
   text: string;
   requestId: string | null;
+  usage?: GatewayUsage | null;
+  model?: string | null;
 }
 
 export interface GatewayVectorSearchRequest {
@@ -221,7 +240,12 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
   async generateStructuredTurn(request: LLMGenerateRequest): Promise<string> {
     const response = await this.client.generate({
       model: request.model.trim() || undefined,
-      systemPrompt: normalizePrompt(request.systemPrompt, "systemPrompt"),
+      // Plan 072.5 — send the system prompt as one cacheable block (a single
+      // cache breakpoint at the end of the full system prompt). sugaragent's
+      // system half is byte-stable per session (072.4), so this caches per-NPC.
+      systemBlocks: [
+        { text: normalizePrompt(request.systemPrompt, "systemPrompt"), cache: true }
+      ],
       userPrompt: normalizePrompt(request.userPrompt, "userPrompt"),
       maxTokens: normalizeMaxTokens(request.maxTokens, this.defaults.maxTokens ?? 300)
     });

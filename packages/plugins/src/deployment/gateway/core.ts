@@ -803,14 +803,48 @@ export async function handleSugarAgentGenerate(
       ? Math.max(1, Math.floor(body["maxTokens"]))
       : 300;
 
-  if (!systemPrompt || !userPrompt) {
+  // Plan 072.5 — structured system blocks with a cache breakpoint. When
+  // `systemBlocks` is present, the gateway maps it to Anthropic `system`
+  // content blocks and marks `cache: true` blocks with cache_control:ephemeral
+  // (prompt caching is GA; no beta header). When absent it falls back to the
+  // legacy `systemPrompt` string (sugarlang's teacher/verify/scripted/chunk
+  // calls stay on that path, uncached).
+  const rawSystemBlocks = Array.isArray(body["systemBlocks"])
+    ? (body["systemBlocks"] as unknown[])
+    : null;
+  const systemBlocks = rawSystemBlocks
+    ? rawSystemBlocks
+        .filter(
+          (entry): entry is { text: string; cache?: boolean } =>
+            !!entry &&
+            typeof entry === "object" &&
+            typeof (entry as { text?: unknown }).text === "string" &&
+            (entry as { text: string }).text.trim().length > 0
+        )
+        .map((entry) => ({
+          text: entry.text.trim(),
+          cache: (entry as { cache?: unknown }).cache === true
+        }))
+    : null;
+  const hasSystemBlocks = !!systemBlocks && systemBlocks.length > 0;
+
+  if ((!systemPrompt && !hasSystemBlocks) || !userPrompt) {
     sendJson(res, 400, {
       ok: false,
       error: "InvalidRequest",
-      message: "systemPrompt and userPrompt are required."
+      message:
+        "userPrompt and one of systemPrompt or systemBlocks are required."
     });
     return;
   }
+
+  const anthropicSystem = hasSystemBlocks
+    ? systemBlocks!.map((block) => ({
+        type: "text",
+        text: block.text,
+        ...(block.cache ? { cache_control: { type: "ephemeral" } } : {})
+      }))
+    : systemPrompt;
 
   const { payload, headers } = await requestJson(
     "https://api.anthropic.com/v1/messages",
@@ -824,7 +858,7 @@ export async function handleSugarAgentGenerate(
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        system: systemPrompt,
+        system: anthropicSystem,
         messages: [
           {
             role: "user",
@@ -848,9 +882,24 @@ export async function handleSugarAgentGenerate(
     throw new Error("Anthropic response did not include text content.");
   }
 
+  // Plan 072.5 — pass usage through (incl. cache read/create) so the browser
+  // and 072.7 diagnostics can observe cache behavior. Coerce to numbers.
+  const rawUsage = (payload as { usage?: Record<string, unknown> }).usage ?? {};
+  const usageNumber = (key: string): number => {
+    const value = rawUsage[key];
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  };
+
   sendJson(res, 200, {
     text,
-    requestId: headers.get("request-id")
+    requestId: headers.get("request-id"),
+    usage: {
+      inputTokens: usageNumber("input_tokens"),
+      outputTokens: usageNumber("output_tokens"),
+      cacheReadInputTokens: usageNumber("cache_read_input_tokens"),
+      cacheCreationInputTokens: usageNumber("cache_creation_input_tokens")
+    },
+    model
   });
 }
 

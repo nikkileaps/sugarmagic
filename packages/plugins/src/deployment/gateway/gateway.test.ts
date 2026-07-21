@@ -272,8 +272,121 @@ describe("handleSugarAgentGenerate", () => {
     expect(callArgs[0]).toContain("anthropic.com");
     const requestBody = JSON.parse(callArgs[1].body as string) as {
       max_tokens: number;
+      system: unknown;
     };
     expect(requestBody.max_tokens).toBe(50);
+    // Legacy string path (sugarlang): `system` stays a plain string.
+    expect(requestBody.system).toBe("you are helpful");
+  });
+
+  it("072.5 — maps systemBlocks to Anthropic system content blocks with cache_control", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({ content: [{ type: "text", text: "Hi." }] }),
+      headers: { get: () => "req-1" }
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const req = makeReq({
+      method: "POST",
+      url: "/api/sugaragent/generate",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemBlocks: [{ text: "You are Finnick.", cache: true }],
+        userPrompt: "hi"
+      })
+    });
+    const res = makeRes();
+    await handleSugarAgentGenerate(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const requestBody = JSON.parse(
+      (mockFetch.mock.calls[0] as [string, RequestInit])[1].body as string
+    ) as { system: Array<{ type: string; text: string; cache_control?: unknown }> };
+    expect(Array.isArray(requestBody.system)).toBe(true);
+    expect(requestBody.system[0]).toEqual({
+      type: "text",
+      text: "You are Finnick.",
+      cache_control: { type: "ephemeral" }
+    });
+  });
+
+  it("072.5 — a systemBlocks block without cache gets no cache_control", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({ content: [{ type: "text", text: "Hi." }] }),
+      headers: { get: () => "req-1" }
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const req = makeReq({
+      method: "POST",
+      url: "/api/sugaragent/generate",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemBlocks: [{ text: "Uncached." }],
+        userPrompt: "hi"
+      })
+    });
+    await handleSugarAgentGenerate(req, makeRes());
+
+    const requestBody = JSON.parse(
+      (mockFetch.mock.calls[0] as [string, RequestInit])[1].body as string
+    ) as { system: Array<Record<string, unknown>> };
+    expect(requestBody.system[0]).not.toHaveProperty("cache_control");
+  });
+
+  it("072.5 — accepts systemBlocks alone (no systemPrompt) and passes usage through", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          content: [{ type: "text", text: "Hi." }],
+          usage: {
+            input_tokens: 12,
+            output_tokens: 34,
+            cache_read_input_tokens: 1000,
+            cache_creation_input_tokens: 0
+          }
+        }),
+      headers: { get: () => "req-1" }
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const req = makeReq({
+      method: "POST",
+      url: "/api/sugaragent/generate",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemBlocks: [{ text: "You are Finnick.", cache: true }],
+        userPrompt: "hi"
+      })
+    });
+    const res = makeRes();
+    await handleSugarAgentGenerate(req, res);
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as {
+      text: string;
+      usage: {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadInputTokens: number;
+        cacheCreationInputTokens: number;
+      };
+    };
+    expect(body.text).toBe("Hi.");
+    expect(body.usage).toEqual({
+      inputTokens: 12,
+      outputTokens: 34,
+      cacheReadInputTokens: 1000,
+      cacheCreationInputTokens: 0
+    });
   });
 
   it("wraps Anthropic non-2xx as 500 GatewayProxyFailure via caller", async () => {
