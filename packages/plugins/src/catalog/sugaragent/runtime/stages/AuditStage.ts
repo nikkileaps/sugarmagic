@@ -42,7 +42,15 @@ export class AuditStage implements TurnStage<AuditStageInput, AuditResult> {
       ...findStageDirectionViolations(input.generate.text),
       ...findSpatialGroundingViolations(input.generate.text, input.execution)
     ];
-    if (input.plan.responseSpecificity === "generic-only") {
+    // The generic-only length/sentence caps exist for the DETERMINISTIC canned
+    // path (short by construction). An LLM-generated persona reply's length is
+    // driven by the character's voice + the maxTokens cap, so don't reject an
+    // in-character reply here (Plan 072: a persona'd NPC answers social turns
+    // in character, and a chatty persona like a cheese-shop owner runs long).
+    if (
+      input.plan.responseSpecificity === "generic-only" &&
+      !input.generate.usedLlm
+    ) {
       violations.push(...findGenericOnlyViolations(input.generate.text));
     }
     if (input.generate.text.trim().length === 0) {

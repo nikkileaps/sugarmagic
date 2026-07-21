@@ -908,6 +908,90 @@ describe("SugarAgent runtime provider", () => {
     expect(gp?.cacheReadInputTokens).toBe(1500);
   });
 
+  // A persona'd NPC answers player-initiated social turns IN CHARACTER (LLM),
+  // not with a canned deterministic line; the opening turn stays canned.
+  it("routes a persona'd NPC's player social turn through the LLM (not the canned reply)", async () => {
+    let generateCalls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.endsWith("/api/sugaragent/lore/resolve")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              pages: [
+                {
+                  pageId: "lore.finnick",
+                  title: "Finnick",
+                  relativePath: "npc/finnick.md",
+                  sectionCount: 1,
+                  body: "## Persona\n\nCheese-obsessed and chatty.",
+                  sections: [
+                    { heading: "Persona", slug: "persona", content: "Cheese-obsessed and chatty." }
+                  ]
+                }
+              ],
+              missingPageIds: []
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.endsWith("/api/sugaragent/retrieve/search")) {
+          return new Response(JSON.stringify({ results: [], requestId: "s" }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (url.endsWith("/api/sugaragent/generate")) {
+          generateCalls += 1;
+          // A long, exuberant in-character reply (>440 chars, many sentences) —
+          // exactly the kind the generic-only audit caps used to reject.
+          return new Response(
+            JSON.stringify({
+              text:
+                "Ah, welcome, welcome! Finnick's the name, and cheese is my game! " +
+                "You've come to the finest little spot around, friend Mim! " +
+                "Now tell me, what brings you here today? Are you a sharp-and-aged " +
+                "sort of person, or more of a soft-and-creamy soul? Because let me " +
+                "tell you, I have got a wheel of something special that would make " +
+                "your whole week, no, your whole month, brighter! Just arrived, you " +
+                "say? Then you simply must let me be your very first welcome!",
+              requestId: "g"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error("Unexpected fetch in test: " + url);
+      })
+    );
+
+    const host = createConversationHost({
+      providers: [resolveSugarAgentProvider()]
+    });
+    const opening = await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:finnick",
+      npcDisplayName: "Finnick",
+      interactionMode: "agent",
+      lorePageId: "lore.finnick"
+    });
+    // Opening turn (no player text) stays the canned greeting — no LLM.
+    expect(opening?.text).toBe("Hello. What can I help you with today?");
+    expect(generateCalls).toBe(0);
+
+    const reply = await host.submitInput({
+      kind: "free_text",
+      text: "Hi! I'm Mim! I just arrived."
+    });
+    // The player's social turn goes through the LLM AND the long in-character
+    // reply survives the audit (not repaired to the canned "I'm listening.").
+    expect(generateCalls).toBe(1);
+    expect(reply?.text).toContain("cheese is my game");
+    expect(reply?.text).not.toBe("I'm listening.");
+    expect((reply?.text ?? "").length).toBeGreaterThan(440);
+  });
+
   // Plan 072.3 — session-start persona load.
   describe("persona load at session start", () => {
     type PersonaDiag = {
