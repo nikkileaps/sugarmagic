@@ -226,6 +226,14 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     let systemPrompt = "";
     let userPrompt = "";
     let retryCount = 0;
+    // Plan 072.7 — usage + model actually used, surfaced in diagnostics.
+    let turnUsage: {
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadInputTokens: number;
+      cacheCreationInputTokens: number;
+    } | null = null;
+    let modelUsed: string | null = null;
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
     const evidenceSummary = summarizeEvidence(input.retrieve.evidencePack, {
       maxItems: context.config.maxEvidenceResults,
@@ -400,13 +408,16 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         let generatedText = "";
         for (let attempt = 0; attempt <= GENERATE_RETRY_BACKOFF_MS.length; attempt += 1) {
           try {
-            generatedText = await this.llmProvider.generateStructuredTurn({
-              // Empty model → gateway defaults it server-side.
-              model: "",
+            const result = await this.llmProvider.generateStructuredTurn({
+              // Plan 072.7 — per-NPC override; empty → gateway default.
+              model: input.execution.selection.agentModelOverride?.trim() || "",
               systemPrompt,
               userPrompt,
               maxTokens: 300
             });
+            generatedText = result.text;
+            turnUsage = result.usage;
+            modelUsed = result.model;
             retryCount = attempt;
             break;
           } catch (error) {
@@ -490,6 +501,13 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           currentActivity: npcCurrentActivity?.activity ?? null,
           currentGoal: npcCurrentGoal?.goal ?? null,
           retryCount,
+          // Plan 072.7 — model actually used + prompt-cache usage (from 072.5's
+          // gateway passthrough). Small + always useful, so not gated.
+          modelUsed,
+          cacheReadInputTokens: turnUsage?.cacheReadInputTokens ?? null,
+          cacheCreationInputTokens: turnUsage?.cacheCreationInputTokens ?? null,
+          inputTokens: turnUsage?.inputTokens ?? null,
+          outputTokens: turnUsage?.outputTokens ?? null,
           systemPromptPreview,
           // Plan 072.4 (absorbed 071.8): the full prompts are heavy and were
           // dumped unconditionally. Gate behind debugLogging; keep the 220-char

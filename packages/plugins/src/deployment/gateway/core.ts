@@ -793,7 +793,7 @@ export async function handleSugarAgentGenerate(
   const model =
     typeof body["model"] === "string" && body["model"].trim()
       ? body["model"].trim()
-      : resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-sonnet-4-5");
+      : resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5");
   const systemPrompt =
     typeof body["systemPrompt"] === "string" ? body["systemPrompt"].trim() : "";
   const userPrompt =

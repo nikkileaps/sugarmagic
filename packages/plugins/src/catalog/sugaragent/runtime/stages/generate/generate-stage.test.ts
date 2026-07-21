@@ -188,7 +188,7 @@ describe("GenerateStage", () => {
 
   it("injects the Sugarlang constraint block into the system prompt", async () => {
     const llmProvider = {
-      generateStructuredTurn: vi.fn().mockResolvedValue("Respuesta corta.")
+      generateStructuredTurn: vi.fn().mockResolvedValue({ text: "Respuesta corta.", usage: null, model: "claude-haiku-4-5" })
     };
     const stage = new GenerateStage(llmProvider);
     const input = createStageInput();
@@ -242,7 +242,7 @@ describe("GenerateStage", () => {
 
   it("skips the generic-only fast path when a Sugarlang constraint is present", async () => {
     const llmProvider = {
-      generateStructuredTurn: vi.fn().mockResolvedValue("Hola. Estoy bien.")
+      generateStructuredTurn: vi.fn().mockResolvedValue({ text: "Hola. Estoy bien.", usage: null, model: "claude-haiku-4-5" })
     };
     const stage = new GenerateStage(llmProvider);
     const input = createStageInput() as any;
@@ -286,7 +286,7 @@ describe("GenerateStage", () => {
 
   it("uses tiny-turn prompt shaping for anchored first-meeting Sugarlang greetings", async () => {
     const llmProvider = {
-      generateStructuredTurn: vi.fn().mockResolvedValue("Hola.")
+      generateStructuredTurn: vi.fn().mockResolvedValue({ text: "Hola.", usage: null, model: "claude-haiku-4-5" })
     };
     const stage = new GenerateStage(llmProvider);
     const input = createStageInput() as any;
@@ -386,7 +386,7 @@ describe("GenerateStage", () => {
 
   it("does not disable tiny-turn prompt shaping just because prior history exists", async () => {
     const llmProvider = {
-      generateStructuredTurn: vi.fn().mockResolvedValue("Hola.")
+      generateStructuredTurn: vi.fn().mockResolvedValue({ text: "Hola.", usage: null, model: "claude-haiku-4-5" })
     };
     const stage = new GenerateStage(llmProvider);
     const input = createStageInput() as any;
@@ -470,7 +470,7 @@ describe("GenerateStage", () => {
   // when debugLogging is on; the 220-char preview is always present.
   it("gates the full systemPrompt/userPrompt in diagnostics behind debugLogging", async () => {
     const llmProvider = {
-      generateStructuredTurn: vi.fn().mockResolvedValue("Hi there.")
+      generateStructuredTurn: vi.fn().mockResolvedValue({ text: "Hi there.", usage: null, model: "claude-haiku-4-5" })
     };
     const stage = new GenerateStage(llmProvider);
 

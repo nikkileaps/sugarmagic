@@ -707,6 +707,20 @@ export function useNPCWorkspaceView(
                   })
                 }
               />
+              <TextInput
+                label="Agent Model Override"
+                size="xs"
+                description="Optional. Pin a bigger model for this NPC's dialogue (e.g. claude-opus-4-8). Empty = game default."
+                placeholder="claude-haiku-4-5 (default)"
+                value={selectedNPC.agentModelOverride ?? ""}
+                onChange={(event) => {
+                  const next = event.currentTarget.value.trim();
+                  updateNPC({
+                    ...selectedNPC,
+                    agentModelOverride: next.length > 0 ? next : undefined
+                  });
+                }}
+              />
             </Stack>
 
             <Stack gap="xs">

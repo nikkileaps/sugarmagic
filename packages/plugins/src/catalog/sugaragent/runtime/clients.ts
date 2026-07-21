@@ -24,8 +24,15 @@ export interface LLMGenerateRequest {
   maxTokens?: number;
 }
 
+/** Plan 072.7 — the LLM result now carries usage + the model actually used. */
+export interface LLMGenerateResult {
+  text: string;
+  usage: GatewayUsage | null;
+  model: string | null;
+}
+
 export interface LLMProvider {
-  generateStructuredTurn: (request: LLMGenerateRequest) => Promise<string>;
+  generateStructuredTurn: (request: LLMGenerateRequest) => Promise<LLMGenerateResult>;
 }
 
 export interface VectorStoreSearchRequest {
@@ -237,7 +244,7 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
     private readonly defaults: { maxTokens?: number } = {}
   ) {}
 
-  async generateStructuredTurn(request: LLMGenerateRequest): Promise<string> {
+  async generateStructuredTurn(request: LLMGenerateRequest): Promise<LLMGenerateResult> {
     const response = await this.client.generate({
       model: request.model.trim() || undefined,
       // Plan 072.5 — send the system prompt as one cacheable block (a single
@@ -249,7 +256,11 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
       userPrompt: normalizePrompt(request.userPrompt, "userPrompt"),
       maxTokens: normalizeMaxTokens(request.maxTokens, this.defaults.maxTokens ?? 300)
     });
-    return response.text;
+    return {
+      text: response.text,
+      usage: response.usage ?? null,
+      model: response.model ?? null
+    };
   }
 }
 

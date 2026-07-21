@@ -50,13 +50,23 @@ export function normalizeRetrievedEvidenceText(text: string): string {
     return "";
   }
 
+  // Strip the ingest header lines (Page ID:/Title:/Section:) from the front.
+  // The embedding text joins them with blank lines, so we must skip blank
+  // lines BETWEEN headers too — otherwise only the first header is removed and
+  // "Title:"/"Section:" leak into the NPC's evidence (Plan 072.7 fix).
   const lines = normalized.split("\n");
   let index = 0;
-  while (
-    index < lines.length &&
-    /^(Page ID:|Title:|Section:)\s+/i.test(lines[index]?.trim() ?? "")
-  ) {
-    index += 1;
+  while (index < lines.length) {
+    const line = lines[index]?.trim() ?? "";
+    if (line === "") {
+      index += 1;
+      continue;
+    }
+    if (/^(Page ID:|Title:|Section:)\s+/i.test(line)) {
+      index += 1;
+      continue;
+    }
+    break;
   }
 
   const content = lines.slice(index).join("\n").trim();
