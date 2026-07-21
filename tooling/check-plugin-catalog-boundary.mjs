@@ -35,8 +35,11 @@ for (const filePath of await collectSourceFiles(catalogRoot)) {
   const catalogRelative = path.relative(catalogRoot, filePath);
   const thisCatalog = catalogRelative.split(path.sep)[0];
 
-  // Match relative import/export-from paths.
-  const importPattern = /from\s+['"](\.[^'"]+)['"]/g;
+  // Match relative import/export-from paths, including dynamic import().
+  // Static `from "..."` / `export ... from "..."` AND `await import("...")`
+  // both need to be caught -- a dynamic cross-catalog import is exactly the
+  // pattern this guard exists to prevent.
+  const importPattern = /(?:from\s+['"]|import\s*\(\s*['"])(\.[^'"]+)['"]/g;
   let match;
   while ((match = importPattern.exec(contents)) !== null) {
     const importPath = match[1];
