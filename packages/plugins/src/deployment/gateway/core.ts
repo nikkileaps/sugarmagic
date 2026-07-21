@@ -16,6 +16,7 @@ import {
 // compile-options.ts precisely so this import survives into the compiled
 // bundle for the supabase-jwt auth gate that buildGatewayServerFile injects.
 import { verifySupabaseJwt } from "./supabase-jwt";
+import { isSecretSection } from "./lore-designation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -538,7 +539,7 @@ function resolveLoreSource(): LoreSource {
   };
 }
 
-function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks: LoreChunk[]; warnings: string[] } {
+export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks: LoreChunk[]; warnings: string[] } {
   const source = resolveLoreSource();
   if (!source.sourceReady || !source.sourcePath) {
     return {
@@ -583,6 +584,10 @@ function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks: LoreC
     });
 
     for (const section of sections) {
+      // Plan 072.1: `## Secrets` never enters the vector index. The section
+      // stays in `pages[].sections` (072.2 strips it from lore/resolve); only
+      // the ingest chunks exclude it here.
+      if (isSecretSection(section)) continue;
       const chunkId = pageId + "#" + section.slug;
       const embeddingText = [
         "Page ID: " + pageId,
