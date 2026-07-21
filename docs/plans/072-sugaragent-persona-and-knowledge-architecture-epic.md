@@ -102,6 +102,12 @@ Append a compact persona digest near the END of the user message each turn, afte
 
 docs/api: plugin page gains the lore-page contract (`## Persona`/`## Voice` convention -> reference the authoring doc), the gateway page-fetch + structured-system routes, and the NpcDefinition model-override field. docs/authoring: the worked persona page example (072.1). Measured cost-per-turn note from 072.7.
 
+### Wrap notes (2026-07-21)
+
+- **docs done**: `packages/plugins/src/catalog/sugaragent/docs/api/npc-knowledge-model.md` (new; layers, load path, prompt cache boundary, generate route, model selection, retrieval); `docs/authoring/npc-lore-page.md` (072.1 worked example). The knowledge-model doc references the authoring doc, not this plan.
+- **Measured cost / cache-minimum (072.7)**: representative persona (Finnick Thorn: `## Persona` + `## Voice` + one core section) -> full system prompt **~646 input tokens**, measured live via the gateway. That is under EVERY model's minimum cacheable prefix (Sonnet 4.5 ~1024, Sonnet 4.6 ~2048, Haiku 4.5 ~4096), so `cacheCreationInputTokens`/`cacheReadInputTokens` are 0 -- **a typical persona does not cache**. The `cache_control` mechanism is correct and free to leave enabled; it only pays off for large personas. At Haiku prices a typical uncached turn is ~$0.003 (input ~1.4k tokens incl. per-turn user message + evidence, output ~250 tokens), so non-caching of small personas is not a cost problem. Conclusion: keep the mechanism; do not chase caching by inflating personas; revisit only if personas grow past the model minimum or if a lower-minimum tier is chosen.
+- **Followed-on / out of scope**: retrieval has no relevance floor (returns top-K regardless of similarity), which lets weak queries surface loosely-related chunks. Deliberately NOT patched here; promoted to its own backlog epic (retrieval relevance + knowledge-injection quality). Two evidence-safety bugs found during 072 verification were fixed in-epic: the deterministic fallback no longer recites raw evidence (072.6), and the `Title:`/`Section:` ingest-header leak is stripped from evidence text (072.7).
+
 ## Deferred (with revisit triggers)
 
 - Quest-stage-scoped knowledge gating (the TimeChara problem: an NPC knows different things at different story points): revisit at epic C/D when quest state and memory both feed the card fetch; code comment at the lore/resolve secrets-exclusion site (the fetch is the natural gate point; `## Secrets` from 072.1 is the static precursor of this gate).

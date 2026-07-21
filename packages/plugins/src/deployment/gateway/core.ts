@@ -1069,6 +1069,12 @@ export async function handleSugarAgentLoreResolve(
     // lexicon). Pages without a secret section pass through byte-identical --
     // only recompute `body` when a secret is actually being removed, so the
     // raw markdown is preserved for the common case.
+    //
+    // DEFERRED (Plan 072, revisit epic C/D): quest-stage-scoped knowledge
+    // gating. This exclusion point is the natural gate -- when quest state +
+    // memory feed the card fetch, filter sections by story stage here (an NPC
+    // knows different things at different points). `## Secrets` is the static
+    // precursor of that dynamic gate.
     const hasSecret = page.sections.some(isSecretSection);
     if (!hasSecret) {
       resolvedPages.push({

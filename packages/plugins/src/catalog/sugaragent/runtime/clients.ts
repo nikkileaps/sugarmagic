@@ -384,6 +384,10 @@ function buildPersonaDigest(personaCard: LoreCardSection[]): string {
 export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
   constructor(private readonly client: SugarAgentGatewayLoreClient) {}
 
+  // DEFERRED (Plan 072, revisit if session-start latency is felt): the persona
+  // is fetched once per conversation. If refetching the same NPC's page across
+  // conversations becomes a felt cost, add a browser-side cache keyed on
+  // (pageId, content hash) here.
   async loadPersona(pageId: string | null): Promise<LoadedPersona> {
     const trimmed = typeof pageId === "string" ? pageId.trim() : "";
     if (!trimmed) {
