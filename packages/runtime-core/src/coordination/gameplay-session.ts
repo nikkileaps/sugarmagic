@@ -424,6 +424,7 @@ export function createConversationSelectionFromNpc(options: {
     npcDisplayName: npcDefinition.displayName,
     interactionMode: npcDefinition.interactionMode,
     lorePageId: npcDefinition.lorePageId,
+    agentModelOverride: npcDefinition.agentModelOverride ?? null,
     activeQuest: toActiveQuestContext(trackedQuest),
     scriptedFollowupDialogueDefinitionId: dialogueDefinitionId,
     ...(selectionMetadata ? { metadata: selectionMetadata } : {})

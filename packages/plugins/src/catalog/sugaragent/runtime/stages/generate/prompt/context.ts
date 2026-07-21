@@ -61,10 +61,27 @@ export interface BasePromptContext {
 
   /**
    * Opaque prompt overlay from a language-learning plugin (e.g. sugarlang).
-   * The builder splices this into the system prompt without interpreting it.
+   * Plan 072.4 relocates this to the USER message (per-turn, uncached).
    * Empty string or null means no overlay.
    */
   languageLearningOverlay: string | null;
+
+  /**
+   * Plan 072.4 — the NPC's persona card + core knowledge, loaded once at
+   * session start (072.3). Rendered into the byte-stable system prompt.
+   * Null (or empty layers) = degraded: system falls back to name + tone.
+   * Structural (not the runtime LoadedPersona type) to keep the builder pure.
+   */
+  persona: {
+    personaCard: Array<{ heading: string; slug: string; content: string }>;
+    coreKnowledge: Array<{ heading: string; slug: string; content: string }>;
+  } | null;
+
+  /**
+   * Plan 072.8 — compact persona drift-reminder, re-injected at the END of the
+   * user message (after history). Empty string = nothing to re-inject.
+   */
+  personaDigest: string;
 }
 
 /**

@@ -1,4 +1,11 @@
-import type { RetrievedEvidenceItem } from "./types";
+import type { LoadedPersona, LoreCardSection, RetrievedEvidenceItem } from "./types";
+// Pure classifier shared with the gateway (ingest) and lore/resolve. It has no
+// node/gateway dependencies, so importing it into the browser runtime is safe;
+// it is the "third consumer" (the card fetch) named in Plan 072.1.
+import {
+  designateLoreSections,
+  type DesignatableLoreSection
+} from "../../../deployment/gateway/lore-designation";
 
 export const OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE = "page_id";
 
@@ -17,8 +24,15 @@ export interface LLMGenerateRequest {
   maxTokens?: number;
 }
 
+/** Plan 072.7 — the LLM result now carries usage + the model actually used. */
+export interface LLMGenerateResult {
+  text: string;
+  usage: GatewayUsage | null;
+  model: string | null;
+}
+
 export interface LLMProvider {
-  generateStructuredTurn: (request: LLMGenerateRequest) => Promise<string>;
+  generateStructuredTurn: (request: LLMGenerateRequest) => Promise<LLMGenerateResult>;
 }
 
 export interface VectorStoreSearchRequest {
@@ -32,16 +46,35 @@ export interface VectorStoreProvider {
   searchLore: (request: VectorStoreSearchRequest) => Promise<RetrievedEvidenceItem[]>;
 }
 
+/** Plan 072.5 — a system content block; `cache: true` marks the cache breakpoint. */
+export interface GatewaySystemBlock {
+  text: string;
+  cache?: boolean;
+}
+
 export interface GatewayGenerateRequest {
   model?: string;
-  systemPrompt: string;
+  /** Legacy string form (sugarlang). Prefer systemBlocks for caching. */
+  systemPrompt?: string;
+  /** Plan 072.5 — structured system with a cache breakpoint (sugaragent). */
+  systemBlocks?: GatewaySystemBlock[];
   userPrompt: string;
   maxTokens?: number;
+}
+
+/** Plan 072.5 — Anthropic usage passthrough (incl. prompt-cache read/create). */
+export interface GatewayUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
 }
 
 export interface GatewayGenerateResult {
   text: string;
   requestId: string | null;
+  usage?: GatewayUsage | null;
+  model?: string | null;
 }
 
 export interface GatewayVectorSearchRequest {
@@ -211,14 +244,23 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
     private readonly defaults: { maxTokens?: number } = {}
   ) {}
 
-  async generateStructuredTurn(request: LLMGenerateRequest): Promise<string> {
+  async generateStructuredTurn(request: LLMGenerateRequest): Promise<LLMGenerateResult> {
     const response = await this.client.generate({
       model: request.model.trim() || undefined,
-      systemPrompt: normalizePrompt(request.systemPrompt, "systemPrompt"),
+      // Plan 072.5 — send the system prompt as one cacheable block (a single
+      // cache breakpoint at the end of the full system prompt). sugaragent's
+      // system half is byte-stable per session (072.4), so this caches per-NPC.
+      systemBlocks: [
+        { text: normalizePrompt(request.systemPrompt, "systemPrompt"), cache: true }
+      ],
       userPrompt: normalizePrompt(request.userPrompt, "userPrompt"),
       maxTokens: normalizeMaxTokens(request.maxTokens, this.defaults.maxTokens ?? 300)
     });
-    return response.text;
+    return {
+      text: response.text,
+      usage: response.usage ?? null,
+      model: response.model ?? null
+    };
   }
 }
 
@@ -233,5 +275,147 @@ export class SugarAgentGatewayVectorStoreProvider implements VectorStoreProvider
       filters: request.filters ?? undefined
     });
     return response.results;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Plan 072.3 — persona/core knowledge load via the existing lore/resolve route
+// ---------------------------------------------------------------------------
+
+export interface LoreResolveRequest {
+  pageIds: string[];
+}
+
+export interface ResolvedLorePageSection {
+  heading: string;
+  slug: string;
+  content: string;
+}
+
+export interface ResolvedLorePage {
+  pageId: string;
+  title: string;
+  relativePath: string;
+  sectionCount: number;
+  body: string;
+  sections: ResolvedLorePageSection[];
+}
+
+export interface LoreResolveResult {
+  ok: boolean;
+  pages: ResolvedLorePage[];
+  missingPageIds: string[];
+}
+
+/**
+ * Thin fetch client for the gateway's `POST /api/sugaragent/lore/resolve`
+ * (072.2 already excludes `## Secrets` from the response). House shape: baseUrl
+ * + BearerTokenGetter, `authHeaders` + `parseJsonResponse`.
+ */
+export class SugarAgentGatewayLoreClient {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly getBearerToken: BearerTokenGetter = async () => null
+  ) {}
+
+  async resolve(request: LoreResolveRequest): Promise<LoreResolveResult> {
+    const response = await fetch(
+      `${normalizeBaseUrl(this.baseUrl)}/api/sugaragent/lore/resolve`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeaders(this.getBearerToken))
+        },
+        body: JSON.stringify(request)
+      }
+    );
+
+    return parseJsonResponse<LoreResolveResult>(
+      response,
+      "SugarAgent gateway lore resolve"
+    );
+  }
+}
+
+export interface PersonaLoader {
+  /** Resolve + designate the NPC's page. Null/empty id -> degraded persona. */
+  loadPersona: (pageId: string | null) => Promise<LoadedPersona>;
+}
+
+function degradedPersona(pageId: string | null): LoadedPersona {
+  return {
+    pageId,
+    loaded: false,
+    fallbackReason: "persona-unavailable",
+    personaCard: [],
+    coreKnowledge: [],
+    digest: ""
+  };
+}
+
+/** Plan 072.8 — the number of `## Persona` lines the drift-reminder digest keeps. */
+const PERSONA_DIGEST_LINE_COUNT = 4;
+
+/**
+ * Build the compact persona digest: the first PERSONA_DIGEST_LINE_COUNT
+ * non-empty lines of `## Persona`, plus the full `## Voice` section. Computed
+ * once at session start; empty string when neither is authored.
+ */
+export function buildPersonaDigest(personaCard: LoreCardSection[]): string {
+  const personaLines = personaCard
+    .filter((section) => section.slug === "persona")
+    .flatMap((section) => section.content.split("\n"))
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .slice(0, PERSONA_DIGEST_LINE_COUNT);
+  const voiceText = personaCard
+    .filter((section) => section.slug === "voice")
+    .map((section) => section.content.trim())
+    .filter(Boolean)
+    .join("\n");
+
+  const parts: string[] = [];
+  if (personaLines.length > 0) parts.push(personaLines.join("\n"));
+  if (voiceText) parts.push(`Voice: ${voiceText}`);
+  return parts.join("\n");
+}
+
+export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
+  constructor(private readonly client: SugarAgentGatewayLoreClient) {}
+
+  // DEFERRED (Plan 072, revisit if session-start latency is felt): the persona
+  // is fetched once per conversation. If refetching the same NPC's page across
+  // conversations becomes a felt cost, add a browser-side cache keyed on
+  // (pageId, content hash) here.
+  async loadPersona(pageId: string | null): Promise<LoadedPersona> {
+    const trimmed = typeof pageId === "string" ? pageId.trim() : "";
+    if (!trimmed) {
+      return degradedPersona(null);
+    }
+    const result = await this.client.resolve({ pageIds: [trimmed] });
+    const page = result.pages.find((entry) => entry.pageId === trimmed);
+    if (!page) {
+      // A page in missingPageIds (or absent) IS the degraded path (D3).
+      return degradedPersona(trimmed);
+    }
+    // `page.sections` matches DesignatableLoreSection structurally.
+    const { personaCard, coreKnowledge } = designateLoreSections(
+      page.sections as DesignatableLoreSection[]
+    );
+    const toCardSection = (section: DesignatableLoreSection) => ({
+      heading: section.heading,
+      slug: section.slug,
+      content: section.content
+    });
+    const card = personaCard.map(toCardSection);
+    return {
+      pageId: trimmed,
+      loaded: true,
+      fallbackReason: null,
+      personaCard: card,
+      coreKnowledge: coreKnowledge.map(toCardSection),
+      digest: buildPersonaDigest(card)
+    };
   }
 }

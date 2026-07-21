@@ -3,7 +3,13 @@
  *
  * Purpose: Pure function that takes a typed GeneratePromptContext and returns
  *          the system and user prompts for the NPC generation LLM call.
- *          Dispatches to mode-specific builders based on the discriminated union.
+ *
+ * Plan 072.4 (cache-boundary restructure): the SYSTEM prompt holds only
+ * session-stable content (identity, grounding rules, persona card, core
+ * knowledge, voice directive) so it is byte-stable across turns and
+ * prompt-caches. EVERYTHING per-turn (world state, sugarlang overlay, minimal-
+ * greeting instruction, directives, evidence, history, player text) lives in
+ * the USER message.
  *
  * Exports:
  *   - GeneratePromptResult
@@ -32,81 +38,120 @@ function fillSlot(line: string, slots: Record<string, string>): string {
   return line.replace(/\{(\w+)\}/g, (_, key: string) => slots[key] ?? `{${key}}`);
 }
 
+type PersonaSection = { heading: string; slug: string; content: string };
+
+function renderSections(sections: PersonaSection[]): string {
+  return sections
+    .map((section) => `## ${section.heading}\n${section.content}`)
+    .join("\n\n");
+}
+
 /**
- * Builds the shared system prompt lines present in all modes:
- * identity, tone, grounding rules, world state, and plugin overlay.
+ * The byte-stable half. Identity + grounding rules + persona card + core
+ * knowledge + voice directive. NOTHING per-turn — every field read here is
+ * session-stable (npcDisplayName, interactionMode, tone/config, persona loaded
+ * once at session start). This is what prompt-caches.
  */
-function buildSharedSystemLines(
+function buildStableSystemLines(
   context: BasePromptContext,
-  interactionMode: string,
-  suppressWorldState: boolean
+  interactionMode: string
 ): (string | null)[] {
   const slots = {
     npcDisplayName: context.npcDisplayName,
     interactionMode
   };
 
+  const personaSections =
+    context.persona?.personaCard.filter((s) => s.slug === "persona") ?? [];
+  const voiceSections =
+    context.persona?.personaCard.filter((s) => s.slug === "voice") ?? [];
+  const coreSections = context.persona?.coreKnowledge ?? [];
+
+  // Voice directive prefers an authored `## Voice` section (D5); the plugin-wide
+  // `tone` config is the game-level fallback.
+  const voiceText = voiceSections.length > 0
+    ? renderSections(voiceSections)
+    : null;
+
   return [
     // 1. Identity
     ...SYSTEM_PROMPT_IDENTITY.map((line) => fillSlot(line, slots)),
 
-    // 1b. Tone
-    context.tone
-      ? `Tone: ${context.tone}. Let this tone guide word choice, pacing, and warmth — but stay in character.`
-      : null,
-
-    // 2. Grounding rules
+    // 2. Grounding rules (the "NPC profile" they cite now refers to the card below)
     ...SYSTEM_PROMPT_GROUNDING_RULES,
 
-    // 3. World state
-    context.activeQuestDisplayName && !suppressWorldState
+    // 3. Persona card (## Persona) — who you are
+    personaSections.length > 0
+      ? `Who you are (persona):\n${renderSections(personaSections)}`
+      : null,
+
+    // 4. Core knowledge (rest of your page) — what you always know
+    coreSections.length > 0
+      ? `What you know (your life and immediate world):\n${renderSections(coreSections)}`
+      : null,
+
+    // 5. Voice directive — authored ## Voice wins, else game tone
+    voiceText
+      ? `Voice: ${voiceText}\nLet this guide word choice, pacing, and warmth — but stay in character.`
+      : context.tone
+        ? `Tone: ${context.tone}. Let this tone guide word choice, pacing, and warmth — but stay in character.`
+        : null
+  ];
+}
+
+/**
+ * The per-turn world-state block, relocated from the system prompt to the user
+ * message (Plan 072.4). Phrasings + minimal-greeting gating preserved from the
+ * prior user-message block; the quest line (previously only in the system half)
+ * is folded in here so nothing is lost.
+ */
+function buildWorldStateUserLines(
+  context: AgentPromptContext
+): (string | null)[] {
+  const suppress = context.minimalGreetingMode;
+  return [
+    context.activeQuestDisplayName && !suppress
       ? `The player is currently on a quest: "${context.activeQuestDisplayName}"${context.activeQuestStageDisplayName ? ` (stage: ${context.activeQuestStageDisplayName})` : ""}. This is the PLAYER's goal, not yours. Only reference it if the player brings it up or if it's directly relevant to your character.`
       : null,
 
     context.currentLocationDisplayName
-      ? `Current location: ${context.currentLocationDisplayName}.`
+      ? `Current runtime location: ${context.currentLocationDisplayName}.`
       : null,
 
-    context.currentParentAreaDisplayName && !suppressWorldState
-      ? `Containing area: ${context.currentParentAreaDisplayName}.`
+    context.currentParentAreaDisplayName && !suppress
+      ? `Current containing area: ${context.currentParentAreaDisplayName}.`
       : null,
 
     context.npcPlayerRelation
-      ? `Player proximity: ${context.npcPlayerRelation.proximityBand}. Same area: ${context.npcPlayerRelation.sameArea ? "yes" : "no"}.`
+      ? `Player/NPC proximity band: ${context.npcPlayerRelation.proximityBand}.`
       : null,
 
-    context.npcCurrentTask && !suppressWorldState
-      ? `Current task: ${context.npcCurrentTask.displayName}.`
+    context.npcCurrentTask && !suppress
+      ? `NPC current task: ${context.npcCurrentTask.displayName}.`
       : null,
 
-    context.npcCurrentTask?.description && !suppressWorldState
-      ? `Task context: ${context.npcCurrentTask.description}.`
+    context.npcCurrentTask?.description && !suppress
+      ? `NPC task context: ${context.npcCurrentTask.description}.`
       : null,
 
-    context.npcCurrentActivity && !suppressWorldState
-      ? `Current activity: ${context.npcCurrentActivity}.`
+    context.npcCurrentActivity && !suppress
+      ? `NPC current activity: ${context.npcCurrentActivity}.`
       : null,
 
-    context.npcCurrentGoal && !suppressWorldState
-      ? `Current goal: ${context.npcCurrentGoal}.`
+    context.npcCurrentGoal && !suppress
+      ? `NPC current goal: ${context.npcCurrentGoal}.`
       : null,
 
-    context.npcMovement && !suppressWorldState
-      ? `Movement status: ${context.npcMovement.status}${context.npcMovement.targetAreaDisplayName ? ` toward ${context.npcMovement.targetAreaDisplayName}` : ""}.`
-      : null,
-
-    // 4. Plugin overlay (opaque — language learning, etc.)
-    context.languageLearningOverlay || null
+    context.npcMovement && !suppress
+      ? `NPC movement status: ${context.npcMovement.status}${context.npcMovement.targetAreaDisplayName ? ` toward ${context.npcMovement.targetAreaDisplayName}` : ""}.`
+      : null
   ];
 }
 
 // ── Agent mode builder ──
 
 function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
-  const systemLines: (string | null)[] = [
-    ...buildSharedSystemLines(context, "agent", context.minimalGreetingMode),
-    context.minimalGreetingMode ? MINIMAL_GREETING_INSTRUCTION : null
-  ];
+  const systemLines = buildStableSystemLines(context, "agent");
 
   const userLines: (string | null)[] = [
     context.minimalGreetingMode
@@ -126,6 +171,9 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
       ? "This is a first-meeting greeting for a beginner learner. Keep it brief, warm, and generic. Do not volunteer what the NPC is doing unless asked."
       : null,
 
+    // Relocated from the system prompt (Plan 072.4).
+    context.minimalGreetingMode ? MINIMAL_GREETING_INSTRUCTION : null,
+
     context.responseIntent === "clarify"
       ? "Ask one concise clarifying question. Do not answer beyond what is grounded."
       : null,
@@ -142,37 +190,11 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
       ? "Use grounded evidence when present, but do not add unsupported specifics."
       : "Keep the reply generic, in-character, and low-specificity.",
 
-    context.currentLocationDisplayName
-      ? `Current runtime location: ${context.currentLocationDisplayName}.`
-      : null,
+    // World state (relocated from the system prompt, Plan 072.4).
+    ...buildWorldStateUserLines(context),
 
-    context.currentParentAreaDisplayName && !context.minimalGreetingMode
-      ? `Current containing area: ${context.currentParentAreaDisplayName}.`
-      : null,
-
-    context.npcPlayerRelation
-      ? `Player/NPC proximity band: ${context.npcPlayerRelation.proximityBand}.`
-      : null,
-
-    context.npcCurrentTask && !context.minimalGreetingMode
-      ? `NPC current task: ${context.npcCurrentTask.displayName}.`
-      : null,
-
-    context.npcCurrentTask?.description && !context.minimalGreetingMode
-      ? `NPC task context: ${context.npcCurrentTask.description}.`
-      : null,
-
-    context.npcCurrentActivity && !context.minimalGreetingMode
-      ? `NPC current activity: ${context.npcCurrentActivity}.`
-      : null,
-
-    context.npcCurrentGoal && !context.minimalGreetingMode
-      ? `NPC current goal: ${context.npcCurrentGoal}.`
-      : null,
-
-    context.npcMovement && !context.minimalGreetingMode
-      ? `NPC movement status: ${context.npcMovement.status}${context.npcMovement.targetAreaDisplayName ? ` toward ${context.npcMovement.targetAreaDisplayName}` : ""}.`
-      : null,
+    // Sugarlang (or other) overlay — opaque, per-turn (relocated from system).
+    context.languageLearningOverlay || null,
 
     context.evidenceSummary.length > 0
       ? `Evidence:\n- ${context.evidenceSummary.join("\n- ")}`
@@ -182,7 +204,13 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
       ? `Recent history:\n${context.recentHistory
           .map((entry) => `${entry.role}: ${entry.text}`)
           .join("\n")}`
-      : "Recent history: none."
+      : "Recent history: none.",
+
+    // Plan 072.8 — persona drift reminder, LAST block (after history). Lives in
+    // the uncached user half, so it doesn't disturb 072.4 system byte-stability.
+    context.personaDigest
+      ? `Before you reply, stay in character. Remember who you are:\n${context.personaDigest}`
+      : null
   ];
 
   return {
@@ -196,9 +224,8 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
 /**
  * Builds the system and user prompts from a typed context.
  *
- * This is a pure function with no side effects. It does not call any LLM,
- * access any external state, or read from annotations. The GenerateStage
- * is responsible for compiling the context; this function just formats it.
+ * Pure function: no side effects, no LLM calls, no annotation reads. The
+ * GenerateStage compiles the context; this function just formats it.
  *
  * @throws Error if npcDisplayName is empty
  */

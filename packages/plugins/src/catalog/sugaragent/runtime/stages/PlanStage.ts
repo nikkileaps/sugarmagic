@@ -87,7 +87,12 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       turnPath: input.interpret.turnRouting.path,
       initiativeAction: decision.initiativeAction,
       noveltyState: decision.noveltyState,
-      claims: summarizeEvidence(input.retrieve.evidencePack),
+      // Diagnostic "claims" field, not the model prompt — keep the legacy
+      // compact budget (the model-facing budget lives in GenerateStage, 072.6).
+      claims: summarizeEvidence(input.retrieve.evidencePack, {
+        maxItems: 3,
+        perItemChars: 180
+      }),
       actionProposals,
       replyInputMode: decision.replyInputMode,
       replyPlaceholder: decision.replyPlaceholder

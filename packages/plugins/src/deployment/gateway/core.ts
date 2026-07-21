@@ -16,6 +16,7 @@ import {
 // compile-options.ts precisely so this import survives into the compiled
 // bundle for the supabase-jwt auth gate that buildGatewayServerFile injects.
 import { verifySupabaseJwt } from "./supabase-jwt";
+import { isSecretSection, composeLoreBody } from "./lore-designation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -538,7 +539,7 @@ function resolveLoreSource(): LoreSource {
   };
 }
 
-function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks: LoreChunk[]; warnings: string[] } {
+export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks: LoreChunk[]; warnings: string[] } {
   const source = resolveLoreSource();
   if (!source.sourceReady || !source.sourcePath) {
     return {
@@ -583,6 +584,10 @@ function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks: LoreC
     });
 
     for (const section of sections) {
+      // Plan 072.1: `## Secrets` never enters the vector index. The section
+      // stays in `pages[].sections` (072.2 strips it from lore/resolve); only
+      // the ingest chunks exclude it here.
+      if (isSecretSection(section)) continue;
       const chunkId = pageId + "#" + section.slug;
       const embeddingText = [
         "Page ID: " + pageId,
@@ -788,7 +793,7 @@ export async function handleSugarAgentGenerate(
   const model =
     typeof body["model"] === "string" && body["model"].trim()
       ? body["model"].trim()
-      : resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-sonnet-4-5");
+      : resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5");
   const systemPrompt =
     typeof body["systemPrompt"] === "string" ? body["systemPrompt"].trim() : "";
   const userPrompt =
@@ -798,14 +803,48 @@ export async function handleSugarAgentGenerate(
       ? Math.max(1, Math.floor(body["maxTokens"]))
       : 300;
 
-  if (!systemPrompt || !userPrompt) {
+  // Plan 072.5 — structured system blocks with a cache breakpoint. When
+  // `systemBlocks` is present, the gateway maps it to Anthropic `system`
+  // content blocks and marks `cache: true` blocks with cache_control:ephemeral
+  // (prompt caching is GA; no beta header). When absent it falls back to the
+  // legacy `systemPrompt` string (sugarlang's teacher/verify/scripted/chunk
+  // calls stay on that path, uncached).
+  const rawSystemBlocks = Array.isArray(body["systemBlocks"])
+    ? (body["systemBlocks"] as unknown[])
+    : null;
+  const systemBlocks = rawSystemBlocks
+    ? rawSystemBlocks
+        .filter(
+          (entry): entry is { text: string; cache?: boolean } =>
+            !!entry &&
+            typeof entry === "object" &&
+            typeof (entry as { text?: unknown }).text === "string" &&
+            (entry as { text: string }).text.trim().length > 0
+        )
+        .map((entry) => ({
+          text: entry.text.trim(),
+          cache: (entry as { cache?: unknown }).cache === true
+        }))
+    : null;
+  const hasSystemBlocks = !!systemBlocks && systemBlocks.length > 0;
+
+  if ((!systemPrompt && !hasSystemBlocks) || !userPrompt) {
     sendJson(res, 400, {
       ok: false,
       error: "InvalidRequest",
-      message: "systemPrompt and userPrompt are required."
+      message:
+        "userPrompt and one of systemPrompt or systemBlocks are required."
     });
     return;
   }
+
+  const anthropicSystem = hasSystemBlocks
+    ? systemBlocks!.map((block) => ({
+        type: "text",
+        text: block.text,
+        ...(block.cache ? { cache_control: { type: "ephemeral" } } : {})
+      }))
+    : systemPrompt;
 
   const { payload, headers } = await requestJson(
     "https://api.anthropic.com/v1/messages",
@@ -819,7 +858,7 @@ export async function handleSugarAgentGenerate(
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        system: systemPrompt,
+        system: anthropicSystem,
         messages: [
           {
             role: "user",
@@ -843,9 +882,33 @@ export async function handleSugarAgentGenerate(
     throw new Error("Anthropic response did not include text content.");
   }
 
+  // Plan 072.5 — pass usage through (incl. cache read/create) so the browser
+  // and 072.7 diagnostics can observe cache behavior. Coerce to numbers.
+  const rawUsage = (payload as { usage?: Record<string, unknown> }).usage ?? {};
+  const usageNumber = (key: string): number => {
+    const value = rawUsage[key];
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  };
+
+  // Plan 072.7 (mini-review) — report the model Anthropic actually served
+  // (its response `model`), not just the requested alias/tier; fall back to
+  // the requested id when the response omits it.
+  const servedModel =
+    typeof (payload as { model?: unknown }).model === "string" &&
+    (payload as { model: string }).model.trim().length > 0
+      ? (payload as { model: string }).model
+      : model;
+
   sendJson(res, 200, {
     text,
-    requestId: headers.get("request-id")
+    requestId: headers.get("request-id"),
+    usage: {
+      inputTokens: usageNumber("input_tokens"),
+      outputTokens: usageNumber("output_tokens"),
+      cacheReadInputTokens: usageNumber("cache_read_input_tokens"),
+      cacheCreationInputTokens: usageNumber("cache_creation_input_tokens")
+    },
+    model: servedModel
   });
 }
 
@@ -1010,13 +1073,39 @@ export async function handleSugarAgentLoreResolve(
       missingPageIds.push(pageId);
       continue;
     }
+    // Plan 072.2: `## Secrets` must not leave the gateway. Strip it from BOTH
+    // `sections` and `body` (sugarlang's consumer feeds each into the scene
+    // lexicon). Pages without a secret section pass through byte-identical --
+    // only recompute `body` when a secret is actually being removed, so the
+    // raw markdown is preserved for the common case.
+    //
+    // DEFERRED (Plan 072, revisit epic C/D): quest-stage-scoped knowledge
+    // gating. This exclusion point is the natural gate -- when quest state +
+    // memory feed the card fetch, filter sections by story stage here (an NPC
+    // knows different things at different points). `## Secrets` is the static
+    // precursor of that dynamic gate.
+    const hasSecret = page.sections.some(isSecretSection);
+    if (!hasSecret) {
+      resolvedPages.push({
+        pageId: page.pageId,
+        title: page.title,
+        relativePath: page.relativePath,
+        sectionCount: page.sectionCount,
+        body: page.body,
+        sections: page.sections
+      });
+      continue;
+    }
+    const visibleSections = page.sections.filter(
+      (section) => !isSecretSection(section)
+    );
     resolvedPages.push({
       pageId: page.pageId,
       title: page.title,
       relativePath: page.relativePath,
-      sectionCount: page.sectionCount,
-      body: page.body,
-      sections: page.sections
+      sectionCount: visibleSections.length,
+      body: composeLoreBody(visibleSections),
+      sections: visibleSections
     });
   }
 

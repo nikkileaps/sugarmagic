@@ -139,9 +139,9 @@ export function normalizeSugarAgentPluginConfig(
   return {
     // Story 46.14 — only the proxy URL crosses the plugin/runtime
     // boundary. Anthropic / OpenAI API keys + model identifiers +
-    // vector store ids all live server-side now (Studio's vite
-    // middleware in dev; the deployed Cloud Run gateway in
-    // published-web). They never enter SugarAgentPluginConfig.
+    // vector store ids all live server-side now (the local SugarDeploy
+    // gateway in dev; the deployed Cloud Run gateway in published-web).
+    // They never enter SugarAgentPluginConfig.
     proxyBaseUrl:
       readEnvValue(environment, "SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL") ||
       (typeof config?.proxyBaseUrl === "string" ? config.proxyBaseUrl.trim() : ""),
@@ -178,6 +178,11 @@ export function normalizeSugarAgentPluginConfig(
       typeof config?.anthropicModel === "string"
         ? config.anthropicModel.trim()
         : "",
+    maxEvidenceCharsPerItem:
+      typeof config?.maxEvidenceCharsPerItem === "number" &&
+      Number.isFinite(config.maxEvidenceCharsPerItem)
+        ? Math.max(120, Math.min(4000, Math.floor(config.maxEvidenceCharsPerItem)))
+        : 600,
     maxEvidenceResults:
       typeof config?.maxEvidenceResults === "number" &&
       Number.isFinite(config.maxEvidenceResults)
@@ -267,6 +272,15 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       max: 8
     },
     {
+      configKey: "maxEvidenceCharsPerItem",
+      label: "Max Evidence Chars / Item",
+      type: "number",
+      group: "Runtime Behavior",
+      default: 600,
+      min: 120,
+      max: 4000
+    },
+    {
       configKey: "debugLogging",
       label: "Structured Debug Logging",
       type: "boolean",
@@ -311,6 +325,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     openAiVectorStoreId: "",
     anthropicModel: "",
     maxEvidenceResults: 4,
+    maxEvidenceCharsPerItem: 600,
     debugLogging: false,
     tone: ""
   },
@@ -329,8 +344,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       if (!config.proxyBaseUrl.trim()) {
         throw new Error(
           `[sugaragent] SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL is not set. ` +
-          `SugarAgent always routes through a proxy (Studio's vite ` +
-          `middleware in dev; the deployed Cloud Run gateway in published- ` +
+          `SugarAgent always routes through a proxy (the local SugarDeploy ` +
+          `gateway in dev; the deployed Cloud Run gateway in published- ` +
           `web). In Studio: confirm the repo-root .env carries ` +
           `VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL or ` +
           `VITE_SUGARMAGIC_GATEWAY_URL. In published-web: confirm the GHA ` +

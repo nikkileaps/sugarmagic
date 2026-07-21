@@ -52,6 +52,7 @@ const GENERATE_RETRY_BACKOFF_MS = [700, 1400] as const;
 
 import type { GeneratePromptContext } from "./prompt/context";
 import { buildGeneratePrompt } from "./prompt/builder";
+import { dumpConstructedPrompt } from "./prompt/prompt-debug";
 
 function buildPrePlacementEnvelope(
   input: GenerateStageInput,
@@ -225,8 +226,19 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     let systemPrompt = "";
     let userPrompt = "";
     let retryCount = 0;
+    // Plan 072.7 — usage + model actually used, surfaced in diagnostics.
+    let turnUsage: {
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadInputTokens: number;
+      cacheCreationInputTokens: number;
+    } | null = null;
+    let modelUsed: string | null = null;
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
-    const evidenceSummary = summarizeEvidence(input.retrieve.evidencePack);
+    const evidenceSummary = summarizeEvidence(input.retrieve.evidencePack, {
+      maxItems: context.config.maxEvidenceResults,
+      perItemChars: context.config.maxEvidenceCharsPerItem
+    });
     const minimalSugarlangGreetingMode = isMinimalGreetingMode(
       constraint
     );
@@ -337,8 +349,8 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       };
     }
 
-    // Story 46.14 — model selection lives server-side now (Studio
-    // vite middleware in dev; Cloud Run gateway in published-web).
+    // Story 46.14 — model selection lives server-side now (the local
+    // SugarDeploy gateway in dev; the Cloud Run gateway in published-web).
     // Browser-side code passes an empty model string; the gateway
     // defaults it from its own configuration.
     if (this.llmProvider && canUseProxyDefaults) {
@@ -368,7 +380,16 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           : null,
         evidenceSummary,
         recentHistory: input.state.history.slice(-4),
-        languageLearningOverlay: constraint?.generatorPromptOverlay || null
+        languageLearningOverlay: constraint?.generatorPromptOverlay || null,
+        // Plan 072.4 — persona/core loaded once at session start (072.3).
+        persona: input.state.persona
+          ? {
+              personaCard: input.state.persona.personaCard,
+              coreKnowledge: input.state.persona.coreKnowledge
+            }
+          : null,
+        // Plan 072.8 — drift-reminder digest, re-injected at end of user message.
+        personaDigest: input.state.persona?.digest ?? ""
       };
 
       const prompts = buildGeneratePrompt(promptContext);
@@ -376,17 +397,29 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       userPrompt = prompts.userPrompt;
       systemPromptPreview = systemPrompt.slice(0, 220);
 
+      // Plan 072.4 — troubleshooting dump (console + window.__sugaragentPrompts),
+      // gated by debugLogging. No-op otherwise.
+      dumpConstructedPrompt({
+        npcDisplayName,
+        systemPrompt,
+        userPrompt,
+        enabled: context.config.debugLogging
+      });
+
       try {
         let generatedText = "";
         for (let attempt = 0; attempt <= GENERATE_RETRY_BACKOFF_MS.length; attempt += 1) {
           try {
-            generatedText = await this.llmProvider.generateStructuredTurn({
-              // Empty model → gateway defaults it server-side.
-              model: "",
+            const result = await this.llmProvider.generateStructuredTurn({
+              // Plan 072.7 — per-NPC override; empty → gateway default.
+              model: input.execution.selection.agentModelOverride?.trim() || "",
               systemPrompt,
               userPrompt,
               maxTokens: 300
             });
+            generatedText = result.text;
+            turnUsage = result.usage;
+            modelUsed = result.model;
             retryCount = attempt;
             break;
           } catch (error) {
@@ -417,7 +450,6 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           text = normalizeNpcSpeech(buildFallbackReply({
             interpret: input.interpret,
             responseIntent: input.plan.responseIntent,
-            evidenceSummary,
             activeQuestDisplayName
           }));
         }
@@ -428,7 +460,6 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       text = normalizeNpcSpeech(buildFallbackReply({
         interpret: input.interpret,
         responseIntent: input.plan.responseIntent,
-        evidenceSummary: summarizeEvidence(input.retrieve.evidencePack),
         activeQuestDisplayName
       }));
     }
@@ -472,9 +503,21 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           currentActivity: npcCurrentActivity?.activity ?? null,
           currentGoal: npcCurrentGoal?.goal ?? null,
           retryCount,
+          // Plan 072.7 — model actually used + prompt-cache usage (from 072.5's
+          // gateway passthrough). Small + always useful, so not gated.
+          modelUsed,
+          cacheReadInputTokens: turnUsage?.cacheReadInputTokens ?? null,
+          cacheCreationInputTokens: turnUsage?.cacheCreationInputTokens ?? null,
+          inputTokens: turnUsage?.inputTokens ?? null,
+          outputTokens: turnUsage?.outputTokens ?? null,
           systemPromptPreview,
-          systemPrompt,
-          userPrompt,
+          // Plan 072.4 (absorbed 071.8): the full prompts are heavy and were
+          // dumped unconditionally. Gate behind debugLogging; keep the 220-char
+          // preview always. The readable console/window dump (below) is also
+          // debugLogging-gated.
+          ...(context.config.debugLogging
+            ? { systemPrompt, userPrompt }
+            : {}),
           minimalSugarlangGreetingMode,
           sugarlangConstraintSummary: constraint
             ? {

@@ -43,8 +43,9 @@ export interface TurnStageResult<TOutput> {
 export interface SugarAgentPluginConfig {
   /**
    * Story 46.14 — REQUIRED. Browser-side SugarAgent always routes
-   * through a proxy (Studio's vite middleware in dev; the deployed
-   * Cloud Run gateway in published-web). Third-party API keys
+   * through a proxy (the local SugarDeploy gateway in dev, reached via
+   * repo-root .env VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL; the
+   * deployed Cloud Run gateway in published-web). Third-party API keys
    * (Anthropic / OpenAI) NEVER live in browser code; the proxy
    * terminates the LLM calls server-side using keys from the local
    * `.env` (Studio) or Secret Manager (Cloud Run).
@@ -75,6 +76,12 @@ export interface SugarAgentPluginConfig {
   openAiVectorStoreId: string;
   anthropicModel: string;
   maxEvidenceResults: number;
+  /**
+   * Plan 072.6 — per-evidence-item character budget forwarded to the prompt.
+   * Replaces the old hard 180-char truncation; the wiki's richness must reach
+   * the model. Total evidence budget is bounded by maxEvidenceResults x this.
+   */
+  maxEvidenceCharsPerItem: number;
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
   tone: string;
@@ -85,6 +92,43 @@ export interface SugarAgentSessionHistoryEntry {
   text: string;
 }
 
+/**
+ * Plan 072.3 -- a designated section of the NPC's lore page, ready for the
+ * prompt. `## Secrets` is already excluded upstream (072.2 lore/resolve), so a
+ * loaded persona never carries secret content.
+ */
+export interface LoreCardSection {
+  heading: string;
+  slug: string;
+  content: string;
+}
+
+/**
+ * Plan 072.3 -- the NPC's persona/core knowledge loaded ONCE at session start
+ * from lore/resolve and held in session state for the prompt builder (072.4).
+ * Missing/unfetchable page degrades (D3): `loaded: false`, empty layers, a
+ * `fallbackReason` -- the conversation still runs on name + game tone.
+ */
+export interface LoadedPersona {
+  /** Requested page id; null when the NPC has no lorePageId. */
+  pageId: string | null;
+  /** true when the page resolved and was designated; false = degraded. */
+  loaded: boolean;
+  /** "persona-unavailable" when degraded, else null. */
+  fallbackReason: string | null;
+  /** `## Persona` + `## Voice`, in document order. */
+  personaCard: LoreCardSection[];
+  /** Everything else on the page (implicit Overview + other sections). */
+  coreKnowledge: LoreCardSection[];
+  /**
+   * Plan 072.8 — a compact persona reminder (first lines of `## Persona` +
+   * `## Voice`), computed once at session start, re-injected at the END of the
+   * user message each turn to fight ~8-turn character drift. Empty when
+   * degraded or no persona sections authored.
+   */
+  digest: string;
+}
+
 export interface SugarAgentProviderState {
   sessionId: string;
   turnCount: number;
@@ -92,6 +136,8 @@ export interface SugarAgentProviderState {
   closeRequested: boolean;
   history: SugarAgentSessionHistoryEntry[];
   lastTurnDiagnostics: Record<string, TurnStageDiagnostics>;
+  /** Plan 072.3 -- loaded once at session start; undefined until then. */
+  persona?: LoadedPersona;
 }
 
 export type TurnIntent =

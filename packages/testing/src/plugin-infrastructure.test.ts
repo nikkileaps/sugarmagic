@@ -3587,8 +3587,13 @@ describe("plugin infrastructure", () => {
       actionKind: "deploy",
       supported: true,
       command: {
-        command: "docker",
-        args: ["compose", "up", "--build", "-d"],
+        // PR #77: local deploy bootstraps .env from .env.example on first run,
+        // then runs docker compose up --build -d, via a single `sh -c`.
+        command: "sh",
+        args: [
+          "-c",
+          `[ -f .env ] || (cp .env.example .env && echo "Created .env from .env.example -- fill in API keys before the gateway will respond to LLM calls."); docker compose up --build -d`
+        ],
         cwd: "/tmp/wordlark/deployment/local"
       },
       healthUrl: "http://localhost:9000/health"
@@ -3684,6 +3689,7 @@ describe("plugin infrastructure", () => {
       openAiVectorStoreId: "",
       anthropicModel: "",
       maxEvidenceResults: 8,
+      maxEvidenceCharsPerItem: 600,
       debugLogging: true,
       tone: ""
     });
@@ -3707,6 +3713,7 @@ describe("plugin infrastructure", () => {
       openAiVectorStoreId: "",
       anthropicModel: "",
       maxEvidenceResults: 4,
+      maxEvidenceCharsPerItem: 600,
       debugLogging: false,
       tone: ""
     });
