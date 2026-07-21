@@ -2248,13 +2248,28 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                 <Text size="sm" c="var(--sm-color-subtext)">
                   /
                 </Text>
-                <Badge size="lg" variant="light" color="gray">
-                  {selectedTargetId === "google-cloud-run"
-                    ? "Google Cloud Run"
-                    : selectedTargetId === "local"
-                      ? "Local"
-                      : selectedTargetId}
-                </Badge>
+                {/* Environment selector: the ONE backend-target selection,
+                    surfaced on every workspace header. Same state the
+                    Backend Targets tabs write (backendDeploymentTargetId);
+                    onChange routes through addTarget so picking an
+                    unconfigured target also persists its tab. Deploy,
+                    infra actions, and managed-file regen all key off this. */}
+                <Select
+                  size="xs"
+                  w={200}
+                  value={selectedTargetId}
+                  placeholder="Select environment"
+                  data={[
+                    { value: "local", label: "Local" },
+                    { value: "google-cloud-run", label: "Production (Cloud Run)" }
+                  ]}
+                  onChange={(value) => {
+                    if (value === "local" || value === "google-cloud-run") {
+                      addTarget(value);
+                    }
+                  }}
+                  allowDeselect={false}
+                />
                 {/* Story 46.6 — frontend axis badge, only shown when
                     a frontend target is configured. Same divider +
                     badge shape as the backend slot so the combo
@@ -2496,26 +2511,39 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               </Group>
             ) : null}
 
-            {/* Story 46.10 — Deploy fires the GHA workflow rather
-                than running gcloud-run-deploy inline. Destroy still
-                runs gcloud inline (it tears down the live Cloud Run
-                service, no need to round-trip through GHA). */}
+            {/* Deploy forks on the selected environment. Local: runs the
+                engine's local deploy action inline (docker compose up
+                --build -d in <workingDirectory>/deployment/local — rebuilds
+                the gateway image, restarts the container, result lands in
+                the action result box; no git push, no GHA). Production:
+                Story 46.10 flow — preflight modal -> auto-sync both repos
+                -> GHA workflow dispatch. Destroy runs inline for both. */}
             {isDeploy ? (
               <Group>
                 <Button
                   size="xs"
-                  onClick={() => openDeployWorkflowModal()}
+                  onClick={() =>
+                    selectedTargetId === "local"
+                      ? runAction("deploy")
+                      : openDeployWorkflowModal()
+                  }
                   disabled={
                     actionsDisabled ||
-                    deployWorkflowState?.phase === "preview" ||
-                    deployWorkflowState?.phase === "dispatching"
+                    (selectedTargetId === "local"
+                      ? actionState.running
+                      : deployWorkflowState?.phase === "preview" ||
+                        deployWorkflowState?.phase === "dispatching")
                   }
                   loading={
-                    deployWorkflowState?.phase === "preview" ||
-                    deployWorkflowState?.phase === "dispatching"
+                    selectedTargetId === "local"
+                      ? actionState.running && actionState.kind === "deploy"
+                      : deployWorkflowState?.phase === "preview" ||
+                        deployWorkflowState?.phase === "dispatching"
                   }
                 >
-                  Deploy
+                  {selectedTargetId === "local"
+                    ? "Deploy Local Gateway"
+                    : "Deploy to Production"}
                 </Button>
                 <Button
                   size="xs"
@@ -2534,7 +2562,9 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
               <Text size="sm" c="var(--sm-color-overlay0)">
                 {actionBlockedReason ??
                   (isDeploy
-                    ? "Click a chip to probe. Save first, then use Deploy/Destroy. Working Directory must point at the game root on disk."
+                    ? selectedTargetId === "local"
+                      ? "Save first (regenerates deployment/local for the selected environment), then Deploy rebuilds the gateway image and restarts the container."
+                      : "Click a chip to probe. Save first, then Deploy commits, pushes, and dispatches the production workflow."
                     : "Save first, then use the buttons. Working Directory must point at the game root on disk.")}
               </Text>
             ) : null}

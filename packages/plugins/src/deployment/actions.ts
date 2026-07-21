@@ -104,9 +104,16 @@ function resolveLocalAction(
         targetId: "local",
         actionKind,
         supported: true,
+        // Bootstrap .env from .env.example on first run so the user never
+        // has to copy manually -- .env.example contains only non-secret
+        // defaults (compose project name, model names, empty key slots).
+        // Real secrets (API keys) must be filled in .env after first deploy.
         command: {
-          command: "docker",
-          args: ["compose", "up", "--build", "-d"],
+          command: "sh",
+          args: [
+            "-c",
+            `[ -f .env ] || (cp .env.example .env && echo "Created .env from .env.example -- fill in API keys before the gateway will respond to LLM calls."); docker compose up --build -d`
+          ],
           cwd
         },
         healthUrl: `http://localhost:${healthPort}/health`
