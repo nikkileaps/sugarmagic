@@ -55,17 +55,6 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       });
     }
 
-    if (input.retrieve.evidencePack[0]) {
-      actionProposals.push({
-        kind: "surface-beat-evidence",
-        beatId:
-          typeof input.execution.selection.dialogueDefinitionId === "string"
-            ? input.execution.selection.dialogueDefinitionId
-            : input.execution.selection.npcDefinitionId ?? "free-chat",
-        evidence: input.retrieve.evidencePack[0].text.slice(0, 280)
-      });
-    }
-
     if (input.interpret.shouldCloseAfterReply) {
       actionProposals.push({ kind: "request-close" });
     }

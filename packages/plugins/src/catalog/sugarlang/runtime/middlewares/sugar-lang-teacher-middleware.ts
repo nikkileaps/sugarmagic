@@ -140,12 +140,6 @@ export function createSugarLangTeacherMiddleware(
         return execution;
       }
 
-      const prescription = execution.annotations[
-        SUGARLANG_PRESCRIPTION_ANNOTATION
-      ] as SugarlangConstraint["rawPrescription"] | undefined;
-      if (!prescription) {
-        return execution;
-      }
       const placementFlow = execution.annotations["sugarlang.placementFlow"] as
         | { phase?: string }
         | undefined;
@@ -158,11 +152,17 @@ export function createSugarLangTeacherMiddleware(
         return execution;
       }
 
+      const prescription = execution.annotations[
+        SUGARLANG_PRESCRIPTION_ANNOTATION
+      ] as SugarlangConstraint["rawPrescription"] | undefined;
+
       const learner = await services.learnerStore.getCurrentProfile();
 
       // Scripted mode: skip the teacher LLM call. Build a lightweight
       // constraint with posture/ratio based on the learner's level.
       // The authored text IS the curriculum — we only control language mix.
+      // Runs even without a prescription (prescription-less scripted dialogue
+      // still needs a constraint so the scripted middleware can adapt the text).
       if (isScriptedMode(execution)) {
         const targetLanguage =
           execution.selection.targetLanguage ?? learner.targetLanguage;
@@ -184,9 +184,9 @@ export function createSugarLangTeacherMiddleware(
           generatorPromptOverlay: overlay,
           minimalGreetingMode: false,
           targetVocab: {
-            introduce: prescription.introduce,
-            reinforce: prescription.reinforce,
-            avoid: prescription.avoid
+            introduce: prescription?.introduce ?? [],
+            reinforce: prescription?.reinforce ?? [],
+            avoid: prescription?.avoid ?? []
           },
           supportPosture: posture,
           targetLanguageRatio: ratio,
@@ -195,14 +195,19 @@ export function createSugarLangTeacherMiddleware(
           sentenceComplexityCap: "free",
           targetLanguage,
           learnerCefr: learner.estimatedCefrBand,
-          rawPrescription: prescription
+          rawPrescription: prescription ?? buildEmptyPrescription("scripted-mode-no-prescription")
         };
         execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
         logger.debug("Scripted mode: lightweight constraint built.", {
           learnerCefr: learner.estimatedCefrBand,
           posture,
-          ratio
+          ratio,
+          hadPrescription: Boolean(prescription)
         });
+        return execution;
+      }
+
+      if (!prescription) {
         return execution;
       }
       const prePlacementOpeningLine = execution.annotations[

@@ -52,8 +52,6 @@ function createStageInput() {
       consecutiveFallbackTurns: 0,
       closeRequested: false,
       history: [],
-      topicCoverage: [],
-      referents: [],
       lastTurnDiagnostics: {}
     },
     interpret: {
@@ -431,7 +429,18 @@ describe("GenerateStage", () => {
     input.execution.selection.targetLanguage = "es";
     input.execution.annotations["sugarlang.placementFlow"] = {
       phase: "questionnaire",
-      minAnswersForValid: 4
+      minAnswersForValid: 4,
+      questionnaireVersion: "es-placement-v1",
+      questionnaire: {
+        schemaVersion: 1,
+        lang: "es",
+        targetLanguage: "Spanish",
+        supportLanguage: "English",
+        formTitle: "Language Test",
+        formIntro: "Please answer the following questions.",
+        questions: [],
+        minAnswersForValid: 4
+      }
     };
 
     const result = await stage.execute(input as never, createStageContext() as never);

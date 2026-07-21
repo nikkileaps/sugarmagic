@@ -971,6 +971,19 @@ export function createRuntimeGameplaySessionController(
     questJournal.update(questManager.getJournalData());
   }
 
+  // Single enforcer for NPC interactable availability, used both at
+  // interactable creation and on every sync. Missing definition falls to
+  // the scripted/coordinator path.
+  function resolveNpcInteractableAvailability(npcDefinitionId: string): boolean {
+    const npcDefinition = npcDefinitions.find(
+      (candidate) => candidate.definitionId === npcDefinitionId
+    );
+    if (!npcDefinition || npcDefinition.interactionMode === "scripted") {
+      return questDialogueCoordinator.isNpcInteractableAvailable(npcDefinitionId);
+    }
+    return conversationProviders.length > 0;
+  }
+
   function syncNpcInteractionAvailability() {
     for (const {
       npcDefinitionId,
@@ -978,16 +991,7 @@ export function createRuntimeGameplaySessionController(
     } of npcInteractableEntities.values()) {
       const interactable = world.getComponent(entity, Interactable);
       if (!interactable) continue;
-      const npcDefinition = npcDefinitions.find(
-        (candidate) => candidate.definitionId === npcDefinitionId
-      );
-      if (!npcDefinition || npcDefinition.interactionMode === "scripted") {
-        interactable.available =
-          questDialogueCoordinator.isNpcInteractableAvailable(npcDefinitionId);
-        continue;
-      }
-
-      interactable.available = true;
+      interactable.available = resolveNpcInteractableAvailability(npcDefinitionId);
     }
   }
 
@@ -1071,16 +1075,10 @@ export function createRuntimeGameplaySessionController(
       case "notify-quest-event":
         questManager.notifyEvent(proposal.eventName);
         return;
-      case "surface-beat-evidence":
-        console.debug("[runtime-core] conversation beat evidence", proposal);
-        return;
       case "start-scripted-followup":
         pendingScriptedFollowupDialogueId = proposal.dialogueDefinitionId;
         return;
       case "request-close":
-        return;
-      case "propose-quest-hook":
-        console.debug("[runtime-core] ignored quest hook proposal", proposal);
         return;
       default: {
         const exhaustive: never = proposal;
@@ -1134,9 +1132,7 @@ export function createRuntimeGameplaySessionController(
           presence.npcDefinitionId,
           `Talk to ${npcDefinition?.displayName ?? "NPC"}`,
           2.0,
-          questDialogueCoordinator.isNpcInteractableAvailable(
-            presence.npcDefinitionId
-          )
+          resolveNpcInteractableAvailability(presence.npcDefinitionId)
         )
       );
       npcInteractableEntities.set(presence.presenceId, {

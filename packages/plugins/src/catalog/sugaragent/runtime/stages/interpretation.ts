@@ -413,7 +413,6 @@ export function interpretPlayerTurn(input: {
   } else if (interpretation.lane === "knowledge") {
     if (interpretation.target === "self") queryType = "self_query";
     else if (interpretation.target === "other") queryType = "other_query";
-    else if (interpretation.target === "mixed") queryType = "mixed_query";
     else if (interpretation.target === "world") queryType = "world_query";
   }
 

@@ -74,7 +74,6 @@ export interface SugarAgentPluginConfig {
    */
   openAiVectorStoreId: string;
   anthropicModel: string;
-  openAiEmbeddingModel: string;
   maxEvidenceResults: number;
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
@@ -92,8 +91,6 @@ export interface SugarAgentProviderState {
   consecutiveFallbackTurns: number;
   closeRequested: boolean;
   history: SugarAgentSessionHistoryEntry[];
-  topicCoverage: string[];
-  referents: string[];
   lastTurnDiagnostics: Record<string, TurnStageDiagnostics>;
 }
 
@@ -103,7 +100,6 @@ export type TurnIntent =
   | "identity_self"
   | "lore_world"
   | "lore_other"
-  | "mixed_knowledge"
   | "quest_guidance"
   | "farewell"
   | "unclear";
@@ -126,7 +122,6 @@ export type QueryType =
   | "self_query"
   | "other_query"
   | "world_query"
-  | "mixed_query"
   | "quest_query";
 export type TurnPath = "social_fast" | "grounded";
 export type ReferentKind = "npc" | "location" | "faction" | "object" | "topic" | "unknown";
@@ -210,9 +205,7 @@ export interface RetrievedEvidenceItem {
 
 export interface RetrieveResult {
   evidencePack: RetrievedEvidenceItem[];
-  usedEmbeddings: boolean;
   vectorSearchPerformed: boolean;
-  semanticQueryFingerprint: number[] | null;
 }
 
 export interface PlanResult {

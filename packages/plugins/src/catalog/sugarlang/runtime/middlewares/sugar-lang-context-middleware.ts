@@ -249,19 +249,20 @@ export function createSugarLangContextMiddleware(
         if (placementFlowAnnotation) {
           execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] =
             placementFlowAnnotation;
-        } else {
+        } else if (questionnaire) {
+          const resolvedMinAnswers = resolvePlacementMinAnswersForValid(
+            questionnaire.minAnswersForValid,
+            config.placement.minAnswersForValid
+          );
           execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
             phase: placementPhase,
-            ...(questionnaire
-              ? {
-                  questionnaireVersion:
-                    getPlacementQuestionnaireVersion(questionnaire),
-                  minAnswersForValid: resolvePlacementMinAnswersForValid(
-                    questionnaire.minAnswersForValid,
-                    config.placement.minAnswersForValid
-                  )
-                }
-              : {})
+            questionnaireVersion: getPlacementQuestionnaireVersion(questionnaire),
+            minAnswersForValid: resolvedMinAnswers,
+            questionnaire: { ...questionnaire, minAnswersForValid: resolvedMinAnswers }
+          } satisfies PlacementFlowAnnotation;
+        } else {
+          execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
+            phase: placementPhase
           } satisfies PlacementFlowAnnotation;
         }
       }
@@ -398,8 +399,6 @@ export function createSugarLangContextMiddleware(
 
       execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = prescription;
 
-      // Log the top candidates and specifically check for queso to debug scoring
-      const quesoInfo = sceneLexicon.lemmas["queso"];
       logger.debug("Budgeter prescription details.", {
         introduce: prescription.introduce.map((l) => {
           const info = sceneLexicon.lemmas[l.lemmaId];
@@ -411,15 +410,7 @@ export function createSugarLangContextMiddleware(
           };
         }),
         anchor: prescription.anchor?.lemmaId ?? null,
-        candidateCount: Object.keys(sceneLexicon.lemmas).length,
-        quesoStatus: quesoInfo
-          ? {
-              freq: quesoInfo.frequencyRank,
-              sceneWeight: quesoInfo.sceneWeight,
-              isAnchor: sceneLexicon.anchors.includes("queso"),
-              inLearnerCards: "queso" in refreshedLearner.lemmaCards
-            }
-          : "NOT IN LEXICON"
+        candidateCount: Object.keys(sceneLexicon.lemmas).length
       });
       execution.annotations[SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION] =
         buildLearnerSnapshot(refreshedLearner);

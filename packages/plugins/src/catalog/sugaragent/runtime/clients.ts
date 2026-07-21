@@ -21,10 +21,6 @@ export interface LLMProvider {
   generateStructuredTurn: (request: LLMGenerateRequest) => Promise<string>;
 }
 
-export interface EmbeddingsProvider {
-  embedQuery: (input: string, model: string) => Promise<number[]>;
-}
-
 export interface VectorStoreSearchRequest {
   vectorStoreId: string;
   query: string;
@@ -48,16 +44,6 @@ export interface GatewayGenerateResult {
   requestId: string | null;
 }
 
-export interface GatewayEmbeddingRequest {
-  input: string;
-  model?: string;
-}
-
-export interface GatewayEmbeddingResult {
-  embedding: number[];
-  requestId: string | null;
-}
-
 export interface GatewayVectorSearchRequest {
   vectorStoreId?: string;
   query: string;
@@ -72,11 +58,6 @@ export interface GatewayVectorSearchResult {
 
 interface VendorTextResult {
   text: string;
-  requestId: string | null;
-}
-
-interface VendorEmbeddingResult {
-  embedding: number[];
   requestId: string | null;
 }
 
@@ -196,34 +177,6 @@ export class SugarAgentGatewayLLMClient {
   }
 }
 
-export class SugarAgentGatewayEmbeddingsClient {
-  constructor(
-    private readonly baseUrl: string,
-    private readonly getBearerToken: BearerTokenGetter = async () => null
-  ) {}
-
-  async createEmbedding(
-    request: GatewayEmbeddingRequest
-  ): Promise<GatewayEmbeddingResult> {
-    const response = await fetch(
-      `${normalizeBaseUrl(this.baseUrl)}/api/sugaragent/retrieve/embed`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...(await authHeaders(this.getBearerToken))
-        },
-        body: JSON.stringify(request)
-      }
-    );
-
-    return parseJsonResponse<GatewayEmbeddingResult>(
-      response,
-      "SugarAgent gateway embedding request"
-    );
-  }
-}
-
 export class SugarAgentGatewayVectorStoreClient {
   constructor(
     private readonly baseUrl: string,
@@ -266,18 +219,6 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
       maxTokens: normalizeMaxTokens(request.maxTokens, this.defaults.maxTokens ?? 300)
     });
     return response.text;
-  }
-}
-
-export class SugarAgentGatewayEmbeddingsProvider implements EmbeddingsProvider {
-  constructor(private readonly client: SugarAgentGatewayEmbeddingsClient) {}
-
-  async embedQuery(input: string, model: string): Promise<number[]> {
-    const response = await this.client.createEmbedding({
-      input: normalizePrompt(input, "embedding input"),
-      model: model.trim() || undefined
-    });
-    return response.embedding;
   }
 }
 

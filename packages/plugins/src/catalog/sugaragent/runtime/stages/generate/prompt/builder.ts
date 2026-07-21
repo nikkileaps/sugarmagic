@@ -15,7 +15,6 @@
 import type {
   GeneratePromptContext,
   AgentPromptContext,
-  ScriptedPromptContext,
   BasePromptContext
 } from "./context";
 import {
@@ -192,47 +191,6 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
   };
 }
 
-// ── Scripted mode builder ──
-
-function buildScriptedPrompt(context: ScriptedPromptContext): GeneratePromptResult {
-  const systemLines: (string | null)[] = [
-    ...buildSharedSystemLines(context, "scripted", false),
-
-    "",
-    "SCRIPTED LINE ADAPTATION:",
-    "You are adapting a pre-authored English dialogue line for a language learner.",
-    "You MUST preserve the exact narrative meaning, quest-critical information, and emotional tone of the authored line.",
-    "Do NOT add, remove, or change any story content.",
-    "Do NOT add parenthetical translations — the UI handles glossing.",
-    "Adapt the language mix (target language vs support language) based on the language learning overlay above.",
-    "If no language learning overlay is present, deliver the line in English as-is."
-  ];
-
-  const userLines: (string | null)[] = [
-    "Adapt the following authored dialogue line for the learner's current level.",
-
-    `Speaker: ${context.authoredLineSpeaker}`,
-    `Authored line: "${context.authoredLineText}"`,
-
-    context.questContext
-      ? `Quest context: ${context.questContext}`
-      : null,
-
-    "Preserve the EXACT meaning. Adjust the language mix to match the learner's level as specified in the language learning overlay. Return only the adapted spoken line — no stage directions, no explanations.",
-
-    context.recentHistory.length > 0
-      ? `Recent history:\n${context.recentHistory
-          .map((entry) => `${entry.role}: ${entry.text}`)
-          .join("\n")}`
-      : null
-  ];
-
-  return {
-    systemPrompt: systemLines.filter(Boolean).join("\n"),
-    userPrompt: userLines.filter(Boolean).join("\n\n")
-  };
-}
-
 // ── Main entry point ──
 
 /**
@@ -253,10 +211,5 @@ export function buildGeneratePrompt(
     );
   }
 
-  switch (context.mode) {
-    case "agent":
-      return buildAgentPrompt(context);
-    case "scripted":
-      return buildScriptedPrompt(context);
-  }
+  return buildAgentPrompt(context);
 }

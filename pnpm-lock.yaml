@@ -199,9 +199,15 @@ importers:
         specifier: '>=18'
         version: 19.2.4(react@19.2.4)
     devDependencies:
+      esbuild:
+        specifier: ^0.27.7
+        version: 0.27.7
       supabase:
         specifier: ^2.108.0
         version: 2.108.0
+      tsx:
+        specifier: ^4.19.4
+        version: 4.21.0
       vite:
         specifier: ^8.0.3
         version: 8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.2)(esbuild@0.27.7)(tsx@4.21.0)

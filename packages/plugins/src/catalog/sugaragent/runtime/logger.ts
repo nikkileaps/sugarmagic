@@ -2,7 +2,6 @@ export interface SugarAgentLogger {
   logPluginEvent: (event: string, payload?: Record<string, unknown>) => void;
   logStageStart: (stageId: string, payload: Record<string, unknown>) => void;
   logStageEnd: (payload: Record<string, unknown>) => void;
-  logFallback: (event: string, payload: Record<string, unknown>) => void;
 }
 
 function emit(enabled: boolean, scope: string, payload?: Record<string, unknown>) {
@@ -20,9 +19,6 @@ export function createSugarAgentLogger(enabled: boolean): SugarAgentLogger {
     },
     logStageEnd(payload) {
       emit(enabled, `stage:${String(payload.stageId)}:end`, payload);
-    },
-    logFallback(event, payload) {
-      emit(true, `fallback:${event}`, payload);
     }
   };
 }

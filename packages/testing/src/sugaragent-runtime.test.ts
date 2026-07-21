@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPluginConfigurationRecord } from "@sugarmagic/domain";
 import {
   createRuntimePluginInstances,
@@ -12,13 +12,24 @@ import {
   type ConversationProvider
 } from "@sugarmagic/runtime-core";
 
+// Post-46.14: sugaragent requires a proxy base URL; all vendor calls are
+// server-side. Point tests at a local mock gateway address and stub fetch.
 const TEST_ENVIRONMENT = {
-  SUGARMAGIC_ANTHROPIC_API_KEY: "test-key-not-real",
-  SUGARMAGIC_ANTHROPIC_MODEL: "claude-sonnet-4-5",
-  SUGARMAGIC_OPENAI_API_KEY: "test-key-not-real",
-  SUGARMAGIC_OPENAI_EMBEDDING_MODEL: "text-embedding-3-small",
-  SUGARMAGIC_OPENAI_VECTOR_STORE_ID: "vs_test_not_real"
+  SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL: "http://localhost:8787"
 };
+
+function makeDefaultGatewayMock() {
+  return vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    if (url.endsWith("/api/sugaragent/retrieve/search")) {
+      return new Response(
+        JSON.stringify({ results: [], requestId: "search-test" }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
+    throw new Error("Unexpected fetch in test: " + url);
+  });
+}
 
 function resolveSugarAgentProvider(
   environment: Record<string, string> = TEST_ENVIRONMENT
@@ -51,6 +62,9 @@ function resolveSugarAgentProvider(
 }
 
 describe("SugarAgent runtime provider", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", makeDefaultGatewayMock());
+  });
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
@@ -340,12 +354,6 @@ describe("SugarAgent runtime provider", () => {
             : null;
         requests.push({ url, body });
 
-        if (url.endsWith("/api/sugaragent/retrieve/embed")) {
-          return new Response(
-            JSON.stringify({ embedding: [0.1, 0.2, 0.3], requestId: "embed-1" }),
-            { status: 200, headers: { "content-type": "application/json" } }
-          );
-        }
         if (url.endsWith("/api/sugaragent/retrieve/search")) {
           const isFiltered = body?.filters != null;
           return new Response(
@@ -431,12 +439,6 @@ describe("SugarAgent runtime provider", () => {
             : null;
         requests.push({ url, body });
 
-        if (url.endsWith("/api/sugaragent/retrieve/embed")) {
-          return new Response(
-            JSON.stringify({ embedding: [0.4, 0.2, 0.1], requestId: "embed-here" }),
-            { status: 200, headers: { "content-type": "application/json" } }
-          );
-        }
         if (url.endsWith("/api/sugaragent/retrieve/search")) {
           return new Response(
             JSON.stringify({
@@ -580,47 +582,33 @@ describe("SugarAgent runtime provider", () => {
     );
   });
 
-  it("retries transient Anthropic overloads, then exits politely and closes the conversation", async () => {
+  it("retries transient gateway overloads (529), then exits politely and closes the conversation", async () => {
     vi.useFakeTimers();
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
 
-      if (url.includes("/v1/embeddings")) {
-        return new Response(
-          JSON.stringify({ data: [{ embedding: [0.1, 0.2, 0.3] }] }),
-          { status: 200, headers: { "content-type": "application/json" } }
-        );
-      }
-
-      if (url.includes("/vector_stores/") && url.endsWith("/search")) {
+      if (url.endsWith("/api/sugaragent/retrieve/search")) {
         return new Response(
           JSON.stringify({
-            data: [
+            results: [
               {
-                file_id: "chunk-1",
+                fileId: "chunk-1",
                 filename: "npc.rick-roll.md",
                 score: 0.94,
                 attributes: { page_id: "lore.entities.npcs.rick-roll" },
-                content: [
-                  {
-                    type: "text",
-                    text: "Page ID: lore.entities.npcs.rick-roll\n\nTitle: Rick Roll\n\nSection: Family\n\nRick Roll owns a cheese shop."
-                  }
-                ]
+                text: "Rick Roll owns a cheese shop."
               }
-            ]
+            ],
+            requestId: "search-retry"
           }),
           { status: 200, headers: { "content-type": "application/json" } }
         );
       }
 
-      if (url.includes("/v1/messages")) {
+      if (url.endsWith("/api/sugaragent/generate")) {
         return new Response(
-          JSON.stringify({
-            type: "error",
-            error: { type: "overloaded_error", message: "Overloaded" }
-          }),
+          JSON.stringify({ error: "overloaded_error", message: "Overloaded" }),
           { status: 529, headers: { "content-type": "application/json" } }
         );
       }
@@ -648,11 +636,11 @@ describe("SugarAgent runtime provider", () => {
     await vi.runAllTimersAsync();
     const reply = await replyPromise;
 
-    const anthropicCalls = fetchMock.mock.calls.filter(([request]) =>
-      String(request).includes("/v1/messages")
+    // Initial attempt + 2 retries (GENERATE_RETRY_BACKOFF_MS = [700, 1400]) = 3 total
+    const generateCalls = fetchMock.mock.calls.filter(([request]) =>
+      String(request).endsWith("/api/sugaragent/generate")
     );
-
-    expect(anthropicCalls).toHaveLength(3);
+    expect(generateCalls).toHaveLength(3);
     expect(reply?.text).toBe("Sorry, I need a moment to think. Let's chat later.");
     expect(reply?.text).not.toContain("Page ID:");
     expect(

@@ -466,7 +466,7 @@ export const pluginWorkspaceDefinition: StudioPluginWorkspaceDefinition = {
               SugarAgent keeps conversation orchestration in the runtime, while lore discovery and vector-store ingest now live behind the gateway.
             </Text>
             <Text size="xs" c="var(--sm-color-overlay0)">
-              Current env status: proxy {runtimeEnvironment.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL ? "configured" : "off"}, LLM {runtimeEnvironment.SUGARMAGIC_ANTHROPIC_API_KEY ? "configured" : "missing"}, embeddings {runtimeEnvironment.SUGARMAGIC_OPENAI_API_KEY ? "configured" : "missing"}, vector store {runtimeEnvironment.SUGARMAGIC_OPENAI_VECTOR_STORE_ID ? "configured" : "missing"}
+              Gateway proxy: {runtimeEnvironment.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL ? `${runtimeEnvironment.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL}` : "not configured (set VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL)"}
             </Text>
           </Stack>
         </Inspector>
