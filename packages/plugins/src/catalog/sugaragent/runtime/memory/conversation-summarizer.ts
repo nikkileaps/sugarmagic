@@ -212,16 +212,6 @@ async function runAsyncSummary(
     });
     return { status: "skipped-no-llm" };
   }
-  const hasPlayerTurn = transcript.some((entry) => entry.role === "user");
-  if (!hasPlayerTurn) {
-    // Nothing the player said to remember — the deterministic merge
-    // already recorded "we met"; skip the LLM cost.
-    deps.logger.logPluginEvent("memory-summary-skipped", {
-      npcDefinitionId,
-      reason: "no-player-turn"
-    });
-    return { status: "skipped-empty" };
-  }
   try {
     const result = await deps.llmProvider.generateStructuredTurn({
       // Model id stays server-side (Plan 073.2). The gateway maps
@@ -279,6 +269,22 @@ export async function summarizeConversationAtDispose(
   deps: ConversationSummaryDeps,
   input: ConversationSummaryInput
 ): Promise<ConversationSummaryHandle> {
+  // Mini-review fix — a session the player never spoke in is not a
+  // "conversation" (metCount counts distinct conversations). Skip the ENTIRE
+  // write, not just the LLM summary: otherwise opening a dialogue, reading the
+  // NPC's greeting, and closing without typing would bump metCount and make the
+  // NPC treat the player as a returning acquaintance next visit.
+  const hasPlayerTurn = input.transcript.some((entry) => entry.role === "user");
+  if (!hasPlayerTurn) {
+    deps.logger.logPluginEvent("memory-skipped", {
+      npcDefinitionId: input.npcDefinitionId,
+      reason: "no-player-turn"
+    });
+    return {
+      conversationCounter: 0,
+      summaryComplete: Promise.resolve({ status: "skipped-empty" })
+    };
+  }
   const { conversationCounter } = await deps.store.mergeDeterministic({
     npcDefinitionId: input.npcDefinitionId,
     lastExchange: buildLastExchange(input.transcript)

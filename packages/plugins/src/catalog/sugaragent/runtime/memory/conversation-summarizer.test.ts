@@ -187,7 +187,7 @@ describe("summarizeConversationAtDispose", () => {
     );
   });
 
-  it("skips the LLM call when the player never spoke (deterministic-only)", async () => {
+  it("writes NOTHING when the player never spoke (no metCount bump)", async () => {
     const store = newStore();
     let called = 0;
     const handle = await summarizeConversationAtDispose(
@@ -208,8 +208,10 @@ describe("summarizeConversationAtDispose", () => {
     const outcome = await handle.summaryComplete;
     expect(outcome.status).toBe("skipped-empty");
     expect(called).toBe(0);
-    // They still "met".
-    expect((await store.load(FINNICK))?.metCount).toBe(1);
+    // A greeting-only open/close is NOT a meeting: no record, no metCount bump,
+    // so the next visit is still a first meeting.
+    expect(handle.conversationCounter).toBe(0);
+    expect(await store.load(FINNICK)).toBeNull();
   });
 
   it("skips the LLM call when no provider is configured", async () => {

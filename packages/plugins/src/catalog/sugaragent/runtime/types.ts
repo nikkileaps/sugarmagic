@@ -79,11 +79,12 @@ export interface SugarAgentPluginConfig {
    *  an empty model for dialogue and the gateway fills it in. */
   anthropicModel: string;
   /**
-   * Plan 073.2 — model for the cheap end-of-conversation memory
-   * summary (a background task, deliberately smaller/cheaper than the
-   * dialogue model). Sent EXPLICITLY from the browser per summary, so
-   * unlike `anthropicModel` it needs no gateway env var. Empty =
-   * `claude-haiku-4-5` (the summarizer's built-in default).
+   * Plan 073.2 — model for the cheap end-of-conversation memory summary (a
+   * background task, deliberately smaller/cheaper than the dialogue model).
+   * Resolved SERVER-SIDE, same as `anthropicModel`: the browser sends
+   * `purpose:"summary"` and an empty model id, and the gateway reads the model
+   * from `SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL` (deployed from this value via
+   * gatewayRuntimeConfigKeys). Empty => gateway default `claude-haiku-4-5`.
    */
   anthropicSummaryModel: string;
   maxEvidenceResults: number;

@@ -98,7 +98,7 @@ function makeGatewayMock(captured: CapturedGenerate[]) {
   });
 }
 
-function resolveSugarAgent(): {
+function resolveSugarAgent(configOverrides: Record<string, unknown> = {}): {
   provider: ConversationProvider;
   middlewares: ConversationMiddleware[];
 } {
@@ -109,7 +109,7 @@ function resolveSugarAgent(): {
   });
   const instances = createRuntimePluginInstances(
     boot,
-    [createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true, {})],
+    [createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true, configOverrides)],
     (pluginId) => {
       const plugin = getDiscoveredPluginDefinition(pluginId);
       if (!plugin) return null;
@@ -243,5 +243,30 @@ describe("NPC memory recall across conversations", () => {
     // (the memoized digest doesn't shift between turns).
     const uniqueSystemPrompts = new Set(conv2Generates.map((g) => g.systemPrompt));
     expect(uniqueSystemPrompts.size).toBe(1);
+  });
+
+  it("writes NO memory at dispose when memoryEnabled is false (write-side master switch)", async () => {
+    // Distinct playthrough so this can't observe the prior test's IDB rows
+    // (fake-indexeddb/auto is a shared global for the file).
+    clearNpcMemoryStoreCacheForTests();
+    mintPlaythrough("play-disabled");
+    vi.stubGlobal("fetch", makeGatewayMock([]));
+    const { provider, middlewares } = resolveSugarAgent({ memoryEnabled: false });
+
+    const host = createConversationHost({ providers: [provider], middlewares });
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: NPC_ID,
+      npcDisplayName: "Finnick",
+      interactionMode: "agent",
+      lorePageId: "root.npcs.finnick"
+    });
+    await host.submitInput({ kind: "free_text", text: "Hi, I'm Mim. I love aged gouda." });
+    await host.endSession();
+
+    // Master switch off => dispose short-circuits before any store write.
+    const store = resolveNpcMemoryStore();
+    expect(store).not.toBeNull();
+    expect(await store!.load(NPC_ID)).toBeNull();
   });
 });
