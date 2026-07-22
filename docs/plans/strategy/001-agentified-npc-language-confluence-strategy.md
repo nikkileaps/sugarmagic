@@ -50,6 +50,10 @@ Rules:
 - Secrets invariant: anything the NPC must not reveal never enters the prompt at all -- withheld at load/retrieval (later: quest-stage scoped). Prompt-level "don't tell" is reliably jailbroken.
 - Authoring cost: one wiki page per character feeds all three layers; ingest already splits pages into sections with slugs.
 
+### Quest + narrative context (director-mediated)
+
+Quest state is world truth, but an NPC must not be a walking quest log. FIREWALL: the player's objective NEVER enters an NPC's prompt -- Finnick must not know a priori that Mim is looking for a suitcase (prompt-level "act like you don't know" is unreliable, the same failure mode as the secrets invariant). Instead a NARRATIVE DIRECTOR reads quest + world + time state and emits a per-turn, in-character NUDGE -- "point them toward baggage claim, once, and again if they return; don't reveal why" -- which the NPC delivers in its own voice. This is the MIRROR of sugarlang's teacher-director: same shared state, one directive each (narrative beat vs teaching plan), the generator obeys both. It stays a generic sugaragent concern (directs any NPC in any game); sugarlang leans in through its own teacher-director, never by specializing this. Built in epic G; the naive "objectives into the prompt" that epic D first sketched is superseded by it.
+
 ### Plugin boundary
 
 - sugaragent: generic agentified-NPC conversation for any sugarmagic game. Consumes sugarlang's constraint as an opaque overlay annotation, never imports from it.
@@ -79,8 +83,8 @@ Two-tier memory: durable per-NPC relationship memory in a plugin-owned store key
 Depends on: B.
 
 ### D. World clock + context completion
-In-game clock and time-of-day blackboard fact (schedules become felt in dialogue); player-known-facts store; world-events feed; activeQuestObjectives into the prompt; wire-or-delete ENTITY_AFFECT.
-Depends on: independent of B/C; feeds both.
+Beat-driven time-of-day (amended 2026-07-22 -- NOT an ambient clock: a blackboard fact the narrative SETS at story beats, so schedules become felt in dialogue without a time-management sim); player-known-facts store; a PUBLIC world-events feed; wire-or-delete ENTITY_AFFECT. (The "activeQuestObjectives into the prompt" idea moved to G once we saw it would make NPCs omniscient about the player's private quest.)
+Depends on: independent of B/C; feeds both, and shares its quest/world/time seam with G.
 
 ### E. Judge audit + safety
 Replace regex-lint Audit + discard-Repair with a cheap LLM judge (character fidelity / world consistency / quality rubric) and ONE bounded regeneration, latency-masked by the typing indicator; moderation on player input and NPC output (free multilingual moderation API); hotfixable server-side blocklist in the gateway (day-one jailbreak is guaranteed -- see Fortnite Vader); enforce the secrets invariant.
@@ -90,9 +94,13 @@ Depends on: B (judges against the persona card).
 Bark system: per-NPC banks selected by responseIntent/socialMove, generic sugaragent/game feature, silent fallback. Sugarlang: hover pronunciation via batch audio generation at lexicon compile.
 Depends on: B for bark tags; sugarlang half independent.
 
+### G. Narrative Director (added 2026-07-22)
+The layer that makes NPCs serve the story WITHOUT breaking immersion -- the heart of "an NPC feels like it's actually part of this world and this quest." Realizes the director-mediated quest-context principle above. Three pillars: (1) the narrative-director contract + per-turn in-character NUDGE (never the raw objective -- the firewall); (2) per-NPC, per-quest-stage awareness AUTHORING -- what each NPC knows and hints, in its own voice, gated on stage, repeated on return, retired at the checkpoint (all NPCs converge on the same goal, each in character); (3) quest-gated world events -- progression flips flags that spawn NPCs / enable dialogue / change presence (the sentient sock-eating suitcase; the passenger upset about missing socks who appears only AFTER arrival AND after the player has talked to NPC-1), composing existing gates (quest stages, region-conditions, presence, D's public recent-events) plus richer trigger authoring (stage X AND conversation Y). It is also what SETS beat-driven time (D's set-time action is one of its beats). Generic sugaragent concern; sugarlang rides on top via its teacher-director.
+Depends on: B (the persona prompt the beat composes with), D (shared quest/world/time seam; co-designed), the quest system (exists). Composes with C (memory-aware beats -- "you mentioned baggage claim last time") and E (the judge can score whether the NPC delivered the beat in character).
+
 ## Sequencing
 
-A -> B -> {C, E} with D in parallel any time; F last (or its sugarlang half whenever). B is the hinge: C, E, F all lean on the persona card and prompt structure.
+A -> B -> {C, E} with D in parallel any time; F last (or its sugarlang half whenever). B is the hinge: C, E, F, G all lean on the persona card and prompt structure. G (Narrative Director) follows D and is best co-designed with it -- they share the quest/world/time seam and G absorbs D's quest-objectives scope. Status 2026-07-22: A, B, C shipped; D amended to beat-driven time (re-gate pending); G is the next major design. Practically, D + G are one design conversation now: settle G's director contract first, then re-gate D against it so the seam is gated once.
 
 ## Deferred / watchlist (not in any child epic)
 
