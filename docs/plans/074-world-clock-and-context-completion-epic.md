@@ -1,6 +1,6 @@
 # Plan 074 -- World Clock + Context Completion (child epic D of Strategy 001)
 
-Status: Locked (epic-review passed 2026-07-19, 3 rounds) -- stories execute as written in the stated EXECUTION ORDER; deviations need STOP + amendment + re-gate.
+Status: AMENDED 2026-07-22 (pure beat-driven time-of-day; quest-objectives grounding moved out) -- the prior lock (epic-review passed 2026-07-19, 3 rounds) is SUSPENDED for the amended parts (D1-D3, 074.1, 074.2, 074.6). Re-gate (/epic-review) required before any story is built. Unamended stories (074.3/074.4/074.5/074.7) stand.
 Owner: nikki + claude
 Date: 2026-07-19
 
@@ -8,6 +8,32 @@ Related:
 - Strategy 001 -- child epic D. Independent of B/C in the strategy graph; feeds both. Prompt-side stories land in the post-072.4 user-message world block if 072 has shipped, or today's system-side block if not -- the stories name the seam, not the half.
 - Plans 023 (blackboard -- the minimal fact registry this epic extends), 024/025 (spatial + schedules -- the systems that gain time-awareness), 055/056 (SaveParticipant pattern for persistables).
 - Ground truth: 2026-07-18 audit, corrected in review round 1. No clock/time-of-day concept exists ANYWHERE in the engine (zero hits for timeOfDay/worldClock/gameClock across runtime-core + plugins + targets). `activeQuestObjectives` reaches ConversationRuntimeContext but no SUGARAGENT stage reads it (sugarlang middlewares do). `ENTITY_AFFECT` has zero production WRITERS but is NOT reader-free: sugarlang's teacher directive-cache invalidates on its change events, and the testing package exercises the getter/setter -- dead-in-practice, but deletion crosses plugin boundaries (see 074.7). No player-known-facts store exists.
+
+---
+
+## AMENDMENT 2026-07-22 -- pure beat-driven time-of-day + quest-context firewall (re-gate required before build)
+
+User-directed, from the Find-the-Suitcase design conversation. Two changes to the locked plan. The lock is SUSPENDED for the affected parts (D1-D3, 074.1, 074.2, 074.6); this epic must re-pass epic-review before any amended story is built. Everything else (074.3, 074.4, 074.5, 074.7) stands as originally written and reviewed.
+
+### Change 1 -- the clock is PURE BEAT-DRIVEN, not an ambient real-time ratio (supersedes D1-D3)
+
+Time-of-day is not a running system; it is a FACT the narrative sets. There is no advance loop, no authored scale/ratio, and no game-pause or dialogue-pause semantics -- the entire "first pause consumer" apparatus in the original D1 is moot and removed. Rationale: Wordlark is a cozy, author-paced narrative game. Ambient time creates pressure and incoherence ("why is it suddenly night?") for no benefit; author control of pacing IS the feature. This also deletes most of 074.1's complexity.
+
+- D1' -- `world.time-of-day` (band: dawn/morning/midday/afternoon/dusk/evening/night) and `world.day` (integer) are blackboard facts SET by authored quest events + dialogue nodes -- a "set-time-of-day" / "advance-day" action on the SAME two authoring surfaces D4 uses for "player learns X". No passive tick; nothing advances time except the story.
+- D2' -- SaveParticipant slice stores `{ day, band }` -- never wall-clock, never minutes (there are no minutes). Restores exactly; there is no elapsed-real-time catch-up because there is no elapsed time.
+- D3' -- the BAND is the primary fact, set directly (not derived from minutes). `world.clock`/minutes is dropped. Prompts + schedules consume the band exactly as 074.3/074.4 describe; the band just changes on a beat instead of on a timer. setFact still emits on write; subscribers (sugarlang's directive-cache) invalidate on the event.
+
+Story deltas:
+- 074.1' -- Time-of-day state + the authored set-action + persistence. NO clock system / advance loop / pause. Domain: `set-time-of-day` (band) + `advance-day` actions on BOTH authoring surfaces (quest action defs + the dialogue node/event mold, per D4's verified molds); a small runtime store that writes the facts; SaveParticipant slice `{ day, band }` per D2'. Exit: unit tests (set band; advance day; a band set that wraps night->dawn increments day; save/restore exactness; the no-wallclock rule asserted).
+- 074.2' -- unchanged in spirit: register `world.time-of-day` + `world.day` fact defs; the set-action store is the sole writer (023's ownership intent). Exit: facts visible in the debug handle; unit test for band-set emit-on-change.
+- 074.3 / 074.4 / 074.5 / 074.7 -- SURVIVE. 074.3/074.4 consume the band identically (the resolver does not care that the band now changes on a beat; 074.4's exit reads "switches tasks when the narrative sets the band boundary"). 074.5 (known-facts) and 074.7 (affect delete) are independent of the clock mechanism.
+
+### Change 2 -- quest-objectives grounding LEAVES this epic (re-scopes 074.6)
+
+The original 074.6 forwarded the player's `activeQuestObjectives` into every NPC's prompt as grounding. That makes NPCs OMNISCIENT about the player's private quest -- Finnick would know a priori that Mim lost a suitcase -- the exact fourth-wall break the game must avoid. That half moves to the NEW **Narrative Director** epic (backlog #416), where quest state is mediated by a director into an in-character NUDGE, never the raw objective (the firewall principle: an NPC's prompt never receives the player's objective).
+
+- 074.6' -- RETAINED here: ONLY the recent-events block (D5) -- a compact derived feed of PUBLIC world transitions this session (quest stage/completion + day changes). Public world news (a passenger's socks went missing) is fine for any NPC to know; the player's private objective is not. REMOVED here (-> #416): forwarding `activeQuestObjectives` into the prompt, and the PlanStage objectives-as-grounding policy change.
+- Verification recipe item 6 (quest-objective question names the objective) moves to #416.
 
 ---
 
