@@ -1321,7 +1321,8 @@ describe("plugin infrastructure", () => {
         pluginConfigurations: [
           createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true, {
             openAiVectorStoreId: "vs_test_123",
-            anthropicModel: "claude-opus-4-7"
+            anthropicModel: "claude-opus-4-7",
+            anthropicSummaryModel: "claude-haiku-4-5"
           })
         ]
       })
@@ -1329,7 +1330,8 @@ describe("plugin infrastructure", () => {
 
     expect(plan.gatewayRuntimeConfigEnv).toEqual({
       SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID: "vs_test_123",
-      SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL: "claude-opus-4-7"
+      SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL: "claude-opus-4-7",
+      SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL: "claude-haiku-4-5"
     });
 
     const deployScript = plan.managedFiles.find(
@@ -1350,6 +1352,9 @@ describe("plugin infrastructure", () => {
     );
     expect(workflow?.content).toContain(
       'SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL: "claude-opus-4-7"'
+    );
+    expect(workflow?.content).toContain(
+      'SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL: "claude-haiku-4-5"'
     );
   });
 
@@ -1444,16 +1449,55 @@ describe("plugin infrastructure", () => {
         (file) => file.relativePath === "deployment/local/services/sugarmagic-gateway/server.mjs"
       )?.content
     ).toContain("handleSugarAgentLoreIngest");
+    // #396 — per-game gateway runtime config (the model) is no longer seeded
+    // into .env.example; it's baked into the compose environment: block on
+    // every deploy so config changes reach the running gateway without hand-
+    // editing .env. With default (empty) config, no model line is emitted at
+    // all, and the gateway falls back to its own default.
     expect(
       withTarget.managedFiles.find(
         (file) => file.relativePath === "deployment/local/.env.example"
       )?.content
-    ).toContain("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL=claude-sonnet-4-5");
-    expect(
-      withTarget.managedFiles.find(
-        (file) => file.relativePath === "deployment/local/docker-compose.yml"
-      )?.content
-    ).toContain("SUGARMAGIC_LORE_SOURCE_LOCAL_PATH");
+    ).not.toContain("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL");
+    const composeContent = withTarget.managedFiles.find(
+      (file) => file.relativePath === "deployment/local/docker-compose.yml"
+    )?.content;
+    expect(composeContent).toContain("SUGARMAGIC_LORE_SOURCE_LOCAL_PATH");
+    // #396 airtight — even with default (empty) config, the key is emitted
+    // empty so the compose environment: always wins over a stale .env; the
+    // gateway then falls back to its own default.
+    expect(composeContent).toContain('SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL: ""');
+    expect(composeContent).toContain('SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL: ""');
+  });
+
+  it("#396 — bakes configured gateway models into the local compose environment (not .env)", () => {
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        deployment: { backendDeploymentTargetId: "local" },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true, {
+            anthropicModel: "claude-opus-4-7",
+            anthropicSummaryModel: "claude-haiku-4-5"
+          })
+        ]
+      })
+    );
+    const compose = plan.managedFiles.find(
+      (file) => file.relativePath === "deployment/local/docker-compose.yml"
+    )?.content;
+    const envExample = plan.managedFiles.find(
+      (file) => file.relativePath === "deployment/local/.env.example"
+    )?.content;
+
+    // Configured models live in the regenerated compose environment: block,
+    // which docker compose applies over .env — so a redeploy pushes them to the
+    // running gateway with no hand-editing.
+    expect(compose).toContain('SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL: "claude-opus-4-7"');
+    expect(compose).toContain('SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL: "claude-haiku-4-5"');
+    // ...and NOT seeded into the copy-once .env.example.
+    expect(envExample).not.toContain("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL");
+    expect(envExample).not.toContain("SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL");
   });
 
   it("plans google cloud run deployment outputs with normalized target overrides", () => {

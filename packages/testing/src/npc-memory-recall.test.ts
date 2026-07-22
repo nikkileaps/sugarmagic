@@ -75,6 +75,7 @@ function makeGatewayMock(captured: CapturedGenerate[]) {
     if (url.endsWith("/api/sugaragent/generate")) {
       const body = JSON.parse(String(init?.body ?? "{}")) as {
         model?: string;
+        purpose?: string;
         systemBlocks?: Array<{ text: string }>;
         userPrompt?: string;
       };
@@ -84,8 +85,9 @@ function makeGatewayMock(captured: CapturedGenerate[]) {
         systemPrompt,
         userPrompt: body.userPrompt ?? ""
       });
-      // The end-of-conversation summary runs on the explicit small model.
-      const isSummary = body.model === "claude-haiku-4-5";
+      // The end-of-conversation summary is tagged server-side by purpose;
+      // no model id crosses the wire (Plan 073.2).
+      const isSummary = body.purpose === "summary";
       const text = isSummary ? SUMMARY_JSON : "A pleasure as always.";
       return new Response(
         JSON.stringify({ text, requestId: "g", model: body.model ?? "dialogue" }),

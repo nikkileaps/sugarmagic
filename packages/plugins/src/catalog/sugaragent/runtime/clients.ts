@@ -22,6 +22,10 @@ export interface LLMGenerateRequest {
   systemPrompt: string;
   userPrompt: string;
   maxTokens?: number;
+  /** Plan 073.2 — request category the gateway maps to a server-side model
+   *  env var. "summary" uses the cheap memory-summary model; anything else
+   *  (default) uses the dialogue model. No model id crosses the wire. */
+  purpose?: "dialogue" | "summary";
 }
 
 /** Plan 072.7 — the LLM result now carries usage + the model actually used. */
@@ -54,6 +58,9 @@ export interface GatewaySystemBlock {
 
 export interface GatewayGenerateRequest {
   model?: string;
+  /** Plan 073.2 — server-side model selector; the gateway maps it to a model
+   *  env var. See LLMGenerateRequest.purpose. */
+  purpose?: "dialogue" | "summary";
   /** Legacy string form (sugarlang). Prefer systemBlocks for caching. */
   systemPrompt?: string;
   /** Plan 072.5 — structured system with a cache breakpoint (sugaragent). */
@@ -247,6 +254,7 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
   async generateStructuredTurn(request: LLMGenerateRequest): Promise<LLMGenerateResult> {
     const response = await this.client.generate({
       model: request.model.trim() || undefined,
+      purpose: request.purpose,
       // Plan 072.5 — send the system prompt as one cacheable block (a single
       // cache breakpoint at the end of the full system prompt). sugaragent's
       // system half is byte-stable per session (072.4), so this caches per-NPC.

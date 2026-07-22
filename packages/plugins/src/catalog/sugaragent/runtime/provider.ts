@@ -551,16 +551,10 @@ export function createSugarAgentConversationProvider(
           const transcript = state.transcript ?? state.history;
           try {
             const { summaryComplete } = await summarizeConversationAtDispose(
-              {
-                store,
-                llmProvider,
-                logger,
-                // Empty config => summarizer's built-in small-model
-                // default (claude-haiku-4-5). Never empty on the wire:
-                // an empty model would make the gateway fall back to the
-                // DIALOGUE env model, not a cheap one.
-                model: config.anthropicSummaryModel || undefined
-              },
+              // The summary model is chosen server-side (the gateway maps
+              // purpose:"summary" to SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL,
+              // fed from the Anthropic Summary Model config at deploy).
+              { store, llmProvider, logger },
               {
                 npcDefinitionId,
                 npcDisplayName: context.selection.npcDisplayName,

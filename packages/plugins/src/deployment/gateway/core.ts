@@ -790,10 +790,24 @@ export async function handleSugarAgentGenerate(
   }
 
   const body = await readJsonBody(req);
+  // Plan 073.2 — model selection stays SERVER-SIDE. The browser sends a
+  // `purpose` category ("dialogue" | "summary"), never a model id, so model
+  // choice is a deploy-time env decision the player can't see or tamper with.
+  // "summary" (the cheap end-of-conversation memory pass) resolves from its
+  // own env var so it can differ from the dialogue model. An explicit
+  // `body.model` is still honored for back-compat / tooling, but the runtime
+  // no longer sends one.
+  const purpose =
+    typeof body["purpose"] === "string" ? body["purpose"].trim() : "";
   const model =
     typeof body["model"] === "string" && body["model"].trim()
       ? body["model"].trim()
-      : resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5");
+      : purpose === "summary"
+        ? resolveEnv("SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL", "claude-haiku-4-5")
+        : resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5");
+  // The ground-truth record of which model each call used — grep it in
+  // `docker compose logs` to verify a model config change actually landed.
+  logInfo("sugaragent.generate", { purpose: purpose || "dialogue", model });
   const systemPrompt =
     typeof body["systemPrompt"] === "string" ? body["systemPrompt"].trim() : "";
   const userPrompt =

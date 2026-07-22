@@ -30,9 +30,6 @@ import type { SugarAgentLogger } from "../logger";
 import type { SugarAgentSessionHistoryEntry } from "../types";
 import type { NpcMemoryStore, SummaryMemoryDelta } from "./npc-memory-store";
 
-/** A small, cheap model for background summarization — deliberately
- *  NOT the NPC-dialogue default (Plan 073 §073.2). Overridable. */
-export const DEFAULT_SUMMARY_MODEL = "claude-haiku-4-5";
 /** One capped call per conversation. */
 export const DEFAULT_SUMMARY_MAX_TOKENS = 400;
 
@@ -192,8 +189,6 @@ export interface ConversationSummaryDeps {
   store: NpcMemoryStore;
   llmProvider: LLMProvider | null;
   logger: SugarAgentLogger;
-  /** Override the summary model id (else DEFAULT_SUMMARY_MODEL). */
-  model?: string;
   /** Override the summary token cap (else DEFAULT_SUMMARY_MAX_TOKENS). */
   maxTokens?: number;
 }
@@ -229,7 +224,10 @@ async function runAsyncSummary(
   }
   try {
     const result = await deps.llmProvider.generateStructuredTurn({
-      model: deps.model ?? DEFAULT_SUMMARY_MODEL,
+      // Model id stays server-side (Plan 073.2). The gateway maps
+      // purpose:"summary" to SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL.
+      model: "",
+      purpose: "summary",
       systemPrompt: SUMMARY_SYSTEM_PROMPT,
       userPrompt: buildTranscriptText(transcript),
       maxTokens: deps.maxTokens ?? DEFAULT_SUMMARY_MAX_TOKENS

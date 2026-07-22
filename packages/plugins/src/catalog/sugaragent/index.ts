@@ -296,7 +296,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       type: "text",
       group: "Gateway Runtime Config",
       description:
-        "Model id the gateway uses for NPC dialogue turns. Empty = gateway default (claude-sonnet-4-5).",
+        "Model the gateway uses for NPC dialogue turns. Applied at deploy (redeploy to change; nothing to hand-edit). Empty = claude-haiku-4-5.",
       placeholder: "claude-sonnet-4-5"
     },
     {
@@ -305,7 +305,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       type: "text",
       group: "Gateway Runtime Config",
       description:
-        "Model id for the end-of-conversation NPC memory summary (a cheap background task, kept smaller than the dialogue model). Empty = claude-haiku-4-5.",
+        "Model for the end-of-conversation NPC memory summary — a cheap background task, keep it smaller/faster than the dialogue model. Applied at deploy. Empty = claude-haiku-4-5.",
       placeholder: "claude-haiku-4-5"
     },
     {
@@ -359,7 +359,14 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       configKey: "anthropicModel",
       envVarName: "SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL",
       description:
-        "Default Anthropic model id the gateway uses when generating turns (e.g., `claude-sonnet-4-5`).",
+        "Anthropic model the gateway uses for NPC dialogue turns (e.g., `claude-sonnet-4-5`).",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    },
+    {
+      configKey: "anthropicSummaryModel",
+      envVarName: "SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL",
+      description:
+        "Anthropic model the gateway uses for the cheap end-of-conversation NPC memory summary (Plan 073.2). Resolved server-side from purpose:\"summary\" requests.",
       nonSecretAttestation: "safe-to-expose-publicly"
     },
   ],
