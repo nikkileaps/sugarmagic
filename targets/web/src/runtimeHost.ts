@@ -107,6 +107,7 @@ import {
   createCasterStatsSaveParticipant,
   createInventoryPlayerSaveParticipant,
   createNpcBehaviorSaveParticipant,
+  createPlaythroughIdentitySaveParticipant,
   createQuestManagerSaveParticipant,
   type QuestManagerSlice,
   createRuntimeGameplayAssembly,
@@ -1214,6 +1215,16 @@ export function createWebRuntimeHost(
   // register at construction; the registry survives host.start /
   // dispose cycles.
   const saveParticipantRegistry = new SaveParticipantRegistry();
+  // Plan 073 §073.1 — playthrough.identity mints/adopts the
+  // playthroughId every reset-on-New-Game plugin store keys on
+  // (SugarAgent NPC memory). Host-owned tier so it settles in
+  // Phase 1; deserialize(null) at boot mints a fresh id (New Game
+  // / first boot / pre-073 save), a present slice adopts it
+  // (Continue). No host closures — it owns its own value and feeds
+  // the `getActivePlaythroughId` registry.
+  saveParticipantRegistry.register(
+    createPlaythroughIdentitySaveParticipant()
+  );
   // Plan 055 §055.3 — host.player is the first real participant.
   // deserialize writes into `hostPlayerRestore` so the spawn
   // resolution block in `start()` can prefer restored values over

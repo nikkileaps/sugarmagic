@@ -152,6 +152,14 @@ export interface DeploymentPlan {
    * `pluginConfigurations` iteration).
    */
   gatewayRuntimeConfigEnv: Record<string, string>;
+  /**
+   * #396 — every VALID gatewayRuntimeConfigKey envVarName from enabled
+   * plugins, whether or not it has a value. The local docker-compose
+   * `environment:` block emits all of them (empty string when unset) so the
+   * compose file always wins over a stale `.env` — a cleared config field
+   * falls back to the gateway's own default, never a leftover `.env` value.
+   */
+  gatewayRuntimeConfigKeyNames: string[];
 }
 
 export interface DeploymentTargetDefinition {
@@ -639,6 +647,20 @@ function formatLocalCompose(
     const serviceName = toComposeServiceName(unit.serviceUnitId);
     const hostPort = overrides.gatewayHostPortBase + index;
     const serviceDir = `./services/${serviceName}`;
+    // #396 — per-game gateway runtime config (models, vector store id) is
+    // baked LITERALLY into the compose `environment:` block, which docker
+    // compose applies OVER `env_file: .env`. So config set in Studio reaches
+    // the running local gateway on every redeploy with no hand-editing of
+    // .env; the .env file is left for secrets (API keys) only. EVERY key is
+    // emitted (empty string when unset) so a stale `.env` value can never
+    // win — a cleared field falls back to the gateway's own default.
+    const runtimeConfigLines = plan.gatewayRuntimeConfigKeyNames
+      .slice()
+      .sort((left, right) => left.localeCompare(right))
+      .map(
+        (key) =>
+          `      ${key}: ${JSON.stringify(plan.gatewayRuntimeConfigEnv[key] ?? "")}`
+      );
     const environment = [
       `      PORT: "8787"`,
       `      SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS: "*"`,
@@ -646,6 +668,7 @@ function formatLocalCompose(
       `      SUGARMAGIC_LORE_SOURCE_PATH: "/opt/sugarmagic/lore-source"`,
       `      SUGARMAGIC_LORE_SOURCE_REPOSITORY_URL: "\${SUGARMAGIC_LORE_SOURCE_REPOSITORY_URL:-${loreSource.repositoryUrl}}"`,
       `      SUGARMAGIC_LORE_SOURCE_REPOSITORY_REF: "\${SUGARMAGIC_LORE_SOURCE_REPOSITORY_REF:-${loreSource.repositoryRef}}"`,
+      ...runtimeConfigLines
     ];
     const volumes = [
       `    volumes:`,
@@ -698,6 +721,11 @@ function buildLocalManagedFiles(
     ),
     asTextFile(
       "deployment/local/.env.example",
+      // #396 — per-game gateway runtime config (models, vector store id) is
+      // NOT listed here anymore: it's baked into docker-compose.yml's
+      // `environment:` block from the Studio config on every deploy, so it
+      // stays fresh without hand-editing. This file is the copy-once seed for
+      // host-side overrides + secrets only.
       formatEnvExample(plan, [
         `COMPOSE_PROJECT_NAME=${overrides.composeProjectName}`,
         `SUGARDEPLOY_WORKING_DIRECTORY=${overrides.workingDirectory}`,
@@ -705,8 +733,6 @@ function buildLocalManagedFiles(
         `SUGARMAGIC_LORE_SOURCE_LOCAL_PATH=${loreSource.localPath}`,
         `SUGARMAGIC_LORE_SOURCE_REPOSITORY_URL=${loreSource.repositoryUrl}`,
         `SUGARMAGIC_LORE_SOURCE_REPOSITORY_REF=${loreSource.repositoryRef}`,
-        `SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL=claude-sonnet-4-5`,
-        `SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID=`,
         `SUGARMAGIC_GATEWAY_ALLOWED_ORIGINS=*`
       ])
     ),
@@ -1584,6 +1610,11 @@ export function planGameDeployment(
   // skipped so deploy.sh + workflow YAML carry only meaningful
   // entries.
   const gatewayRuntimeConfigEnv: Record<string, string> = {};
+  // #396 — every VALID key name (empty value or not). The local compose
+  // `environment:` block emits all of them so it always wins over a stale
+  // `.env`; the prod `--set-env-vars` path keeps using the non-empty
+  // `gatewayRuntimeConfigEnv` only.
+  const gatewayRuntimeConfigKeyNames: string[] = [];
   for (const configuration of gameProject.pluginConfigurations) {
     if (!configuration.enabled) continue;
     const definition = getDiscoveredPluginDefinition(configuration.pluginId);
@@ -1605,6 +1636,9 @@ export function planGameDeployment(
           requirementIds: []
         });
         continue;
+      }
+      if (!gatewayRuntimeConfigKeyNames.includes(key.envVarName)) {
+        gatewayRuntimeConfigKeyNames.push(key.envVarName);
       }
       const rawValue = config[key.configKey];
       if (typeof rawValue !== "string") continue;
@@ -1634,7 +1668,8 @@ export function planGameDeployment(
     conflicts,
     warnings,
     managedFiles: [],
-    gatewayRuntimeConfigEnv
+    gatewayRuntimeConfigEnv,
+    gatewayRuntimeConfigKeyNames
   };
 
   if (handler?.collectWarnings) {

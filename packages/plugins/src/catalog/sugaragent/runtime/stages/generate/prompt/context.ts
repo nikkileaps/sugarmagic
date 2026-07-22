@@ -78,6 +78,16 @@ export interface BasePromptContext {
   } | null;
 
   /**
+   * Plan 073.3 — the NPC's memory of this player, digested from the
+   * record loaded once per conversation (D4). Slots into the byte-stable
+   * system prompt after core knowledge. Empty string = first meeting (no
+   * memory block). Must be byte-stable within a session — a mid-session
+   * summarizer completion does NOT change it (the record is frozen at
+   * load).
+   */
+  memoryDigest: string;
+
+  /**
    * Plan 072.8 — compact persona drift-reminder, re-injected at the END of the
    * user message (after history). Empty string = nothing to re-inject.
    */

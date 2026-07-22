@@ -100,9 +100,16 @@ export function buildScriptedGeneratorPromptOverlay(
 
 /**
 /**
- * Determines whether the generator should use minimal greeting mode.
- * This fires when: the learner hasn't typed anything yet, the teacher
+ * Determines whether the generator should keep the opening greeting brief and
+ * simple. This fires when: the learner hasn't typed anything yet, the teacher
  * chose the most conservative posture, and there's no vocabulary to teach.
+ *
+ * Plan 073.4 — this is a PEDAGOGICAL brevity signal for a conservative-beginner
+ * opening (short/simple language), independent of whether the player and NPC
+ * have met. First-meeting vs repeat-visit semantics (introduce / don't
+ * re-introduce) are SugarAgent's concern, driven by its memory mechanic — not
+ * sugarlang's. So a beginner's opening stays brief on every visit; SugarAgent
+ * decides acquaintance framing separately.
  */
 export function computeMinimalGreetingMode(
   constraint: SugarlangConstraint,

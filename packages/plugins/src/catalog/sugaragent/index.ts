@@ -4,6 +4,12 @@ import {
 } from "@sugarmagic/domain";
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import { createSugarAgentConversationProvider } from "./runtime/provider";
+import { createSugarAgentLogger } from "./runtime/logger";
+import {
+  createNpcMemoryMiddleware,
+  NPC_MEMORY_MIDDLEWARE_ID
+} from "./runtime/memory/memory-middleware";
+import { installNpcMemoryDebugHandle } from "./runtime/memory/memory-debug";
 import type { SugarAgentPluginConfig } from "./runtime/types";
 import type { RuntimePluginEnvironment } from "../../runtime";
 
@@ -18,6 +24,34 @@ export {
   SugarAgentGatewayVectorStoreClient,
   type BearerTokenGetter
 } from "./runtime/clients";
+
+// Plan 073 §073.1 — the plugin-owned NPC memory store. Surfaced from
+// the plugin root so integration tests can drive it against the
+// runtime identity registries directly; later stories wire it into
+// the conversation lifecycle.
+export {
+  NpcMemoryStore,
+  InMemoryNpcMemoryBackend,
+  IndexedDBNpcMemoryBackend,
+  migrateNpcMemoryRecord,
+  NPC_MEMORY_SCHEMA_VERSION,
+  type NpcMemoryRecord,
+  type NpcMemoryBackend,
+  type NpcMemoryStoreOptions,
+  type DeterministicMemoryDelta,
+  type SummaryMemoryDelta
+} from "./runtime/memory/npc-memory-store";
+export {
+  resolveNpcMemoryStore,
+  clearNpcMemoryStoreCacheForTests
+} from "./runtime/memory/store-registry";
+export {
+  buildMemoryDigest,
+  MEMORY_STATE_KEY,
+  MEMORY_ANNOTATION_KEY,
+  type MemoizedNpcMemory,
+  type NpcMemoryAnnotation
+} from "./runtime/memory/digest";
 
 const deploymentRequirements: DeploymentRequirement[] = [
   {
@@ -178,6 +212,10 @@ export function normalizeSugarAgentPluginConfig(
       typeof config?.anthropicModel === "string"
         ? config.anthropicModel.trim()
         : "",
+    anthropicSummaryModel:
+      typeof config?.anthropicSummaryModel === "string"
+        ? config.anthropicSummaryModel.trim()
+        : "",
     maxEvidenceCharsPerItem:
       typeof config?.maxEvidenceCharsPerItem === "number" &&
       Number.isFinite(config.maxEvidenceCharsPerItem)
@@ -188,6 +226,12 @@ export function normalizeSugarAgentPluginConfig(
       Number.isFinite(config.maxEvidenceResults)
         ? Math.max(1, Math.min(8, Math.floor(config.maxEvidenceResults)))
         : 4,
+    memoryEnabled: config?.memoryEnabled !== false,
+    memoryDigestMaxChars:
+      typeof config?.memoryDigestMaxChars === "number" &&
+      Number.isFinite(config.memoryDigestMaxChars)
+        ? Math.max(200, Math.min(2000, Math.floor(config.memoryDigestMaxChars)))
+        : 800,
     debugLogging: config?.debugLogging === true,
     tone: typeof config?.tone === "string" ? config.tone.trim() : ""
   };
@@ -255,12 +299,21 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     },
     {
       configKey: "anthropicModel",
-      label: "Anthropic Model",
+      label: "Anthropic Dialogue Model",
       type: "text",
       group: "Gateway Runtime Config",
       description:
-        "Override the default model id the gateway uses for generation. Empty = gateway default (claude-sonnet-4-5).",
+        "Model the gateway uses for NPC dialogue turns. Applied at deploy (redeploy to change; nothing to hand-edit). Empty = claude-haiku-4-5.",
       placeholder: "claude-sonnet-4-5"
+    },
+    {
+      configKey: "anthropicSummaryModel",
+      label: "Anthropic Summary Model",
+      type: "text",
+      group: "Gateway Runtime Config",
+      description:
+        "Model for the end-of-conversation NPC memory summary — a cheap background task, keep it smaller/faster than the dialogue model. Applied at deploy. Empty = claude-haiku-4-5.",
+      placeholder: "claude-haiku-4-5"
     },
     {
       configKey: "maxEvidenceResults",
@@ -279,6 +332,24 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       default: 600,
       min: 120,
       max: 4000
+    },
+    {
+      configKey: "memoryEnabled",
+      label: "NPC Memory",
+      type: "boolean",
+      group: "Runtime Behavior",
+      default: true,
+      description:
+        "When on, NPCs remember players across conversations and greet them as acquaintances on repeat visits. Off = every conversation starts fresh."
+    },
+    {
+      configKey: "memoryDigestMaxChars",
+      label: "Memory Digest Size Cap",
+      type: "number",
+      group: "Runtime Behavior",
+      default: 800,
+      min: 200,
+      max: 2000
     },
     {
       configKey: "debugLogging",
@@ -313,7 +384,14 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       configKey: "anthropicModel",
       envVarName: "SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL",
       description:
-        "Default Anthropic model id the gateway uses when generating turns (e.g., `claude-sonnet-4-5`).",
+        "Anthropic model the gateway uses for NPC dialogue turns (e.g., `claude-sonnet-4-5`).",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    },
+    {
+      configKey: "anthropicSummaryModel",
+      envVarName: "SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL",
+      description:
+        "Anthropic model the gateway uses for the cheap end-of-conversation NPC memory summary (Plan 073.2). Resolved server-side from purpose:\"summary\" requests.",
       nonSecretAttestation: "safe-to-expose-publicly"
     },
   ],
@@ -324,8 +402,11 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     loreRepositoryRef: "main",
     openAiVectorStoreId: "",
     anthropicModel: "",
+    anthropicSummaryModel: "",
     maxEvidenceResults: 4,
     maxEvidenceCharsPerItem: 600,
+    memoryEnabled: true,
+    memoryDigestMaxChars: 800,
     debugLogging: false,
     tone: ""
   },
@@ -366,6 +447,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
             proxyBaseUrl: config.proxyBaseUrl,
             stageLoggingEnabled: config.debugLogging
           });
+          // Plan 073.5 — dev-only memory inspection handle (window.__sugaragentMemory).
+          installNpcMemoryDebugHandle();
         },
         contributions: [
           {
@@ -380,6 +463,29 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
                 "Agentified NPC provider with Interpret/Retrieve/Plan/Generate/Audit/Repair stages.",
               status: "ready",
               provider: createSugarAgentConversationProvider(config)
+            }
+          },
+          // Plan 073.3 — context-stage middleware that loads NPC memory once
+          // per conversation, memoizes record + digest in execution.state, and
+          // annotates metCount/first-meeting for the provider, the stages, and
+          // (073.4) sugarlang's minimal-greeting policy.
+          {
+            pluginId: configuration.pluginId,
+            contributionId: "sugaragent.memory-middleware",
+            kind: "conversation.middleware",
+            displayName: "SugarAgent NPC Memory",
+            priority: 10,
+            payload: {
+              middlewareId: NPC_MEMORY_MIDDLEWARE_ID,
+              summary:
+                "Loads NPC memory once per conversation; memoizes the digest for the prompt and annotates first-meeting.",
+              stage: "context",
+              status: "ready",
+              middleware: createNpcMemoryMiddleware({
+                logger: createSugarAgentLogger(config.debugLogging),
+                enabled: config.memoryEnabled,
+                digestMaxChars: config.memoryDigestMaxChars
+              })
             }
           }
         ],

@@ -22,7 +22,24 @@ export {
   SugarAgentGatewayLLMClient,
   SugarAgentGatewayVectorStoreClient,
   normalizeSugarAgentPluginConfig,
-  type BearerTokenGetter
+  type BearerTokenGetter,
+  NpcMemoryStore,
+  InMemoryNpcMemoryBackend,
+  IndexedDBNpcMemoryBackend,
+  migrateNpcMemoryRecord,
+  NPC_MEMORY_SCHEMA_VERSION,
+  type NpcMemoryRecord,
+  type NpcMemoryBackend,
+  type NpcMemoryStoreOptions,
+  type DeterministicMemoryDelta,
+  type SummaryMemoryDelta,
+  resolveNpcMemoryStore,
+  clearNpcMemoryStoreCacheForTests,
+  buildMemoryDigest,
+  MEMORY_STATE_KEY,
+  MEMORY_ANNOTATION_KEY,
+  type MemoizedNpcMemory,
+  type NpcMemoryAnnotation
 } from "../catalog/sugaragent";
 export { SUGARDEPLOY_PLUGIN_ID } from "../catalog/sugardeploy";
 export {

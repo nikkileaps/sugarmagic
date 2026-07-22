@@ -90,6 +90,12 @@ function buildStableSystemLines(
       ? `What you know (your life and immediate world):\n${renderSections(coreSections)}`
       : null,
 
+    // 4b. Memory (Plan 073.3, D4) — what you remember about THIS player from
+    // earlier conversations. Byte-stable within a session (the record is
+    // loaded once); empty on a first meeting. Slots after core knowledge and
+    // before the voice directive so the cached-half stays stable.
+    context.memoryDigest ? context.memoryDigest : null,
+
     // 5. Voice directive — authored ## Voice wins, else game tone
     voiceText
       ? `Voice: ${voiceText}\nLet this guide word choice, pacing, and warmth — but stay in character.`
@@ -168,7 +174,7 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
       : "This is the opening turn. Start the conversation naturally.",
 
     context.minimalGreetingMode
-      ? "This is a first-meeting greeting for a beginner learner. Keep it brief, warm, and generic. Do not volunteer what the NPC is doing unless asked."
+      ? "Keep this greeting brief, warm, and simple for a beginner learner. Do not volunteer what the NPC is doing unless asked."
       : null,
 
     // Relocated from the system prompt (Plan 072.4).

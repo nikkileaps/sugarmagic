@@ -74,7 +74,19 @@ export interface SugarAgentPluginConfig {
    * declaration -> deploy.sh `--set-env-vars` chain.
    */
   openAiVectorStoreId: string;
+  /** Model the gateway uses for NPC dialogue turns (empty = gateway
+   *  default). Deployed as the gateway env default; the browser sends
+   *  an empty model for dialogue and the gateway fills it in. */
   anthropicModel: string;
+  /**
+   * Plan 073.2 — model for the cheap end-of-conversation memory summary (a
+   * background task, deliberately smaller/cheaper than the dialogue model).
+   * Resolved SERVER-SIDE, same as `anthropicModel`: the browser sends
+   * `purpose:"summary"` and an empty model id, and the gateway reads the model
+   * from `SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL` (deployed from this value via
+   * gatewayRuntimeConfigKeys). Empty => gateway default `claude-haiku-4-5`.
+   */
+  anthropicSummaryModel: string;
   maxEvidenceResults: number;
   /**
    * Plan 072.6 — per-evidence-item character budget forwarded to the prompt.
@@ -82,6 +94,17 @@ export interface SugarAgentPluginConfig {
    * the model. Total evidence budget is bounded by maxEvidenceResults x this.
    */
   maxEvidenceCharsPerItem: number;
+  /**
+   * Plan 073.5 — master switch for NPC memory (persistence + recall). When
+   * false, the memory middleware and the end-of-conversation summarizer are
+   * no-ops: NPCs neither write nor read memory.
+   */
+  memoryEnabled: boolean;
+  /**
+   * Plan 073.5 — hard cap on the memory digest injected into the cached system
+   * prefix. Keeps the prompt (and its cache write) bounded per conversation.
+   */
+  memoryDigestMaxChars: number;
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
   tone: string;
@@ -138,6 +161,14 @@ export interface SugarAgentProviderState {
   lastTurnDiagnostics: Record<string, TurnStageDiagnostics>;
   /** Plan 072.3 -- loaded once at session start; undefined until then. */
   persona?: LoadedPersona;
+  /**
+   * Plan 073.2 -- a fuller conversation transcript for end-of-session
+   * memory summarization. `history` is capped at 12 for the prompt's
+   * recent-turns window; the summarizer wants earlier exchanges too
+   * (e.g. the player's introduction), so this accumulates a higher-
+   * bounded copy. Session-scoped, never enters the prompt.
+   */
+  transcript?: SugarAgentSessionHistoryEntry[];
 }
 
 export type TurnIntent =

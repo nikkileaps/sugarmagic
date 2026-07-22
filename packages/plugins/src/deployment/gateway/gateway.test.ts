@@ -279,6 +279,54 @@ describe("handleSugarAgentGenerate", () => {
     expect(requestBody.system).toBe("you are helpful");
   });
 
+  it("073.2 — resolves the model server-side by purpose (no model id from the client)", async () => {
+    process.env["SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL"] = "dialogue-model-x";
+    process.env["SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL"] = "summary-model-y";
+    try {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+        headers: { get: () => "req" }
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      // No purpose => dialogue model.
+      await handleSugarAgentGenerate(
+        makeReq({
+          method: "POST",
+          url: "/api/sugaragent/generate",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ systemPrompt: "s", userPrompt: "u" })
+        }),
+        makeRes()
+      );
+      // purpose:"summary" => summary model.
+      await handleSugarAgentGenerate(
+        makeReq({
+          method: "POST",
+          url: "/api/sugaragent/generate",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ purpose: "summary", systemPrompt: "s", userPrompt: "u" })
+        }),
+        makeRes()
+      );
+
+      const dialogueBody = JSON.parse(
+        (mockFetch.mock.calls[0] as [string, RequestInit])[1].body as string
+      ) as { model: string };
+      const summaryBody = JSON.parse(
+        (mockFetch.mock.calls[1] as [string, RequestInit])[1].body as string
+      ) as { model: string };
+      expect(dialogueBody.model).toBe("dialogue-model-x");
+      expect(summaryBody.model).toBe("summary-model-y");
+    } finally {
+      delete process.env["SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL"];
+      delete process.env["SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL"];
+    }
+  });
+
   it("072.5 — maps systemBlocks to Anthropic system content blocks with cache_control", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

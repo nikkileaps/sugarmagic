@@ -5,6 +5,10 @@ import type {
 import { createDiagnostics } from "./diagnostics";
 import { summarizeEvidence } from "./helpers";
 import { resolvePlanDecision } from "./planning";
+import {
+  MEMORY_ANNOTATION_KEY,
+  type NpcMemoryAnnotation
+} from "../memory/digest";
 import type {
   InterpretResult,
   PlanResult,
@@ -69,10 +73,20 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       typeof scriptedFollowupDialogueDefinitionId === "string" &&
         scriptedFollowupDialogueDefinitionId.length > 0
     );
+    // Plan 073.3 — memory IS evidence for recall/greeting: the memory
+    // middleware (context stage) publishes this annotation before Plan runs.
+    const hasMemory = Boolean(
+      (
+        input.execution.annotations[MEMORY_ANNOTATION_KEY] as
+          | NpcMemoryAnnotation
+          | undefined
+      )?.hasMemory
+    );
 
     const decision = resolvePlanDecision({
       interpret: input.interpret,
       hasEvidence,
+      hasMemory,
       hasActiveQuest,
       hasScriptedFollowup,
       npcDisplayName: input.execution.selection.npcDisplayName,
@@ -111,6 +125,7 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
         initiativeAction: output.initiativeAction,
         noveltyState: output.noveltyState,
         hasEvidence,
+        hasMemory,
         hasActiveQuest,
         hasScriptedFollowup,
         actionKinds: output.actionProposals.map((proposal) => proposal.kind),

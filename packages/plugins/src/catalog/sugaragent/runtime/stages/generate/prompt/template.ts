@@ -55,4 +55,4 @@ export const SYSTEM_PROMPT_GROUNDING_RULES = [
  * Instruction injected in minimal greeting mode to suppress detail.
  */
 export const MINIMAL_GREETING_INSTRUCTION =
-  "This is a first-meeting beginner greeting turn. Keep it tiny, warm, and low-specificity. Do not volunteer task details, quest details, location trivia, or backstory unless the player asks.";
+  "This is a beginner-learner greeting turn. Keep it tiny, warm, and low-specificity. Do not volunteer task details, quest details, location trivia, or backstory unless the player asks.";

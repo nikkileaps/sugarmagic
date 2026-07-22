@@ -118,6 +118,19 @@ export {
   SaveParticipantRegistry
 } from "./participant";
 
+// Plan 073 §073.1 — playthrough identity: the id every plugin store
+// that resets on New Game keys itself on. `getActivePlaythroughId`
+// is the plugin-runtime read path (access-token-registry mold).
+export {
+  PLAYTHROUGH_IDENTITY_PARTICIPANT_ID,
+  PLAYTHROUGH_IDENTITY_SLICE_SCHEMA_VERSION,
+  type PlaythroughIdentitySlice,
+  type PlaythroughIdentityParticipantOptions,
+  createPlaythroughIdentitySaveParticipant,
+  getActivePlaythroughId,
+  resetActivePlaythroughIdForTests
+} from "./playthroughIdentitySaveParticipant";
+
 // SaveSlice authored in domain (Plan 055.2). Re-exported here so
 // runtime-core consumers keep pulling every save type from one
 // package.
