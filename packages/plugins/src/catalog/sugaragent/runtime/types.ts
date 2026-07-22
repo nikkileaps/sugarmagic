@@ -74,7 +74,18 @@ export interface SugarAgentPluginConfig {
    * declaration -> deploy.sh `--set-env-vars` chain.
    */
   openAiVectorStoreId: string;
+  /** Model the gateway uses for NPC dialogue turns (empty = gateway
+   *  default). Deployed as the gateway env default; the browser sends
+   *  an empty model for dialogue and the gateway fills it in. */
   anthropicModel: string;
+  /**
+   * Plan 073.2 — model for the cheap end-of-conversation memory
+   * summary (a background task, deliberately smaller/cheaper than the
+   * dialogue model). Sent EXPLICITLY from the browser per summary, so
+   * unlike `anthropicModel` it needs no gateway env var. Empty =
+   * `claude-haiku-4-5` (the summarizer's built-in default).
+   */
+  anthropicSummaryModel: string;
   maxEvidenceResults: number;
   /**
    * Plan 072.6 — per-evidence-item character budget forwarded to the prompt.
@@ -138,6 +149,14 @@ export interface SugarAgentProviderState {
   lastTurnDiagnostics: Record<string, TurnStageDiagnostics>;
   /** Plan 072.3 -- loaded once at session start; undefined until then. */
   persona?: LoadedPersona;
+  /**
+   * Plan 073.2 -- a fuller conversation transcript for end-of-session
+   * memory summarization. `history` is capped at 12 for the prompt's
+   * recent-turns window; the summarizer wants earlier exchanges too
+   * (e.g. the player's introduction), so this accumulates a higher-
+   * bounded copy. Session-scoped, never enters the prompt.
+   */
+  transcript?: SugarAgentSessionHistoryEntry[];
 }
 
 export type TurnIntent =

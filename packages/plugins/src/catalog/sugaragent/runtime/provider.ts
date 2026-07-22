@@ -24,6 +24,8 @@ import {
   type VectorStoreProvider
 } from "./clients";
 import { createSugarAgentLogger, type SugarAgentLogger } from "./logger";
+import { summarizeConversationAtDispose } from "./memory/conversation-summarizer";
+import { resolveNpcMemoryStore } from "./memory/store-registry";
 import {
   AuditStage,
   GenerateStage,
@@ -69,6 +71,7 @@ function ensureProviderState(
     consecutiveFallbackTurns: 0,
     closeRequested: false,
     history: [],
+    transcript: [],
     lastTurnDiagnostics: {}
   };
   stateContainer[SUGARAGENT_STATE_KEY] = next;
@@ -88,6 +91,14 @@ function pushHistoryEntry(
   if (!normalized) return;
   state.history.push({ role, text: normalized });
   state.history = state.history.slice(-12);
+  // Plan 073.2 — accumulate a fuller transcript for end-of-conversation
+  // memory summarization. `history` is capped at 12 for the prompt's
+  // recent-turns window; the summarizer wants earlier exchanges too
+  // (e.g. the player's introduction). Session-scoped, bounded, never
+  // enters the prompt.
+  if (!state.transcript) state.transcript = [];
+  state.transcript.push({ role, text: normalized });
+  state.transcript = state.transcript.slice(-60);
 }
 
 function isStalledTurn(
@@ -524,11 +535,45 @@ export function createSugarAgentConversationProvider(
             stages
           });
         },
-        dispose: () => {
+        dispose: async () => {
           logger.logPluginEvent("unmounted", {
             npcDefinitionId: context.selection.npcDefinitionId,
             sessionId: state.sessionId
           });
+          // Plan 073.2 — write what this NPC remembers about the player.
+          // Phase 1 (deterministic merge) is AWAITED so an immediate
+          // re-talk sees "we met"; phase 2 (the LLM summary) is fire-
+          // and-forget so dispose never blocks on the gateway.
+          const npcDefinitionId = context.selection.npcDefinitionId;
+          if (!npcDefinitionId) return;
+          const store = resolveNpcMemoryStore();
+          if (!store) return; // identity not ready — memory unavailable
+          const transcript = state.transcript ?? state.history;
+          try {
+            const { summaryComplete } = await summarizeConversationAtDispose(
+              {
+                store,
+                llmProvider,
+                logger,
+                // Empty config => summarizer's built-in small-model
+                // default (claude-haiku-4-5). Never empty on the wire:
+                // an empty model would make the gateway fall back to the
+                // DIALOGUE env model, not a cheap one.
+                model: config.anthropicSummaryModel || undefined
+              },
+              {
+                npcDefinitionId,
+                npcDisplayName: context.selection.npcDisplayName,
+                transcript
+              }
+            );
+            void summaryComplete.catch(() => {});
+          } catch (error) {
+            logger.logPluginEvent("memory-dispose-failed", {
+              npcDefinitionId,
+              error: error instanceof Error ? error.message : String(error)
+            });
+          }
         }
       };
 

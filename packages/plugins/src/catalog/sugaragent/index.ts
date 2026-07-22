@@ -195,6 +195,10 @@ export function normalizeSugarAgentPluginConfig(
       typeof config?.anthropicModel === "string"
         ? config.anthropicModel.trim()
         : "",
+    anthropicSummaryModel:
+      typeof config?.anthropicSummaryModel === "string"
+        ? config.anthropicSummaryModel.trim()
+        : "",
     maxEvidenceCharsPerItem:
       typeof config?.maxEvidenceCharsPerItem === "number" &&
       Number.isFinite(config.maxEvidenceCharsPerItem)
@@ -272,12 +276,21 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     },
     {
       configKey: "anthropicModel",
-      label: "Anthropic Model",
+      label: "Anthropic Dialogue Model",
       type: "text",
       group: "Gateway Runtime Config",
       description:
-        "Override the default model id the gateway uses for generation. Empty = gateway default (claude-sonnet-4-5).",
+        "Model id the gateway uses for NPC dialogue turns. Empty = gateway default (claude-sonnet-4-5).",
       placeholder: "claude-sonnet-4-5"
+    },
+    {
+      configKey: "anthropicSummaryModel",
+      label: "Anthropic Summary Model",
+      type: "text",
+      group: "Gateway Runtime Config",
+      description:
+        "Model id for the end-of-conversation NPC memory summary (a cheap background task, kept smaller than the dialogue model). Empty = claude-haiku-4-5.",
+      placeholder: "claude-haiku-4-5"
     },
     {
       configKey: "maxEvidenceResults",
@@ -341,6 +354,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     loreRepositoryRef: "main",
     openAiVectorStoreId: "",
     anthropicModel: "",
+    anthropicSummaryModel: "",
     maxEvidenceResults: 4,
     maxEvidenceCharsPerItem: 600,
     debugLogging: false,
