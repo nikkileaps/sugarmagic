@@ -77,3 +77,22 @@ export async function getActiveAccessToken(): Promise<string | null> {
   if (!activeProvider) return null;
   return activeProvider.getAccessToken();
 }
+
+/**
+ * Read the current human-at-the-keyboard's stable `userId`. Same
+ * late-binding rationale as `getActiveAccessToken` (above): plugin
+ * runtimes that key per-user state (SugarAgent's NPC memory store,
+ * Plan 073) are constructed before the identity provider resolves,
+ * so they read the id per operation through this getter rather than
+ * being handed it at construction.
+ *
+ * Synchronous — `currentUser()` reads the provider's cached user.
+ * Returns `null` when no provider is registered yet (boot hasn't
+ * completed) or the provider currently has no user. Callers keying
+ * a store on this should treat `null` as "identity not ready" and
+ * defer, not persist under a null key.
+ */
+export function getActiveUserId(): string | null {
+  if (!activeProvider) return null;
+  return activeProvider.currentUser()?.userId ?? null;
+}

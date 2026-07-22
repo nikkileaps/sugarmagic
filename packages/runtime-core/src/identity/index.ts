@@ -127,5 +127,6 @@ export {
 
 export {
   registerActiveIdentityProvider,
-  getActiveAccessToken
+  getActiveAccessToken,
+  getActiveUserId
 } from "./access-token-registry";

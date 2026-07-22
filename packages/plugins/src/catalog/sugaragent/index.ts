@@ -19,6 +19,23 @@ export {
   type BearerTokenGetter
 } from "./runtime/clients";
 
+// Plan 073 §073.1 — the plugin-owned NPC memory store. Surfaced from
+// the plugin root so integration tests can drive it against the
+// runtime identity registries directly; later stories wire it into
+// the conversation lifecycle.
+export {
+  NpcMemoryStore,
+  InMemoryNpcMemoryBackend,
+  IndexedDBNpcMemoryBackend,
+  migrateNpcMemoryRecord,
+  NPC_MEMORY_SCHEMA_VERSION,
+  type NpcMemoryRecord,
+  type NpcMemoryBackend,
+  type NpcMemoryStoreOptions,
+  type DeterministicMemoryDelta,
+  type SummaryMemoryDelta
+} from "./runtime/memory/npc-memory-store";
+
 const deploymentRequirements: DeploymentRequirement[] = [
   {
     requirementId: createDeploymentRequirementId({
