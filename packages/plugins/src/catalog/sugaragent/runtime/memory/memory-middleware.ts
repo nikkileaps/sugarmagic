@@ -59,6 +59,9 @@ function isAgentSelection(
 
 export interface NpcMemoryMiddlewareOptions {
   logger?: SugarAgentLogger;
+  /** Plan 073.5 — master switch. When false, prepare is a no-op (NPCs
+   *  neither read nor annotate memory). Defaults to true. */
+  enabled?: boolean;
   /** Hard cap on the digest text. Defaults to the module default. */
   digestMaxChars?: number;
   /** Store resolver seam (tests inject a store). Defaults to the
@@ -128,6 +131,7 @@ export function createNpcMemoryMiddleware(
     priority: 10,
     stage: "context",
     async prepare(execution) {
+      if (options.enabled === false) return execution;
       if (!isAgentSelection(execution.selection)) return execution;
       const memoized = await ensureMemoizedMemory(execution, options);
       // Annotations reset each turn — republish from the memoized

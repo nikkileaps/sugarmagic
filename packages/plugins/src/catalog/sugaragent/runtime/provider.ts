@@ -544,6 +544,7 @@ export function createSugarAgentConversationProvider(
           // Phase 1 (deterministic merge) is AWAITED so an immediate
           // re-talk sees "we met"; phase 2 (the LLM summary) is fire-
           // and-forget so dispose never blocks on the gateway.
+          if (!config.memoryEnabled) return; // Plan 073.5 — memory master switch
           const npcDefinitionId = context.selection.npcDefinitionId;
           if (!npcDefinitionId) return;
           const store = resolveNpcMemoryStore();

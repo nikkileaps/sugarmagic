@@ -3735,6 +3735,8 @@ describe("plugin infrastructure", () => {
       anthropicSummaryModel: "",
       maxEvidenceResults: 8,
       maxEvidenceCharsPerItem: 600,
+      memoryEnabled: true,
+      memoryDigestMaxChars: 800,
       debugLogging: true,
       tone: ""
     });
@@ -3760,6 +3762,8 @@ describe("plugin infrastructure", () => {
       anthropicSummaryModel: "",
       maxEvidenceResults: 4,
       maxEvidenceCharsPerItem: 600,
+      memoryEnabled: true,
+      memoryDigestMaxChars: 800,
       debugLogging: false,
       tone: ""
     });

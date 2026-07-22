@@ -9,6 +9,7 @@ import {
   createNpcMemoryMiddleware,
   NPC_MEMORY_MIDDLEWARE_ID
 } from "./runtime/memory/memory-middleware";
+import { installNpcMemoryDebugHandle } from "./runtime/memory/memory-debug";
 import type { SugarAgentPluginConfig } from "./runtime/types";
 import type { RuntimePluginEnvironment } from "../../runtime";
 
@@ -225,6 +226,12 @@ export function normalizeSugarAgentPluginConfig(
       Number.isFinite(config.maxEvidenceResults)
         ? Math.max(1, Math.min(8, Math.floor(config.maxEvidenceResults)))
         : 4,
+    memoryEnabled: config?.memoryEnabled !== false,
+    memoryDigestMaxChars:
+      typeof config?.memoryDigestMaxChars === "number" &&
+      Number.isFinite(config.memoryDigestMaxChars)
+        ? Math.max(200, Math.min(2000, Math.floor(config.memoryDigestMaxChars)))
+        : 800,
     debugLogging: config?.debugLogging === true,
     tone: typeof config?.tone === "string" ? config.tone.trim() : ""
   };
@@ -327,6 +334,24 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       max: 4000
     },
     {
+      configKey: "memoryEnabled",
+      label: "NPC Memory",
+      type: "boolean",
+      group: "Runtime Behavior",
+      default: true,
+      description:
+        "When on, NPCs remember players across conversations and greet them as acquaintances on repeat visits. Off = every conversation starts fresh."
+    },
+    {
+      configKey: "memoryDigestMaxChars",
+      label: "Memory Digest Size Cap",
+      type: "number",
+      group: "Runtime Behavior",
+      default: 800,
+      min: 200,
+      max: 2000
+    },
+    {
       configKey: "debugLogging",
       label: "Structured Debug Logging",
       type: "boolean",
@@ -380,6 +405,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     anthropicSummaryModel: "",
     maxEvidenceResults: 4,
     maxEvidenceCharsPerItem: 600,
+    memoryEnabled: true,
+    memoryDigestMaxChars: 800,
     debugLogging: false,
     tone: ""
   },
@@ -420,6 +447,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
             proxyBaseUrl: config.proxyBaseUrl,
             stageLoggingEnabled: config.debugLogging
           });
+          // Plan 073.5 — dev-only memory inspection handle (window.__sugaragentMemory).
+          installNpcMemoryDebugHandle();
         },
         contributions: [
           {
@@ -453,7 +482,9 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
               stage: "context",
               status: "ready",
               middleware: createNpcMemoryMiddleware({
-                logger: createSugarAgentLogger(config.debugLogging)
+                logger: createSugarAgentLogger(config.debugLogging),
+                enabled: config.memoryEnabled,
+                digestMaxChars: config.memoryDigestMaxChars
               })
             }
           }

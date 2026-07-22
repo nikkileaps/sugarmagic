@@ -93,6 +93,17 @@ export interface SugarAgentPluginConfig {
    * the model. Total evidence budget is bounded by maxEvidenceResults x this.
    */
   maxEvidenceCharsPerItem: number;
+  /**
+   * Plan 073.5 — master switch for NPC memory (persistence + recall). When
+   * false, the memory middleware and the end-of-conversation summarizer are
+   * no-ops: NPCs neither write nor read memory.
+   */
+  memoryEnabled: boolean;
+  /**
+   * Plan 073.5 — hard cap on the memory digest injected into the cached system
+   * prefix. Keeps the prompt (and its cache write) bounded per conversation.
+   */
+  memoryDigestMaxChars: number;
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
   tone: string;

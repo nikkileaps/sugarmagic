@@ -286,6 +286,43 @@ describe("NpcMemoryStore reset", () => {
   });
 });
 
+describe("NpcMemoryStore debug helpers (073.5 dev handle)", () => {
+  it("lists only the current playthrough's records", async () => {
+    const backend = new InMemoryNpcMemoryBackend();
+    await storeOn(backend, { playthroughId: PLAY_A }).mergeDeterministic({
+      npcDefinitionId: FINNICK,
+      lastExchange: "a"
+    });
+    await storeOn(backend, { playthroughId: PLAY_A }).mergeDeterministic({
+      npcDefinitionId: HORACE,
+      lastExchange: "b"
+    });
+    await storeOn(backend, { playthroughId: PLAY_B }).mergeDeterministic({
+      npcDefinitionId: FINNICK,
+      lastExchange: "other playthrough"
+    });
+
+    const list = await storeOn(backend, { playthroughId: PLAY_A }).debugListRecords();
+    expect(list.map((record) => record.npcDefinitionId).sort()).toEqual(
+      [FINNICK, HORACE].sort()
+    );
+  });
+
+  it("forgets one NPC, then all NPCs, for the current playthrough", async () => {
+    const backend = new InMemoryNpcMemoryBackend();
+    const store = storeOn(backend);
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "a" });
+    await store.mergeDeterministic({ npcDefinitionId: HORACE, lastExchange: "b" });
+
+    await store.debugForget(FINNICK);
+    expect(await store.load(FINNICK)).toBeNull();
+    expect((await store.load(HORACE))?.metCount).toBe(1);
+
+    await store.debugForget();
+    expect(await store.load(HORACE)).toBeNull();
+  });
+});
+
 describe("NpcMemoryStore IndexedDB backend (durability smoke)", () => {
   it("persists across store instances backed by the same database", async () => {
     const indexedDbFactory = new IDBFactory();

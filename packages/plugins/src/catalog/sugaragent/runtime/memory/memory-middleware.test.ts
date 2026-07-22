@@ -104,6 +104,18 @@ describe("createNpcMemoryMiddleware", () => {
     });
   });
 
+  it("is a no-op when memory is disabled (Plan 073.5 master switch)", async () => {
+    const { store, load } = fakeStore(record());
+    const execution = agentExecution();
+    await createNpcMemoryMiddleware({
+      resolveStore: () => store,
+      enabled: false
+    }).prepare?.(execution);
+    expect(load).not.toHaveBeenCalled();
+    expect(execution.state[MEMORY_STATE_KEY]).toBeUndefined();
+    expect(execution.annotations[MEMORY_ANNOTATION_KEY]).toBeUndefined();
+  });
+
   it("is a no-op for a non-agent selection", async () => {
     const { store, load } = fakeStore(record());
     const execution: ConversationExecutionContext = {

@@ -422,6 +422,10 @@ export class NpcMemoryStore {
    * record's current `summaryCounter` (stale-summary gate). Returns
    * whether the summary was applied.
    */
+  // DEFERRED SEAM (Plan 073) — consolidation (merge/forget/compress across many
+  // conversations) belongs here: today a new summary REPLACES fields wholesale.
+  // Revisit when records approach the digest cap in real play; the store API +
+  // this merge are the seam. Tracked in the backlog.
   mergeSummary(delta: SummaryMemoryDelta, counter: number): Promise<boolean> {
     return this.enqueue(async () => {
       const record =
@@ -469,6 +473,49 @@ export class NpcMemoryStore {
         if (!record) continue;
         if (record.userId !== this.userId) continue;
         if (record.playthroughId !== this.playthroughId) {
+          await this.backend.delete(record.key);
+        }
+      }
+    });
+  }
+
+  /**
+   * Dev-only (Plan 073.5): every memory record for the current
+   * (userId, playthroughId), for the inspection handle. Not used by the game.
+   */
+  debugListRecords(): Promise<NpcMemoryRecord[]> {
+    return this.enqueue(async () => {
+      const rows = await this.backend.all();
+      return rows
+        .map((raw) => migrateNpcMemoryRecord(raw))
+        .filter(
+          (record): record is NpcMemoryRecord =>
+            record != null &&
+            record.userId === this.userId &&
+            record.playthroughId === this.playthroughId
+        );
+    });
+  }
+
+  /**
+   * Dev-only (Plan 073.5): forget this playthrough's memory of one NPC, or of
+   * ALL NPCs when `npcDefinitionId` is omitted. Lets Claude/nikki re-test the
+   * first-meeting path in preview without a New Game.
+   */
+  debugForget(npcDefinitionId?: string): Promise<void> {
+    return this.enqueue(async () => {
+      if (npcDefinitionId) {
+        await this.backend.delete(this.keyFor(npcDefinitionId));
+        return;
+      }
+      const rows = await this.backend.all();
+      for (const raw of rows) {
+        const record = migrateNpcMemoryRecord(raw);
+        if (!record) continue;
+        if (
+          record.userId === this.userId &&
+          record.playthroughId === this.playthroughId
+        ) {
           await this.backend.delete(record.key);
         }
       }
