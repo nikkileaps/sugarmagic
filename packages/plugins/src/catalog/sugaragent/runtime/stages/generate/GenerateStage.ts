@@ -53,6 +53,10 @@ const GENERATE_RETRY_BACKOFF_MS = [700, 1400] as const;
 import type { GeneratePromptContext } from "./prompt/context";
 import { buildGeneratePrompt } from "./prompt/builder";
 import { dumpConstructedPrompt } from "./prompt/prompt-debug";
+import {
+  MEMORY_STATE_KEY,
+  type MemoizedNpcMemory
+} from "../../memory/digest";
 
 function buildPrePlacementEnvelope(
   input: GenerateStageInput,
@@ -397,6 +401,11 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
               coreKnowledge: input.state.persona.coreKnowledge
             }
           : null,
+        // Plan 073.3 — memory digest, loaded once by the memory middleware and
+        // memoized in execution.state; slots into the byte-stable system half.
+        memoryDigest:
+          (input.execution.state[MEMORY_STATE_KEY] as MemoizedNpcMemory | undefined)
+            ?.digest ?? "",
         // Plan 072.8 — drift-reminder digest, re-injected at end of user message.
         personaDigest: input.state.persona?.digest ?? ""
       };

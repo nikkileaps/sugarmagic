@@ -4,6 +4,11 @@ import {
 } from "@sugarmagic/domain";
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import { createSugarAgentConversationProvider } from "./runtime/provider";
+import { createSugarAgentLogger } from "./runtime/logger";
+import {
+  createNpcMemoryMiddleware,
+  NPC_MEMORY_MIDDLEWARE_ID
+} from "./runtime/memory/memory-middleware";
 import type { SugarAgentPluginConfig } from "./runtime/types";
 import type { RuntimePluginEnvironment } from "../../runtime";
 
@@ -35,6 +40,17 @@ export {
   type DeterministicMemoryDelta,
   type SummaryMemoryDelta
 } from "./runtime/memory/npc-memory-store";
+export {
+  resolveNpcMemoryStore,
+  clearNpcMemoryStoreCacheForTests
+} from "./runtime/memory/store-registry";
+export {
+  buildMemoryDigest,
+  MEMORY_STATE_KEY,
+  MEMORY_ANNOTATION_KEY,
+  type MemoizedNpcMemory,
+  type NpcMemoryAnnotation
+} from "./runtime/memory/digest";
 
 const deploymentRequirements: DeploymentRequirement[] = [
   {
@@ -411,6 +427,27 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
                 "Agentified NPC provider with Interpret/Retrieve/Plan/Generate/Audit/Repair stages.",
               status: "ready",
               provider: createSugarAgentConversationProvider(config)
+            }
+          },
+          // Plan 073.3 — context-stage middleware that loads NPC memory once
+          // per conversation, memoizes record + digest in execution.state, and
+          // annotates metCount/first-meeting for the provider, the stages, and
+          // (073.4) sugarlang's minimal-greeting policy.
+          {
+            pluginId: configuration.pluginId,
+            contributionId: "sugaragent.memory-middleware",
+            kind: "conversation.middleware",
+            displayName: "SugarAgent NPC Memory",
+            priority: 10,
+            payload: {
+              middlewareId: NPC_MEMORY_MIDDLEWARE_ID,
+              summary:
+                "Loads NPC memory once per conversation; memoizes the digest for the prompt and annotates first-meeting.",
+              stage: "context",
+              status: "ready",
+              middleware: createNpcMemoryMiddleware({
+                logger: createSugarAgentLogger(config.debugLogging)
+              })
             }
           }
         ],

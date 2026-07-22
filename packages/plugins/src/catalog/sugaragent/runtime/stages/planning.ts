@@ -109,6 +109,11 @@ function resolveReplyPlaceholder(
 export function resolvePlanDecision(input: {
   interpret: InterpretResult;
   hasEvidence: boolean;
+  /** Plan 073.3 — a remembered record with a prior meeting exists. Memory
+   *  grounds recall answers and repeat-visit greetings (the digest is in the
+   *  system prompt), so those turns answer instead of abstaining / staying
+   *  generic. */
+  hasMemory?: boolean;
   hasActiveQuest: boolean;
   hasScriptedFollowup: boolean;
   npcDisplayName: string | null | undefined;
@@ -127,6 +132,16 @@ export function resolvePlanDecision(input: {
   } = input.interpret;
 
   let responseIntent: PlanResult["responseIntent"] = "answer";
+
+  // Plan 073.3 — memory counts as grounding for a recall question ("do you
+  // remember me?") and for the opening greeting of a repeat visit (so the NPC
+  // greets as an acquaintance rather than a stranger). The digest is already
+  // in the system prompt; these turns just need to route to the LLM as
+  // grounded rather than abstain / generic-only.
+  const memoryGrounds = Boolean(
+    input.hasMemory &&
+      (!userText || interpretation.intent === "session_recall")
+  );
 
   if (!userText) {
     responseIntent = "greet";
@@ -150,7 +165,7 @@ export function resolvePlanDecision(input: {
     interpretation.intent === "lore_other" ||
     interpretation.intent === "session_recall"
   ) {
-    responseIntent = input.hasEvidence ? "answer" : "abstain";
+    responseIntent = input.hasEvidence || memoryGrounds ? "answer" : "abstain";
   }
 
   if (
@@ -162,8 +177,12 @@ export function resolvePlanDecision(input: {
     responseIntent = "clarify";
   }
 
+  // Plan 073.3 — memoryGrounds is a grounding source alongside evidence, so a
+  // remembered greeting / recall answer is "grounded" (routes to the LLM with
+  // the digest) rather than "generic-only" (the canned short-circuit).
   const responseSpecificity: PlanResult["responseSpecificity"] =
     !input.hasEvidence &&
+    !memoryGrounds &&
     (
       responseIntent === "greet" ||
       responseIntent === "chat" ||

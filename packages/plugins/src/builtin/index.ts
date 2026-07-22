@@ -32,7 +32,14 @@ export {
   type NpcMemoryBackend,
   type NpcMemoryStoreOptions,
   type DeterministicMemoryDelta,
-  type SummaryMemoryDelta
+  type SummaryMemoryDelta,
+  resolveNpcMemoryStore,
+  clearNpcMemoryStoreCacheForTests,
+  buildMemoryDigest,
+  MEMORY_STATE_KEY,
+  MEMORY_ANNOTATION_KEY,
+  type MemoizedNpcMemory,
+  type NpcMemoryAnnotation
 } from "../catalog/sugaragent";
 export { SUGARDEPLOY_PLUGIN_ID } from "../catalog/sugardeploy";
 export {

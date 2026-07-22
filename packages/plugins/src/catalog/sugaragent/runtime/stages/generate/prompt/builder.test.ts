@@ -50,6 +50,7 @@ function baseContext(
       ]
     },
     personaDigest: "Warm, brisk, proud.\nVoice: Short sentences; says 'love'.",
+    memoryDigest: "",
     ...overrides
   };
 }
@@ -152,5 +153,41 @@ describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
   it("omits the digest block when there is no persona digest", () => {
     const { userPrompt } = buildGeneratePrompt(baseContext({ personaDigest: "" }));
     expect(userPrompt).not.toContain("Remember who you are:");
+  });
+
+  // Plan 073.3 — memory digest in the cached system half.
+  it("slots the memory digest into the system prompt between core knowledge and voice", () => {
+    const memoryDigest =
+      "What you remember about this player (from earlier conversations):\nYou have spoken with them twice before.";
+    const { systemPrompt, userPrompt } = buildGeneratePrompt(
+      baseContext({ memoryDigest })
+    );
+    expect(systemPrompt).toContain(memoryDigest);
+    // After core knowledge, before the voice directive.
+    const coreIdx = systemPrompt.indexOf("What you know");
+    const memIdx = systemPrompt.indexOf("What you remember about this player");
+    const voiceIdx = systemPrompt.indexOf("Short sentences; says 'love'.");
+    expect(coreIdx).toBeGreaterThanOrEqual(0);
+    expect(memIdx).toBeGreaterThan(coreIdx);
+    expect(voiceIdx).toBeGreaterThan(memIdx);
+    // Memory is session-stable, so it lives in the cached system half only.
+    expect(userPrompt).not.toContain("What you remember about this player");
+  });
+
+  it("omits the memory block on a first meeting (empty digest)", () => {
+    const { systemPrompt } = buildGeneratePrompt(baseContext({ memoryDigest: "" }));
+    expect(systemPrompt).not.toContain("What you remember about this player");
+  });
+
+  it("keeps the SYSTEM prompt byte-stable across turns with a constant memory digest", () => {
+    const memoryDigest =
+      "What you remember about this player (from earlier conversations):\nYou have spoken with them twice before.";
+    const a = buildGeneratePrompt(
+      baseContext({ memoryDigest, minimalGreetingMode: true, playerText: null })
+    ).systemPrompt;
+    const b = buildGeneratePrompt(
+      baseContext({ memoryDigest, minimalGreetingMode: false, playerText: "hi again" })
+    ).systemPrompt;
+    expect(a).toBe(b);
   });
 });
