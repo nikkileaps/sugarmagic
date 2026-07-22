@@ -174,7 +174,7 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
       : "This is the opening turn. Start the conversation naturally.",
 
     context.minimalGreetingMode
-      ? "This is a first-meeting greeting for a beginner learner. Keep it brief, warm, and generic. Do not volunteer what the NPC is doing unless asked."
+      ? "Keep this greeting brief, warm, and simple for a beginner learner. Do not volunteer what the NPC is doing unless asked."
       : null,
 
     // Relocated from the system prompt (Plan 072.4).

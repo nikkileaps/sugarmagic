@@ -77,7 +77,11 @@ export function buildMemoryDigest(
     "What you remember about this player (from earlier conversations):",
     record.metCount === 1
       ? "You have spoken with them once before."
-      : `You have spoken with them ${record.metCount} times before.`
+      : `You have spoken with them ${record.metCount} times before.`,
+    // Plan 073.4 — first-meeting semantics live here (SugarAgent, memory-
+    // driven), NOT in a language plugin. metCount > 0 means you already know
+    // this player, so greet them as an acquaintance rather than re-introducing.
+    "You already know this player — greet them as an acquaintance; do not re-introduce yourself."
   ];
   if (record.relationshipSummary) {
     lines.push(`Relationship so far: ${record.relationshipSummary}`);

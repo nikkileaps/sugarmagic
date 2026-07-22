@@ -111,8 +111,8 @@ describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
     const { systemPrompt, userPrompt } = buildGeneratePrompt(
       baseContext({ minimalGreetingMode: true })
     );
-    expect(userPrompt).toContain("first-meeting beginner greeting turn");
-    expect(systemPrompt).not.toContain("first-meeting beginner greeting turn");
+    expect(userPrompt).toContain("beginner-learner greeting turn");
+    expect(systemPrompt).not.toContain("beginner-learner greeting turn");
   });
 
   it("keeps the SYSTEM prompt byte-stable across the minimal-greeting -> normal boundary", () => {

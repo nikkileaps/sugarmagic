@@ -389,6 +389,10 @@ export function createSugarLangTeacherMiddleware(
       };
 
       constraint.generatorPromptOverlay = buildGeneratorPromptOverlay(constraint);
+      // Plan 073.4 — minimalGreetingMode is a PEDAGOGICAL brevity signal only
+      // (short opening for a conservative beginner). First-meeting vs
+      // repeat-visit semantics belong to SugarAgent's memory mechanic, not
+      // here, so this decision does not read metCount.
       constraint.minimalGreetingMode = computeMinimalGreetingMode(
         constraint,
         execution.input?.kind === "free_text"

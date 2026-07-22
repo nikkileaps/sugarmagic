@@ -50,6 +50,9 @@ describe("buildMemoryDigest", () => {
     const digest = buildMemoryDigest(record());
     expect(digest).toContain("What you remember about this player");
     expect(digest).toContain("spoken with them 2 times before");
+    // Plan 073.4 — first-meeting semantics: a remembered player is greeted as
+    // an acquaintance, not re-introduced.
+    expect(digest).toContain("do not re-introduce yourself");
     expect(digest).toContain("Warming to Mim");
     expect(digest).toContain("Loves aged gouda");
     expect(digest).toContain("Save a wedge of gouda");

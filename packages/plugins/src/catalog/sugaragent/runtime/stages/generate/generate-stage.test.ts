@@ -284,7 +284,7 @@ describe("GenerateStage", () => {
     expect(result.output.text).toBe("Hola. Estoy bien.");
   });
 
-  it("uses tiny-turn prompt shaping for anchored first-meeting Sugarlang greetings", async () => {
+  it("uses tiny-turn prompt shaping for anchored beginner Sugarlang greetings", async () => {
     const llmProvider = {
       generateStructuredTurn: vi.fn().mockResolvedValue({ text: "Hola.", usage: null, model: "claude-haiku-4-5" })
     };
@@ -374,7 +374,7 @@ describe("GenerateStage", () => {
     expect(result.diagnostics.payload.minimalSugarlangGreetingMode).toBe(true);
     // Plan 072.4 — MINIMAL_GREETING_INSTRUCTION moved to the USER message.
     expect(String(result.diagnostics.payload.userPrompt ?? "")).toContain(
-      "This is a first-meeting beginner greeting turn."
+      "This is a beginner-learner greeting turn."
     );
     // The system prompt now carries NO per-turn world state at all (072.4).
     expect(resultDiagnosticsSystemPrompt(result)).not.toContain("Current task:");
