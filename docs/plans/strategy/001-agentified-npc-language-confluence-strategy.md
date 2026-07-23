@@ -100,7 +100,7 @@ Depends on: B (persona in the prompt), the quest system + blackboard + region-co
 
 ## Sequencing
 
-A -> B -> {C, E} with D in parallel any time; F last (or its sugarlang half whenever). B is the hinge: C, E, F, G all lean on the persona card and prompt structure. G (Quest-Aware NPCs) follows D and shares its quest/world/time seam -- G absorbs D's quest-objectives scope. Status 2026-07-22: A, B, C shipped; D amended to beat-driven time (re-gate pending); G designed down to "no director -- shared state + per-NPC agents" (Plan 077, ready to gate). Practically, D + G are one seam: gate 077, and re-gate the amended D against it so the shared quest/world/time seam is gated once.
+A -> B -> {C, E} with D in parallel any time; F last (or its sugarlang half whenever). B is the hinge: C, E, F, G all lean on the persona card and prompt structure. G (Quest-Aware NPCs) follows D and shares its quest/world/time seam -- G absorbs D's quest-objectives scope. Status 2026-07-22: A, B, C shipped; D amended to beat-driven time (re-gate pending); G locked (Plan 077, epic-review passed 2 rounds -- added 077.3a runtime-side fact-write path; D2/D3 prompt invariant). Practically, D + G are one seam: gate 077, and re-gate the amended D against it so the shared quest/world/time seam is gated once.
 
 ## Deferred / watchlist (not in any child epic)
 
