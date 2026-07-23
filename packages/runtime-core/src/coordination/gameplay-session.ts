@@ -848,7 +848,7 @@ export function createRuntimeGameplaySessionController(
       displayName: trackedQuest.displayName,
       stageId: trackedQuest.stageId,
       stageDisplayName: trackedQuest.stageDisplayName,
-      objectives: trackedQuest.objectives.map((objective) => ({
+      objectives: questManager.getActiveObjectivesForTrackedQuest().map((objective) => ({
         nodeId: objective.nodeId,
         displayName: objective.displayName,
         description: objective.description

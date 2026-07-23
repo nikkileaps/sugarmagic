@@ -69,7 +69,27 @@ interface SugarAgentLoreIngestResponse {
   vectorStoreId: string | null;
 }
 
-type SugarAgentLoreActionKind = "status" | "pages" | "ingest";
+interface SugarAgentLorePingStep {
+  ok: boolean;
+  id?: string;
+  name?: string;
+  status?: string;
+  fileId?: string;
+  error?: string;
+}
+
+interface SugarAgentLorePingResponse {
+  ok: boolean;
+  failedAt?: string;
+  steps: {
+    read?: SugarAgentLorePingStep;
+    write?: SugarAgentLorePingStep;
+    cleanup?: SugarAgentLorePingStep;
+    search?: SugarAgentLorePingStep & { hits?: number };
+  };
+}
+
+type SugarAgentLoreActionKind = "status" | "pages" | "ingest" | "ping";
 
 type SugarAgentCenterPanelProps = PluginWorkspaceViewProps;
 
@@ -83,6 +103,10 @@ function isLoreStatusResponse(value: unknown): value is SugarAgentLoreStatusResp
 
 function isLorePagesResponse(value: unknown): value is SugarAgentLorePagesResponse {
   return !!value && typeof value === "object" && Array.isArray((value as { pages?: unknown[] }).pages);
+}
+
+function isLorePingResponse(value: unknown): value is SugarAgentLorePingResponse {
+  return !!value && typeof value === "object" && "steps" in value;
 }
 
 function isLoreIngestResponse(value: unknown): value is SugarAgentLoreIngestResponse {
@@ -104,13 +128,15 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
     status: SugarAgentLoreStatusResponse | null;
     pages: SugarAgentLorePageSummary[];
     ingest: SugarAgentLoreIngestResponse | null;
+    ping: SugarAgentLorePingResponse | null;
   }>({
     kind: null,
     running: false,
     error: null,
     status: null,
     pages: [],
-    ingest: null
+    ingest: null,
+    ping: null
   });
 
   const configuration = ensureDiscoveredPluginConfiguration(
@@ -141,7 +167,8 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
       kind,
       running: true,
       error: null,
-      ...(kind === "ingest" ? { ingest: null } : {})
+      ...(kind === "ingest" ? { ingest: null } : {}),
+      ...(kind === "ping" ? { ping: null } : {})
     }));
 
     const url =
@@ -149,7 +176,9 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
         ? `${proxyBaseUrl}/api/sugaragent/lore/status`
         : kind === "pages"
           ? `${proxyBaseUrl}/api/sugaragent/lore/pages`
-          : `${proxyBaseUrl}/api/sugaragent/lore/ingest`;
+          : kind === "ping"
+            ? `${proxyBaseUrl}/api/sugaragent/lore/ping`
+            : `${proxyBaseUrl}/api/sugaragent/lore/ingest`;
 
     let pollTimer: number | null = null;
     try {
@@ -184,9 +213,7 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
 
       const response = await fetch(url, {
         method: kind === "ingest" ? "POST" : "GET",
-        headers: {
-          "content-type": "application/json"
-        },
+        headers: { "content-type": "application/json" },
         body: kind === "ingest" ? JSON.stringify({ mode: "overwrite" }) : undefined
       });
       const raw = await response.text();
@@ -213,6 +240,37 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
         return;
       }
 
+      // 202 means the gateway accepted the ingest and is running it in the
+      // background. Clear the fixed-interval poll timer and switch to a
+      // completion-detection loop instead (polls until active === false).
+      if (
+        response.status === 202 &&
+        payload &&
+        typeof payload === "object" &&
+        "started" in payload &&
+        (payload as { started?: unknown }).started === true
+      ) {
+        if (pollTimer != null) {
+          window.clearInterval(pollTimer);
+          pollTimer = null;
+        }
+        void (async () => {
+          while (true) {
+            await new Promise<void>((r) => window.setTimeout(r, 700));
+            let status: SugarAgentLoreStatusResponse | null = null;
+            try { status = await fetchLoreStatus(); } catch { /* keep polling */ }
+            if (status) {
+              setActionState((current) => ({ ...current, status }));
+            }
+            if (!status?.ingest?.active) {
+              setActionState((current) => ({ ...current, running: false }));
+              return;
+            }
+          }
+        })();
+        return;
+      }
+
       const latestStatus =
         kind === "ingest"
           ? await fetchLoreStatus().catch(() => null)
@@ -230,7 +288,8 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
             ? current.status
             : current.status),
         pages: isLorePagesResponse(payload) ? payload.pages : current.pages,
-        ingest: isLoreIngestResponse(payload) ? payload : current.ingest
+        ingest: isLoreIngestResponse(payload) ? payload : current.ingest,
+        ping: isLorePingResponse(payload) ? payload : current.ping
       }));
     } catch (error) {
       setActionState((current) => ({
@@ -318,6 +377,15 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
           >
             Ingest Lore
           </Button>
+          <Button
+            size="xs"
+            variant="default"
+            disabled={actionsDisabled}
+            loading={actionState.running && actionState.kind === "ping"}
+            onClick={() => void runLoreAction("ping")}
+          >
+            Test Connection
+          </Button>
         </Group>
         <Text size="xs" c="var(--sm-color-overlay0)">
           {actionsDisabledReason ??
@@ -337,6 +405,43 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
           <Stack gap="xs">
             <Text fw={600} c="var(--mantine-color-red-2)">Action Failed</Text>
             <Code block style={{ whiteSpace: "pre-wrap" }}>{actionState.error}</Code>
+          </Stack>
+        </Box>
+      ) : null}
+
+      {actionState.ping ? (
+        <Box
+          p="md"
+          style={{
+            borderRadius: 8,
+            border: `1px solid color-mix(in srgb, ${actionState.ping.ok ? "var(--mantine-color-green-7)" : "var(--mantine-color-red-7)"} 45%, transparent)`,
+            background: `color-mix(in srgb, ${actionState.ping.ok ? "var(--mantine-color-green-9)" : "var(--mantine-color-red-9)"} 16%, transparent)`
+          }}
+        >
+          <Stack gap="xs">
+            <Text fw={600}>OpenAI Connection {actionState.ping.ok ? "OK" : "Failed"}</Text>
+            <Group gap="xs">
+              {(["read", "write", "cleanup", "search"] as const).map((step) => {
+                const s = actionState.ping!.steps[step];
+                if (!s) return null;
+                const label = step === "search" && s.ok
+                  ? `search: ${(s as { hits?: number }).hits ?? 0} hit(s)`
+                  : `${step}: ${s.ok ? "ok" : "failed"}`;
+                return (
+                  <Badge key={step} color={s.ok ? "green" : "red"}>
+                    {label}
+                  </Badge>
+                );
+              })}
+            </Group>
+            {actionState.ping.failedAt && (
+              <Text size="xs" c="var(--mantine-color-red-3)">
+                {(() => {
+                  const s = actionState.ping.steps[actionState.ping.failedAt as keyof typeof actionState.ping.steps];
+                  return s?.error ?? "Unknown error";
+                })()}
+              </Text>
+            )}
           </Stack>
         </Box>
       ) : null}

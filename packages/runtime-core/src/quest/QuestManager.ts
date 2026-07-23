@@ -387,6 +387,21 @@ export class QuestManager {
     this.onStateChange?.();
   }
 
+  getActiveObjectivesForTrackedQuest(): QuestActiveObjectiveView[] {
+    const questDefinitionId =
+      this.trackedQuestDefinitionId ?? Array.from(this.activeQuests.keys())[0] ?? null;
+    if (!questDefinitionId) return [];
+    const state = this.activeQuests.get(questDefinitionId);
+    const definition = this.definitions.get(questDefinitionId);
+    const stage = state ? this.getCurrentStageDefinition(state) : null;
+    if (!state || !definition || !stage) return [];
+    return this.getActiveObjectivesForStage(
+      definition.definitionId,
+      stage,
+      this.getCurrentStageProgress(state)
+    );
+  }
+
   getTrackedQuest(): QuestTrackerView | null {
     const questDefinitionId =
       this.trackedQuestDefinitionId ?? Array.from(this.activeQuests.keys())[0] ?? null;
