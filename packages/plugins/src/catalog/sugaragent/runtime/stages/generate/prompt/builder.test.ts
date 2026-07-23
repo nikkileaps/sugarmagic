@@ -30,6 +30,7 @@ function baseContext(
     minimalGreetingMode: false,
     activeQuestDisplayName: "Lost Locket",
     activeQuestStageDisplayName: "Ask around",
+    questWorldContext: "Travelers with lost luggage are directed to baggage claim.",
     currentLocationDisplayName: "Bakery",
     currentParentAreaDisplayName: "Market Square",
     npcPlayerRelation: { proximityBand: "immediate", sameArea: true },
@@ -100,7 +101,9 @@ describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
 
   it("puts world state and overlay IN the user message", () => {
     const { userPrompt } = buildGeneratePrompt(baseContext());
-    expect(userPrompt).toContain("Lost Locket"); // quest line relocated here
+    // Plan 077.1: raw quest title MUST NOT appear -- world-framed context replaces it (D2).
+    expect(userPrompt).not.toContain("Lost Locket");
+    expect(userPrompt).toContain("baggage claim"); // world-framed context IS present
     expect(userPrompt).toContain("Current runtime location: Bakery.");
     expect(userPrompt).toContain("Player/NPC proximity band: immediate.");
     expect(userPrompt).toContain("NPC current task: Kneading dough.");
@@ -189,5 +192,69 @@ describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
       baseContext({ memoryDigest, minimalGreetingMode: false, playerText: "hi again" })
     ).systemPrompt;
     expect(a).toBe(b);
+  });
+});
+
+// Plan 077.1 -- D2 prompt firewall: world-framed quest context replaces the
+// omniscient "player is on a quest" line. The raw objective title must never
+// appear in ANY part of the prompt.
+describe("buildGeneratePrompt -- D2 quest-context firewall (077.1)", () => {
+  it("emits world-framed context in user message and keeps the raw title out", () => {
+    const worldContext = "Travelers with lost luggage are directed to baggage claim.";
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: worldContext, activeQuestDisplayName: "Lost Locket" })
+    );
+    expect(userPrompt).toContain(worldContext);
+    expect(userPrompt).not.toContain("Lost Locket");
+  });
+
+  it("emits the NPC guidance block alongside the world context", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "Travelers with lost luggage are directed to baggage claim."
+      })
+    );
+    expect(userPrompt).toContain("World context right now:");
+    expect(userPrompt).toContain("offer what you would plausibly know in character");
+    expect(userPrompt).toContain("Do not act as though you know the player's private business");
+  });
+
+  it("omits the quest block entirely when questWorldContext is null", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: null, activeQuestDisplayName: "Lost Locket" })
+    );
+    expect(userPrompt).not.toContain("Lost Locket");
+    expect(userPrompt).not.toContain("World context right now:");
+  });
+
+  it("omits the quest block during minimal-greeting mode even when context is set", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "Travelers with lost luggage are directed to baggage claim.",
+        minimalGreetingMode: true
+      })
+    );
+    expect(userPrompt).not.toContain("World context right now:");
+  });
+
+  it("keeps the raw quest title out of the system prompt regardless of world context", () => {
+    const { systemPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "Travelers with lost luggage are directed to baggage claim.",
+        activeQuestDisplayName: "Lost Locket"
+      })
+    );
+    expect(systemPrompt).not.toContain("Lost Locket");
+    expect(systemPrompt).not.toContain("World context right now:");
+  });
+
+  it("keeps the SYSTEM prompt byte-stable whether or not world context is set", () => {
+    const withContext = buildGeneratePrompt(
+      baseContext({ questWorldContext: "Travelers with lost luggage are directed to baggage claim." })
+    ).systemPrompt;
+    const withoutContext = buildGeneratePrompt(
+      baseContext({ questWorldContext: null })
+    ).systemPrompt;
+    expect(withContext).toBe(withoutContext);
   });
 });

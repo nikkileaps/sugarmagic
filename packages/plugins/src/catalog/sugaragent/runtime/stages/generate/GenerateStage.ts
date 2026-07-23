@@ -407,7 +407,11 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           (input.execution.state[MEMORY_STATE_KEY] as MemoizedNpcMemory | undefined)
             ?.digest ?? "",
         // Plan 072.8 — drift-reminder digest, re-injected at end of user message.
-        personaDigest: input.state.persona?.digest ?? ""
+        personaDigest: input.state.persona?.digest ?? "",
+        // Plan 077.1 -- world-framed quest context (D2 prompt invariant). Null
+        // until the quest-context middleware (077.2) resolves world lore for the
+        // active objective; 077.2 will populate this from execution.state.
+        questWorldContext: null
       };
 
       const prompts = buildGeneratePrompt(promptContext);

@@ -83,11 +83,17 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       )?.hasMemory
     );
 
+    // Plan 077.1: quest-context middleware (077.2) will publish an annotation
+    // when world-framed lore has been resolved for the active objective. Until
+    // 077.2 is wired, this is always false -- no quest-grounded routing yet.
+    const hasQuestWorldContext = false;
+
     const decision = resolvePlanDecision({
       interpret: input.interpret,
       hasEvidence,
       hasMemory,
       hasActiveQuest,
+      hasQuestWorldContext,
       hasScriptedFollowup,
       npcDisplayName: input.execution.selection.npcDisplayName,
       history: input.state.history

@@ -116,8 +116,14 @@ function buildWorldStateUserLines(
 ): (string | null)[] {
   const suppress = context.minimalGreetingMode;
   return [
-    context.activeQuestDisplayName && !suppress
-      ? `The player is currently on a quest: "${context.activeQuestDisplayName}"${context.activeQuestStageDisplayName ? ` (stage: ${context.activeQuestStageDisplayName})` : ""}. This is the PLAYER's goal, not yours. Only reference it if the player brings it up or if it's directly relevant to your character.`
+    // Plan 077.1 (D2): world-framed quest context -- NEVER the raw objective
+    // title/description (that is the player's private business). Null until
+    // the quest-context middleware (077.2) resolves world lore. If present and
+    // not in minimal-greeting mode, surface the world fact + the NPC guidance
+    // block. The raw activeQuestDisplayName is kept for search seeding only
+    // (RetrieveStage) and must never appear here.
+    context.questWorldContext && !suppress
+      ? `World context right now: ${context.questWorldContext}\nIf this is something you could naturally help with, offer what you would plausibly know in character. Do not act as though you know the player's private business. Do not repeat what has already been said.`
       : null,
 
     context.currentLocationDisplayName

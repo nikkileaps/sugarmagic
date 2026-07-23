@@ -88,6 +88,16 @@ export interface BasePromptContext {
   memoryDigest: string;
 
   /**
+   * Plan 077.1 -- World-framed quest context (D2 prompt invariant). Phrased
+   * as "what would be helpful in the world right now" -- NEVER the player's
+   * private objective displayName/description. Goes into the UNCACHED user
+   * half (per 072.4 / D7) so the byte-stable cached system prefix is never
+   * busted. Null until the quest-context middleware (077.2) has resolved
+   * world lore; GenerateStage keeps it null in 077.1.
+   */
+  questWorldContext: string | null;
+
+  /**
    * Plan 072.8 — compact persona drift-reminder, re-injected at the END of the
    * user message (after history). Empty string = nothing to re-inject.
    */
