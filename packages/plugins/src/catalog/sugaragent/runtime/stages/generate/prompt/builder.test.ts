@@ -20,6 +20,7 @@ function baseContext(
   return {
     mode: "agent",
     npcDisplayName: "Maren",
+    npcDescription: null,
     tone: "cozy",
     responseIntent: "chat",
     responseSpecificity: "grounded",
@@ -30,6 +31,8 @@ function baseContext(
     minimalGreetingMode: false,
     activeQuestDisplayName: "Lost Locket",
     activeQuestStageDisplayName: "Ask around",
+    questWorldContext: "Travelers with lost luggage are directed to baggage claim.",
+    goalSurfacedCount: null,
     currentLocationDisplayName: "Bakery",
     currentParentAreaDisplayName: "Market Square",
     npcPlayerRelation: { proximityBand: "immediate", sameArea: true },
@@ -100,7 +103,9 @@ describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
 
   it("puts world state and overlay IN the user message", () => {
     const { userPrompt } = buildGeneratePrompt(baseContext());
-    expect(userPrompt).toContain("Lost Locket"); // quest line relocated here
+    // Plan 077.1: raw quest title MUST NOT appear -- world-framed context replaces it (D2).
+    expect(userPrompt).not.toContain("Lost Locket");
+    expect(userPrompt).toContain("baggage claim"); // world-framed context IS present
     expect(userPrompt).toContain("Current runtime location: Bakery.");
     expect(userPrompt).toContain("Player/NPC proximity band: immediate.");
     expect(userPrompt).toContain("NPC current task: Kneading dough.");
@@ -189,5 +194,145 @@ describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
       baseContext({ memoryDigest, minimalGreetingMode: false, playerText: "hi again" })
     ).systemPrompt;
     expect(a).toBe(b);
+  });
+});
+
+// Plan 077.1 -- D2 prompt firewall: world-framed quest context replaces the
+// omniscient "player is on a quest" line. The raw objective title must never
+// appear in ANY part of the prompt.
+describe("buildGeneratePrompt -- D2 quest-context firewall (077.1)", () => {
+  it("emits world-framed context in user message and keeps the raw title out", () => {
+    const worldContext = "Travelers with lost luggage are directed to baggage claim.";
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: worldContext, activeQuestDisplayName: "Lost Locket" })
+    );
+    expect(userPrompt).toContain(worldContext);
+    expect(userPrompt).not.toContain("Lost Locket");
+  });
+
+  it("emits the NPC guidance block alongside the world context", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "Travelers with lost luggage are directed to baggage claim."
+      })
+    );
+    expect(userPrompt).toContain("World context right now:");
+    expect(userPrompt).toContain("offer what you would plausibly know in character");
+    expect(userPrompt).toContain("Do not act as though you know the player's private business");
+  });
+
+  it("omits the quest block entirely when questWorldContext is null", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: null, activeQuestDisplayName: "Lost Locket" })
+    );
+    expect(userPrompt).not.toContain("Lost Locket");
+    expect(userPrompt).not.toContain("World context right now:");
+  });
+
+  it("omits the quest block during minimal-greeting mode even when context is set", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "Travelers with lost luggage are directed to baggage claim.",
+        minimalGreetingMode: true
+      })
+    );
+    expect(userPrompt).not.toContain("World context right now:");
+  });
+
+  it("keeps the raw quest title out of the system prompt regardless of world context", () => {
+    const { systemPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "Travelers with lost luggage are directed to baggage claim.",
+        activeQuestDisplayName: "Lost Locket"
+      })
+    );
+    expect(systemPrompt).not.toContain("Lost Locket");
+    expect(systemPrompt).not.toContain("World context right now:");
+  });
+
+  it("keeps the SYSTEM prompt byte-stable whether or not world context is set", () => {
+    const withContext = buildGeneratePrompt(
+      baseContext({ questWorldContext: "Travelers with lost luggage are directed to baggage claim." })
+    ).systemPrompt;
+    const withoutContext = buildGeneratePrompt(
+      baseContext({ questWorldContext: null })
+    ).systemPrompt;
+    expect(withContext).toBe(withoutContext);
+  });
+});
+
+describe("buildGeneratePrompt -- goal-surfaced ease-off hint (077.3)", () => {
+  it("omits the ease-off hint when goalSurfacedCount is null (first NPC to offer)", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: "Baggage claim info.", goalSurfacedCount: null })
+    );
+    expect(userPrompt).not.toContain("has been brought up");
+    expect(userPrompt).not.toContain("ease off");
+  });
+
+  it("omits the ease-off hint when goalSurfacedCount is 0", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: "Baggage claim info.", goalSurfacedCount: 0 })
+    );
+    expect(userPrompt).not.toContain("has been brought up");
+  });
+
+  it("emits the ease-off hint when goalSurfacedCount is > 0", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: "Baggage claim info.", goalSurfacedCount: 2 })
+    );
+    expect(userPrompt).toContain("2 time(s)");
+    expect(userPrompt).toContain("without repeating the nudge");
+  });
+
+  it("omits the ease-off hint even with count > 0 when questWorldContext is null", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: null, goalSurfacedCount: 3 })
+    );
+    expect(userPrompt).not.toContain("time(s)");
+    expect(userPrompt).not.toContain("without repeating");
+  });
+
+  it("omits the ease-off hint in minimal-greeting mode even with count > 0", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "Baggage claim info.",
+        goalSurfacedCount: 5,
+        minimalGreetingMode: true,
+        playerText: null
+      })
+    );
+    expect(userPrompt).not.toContain("time(s)");
+  });
+});
+
+describe("buildGeneratePrompt — no-lore description fallback", () => {
+  it("injects npcDescription as identity anchor when persona card and core knowledge are empty", () => {
+    const { systemPrompt } = buildGeneratePrompt(
+      baseContext({
+        persona: { personaCard: [], coreKnowledge: [] },
+        npcDescription: "A stressed passenger worried about lost luggage."
+      })
+    );
+    expect(systemPrompt).toContain("Who you are: A stressed passenger worried about lost luggage.");
+  });
+
+  it("does not inject npcDescription when persona card is present", () => {
+    const { systemPrompt } = buildGeneratePrompt(
+      baseContext({
+        npcDescription: "Should not appear."
+      })
+    );
+    expect(systemPrompt).not.toContain("Should not appear.");
+  });
+
+  it("does not inject npcDescription when npcDescription is null", () => {
+    const { systemPrompt } = buildGeneratePrompt(
+      baseContext({
+        persona: { personaCard: [], coreKnowledge: [] },
+        npcDescription: null
+      })
+    );
+    expect(systemPrompt).not.toContain("Who you are:");
   });
 });

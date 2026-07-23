@@ -9,6 +9,10 @@ import {
   MEMORY_ANNOTATION_KEY,
   type NpcMemoryAnnotation
 } from "../memory/digest";
+import {
+  QUEST_CONTEXT_ANNOTATION_KEY,
+  type QuestContextAnnotation
+} from "../quest/quest-context-middleware";
 import type {
   InterpretResult,
   PlanResult,
@@ -83,16 +87,44 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       )?.hasMemory
     );
 
+    // Plan 077.2 -- quest-context middleware publishes this annotation when
+    // world-framed lore was resolved for the active objective (D3). When
+    // absent (no active quest, or middleware degraded), defaults to false.
+    const hasQuestWorldContext = Boolean(
+      (
+        input.execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as
+          | QuestContextAnnotation
+          | undefined
+      )?.hasContext
+    );
+
     const decision = resolvePlanDecision({
       interpret: input.interpret,
       hasEvidence,
       hasMemory,
       hasActiveQuest,
+      hasQuestWorldContext,
       hasScriptedFollowup,
       npcDisplayName: input.execution.selection.npcDisplayName,
       history: input.state.history
     });
     responseIntent = decision.responseIntent;
+
+    // Plan 077.3 (D4): coarse proxy for "NPC was prompted to voice the quest
+    // objective". Emit only when quest world context was resolved AND we didn't
+    // redirect to a scripted path (that's a different signal). The handler in
+    // gameplay-session.ts calls bumpGoalSurfacedCount -- sugaragent never
+    // touches the blackboard directly (write firewall: assertWriteAllowed would
+    // throw if it tried). Counts PROMPTING, not saying (D4 honest wrinkle).
+    if (hasQuestWorldContext && hasActiveQuest && responseIntent !== "redirect") {
+      const questId =
+        input.execution.runtimeContext?.trackedQuest?.questId ?? "";
+      const stageId =
+        input.execution.runtimeContext?.activeQuestStage?.stageId ?? "";
+      if (questId) {
+        actionProposals.push({ kind: "bump-goal-surfaced", questId, stageId });
+      }
+    }
 
     const output: PlanResult = {
       responseIntent,

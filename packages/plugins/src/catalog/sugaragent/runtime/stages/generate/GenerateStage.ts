@@ -57,6 +57,10 @@ import {
   MEMORY_STATE_KEY,
   type MemoizedNpcMemory
 } from "../../memory/digest";
+import {
+  QUEST_CONTEXT_ANNOTATION_KEY,
+  type QuestContextAnnotation
+} from "../../quest/quest-context-middleware";
 
 function buildPrePlacementEnvelope(
   input: GenerateStageInput,
@@ -370,6 +374,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       const promptContext: GeneratePromptContext = {
         mode: "agent",
         npcDisplayName,
+        npcDescription: input.execution.selection.npcDescription ?? null,
         tone: context.config.tone || null,
         responseIntent: input.plan.responseIntent,
         responseSpecificity: input.plan.responseSpecificity,
@@ -407,7 +412,22 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           (input.execution.state[MEMORY_STATE_KEY] as MemoizedNpcMemory | undefined)
             ?.digest ?? "",
         // Plan 072.8 — drift-reminder digest, re-injected at end of user message.
-        personaDigest: input.state.persona?.digest ?? ""
+        personaDigest: input.state.persona?.digest ?? "",
+        // Plan 077.2 -- world-framed quest context (D2/D3). Populated by the
+        // quest-context middleware annotation when it resolved world lore for
+        // the active objective. Null when no quest is active or the middleware
+        // degraded. Goes into the UNCACHED user half (D7: no cache bust).
+        questWorldContext:
+          (
+            input.execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as
+              | QuestContextAnnotation
+              | undefined
+          )?.worldContext ?? null,
+        // Plan 077.3 (D4): how many times the objective has been raised this
+        // session. Read from runtimeContext (populated by the blackboard
+        // middleware via bumpGoalSurfacedCount). Null -> first NPC to offer.
+        goalSurfacedCount:
+          input.execution.runtimeContext?.goalSurfacedCount ?? null
       };
 
       const prompts = buildGeneratePrompt(promptContext);

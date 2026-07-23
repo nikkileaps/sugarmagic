@@ -127,6 +127,8 @@ import {
   type NpcCollisionAgent
 } from "../behavior";
 import {
+  bumpGoalSurfacedCount,
+  getGoalSurfacedCount,
   clearActiveQuestObjectives,
   clearActiveQuestStage,
   clearTrackedQuest,
@@ -422,6 +424,7 @@ export function createConversationSelectionFromNpc(options: {
     conversationKind: "free-form",
     npcDefinitionId: npcDefinition.definitionId,
     npcDisplayName: npcDefinition.displayName,
+    npcDescription: npcDefinition.description ?? null,
     interactionMode: npcDefinition.interactionMode,
     lorePageId: npcDefinition.lorePageId,
     agentModelOverride: npcDefinition.agentModelOverride ?? null,
@@ -846,7 +849,7 @@ export function createRuntimeGameplaySessionController(
       displayName: trackedQuest.displayName,
       stageId: trackedQuest.stageId,
       stageDisplayName: trackedQuest.stageDisplayName,
-      objectives: trackedQuest.objectives.map((objective) => ({
+      objectives: questManager.getActiveObjectivesForTrackedQuest().map((objective) => ({
         nodeId: objective.nodeId,
         displayName: objective.displayName,
         description: objective.description
@@ -920,6 +923,12 @@ export function createRuntimeGameplaySessionController(
             goal: npcCurrentGoal
           }
         : null;
+      // Plan 077.3 (D4): read the world-narrative surfacing count so the NPC
+      // prompt can reflect how many times the objective has been raised.
+      const goalSurfacedCount = trackedQuest
+        ? getGoalSurfacedCount(blackboard, trackedQuest.questId)
+        : null;
+
       const runtimeContext: ConversationRuntimeContext = {
         here:
           playerLocation?.location ??
@@ -935,7 +944,8 @@ export function createRuntimeGameplaySessionController(
         npcBehavior,
         trackedQuest,
         activeQuestStage,
-        activeQuestObjectives
+        activeQuestObjectives,
+        goalSurfacedCount
       };
 
       return {
@@ -1080,6 +1090,13 @@ export function createRuntimeGameplaySessionController(
         pendingScriptedFollowupDialogueId = proposal.dialogueDefinitionId;
         return;
       case "request-close":
+        return;
+      // Plan 077 §077.3a (D4): coarse proxy for "NPC was prompted to voice
+      // the quest objective". Sugaragent cannot call setFact directly
+      // (assertWriteAllowed throws -- narrative-system != sugaragent). This
+      // handler performs the owner-side write on runtime-core's behalf.
+      case "bump-goal-surfaced":
+        bumpGoalSurfacedCount(blackboard, proposal.questId);
         return;
       default: {
         const exhaustive: never = proposal;

@@ -115,6 +115,11 @@ export function resolvePlanDecision(input: {
    *  generic. */
   hasMemory?: boolean;
   hasActiveQuest: boolean;
+  /** Plan 077.1 -- the quest-context middleware (077.2) resolved world-framed
+   *  lore for the active objective. When true, quest context is in the user
+   *  message and grounds the turn (routes to the LLM), preventing generic-only
+   *  fallback. False in 077.1 (middleware not yet wired); 077.2 sets it. */
+  hasQuestWorldContext?: boolean;
   hasScriptedFollowup: boolean;
   npcDisplayName: string | null | undefined;
   history: SugarAgentSessionHistoryEntry[];
@@ -141,6 +146,14 @@ export function resolvePlanDecision(input: {
   const memoryGrounds = Boolean(
     input.hasMemory &&
       (!userText || interpretation.intent === "session_recall")
+  );
+
+  // Plan 077.1 (D2/D3) -- when the quest-context middleware (077.2) has
+  // resolved world-framed lore for the active objective, that context is in
+  // the user message. The turn is grounded so the LLM can naturally voice it;
+  // without it, generic-only fallback is unchanged.
+  const questGrounds = Boolean(
+    input.hasQuestWorldContext && input.hasActiveQuest
   );
 
   if (!userText) {
@@ -177,12 +190,14 @@ export function resolvePlanDecision(input: {
     responseIntent = "clarify";
   }
 
-  // Plan 073.3 — memoryGrounds is a grounding source alongside evidence, so a
-  // remembered greeting / recall answer is "grounded" (routes to the LLM with
-  // the digest) rather than "generic-only" (the canned short-circuit).
+  // Plan 073.3 / 077.1 -- memoryGrounds and questGrounds are grounding sources
+  // alongside evidence. A remembered greeting/recall answer, or a turn where
+  // the quest-context middleware surfaced world lore, routes to the LLM as
+  // "grounded" rather than the deterministic "generic-only" short-circuit.
   const responseSpecificity: PlanResult["responseSpecificity"] =
     !input.hasEvidence &&
     !memoryGrounds &&
+    !questGrounds &&
     (
       responseIntent === "greet" ||
       responseIntent === "chat" ||

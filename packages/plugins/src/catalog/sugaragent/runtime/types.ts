@@ -105,6 +105,12 @@ export interface SugarAgentPluginConfig {
    * prefix. Keeps the prompt (and its cache write) bounded per conversation.
    */
   memoryDigestMaxChars: number;
+  /**
+   * Plan 077.5 — master switch for quest-aware NPC behavior. When false,
+   * the quest-context middleware is not registered and NPCs behave as they
+   * did before Plan 077 (no world-framed context, no ease-off blackboard).
+   */
+  questAwareNpcsEnabled: boolean;
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
   tone: string;

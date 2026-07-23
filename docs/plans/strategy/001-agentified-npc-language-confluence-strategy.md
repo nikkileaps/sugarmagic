@@ -50,6 +50,10 @@ Rules:
 - Secrets invariant: anything the NPC must not reveal never enters the prompt at all -- withheld at load/retrieval (later: quest-stage scoped). Prompt-level "don't tell" is reliably jailbroken.
 - Authoring cost: one wiki page per character feeds all three layers; ingest already splits pages into sections with slugs.
 
+### Quest + narrative context (no director -- shared state + per-NPC agents)
+
+Quest state is world truth, but an NPC must not be a walking quest log. The distinction that unlocks this: a SECRET (never reveal) and a NUDGE (we WANT it said, if it fits) are different problems. Secrets stay out of the prompt entirely (prompt-level "don't tell" leaks ~10% under injection). A quest nudge is the opposite -- it may go in the prompt, framed as WORLD context ("travelers with lost luggage are sent to baggage claim") never as the player's private goal ("Mim lost her suitcase"). So there is NO narrative-director component: the "writer brain watching the board" is realized by three things we already have -- (1) the agent's own pipeline, made quest-aware (Retrieve pulls quest-relevant lore while a quest is active, so Finnick HAS "lost luggage -> baggage claim" even if Mim never says "baggage"); (2) the blackboard, holding shared world-narrative state (where the sentient suitcase is; how many times the goal's been surfaced) that NPCs READ and WRITE, so coordination across NPCs is implicit; (3) the quest + world-event system (deterministic, authored) that makes the WORLD change. Per-NPC judgment ("should I mention it now, in character?") is delegated to that NPC's own generate call + persona -- cheaper and more in-character than any central brain. A central LLM director is REJECTED on merit: it fights the agent architecture, is a coherence risk (runtime global-narrative LLM decisions are where coherence dies), and costs more for a worse result. Built in epic G; supersedes both the naive "objectives into the prompt" that epic D first sketched AND the authored-beat director that G was first drafted as. Stays a generic sugaragent + runtime-core concern; sugarlang independently reads the same neutral quest facts for vocab, no cross-plugin import.
+
 ### Plugin boundary
 
 - sugaragent: generic agentified-NPC conversation for any sugarmagic game. Consumes sugarlang's constraint as an opaque overlay annotation, never imports from it.
@@ -79,8 +83,8 @@ Two-tier memory: durable per-NPC relationship memory in a plugin-owned store key
 Depends on: B.
 
 ### D. World clock + context completion
-In-game clock and time-of-day blackboard fact (schedules become felt in dialogue); player-known-facts store; world-events feed; activeQuestObjectives into the prompt; wire-or-delete ENTITY_AFFECT.
-Depends on: independent of B/C; feeds both.
+Beat-driven time-of-day (amended 2026-07-22 -- NOT an ambient clock: a blackboard fact the narrative SETS at story beats, so schedules become felt in dialogue without a time-management sim); player-known-facts store; a PUBLIC world-events feed; wire-or-delete ENTITY_AFFECT. (The "activeQuestObjectives into the prompt" idea moved to G once we saw it would make NPCs omniscient about the player's private quest.)
+Depends on: independent of B/C; feeds both, and shares its quest/world/time seam with G.
 
 ### E. Judge audit + safety
 Replace regex-lint Audit + discard-Repair with a cheap LLM judge (character fidelity / world consistency / quality rubric) and ONE bounded regeneration, latency-masked by the typing indicator; moderation on player input and NPC output (free multilingual moderation API); hotfixable server-side blocklist in the gateway (day-one jailbreak is guaranteed -- see Fortnite Vader); enforce the secrets invariant.
@@ -90,9 +94,13 @@ Depends on: B (judges against the persona card).
 Bark system: per-NPC banks selected by responseIntent/socialMove, generic sugaragent/game feature, silent fallback. Sugarlang: hover pronunciation via batch audio generation at lexicon compile.
 Depends on: B for bark tags; sugarlang half independent.
 
+### G. Quest-Aware Agentified NPCs (added 2026-07-22; drafted as "Narrative Director", then simplified -- Plan 077)
+The heart of "an NPC feels like it's actually part of this world and this quest" -- realized WITHOUT a director component, per the section above. Three parts: (1) quest context into the agent prompt, world-framed (delete the shipping omniscient line that hands NPCs the quest title); (2) the real substance -- make quest-relevant facts REACHABLE while a quest is active (bias Retrieve by the active objective so the NPC has the fact even if the player never names it), loaded once at conversation start; (3) shared world-narrative state on the blackboard (surfaced-counts, world-entity flavor) that NPCs read + write, so "mention once, again on return, other NPCs ease off" emerges without a central brain. Quest-gated world events (the sentient sock-eating suitcase; the passenger who appears only AFTER arrival AND after the player talked to NPC-1) COMPOSE existing machinery (quest actions + region-conditions + presence), not a new engine. A central LLM director is rejected on merit (see the section above); global pacing is watchlist-only for a cozy episodic game. Generic sugaragent + runtime-core concern; sugarlang independent.
+Depends on: B (persona in the prompt), the quest system + blackboard + region-conditions (all exist). Composes with C (memory-aware NPCs), D (world/time facts), and E (a judge can later verify a hint was delivered in character; until then a coarse surfaced-count proxy stands).
+
 ## Sequencing
 
-A -> B -> {C, E} with D in parallel any time; F last (or its sugarlang half whenever). B is the hinge: C, E, F all lean on the persona card and prompt structure.
+A -> B -> {C, E} with D in parallel any time; F last (or its sugarlang half whenever). B is the hinge: C, E, F, G all lean on the persona card and prompt structure. G (Quest-Aware NPCs) follows D and shares its quest/world/time seam -- G absorbs D's quest-objectives scope. Status 2026-07-22: A, B, C shipped; D amended to beat-driven time (re-gate pending); G locked (Plan 077, epic-review passed 2 rounds -- added 077.3a runtime-side fact-write path; D2/D3 prompt invariant). Practically, D + G are one seam: gate 077, and re-gate the amended D against it so the shared quest/world/time seam is gated once.
 
 ## Deferred / watchlist (not in any child epic)
 

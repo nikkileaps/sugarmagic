@@ -90,6 +90,13 @@ function buildStableSystemLines(
       ? `What you know (your life and immediate world):\n${renderSections(coreSections)}`
       : null,
 
+    // 4a. No-lore fallback: when no persona page is loaded, ground the NPC in
+    // their display name and description so the model cannot adopt retrieved
+    // world-context (e.g. another character's lore page) as its own identity.
+    personaSections.length === 0 && coreSections.length === 0 && context.npcDescription
+      ? `Who you are: ${context.npcDescription}`
+      : null,
+
     // 4b. Memory (Plan 073.3, D4) — what you remember about THIS player from
     // earlier conversations. Byte-stable within a session (the record is
     // loaded once); empty on a first meeting. Slots after core knowledge and
@@ -116,8 +123,23 @@ function buildWorldStateUserLines(
 ): (string | null)[] {
   const suppress = context.minimalGreetingMode;
   return [
-    context.activeQuestDisplayName && !suppress
-      ? `The player is currently on a quest: "${context.activeQuestDisplayName}"${context.activeQuestStageDisplayName ? ` (stage: ${context.activeQuestStageDisplayName})` : ""}. This is the PLAYER's goal, not yours. Only reference it if the player brings it up or if it's directly relevant to your character.`
+    // Plan 077.1 (D2): world-framed quest context -- NEVER the raw objective
+    // title/description (that is the player's private business). Null until
+    // the quest-context middleware (077.2) resolves world lore. If present and
+    // not in minimal-greeting mode, surface the world fact + the NPC guidance
+    // block. The raw activeQuestDisplayName is kept for search seeding only
+    // (RetrieveStage) and must never appear here.
+    context.questWorldContext && !suppress
+      ? `World context right now: ${context.questWorldContext}\nIf this is something you could naturally help with, offer what you would plausibly know in character. Do not act as though you know the player's private business. Do not repeat what has already been said.`
+      : null,
+
+    // Plan 077.3 (D4): coarse ease-off hint. goalSurfacedCount counts PROMPTING
+    // (not saying), so > 0 means at least one NPC turn already steered toward
+    // this topic. The player has had a chance to find it; be more subtle.
+    context.questWorldContext && !suppress &&
+    typeof context.goalSurfacedCount === "number" &&
+    context.goalSurfacedCount > 0
+      ? `This topic has been brought up in conversation ${context.goalSurfacedCount} time(s) already. If another character has already offered guidance on this, let the player discover it without repeating the nudge. You can acknowledge the topic if the player raises it, but do not volunteer the same information again.`
       : null,
 
     context.currentLocationDisplayName

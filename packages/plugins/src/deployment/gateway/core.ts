@@ -625,6 +625,28 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
 // Vector store helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Retry an async operation up to `maxAttempts` times on transient OpenAI
+ * errors (5xx, 429). Exponential backoff: 1s, 2s between retries.
+ */
+async function withOpenAIRetry<T>(label: string, fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const isTransient =
+        error instanceof Error && /status (?:429|50[234])/.test(error.message);
+      if (!isTransient || attempt === maxAttempts - 1) throw error;
+      const delayMs = 1000 * (attempt + 1);
+      logInfo("upstream:retry", { label, attempt: attempt + 1, delayMs });
+      await new Promise<void>((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 async function listVectorStoreFiles(vectorStoreId: string): Promise<Record<string, unknown>[]> {
   const items: Record<string, unknown>[] = [];
   let after = "";
@@ -1131,12 +1153,96 @@ export async function handleSugarAgentLoreResolve(
   });
 }
 
+async function runIngestWork(
+  vectorStoreId: string,
+  mode: string,
+  lore: ReturnType<typeof readLorePages>
+): Promise<void> {
+  try {
+    if (mode === "overwrite") {
+      updateLoreIngestState({
+        phase: "clearing-store",
+        message: "Clearing existing vector store contents before overwrite."
+      });
+      // Clear is best-effort: if the list endpoint is degraded we still
+      // proceed to upload so new content is searchable. Stale files in the
+      // vector store are wasteful but not broken.
+      try {
+        const existingFiles = await withOpenAIRetry("list-vector-store-files", () =>
+          listVectorStoreFiles(vectorStoreId)
+        );
+        for (const item of existingFiles) {
+          if (typeof item?.["id"] === "string") {
+            await withOpenAIRetry("delete-vector-store-file", () =>
+              deleteVectorStoreFile(vectorStoreId, item["id"] as string)
+            );
+          }
+        }
+      } catch (clearErr) {
+        logInfo("ingest:clear-skipped", {
+          reason: clearErr instanceof Error ? clearErr.message : String(clearErr)
+        });
+        updateLoreIngestState({
+          phase: "uploading",
+          message: "Could not clear existing files (will upload on top). Proceeding with upload."
+        });
+      }
+    }
+
+    let uploadedCount = 0;
+    for (const chunk of lore.chunks) {
+      await withOpenAIRetry("upload-chunk-" + chunk.chunkId, () =>
+        uploadChunkToVectorStore(vectorStoreId, chunk, (progress) => {
+          updateLoreIngestState({
+            phase: progress.phase,
+            currentChunkId: progress.currentChunkId ?? null,
+            message: progress.message,
+            uploadedCount
+          });
+        })
+      );
+      uploadedCount += 1;
+      updateLoreIngestState({
+        phase: "uploading",
+        currentChunkId: chunk.chunkId,
+        uploadedCount,
+        message: "Uploaded " + uploadedCount + " / " + lore.chunks.length + " chunks."
+      });
+    }
+
+    updateLoreIngestState({
+      active: false,
+      phase: "completed",
+      currentChunkId: null,
+      uploadedCount,
+      message: "Completed lore ingest.",
+      completedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    updateLoreIngestState({
+      active: false,
+      phase: "failed",
+      message: error instanceof Error ? error.message : String(error),
+      completedAt: new Date().toISOString()
+    });
+  }
+}
+
 export async function handleSugarAgentLoreIngest(
   req: IncomingMessage,
   res: ServerResponse & { __sugarmagicCors?: Record<string, string> }
 ): Promise<void> {
   if (req.method !== "POST") {
     sendMethodNotAllowed(res, ["POST", "OPTIONS"]);
+    return;
+  }
+
+  if (_loreIngestState.active) {
+    sendJson(res, 409, {
+      ok: false,
+      error: "IngestAlreadyRunning",
+      message: "An ingest is already in progress. Poll /status to track it."
+    });
     return;
   }
 
@@ -1189,66 +1295,287 @@ export async function handleSugarAgentLoreIngest(
     completedAt: null
   });
 
-  try {
-    if (mode === "overwrite") {
-      updateLoreIngestState({
-        phase: "clearing-store",
-        message: "Clearing existing vector store contents before overwrite."
-      });
-      const existingFiles = await listVectorStoreFiles(vectorStoreId);
-      for (const item of existingFiles) {
-        if (typeof item?.["id"] === "string") {
-          await deleteVectorStoreFile(vectorStoreId, item["id"] as string);
-        }
-      }
-    }
+  // Fire the upload work in the background so the HTTP request returns
+  // immediately. Studio polls /status at 700ms for progress.
+  void runIngestWork(vectorStoreId, mode, lore);
 
-    let uploadedCount = 0;
-    for (const chunk of lore.chunks) {
-      await uploadChunkToVectorStore(vectorStoreId, chunk, (progress) => {
-        updateLoreIngestState({
-          phase: progress.phase,
-          currentChunkId: progress.currentChunkId ?? null,
-          message: progress.message,
-          uploadedCount
-        });
-      });
-      uploadedCount += 1;
-      updateLoreIngestState({
-        phase: "uploading",
-        currentChunkId: chunk.chunkId,
-        uploadedCount,
-        message: "Uploaded " + uploadedCount + " / " + lore.chunks.length + " chunks."
-      });
-    }
+  sendJson(res, 202, {
+    ok: true,
+    started: true,
+    pageCount: lore.pages.length,
+    chunkCount: lore.chunks.length,
+    warnings: lore.warnings
+  });
+}
 
-    updateLoreIngestState({
-      active: false,
-      phase: "completed",
-      currentChunkId: null,
-      uploadedCount,
-      message: "Completed lore ingest.",
-      completedAt: new Date().toISOString()
-    });
-
-    sendJson(res, 200, {
-      ok: true,
-      mode,
-      vectorStoreId,
-      pageCount: lore.pages.length,
-      chunkCount: lore.chunks.length,
-      uploadedCount,
-      warnings: lore.warnings
-    });
-  } catch (error) {
-    updateLoreIngestState({
-      active: false,
-      phase: "failed",
-      message: error instanceof Error ? error.message : String(error),
-      completedAt: new Date().toISOString()
-    });
-    throw error;
+export async function handleSugarAgentLorePing(
+  req: IncomingMessage,
+  res: ServerResponse & { __sugarmagicCors?: Record<string, string> }
+): Promise<void> {
+  if (req.method !== "GET") {
+    sendMethodNotAllowed(res, ["GET", "OPTIONS"]);
+    return;
   }
+
+  const vectorStoreId = resolveEnv("SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID");
+  if (!vectorStoreId) {
+    sendJson(res, 400, {
+      ok: false,
+      error: "InvalidConfig",
+      message: "SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID is not configured."
+    });
+    return;
+  }
+
+  const apiKey = requireEnv("SUGARMAGIC_OPENAI_API_KEY");
+  const steps: Record<string, unknown> = {};
+
+  // Read: GET vector store metadata -- proves API key + VS reachability
+  try {
+    const readRes = await fetch(
+      "https://api.openai.com/v1/vector_stores/" + vectorStoreId,
+      { method: "GET", headers: { authorization: "Bearer " + apiKey } }
+    );
+    const readPayload = await parseApiJsonResponse(readRes, "OpenAI vector store read") as Record<string, unknown>;
+    steps["read"] = { ok: true, id: readPayload["id"], name: readPayload["name"], status: readPayload["status"] };
+  } catch (err) {
+    steps["read"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    sendJson(res, 502, { ok: false, failedAt: "read", steps });
+    return;
+  }
+
+  // Write: upload a tiny synthetic file -- proves file upload works
+  let uploadedFileId: string | null = null;
+  try {
+    const form = new FormData();
+    form.append("purpose", "user_data");
+    form.append(
+      "file",
+      new Blob(["# Ping\n\nTemporary connectivity test."], { type: "text/markdown" }),
+      "sugarmagic-ping.md"
+    );
+    const writeRes = await fetch("https://api.openai.com/v1/files", {
+      method: "POST",
+      headers: { authorization: "Bearer " + apiKey },
+      body: form
+    });
+    const writePayload = await parseApiJsonResponse(writeRes, "OpenAI file upload") as Record<string, unknown>;
+    uploadedFileId = typeof writePayload["id"] === "string" ? writePayload["id"] : null;
+    steps["write"] = { ok: true, fileId: uploadedFileId };
+  } catch (err) {
+    steps["write"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    sendJson(res, 502, { ok: false, failedAt: "write", steps });
+    return;
+  }
+
+  // Cleanup: delete the test file
+  if (uploadedFileId) {
+    try {
+      const deleteRes = await fetch("https://api.openai.com/v1/files/" + uploadedFileId, {
+        method: "DELETE",
+        headers: { authorization: "Bearer " + apiKey }
+      });
+      await parseApiJsonResponse(deleteRes, "OpenAI file delete");
+      steps["cleanup"] = { ok: true };
+    } catch (err) {
+      steps["cleanup"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  // Search probe: POST /v1/vector_stores/{id}/search with a known term.
+  // This is the exact same endpoint the quest-context middleware uses.
+  try {
+    const searchRes = await fetch(
+      "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/search",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer " + apiKey
+        },
+        body: JSON.stringify({ query: "lost baggage claim", max_num_results: 2 })
+      }
+    );
+    const searchPayload = await parseApiJsonResponse(searchRes, "OpenAI vector search probe") as Record<string, unknown>;
+    const hits = Array.isArray((searchPayload as { data?: unknown[] })?.data)
+      ? (searchPayload as { data: unknown[] }).data.length
+      : 0;
+    steps["search"] = { ok: true, hits };
+  } catch (err) {
+    steps["search"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  sendJson(res, 200, { ok: true, steps });
+}
+
+/**
+ * POST /sugaragent/lore/probe
+ *
+ * Full write-then-read roundtrip E2E test driven by the gateway (which holds
+ * the API key). Steps:
+ *   1. Upload a synthetic file containing a unique probe phrase to /v1/files
+ *   2. Attach it to the configured vector store
+ *   3. Poll until the file reaches status "completed" (up to 90s)
+ *   4. Search the vector store for the probe phrase
+ *   5. Verify the phrase appears in at least one result
+ *   6. Delete the probe file from the VS and from /v1/files
+ *
+ * Returns { ok: true, durationMs, steps } on success or
+ *         { ok: false, failedAt, error, steps } on failure.
+ */
+export async function handleSugarAgentLoreProbe(
+  req: IncomingMessage,
+  res: ServerResponse & { __sugarmagicCors?: Record<string, string> }
+): Promise<void> {
+  if (req.method !== "POST") {
+    sendMethodNotAllowed(res, ["POST", "OPTIONS"]);
+    return;
+  }
+
+  const vectorStoreId = resolveEnv("SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID");
+  if (!vectorStoreId) {
+    sendJson(res, 400, {
+      ok: false,
+      error: "InvalidConfig",
+      message: "SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID is not configured."
+    });
+    return;
+  }
+
+  const apiKey = requireEnv("SUGARMAGIC_OPENAI_API_KEY");
+  const startMs = Date.now();
+  const probePhrase = "smprobe_" + startMs.toString(36) + "_lore_roundtrip_test";
+  const steps: Record<string, unknown> = {};
+  let uploadedFileId: string | null = null;
+
+  const authHeader = { authorization: "Bearer " + apiKey };
+
+  // Step 1: upload probe file
+  try {
+    const form = new FormData();
+    form.append("purpose", "user_data");
+    form.append(
+      "file",
+      new Blob(
+        ["# Lore Probe\n\n" + probePhrase + "\n\nThis is a temporary roundtrip test file.\n"],
+        { type: "text/markdown" }
+      ),
+      "smprobe.md"
+    );
+    const uploadRes = await fetch("https://api.openai.com/v1/files", {
+      method: "POST",
+      headers: authHeader,
+      body: form
+    });
+    const uploadPayload = await parseApiJsonResponse(uploadRes, "probe:upload") as Record<string, unknown>;
+    uploadedFileId = typeof uploadPayload["id"] === "string" ? uploadPayload["id"] : null;
+    steps["upload"] = { ok: true, fileId: uploadedFileId };
+  } catch (err) {
+    steps["upload"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    sendJson(res, 502, { ok: false, failedAt: "upload", error: steps["upload"], steps, durationMs: Date.now() - startMs });
+    return;
+  }
+
+  if (!uploadedFileId) {
+    sendJson(res, 502, { ok: false, failedAt: "upload", error: "no file id in response", steps, durationMs: Date.now() - startMs });
+    return;
+  }
+
+  // Step 2: attach to vector store
+  try {
+    const attachRes = await fetch(
+      "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/files",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeader },
+        body: JSON.stringify({ file_id: uploadedFileId })
+      }
+    );
+    await parseApiJsonResponse(attachRes, "probe:attach");
+    steps["attach"] = { ok: true };
+  } catch (err) {
+    steps["attach"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    sendJson(res, 502, { ok: false, failedAt: "attach", error: steps["attach"], steps, durationMs: Date.now() - startMs });
+    return;
+  }
+
+  // Step 3: poll until indexed (90s deadline)
+  const deadline = startMs + 90_000;
+  let indexed = false;
+  let lastStatus = "unknown";
+  try {
+    while (Date.now() < deadline) {
+      await new Promise<void>((r) => setTimeout(r, 2000));
+      const statusRes = await fetch(
+        "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/files/" + uploadedFileId,
+        { method: "GET", headers: authHeader }
+      );
+      const statusPayload = await parseApiJsonResponse(statusRes, "probe:status") as Record<string, unknown>;
+      lastStatus = typeof statusPayload["status"] === "string" ? statusPayload["status"] : "unknown";
+      if (lastStatus === "completed") { indexed = true; break; }
+      if (lastStatus === "failed" || lastStatus === "cancelled") break;
+    }
+    steps["index"] = indexed
+      ? { ok: true, status: lastStatus }
+      : { ok: false, error: "Timed out or failed waiting for indexing: " + lastStatus };
+  } catch (err) {
+    steps["index"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  if (!indexed) {
+    sendJson(res, 502, { ok: false, failedAt: "index", steps, durationMs: Date.now() - startMs });
+    return;
+  }
+
+  // Step 4: search for the probe phrase
+  let hitFound = false;
+  try {
+    const searchRes = await fetch(
+      "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/search",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", ...authHeader },
+        body: JSON.stringify({ query: probePhrase, max_num_results: 4 })
+      }
+    );
+    const searchPayload = await parseApiJsonResponse(searchRes, "probe:search") as Record<string, unknown>;
+    const hits = Array.isArray((searchPayload as { data?: unknown[] }).data)
+      ? (searchPayload as { data: Array<Record<string, unknown>> }).data
+      : [];
+    hitFound = hits.some((h) =>
+      Array.isArray(h["content"]) &&
+      (h["content"] as Array<Record<string, unknown>>).some(
+        (c) => typeof c["text"] === "string" && (c["text"] as string).includes(probePhrase)
+      )
+    );
+    steps["search"] = { ok: true, hits: hits.length, hitFound };
+  } catch (err) {
+    steps["search"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    sendJson(res, 502, { ok: false, failedAt: "search", steps, durationMs: Date.now() - startMs });
+    return;
+  }
+
+  // Step 5: cleanup (best effort -- don't fail the probe if cleanup blows up)
+  try {
+    await fetch(
+      "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/files/" + uploadedFileId,
+      { method: "DELETE", headers: authHeader }
+    );
+    await fetch("https://api.openai.com/v1/files/" + uploadedFileId, {
+      method: "DELETE",
+      headers: authHeader
+    });
+    steps["cleanup"] = { ok: true };
+  } catch (err) {
+    steps["cleanup"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  const durationMs = Date.now() - startMs;
+  if (!hitFound) {
+    sendJson(res, 502, { ok: false, failedAt: "search", error: "probe phrase not found in search results", steps, durationMs });
+    return;
+  }
+  sendJson(res, 200, { ok: true, steps, durationMs });
 }
 
 // ---------------------------------------------------------------------------
@@ -1379,6 +1706,18 @@ export const server = createServer(async (req: GatewayRequest, res: GatewayRespo
         path
       });
       await handleSugarAgentLoreIngest(req, res);
+      return;
+    }
+
+    if (match.routeId === "sugaragent-lore" && path === match.path + "/ping") {
+      logInfo("gateway:dispatch", { routeId: match.routeId, path });
+      await handleSugarAgentLorePing(req, res);
+      return;
+    }
+
+    if (match.routeId === "sugaragent-lore" && path === match.path + "/probe") {
+      logInfo("gateway:dispatch", { routeId: match.routeId, path });
+      await handleSugarAgentLoreProbe(req, res);
       return;
     }
 

@@ -20,6 +20,9 @@ export interface BasePromptContext {
   /** NPC display name — used as the speaker identity in the system prompt. */
   npcDisplayName: string;
 
+  /** NPC description from the NPC definition. Fallback identity anchor when no lore page is loaded. */
+  npcDescription: string | null;
+
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). Null means no tone directive. */
   tone: string | null;
 
@@ -86,6 +89,26 @@ export interface BasePromptContext {
    * load).
    */
   memoryDigest: string;
+
+  /**
+   * Plan 077.1 -- World-framed quest context (D2 prompt invariant). Phrased
+   * as "what would be helpful in the world right now" -- NEVER the player's
+   * private objective displayName/description. Goes into the UNCACHED user
+   * half (per 072.4 / D7) so the byte-stable cached system prefix is never
+   * busted. Null until the quest-context middleware (077.2) has resolved
+   * world lore; GenerateStage keeps it null in 077.1.
+   */
+  questWorldContext: string | null;
+
+  /**
+   * Plan 077.3 (D4) -- how many times the active quest objective has been
+   * raised to the player via NPC dialogue this session (coarse proxy: counts
+   * PROMPTING, not saying). Goes into the UNCACHED user half alongside
+   * questWorldContext. Zero/null -> omit the ease-off hint (first NPC to
+   * offer help should do so naturally). > 0 -> the NPC knows others have
+   * already nudged the player and can be more subtle.
+   */
+  goalSurfacedCount: number | null;
 
   /**
    * Plan 072.8 — compact persona drift-reminder, re-injected at the END of the

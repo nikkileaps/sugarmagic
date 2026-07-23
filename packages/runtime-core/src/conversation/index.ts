@@ -40,6 +40,7 @@ export interface ConversationSelectionContext {
   dialogueDefinitionId?: string;
   npcDefinitionId?: string;
   npcDisplayName?: string;
+  npcDescription?: string | null;
   interactionMode?: ConversationInteractionMode;
   lorePageId?: string | null;
   /** Plan 072.7 — per-NPC agent model override (empty = gateway default). */
@@ -81,9 +82,29 @@ export interface ConversationChoice {
 
 export type ConversationActionProposal =
   | { kind: "start-scripted-followup"; dialogueDefinitionId: string }
+  /**
+   * Quest FLAG write (via questManager.setFlag in handleConversationActionProposal
+   * -> gameplay-session.ts). Sets a world flag that authored region conditions
+   * (evaluateRegionQuestBinding) can read -- e.g. a scripted dock-NPC
+   * conversation setting "talkedToDockWorker=true" that gates an upset
+   * passenger's behavior task. This is a QUEST FLAG, distinct from the
+   * "bump-goal-surfaced" proposal which writes a world-NARRATIVE FACT on the
+   * blackboard (Plan 077.3a/D4). Do not conflate them: flags are authored
+   * string keys in the quest system; narrative facts are typed blackboard
+   * entries owned by narrative-system.
+   */
   | { kind: "set-conversation-flag"; key: string; value: unknown }
   | { kind: "notify-quest-event"; eventName: string }
-  | { kind: "request-close" };
+  | { kind: "request-close" }
+  /**
+   * Plan 077 §077.3a (D4) -- coarse proxy for "NPC was prompted to voice the
+   * quest objective". Runtime-core's handleConversationActionProposal bumps
+   * narrative.goal-surfaced-count for the quest on this proposal. Sugaragent
+   * never writes the blackboard fact directly: the proposal channel is the
+   * only authorized write path (enforced by assertWriteAllowed in
+   * RuntimeBlackboard: ownerSystem="narrative-system" != "sugaragent").
+   */
+  | { kind: "bump-goal-surfaced"; questId: string; stageId: string };
 
 export interface ConversationTurnEnvelope {
   turnId: string;
@@ -123,6 +144,13 @@ export interface ConversationRuntimeContext {
   trackedQuest: TrackedQuestFact | null;
   activeQuestStage: QuestActiveStageFact | null;
   activeQuestObjectives: QuestActiveObjectivesFact | null;
+  /**
+   * Plan 077.3 (D4): how many times the active quest objective has been
+   * raised to the player via NPC dialogue this session. Written by
+   * runtime-core via "bump-goal-surfaced" proposal handling; zero/null
+   * means no NPC has been prompted on it yet.
+   */
+  goalSurfacedCount?: number | null;
 }
 
 export interface ConversationRuntimeNpcBehaviorContext {
