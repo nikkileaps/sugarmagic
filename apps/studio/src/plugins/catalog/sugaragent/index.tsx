@@ -255,15 +255,23 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
           pollTimer = null;
         }
         void (async () => {
+          let consecutiveFailures = 0;
           while (true) {
             await new Promise<void>((r) => window.setTimeout(r, 700));
             let status: SugarAgentLoreStatusResponse | null = null;
-            try { status = await fetchLoreStatus(); } catch { /* keep polling */ }
+            try {
+              status = await fetchLoreStatus();
+              consecutiveFailures = 0;
+            } catch {
+              consecutiveFailures++;
+              if (consecutiveFailures >= 10) {
+                setActionState((current) => ({ ...current, running: false }));
+                return;
+              }
+            }
             if (status) {
               setActionState((current) => ({ ...current, status }));
             }
-            // Only exit when status is non-null: a null from a transient fetch
-            // failure should not terminate the polling loop.
             if (status && !status.ingest?.active) {
               setActionState((current) => ({ ...current, running: false }));
               return;
