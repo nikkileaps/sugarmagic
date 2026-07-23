@@ -20,6 +20,9 @@ export interface BasePromptContext {
   /** NPC display name — used as the speaker identity in the system prompt. */
   npcDisplayName: string;
 
+  /** NPC description from the NPC definition. Fallback identity anchor when no lore page is loaded. */
+  npcDescription: string | null;
+
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). Null means no tone directive. */
   tone: string | null;
 

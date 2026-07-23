@@ -424,6 +424,7 @@ export function createConversationSelectionFromNpc(options: {
     conversationKind: "free-form",
     npcDefinitionId: npcDefinition.definitionId,
     npcDisplayName: npcDefinition.displayName,
+    npcDescription: npcDefinition.description ?? null,
     interactionMode: npcDefinition.interactionMode,
     lorePageId: npcDefinition.lorePageId,
     agentModelOverride: npcDefinition.agentModelOverride ?? null,

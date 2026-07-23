@@ -20,6 +20,7 @@ function baseContext(
   return {
     mode: "agent",
     npcDisplayName: "Maren",
+    npcDescription: null,
     tone: "cozy",
     responseIntent: "chat",
     responseSpecificity: "grounded",
@@ -302,5 +303,36 @@ describe("buildGeneratePrompt -- goal-surfaced ease-off hint (077.3)", () => {
       })
     );
     expect(userPrompt).not.toContain("time(s)");
+  });
+});
+
+describe("buildGeneratePrompt — no-lore description fallback", () => {
+  it("injects npcDescription as identity anchor when persona card and core knowledge are empty", () => {
+    const { systemPrompt } = buildGeneratePrompt(
+      baseContext({
+        persona: { personaCard: [], coreKnowledge: [] },
+        npcDescription: "A stressed passenger worried about lost luggage."
+      })
+    );
+    expect(systemPrompt).toContain("Who you are: A stressed passenger worried about lost luggage.");
+  });
+
+  it("does not inject npcDescription when persona card is present", () => {
+    const { systemPrompt } = buildGeneratePrompt(
+      baseContext({
+        npcDescription: "Should not appear."
+      })
+    );
+    expect(systemPrompt).not.toContain("Should not appear.");
+  });
+
+  it("does not inject npcDescription when npcDescription is null", () => {
+    const { systemPrompt } = buildGeneratePrompt(
+      baseContext({
+        persona: { personaCard: [], coreKnowledge: [] },
+        npcDescription: null
+      })
+    );
+    expect(systemPrompt).not.toContain("Who you are:");
   });
 });

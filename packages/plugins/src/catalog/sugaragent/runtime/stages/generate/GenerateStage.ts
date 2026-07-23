@@ -374,6 +374,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       const promptContext: GeneratePromptContext = {
         mode: "agent",
         npcDisplayName,
+        npcDescription: input.execution.selection.npcDescription ?? null,
         tone: context.config.tone || null,
         responseIntent: input.plan.responseIntent,
         responseSpecificity: input.plan.responseSpecificity,

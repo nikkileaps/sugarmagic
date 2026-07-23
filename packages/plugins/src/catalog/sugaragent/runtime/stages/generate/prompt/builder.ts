@@ -90,6 +90,13 @@ function buildStableSystemLines(
       ? `What you know (your life and immediate world):\n${renderSections(coreSections)}`
       : null,
 
+    // 4a. No-lore fallback: when no persona page is loaded, ground the NPC in
+    // their display name and description so the model cannot adopt retrieved
+    // world-context (e.g. another character's lore page) as its own identity.
+    personaSections.length === 0 && coreSections.length === 0 && context.npcDescription
+      ? `Who you are: ${context.npcDescription}`
+      : null,
+
     // 4b. Memory (Plan 073.3, D4) — what you remember about THIS player from
     // earlier conversations. Byte-stable within a session (the record is
     // loaded once); empty on a first meeting. Slots after core knowledge and
