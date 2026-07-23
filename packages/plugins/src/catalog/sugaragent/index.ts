@@ -17,6 +17,7 @@ import {
   createQuestContextMiddleware,
   QUEST_CONTEXT_MIDDLEWARE_ID
 } from "./runtime/quest/quest-context-middleware";
+import { installQuestContextDebugHandle } from "./runtime/quest/quest-context-debug";
 import type { SugarAgentPluginConfig } from "./runtime/types";
 import type { RuntimePluginEnvironment } from "../../runtime";
 
@@ -239,6 +240,7 @@ export function normalizeSugarAgentPluginConfig(
       Number.isFinite(config.memoryDigestMaxChars)
         ? Math.max(200, Math.min(2000, Math.floor(config.memoryDigestMaxChars)))
         : 800,
+    questAwareNpcsEnabled: config?.questAwareNpcsEnabled !== false,
     debugLogging: config?.debugLogging === true,
     tone: typeof config?.tone === "string" ? config.tone.trim() : ""
   };
@@ -359,6 +361,15 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       max: 2000
     },
     {
+      configKey: "questAwareNpcsEnabled",
+      label: "Quest-Aware NPCs",
+      type: "boolean",
+      group: "Runtime Behavior",
+      default: true,
+      description:
+        "When on, NPCs receive world-framed quest context and participate in the goal-surfaced blackboard. Off = pre-077 behavior."
+    },
+    {
       configKey: "debugLogging",
       label: "Structured Debug Logging",
       type: "boolean",
@@ -414,6 +425,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     maxEvidenceCharsPerItem: 600,
     memoryEnabled: true,
     memoryDigestMaxChars: 800,
+    questAwareNpcsEnabled: true,
     debugLogging: false,
     tone: ""
   },
@@ -456,6 +468,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
           });
           // Plan 073.5 — dev-only memory inspection handle (window.__sugaragentMemory).
           installNpcMemoryDebugHandle();
+          // Plan 077.5 — dev-only quest-context inspection handle (window.__sugaragentQuestContext).
+          if (config.questAwareNpcsEnabled) installQuestContextDebugHandle();
         },
         contributions: [
           {
@@ -499,25 +513,30 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
           // world lore once per quest-state (D3), memoizes it, and annotates
           // questWorldContext for the prompt builder (D2 prompt invariant: the
           // objective displayName/description seeds retrieval only, never in the
-          // prompt).
-          {
-            pluginId: configuration.pluginId,
-            contributionId: "sugaragent.quest-context-middleware",
-            kind: "conversation.middleware",
-            displayName: "SugarAgent Quest Context",
-            priority: 15,
-            payload: {
-              middlewareId: QUEST_CONTEXT_MIDDLEWARE_ID,
-              summary:
-                "Resolves quest-relevant world lore once per quest-state; supplies world-framed context to NPC dialogue without leaking the player's private objective.",
-              stage: "context",
-              status: "ready",
-              middleware: createQuestContextMiddleware({
-                vectorStoreProvider: createSugarAgentVectorStoreProvider(config),
-                logger: createSugarAgentLogger(config.debugLogging)
-              })
-            }
-          }
+          // prompt). Gated by questAwareNpcsEnabled (077.5); when off, NPCs
+          // behave as pre-077 (no world-framed context, no ease-off blackboard).
+          ...(config.questAwareNpcsEnabled
+            ? [
+                {
+                  pluginId: configuration.pluginId,
+                  contributionId: "sugaragent.quest-context-middleware",
+                  kind: "conversation.middleware" as const,
+                  displayName: "SugarAgent Quest Context",
+                  priority: 15,
+                  payload: {
+                    middlewareId: QUEST_CONTEXT_MIDDLEWARE_ID,
+                    summary:
+                      "Resolves quest-relevant world lore once per quest-state; supplies world-framed context to NPC dialogue without leaking the player's private objective.",
+                    stage: "context",
+                    status: "ready" as const,
+                    middleware: createQuestContextMiddleware({
+                      vectorStoreProvider: createSugarAgentVectorStoreProvider(config),
+                      logger: createSugarAgentLogger(config.debugLogging)
+                    })
+                  }
+                }
+              ]
+            : [])
         ],
         serializeState: () => ({
           enabled: configuration.enabled,

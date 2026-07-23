@@ -254,3 +254,47 @@ describe("createQuestContextMiddleware", () => {
     expect(callArg?.query).toContain("Track down the missing suitcase");
   });
 });
+
+// 077.5 cost guard: the quest-context middleware must not add any LLM calls.
+// It may call vectorStoreProvider.searchLore (a vector-index lookup, not an LLM
+// call) once per quest-state change; memoization prevents re-calling it on
+// subsequent turns with the same questId+stageId.
+describe("createQuestContextMiddleware -- 077.5 cost guard", () => {
+  it("memo hit on same quest state makes zero network calls (vector-search + LLM both saved)", async () => {
+    const { provider, searchLore } = fakeVectorStore([
+      fakeLore("Travelers with lost luggage are directed to baggage claim.")
+    ]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const state: Record<string, unknown> = {};
+
+    // Cold resolve: one vector-search call expected.
+    await middleware.prepare?.(makeExecution(state));
+    expect(searchLore).toHaveBeenCalledTimes(1);
+
+    // Two more turns, same quest state: no new calls.
+    await middleware.prepare?.(makeExecution(state));
+    await middleware.prepare?.(makeExecution(state));
+    expect(searchLore).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call any LLM during context resolution -- only vectorStoreProvider.searchLore", async () => {
+    // Ensure the fake provider exposes ONLY searchLore. If the middleware ever
+    // added an LLM call it would need an additional method here (which would
+    // need to be a vi.fn() that can be asserted). An unrecognized call would
+    // throw, keeping this guard tight.
+    const searchLore = vi.fn(async () => [
+      fakeLore("Baggage claim is on level B.")
+    ]);
+    const providerWithOnlySearchLore: VectorStoreProvider = {
+      searchLore
+    } as unknown as VectorStoreProvider;
+    const middleware = createQuestContextMiddleware({
+      vectorStoreProvider: providerWithOnlySearchLore
+    });
+
+    await middleware.prepare?.(makeExecution());
+
+    // The one allowed call: vector-index lookup (not an LLM call).
+    expect(searchLore).toHaveBeenCalledOnce();
+  });
+});

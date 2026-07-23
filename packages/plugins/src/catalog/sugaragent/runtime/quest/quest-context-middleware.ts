@@ -42,6 +42,7 @@ import type {
 } from "@sugarmagic/runtime-core";
 import type { SugarAgentLogger } from "../logger";
 import type { VectorStoreProvider } from "../clients";
+import { recordQuestContextSnapshot } from "./quest-context-debug";
 
 export const QUEST_CONTEXT_MIDDLEWARE_ID = "sugaragent.questContext";
 export const QUEST_CONTEXT_STATE_KEY = "sugaragent.questContext";
@@ -197,6 +198,19 @@ export function createQuestContextMiddleware(
         worldContext: memoized.worldContext
       };
       execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] = annotation;
+
+      // Dev handle snapshot -- no-op in prod (the handle is not installed
+      // unless questAwareNpcsEnabled was true at plugin init).
+      const npcDefinitionId = execution.selection.npcDefinitionId ?? "";
+      if (typeof npcDefinitionId === "string" && npcDefinitionId) {
+        recordQuestContextSnapshot({
+          npcDefinitionId,
+          questId,
+          stageId,
+          worldContext: memoized.worldContext,
+          goalSurfacedCount: execution.runtimeContext?.goalSurfacedCount ?? null
+        });
+      }
 
       return execution;
     }

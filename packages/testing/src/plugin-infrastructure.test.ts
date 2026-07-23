@@ -3737,6 +3737,7 @@ describe("plugin infrastructure", () => {
       maxEvidenceCharsPerItem: 600,
       memoryEnabled: true,
       memoryDigestMaxChars: 800,
+      questAwareNpcsEnabled: true,
       debugLogging: true,
       tone: ""
     });
@@ -3764,6 +3765,7 @@ describe("plugin infrastructure", () => {
       maxEvidenceCharsPerItem: 600,
       memoryEnabled: true,
       memoryDigestMaxChars: 800,
+      questAwareNpcsEnabled: true,
       debugLogging: false,
       tone: ""
     });
