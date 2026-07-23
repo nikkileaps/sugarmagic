@@ -98,6 +98,16 @@ export interface BasePromptContext {
   questWorldContext: string | null;
 
   /**
+   * Plan 077.3 (D4) -- how many times the active quest objective has been
+   * raised to the player via NPC dialogue this session (coarse proxy: counts
+   * PROMPTING, not saying). Goes into the UNCACHED user half alongside
+   * questWorldContext. Zero/null -> omit the ease-off hint (first NPC to
+   * offer help should do so naturally). > 0 -> the NPC knows others have
+   * already nudged the player and can be more subtle.
+   */
+  goalSurfacedCount: number | null;
+
+  /**
    * Plan 072.8 — compact persona drift-reminder, re-injected at the END of the
    * user message (after history). Empty string = nothing to re-inject.
    */

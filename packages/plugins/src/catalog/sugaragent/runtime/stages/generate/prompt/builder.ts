@@ -126,6 +126,15 @@ function buildWorldStateUserLines(
       ? `World context right now: ${context.questWorldContext}\nIf this is something you could naturally help with, offer what you would plausibly know in character. Do not act as though you know the player's private business. Do not repeat what has already been said.`
       : null,
 
+    // Plan 077.3 (D4): coarse ease-off hint. goalSurfacedCount counts PROMPTING
+    // (not saying), so > 0 means at least one NPC turn already steered toward
+    // this topic. The player has had a chance to find it; be more subtle.
+    context.questWorldContext && !suppress &&
+    typeof context.goalSurfacedCount === "number" &&
+    context.goalSurfacedCount > 0
+      ? `This topic has been brought up in conversation ${context.goalSurfacedCount} time(s) already. If another character has already offered guidance on this, let the player discover it without repeating the nudge. You can acknowledge the topic if the player raises it, but do not volunteer the same information again.`
+      : null,
+
     context.currentLocationDisplayName
       ? `Current runtime location: ${context.currentLocationDisplayName}.`
       : null,

@@ -132,6 +132,13 @@ export interface ConversationRuntimeContext {
   trackedQuest: TrackedQuestFact | null;
   activeQuestStage: QuestActiveStageFact | null;
   activeQuestObjectives: QuestActiveObjectivesFact | null;
+  /**
+   * Plan 077.3 (D4): how many times the active quest objective has been
+   * raised to the player via NPC dialogue this session. Written by
+   * runtime-core via "bump-goal-surfaced" proposal handling; zero/null
+   * means no NPC has been prompted on it yet.
+   */
+  goalSurfacedCount?: number | null;
 }
 
 export interface ConversationRuntimeNpcBehaviorContext {

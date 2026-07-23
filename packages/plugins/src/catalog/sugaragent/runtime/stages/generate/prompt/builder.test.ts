@@ -31,6 +31,7 @@ function baseContext(
     activeQuestDisplayName: "Lost Locket",
     activeQuestStageDisplayName: "Ask around",
     questWorldContext: "Travelers with lost luggage are directed to baggage claim.",
+    goalSurfacedCount: null,
     currentLocationDisplayName: "Bakery",
     currentParentAreaDisplayName: "Market Square",
     npcPlayerRelation: { proximityBand: "immediate", sameArea: true },
@@ -256,5 +257,50 @@ describe("buildGeneratePrompt -- D2 quest-context firewall (077.1)", () => {
       baseContext({ questWorldContext: null })
     ).systemPrompt;
     expect(withContext).toBe(withoutContext);
+  });
+});
+
+describe("buildGeneratePrompt -- goal-surfaced ease-off hint (077.3)", () => {
+  it("omits the ease-off hint when goalSurfacedCount is null (first NPC to offer)", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: "Baggage claim info.", goalSurfacedCount: null })
+    );
+    expect(userPrompt).not.toContain("has been brought up");
+    expect(userPrompt).not.toContain("ease off");
+  });
+
+  it("omits the ease-off hint when goalSurfacedCount is 0", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: "Baggage claim info.", goalSurfacedCount: 0 })
+    );
+    expect(userPrompt).not.toContain("has been brought up");
+  });
+
+  it("emits the ease-off hint when goalSurfacedCount is > 0", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: "Baggage claim info.", goalSurfacedCount: 2 })
+    );
+    expect(userPrompt).toContain("2 time(s)");
+    expect(userPrompt).toContain("without repeating the nudge");
+  });
+
+  it("omits the ease-off hint even with count > 0 when questWorldContext is null", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ questWorldContext: null, goalSurfacedCount: 3 })
+    );
+    expect(userPrompt).not.toContain("time(s)");
+    expect(userPrompt).not.toContain("without repeating");
+  });
+
+  it("omits the ease-off hint in minimal-greeting mode even with count > 0", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "Baggage claim info.",
+        goalSurfacedCount: 5,
+        minimalGreetingMode: true,
+        playerText: null
+      })
+    );
+    expect(userPrompt).not.toContain("time(s)");
   });
 });

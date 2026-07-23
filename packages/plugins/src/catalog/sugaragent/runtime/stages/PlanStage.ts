@@ -110,6 +110,22 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
     });
     responseIntent = decision.responseIntent;
 
+    // Plan 077.3 (D4): coarse proxy for "NPC was prompted to voice the quest
+    // objective". Emit only when quest world context was resolved AND we didn't
+    // redirect to a scripted path (that's a different signal). The handler in
+    // gameplay-session.ts calls bumpGoalSurfacedCount -- sugaragent never
+    // touches the blackboard directly (write firewall: assertWriteAllowed would
+    // throw if it tried). Counts PROMPTING, not saying (D4 honest wrinkle).
+    if (hasQuestWorldContext && hasActiveQuest && responseIntent !== "redirect") {
+      const questId =
+        input.execution.runtimeContext?.trackedQuest?.questId ?? "";
+      const stageId =
+        input.execution.runtimeContext?.activeQuestStage?.stageId ?? "";
+      if (questId) {
+        actionProposals.push({ kind: "bump-goal-surfaced", questId, stageId });
+      }
+    }
+
     const output: PlanResult = {
       responseIntent,
       responseGoal: decision.responseGoal,

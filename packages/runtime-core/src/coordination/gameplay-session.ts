@@ -128,6 +128,7 @@ import {
 } from "../behavior";
 import {
   bumpGoalSurfacedCount,
+  getGoalSurfacedCount,
   clearActiveQuestObjectives,
   clearActiveQuestStage,
   clearTrackedQuest,
@@ -921,6 +922,12 @@ export function createRuntimeGameplaySessionController(
             goal: npcCurrentGoal
           }
         : null;
+      // Plan 077.3 (D4): read the world-narrative surfacing count so the NPC
+      // prompt can reflect how many times the objective has been raised.
+      const goalSurfacedCount = trackedQuest
+        ? getGoalSurfacedCount(blackboard, trackedQuest.questId)
+        : null;
+
       const runtimeContext: ConversationRuntimeContext = {
         here:
           playerLocation?.location ??
@@ -936,7 +943,8 @@ export function createRuntimeGameplaySessionController(
         npcBehavior,
         trackedQuest,
         activeQuestStage,
-        activeQuestObjectives
+        activeQuestObjectives,
+        goalSurfacedCount
       };
 
       return {

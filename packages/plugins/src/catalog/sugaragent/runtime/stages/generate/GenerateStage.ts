@@ -421,7 +421,12 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
             input.execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as
               | QuestContextAnnotation
               | undefined
-          )?.worldContext ?? null
+          )?.worldContext ?? null,
+        // Plan 077.3 (D4): how many times the objective has been raised this
+        // session. Read from runtimeContext (populated by the blackboard
+        // middleware via bumpGoalSurfacedCount). Null -> first NPC to offer.
+        goalSurfacedCount:
+          input.execution.runtimeContext?.goalSurfacedCount ?? null
       };
 
       const prompts = buildGeneratePrompt(promptContext);
