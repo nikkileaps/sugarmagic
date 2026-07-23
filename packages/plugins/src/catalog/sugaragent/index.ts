@@ -3,13 +3,20 @@ import {
   type DeploymentRequirement
 } from "@sugarmagic/domain";
 import type { DiscoveredPluginDefinition } from "../../sdk";
-import { createSugarAgentConversationProvider } from "./runtime/provider";
+import {
+  createSugarAgentConversationProvider,
+  createSugarAgentVectorStoreProvider
+} from "./runtime/provider";
 import { createSugarAgentLogger } from "./runtime/logger";
 import {
   createNpcMemoryMiddleware,
   NPC_MEMORY_MIDDLEWARE_ID
 } from "./runtime/memory/memory-middleware";
 import { installNpcMemoryDebugHandle } from "./runtime/memory/memory-debug";
+import {
+  createQuestContextMiddleware,
+  QUEST_CONTEXT_MIDDLEWARE_ID
+} from "./runtime/quest/quest-context-middleware";
 import type { SugarAgentPluginConfig } from "./runtime/types";
 import type { RuntimePluginEnvironment } from "../../runtime";
 
@@ -485,6 +492,29 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
                 logger: createSugarAgentLogger(config.debugLogging),
                 enabled: config.memoryEnabled,
                 digestMaxChars: config.memoryDigestMaxChars
+              })
+            }
+          },
+          // Plan 077.2 -- context-stage middleware that resolves quest-relevant
+          // world lore once per quest-state (D3), memoizes it, and annotates
+          // questWorldContext for the prompt builder (D2 prompt invariant: the
+          // objective displayName/description seeds retrieval only, never in the
+          // prompt).
+          {
+            pluginId: configuration.pluginId,
+            contributionId: "sugaragent.quest-context-middleware",
+            kind: "conversation.middleware",
+            displayName: "SugarAgent Quest Context",
+            priority: 15,
+            payload: {
+              middlewareId: QUEST_CONTEXT_MIDDLEWARE_ID,
+              summary:
+                "Resolves quest-relevant world lore once per quest-state; supplies world-framed context to NPC dialogue without leaking the player's private objective.",
+              stage: "context",
+              status: "ready",
+              middleware: createQuestContextMiddleware({
+                vectorStoreProvider: createSugarAgentVectorStoreProvider(config),
+                logger: createSugarAgentLogger(config.debugLogging)
               })
             }
           }

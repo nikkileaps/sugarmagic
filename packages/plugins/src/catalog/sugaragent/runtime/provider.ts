@@ -247,6 +247,25 @@ function resolveProviders(
 }
 
 /**
+ * Plan 077.2 -- create a VectorStoreProvider from plugin config, using the
+ * same gateway routing and bearer-token logic as the conversation provider.
+ * Used by the quest-context middleware, which needs its own provider instance
+ * (middleware registration is independent of the conversation provider).
+ */
+export function createSugarAgentVectorStoreProvider(
+  config: SugarAgentPluginConfig
+): VectorStoreProvider {
+  const baseUrl = config.proxyBaseUrl.trim();
+  const staticToken = config.gatewayBearerToken.trim();
+  const getBearerToken: BearerTokenGetter = staticToken
+    ? async () => staticToken
+    : getActiveAccessToken;
+  return new SugarAgentGatewayVectorStoreProvider(
+    new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken)
+  );
+}
+
+/**
  * Plan 072.3 -- load the NPC's persona + core knowledge ONCE at session start,
  * before the initial turn. Never throws (D3): any failure degrades to a
  * name-and-tone conversation with a `persona-unavailable` fallback reason.

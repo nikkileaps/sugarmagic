@@ -9,6 +9,10 @@ import {
   MEMORY_ANNOTATION_KEY,
   type NpcMemoryAnnotation
 } from "../memory/digest";
+import {
+  QUEST_CONTEXT_ANNOTATION_KEY,
+  type QuestContextAnnotation
+} from "../quest/quest-context-middleware";
 import type {
   InterpretResult,
   PlanResult,
@@ -83,10 +87,16 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       )?.hasMemory
     );
 
-    // Plan 077.1: quest-context middleware (077.2) will publish an annotation
-    // when world-framed lore has been resolved for the active objective. Until
-    // 077.2 is wired, this is always false -- no quest-grounded routing yet.
-    const hasQuestWorldContext = false;
+    // Plan 077.2 -- quest-context middleware publishes this annotation when
+    // world-framed lore was resolved for the active objective (D3). When
+    // absent (no active quest, or middleware degraded), defaults to false.
+    const hasQuestWorldContext = Boolean(
+      (
+        input.execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as
+          | QuestContextAnnotation
+          | undefined
+      )?.hasContext
+    );
 
     const decision = resolvePlanDecision({
       interpret: input.interpret,

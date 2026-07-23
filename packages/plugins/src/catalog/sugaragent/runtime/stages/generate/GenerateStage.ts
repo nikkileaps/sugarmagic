@@ -57,6 +57,10 @@ import {
   MEMORY_STATE_KEY,
   type MemoizedNpcMemory
 } from "../../memory/digest";
+import {
+  QUEST_CONTEXT_ANNOTATION_KEY,
+  type QuestContextAnnotation
+} from "../../quest/quest-context-middleware";
 
 function buildPrePlacementEnvelope(
   input: GenerateStageInput,
@@ -408,10 +412,16 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
             ?.digest ?? "",
         // Plan 072.8 — drift-reminder digest, re-injected at end of user message.
         personaDigest: input.state.persona?.digest ?? "",
-        // Plan 077.1 -- world-framed quest context (D2 prompt invariant). Null
-        // until the quest-context middleware (077.2) resolves world lore for the
-        // active objective; 077.2 will populate this from execution.state.
-        questWorldContext: null
+        // Plan 077.2 -- world-framed quest context (D2/D3). Populated by the
+        // quest-context middleware annotation when it resolved world lore for
+        // the active objective. Null when no quest is active or the middleware
+        // degraded. Goes into the UNCACHED user half (D7: no cache bust).
+        questWorldContext:
+          (
+            input.execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as
+              | QuestContextAnnotation
+              | undefined
+          )?.worldContext ?? null
       };
 
       const prompts = buildGeneratePrompt(promptContext);
