@@ -387,6 +387,13 @@ export class QuestManager {
     this.onStateChange?.();
   }
 
+  // Intentionally NO showInHud filter here. showInHud controls HUD display
+  // only -- it has nothing to do with whether an objective is relevant to NPC
+  // context or the blackboard. getTrackedQuest() (below) filters by showInHud
+  // for the player-facing HUD tracker. This method is the NPC/blackboard path
+  // and must return ALL active objectives regardless of display preference.
+  // Filtering here was the original bug: quest-context middleware silently
+  // received empty objectives and skipped the vector search entirely.
   getActiveObjectivesForTrackedQuest(): QuestActiveObjectiveView[] {
     const questDefinitionId =
       this.trackedQuestDefinitionId ?? Array.from(this.activeQuests.keys())[0] ?? null;

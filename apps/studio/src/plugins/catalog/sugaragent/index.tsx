@@ -262,7 +262,9 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
             if (status) {
               setActionState((current) => ({ ...current, status }));
             }
-            if (!status?.ingest?.active) {
+            // Only exit when status is non-null: a null from a transient fetch
+            // failure should not terminate the polling loop.
+            if (status && !status.ingest?.active) {
               setActionState((current) => ({ ...current, running: false }));
               return;
             }
