@@ -172,21 +172,62 @@ Each entry: `{ npcDefinitionId, questId, stageId, worldContext, goalSurfacedCoun
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/quest/quest-context-debug.ts`
 
+## NPC Identity Fallback (no lore page)
+
+When an agentified NPC has no lore page attached (or the lore API is
+unavailable), `buildStableSystemLines` injects the NPC's `description` field
+from `NPCDefinition` as a minimal identity anchor:
+
+```
+Who you are: <npcDefinition.description>
+```
+
+This fires only when both `personaCard` AND `coreKnowledge` are empty (i.e.
+no real persona was loaded). It prevents the model from adopting retrieved
+world-context (e.g. another character's lore page returned by the
+quest-context middleware) as its own identity.
+
+**Author action:** always fill in the NPC's Description field in the NPC
+editor. It is the fallback floor and costs nothing. A lore page with a
+`## Persona` section overrides it completely when loaded.
+
+**Files:** `ConversationSelectionContext.npcDescription` (runtime-core),
+`buildStableSystemLines` in `prompt/builder.ts`.
+
 ## World Events: Compose Existing Machinery (D5)
 
 Quest-gated scene changes use existing seams, not new infrastructure:
 
-- **Flag set from agent turn:** PlanStage emits `set-conversation-flag` ->
-  `questManager.setFlag` -> sets a world flag.
+- **Flag set from scripted NPC dialogue:** Put a `setFlag` action in the quest
+  Talk node's `onCompleteActions`. When the player finishes the scripted
+  dialogue, `questManager.notifyDialogueFinished` auto-completes the Talk node,
+  which fires `onCompleteActions`, which calls `questManager.setFlag(targetId, value)`.
+  The Talk node's `targetId` is the flag key; `value` is the flag value.
+- **Flag set from agentified NPC turn:** PlanStage emits
+  `{ kind: "set-conversation-flag", key, value }` -> `handleConversationActionProposal`
+  -> `questManager.setFlag`. This is for runtime-emergent flag writes from AI
+  NPC turns, not scripted dialogue.
 - **Compound AND gate:** `evaluateRegionQuestBinding({ questDefinitionId, questStageId, worldFlagEquals })`
   in `packages/runtime-core/src/region-conditions/index.ts` evaluates stage
   AND flag together. Used by behavior-task activation and collision volumes.
+  Authored in Studio via the Behavior inspector: Quest + Quest Stage + World Flag fields.
 - **Presence gating (deferred):** `RegionNPCPresence` has no condition field;
   presence gates require task #418 (epic). Use behavior-task gating (NPC
   present, behavior changes) in the meantime.
 
+**Authoring pattern -- "NPC B appears upset only after player talked to NPC A":**
+
+1. NPC A is scripted. Its dialogue is bound to a quest Talk objective node.
+2. On that Talk node's `onCompleteActions`: add `setFlag`, targetId =
+   `talkedToNpcA`, value = `true`.
+3. NPC B is agentified. Place it in the region (always present).
+4. Add a behavior task for NPC B with activation: quest stage = the relevant
+   stage AND world flag = `talkedToNpcA` = `true`.
+5. NPC B's task description drives their behavior when the compound condition
+   holds; without the task active they are behaviorally neutral.
+
 The evaluator handles compound AND natively; no new engine is needed for
-"appear only after arrival AND after NPC-1 conversation."
+"active only after arrival AND after NPC-A conversation."
 
 ## SugarAgent Plugin Config
 

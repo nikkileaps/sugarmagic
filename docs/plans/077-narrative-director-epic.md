@@ -1,6 +1,6 @@
 # Plan 077 -- Quest-Aware Agentified NPCs (child epic G of Strategy 001)
 
-Status: Locked (epic-review passed 2026-07-22, 2 rounds)
+Status: Complete (epic-review passed 2026-07-22, 2 rounds; all stories shipped 2026-07-23)
 Owner: nikki + claude
 Date: 2026-07-22
 
