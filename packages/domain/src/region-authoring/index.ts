@@ -97,6 +97,13 @@ export interface RegionNPCPresence {
   shaderOverride?: ShaderBindingOverride | null;
   shaderParameterOverrides: ShaderParameterOverride[];
   transform: RegionSceneTransform;
+  // DEFERRED 077.4: conditional presence gating (stage + world-flag).
+  // Add `condition?: RegionBehaviorQuestBinding | null` here, filter presences
+  // at runtime in gameplay-session's regionContents loop, and add Studio UI.
+  // The evaluator (evaluateRegionQuestBinding) already handles compound AND.
+  // Revisit when authored content needs an NPC physically absent until
+  // conditions hold (vs. behavior-task gating, which keeps the NPC present
+  // but behaviorally neutral). See plan 077 Deferred + backlog task #418.
 }
 
 export interface RegionItemPresence {

@@ -251,6 +251,59 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
       resolveWorldFlagWriteValue({ key: "k", valueType: "boolean", value: null })
     ).toBe(true);
   });
+
+  // Plan 077.4 (D5): compound AND binding -- stage + world-flag together.
+  // Models the "upset passenger activates only after dock-worker conversation
+  // AND the quest is at find-suitcase stage" pattern. The evaluator already
+  // handled this; these tests document + lock the behavior.
+  it("resolves compound stage-AND-flag binding only when both conditions hold", () => {
+    const binding = {
+      questDefinitionId: "quest.find-the-luggage",
+      questStageId: "stage.find-suitcase",
+      worldFlagEquals: { key: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
+    };
+    const ctx = (stageId: string, hasFlag: boolean) => ({
+      activeQuest: { questDefinitionId: "quest.find-the-luggage", stageId },
+      hasWorldFlag: (k: string, v: unknown) => k === "talkedToDockWorker" && v === hasFlag
+    });
+
+    // Both conditions hold -> active
+    expect(evaluateRegionQuestBinding(binding, ctx("stage.find-suitcase", true))).toBe(true);
+    // Flag missing -> not active
+    expect(evaluateRegionQuestBinding(binding, ctx("stage.find-suitcase", false))).toBe(false);
+    // Stage wrong (quest advanced) -> retires automatically
+    expect(evaluateRegionQuestBinding(binding, ctx("stage.return-to-counter", true))).toBe(false);
+    // Neither condition -> not active
+    expect(evaluateRegionQuestBinding(binding, ctx("stage.return-to-counter", false))).toBe(false);
+  });
+
+  it("compound binding retires when stage advances (flag still set)", () => {
+    // Verifies "retires when the stage advances" from 077.4 exit criterion.
+    // The world flag stays set after the stage changes; only the stage gate
+    // causes the binding to retire.
+    const binding = {
+      questDefinitionId: "quest.find-the-luggage",
+      questStageId: "stage.find-suitcase",
+      worldFlagEquals: { key: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
+    };
+    const flagAlwaysSet = (k: string, v: unknown) =>
+      k === "talkedToDockWorker" && v === true;
+
+    expect(
+      evaluateRegionQuestBinding(binding, {
+        activeQuest: { questDefinitionId: "quest.find-the-luggage", stageId: "stage.find-suitcase" },
+        hasWorldFlag: flagAlwaysSet
+      })
+    ).toBe(true);
+
+    // Stage advances; flag is still set but the binding should retire
+    expect(
+      evaluateRegionQuestBinding(binding, {
+        activeQuest: { questDefinitionId: "quest.find-the-luggage", stageId: "stage.return-to-counter" },
+        hasWorldFlag: flagAlwaysSet
+      })
+    ).toBe(false);
+  });
 });
 
 function regionWithVolumes(

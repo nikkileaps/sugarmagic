@@ -81,6 +81,17 @@ export interface ConversationChoice {
 
 export type ConversationActionProposal =
   | { kind: "start-scripted-followup"; dialogueDefinitionId: string }
+  /**
+   * Quest FLAG write (via questManager.setFlag in handleConversationActionProposal
+   * -> gameplay-session.ts). Sets a world flag that authored region conditions
+   * (evaluateRegionQuestBinding) can read -- e.g. a scripted dock-NPC
+   * conversation setting "talkedToDockWorker=true" that gates an upset
+   * passenger's behavior task. This is a QUEST FLAG, distinct from the
+   * "bump-goal-surfaced" proposal which writes a world-NARRATIVE FACT on the
+   * blackboard (Plan 077.3a/D4). Do not conflate them: flags are authored
+   * string keys in the quest system; narrative facts are typed blackboard
+   * entries owned by narrative-system.
+   */
   | { kind: "set-conversation-flag"; key: string; value: unknown }
   | { kind: "notify-quest-event"; eventName: string }
   | { kind: "request-close" }
