@@ -25,6 +25,7 @@ import {
   buildAppendDeployHistoryCommand,
   buildUpdateDeployHistoryEntryCommand,
   buildUpdateDeploymentSettingsCommand,
+  buildUpdatePublishSettingsCommand,
   type DeploymentActionExecutionResult,
   type DeploymentActionKind,
   GCP_SERVICE_ACCOUNT_ID_MAX_LENGTH,
@@ -3390,6 +3391,21 @@ function SugarDeployCenterPanel(props: SugarDeployCenterPanelProps) {
                               siteName: event.currentTarget.value
                             })
                           }
+                        />
+                        <TextInput
+                          label="Live Domain"
+                          description="Custom domain pointing at this site (e.g. game.wordlarkhollow.com). Added to the gateway's CORS allowed-origins list."
+                          placeholder="game.example.com"
+                          value={publishSettings?.liveDomain ?? ""}
+                          onChange={(event) => {
+                            if (!gameProject) return;
+                            const current = getPublishSettings(gameProject);
+                            onCommand(buildUpdatePublishSettingsCommand(gameProject, {
+                              ...current,
+                              liveDomain: event.currentTarget.value
+                            }));
+                          }}
+                          style={{ gridColumn: "1 / -1" }}
                         />
                         <Select
                           label="Production Context"
