@@ -272,6 +272,36 @@ export const QUEST_ACTIVE_OBJECTIVES_FACT =
     lifecycle: { kind: "session" }
   });
 
+/**
+ * Plan 077 §077.3a (D4) -- world-narrative facts.
+ *
+ * Owned by "narrative-system" (runtime-core), written ONLY via the
+ * "bump-goal-surfaced" ConversationActionProposal handler in
+ * gameplay-session.ts. Sugaragent's stages never hold a blackboard handle
+ * and therefore cannot write these directly -- the proposal channel is the
+ * only path (see handleConversationActionProposal in gameplay-session.ts).
+ */
+export const NARRATIVE_SOURCE_SYSTEM = "narrative-system";
+
+/**
+ * How many times the current quest objective has been raised to the player
+ * via NPC dialogue this session. Scoped per quest (questId). Lifecycle:
+ * session (no persistence in v1). A count of 0 means no NPC has been
+ * prompted to surface it yet.
+ *
+ * NOTE: this is a COARSE proxy that counts PROMPTING, not saying. PlanStage
+ * bumps it when it routes the turn to voice quest context -- the model may
+ * still decline to steer in character. "Second NPC eases off" is therefore
+ * best-effort emergent, not guaranteed. Precise "was the beat delivered?"
+ * is deferred to Epic E/075's judge.
+ */
+export const GOAL_SURFACED_COUNT_FACT = defineBlackboardFact<number>({
+  key: "narrative.goal-surfaced-count",
+  ownerSystem: NARRATIVE_SOURCE_SYSTEM,
+  allowedScopeKinds: ["quest"],
+  lifecycle: { kind: "session" }
+});
+
 export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   ENTITY_POSITION_FACT,
   ENTITY_LOCATION_FACT,
@@ -283,7 +313,8 @@ export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   ENTITY_CURRENT_GOAL_FACT,
   TRACKED_QUEST_FACT,
   QUEST_ACTIVE_STAGE_FACT,
-  QUEST_ACTIVE_OBJECTIVES_FACT
+  QUEST_ACTIVE_OBJECTIVES_FACT,
+  GOAL_SURFACED_COUNT_FACT
 ] as const satisfies readonly BlackboardFactDefinition<unknown>[];
 
 export function defineBlackboardFact<TValue>(
@@ -797,6 +828,33 @@ export function createBlackboardScope(
   id: string
 ): BlackboardScopeRef {
   return { kind, id };
+}
+
+// Plan 077 §077.3a -- world-narrative fact helpers (narrative-system owned).
+
+export function getGoalSurfacedCount(
+  blackboard: RuntimeBlackboard,
+  questId: string
+): number {
+  return (
+    blackboard.getFact(
+      GOAL_SURFACED_COUNT_FACT,
+      createBlackboardScope("quest", questId)
+    )?.value ?? 0
+  );
+}
+
+export function bumpGoalSurfacedCount(
+  blackboard: RuntimeBlackboard,
+  questId: string
+): void {
+  const current = getGoalSurfacedCount(blackboard, questId);
+  blackboard.setFact({
+    definition: GOAL_SURFACED_COUNT_FACT,
+    scope: createBlackboardScope("quest", questId),
+    value: current + 1,
+    sourceSystem: NARRATIVE_SOURCE_SYSTEM
+  });
 }
 
 function serializeFactStorageKey(key: string, scope: BlackboardScopeRef): string {

@@ -83,7 +83,16 @@ export type ConversationActionProposal =
   | { kind: "start-scripted-followup"; dialogueDefinitionId: string }
   | { kind: "set-conversation-flag"; key: string; value: unknown }
   | { kind: "notify-quest-event"; eventName: string }
-  | { kind: "request-close" };
+  | { kind: "request-close" }
+  /**
+   * Plan 077 §077.3a (D4) -- coarse proxy for "NPC was prompted to voice the
+   * quest objective". Runtime-core's handleConversationActionProposal bumps
+   * narrative.goal-surfaced-count for the quest on this proposal. Sugaragent
+   * never writes the blackboard fact directly: the proposal channel is the
+   * only authorized write path (enforced by assertWriteAllowed in
+   * RuntimeBlackboard: ownerSystem="narrative-system" != "sugaragent").
+   */
+  | { kind: "bump-goal-surfaced"; questId: string; stageId: string };
 
 export interface ConversationTurnEnvelope {
   turnId: string;
