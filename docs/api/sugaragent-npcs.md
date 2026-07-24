@@ -191,8 +191,13 @@ quest-context middleware) as its own identity.
 editor. It is the fallback floor and costs nothing. A lore page with a
 `## Persona` section overrides it completely when loaded.
 
+The **judge** applies the same fallback: when `persona.digest` is empty,
+`JudgeStage` passes `"NPC description: <value>"` as the persona anchor. If
+neither is set, the judge skips with `skipReason: "no-persona"` (no basis for
+consistency evaluation).
+
 **Files:** `ConversationSelectionContext.npcDescription` (runtime-core),
-`buildStableSystemLines` in `prompt/builder.ts`.
+`buildStableSystemLines` in `prompt/builder.ts`, `JudgeStage.ts`.
 
 ## World Events: Compose Existing Machinery (D5)
 
@@ -237,6 +242,13 @@ When `false`:
   no ease-off blackboard, pre-077 behavior).
 - The `__sugaragentQuestContext` dev handle is not installed.
 
+`worldPremise: string` (default `""`) -- a short paragraph describing your game
+world. Sent to the judge as the grounding source for the WORLD-GROUNDED rubric
+check. Without it the judge grades against generic RPG assumptions. Example:
+`"Wordlark Hollow is a cozy village where everyone is an anthropomorphic animal."`
+
+Set in Studio > SugarAgent > NPC Behavior > World Premise.
+
 ---
 
 ## Plan 075: Judge, Regen, and Safety
@@ -253,6 +265,7 @@ reply against a semantic rubric via the Anthropic tool-use API
 **Skip conditions** (no LLM call, `skipped: true`):
 - `generate.usedLlm === false` (deterministic/envelope-override turn)
 - No judge provider (proxy URL missing)
+- No NPC identity: both `persona.digest` and `npcDefinition.description` are empty (`no-persona`)
 
 **Internal regex short-circuit:** calls `findMetaLeakViolations` on the
 generated text before any LLM call. If structural violations are found,
@@ -275,7 +288,7 @@ interface JudgeResult {
 ```
 
 **Gateway route:** `POST /api/sugaragent/generate/judge`
-Body: `{ replyText, personaDigest, responseIntent, worldContext, evidenceSummary }`
+Body: `{ replyText, personaDigest, responseIntent, worldContext, loreContextSummary, worldPremise }`
 Uses Anthropic `tool_use` with `score_reply` tool and `tool_choice: { type: "tool", name: "score_reply" }`.
 
 ### RegenerateStage (bounded LLM regen + 3-strike governor)

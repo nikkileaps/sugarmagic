@@ -108,7 +108,16 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
     }
 
     // Build judge inputs from execution context.
-    const personaDigest = input.state.persona?.digest ?? "";
+    // Fallback: if no lore-page persona, use the NPC definition description
+    // as the identity anchor -- the same fallback buildStableSystemLines uses.
+    const personaDigest =
+      input.state.persona?.digest ||
+      (input.execution.selection.npcDescription
+        ? `NPC description: ${input.execution.selection.npcDescription}`
+        : "");
+    if (!personaDigest) {
+      return skipResult(startedAt, "no-persona");
+    }
     const loreContextSummary = input.retrieve.loreContext.map((item) =>
       item.text.slice(0, 300)
     );
