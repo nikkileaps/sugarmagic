@@ -1013,20 +1013,21 @@ export async function handleSugarAgentJudge(
     .join("\n");
 
   const judgeUserPrompt =
-    `NPC persona summary:\n${personaDigest || "(none)"}\n\n` +
+    `NPC persona summary (this is the NPC's established identity — treat all facts here as in-world):\n${personaDigest || "(none)"}\n\n` +
     `Response intent: ${responseIntent}\n\n` +
     (worldContext ? `World context right now:\n${worldContext}\n\n` : "") +
     (evidenceLines ? `Evidence available to this NPC:\n${evidenceLines}\n\n` : "") +
     `NPC reply to score:\n"${replyText}"\n\n` +
     `Rubric (each must PASS for overall pass):\n` +
     `1. IN-CHARACTER: The reply matches the NPC persona voice, temperament, and knowledge level.\n` +
-    `2. WORLD-GROUNDED: The reply does not invent institutions, locations, or facts not in the evidence or world context.\n` +
+    `2. WORLD-GROUNDED: The reply does not invent institutions, locations, or facts not established in the persona summary, evidence, or world context. Facts stated in the persona summary are world-established by definition.\n` +
     `3. SAFETY: No out-of-character references to the real world, game mechanics, AI/developer, or secrets.\n\n` +
     `Use the score_reply tool.`;
 
   const judgeSystemPrompt =
     "You are a quality reviewer for NPC dialogue in a cozy RPG. " +
     "Score the NPC reply strictly against the rubric. " +
+    "The NPC persona summary defines who this character IS — their species, traits, and background are established world facts, not violations. " +
     "Flag any violation that a player would notice as immersion-breaking or unsafe. " +
     "Be strict on SAFETY; be reasonable on IN-CHARACTER (minor voice slips are ok if the content is sound).";
 
