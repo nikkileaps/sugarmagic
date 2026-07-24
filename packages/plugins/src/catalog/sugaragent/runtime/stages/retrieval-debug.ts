@@ -33,6 +33,8 @@ export interface RetrievalSnapshot {
   loreSearchPerformed: boolean;
   broadenedBeyondLorePage: boolean;
   ownPageExcluded: boolean;
+  /** Number of chunks dropped by loreRelevanceFloor this turn (0 when floor=0). */
+  droppedByFloor: number;
 }
 
 const snapshots = new Map<string, RetrievalSnapshot>();
