@@ -328,6 +328,20 @@ export const WORLD_DAY_FACT = defineBlackboardFact<number>({
   lifecycle: { kind: "session" }
 });
 
+// Plan 074 §074.5 -- player-known-facts. Sole write path: learn-fact quest
+// actions dispatched through QuestManager -> gameplay-session.setActionHandler
+// -> playerKnownFactsStore.learnFact -> callback. The blackboard `persistent`
+// lifecycle tag is inert (survives only session-clear); the SaveParticipant
+// re-writes the fact array into the blackboard on restore.
+export const PLAYER_FACTS_SOURCE_SYSTEM = "player-facts-system";
+
+export const PLAYER_KNOWN_FACTS_FACT = defineBlackboardFact<string[]>({
+  key: "player.known-facts",
+  ownerSystem: PLAYER_FACTS_SOURCE_SYSTEM,
+  allowedScopeKinds: ["global"],
+  lifecycle: { kind: "session" }
+});
+
 export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   ENTITY_POSITION_FACT,
   ENTITY_LOCATION_FACT,
@@ -342,7 +356,8 @@ export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   QUEST_ACTIVE_OBJECTIVES_FACT,
   GOAL_SURFACED_COUNT_FACT,
   WORLD_TIME_OF_DAY_FACT,
-  WORLD_DAY_FACT
+  WORLD_DAY_FACT,
+  PLAYER_KNOWN_FACTS_FACT
 ] as const satisfies readonly BlackboardFactDefinition<unknown>[];
 
 export function defineBlackboardFact<TValue>(
@@ -923,6 +938,29 @@ export function setWorldDay(blackboard: RuntimeBlackboard, day: number): void {
     scope: createBlackboardScope("global", "world.day"),
     value: day,
     sourceSystem: WORLD_TIME_SOURCE_SYSTEM
+  });
+}
+
+// Plan 074 §074.5 -- player-known-facts getters/setters.
+
+export function getPlayerKnownFacts(blackboard: RuntimeBlackboard): string[] {
+  return (
+    blackboard.getFact(
+      PLAYER_KNOWN_FACTS_FACT,
+      createBlackboardScope("global", "player.known-facts")
+    )?.value ?? []
+  );
+}
+
+export function setPlayerKnownFacts(
+  blackboard: RuntimeBlackboard,
+  facts: string[]
+): void {
+  blackboard.setFact({
+    definition: PLAYER_KNOWN_FACTS_FACT,
+    scope: createBlackboardScope("global", "player.known-facts"),
+    value: facts,
+    sourceSystem: PLAYER_FACTS_SOURCE_SYSTEM
   });
 }
 

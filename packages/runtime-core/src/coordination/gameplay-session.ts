@@ -135,6 +135,8 @@ import {
   setWorldTimeOfDay,
   setWorldDay,
   getTimeOfDayBand,
+  getPlayerKnownFacts,
+  setPlayerKnownFacts,
   createRuntimeBlackboard,
   getActiveQuestObjectives,
   getEntityCurrentActivity,
@@ -157,8 +159,10 @@ import { buildLocationReference } from "../spatial";
 import { createRuntimeSpatialResolverSystem } from "../spatial/system";
 import {
   createWorldTimeStore,
+  createPlayerKnownFactsStore,
   type TimeOfDayBand,
-  type WorldTimeStore
+  type WorldTimeStore,
+  type PlayerKnownFactsStore
 } from "../world";
 
 export interface RuntimeSpellCastFeedback {
@@ -272,6 +276,7 @@ export interface RuntimeGameplaySessionController {
   readonly blackboard: RuntimeBlackboard;
   readonly audioController: RuntimeAudioController;
   readonly worldTimeStore: WorldTimeStore;
+  readonly playerKnownFactsStore: PlayerKnownFactsStore;
   /** Plan 055 §055.4 — kick off every loaded quest definition
    *  via the quest-dialogue coordinator. Idempotent: startQuest
    *  short-circuits on quests already active or completed. The
@@ -597,6 +602,9 @@ export function createRuntimeGameplaySessionController(
   worldTimeStore.setDayChangeCallback((day) => setWorldDay(blackboard, day));
   setWorldTimeOfDay(blackboard, worldTimeStore.getBand());
   setWorldDay(blackboard, worldTimeStore.getDay());
+  const playerKnownFactsStore = createPlayerKnownFactsStore();
+  playerKnownFactsStore.setChangeCallback((texts) => setPlayerKnownFacts(blackboard, texts));
+  setPlayerKnownFacts(blackboard, []);
   const billboardSystem = new BillboardSystem();
   const billboardOnlyEntities = new Set<Entity>();
   const debugBillboardBindings = new Map<Entity, DebugBillboardBinding>();
@@ -960,7 +968,8 @@ export function createRuntimeGameplaySessionController(
         activeQuestStage,
         activeQuestObjectives,
         goalSurfacedCount,
-        timeOfDay: getTimeOfDayBand(blackboard)
+        timeOfDay: getTimeOfDayBand(blackboard),
+        knownFacts: getPlayerKnownFacts(blackboard)
       };
 
       return {
@@ -1733,6 +1742,15 @@ export function createRuntimeGameplaySessionController(
       worldTimeStore.advanceDay();
       return;
     }
+
+    if (
+      action.type === "learn-fact" &&
+      action.targetId &&
+      typeof action.value === "string"
+    ) {
+      playerKnownFactsStore.learnFact(action.targetId, action.value);
+      return;
+    }
   });
   questManager.setStateChangeHandler(() => {
     syncQuestUi();
@@ -2054,6 +2072,7 @@ export function createRuntimeGameplaySessionController(
     casterManager,
     npcBehaviorSystem,
     worldTimeStore,
+    playerKnownFactsStore,
     interactionSystem,
     questSystem,
     blackboard,

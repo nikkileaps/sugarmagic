@@ -57,6 +57,10 @@ export type QuestActionType =
   // no value. Both dispatch through the existing quest action chain.
   | "set-time-of-day"
   | "advance-day"
+  // Plan 074 §074.5 -- Player-known-facts. `learn-fact` uses targetId
+  // as the fact id (dedup key) and value (string) as the display text.
+  // QUEST ACTIONS ONLY -- no dialogue node surface.
+  | "learn-fact"
   | "custom";
 
 export interface QuestActionDefinition {

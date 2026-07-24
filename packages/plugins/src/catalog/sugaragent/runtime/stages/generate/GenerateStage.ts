@@ -429,7 +429,12 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         goalSurfacedCount:
           input.execution.runtimeContext?.goalSurfacedCount ?? null,
         // Plan 074 §074.3: world clock band, read from the blackboard each turn.
-        timeOfDay: input.execution.runtimeContext?.timeOfDay ?? null
+        timeOfDay: input.execution.runtimeContext?.timeOfDay ?? null,
+        // Plan 074 §074.5: player-known-facts, read from the blackboard each turn.
+        knownFacts:
+          (input.execution.runtimeContext?.knownFacts?.length ?? 0) > 0
+            ? (input.execution.runtimeContext?.knownFacts ?? null)
+            : null
       };
 
       const prompts = buildGeneratePrompt(promptContext);

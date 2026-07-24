@@ -159,6 +159,13 @@ export interface ConversationRuntimeContext {
    * active (should not happen in practice -- defaults to "morning").
    */
   timeOfDay?: TimeOfDayBand | null;
+  /**
+   * Plan 074 §074.5 -- player-known-facts. Display texts of facts the player
+   * has learned via learn-fact quest actions this session. Forwarded to the
+   * prompt builder as a compact "the player already knows" block. Empty
+   * array = no facts learned yet.
+   */
+  knownFacts?: string[] | null;
 }
 
 export interface ConversationRuntimeNpcBehaviorContext {

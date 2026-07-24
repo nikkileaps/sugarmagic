@@ -146,6 +146,10 @@ function buildWorldStateUserLines(
       ? `Time of day: ${context.timeOfDay}.`
       : null,
 
+    context.knownFacts && context.knownFacts.length > 0
+      ? `The player already knows:\n${context.knownFacts.map((f) => `- ${f}`).join("\n")}`
+      : null,
+
     context.currentLocationDisplayName
       ? `Current runtime location: ${context.currentLocationDisplayName}.`
       : null,

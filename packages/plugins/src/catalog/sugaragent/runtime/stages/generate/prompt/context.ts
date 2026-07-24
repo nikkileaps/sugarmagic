@@ -117,6 +117,12 @@ export interface BasePromptContext {
    * default that doesn't need explicit mention).
    */
   timeOfDay: string | null;
+  /**
+   * Plan 074 §074.5 -- player-known-facts display texts, capped + ordered
+   * most-recent-last. Injected into the uncached user message so the NPC
+   * can reference what the player already knows. Empty/null -> omit.
+   */
+  knownFacts: string[] | null;
 
   /**
    * Plan 072.8 — compact persona drift-reminder, re-injected at the END of the
