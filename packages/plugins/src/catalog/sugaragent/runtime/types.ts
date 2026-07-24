@@ -98,6 +98,13 @@ export interface SugarAgentPluginConfig {
    */
   maxLoreCharsPerItem: number;
   /**
+   * Plan 078.2 — minimum similarity score a retrieved chunk must clear to
+   * enter loreContext. 0 = off (default; today's behavior). Clamped 0..1.
+   * Pinned own-page chunks and synthetic runtime-location evidence bypass
+   * this filter. Set conservatively low; see docs/api/sugaragent-npcs.md.
+   */
+  loreRelevanceFloor: number;
+  /**
    * Plan 073.5 — master switch for NPC memory (persistence + recall). When
    * false, the memory middleware and the end-of-conversation summarizer are
    * no-ops: NPCs neither write nor read memory.
@@ -309,6 +316,14 @@ export interface RetrievedEvidenceItem {
   score: number;
   text: string;
   attributes: Record<string, unknown>;
+}
+
+export interface RetrievalScoreEntry {
+  score: number;
+  /** How this chunk entered loreContext. */
+  source: "retrieved" | "pinned" | "synthetic-location";
+  pageId: string | null;
+  fileId: string;
 }
 
 export interface RetrieveResult {

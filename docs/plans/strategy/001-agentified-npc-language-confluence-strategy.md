@@ -1,6 +1,6 @@
 # Strategy 001 -- Agentified NPCs + the Language Confluence
 
-Status: Draft (strategy tier -- direction, not buildable spec; each child epic gets its own numbered plan doc in docs/plans and passes epic-review individually)
+Status: COMPLETE 2026-07-24. All child epics shipped or explicitly deferred (076 backlogged).
 Owner: nikki + claude
 Date: 2026-07-18
 

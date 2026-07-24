@@ -205,7 +205,7 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
 
     context.playerText
       ? `Player said: ${context.playerText}`
-      : "This is the opening turn. Start the conversation naturally.",
+      : "This is the opening turn. Open with a brief, warm greeting -- 1 to 2 sentences. Leave room for the player to respond before you elaborate.",
 
     context.minimalGreetingMode
       ? "Keep this greeting brief, warm, and simple for a beginner learner. Do not volunteer what the NPC is doing unless asked."

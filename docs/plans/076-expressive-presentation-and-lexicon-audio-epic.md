@@ -1,8 +1,16 @@
 # Plan 076 -- Expressive Presentation + Lexicon Audio (child epic F of Strategy 001)
 
-Status: Locked (epic-review passed 2026-07-19, 3 rounds) -- stories execute as written in the stated EXECUTION ORDER; deviations need STOP + amendment + re-gate.
+Status: DEFERRED -- moved to backlog 2026-07-24.
 Owner: nikki + claude
 Date: 2026-07-19
+
+Deferral notes:
+- Neither thread is needed to complete Strategy 001's sugaragent track right now.
+- The lexicon audio / hover pronunciation half (076.4-076.6) belongs in the sugarlang epic
+  track, not the sugaragent strategy. Revisit when sugarlang lexicon authoring is a priority.
+- The bark bank half (076.1-076.3) is high-charm but not blocking anything. Revisit when
+  personality-through-sound becomes a design priority or when a game producer asks for it.
+- The plan + epic-review lock are preserved here for when either thread is picked back up.
 
 Related:
 - Strategy 001 -- child epic F, the "ease into voice" epic: personality through sound WITHOUT live TTS on any hot path. Bark half depends on Plan 072 only lightly (per-NPC authoring rides the same inspector surfaces); the sugarlang half is independent.

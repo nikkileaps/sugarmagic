@@ -13,6 +13,7 @@ import {
   NPC_MEMORY_MIDDLEWARE_ID
 } from "./runtime/memory/memory-middleware";
 import { installNpcMemoryDebugHandle } from "./runtime/memory/memory-debug";
+import { installRetrievalDebugHandle } from "./runtime/stages/retrieval-debug";
 import {
   createQuestContextMiddleware,
   QUEST_CONTEXT_MIDDLEWARE_ID
@@ -246,6 +247,11 @@ export function normalizeSugarAgentPluginConfig(
       Number.isFinite(config.maxLoreResults)
         ? Math.max(1, Math.min(8, Math.floor(config.maxLoreResults)))
         : 4,
+    loreRelevanceFloor:
+      typeof config?.loreRelevanceFloor === "number" &&
+      Number.isFinite(config.loreRelevanceFloor)
+        ? Math.max(0, Math.min(1, config.loreRelevanceFloor))
+        : 0,
     memoryEnabled: config?.memoryEnabled !== false,
     memoryDigestMaxChars:
       typeof config?.memoryDigestMaxChars === "number" &&
@@ -365,6 +371,17 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       default: 600,
       min: 120,
       max: 4000
+    },
+    {
+      configKey: "loreRelevanceFloor",
+      label: "Lore Relevance Floor",
+      type: "number",
+      group: "Runtime Behavior",
+      default: 0,
+      min: 0,
+      max: 1,
+      description:
+        "Minimum similarity score (0-1) a retrieved lore chunk must reach to be injected. 0 = off. Set conservatively low -- scores are corpus-dependent and can be volatile."
     },
     {
       configKey: "memoryEnabled",
@@ -489,6 +506,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     anthropicRegenModel: "",
     maxLoreResults: 4,
     maxLoreCharsPerItem: 600,
+    loreRelevanceFloor: 0,
     memoryEnabled: true,
     memoryDigestMaxChars: 800,
     questAwareNpcsEnabled: true,
@@ -539,6 +557,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
           installNpcMemoryDebugHandle();
           // Plan 077.5 — dev-only quest-context inspection handle (window.__sugaragentQuestContext).
           if (config.questAwareNpcsEnabled) installQuestContextDebugHandle();
+          // Plan 078.1 — dev-only retrieval scores handle (window.__sugaragentRetrieval).
+          installRetrievalDebugHandle();
         },
         contributions: [
           {

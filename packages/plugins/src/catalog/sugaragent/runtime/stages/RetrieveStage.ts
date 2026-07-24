@@ -6,8 +6,10 @@ import {
 } from "../clients";
 import { createDiagnostics } from "./diagnostics";
 import { normalizeRetrievedEvidenceText, summarizeEvidence } from "./helpers";
+import { recordRetrievalSnapshot } from "./retrieval-debug";
 import type {
   InterpretResult,
+  RetrievalScoreEntry,
   RetrievedEvidenceItem,
   RetrieveResult,
   TurnStage,
@@ -225,6 +227,9 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       activeQuestDisplayName
     );
 
+    const floor = context.config.loreRelevanceFloor;
+    let droppedByFloor = 0;
+    const droppedScores: number[] = [];
     let loreSearchPerformed = false;
     let loreContext: RetrieveResult["loreContext"] = [];
     let fallbackReason: string | null = null;
@@ -275,13 +280,20 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
             maxResults: requested,
             filters: undefined
           });
-          loreContext = broad
-            .filter(
-              (item) =>
-                item.attributes[OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE] !==
-                npcLorePageId
-            )
-            .slice(0, context.config.maxLoreResults);
+          // Branch A: own-page filter first, floor filter second, slice last.
+          loreContext = broad.filter(
+            (item) =>
+              item.attributes[OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE] !== npcLorePageId
+          );
+          // Plan 078.2 -- floor filter (Branch A): after own-page drop, before slice.
+          if (floor > 0) {
+            for (const item of loreContext) {
+              if (item.score < floor) droppedScores.push(item.score);
+            }
+            droppedByFloor += droppedScores.length;
+            loreContext = loreContext.filter((item) => item.score >= floor);
+          }
+          loreContext = loreContext.slice(0, context.config.maxLoreResults);
           ownPageExcluded = true;
           loreSearchPerformed = true;
         } else {
@@ -304,6 +316,16 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           if (loreContext.length === 0 && retrievalFilters) {
             loreContext = await searchLore();
             broadenedBeyondLorePage = true;
+          }
+
+          // Plan 078.2 -- floor filter (Branch B): after broaden, before pin merge.
+          // Pin bypasses for free: filtering happens here, pin is merged below.
+          if (floor > 0) {
+            for (const item of loreContext) {
+              if (item.score < floor) droppedScores.push(item.score);
+            }
+            droppedByFloor += droppedScores.length;
+            loreContext = loreContext.filter((item) => item.score >= floor);
           }
 
           if (shouldPinNpcLore && npcLorePageId) {
@@ -347,6 +369,39 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       loreContext = [runtimeCurrentLocationEvidence, ...loreContext];
     }
 
+    // Plan 078.1 -- tag each chunk by how it entered loreContext so scores
+    // are distinguishable in diagnostics and the __sugaragentRetrieval handle.
+    const loreScores: RetrievalScoreEntry[] = loreContext.map((item) => {
+      let source: RetrievalScoreEntry["source"];
+      if (item.fileId === "runtime:blackboard:current-location") {
+        source = "synthetic-location";
+      } else if (
+        shouldPinNpcLore &&
+        item.attributes[OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE] === npcLorePageId
+      ) {
+        source = "pinned";
+      } else {
+        source = "retrieved";
+      }
+      return {
+        score: item.score,
+        source,
+        pageId:
+          (item.attributes[OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE] as string | null) ??
+          null,
+        fileId: item.fileId
+      };
+    });
+
+    recordRetrievalSnapshot({
+      npcDefinitionId: context.selection.npcDefinitionId ?? "unknown",
+      loreScores,
+      loreSearchPerformed,
+      broadenedBeyondLorePage,
+      ownPageExcluded,
+      droppedByFloor
+    });
+
     const output: RetrieveResult = {
       loreContext,
       loreSearchPerformed
@@ -367,6 +422,9 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
             perItemChars: context.config.maxLoreCharsPerItem
           }),
           loreContextCount: loreContext.length,
+          loreScores,
+          droppedByFloor,
+          droppedScores,
           // Plan 072.6 — retrieval rebalance observability.
           personaLoaded: input.personaLoaded,
           ownPageExcluded,

@@ -172,6 +172,90 @@ Each entry: `{ npcDefinitionId, questId, stageId, worldContext, goalSurfacedCoun
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/quest/quest-context-debug.ts`
 
+## Retrieval Score Observability
+
+`window.__sugaragentRetrieval` is installed unconditionally at session start
+(Plan 078.1). It exposes the per-chunk similarity scores from the most recent
+turn for each NPC, so you can see what the vector search actually returned
+before tuning the relevance floor (Plan 078.2).
+
+From a devtools console or an automated browser session:
+
+```javascript
+// Dump last-seen retrieval snapshot for all NPCs this session
+__sugaragentRetrieval.dump()
+
+// Dump for one NPC
+__sugaragentRetrieval.dump("npc:finnick")
+```
+
+Each entry: `{ npcDefinitionId, loreScores, loreSearchPerformed, broadenedBeyondLorePage, ownPageExcluded, droppedByFloor }`.
+
+`loreScores` is an array of `{ score, source, pageId, fileId }`, one entry per
+chunk in the final `loreContext` for that turn. The `source` tag says why the
+chunk is there:
+
+- **`retrieved`** -- came back from the OpenAI vector search. The player's
+  message was embedded and the gateway returned semantically similar wiki chunks.
+  These are relevance-ranked and could be anything in the lore.
+
+- **`pinned`** -- the stage fired a second search specifically for the NPC's own
+  lore page (`npcLorePageId`) as an identity anchor. This happens when the
+  primary search targets a different page (e.g. a location-anchored turn). The
+  pinned chunk got into the context by identity, not by relevance ranking. A low
+  score on a pinned chunk is expected and should not be treated as noise: it
+  means the NPC's page happened to score low against this particular query, not
+  that the chunk is irrelevant to the NPC.
+
+- **`synthetic-location`** -- not from the vector DB at all. It is a string
+  assembled at runtime from the blackboard: current area, NPC task, proximity to
+  the player, etc. Always given `score: 1` (authoritative fact, not a similarity
+  estimate). The relevance floor never drops it.
+
+Reading `source` alongside `score` is what makes the floor tunable: a score of
+0.3 on a `retrieved` chunk is a candidate for filtering; the same score on a
+`pinned` chunk is the identity anchor doing its job.
+
+**File:** `packages/plugins/src/catalog/sugaragent/runtime/stages/retrieval-debug.ts`
+
+## Tuning the Relevance Floor
+
+Use `__sugaragentRetrieval.dump()` to observe score distributions before
+setting `loreRelevanceFloor`. Four steps:
+
+**Step 1 -- Read on-topic vs off-topic scores.**
+Start a session with a representative NPC. Ask one clear on-topic question
+(something the NPC's lore page covers) and one off-topic question (a topic
+from a different part of the world). After each turn:
+
+```javascript
+__sugaragentRetrieval.dump("npc:your-npc-id")
+```
+
+Look at `loreScores.filter(s => s.source === "retrieved")`. On-topic turns
+should return higher scores; off-topic turns should return lower scores or
+nothing. Note where relevance visibly flips.
+
+**Step 2 -- Check stability across repeats.**
+Ask the same question twice without advancing the conversation. Compare
+scores across two dumps. If scores vary by more than 0.05-0.10 on the same
+query, the boundary is noisy. Your floor must be at least 0.1 below the
+lowest score you want to reliably keep, or you will intermittently filter
+chunks you need.
+
+**Step 3 -- Set the floor conservatively LOW.**
+Pick a value that clears obvious noise (0.2-0.35 is a typical noise floor for
+OpenAI text-embedding-3) with a comfortable margin below your weakest
+on-topic score. A floor of 0.3 is a reasonable first cut for most lore sets.
+Do not set above 0.7 without verifying on a large sample of on-topic queries.
+
+**Step 4 -- Confirm graceful abstain on off-topic turns.**
+With the floor set, ask a clearly off-topic question. If all retrieved chunks
+fall below the floor, `loreContext` will be empty and the NPC will abstain
+("I don't know enough about that yet") rather than hallucinating. Check
+`droppedByFloor` in the dump to confirm chunks were dropped rather than simply
+absent from the search results.
+
 ## NPC Identity Fallback (no lore page)
 
 When an agentified NPC has no lore page attached (or the lore API is
@@ -248,6 +332,13 @@ check. Without it the judge grades against generic RPG assumptions. Example:
 `"Wordlark Hollow is a cozy village where everyone is an anthropomorphic animal."`
 
 Set in Studio > SugarAgent > NPC Behavior > World Premise.
+
+`loreRelevanceFloor: number` (default `0`) -- minimum vector similarity score
+for a retrieved lore chunk to enter the NPC's context. Range: 0..1 (0 = no
+filter, 1 = nothing passes). Only filters `retrieved` chunks; `pinned` and
+`synthetic-location` chunks always pass. See Tuning the Relevance Floor above.
+
+Set in Studio > SugarAgent > NPC Behavior > Lore Relevance Floor.
 
 ---
 
@@ -387,5 +478,9 @@ Interpret -> Retrieve -> Plan -> Generate -> Judge -> Audit -> Regenerate
 
 Diagnostics keys in `lastTurnDiagnostics`:
 `Interpret`, `Retrieve`, `Plan`, `Generate`, `Judge`, `Audit`, `Regenerate`
+
+The `Retrieve` payload includes `loreScores` (see Retrieval Score Observability
+above) and is also mirrored to `window.__sugaragentRetrieval` for live
+inspection without devtools archaeology into `lastTurnDiagnostics`.
 
 All other quest-system config (lore source, vector store ID) is unchanged.
