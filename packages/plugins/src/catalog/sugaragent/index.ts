@@ -13,6 +13,7 @@ import {
   NPC_MEMORY_MIDDLEWARE_ID
 } from "./runtime/memory/memory-middleware";
 import { installNpcMemoryDebugHandle } from "./runtime/memory/memory-debug";
+import { installRetrievalDebugHandle } from "./runtime/stages/retrieval-debug";
 import {
   createQuestContextMiddleware,
   QUEST_CONTEXT_MIDDLEWARE_ID
@@ -539,6 +540,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
           installNpcMemoryDebugHandle();
           // Plan 077.5 — dev-only quest-context inspection handle (window.__sugaragentQuestContext).
           if (config.questAwareNpcsEnabled) installQuestContextDebugHandle();
+          // Plan 078.1 — dev-only retrieval scores handle (window.__sugaragentRetrieval).
+          installRetrievalDebugHandle();
         },
         contributions: [
           {

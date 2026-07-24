@@ -6,6 +6,10 @@ import {
 } from "../clients";
 import { createDiagnostics } from "./diagnostics";
 import { normalizeRetrievedEvidenceText, summarizeEvidence } from "./helpers";
+import {
+  type RetrievalScoreEntry,
+  recordRetrievalSnapshot
+} from "./retrieval-debug";
 import type {
   InterpretResult,
   RetrievedEvidenceItem,
@@ -347,6 +351,38 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       loreContext = [runtimeCurrentLocationEvidence, ...loreContext];
     }
 
+    // Plan 078.1 -- tag each chunk by how it entered loreContext so scores
+    // are distinguishable in diagnostics and the __sugaragentRetrieval handle.
+    const loreScores: RetrievalScoreEntry[] = loreContext.map((item) => {
+      let source: RetrievalScoreEntry["source"];
+      if (item.fileId === "runtime:blackboard:current-location") {
+        source = "synthetic-location";
+      } else if (
+        shouldPinNpcLore &&
+        item.attributes[OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE] === npcLorePageId
+      ) {
+        source = "pinned";
+      } else {
+        source = "retrieved";
+      }
+      return {
+        score: item.score,
+        source,
+        pageId:
+          (item.attributes[OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE] as string | null) ??
+          null,
+        fileId: item.fileId
+      };
+    });
+
+    recordRetrievalSnapshot({
+      npcDefinitionId: context.selection.npcDefinitionId ?? "unknown",
+      loreScores,
+      loreSearchPerformed,
+      broadenedBeyondLorePage,
+      ownPageExcluded
+    });
+
     const output: RetrieveResult = {
       loreContext,
       loreSearchPerformed
@@ -367,6 +403,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
             perItemChars: context.config.maxLoreCharsPerItem
           }),
           loreContextCount: loreContext.length,
+          loreScores,
           // Plan 072.6 — retrieval rebalance observability.
           personaLoaded: input.personaLoaded,
           ownPageExcluded,
