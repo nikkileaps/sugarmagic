@@ -1457,6 +1457,41 @@ export function createWebRuntimeHost(
     );
     return { table, rows };
   }
+  // Dev-only quest + NPC behavior debug handle. Call in the preview console:
+  //   __smquestDebug()            -- prints flags + quest state
+  //   __smquestDebug("<npcId>")   -- also shows that NPC's resolved task
+  // Raccoon lady id: "139daaec-a618-4053-b697-0ced0024d80d"
+  function smQuestDebug(npcDefinitionId?: string): Record<string, unknown> {
+    const qm = gameplaySession?.questManager ?? null;
+    const nbs = gameplaySession?.npcBehaviorSystem ?? null;
+    const slice = qm?.serializeSaveSlice() ?? null;
+    const result: Record<string, unknown> = {
+      runtimeFlags: slice?.runtimeFlags ?? null,
+      talkedToDockWorker: qm?.hasFlag("talkedToDockWorker") ?? null,
+      activeQuests: slice?.activeQuests ?? null,
+      completedQuestIds: slice?.completedQuestIds ?? null
+    };
+    if (npcDefinitionId != null) {
+      result.npcTask = nbs?.getCurrentTask(npcDefinitionId) ?? null;
+    }
+    // eslint-disable-next-line no-console
+    console.info("[smquestdebug]", result);
+    return result;
+  }
+  // Force-set a world flag without going through quest dialogue. Use to test
+  // behavior-task injection directly:
+  //   __smsetflag("talkedToDockWorker", true)
+  function smSetFlag(key: string, value: unknown = true): void {
+    const qm = gameplaySession?.questManager ?? null;
+    if (!qm) {
+      // eslint-disable-next-line no-console
+      console.warn("[smsetflag] no active quest manager");
+      return;
+    }
+    qm.setFlag(key, value);
+    // eslint-disable-next-line no-console
+    console.info("[smsetflag]", key, "=", value);
+  }
   // Plan 070.2 — the shared reconciler owns all scene renderables (created
   // per start() so its config closes over that start's state; disposed in
   // disposeRuntime). Cross-cutting per-frame consumers read it by instanceId.
@@ -1836,6 +1871,10 @@ export function createWebRuntimeHost(
     // Plan 070.1 — expose the self-driving A/B capture on the preview window.
     (ownerWindow as unknown as { __smperfRun?: typeof runSmperfMatrix }).__smperfRun =
       runSmperfMatrix;
+    (ownerWindow as unknown as { __smquestDebug?: typeof smQuestDebug }).__smquestDebug =
+      smQuestDebug;
+    (ownerWindow as unknown as { __smsetflag?: typeof smSetFlag }).__smsetflag =
+      smSetFlag;
     currentAssetSources = state.assetSources;
     webAudioAdapter = new WebAudioAdapter({
       ownerWindow,
