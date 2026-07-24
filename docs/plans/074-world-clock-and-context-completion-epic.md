@@ -1,6 +1,6 @@
 # Plan 074 -- World Clock + Context Completion (child epic D of Strategy 001)
 
-Status: AMENDED 2026-07-22 (pure beat-driven time-of-day; quest-objectives grounding moved out) -- the prior lock (epic-review passed 2026-07-19, 3 rounds) is SUSPENDED for the amended parts (D1-D3, 074.1, 074.2, 074.6). Re-gate (/epic-review) required before any story is built. Unamended stories (074.3/074.4/074.5/074.7) stand.
+Status: Locked (epic-review passed 2026-07-23, 3 rounds) -- AMENDED 2026-07-22 (pure beat-driven time-of-day; quest-objectives grounding moved to #416). All stories build-ready.
 Owner: nikki + claude
 Date: 2026-07-19
 
@@ -56,13 +56,32 @@ Visual response to time (lighting/sky/ambience changes are an environment-author
 
 ## Stories (EXECUTION ORDER)
 
-### 074.1 World clock system + persistence
+### 074.1' Time-of-day state + authored set-actions + persistence (AMENDED -- replaces original 074.1)
 
-Runtime-core clock system: authored scale/start (D1), advance in the update loop, pause semantics (game pause + the dialogue toggle), SaveParticipant slice per D2. Exit: unit tests (advance, pause, band boundaries, save/restore exactness); the no-wallclock rule asserted in a test.
+Beat-driven only -- NO advance loop, NO pause semantics, NO authored ratio.
 
-### 074.2 Time facts on the blackboard
+Domain changes (both authoring surfaces that also carry "player learns X" in 074.5):
+- Add `set-time-of-day` and `advance-day` to `QuestActionDefinition.type` (domain/src/quest-definition/index.ts) with matching `targetId` semantics (band for set, no value for advance).
+- Add `onEnterActions?: QuestActionDefinition[]` to `DialogueNodeDefinition` (domain/src/dialogue-definition/index.ts). `DialogueNodeDefinition` currently has only `onEnterEventId: string` -- this field does NOT exist yet and must be added. Update the dialogue domain normalizer (`normalizeDialogueNodeDefinition` in `domain/src/dialogue-definition/index.ts`) to parse it -- there is no separate io-layer normalizer for dialogue; this is the only one, analogous to how `normalizeQuestNodeDefinition` handles `onEnterActions`/`onCompleteActions`.
+- Extend the scripted dialogue runtime to execute `onEnterActions` on node enter. Exact wiring (verified against the code -- `DialogueManager` currently has `setOnEvent` for string event IDs and no typed action slot):
+  1. `createScriptedDialogueConversationProvider` (`conversation/index.ts`) passes `node.onEnterActions` through `turn.metadata.onEnterActions` -- the same metadata pattern used for `onEnterEventId` (verified: `presentTurn` reads `turn.metadata.onEnterEventId` at line 255; `onEnterActions` follows identically).
+  2. `DialogueManager` gains `private onAction: ((action: QuestActionDefinition) => void) | null = null` and `setOnAction(handler)`, analogous to the existing `setOnEvent` / `onEvent` slot.
+  3. `presentTurn` reads `turn.metadata.onEnterActions` (typed as `QuestActionDefinition[] | undefined`) and calls `this.onAction?.(action)` for each entry -- same call site as `this.onEvent?.(onEnterEventId)` at line 278.
+  4. `gameplay-session` calls `dialogueManager.setOnAction(action => timeStore.handleAction(action))` at session setup, where `timeStore.handleAction` dispatches `set-time-of-day` and `advance-day` (and ignores unknown types). This is the seam; the time store, not DialogueManager, owns the dispatch logic.
 
-Register `world.time-of-day` + `world.clock` fact definitions; clock system is the sole writer (023's ownership intent). Exit: facts visible in the debug HUD/handle; unit test for band transitions.
+Runtime time store: a small runtime-core module that holds `{ day: number; band: TimeOfDayBand }` and implements the EQUALITY GATE before calling `setFact` (since `setFact` emits unconditionally -- confirmed against blackboard.ts; the gate belongs here, not in the blackboard). Exposes `setTimeBand(band)` and `advanceDay()`. The band enum (`TimeOfDayBand`) is defined here and exported -- 074.4 depends on it.
+
+SaveParticipant slice `{ day, band }` per D2'. Never wall-clock. Follow `QuestManagerSaveParticipant` as the reference implementation.
+
+Exit: unit tests -- set band; advance day; night->dawn wraps increment day; same-band write does NOT emit (equality gate); save/restore exactness; no-wallclock asserted.
+
+### 074.2' Time facts on the blackboard (AMENDED -- replaces original 074.2)
+
+Register `world.time-of-day` (band) + `world.day` (integer) fact definitions -- NOT `world.clock` (dropped in the amendment). The time store (074.1') is the SOLE WRITER via its equality-gated `setTimeBand` / `advanceDay` methods. Follow `GOAL_SURFACED_COUNT_FACT` (blackboard.ts) as the reference for global-scoped fact registration.
+
+Export getter helpers (`getTimeOfDayBand`, `getWorldDay`) analogous to `getGoalSurfacedCount`. These are the only read paths -- consumers never call `getFact` directly.
+
+Exit: facts visible in the debug handle after 074.2 is wired; unit test for band-change emit AND no-emit on same-band write (confirming the equality gate from 074.1' holds at the fact level).
 
 ### 074.3 Time in conversations
 
@@ -70,15 +89,31 @@ RuntimeContext gains timeOfDay (band); the blackboard conversation middleware fo
 
 ### 074.4 Time-aware schedules
 
-Behavior/schedule system (025) accepts optional time-window conditions on tasks -- authored on the REGION document's NPC behavior tasks (the actual schedule home: RegionNPCBehaviorTask activation bindings; the NPC definition carries no schedule): extend the activation predicate + its evaluator + io parse + the region behavior editor; task resolution consults `world.time-of-day`. Plan 025 explicitly deferred temporal overlays -- this is the sanctioned revisit. Scope tightly: window-gating of EXISTING task selection, no new behavior kinds. Exit: an NPC with a two-window schedule demonstrably switches tasks at the band boundary in preview; unit tests on the resolver.
+Behavior/schedule system (025) accepts optional time-window conditions on tasks -- authored on the REGION document's NPC behavior tasks (the actual schedule home: `RegionNPCBehaviorTask`; the NPC definition carries no schedule).
+
+Domain design (SETTLED -- do NOT extend `RegionBehaviorQuestBinding`): add an optional `timeWindow?: { bands: TimeOfDayBand[] } | null` field DIRECTLY on `RegionNPCBehaviorTask`. `RegionBehaviorQuestBinding` is also used for volume `condition` (region-authoring/index.ts:281) -- extending it would leak time semantics into volumes, which is wrong. The time-window is NPC-task-only.
+
+Extend: the `taskMatchesActivation` evaluator (npc-behavior-system.ts, calls `evaluateRegionQuestBinding`) to also check `timeWindow` -- when set, the task is only active if the current band is in the array. Read the band via the `getTimeOfDayBand` getter from 074.2'. Update the domain normalizer (`createRegionNPCBehaviorTask` in `domain/src/region-authoring/index.ts`) and the region behavior editor (Studio) for the new field. There is no separate io-layer normalizer for region authoring; the domain factory is the only one. `TimeOfDayBand` is exported from 074.1'.
+
+Scope tightly: window-gating of EXISTING task selection only, no new behavior kinds. Exit: an NPC with a two-window schedule demonstrably switches tasks at the band boundary in preview; unit tests on the resolver (in-window, out-of-window, no-window pass-through).
 
 ### 074.5 Player-known-facts
 
-Authoring per D4 (quest event + dialogue node "player learns" declarations -- both authoring surfaces verified real: quest action definitions + the dialogue node/event mold), a runtime store + blackboard facts + SaveParticipant slice, runtimeContext + prompt block ("The player already knows: ..."), capped count with most-recent-wins. Persistence honesty: the blackboard's `persistent` lifecycle tag is INERT machinery (it only survives session-clear; nothing persists blackboard facts across restart) -- the SaveParticipant deserialize re-writes the facts into the blackboard on load, explicitly. Retrieval hint: known-fact ids optionally bias the Retrieve query (decide in-story; do not overbuild). Internal sequencing pre-agreed: (a) domain + editors, (b) store + facts + slice, (c) middleware + prompt -- one story, three checkpoints. Exit: integration test -- a fact granted by a dialogue node appears in a later conversation's prompt and survives save/restore.
+Authoring per D4 (quest event + dialogue node "player learns" declarations -- both authoring surfaces: quest action definitions + dialogue nodes). NOTE: the `DialogueNodeDefinition.onEnterActions` field is added in 074.1' -- this story depends on that domain extension being done first, as 074.5's "player learns X" declaration on dialogue nodes uses the same new field. a runtime store + blackboard facts + SaveParticipant slice, runtimeContext + prompt block ("The player already knows: ..."), capped count with most-recent-wins. Persistence honesty: the blackboard's `persistent` lifecycle tag is INERT machinery (it only survives session-clear; nothing persists blackboard facts across restart) -- the SaveParticipant deserialize re-writes the facts into the blackboard on load, explicitly. Retrieval hint: known-fact ids optionally bias the Retrieve query (decide in-story; do not overbuild). Internal sequencing pre-agreed: (a) domain + editors, (b) store + facts + slice, (c) middleware + prompt -- one story, three checkpoints. Exit: integration test -- a fact granted by a dialogue node appears in a later conversation's prompt and survives save/restore.
 
-### 074.6 Recent-events block + quest objectives grounding
+### 074.6' Recent-events block (AMENDED -- objectives forwarding REMOVED, moved to backlog #416)
 
-Corrected mechanism (review round 1 -- the original claim was wrong: `quest_guidance` NEVER abstains; it redirects vaguely because objectives are absent from the prompt, and objective questions misclassified into knowledge intents abstain on the no-evidence policy): (a) forward `activeQuestObjectives` into the prompt's quest block; (b) PlanStage policy change, with the intent boundary pinned (review round 2 -- the only quest-flavored intent, quest_guidance, NEVER abstains; the misclassified case by definition arrives under a knowledge intent): runtimeContext quest objectives count as grounding for the surviving KNOWLEDGE intents (identity_self / lore_world / lore_other / session_recall, post-071.2) when objectives exist -- gated by lexical overlap between the query and objective text so unrelated lore questions do not stop abstaining -- and the flag feeds BOTH the abstain branch and the specificity computation (answer + no-evidence must not emit generic-only when objectives ground it). Derive the recent-events lines per D5. Exit, restated falsifiably: a quest-objective question in preview yields an answer that NAMES THE CURRENT OBJECTIVE TEXT; prompt shows objectives + recent events.
+Derive a compact session-only feed of PUBLIC world transitions ("quest stage X completed", "day advanced to N") to inject into the conversation's world block. Scope: recent events only; `activeQuestObjectives` and any PlanStage policy changes are #416.
+
+Hook mechanism: a new session-level `RecentEventCollector` in runtime-core that:
+1. Attaches as a SECONDARY tap on gameplay-session's quest event handler chain -- gameplay-session wraps its existing `QuestManager.setEventHandler` call to ALSO forward `QuestRuntimeEvent` (stage changes, quest completions) to the collector. The existing handler is not replaced; this is an additive fan-out.
+2. Receives a callback from the time store's (074.1') `advanceDay` path for day-change events.
+
+The collector maintains a session-ordered list of recent transitions (capped, most-recent-wins). Empty right after a load/restore (session-only in v1 per D5 -- transitions do not persist; the derivation function is the named upgrade seam if play proves the gap).
+
+Events are formatted as compact human-readable lines ("Quest 'Find the Luggage' stage 2 completed.", "Day advanced to 2.") and surfaced in `ConversationRuntimeContext.recentWorldEvents: string[]`, forwarded by the blackboard middleware to the prompt world block.
+
+Exit: integration test -- triggering a quest stage change populates the events block; a subsequent NPC conversation's prompt includes the event line; the block is empty on a fresh load/restore.
 
 ### 074.7 ENTITY_AFFECT delete (D6)
 
@@ -87,11 +122,11 @@ Cross-plugin scope per corrected D6, deletion list completed review round 2: the
 ## Verification recipe (nikki)
 
 1. `pnpm test` green.
-2. Preview: watch the debug handle -- time advances at the authored ratio, pauses in pause menu (and in dialogue if toggled). Save mid-afternoon, quit, Continue: still mid-afternoon.
-3. Talk to an NPC in the evening: the conversation can reference the time of day naturally; the same NPC at dawn reads differently.
-4. Author an NPC with a morning task and an evening task: watch the switch at the boundary.
+2. Preview: author a quest action that sets time-of-day to "evening"; trigger it; check the debug handle shows band = "evening". Save, quit, Continue: still "evening".
+3. Talk to an NPC after the band is set to "evening": the conversation naturally reflects the time ("Good evening"). Same NPC at "dawn" reads differently.
+4. Author an NPC with a morning task and an evening task: watch the switch at the band boundary.
 5. Trigger a dialogue that grants a known-fact; later, a DIFFERENT conversation shows the NPC aware the player knows it (and it survives reload).
-6. Ask an NPC about your current quest objective: the answer names the current objective text (not a vague redirect).
+6. Trigger a quest stage change then talk to any NPC: the prompt's recent-events block contains the stage-change line (visible via `__sugaragentPrompts`).
 
 ## Epic wrap
 
