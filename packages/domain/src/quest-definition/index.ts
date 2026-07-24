@@ -1,5 +1,15 @@
 import { createUuid } from "../shared/identity";
 
+// Plan 074 §074.1' -- canonical location; runtime-core re-exports from here.
+export type TimeOfDayBand =
+  | "dawn"
+  | "morning"
+  | "midday"
+  | "afternoon"
+  | "dusk"
+  | "evening"
+  | "night";
+
 export type QuestNodeBehavior = "objective" | "narrative" | "condition" | "branch";
 export type QuestObjectiveSubtype =
   | "talk"

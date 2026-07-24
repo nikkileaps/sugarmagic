@@ -1,11 +1,5 @@
-export type TimeOfDayBand =
-  | "dawn"
-  | "morning"
-  | "midday"
-  | "afternoon"
-  | "dusk"
-  | "evening"
-  | "night";
+export type { TimeOfDayBand } from "@sugarmagic/domain";
+import type { TimeOfDayBand } from "@sugarmagic/domain";
 
 export interface WorldTimeState {
   day: number;

@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import {
   Badge,
   Button,
+  MultiSelect,
   Select,
   Stack,
   Text,
@@ -12,11 +13,13 @@ import type {
   QuestDefinition,
   RegionDocument,
   RegionNPCBehaviorDefinition,
-  RegionNPCBehaviorTask
+  RegionNPCBehaviorTask,
+  TimeOfDayBand
 } from "@sugarmagic/domain";
 import {
   REGION_NPC_BEHAVIOR_ACTIVITY_OPTIONS,
-  REGION_NPC_BEHAVIOR_GOAL_OPTIONS
+  REGION_NPC_BEHAVIOR_GOAL_OPTIONS,
+  REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS
 } from "@sugarmagic/domain";
 import { Inspector } from "@sugarmagic/ui";
 import type { WorkspaceNavigationTarget } from "../../workspace-view";
@@ -216,6 +219,25 @@ function BehaviorInspectorComponent(props: BehaviorInspectorProps) {
                   onUpdateTask({
                     ...task,
                     currentGoal: value ?? "idle"
+                  })
+                }
+              />
+              <MultiSelect
+                label="Active Time Window"
+                description="Only active during these times. Empty = any time."
+                size="xs"
+                data={REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: option.label
+                }))}
+                value={task.timeWindow?.bands ?? []}
+                onChange={(values) =>
+                  onUpdateTask({
+                    ...task,
+                    timeWindow:
+                      values.length > 0
+                        ? { bands: values as TimeOfDayBand[] }
+                        : null
                   })
                 }
               />

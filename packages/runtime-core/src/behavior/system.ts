@@ -9,6 +9,7 @@ import {
   setEntityCurrentActivity,
   setEntityCurrentGoal,
   setEntityMovement,
+  getTimeOfDayBand,
   type RuntimeBlackboard
 } from "../state";
 import { findRegionAreaById } from "../spatial";
@@ -205,8 +206,18 @@ function resolveTaskTargetPoint(
 function taskMatchesActivation(
   task: RegionNPCBehaviorTask,
   activeQuest: RuntimeBehaviorQuestState | null,
-  hasWorldFlag?: (key: string, value?: unknown) => boolean
+  hasWorldFlag?: (key: string, value?: unknown) => boolean,
+  currentTimeBand?: string | null
 ): boolean {
+  // Plan 074 §074.4 -- time-window gating: skip tasks outside the active band.
+  if (
+    task.timeWindow &&
+    task.timeWindow.bands.length > 0 &&
+    currentTimeBand != null &&
+    !(task.timeWindow.bands as string[]).includes(currentTimeBand)
+  ) {
+    return false;
+  }
   // Plan 069.5 — one grammar evaluator, shared with the containment gate.
   return evaluateRegionQuestBinding(task.activation, {
     activeQuest,
@@ -217,14 +228,17 @@ function taskMatchesActivation(
 function resolveBehaviorTask(
   behavior: RegionNPCBehaviorDefinition | null,
   activeQuest: RuntimeBehaviorQuestState | null,
-  hasWorldFlag?: (key: string, value?: unknown) => boolean
+  hasWorldFlag?: (key: string, value?: unknown) => boolean,
+  currentTimeBand?: string | null
 ): RegionNPCBehaviorTask | null {
   if (!behavior || behavior.tasks.length === 0) {
     return null;
   }
 
   const questMatchedTask =
-    behavior.tasks.find((task) => taskMatchesActivation(task, activeQuest, hasWorldFlag)) ?? null;
+    behavior.tasks.find((task) =>
+      taskMatchesActivation(task, activeQuest, hasWorldFlag, currentTimeBand)
+    ) ?? null;
   if (questMatchedTask) {
     return questMatchedTask;
   }
@@ -234,7 +248,8 @@ function resolveBehaviorTask(
       (task) =>
         task.activation.questDefinitionId === null &&
         task.activation.questStageId === null &&
-        task.activation.worldFlagEquals === null
+        task.activation.worldFlagEquals === null &&
+        taskMatchesActivation(task, activeQuest, hasWorldFlag, currentTimeBand)
     ) ?? null
   );
 }
@@ -545,7 +560,12 @@ export function createRuntimeNpcBehaviorSystem(
     }
 
     const behavior = behaviorByNpcId.get(npc.npcDefinitionId) ?? null;
-    const task = resolveBehaviorTask(behavior, activeQuest, hasWorldFlag);
+    const task = resolveBehaviorTask(
+      behavior,
+      activeQuest,
+      hasWorldFlag,
+      getTimeOfDayBand(blackboard)
+    );
     const targetArea = task ? findRegionAreaById(region, task.targetAreaId) : null;
     const directiveTargetPoint = targetArea
       ? resolveTaskTargetPoint(

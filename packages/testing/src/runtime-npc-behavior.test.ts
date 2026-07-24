@@ -9,6 +9,7 @@ import {
   getEntityCurrentActivity,
   getEntityCurrentGoal,
   getEntityMovement,
+  setWorldTimeOfDay,
   type NavMeshPathfinder,
   type NpcMovementCollisionContext
 } from "@sugarmagic/runtime-core";
@@ -706,5 +707,176 @@ describe("069.9 — path-following state machine across frames", () => {
     expect(getEntityMovement(blackboard, "npc:rick-roll")?.targetAreaId).toBe(
       "shop"
     );
+  });
+});
+
+// Plan 074 §074.4 -- time-window gating tests.
+describe("time-window task gating (074.4)", () => {
+  function makeTimedRegion(): RegionDocument {
+    return {
+      identity: { id: "wordlark-hollow", schema: "RegionDocument", version: 1 },
+      displayName: "Wordlark Hollow",
+      placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
+      placedAssets: [],
+      folders: [],
+      environmentBinding: { defaultEnvironmentId: null },
+      areas: [
+        {
+          areaId: "dock",
+          displayName: "Dock",
+          lorePageId: null,
+          parentAreaId: null,
+          kind: "platform",
+          bounds: { kind: "box", center: [10, 0, 0], size: [8, 4, 8] }
+        },
+        {
+          areaId: "shop",
+          displayName: "Shop",
+          lorePageId: null,
+          parentAreaId: null,
+          kind: "shop",
+          bounds: { kind: "box", center: [20, 0, 0], size: [8, 4, 8] }
+        }
+      ],
+      behaviors: [
+        {
+          behaviorId: "behavior:dawn-dweller",
+          npcDefinitionId: "npc:dawn-dweller",
+          displayName: "Dawn Dweller Behavior",
+          tasks: [
+            {
+              taskId: "task:morning-work",
+              displayName: "Morning Work",
+              description: null,
+              targetAreaId: "dock",
+              currentActivity: "working",
+              currentGoal: "work",
+              activation: { questDefinitionId: null, questStageId: null, worldFlagEquals: null },
+              timeWindow: { bands: ["dawn", "morning", "midday"] }
+            },
+            {
+              taskId: "task:evening-rest",
+              displayName: "Evening Rest",
+              description: null,
+              targetAreaId: "shop",
+              currentActivity: "idle",
+              currentGoal: "idle",
+              activation: { questDefinitionId: null, questStageId: null, worldFlagEquals: null },
+              timeWindow: { bands: ["dusk", "evening", "night"] }
+            }
+          ]
+        }
+      ],
+      landscape: {
+        enabled: false,
+        size: 100,
+        subdivisions: 8,
+        surfaceSlots: [],
+        deform: null,
+        effect: null,
+        paintPayload: null
+      },
+      markers: [],
+      gameplayPlacements: []
+    };
+  }
+
+  it("selects the task whose time window contains the current band", () => {
+    const region = makeTimedRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+    setWorldTimeOfDay(blackboard, "morning");
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      npcEntities: [{ presenceId: "p1", npcDefinitionId: "npc:dawn-dweller", entity }]
+    });
+
+    system.sync({ deltaSeconds: 1, activeQuest: null });
+
+    expect(system.getCurrentTask("npc:dawn-dweller")?.taskId).toBe("task:morning-work");
+    expect(getEntityCurrentActivity(blackboard, "npc:dawn-dweller")?.activity).toBe("working");
+  });
+
+  it("skips the out-of-window task and selects the one in-window", () => {
+    const region = makeTimedRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+    setWorldTimeOfDay(blackboard, "evening");
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      npcEntities: [{ presenceId: "p1", npcDefinitionId: "npc:dawn-dweller", entity }]
+    });
+
+    system.sync({ deltaSeconds: 1, activeQuest: null });
+
+    expect(system.getCurrentTask("npc:dawn-dweller")?.taskId).toBe("task:evening-rest");
+    expect(getEntityCurrentActivity(blackboard, "npc:dawn-dweller")?.activity).toBe("idle");
+  });
+
+  it("resolves no task when no time window matches (NPC is off-duty)", () => {
+    const region = makeTimedRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+    // "afternoon" is in neither morning-window nor evening-window.
+    setWorldTimeOfDay(blackboard, "afternoon");
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      npcEntities: [{ presenceId: "p1", npcDefinitionId: "npc:dawn-dweller", entity }]
+    });
+
+    system.sync({ deltaSeconds: 1, activeQuest: null });
+
+    // No task matches: taskId is null; NPC falls to idle.
+    expect(system.getCurrentTask("npc:dawn-dweller")?.taskId).toBeNull();
+    expect(getEntityCurrentActivity(blackboard, "npc:dawn-dweller")?.activity).toBe("idle");
+  });
+
+  it("tasks without a timeWindow are always selected regardless of band (pass-through)", () => {
+    const region = makeTimedRegion();
+    // Replace tasks with one that has no timeWindow.
+    region.behaviors[0]!.tasks = [
+      {
+        taskId: "task:always",
+        displayName: "Always On",
+        description: null,
+        targetAreaId: "dock",
+        currentActivity: "idle",
+        currentGoal: "idle",
+        activation: { questDefinitionId: null, questStageId: null, worldFlagEquals: null }
+        // timeWindow intentionally absent (optional field)
+      }
+    ];
+
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+    setWorldTimeOfDay(blackboard, "night");
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      npcEntities: [{ presenceId: "p1", npcDefinitionId: "npc:dawn-dweller", entity }]
+    });
+
+    system.sync({ deltaSeconds: 1, activeQuest: null });
+
+    expect(system.getCurrentTask("npc:dawn-dweller")?.taskId).toBe("task:always");
   });
 });
