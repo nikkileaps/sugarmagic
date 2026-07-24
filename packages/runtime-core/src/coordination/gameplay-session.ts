@@ -160,9 +160,11 @@ import { createRuntimeSpatialResolverSystem } from "../spatial/system";
 import {
   createWorldTimeStore,
   createPlayerKnownFactsStore,
+  createRecentEventCollector,
   type TimeOfDayBand,
   type WorldTimeStore,
-  type PlayerKnownFactsStore
+  type PlayerKnownFactsStore,
+  type RecentEventCollector
 } from "../world";
 
 export interface RuntimeSpellCastFeedback {
@@ -598,8 +600,12 @@ export function createRuntimeGameplaySessionController(
   let lastTrackedQuestDefinitionId: string | null = null;
   let npcBehaviorSystem: RuntimeNpcBehaviorSystem | null = null;
   const worldTimeStore = createWorldTimeStore();
+  const recentEventCollector = createRecentEventCollector();
   worldTimeStore.setBandChangeCallback((band) => setWorldTimeOfDay(blackboard, band));
-  worldTimeStore.setDayChangeCallback((day) => setWorldDay(blackboard, day));
+  worldTimeStore.setDayChangeCallback((day) => {
+    setWorldDay(blackboard, day);
+    recentEventCollector.onDayAdvance(day);
+  });
   setWorldTimeOfDay(blackboard, worldTimeStore.getBand());
   setWorldDay(blackboard, worldTimeStore.getDay());
   const playerKnownFactsStore = createPlayerKnownFactsStore();
@@ -969,7 +975,8 @@ export function createRuntimeGameplaySessionController(
         activeQuestObjectives,
         goalSurfacedCount,
         timeOfDay: getTimeOfDayBand(blackboard),
-        knownFacts: getPlayerKnownFacts(blackboard)
+        knownFacts: getPlayerKnownFacts(blackboard),
+        recentWorldEvents: recentEventCollector.getRecentEvents()
       };
 
       return {
@@ -1760,6 +1767,7 @@ export function createRuntimeGameplaySessionController(
   });
   questManager.setEventHandler((event) => {
     questNotificationCenter.push(event);
+    recentEventCollector.onQuestEvent(event);
     if (event.type === "quest-complete") {
       audioController.emitEvent("quest.reward", {
         instanceKey: `quest.reward:${event.questDefinitionId}`

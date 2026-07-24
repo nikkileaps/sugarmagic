@@ -150,6 +150,10 @@ function buildWorldStateUserLines(
       ? `The player already knows:\n${context.knownFacts.map((f) => `- ${f}`).join("\n")}`
       : null,
 
+    context.recentWorldEvents && context.recentWorldEvents.length > 0
+      ? `Recent world events:\n${context.recentWorldEvents.map((e) => `- ${e}`).join("\n")}`
+      : null,
+
     context.currentLocationDisplayName
       ? `Current runtime location: ${context.currentLocationDisplayName}.`
       : null,

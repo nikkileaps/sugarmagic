@@ -434,6 +434,11 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         knownFacts:
           (input.execution.runtimeContext?.knownFacts?.length ?? 0) > 0
             ? (input.execution.runtimeContext?.knownFacts ?? null)
+            : null,
+        // Plan 074 §074.6': recent world events (session-only, not persisted).
+        recentWorldEvents:
+          (input.execution.runtimeContext?.recentWorldEvents?.length ?? 0) > 0
+            ? (input.execution.runtimeContext?.recentWorldEvents ?? null)
             : null
       };
 

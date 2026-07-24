@@ -125,6 +125,14 @@ export interface BasePromptContext {
   knownFacts: string[] | null;
 
   /**
+   * Plan 074 §074.6' -- recent world events (session-only), human-readable
+   * strings: quest stage advances, quest completions, day advances. Capped
+   * at 10; empty after a load. Injected into the uncached user message.
+   * Empty/null -> omit.
+   */
+  recentWorldEvents: string[] | null;
+
+  /**
    * Plan 072.8 — compact persona drift-reminder, re-injected at the END of the
    * user message (after history). Empty string = nothing to re-inject.
    */

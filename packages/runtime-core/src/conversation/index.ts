@@ -166,6 +166,14 @@ export interface ConversationRuntimeContext {
    * array = no facts learned yet.
    */
   knownFacts?: string[] | null;
+  /**
+   * Plan 074 §074.6' -- recent world events (session-only). Human-readable
+   * strings describing notable events since the last load: quest stage
+   * advances, quest completions, day advances. Capped at 10; empty after a
+   * load/restore. Forwarded to the prompt builder as a compact "recent events"
+   * block so NPC responses can reflect things that just happened in the world.
+   */
+  recentWorldEvents?: string[] | null;
 }
 
 export interface ConversationRuntimeNpcBehaviorContext {

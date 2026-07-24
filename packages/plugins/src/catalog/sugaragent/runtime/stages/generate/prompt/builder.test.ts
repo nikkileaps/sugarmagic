@@ -54,6 +54,8 @@ function baseContext(
     },
     personaDigest: "Warm, brisk, proud.\nVoice: Short sentences; says 'love'.",
     memoryDigest: "",
+    knownFacts: null,
+    recentWorldEvents: null,
     ...overrides
   };
 }
@@ -334,5 +336,31 @@ describe("buildGeneratePrompt — no-lore description fallback", () => {
       })
     );
     expect(systemPrompt).not.toContain("Who you are:");
+  });
+});
+
+describe("buildGeneratePrompt -- recent-events block (074.6')", () => {
+  it("renders recentWorldEvents as bullet list in the user message", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        recentWorldEvents: [
+          "Day advanced to 2.",
+          "Quest 'The Lost Cargo' completed."
+        ]
+      })
+    );
+    expect(userPrompt).toContain("Recent world events:");
+    expect(userPrompt).toContain("- Day advanced to 2.");
+    expect(userPrompt).toContain("- Quest 'The Lost Cargo' completed.");
+  });
+
+  it("omits the block when recentWorldEvents is null", () => {
+    const { userPrompt } = buildGeneratePrompt(baseContext({ recentWorldEvents: null }));
+    expect(userPrompt).not.toContain("Recent world events:");
+  });
+
+  it("omits the block when recentWorldEvents is empty", () => {
+    const { userPrompt } = buildGeneratePrompt(baseContext({ recentWorldEvents: [] }));
+    expect(userPrompt).not.toContain("Recent world events:");
   });
 });
