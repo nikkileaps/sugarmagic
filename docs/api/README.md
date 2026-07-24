@@ -31,6 +31,7 @@ They are architecture-facing developer API documents that explain how the system
 - [Collision & Navigation](/Users/nikki/projects/sugarmagic/docs/api/collision-and-navigation.md) — runtime collision (single `resolveMove` enforcer), drawn Volumes + roles, object colliders, and navmesh bake/pathfinding (epic 069)
 - [SugarAgent NPC Memory](/Users/nikki/projects/sugarmagic/docs/api/sugaragent-npc-memory.md) — two-tier memory model (IDB record + session digest), first-meeting semantics, plugin config, `__sugaragentMemory` dev handle (epic 073)
 - [SugarAgent Quest-Aware NPCs](/Users/nikki/projects/sugarmagic/docs/api/sugaragent-npcs.md) — quest-context middleware, world-narrative blackboard facts, firewall contract (secrets vs nudges), no-director design (epic 077)
+- [Quest System](/Users/nikki/projects/sugarmagic/docs/api/quest-system.md) — quest definitions, stages/nodes/actions, world flags, NPC behavior tasks, world clock, player known facts, recent events, dev handles (epics 074, 077)
 
 ## Relationship to Proposals and ADRs
 
