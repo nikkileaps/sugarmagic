@@ -29,6 +29,7 @@ They are architecture-facing developer API documents that explain how the system
 - [Character Wizard](/Users/nikki/projects/sugarmagic/docs/api/character-wizard.md) — static GLB to rigged, animated character in Studio (wizard steps, weight painting, edit-in-place, integration seams)
 - [Animation Generation](/Users/nikki/projects/sugarmagic/docs/api/animation-generation.md) — procedural idle/walk/run with personality sliders, pose adjust, and curve editing (the animation panel)
 - [Collision & Navigation](/Users/nikki/projects/sugarmagic/docs/api/collision-and-navigation.md) — runtime collision (single `resolveMove` enforcer), drawn Volumes + roles, object colliders, and navmesh bake/pathfinding (epic 069)
+- [SugarAgent NPC Memory](/Users/nikki/projects/sugarmagic/docs/api/sugaragent-npc-memory.md) — two-tier memory model (IDB record + session digest), first-meeting semantics, plugin config, `__sugaragentMemory` dev handle (epic 073)
 - [SugarAgent Quest-Aware NPCs](/Users/nikki/projects/sugarmagic/docs/api/sugaragent-npcs.md) — quest-context middleware, world-narrative blackboard facts, firewall contract (secrets vs nudges), no-director design (epic 077)
 
 ## Relationship to Proposals and ADRs
