@@ -25,6 +25,7 @@ import {
   Stack,
   Switch,
   Text,
+  Textarea,
   TextInput
 } from "@mantine/core";
 import {
@@ -199,6 +200,19 @@ function PluginSchemaField(props: PluginSchemaFieldProps) {
           label={field.label}
           description={field.description}
           placeholder={field.placeholder}
+          value={typeof value === "string" ? value : ""}
+          onChange={(event) => onChange(event.currentTarget.value)}
+        />
+      );
+    case "textarea":
+      return (
+        <Textarea
+          label={field.label}
+          description={field.description}
+          placeholder={field.placeholder}
+          autosize
+          minRows={3}
+          maxRows={8}
           value={typeof value === "string" ? value : ""}
           onChange={(event) => onChange(event.currentTarget.value)}
         />
