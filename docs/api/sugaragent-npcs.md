@@ -172,6 +172,52 @@ Each entry: `{ npcDefinitionId, questId, stageId, worldContext, goalSurfacedCoun
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/quest/quest-context-debug.ts`
 
+## Retrieval Score Observability
+
+`window.__sugaragentRetrieval` is installed unconditionally at session start
+(Plan 078.1). It exposes the per-chunk similarity scores from the most recent
+turn for each NPC, so you can see what the vector search actually returned
+before tuning the relevance floor (Plan 078.2).
+
+From a devtools console or an automated browser session:
+
+```javascript
+// Dump last-seen retrieval snapshot for all NPCs this session
+__sugaragentRetrieval.dump()
+
+// Dump for one NPC
+__sugaragentRetrieval.dump("npc:finnick")
+```
+
+Each entry: `{ npcDefinitionId, loreScores, loreSearchPerformed, broadenedBeyondLorePage, ownPageExcluded }`.
+
+`loreScores` is an array of `{ score, source, pageId, fileId }`, one entry per
+chunk in the final `loreContext` for that turn. The `source` tag says why the
+chunk is there:
+
+- **`retrieved`** -- came back from the OpenAI vector search. The player's
+  message was embedded and the gateway returned semantically similar wiki chunks.
+  These are relevance-ranked and could be anything in the lore.
+
+- **`pinned`** -- the stage fired a second search specifically for the NPC's own
+  lore page (`npcLorePageId`) as an identity anchor. This happens when the
+  primary search targets a different page (e.g. a location-anchored turn). The
+  pinned chunk got into the context by identity, not by relevance ranking. A low
+  score on a pinned chunk is expected and should not be treated as noise: it
+  means the NPC's page happened to score low against this particular query, not
+  that the chunk is irrelevant to the NPC.
+
+- **`synthetic-location`** -- not from the vector DB at all. It is a string
+  assembled at runtime from the blackboard: current area, NPC task, proximity to
+  the player, etc. Always given `score: 1` (authoritative fact, not a similarity
+  estimate). The relevance floor never drops it.
+
+Reading `source` alongside `score` is what makes the floor tunable: a score of
+0.3 on a `retrieved` chunk is a candidate for filtering; the same score on a
+`pinned` chunk is the identity anchor doing its job.
+
+**File:** `packages/plugins/src/catalog/sugaragent/runtime/stages/retrieval-debug.ts`
+
 ## NPC Identity Fallback (no lore page)
 
 When an agentified NPC has no lore page attached (or the lore API is
@@ -387,5 +433,9 @@ Interpret -> Retrieve -> Plan -> Generate -> Judge -> Audit -> Regenerate
 
 Diagnostics keys in `lastTurnDiagnostics`:
 `Interpret`, `Retrieve`, `Plan`, `Generate`, `Judge`, `Audit`, `Regenerate`
+
+The `Retrieve` payload includes `loreScores` (see Retrieval Score Observability
+above) and is also mirrored to `window.__sugaragentRetrieval` for live
+inspection without devtools archaeology into `lastTurnDiagnostics`.
 
 All other quest-system config (lore source, vector store ID) is unchanged.
