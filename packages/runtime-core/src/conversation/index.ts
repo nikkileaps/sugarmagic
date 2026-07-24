@@ -17,6 +17,7 @@ import type {
   TrackedQuestFact,
   LocationReference
 } from "../state";
+import type { TimeOfDayBand } from "../world";
 import type { RuntimeNpcCurrentTask } from "../behavior";
 
 export type ConversationKind = "scripted-dialogue" | "free-form";
@@ -151,6 +152,13 @@ export interface ConversationRuntimeContext {
    * means no NPC has been prompted on it yet.
    */
   goalSurfacedCount?: number | null;
+  /**
+   * Plan 074 §074.3 -- world clock band. Read from the blackboard
+   * (world.time-of-day) each turn; forwarded to the prompt builder so the
+   * NPC knows what part of the day it is. Null when no world clock is
+   * active (should not happen in practice -- defaults to "morning").
+   */
+  timeOfDay?: TimeOfDayBand | null;
 }
 
 export interface ConversationRuntimeNpcBehaviorContext {

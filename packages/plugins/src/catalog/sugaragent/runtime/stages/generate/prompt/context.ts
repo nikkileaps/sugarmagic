@@ -111,6 +111,14 @@ export interface BasePromptContext {
   goalSurfacedCount: number | null;
 
   /**
+   * Plan 074 §074.3 -- world clock band read from the blackboard each turn.
+   * Injected into the uncached user message (per-turn, not cache-busting).
+   * Null or absent -> omit the line (default morning is an uninteresting
+   * default that doesn't need explicit mention).
+   */
+  timeOfDay: string | null;
+
+  /**
    * Plan 072.8 — compact persona drift-reminder, re-injected at the END of the
    * user message (after history). Empty string = nothing to re-inject.
    */

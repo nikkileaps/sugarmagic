@@ -134,6 +134,7 @@ import {
   clearTrackedQuest,
   setWorldTimeOfDay,
   setWorldDay,
+  getTimeOfDayBand,
   createRuntimeBlackboard,
   getActiveQuestObjectives,
   getEntityCurrentActivity,
@@ -958,7 +959,8 @@ export function createRuntimeGameplaySessionController(
         trackedQuest,
         activeQuestStage,
         activeQuestObjectives,
-        goalSurfacedCount
+        goalSurfacedCount,
+        timeOfDay: getTimeOfDayBand(blackboard)
       };
 
       return {
