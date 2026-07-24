@@ -1,6 +1,6 @@
 # Plan 074 -- World Clock + Context Completion (child epic D of Strategy 001)
 
-Status: Locked (epic-review passed 2026-07-23, 3 rounds) -- AMENDED 2026-07-22 (pure beat-driven time-of-day; quest-objectives grounding moved to #416); AMENDED 2026-07-23 (scope reduction: narrative clock + player-known-facts are QUEST ACTIONS ONLY -- no dialogue node surface; DialogueNodeDefinition.onEnterActions and DialogueManager.setOnAction removed from scope entirely). All stories build-ready.
+Status: COMPLETE 2026-07-24. All stories shipped.
 Owner: nikki + claude
 Date: 2026-07-19
 
