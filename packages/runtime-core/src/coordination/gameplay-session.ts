@@ -33,6 +33,7 @@ import {
   type PlayerDefinition,
   type QuestDefinition,
   type RegionItemPresence,
+  type RegionNPCPresence,
   type Scene,
   type SpellDefinition,
   type RegionDocument,
@@ -102,7 +103,7 @@ import {
   type CollisionWorld
 } from "../collision";
 import type { NavMeshPathfinder } from "../navmesh";
-import { resolveWorldFlagWriteValue } from "../region-conditions";
+import { resolveWorldFlagWriteValue, evaluateRegionQuestBinding } from "../region-conditions";
 import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
@@ -308,6 +309,9 @@ export interface RuntimeGameplaySessionController {
     npcDefinitionId: string;
     position: [number, number, number];
   }>;
+  /** Plan 079.2 -- true when the presence's condition is satisfied (or the
+   *  presence has no condition). False while the ECS entity is despawned. */
+  isPresenceActive: (presenceId: string) => boolean;
   initializeDebugBillboards: () => void;
   refreshDebugBillboards: () => void;
   setDebugBillboardsEnabled: (enabled: boolean) => void;
@@ -1161,33 +1165,74 @@ export function createRuntimeGameplaySessionController(
     interactionPrompt.hide();
   }
 
+  function spawnNpcInteractable(presence: RegionNPCPresence) {
+    const npcDefinition = npcDefinitions.find(
+      (definition) => definition.definitionId === presence.npcDefinitionId
+    );
+    const interactableEntity = world.createEntity();
+    world.addComponent(
+      interactableEntity,
+      new Position(...presence.transform.position)
+    );
+    world.addComponent(
+      interactableEntity,
+      new Interactable(
+        "npc",
+        presence.presenceId,
+        presence.npcDefinitionId,
+        `Talk to ${npcDefinition?.displayName ?? "NPC"}`,
+        2.0,
+        resolveNpcInteractableAvailability(presence.npcDefinitionId)
+      )
+    );
+    npcInteractableEntities.set(presence.presenceId, {
+      npcDefinitionId: presence.npcDefinitionId,
+      entity: interactableEntity
+    });
+  }
+
+  function despawnNpcInteractable(presenceId: string) {
+    const entry = npcInteractableEntities.get(presenceId);
+    if (!entry) return;
+    world.destroyEntity(entry.entity);
+    npcInteractableEntities.delete(presenceId);
+    debugBillboardBindings.delete(entry.entity);
+  }
+
+  function buildPresenceQuestContext() {
+    const trackedQuest = questManager.getTrackedQuest();
+    return {
+      activeQuest: trackedQuest
+        ? { questDefinitionId: trackedQuest.questDefinitionId, stageId: trackedQuest.stageId }
+        : null,
+      hasWorldFlag: (key: string, value: boolean) => questManager.hasFlag(key, value)
+    };
+  }
+
+  function reconcileNpcPresences() {
+    if (!regionContents) return;
+    const ctx = buildPresenceQuestContext();
+    for (const presence of regionContents.npcPresences) {
+      const active = presence.condition === null
+        || evaluateRegionQuestBinding(presence.condition, ctx);
+      const spawned = npcInteractableEntities.has(presence.presenceId);
+      if (active && !spawned) {
+        spawnNpcInteractable(presence);
+      } else if (!active && spawned) {
+        despawnNpcInteractable(presence.presenceId);
+      }
+    }
+  }
+
   function registerNpcInteractables() {
     if (!regionContents) return;
-
+    // Plan 079.2 -- filter by condition at initial load; reconcileNpcPresences
+    // then keeps the set live each frame.
+    const ctx = buildPresenceQuestContext();
     for (const presence of regionContents.npcPresences) {
-      const npcDefinition = npcDefinitions.find(
-        (definition) => definition.definitionId === presence.npcDefinitionId
-      );
-      const interactableEntity = world.createEntity();
-      world.addComponent(
-        interactableEntity,
-        new Position(...presence.transform.position)
-      );
-      world.addComponent(
-        interactableEntity,
-        new Interactable(
-          "npc",
-          presence.presenceId,
-          presence.npcDefinitionId,
-          `Talk to ${npcDefinition?.displayName ?? "NPC"}`,
-          2.0,
-          resolveNpcInteractableAvailability(presence.npcDefinitionId)
-        )
-      );
-      npcInteractableEntities.set(presence.presenceId, {
-        npcDefinitionId: presence.npcDefinitionId,
-        entity: interactableEntity
-      });
+      if (presence.condition === null || evaluateRegionQuestBinding(presence.condition, ctx)) {
+        spawnNpcInteractable(presence);
+      }
     }
   }
 
@@ -1231,6 +1276,12 @@ export function createRuntimeGameplaySessionController(
     // Any future filter (Plan 058 Scene gating, etc.)
     // composes into `shouldSkipItemPresence` at the host and
     // both paths pick it up automatically.
+    // DEFERRED (079): upgrade this to a per-frame dynamic reconciler (same as
+    // reconcileNpcPresences) so items can appear/disappear mid-region on a
+    // condition change. Today this is load-time only; items authored with a
+    // condition field would need the reconciler treatment. Revisit trigger:
+    // when an authored item presence needs a quest/flag condition gate
+    // (parallel to NPC presence gating, Plan 079).
     iterateActiveItemPresences(
       regionContents.itemPresences,
       {
@@ -2017,6 +2068,13 @@ export function createRuntimeGameplaySessionController(
         ),
       hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
       // Plan 069.9 — NPCs follow the baked navmesh (host loads it async).
+      // DEFERRED (079): if an NPC that was pathfinding toward a conditional
+      // containment gate becomes absent (condition clears), its in-flight
+      // navmesh path stays queued until reconcileNpcPresences despawns the
+      // entity. The behavior system's internal-Map cleanup handles the
+      // bookkeeping on next sync. Revisit trigger: authored content with an
+      // NPC whose presence gate and a nearby containment gate can be set/
+      // cleared in rapid succession causing visually odd path-into-gate behavior.
       getPathfinder,
       // Plan 069.3 — per-sync snapshot of the collision world + every agent
       // circle (player + NPCs), so NPC moves resolve against props and each
@@ -2110,6 +2168,8 @@ export function createRuntimeGameplaySessionController(
           hasWorldFlag: (key, value) => questManager.hasFlag(key, value)
         });
       }
+      // Plan 079.2 -- reconcile conditional NPC presences each frame.
+      reconcileNpcPresences();
       npcBehaviorSystem?.sync({
         deltaSeconds,
         activeQuest: trackedQuest
@@ -2189,6 +2249,9 @@ export function createRuntimeGameplaySessionController(
           ];
         }
       );
+    },
+    isPresenceActive(presenceId: string): boolean {
+      return npcInteractableEntities.has(presenceId);
     },
     getNpcAgents(): CircleObstacle[] {
       const agents: CircleObstacle[] = [];

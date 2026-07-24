@@ -4,7 +4,8 @@ import type {
   RegionLandscapePaintPayload,
   RegionLayoutSketchState,
   RegionAmbienceZone,
-  RegionSoundEmitter
+  RegionSoundEmitter,
+  RegionBehaviorQuestBinding
 } from "../region-authoring";
 import type { AssetCollider, EnvironmentDefinition } from "../content-library";
 import type {
@@ -850,6 +851,15 @@ export type RemoveNPCPresenceCommand = SemanticCommandBase<
   }
 >;
 
+export type SetNPCPresenceConditionCommand = SemanticCommandBase<
+  "SetNPCPresenceCondition",
+  {
+    presenceId: string;
+    /** null clears the condition (presence becomes unconditional). */
+    condition: RegionBehaviorQuestBinding | null;
+  }
+>;
+
 export type TransformItemPresenceCommand = SemanticCommandBase<
   "TransformItemPresence",
   {
@@ -1132,6 +1142,7 @@ export type SemanticCommand =
   | TransformItemPresenceCommand
   | UpdateItemPresenceCommand
   | RemoveNPCPresenceCommand
+  | SetNPCPresenceConditionCommand
   | RemoveItemPresenceCommand
   | AssignPlacedAssetInspectableCommand
   | UpdatePlacedAssetInspectableCommand

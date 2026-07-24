@@ -99,6 +99,7 @@ import type {
   ClearPlacedAssetShaderParameterOverrideCommand,
   SetNPCPresenceShaderParameterOverrideCommand,
   ClearNPCPresenceShaderParameterOverrideCommand,
+  SetNPCPresenceConditionCommand,
   SetItemPresenceShaderParameterOverrideCommand,
   ClearItemPresenceShaderParameterOverrideCommand
 } from "../commands";

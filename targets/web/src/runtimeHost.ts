@@ -1693,11 +1693,30 @@ export function createWebRuntimeHost(
       entry.root.position.set(...snapshot.position);
     }
 
+    // Plan 079.3 -- sync NPC visibility from the presence reconciler each
+    // frame. Absent presences (condition not satisfied) get root.visible=false;
+    // the three.js group stays resident so the return-to-visible is instant.
+    // Runs after gameplaySession.update() so isPresenceActive reflects the
+    // current frame's condition evaluation.
+    if (gameplaySession && renderableReconciler) {
+      for (const entry of renderableReconciler.entries()) {
+        if (entry.object.kind === "npc") {
+          entry.root.visible = gameplaySession.isPresenceActive(
+            entry.object.instanceId
+          );
+        }
+      }
+    }
+
     // Tick every entry mixer (NPCs with bound idle animations). The
     // mixer is absent for static-mesh assets and for NPCs without
     // animations, so this loop is cheap when nothing's animated.
+    // Plan 079.3 -- skip the mixer when the NPC is hidden (saves per-frame
+    // bone-hierarchy cost for absent conditional NPCs).
     for (const entry of renderableReconciler?.entries() ?? []) {
-      npcMixer(entry)?.update(delta);
+      if (entry.root.visible) {
+        npcMixer(entry)?.update(delta);
+      }
     }
 
     const playerEntities = world.query(PlayerControlled, Position);

@@ -298,11 +298,30 @@ Quest-gated scene changes use existing seams, not new infrastructure:
   NPC turns, not scripted dialogue.
 - **Compound AND gate:** `evaluateRegionQuestBinding({ questDefinitionId, questStageId, worldFlagEquals })`
   in `packages/runtime-core/src/region-conditions/index.ts` evaluates stage
-  AND flag together. Used by behavior-task activation and collision volumes.
-  Authored in Studio via the Behavior inspector: Quest + Quest Stage + World Flag fields.
-- **Presence gating (deferred):** `RegionNPCPresence` has no condition field;
-  presence gates require task #418 (epic). Use behavior-task gating (NPC
-  present, behavior changes) in the meantime.
+  AND flag together. Used by behavior-task activation, collision volumes, and
+  NPC presence gating (Plan 079).
+  Authored in Studio via the Behavior inspector (behavior tasks) or the NPC
+  presence inspector (Quest + Quest Stage + Flag fields, Plan 079).
+- **Presence gating (Plan 079):** `RegionNPCPresence` carries
+  `condition: RegionBehaviorQuestBinding | null`. A null condition means always
+  present (existing behavior). A populated condition makes the NPC physically
+  absent until the condition holds -- no mesh, no E prompt, no collision agent.
+  Authored in Studio > Build > Layout, NPC inspector > "Show when" section.
+  The condition is evaluated per-frame; the NPC appears or disappears without
+  a region reload. The three.js group stays resident (instant return).
+
+**Choosing: behavior-task gating vs presence gating**
+
+Both use the same compound-AND evaluator. Pick by what "absent" means:
+
+| | Behavior-task gating | Presence gating (079) |
+|---|---|---|
+| NPC is physically in the scene | Yes (always) | No (absent until condition) |
+| Mesh rendered | Yes | No |
+| E prompt shown | Yes | No |
+| Collision agent active | Yes | No |
+| Behavior changes on condition | Yes | N/A (NPC appears/disappears) |
+| Use for | "NPC is here but acts differently" | "NPC is not here yet" |
 
 **Authoring pattern -- "NPC B appears upset only after player talked to NPC A":**
 
@@ -315,8 +334,16 @@ Quest-gated scene changes use existing seams, not new infrastructure:
 5. NPC B's task description drives their behavior when the compound condition
    holds; without the task active they are behaviorally neutral.
 
+**Authoring pattern -- "NPC B only appears after player talked to NPC A":**
+
+1-2. Same as above (NPC A sets the flag).
+3. NPC B is placed in the region. In the NPC inspector > "Show when": set
+   Flag = `talkedToNpcA`, equals = `true`.
+4. NPC B is absent (no mesh, no E prompt) until the flag is set; appears
+   without a region reload once the condition holds.
+
 The evaluator handles compound AND natively; no new engine is needed for
-"active only after arrival AND after NPC-A conversation."
+"appears only after arrival AND after NPC-A conversation."
 
 ## SugarAgent Plugin Config
 
