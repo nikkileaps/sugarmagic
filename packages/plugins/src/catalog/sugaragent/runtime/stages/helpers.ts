@@ -32,12 +32,12 @@ export interface EvidenceBudget {
  * maxItems x perItemChars.
  */
 export function summarizeEvidence(
-  evidencePack: RetrieveResult["evidencePack"],
+  loreContext: RetrieveResult["loreContext"],
   budget: EvidenceBudget
 ): string[] {
   const maxItems = Math.max(1, Math.floor(budget.maxItems));
   const perItemChars = Math.max(1, Math.floor(budget.perItemChars));
-  return evidencePack
+  return loreContext
     .slice(0, maxItems)
     .map((item) =>
       item.text.length > perItemChars ? item.text.slice(0, perItemChars) : item.text

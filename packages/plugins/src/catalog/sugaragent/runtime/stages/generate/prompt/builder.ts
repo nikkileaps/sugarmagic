@@ -236,8 +236,8 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
     // Sugarlang (or other) overlay — opaque, per-turn (relocated from system).
     context.languageLearningOverlay || null,
 
-    context.evidenceSummary.length > 0
-      ? `Evidence:\n- ${context.evidenceSummary.join("\n- ")}`
+    context.loreContextSummary.length > 0
+      ? `Evidence:\n- ${context.loreContextSummary.join("\n- ")}`
       : "Evidence: none retrieved.",
 
     context.recentHistory.length > 0

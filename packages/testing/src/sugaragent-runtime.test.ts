@@ -538,7 +538,7 @@ describe("SugarAgent runtime provider", () => {
     const lastSearch = searchRequests.at(-1);
     expect(lastSearch?.filters).toBeUndefined();
     // Own page dropped from evidence; only the other-page result survives.
-    expect(retrieve?.evidenceCount).toBe(1);
+    expect(retrieve?.loreContextCount).toBe(1);
   });
 
   it("uses blackboard-backed current location context for 'where are we' retrieval", async () => {
@@ -830,83 +830,6 @@ describe("SugarAgent runtime provider", () => {
     expect((reply?.text ?? "").length).toBeGreaterThan(0);
   });
 
-  // Plan 072.7 — per-NPC model override + cache/model observability.
-  it("sends the NPC's agentModelOverride as the generate model and surfaces usage + model in diagnostics", async () => {
-    const generateBodies: Array<Record<string, unknown> | null> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input.toString();
-        const body =
-          typeof init?.body === "string" && init.body.trim().length > 0
-            ? (JSON.parse(init.body) as Record<string, unknown>)
-            : null;
-        if (url.endsWith("/api/sugaragent/retrieve/search")) {
-          return new Response(
-            JSON.stringify({
-              results: [
-                {
-                  fileId: "c1",
-                  filename: "hero.md",
-                  score: 0.9,
-                  attributes: { page_id: "lore.hero" },
-                  text: "The hero guards the bridge."
-                }
-              ],
-              requestId: "s"
-            }),
-            { status: 200, headers: { "content-type": "application/json" } }
-          );
-        }
-        if (url.endsWith("/api/sugaragent/generate")) {
-          generateBodies.push(body);
-          return new Response(
-            JSON.stringify({
-              text: "I guard the bridge.",
-              requestId: "g",
-              model: "claude-opus-4-8",
-              usage: {
-                inputTokens: 20,
-                outputTokens: 8,
-                cacheReadInputTokens: 1500,
-                cacheCreationInputTokens: 0
-              }
-            }),
-            { status: 200, headers: { "content-type": "application/json" } }
-          );
-        }
-        throw new Error("Unexpected fetch in test: " + url);
-      })
-    );
-
-    const host = createConversationHost({
-      providers: [resolveSugarAgentProvider()]
-    });
-    await host.startSession({
-      conversationKind: "free-form",
-      npcDefinitionId: "npc:hero",
-      npcDisplayName: "Hero",
-      interactionMode: "agent",
-      lorePageId: "lore.hero",
-      agentModelOverride: "claude-opus-4-8"
-    });
-    const reply = await host.submitInput({
-      kind: "free_text",
-      text: "What do you do here?"
-    });
-
-    // The override reached the gateway request's model field.
-    const gen = generateBodies.find((b) => b);
-    expect(gen?.model).toBe("claude-opus-4-8");
-    // Diagnostics surface the model actually used + cache usage (from 072.5).
-    const gp = (
-      reply?.diagnostics as
-        | { stages?: Record<string, { payload?: Record<string, unknown> }> }
-        | undefined
-    )?.stages?.Generate?.payload;
-    expect(gp?.modelUsed).toBe("claude-opus-4-8");
-    expect(gp?.cacheReadInputTokens).toBe(1500);
-  });
 
   // A persona'd NPC answers player-initiated social turns IN CHARACTER (LLM),
   // not with a canned deterministic line; the opening turn stays canned.

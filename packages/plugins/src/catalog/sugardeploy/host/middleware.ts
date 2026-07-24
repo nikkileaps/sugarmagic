@@ -3502,6 +3502,109 @@ function createEnsureCurrentMajorTagPlugin(): VitePlugin {
   };
 }
 
+// Plan 075.4 -- hotfix blocklist update: runs `gcloud run services update
+// --update-env-vars SUGARMAGIC_SUGARAGENT_BLOCKLIST=<terms>` against every
+// gateway service for the project WITHOUT a new image build. Studio calls
+// /__sugardeploy/update-blocklist from the SugarAgent Safety settings panel.
+function createUpdateBlocklistPlugin(): VitePlugin {
+  return {
+    name: "sugardeploy-update-blocklist",
+    configureServer(server) {
+      server.middlewares.use(
+        "/__sugardeploy/update-blocklist",
+        async (req, res, next) => {
+          if (req.method !== "POST") {
+            next();
+            return;
+          }
+          try {
+            const body = (await readJsonBody(req)) as Partial<{
+              gameProject: unknown;
+              blocklist: unknown;
+            }>;
+
+            const blocklist =
+              typeof body.blocklist === "string" ? body.blocklist.trim() : "";
+            const normalizedGameProject = tryNormalizeGameProject(body.gameProject);
+            if (!normalizedGameProject) {
+              sendJson(res, 400, {
+                ok: false,
+                reason: "A valid gameProject payload is required."
+              });
+              return;
+            }
+
+            const deploymentSettings = getDeploymentSettings(normalizedGameProject);
+            const cloudRunOverrides = normalizeGoogleCloudRunDeploymentTargetOverrides(
+              deploymentSettings.targetOverrides["google-cloud-run"],
+              normalizedGameProject
+            );
+            const { projectId, region } = cloudRunOverrides;
+            if (!projectId || !region) {
+              sendJson(res, 400, {
+                ok: false,
+                reason:
+                  "gcp_project_id and region must be set in Cloud Run deployment settings before using the blocklist hotfix."
+              });
+              return;
+            }
+
+            const gcloudAuthError = await ensureGcloudAuthReady();
+            if (gcloudAuthError !== null) {
+              sendJson(res, 412, { ok: false, reason: gcloudAuthError });
+              return;
+            }
+
+            const plan = planGameDeployment(normalizedGameProject);
+            const serviceNames = getCloudRunServiceNamesForPlan(plan);
+            if (serviceNames.length === 0) {
+              sendJson(res, 200, { ok: true, servicesUpdated: 0, blocklist });
+              return;
+            }
+
+            const envVarValue = blocklist.length > 0 ? blocklist : "";
+            const steps: HostCommandStep[] = serviceNames.map((name) => ({
+              label: `gcloud run services update ${name} (blocklist)`,
+              command: "gcloud",
+              args: [
+                "run",
+                "services",
+                "update",
+                name,
+                "--update-env-vars",
+                `SUGARMAGIC_SUGARAGENT_BLOCKLIST=${envVarValue}`,
+                "--project",
+                projectId,
+                "--region",
+                region
+              ],
+              cwd: process.cwd()
+            }));
+
+            const seqResult = await runHostCommandSequence(steps);
+            sendJson(res, seqResult.exitCode === 0 ? 200 : 500, {
+              ok: seqResult.exitCode === 0,
+              servicesUpdated: seqResult.exitCode === 0 ? serviceNames.length : 0,
+              blocklist,
+              stdout: seqResult.stdout,
+              stderr: seqResult.stderr,
+              message:
+                seqResult.exitCode === 0
+                  ? `Blocklist updated on ${serviceNames.length} service${serviceNames.length === 1 ? "" : "s"} (no rebuild needed).`
+                  : `gcloud update failed with exit code ${seqResult.exitCode ?? "unknown"}.`
+            });
+          } catch (error) {
+            sendJson(res, 500, {
+              ok: false,
+              reason: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      );
+    }
+  };
+}
+
 export function createSugarDeployHostMiddleware(): VitePlugin[] {
   return [
     createActionDispatcherPlugin(),
@@ -3521,6 +3624,7 @@ export function createSugarDeployHostMiddleware(): VitePlugin[] {
     createCutMajorVersionCommitPlugin(),
     createListVersionTagsPlugin(),
     createTagPatchVersionPlugin(),
-    createEnsureCurrentMajorTagPlugin()
+    createEnsureCurrentMajorTagPlugin(),
+    createUpdateBlocklistPlugin()
   ];
 }

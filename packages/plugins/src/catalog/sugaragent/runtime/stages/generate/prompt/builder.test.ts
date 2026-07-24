@@ -40,7 +40,7 @@ function baseContext(
     npcCurrentActivity: "baking",
     npcCurrentGoal: "finish the spiced loaf",
     npcMovement: { status: "stationary", targetAreaDisplayName: null },
-    evidenceSummary: ["Maren runs the bakery."],
+    loreContextSummary: ["Maren runs the bakery."],
     recentHistory: [{ role: "user", text: "hi" }],
     languageLearningOverlay: "Language constraint: keep it simple.",
     persona: {

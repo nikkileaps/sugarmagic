@@ -191,8 +191,13 @@ quest-context middleware) as its own identity.
 editor. It is the fallback floor and costs nothing. A lore page with a
 `## Persona` section overrides it completely when loaded.
 
+The **judge** applies the same fallback: when `persona.digest` is empty,
+`JudgeStage` passes `"NPC description: <value>"` as the persona anchor. If
+neither is set, the judge skips with `skipReason: "no-persona"` (no basis for
+consistency evaluation).
+
 **Files:** `ConversationSelectionContext.npcDescription` (runtime-core),
-`buildStableSystemLines` in `prompt/builder.ts`.
+`buildStableSystemLines` in `prompt/builder.ts`, `JudgeStage.ts`.
 
 ## World Events: Compose Existing Machinery (D5)
 
@@ -236,5 +241,151 @@ When `false`:
 - The quest-context middleware is not registered (no world lore in NPC prompts,
   no ease-off blackboard, pre-077 behavior).
 - The `__sugaragentQuestContext` dev handle is not installed.
+
+`worldPremise: string` (default `""`) -- a short paragraph describing your game
+world. Sent to the judge as the grounding source for the WORLD-GROUNDED rubric
+check. Without it the judge grades against generic RPG assumptions. Example:
+`"Wordlark Hollow is a cozy village where everyone is an anthropomorphic animal."`
+
+Set in Studio > SugarAgent > NPC Behavior > World Premise.
+
+---
+
+## Plan 075: Judge, Regen, and Safety
+
+### JudgeStage (semantic rubric evaluation)
+
+**File:** `packages/plugins/src/catalog/sugaragent/runtime/stages/JudgeStage.ts`
+
+JudgeStage runs AFTER GenerateStage and BEFORE AuditStage. It calls the
+gateway judge route (`/api/sugaragent/generate/judge`) to evaluate the NPC
+reply against a semantic rubric via the Anthropic tool-use API
+(`SUGARMAGIC_SUGARAGENT_JUDGE_MODEL`, default: `claude-haiku-4-5`).
+
+**Skip conditions** (no LLM call, `skipped: true`):
+- `generate.usedLlm === false` (deterministic/envelope-override turn)
+- No judge provider (proxy URL missing)
+- No NPC identity: both `persona.digest` and `npcDefinition.description` are empty (`no-persona`)
+
+**Internal regex short-circuit:** calls `findMetaLeakViolations` on the
+generated text before any LLM call. If structural violations are found,
+returns `passed: false` immediately (saves a vendor round-trip).
+
+**Fail-open on error:** any provider exception returns
+`{ passed: true, errorOccurred: true }` and `fallbackReason: "judge-error"`.
+This never triggers `isStalledTurn` (judge errors are excluded from the
+stall governor).
+
+**`JudgeResult` type:**
+```typescript
+interface JudgeResult {
+  passed: boolean;
+  violations: string[];
+  repairHint: string | null;
+  skipped: boolean;
+  errorOccurred: boolean;
+}
+```
+
+**Gateway route:** `POST /api/sugaragent/generate/judge`
+Body: `{ replyText, personaDigest, responseIntent, worldContext, loreContextSummary, worldPremise }`
+Uses Anthropic `tool_use` with `score_reply` tool and `tool_choice: { type: "tool", name: "score_reply" }`.
+
+### RegenerateStage (bounded LLM regen + 3-strike governor)
+
+**File:** `packages/plugins/src/catalog/sugaragent/runtime/stages/RegenerateStage.ts`
+
+Replaces RepairStage. Decision tree (priority order):
+
+1. Both `audit.passed && judge.passed` -> passthrough, no regen
+2. `!audit.passed` -> structural violation -> deterministic fallback
+3. `judge.errorOccurred` -> fail-open passthrough
+4. `judge.skipped` -> passthrough
+5. `consecutiveJudgeFailures >= 3` -> 3-strike governor -> deterministic fallback
+6. No LLM provider -> deterministic fallback
+7. Attempt one LLM regen (max 200 tokens). Re-lint with regex. Pass or fallback.
+
+**Cost cap:** at most 2 generate invocations + 1 judge call per turn. No
+second judge call after regen (latency/cost constraint per plan D2).
+
+**3-strike governor:** `SugarAgentProviderState.consecutiveJudgeFailures` is
+incremented when the judge fails (non-error, non-skip). Reset on any passing
+judge verdict. After 3 consecutive failures, `RegenerateStage` skips regen
+entirely and returns a deterministic reply.
+
+### Content Moderation (075.3)
+
+**File:** `packages/plugins/src/catalog/sugaragent/runtime/moderation/moderation-middleware.ts`
+
+`ConversationMiddleware` with `stage: "policy"`. Two checkpoints per turn:
+
+**`prepare` (player input check):**
+- Extracts `free_text` player input.
+- POSTs to `/api/sugaragent/generate/moderate` (gateway route).
+- If flagged: annotates `sugaragent.moderationInputFlagged` on the execution
+  context. The NPC pipeline sees this annotation; the `finalize` hook replaces
+  the output with an in-character deflection.
+- Fail-open: moderation outage never gates conversation flow.
+
+**`finalize` (NPC output check):**
+- If the input was already flagged, replaces the NPC reply with a deflection
+  drawn from the `INPUT_DEFLECTIONS` pool.
+- Otherwise moderates the NPC output text; replaces with `OUTPUT_DEFLECTIONS`
+  pool if flagged.
+
+Gated by `moderationEnabled` config (default `false`). Enable in the SugarAgent
+studio settings under Safety > Content Moderation.
+
+**Gateway route:** `POST /api/sugaragent/generate/moderate`
+Body: `{ text: string }`
+Response: `{ flagged: boolean, categories: string[], blocklisted: boolean }`
+
+The gateway calls the OpenAI `/v1/moderations` endpoint using the same API key
+as vector retrieval (`SUGARMAGIC_OPENAI_API_KEY`). Override the vendor base URL
+for testing via `SUGARMAGIC_MODERATION_BASE_URL`.
+
+### Topic Blocklist (075.4)
+
+**Config key:** `blocklist` (comma-separated terms, default `""`)
+**Gateway env:** `SUGARMAGIC_SUGARAGENT_BLOCKLIST`
+
+Applied at two layers:
+1. `/api/sugaragent/generate/moderate` pre-check: if any term matches the
+   player input (case-insensitive substring), returns `{ flagged: true, blocklisted: true }`
+   immediately (no OpenAI call).
+2. `/api/sugaragent/generate` defense-in-depth: if any term matches the
+   composed user prompt, returns a canned safe reply without calling Anthropic.
+
+**Hotfix procedure (no image rebuild):**
+Use Studio > SugarDeploy > `/__sugardeploy/update-blocklist`. This calls
+`gcloud run services update --update-env-vars SUGARMAGIC_SUGARAGENT_BLOCKLIST=<terms>`
+against each gateway service. The running container picks up the new env var
+immediately (Cloud Run zero-downtime update). The config value in the Studio
+settings panel is the initial-deploy value; hot-updates bypass it.
+
+### Safety Observability (075.5)
+
+Structured log events emitted by the gateway:
+
+| Event | Where | Fields |
+|---|---|---|
+| `sugaragent.judge` | Judge handler | `passed`, `violations`, `durationMs`, `model` |
+| `sugaragent.moderation-flagged` | Moderate handler | `categories`, `durationMs` |
+| `sugaragent.blocklist-hit` | Moderate + Generate handlers | `term` |
+| `sugaragent.moderation-error` | Moderate handler | `text` (40-char prefix) |
+| `sugaragent.generate-blocklist-hit` | Generate handler | `term` |
+
+All emitted via `logInfo` / `logError` (structured JSON to stdout; Cloud Run
+routes to Cloud Logging). Filter by message prefix in Cloud Logging:
+`jsonPayload.message =~ "sugaragent.judge|sugaragent.moderation"`.
+
+### Pipeline Order (post-075)
+
+```
+Interpret -> Retrieve -> Plan -> Generate -> Judge -> Audit -> Regenerate
+```
+
+Diagnostics keys in `lastTurnDiagnostics`:
+`Interpret`, `Retrieve`, `Plan`, `Generate`, `Judge`, `Audit`, `Regenerate`
 
 All other quest-system config (lore source, vector store ID) is unchanged.

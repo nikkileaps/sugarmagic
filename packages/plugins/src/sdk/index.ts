@@ -108,6 +108,7 @@ export interface InstalledPluginDefinition {
  */
 export type PluginSettingsSchemaFieldType =
   | "text"
+  | "textarea"
   | "select"
   | "number"
   | "boolean";
@@ -250,13 +251,14 @@ export function validatePluginSettingsSchema(
     seenKeys.add(field.configKey);
     if (
       field.type !== "text" &&
+      field.type !== "textarea" &&
       field.type !== "select" &&
       field.type !== "number" &&
       field.type !== "boolean"
     ) {
       return {
         ok: false,
-        reason: `Plugin "${pluginId}" schema field "${field.configKey}" has unsupported type "${String(field.type)}". Supported types: text / select / number / boolean.`
+        reason: `Plugin "${pluginId}" schema field "${field.configKey}" has unsupported type "${String(field.type)}". Supported types: text / textarea / select / number / boolean.`
       };
     }
     if (field.type === "select" && (!field.options || field.options.length === 0)) {

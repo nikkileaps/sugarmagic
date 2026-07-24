@@ -41,12 +41,6 @@ export interface NPCDefinition {
   description?: string;
   interactionMode: NPCInteractionMode;
   lorePageId: string | null;
-  /**
-   * Plan 072.7 — optional per-NPC agent model override (engine config, not
-   * lore). Empty/absent = the gateway default. A hero NPC can pin a bigger
-   * model; most NPCs run on the small-fast default.
-   */
-  agentModelOverride?: string;
   // Plugin metadata keys must follow the namespace convention documented in
   // packages/domain/README.md ("Plugin Metadata Convention").
   metadata?: Record<string, unknown>;
@@ -169,11 +163,6 @@ export function normalizeNPCDefinition(
       npcDefinition.lorePageId.trim().length > 0
         ? npcDefinition.lorePageId.trim()
         : null,
-    // Plan 072.7 — threaded through the explicit return (omitted when empty).
-    ...(typeof npcDefinition.agentModelOverride === "string" &&
-    npcDefinition.agentModelOverride.trim().length > 0
-      ? { agentModelOverride: npcDefinition.agentModelOverride.trim() }
-      : {}),
     ...(normalizedMetadata ? { metadata: normalizedMetadata } : {}),
     presentation: {
       modelAssetDefinitionId:

@@ -87,13 +87,16 @@ export interface SugarAgentPluginConfig {
    * gatewayRuntimeConfigKeys). Empty => gateway default `claude-haiku-4-5`.
    */
   anthropicSummaryModel: string;
-  maxEvidenceResults: number;
+  /** Model the gateway uses for regen calls (purpose:"regen"). Falls back to
+   *  SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL when unset. */
+  anthropicRegenModel: string;
+  maxLoreResults: number;
   /**
    * Plan 072.6 — per-evidence-item character budget forwarded to the prompt.
    * Replaces the old hard 180-char truncation; the wiki's richness must reach
-   * the model. Total evidence budget is bounded by maxEvidenceResults x this.
+   * the model. Total evidence budget is bounded by maxLoreResults x this.
    */
-  maxEvidenceCharsPerItem: number;
+  maxLoreCharsPerItem: number;
   /**
    * Plan 073.5 — master switch for NPC memory (persistence + recall). When
    * false, the memory middleware and the end-of-conversation summarizer are
@@ -114,6 +117,26 @@ export interface SugarAgentPluginConfig {
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
   tone: string;
+  /**
+   * Plan 075.3 -- master switch for input/output moderation. When false,
+   * the moderation middleware is not registered.
+   */
+  moderationEnabled: boolean;
+  /**
+   * Plan 075.4 -- comma-separated topic blocklist applied to player input
+   * at the gateway (pre-moderation) and inside the /generate handler
+   * (defense-in-depth). Hotfixable via the sugardeploy update-blocklist
+   * action without a client rebuild. Stored in deployable config so the
+   * initial value is version-controlled; fast updates bypass this path.
+   */
+  blocklist: string;
+  /**
+   * Plan 075 -- short author-written description of the game world, sent to
+   * the judge so WORLD-GROUNDED checks against the actual setting rather than
+   * generic RPG assumptions. Optional; leave empty to omit the world premise
+   * block from the judge prompt.
+   */
+  worldPremise: string;
 }
 
 export interface SugarAgentSessionHistoryEntry {
@@ -162,6 +185,8 @@ export interface SugarAgentProviderState {
   sessionId: string;
   turnCount: number;
   consecutiveFallbackTurns: number;
+  /** Plan 075.2 -- 3-strike governor: consecutive turns where judge failed and regen ran */
+  consecutiveJudgeFailures: number;
   closeRequested: boolean;
   history: SugarAgentSessionHistoryEntry[];
   lastTurnDiagnostics: Record<string, TurnStageDiagnostics>;
@@ -287,8 +312,8 @@ export interface RetrievedEvidenceItem {
 }
 
 export interface RetrieveResult {
-  evidencePack: RetrievedEvidenceItem[];
-  vectorSearchPerformed: boolean;
+  loreContext: RetrievedEvidenceItem[];
+  loreSearchPerformed: boolean;
 }
 
 export interface PlanResult {
@@ -327,6 +352,16 @@ export interface GenerateResult {
 export interface AuditResult {
   passed: boolean;
   violations: string[];
+}
+
+export interface JudgeResult {
+  passed: boolean;
+  violations: string[];
+  repairHint: string | null;
+  /** true when the judge was not invoked (no LLM text, no provider) */
+  skipped: boolean;
+  /** true when the judge errored; verdict is fail-open (passed: true) */
+  errorOccurred: boolean;
 }
 
 export interface RepairResult {

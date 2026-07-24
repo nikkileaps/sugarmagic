@@ -18,14 +18,13 @@ export interface OpenAIVectorStoreEqFilter {
 export type OpenAIVectorStoreFilter = OpenAIVectorStoreEqFilter;
 
 export interface LLMGenerateRequest {
-  model: string;
   systemPrompt: string;
   userPrompt: string;
   maxTokens?: number;
-  /** Plan 073.2 — request category the gateway maps to a server-side model
-   *  env var. "summary" uses the cheap memory-summary model; anything else
-   *  (default) uses the dialogue model. No model id crosses the wire. */
-  purpose?: "dialogue" | "summary";
+  /** Gateway-side model routing. "summary" uses SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL;
+   *  "regen" uses SUGARMAGIC_SUGARAGENT_REGEN_MODEL (falls back to dialogue model);
+   *  omit or "dialogue" uses SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL. */
+  purpose?: "dialogue" | "summary" | "regen";
 }
 
 /** Plan 072.7 — the LLM result now carries usage + the model actually used. */
@@ -253,7 +252,6 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
 
   async generateStructuredTurn(request: LLMGenerateRequest): Promise<LLMGenerateResult> {
     const response = await this.client.generate({
-      model: request.model.trim() || undefined,
       purpose: request.purpose,
       // Plan 072.5 — send the system prompt as one cacheable block (a single
       // cache breakpoint at the end of the full system prompt). sugaragent's
@@ -269,6 +267,107 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
       usage: response.usage ?? null,
       model: response.model ?? null
     };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Plan 075.1 -- judge client + provider
+// ---------------------------------------------------------------------------
+
+export interface JudgeRequest {
+  replyText: string;
+  personaDigest: string;
+  responseIntent: string;
+  worldContext: string | null;
+  loreContextSummary: string[];
+  worldPremise: string;
+}
+
+export interface JudgeVerdict {
+  passed: boolean;
+  violations: string[];
+  repairHint: string | null;
+}
+
+export interface JudgeProvider {
+  judgeReply: (request: JudgeRequest) => Promise<JudgeVerdict>;
+}
+
+export class SugarAgentGatewayJudgeClient {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly getBearerToken: BearerTokenGetter = async () => null
+  ) {}
+
+  async judge(request: JudgeRequest): Promise<JudgeVerdict> {
+    const response = await fetch(
+      `${normalizeBaseUrl(this.baseUrl)}/api/sugaragent/generate/judge`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeaders(this.getBearerToken))
+        },
+        body: JSON.stringify(request)
+      }
+    );
+    return parseJsonResponse<JudgeVerdict>(response, "SugarAgent gateway judge request");
+  }
+}
+
+export class SugarAgentGatewayJudgeProvider implements JudgeProvider {
+  constructor(private readonly client: SugarAgentGatewayJudgeClient) {}
+
+  async judgeReply(request: JudgeRequest): Promise<JudgeVerdict> {
+    return this.client.judge(request);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Plan 075.3 -- moderation client + provider
+// ---------------------------------------------------------------------------
+
+export interface ModerationRequest {
+  text: string;
+}
+
+export interface ModerationResult {
+  flagged: boolean;
+  categories: string[];
+  blocklisted: boolean;
+}
+
+export interface ModerationProvider {
+  moderate: (request: ModerationRequest) => Promise<ModerationResult>;
+}
+
+export class SugarAgentGatewayModerationClient {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly getBearerToken: BearerTokenGetter = async () => null
+  ) {}
+
+  async moderate(request: ModerationRequest): Promise<ModerationResult> {
+    const response = await fetch(
+      `${normalizeBaseUrl(this.baseUrl)}/api/sugaragent/generate/moderate`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeaders(this.getBearerToken))
+        },
+        body: JSON.stringify(request)
+      }
+    );
+    return parseJsonResponse<ModerationResult>(response, "SugarAgent gateway moderation request");
+  }
+}
+
+export class SugarAgentGatewayModerationProvider implements ModerationProvider {
+  constructor(private readonly client: SugarAgentGatewayModerationClient) {}
+
+  async moderate(request: ModerationRequest): Promise<ModerationResult> {
+    return this.client.moderate(request);
   }
 }
 

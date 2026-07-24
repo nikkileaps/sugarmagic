@@ -44,8 +44,6 @@ export interface ConversationSelectionContext {
   npcDescription?: string | null;
   interactionMode?: ConversationInteractionMode;
   lorePageId?: string | null;
-  /** Plan 072.7 — per-NPC agent model override (empty = gateway default). */
-  agentModelOverride?: string | null;
   activeQuest?: ConversationActiveQuestContext | null;
   scriptedFollowupDialogueDefinitionId?: string | null;
   targetLanguage?: string | null;

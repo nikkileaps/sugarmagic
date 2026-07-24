@@ -39,27 +39,6 @@ describe("npc-definition metadata normalization", () => {
     expect(npc.metadata).toEqual({ sugarlangRole: "placement" });
   });
 
-  // Plan 072.7 — per-NPC agent model override threads through normalize.
-  it("preserves a trimmed agentModelOverride during normalization", () => {
-    const npc = normalizeNPCDefinition({
-      displayName: "Orrin",
-      interactionMode: "agent",
-      agentModelOverride: "  claude-opus-4-8  "
-    });
-
-    expect(npc.agentModelOverride).toBe("claude-opus-4-8");
-  });
-
-  it("omits an empty agentModelOverride (falls back to the gateway default)", () => {
-    const npc = normalizeNPCDefinition({
-      displayName: "Orrin",
-      interactionMode: "agent",
-      agentModelOverride: "   "
-    });
-
-    expect(npc).not.toHaveProperty("agentModelOverride");
-  });
-
   it("strips null metadata during normalization", () => {
     const npc = normalizeNPCDefinition({
       displayName: "Orrin",
