@@ -112,6 +112,7 @@ import {
   type QuestManagerSlice,
   createRuntimeGameplayAssembly,
   createWorldPresenceSaveParticipant,
+  createWorldTimeSaveParticipant,
   WorldPresenceTracker,
   type RuntimeBannerContribution,
   createPlayerVisualController,
@@ -2727,6 +2728,12 @@ export function createWebRuntimeHost(
       createNpcBehaviorSaveParticipant({
         getNpcBehaviorSystem: () =>
           gameplaySession?.npcBehaviorSystem ?? null
+      })
+    );
+    saveParticipantRegistry.register(
+      createWorldTimeSaveParticipant({
+        getWorldTimeStore: () =>
+          gameplaySession?.worldTimeStore ?? null
       })
     );
     saveParticipantRegistry.deserializeAll(restoredSlices, ["default"]);

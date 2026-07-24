@@ -152,6 +152,11 @@ import {
 import { PlayerControlled } from "../ecs";
 import { buildLocationReference } from "../spatial";
 import { createRuntimeSpatialResolverSystem } from "../spatial/system";
+import {
+  createWorldTimeStore,
+  type TimeOfDayBand,
+  type WorldTimeStore
+} from "../world";
 
 export interface RuntimeSpellCastFeedback {
   spellDefinitionId: string;
@@ -263,6 +268,7 @@ export interface RuntimeGameplaySessionController {
   readonly questSystem: QuestSystem;
   readonly blackboard: RuntimeBlackboard;
   readonly audioController: RuntimeAudioController;
+  readonly worldTimeStore: WorldTimeStore;
   /** Plan 055 §055.4 — kick off every loaded quest definition
    *  via the quest-dialogue coordinator. Idempotent: startQuest
    *  short-circuits on quests already active or completed. The
@@ -583,6 +589,7 @@ export function createRuntimeGameplaySessionController(
   let pendingScriptedFollowupDialogueId: string | null = null;
   let lastTrackedQuestDefinitionId: string | null = null;
   let npcBehaviorSystem: RuntimeNpcBehaviorSystem | null = null;
+  const worldTimeStore = createWorldTimeStore();
   const billboardSystem = new BillboardSystem();
   const billboardOnlyEntities = new Set<Entity>();
   const debugBillboardBindings = new Map<Entity, DebugBillboardBinding>();
@@ -1708,6 +1715,16 @@ export function createRuntimeGameplaySessionController(
         sceneId: action.targetId ?? null
       });
     }
+
+    if (action.type === "set-time-of-day" && action.targetId) {
+      worldTimeStore.setTimeBand(action.targetId as TimeOfDayBand);
+      return;
+    }
+
+    if (action.type === "advance-day") {
+      worldTimeStore.advanceDay();
+      return;
+    }
   });
   questManager.setStateChangeHandler(() => {
     syncQuestUi();
@@ -2028,6 +2045,7 @@ export function createRuntimeGameplaySessionController(
     inventoryManager,
     casterManager,
     npcBehaviorSystem,
+    worldTimeStore,
     interactionSystem,
     questSystem,
     blackboard,

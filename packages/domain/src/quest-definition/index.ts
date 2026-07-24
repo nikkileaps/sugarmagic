@@ -42,6 +42,11 @@ export type QuestActionType =
   // targetId is omitted).
   | "unlockScene"
   | "advanceToNextScene"
+  // Plan 074 §074.1' — Beat-driven world clock. `set-time-of-day`
+  // uses targetId as the TimeOfDayBand value; `advance-day` needs
+  // no value. Both dispatch through the existing quest action chain.
+  | "set-time-of-day"
+  | "advance-day"
   | "custom";
 
 export interface QuestActionDefinition {
