@@ -27,8 +27,8 @@ function makeContext() {
       loreLocalPath: "",
       loreRepositoryUrl: "",
       loreRepositoryRef: "main",
-      maxEvidenceResults: 4,
-      maxEvidenceCharsPerItem: 600,
+      maxLoreResults: 4,
+      maxLoreCharsPerItem: 600,
       debugLogging: false,
       tone: ""
     },

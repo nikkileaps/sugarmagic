@@ -538,7 +538,7 @@ describe("SugarAgent runtime provider", () => {
     const lastSearch = searchRequests.at(-1);
     expect(lastSearch?.filters).toBeUndefined();
     // Own page dropped from evidence; only the other-page result survives.
-    expect(retrieve?.evidenceCount).toBe(1);
+    expect(retrieve?.loreContextCount).toBe(1);
   });
 
   it("uses blackboard-backed current location context for 'where are we' retrieval", async () => {

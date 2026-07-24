@@ -281,7 +281,7 @@ export interface JudgeRequest {
   personaDigest: string;
   responseIntent: string;
   worldContext: string | null;
-  evidenceSummary: string[];
+  loreContextSummary: string[];
 }
 
 export interface JudgeVerdict {

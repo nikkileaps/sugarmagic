@@ -243,9 +243,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     } | null = null;
     let modelUsed: string | null = null;
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
-    const evidenceSummary = summarizeEvidence(input.retrieve.evidencePack, {
-      maxItems: context.config.maxEvidenceResults,
-      perItemChars: context.config.maxEvidenceCharsPerItem
+    const loreContextSummary = summarizeEvidence(input.retrieve.loreContext, {
+      maxItems: context.config.maxLoreResults,
+      perItemChars: context.config.maxLoreCharsPerItem
     });
     const minimalSugarlangGreetingMode = isMinimalGreetingMode(
       constraint
@@ -350,7 +350,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
             responseGoal: input.plan.responseGoal,
             responseSpecificity: input.plan.responseSpecificity,
             turnPath: input.plan.turnPath,
-            evidenceCount: input.retrieve.evidencePack.length,
+            loreContextCount: input.retrieve.loreContext.length,
             proximityBand: npcPlayerRelation?.proximityBand ?? null,
             movementStatus: npcMovement?.status ?? null,
             currentTaskDisplayName: npcCurrentTask?.displayName ?? null,
@@ -396,7 +396,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         npcMovement: npcMovement?.status
           ? { status: npcMovement.status, targetAreaDisplayName: npcMovement.targetAreaDisplayName }
           : null,
-        evidenceSummary,
+        loreContextSummary,
         recentHistory: input.state.history.slice(-4),
         languageLearningOverlay: constraint?.generatorPromptOverlay || null,
         // Plan 072.4 — persona/core loaded once at session start (072.3).
@@ -545,7 +545,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           turnPath: input.plan.turnPath,
           interpretIntent: input.interpret.interpretation.intent,
           socialMove: input.interpret.interpretation.socialMove,
-          evidenceCount: input.retrieve.evidencePack.length,
+          loreContextCount: input.retrieve.loreContext.length,
           currentAreaDisplayName: currentLocationDisplayName,
           proximityBand: npcPlayerRelation?.proximityBand ?? null,
           movementStatus: npcMovement?.status ?? null,

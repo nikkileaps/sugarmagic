@@ -15,7 +15,7 @@ import type {
   TurnStageContext
 } from "../types";
 
-function mergeEvidencePacks(
+function mergeLoreContexts(
   ...packs: RetrievedEvidenceItem[][]
 ): RetrievedEvidenceItem[] {
   const merged: RetrievedEvidenceItem[] = [];
@@ -42,7 +42,7 @@ function mergeEvidencePacks(
 
 function buildCurrentLocationEvidence(
   execution: ConversationExecutionContext
-): RetrieveResult["evidencePack"][number] | null {
+): RetrieveResult["loreContext"][number] | null {
   const currentLocation = execution.runtimeContext?.here;
   if (!currentLocation?.regionDisplayName && !currentLocation?.area?.displayName) {
     return null;
@@ -225,8 +225,8 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       activeQuestDisplayName
     );
 
-    let vectorSearchPerformed = false;
-    let evidencePack: RetrieveResult["evidencePack"] = [];
+    let loreSearchPerformed = false;
+    let loreContext: RetrieveResult["loreContext"] = [];
     let fallbackReason: string | null = null;
     let status: TurnStageResult<RetrieveResult>["status"] = "ok";
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
@@ -267,28 +267,28 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           // server-side `ne` filter is NOT used: it is unverified against the
           // live OpenAI vector-store /search schema (072.6 probe-first). Request
           // headroom so dropping the own page still leaves up to
-          // maxEvidenceResults items of OTHER lore.
-          const requested = Math.min(8, context.config.maxEvidenceResults + 3);
+          // maxLoreResults items of OTHER lore.
+          const requested = Math.min(8, context.config.maxLoreResults + 3);
           const broad = await this.vectorStoreProvider.searchLore({
             vectorStoreId: "",
             query: searchQuery,
             maxResults: requested,
             filters: undefined
           });
-          evidencePack = broad
+          loreContext = broad
             .filter(
               (item) =>
                 item.attributes[OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE] !==
                 npcLorePageId
             )
-            .slice(0, context.config.maxEvidenceResults);
+            .slice(0, context.config.maxLoreResults);
           ownPageExcluded = true;
-          vectorSearchPerformed = true;
+          loreSearchPerformed = true;
         } else {
           const reservedNpcLoreResults = shouldPinNpcLore ? 1 : 0;
           const primaryMaxResults = Math.max(
             1,
-            context.config.maxEvidenceResults - reservedNpcLoreResults
+            context.config.maxLoreResults - reservedNpcLoreResults
           );
 
           const searchLore = (filters?: OpenAIVectorStoreFilter) =>
@@ -296,13 +296,13 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
               // Empty vectorStoreId → gateway defaults it server-side.
               vectorStoreId: "",
               query: searchQuery,
-              maxResults: filters ? primaryMaxResults : context.config.maxEvidenceResults,
+              maxResults: filters ? primaryMaxResults : context.config.maxLoreResults,
               filters
             });
 
-          evidencePack = await searchLore(retrievalFilters);
-          if (evidencePack.length === 0 && retrievalFilters) {
-            evidencePack = await searchLore();
+          loreContext = await searchLore(retrievalFilters);
+          if (loreContext.length === 0 && retrievalFilters) {
+            loreContext = await searchLore();
             broadenedBeyondLorePage = true;
           }
 
@@ -318,21 +318,21 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
               }
             });
             pinnedNpcLoreEvidence = npcLoreEvidence.length > 0;
-            evidencePack = mergeEvidencePacks(evidencePack, npcLoreEvidence).slice(
+            loreContext = mergeLoreContexts(loreContext, npcLoreEvidence).slice(
               0,
-              context.config.maxEvidenceResults
+              context.config.maxLoreResults
             );
           }
-          vectorSearchPerformed = true;
+          loreSearchPerformed = true;
         }
       } catch {
         status = "degraded";
         fallbackReason = fallbackReason ?? "vector-search-unavailable";
-        evidencePack = [];
+        loreContext = [];
       }
     }
 
-    evidencePack = evidencePack.map((item) => ({
+    loreContext = loreContext.map((item) => ({
       ...item,
       text: normalizeRetrievedEvidenceText(item.text)
     }));
@@ -344,12 +344,12 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
         input.interpret.interpretation.facet === "location"
       )
     ) {
-      evidencePack = [runtimeCurrentLocationEvidence, ...evidencePack];
+      loreContext = [runtimeCurrentLocationEvidence, ...loreContext];
     }
 
     const output: RetrieveResult = {
-      evidencePack,
-      vectorSearchPerformed
+      loreContext,
+      loreSearchPerformed
     };
 
     return {
@@ -362,15 +362,15 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           turnPath: input.interpret.turnRouting.path,
           queryType: input.interpret.queryType,
           skippedRetrieval: skipRetrieval,
-          evidencePackSummary: summarizeEvidence(evidencePack, {
-            maxItems: context.config.maxEvidenceResults,
-            perItemChars: context.config.maxEvidenceCharsPerItem
+          loreContextSummary: summarizeEvidence(loreContext, {
+            maxItems: context.config.maxLoreResults,
+            perItemChars: context.config.maxLoreCharsPerItem
           }),
-          evidenceCount: evidencePack.length,
+          loreContextCount: loreContext.length,
           // Plan 072.6 — retrieval rebalance observability.
           personaLoaded: input.personaLoaded,
           ownPageExcluded,
-          evidenceCharsPerItem: context.config.maxEvidenceCharsPerItem,
+          loreCharsPerItem: context.config.maxLoreCharsPerItem,
           npcLorePageId,
           currentAreaDisplayName: runtimeCurrentLocation?.area?.displayName ?? null,
           currentParentAreaDisplayName:
@@ -392,7 +392,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           retrievalFilters,
           broadenedBeyondLorePage,
           pinnedNpcLoreEvidence,
-          vectorSearchPerformed
+          loreSearchPerformed
         },
         fallbackReason
       ),

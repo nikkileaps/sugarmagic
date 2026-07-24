@@ -32,8 +32,8 @@ function makeContext() {
       loreLocalPath: "",
       loreRepositoryUrl: "",
       loreRepositoryRef: "main",
-      maxEvidenceResults: 4,
-      maxEvidenceCharsPerItem: 600,
+      maxLoreResults: 4,
+      maxLoreCharsPerItem: 600,
       debugLogging: false,
       tone: "",
       moderationEnabled: false,
@@ -114,8 +114,8 @@ function makeInput(overrides: PartialInput = {}) {
       shouldCloseAfterReply: false
     },
     retrieve: {
-      evidencePack: [],
-      vectorSearchPerformed: false
+      loreContext: [],
+      loreSearchPerformed: false
     },
     plan: {
       responseIntent: "chat" as const,

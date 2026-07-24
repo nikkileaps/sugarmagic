@@ -166,8 +166,8 @@ export interface AgentPromptContext extends BasePromptContext {
   /** Whether the generator should use minimal first-meeting greeting mode. */
   minimalGreetingMode: boolean;
 
-  /** Evidence summary lines from the retrieve stage. */
-  evidenceSummary: string[];
+  /** Lore context summary lines from the retrieve stage. */
+  loreContextSummary: string[];
 
   /** Recent conversation history (last N entries). */
   recentHistory: Array<{ role: string; text: string }>;

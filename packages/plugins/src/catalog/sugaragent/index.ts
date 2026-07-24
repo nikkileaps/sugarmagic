@@ -232,15 +232,15 @@ export function normalizeSugarAgentPluginConfig(
       typeof config?.anthropicSummaryModel === "string"
         ? config.anthropicSummaryModel.trim()
         : "",
-    maxEvidenceCharsPerItem:
-      typeof config?.maxEvidenceCharsPerItem === "number" &&
-      Number.isFinite(config.maxEvidenceCharsPerItem)
-        ? Math.max(120, Math.min(4000, Math.floor(config.maxEvidenceCharsPerItem)))
+    maxLoreCharsPerItem:
+      typeof config?.maxLoreCharsPerItem === "number" &&
+      Number.isFinite(config.maxLoreCharsPerItem)
+        ? Math.max(120, Math.min(4000, Math.floor(config.maxLoreCharsPerItem)))
         : 600,
-    maxEvidenceResults:
-      typeof config?.maxEvidenceResults === "number" &&
-      Number.isFinite(config.maxEvidenceResults)
-        ? Math.max(1, Math.min(8, Math.floor(config.maxEvidenceResults)))
+    maxLoreResults:
+      typeof config?.maxLoreResults === "number" &&
+      Number.isFinite(config.maxLoreResults)
+        ? Math.max(1, Math.min(8, Math.floor(config.maxLoreResults)))
         : 4,
     memoryEnabled: config?.memoryEnabled !== false,
     memoryDigestMaxChars:
@@ -335,8 +335,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       placeholder: "claude-haiku-4-5"
     },
     {
-      configKey: "maxEvidenceResults",
-      label: "Max Evidence Results",
+      configKey: "maxLoreResults",
+      label: "Max Lore Results",
       type: "number",
       group: "Runtime Behavior",
       default: 4,
@@ -344,8 +344,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       max: 8
     },
     {
-      configKey: "maxEvidenceCharsPerItem",
-      label: "Max Evidence Chars / Item",
+      configKey: "maxLoreCharsPerItem",
+      label: "Max Lore Chars / Item",
       type: "number",
       group: "Runtime Behavior",
       default: 600,
@@ -456,8 +456,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     openAiVectorStoreId: "",
     anthropicModel: "",
     anthropicSummaryModel: "",
-    maxEvidenceResults: 4,
-    maxEvidenceCharsPerItem: 600,
+    maxLoreResults: 4,
+    maxLoreCharsPerItem: 600,
     memoryEnabled: true,
     memoryDigestMaxChars: 800,
     questAwareNpcsEnabled: true,

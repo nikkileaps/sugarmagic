@@ -109,7 +109,7 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
 
     // Build judge inputs from execution context.
     const personaDigest = input.state.persona?.digest ?? "";
-    const evidenceSummary = input.retrieve.evidencePack.map((item) =>
+    const loreContextSummary = input.retrieve.loreContext.map((item) =>
       item.text.slice(0, 300)
     );
     const questAnnotation =
@@ -124,7 +124,7 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
         personaDigest,
         responseIntent: input.plan.responseIntent,
         worldContext,
-        evidenceSummary
+        loreContextSummary
       });
 
       const output: JudgeResult = {

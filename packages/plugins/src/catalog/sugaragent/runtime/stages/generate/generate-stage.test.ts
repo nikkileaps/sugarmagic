@@ -83,9 +83,9 @@ function createStageInput() {
       shouldCloseAfterReply: false
     },
     retrieve: {
-      evidencePack: [],
+      loreContext: [],
       usedEmbeddings: false,
-      vectorSearchPerformed: false,
+      loreSearchPerformed: false,
       semanticQueryFingerprint: null
     },
     plan: {
@@ -129,8 +129,8 @@ function createStageContext(options: { debugLogging?: boolean } = {}) {
       loreLocalPath: "",
       loreRepositoryUrl: "",
       loreRepositoryRef: "main",
-      maxEvidenceResults: 4,
-      maxEvidenceCharsPerItem: 600,
+      maxLoreResults: 4,
+      maxLoreCharsPerItem: 600,
       // Plan 072.4 — the full systemPrompt/userPrompt are only dumped into
       // diagnostics when debugLogging is on. These prompt-content tests need
       // them, so default on; the gate test overrides to false.

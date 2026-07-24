@@ -68,7 +68,7 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
     }
 
     let responseIntent: PlanResult["responseIntent"] = "answer";
-    const hasEvidence = input.retrieve.evidencePack.length > 0;
+    const hasEvidence = input.retrieve.loreContext.length > 0;
     const hasActiveQuest = Boolean(
       input.execution.runtimeContext?.trackedQuest?.displayName ??
         input.execution.selection.activeQuest?.displayName
@@ -135,7 +135,7 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       noveltyState: decision.noveltyState,
       // Diagnostic "claims" field, not the model prompt — keep the legacy
       // compact budget (the model-facing budget lives in GenerateStage, 072.6).
-      claims: summarizeEvidence(input.retrieve.evidencePack, {
+      claims: summarizeEvidence(input.retrieve.loreContext, {
         maxItems: 3,
         perItemChars: 180
       }),

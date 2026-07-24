@@ -87,13 +87,13 @@ export interface SugarAgentPluginConfig {
    * gatewayRuntimeConfigKeys). Empty => gateway default `claude-haiku-4-5`.
    */
   anthropicSummaryModel: string;
-  maxEvidenceResults: number;
+  maxLoreResults: number;
   /**
    * Plan 072.6 — per-evidence-item character budget forwarded to the prompt.
    * Replaces the old hard 180-char truncation; the wiki's richness must reach
-   * the model. Total evidence budget is bounded by maxEvidenceResults x this.
+   * the model. Total evidence budget is bounded by maxLoreResults x this.
    */
-  maxEvidenceCharsPerItem: number;
+  maxLoreCharsPerItem: number;
   /**
    * Plan 073.5 — master switch for NPC memory (persistence + recall). When
    * false, the memory middleware and the end-of-conversation summarizer are
@@ -302,8 +302,8 @@ export interface RetrievedEvidenceItem {
 }
 
 export interface RetrieveResult {
-  evidencePack: RetrievedEvidenceItem[];
-  vectorSearchPerformed: boolean;
+  loreContext: RetrievedEvidenceItem[];
+  loreSearchPerformed: boolean;
 }
 
 export interface PlanResult {

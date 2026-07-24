@@ -996,8 +996,8 @@ export async function handleSugarAgentJudge(
     typeof body["responseIntent"] === "string" ? body["responseIntent"].trim() : "chat";
   const worldContext =
     typeof body["worldContext"] === "string" ? body["worldContext"].trim() : null;
-  const rawEvidence = Array.isArray(body["evidenceSummary"])
-    ? (body["evidenceSummary"] as unknown[]).filter((e): e is string => typeof e === "string")
+  const rawLoreContext = Array.isArray(body["loreContextSummary"])
+    ? (body["loreContextSummary"] as unknown[]).filter((e): e is string => typeof e === "string")
     : [];
 
   if (!replyText) {
@@ -1008,7 +1008,7 @@ export async function handleSugarAgentJudge(
   const model = resolveEnv("SUGARMAGIC_SUGARAGENT_JUDGE_MODEL", "claude-haiku-4-5");
   const baseUrl = resolveEnv("SUGARMAGIC_SUGARAGENT_JUDGE_BASE_URL", "https://api.anthropic.com");
 
-  const evidenceLines = rawEvidence
+  const loreContextLines = rawLoreContext
     .map((e, i) => `[${i + 1}] ${e.slice(0, 300)}`)
     .join("\n");
 
@@ -1016,7 +1016,7 @@ export async function handleSugarAgentJudge(
     `NPC persona summary (this is the NPC's established identity — treat all facts here as in-world):\n${personaDigest || "(none)"}\n\n` +
     `Response intent: ${responseIntent}\n\n` +
     (worldContext ? `World context right now:\n${worldContext}\n\n` : "") +
-    (evidenceLines ? `Evidence available to this NPC:\n${evidenceLines}\n\n` : "") +
+    (loreContextLines ? `Lore context available to this NPC:\n${loreContextLines}\n\n` : "") +
     `NPC reply to score:\n"${replyText}"\n\n` +
     `Rubric (each must PASS for overall pass):\n` +
     `1. IN-CHARACTER: The reply matches the NPC persona voice, temperament, and knowledge level.\n` +
