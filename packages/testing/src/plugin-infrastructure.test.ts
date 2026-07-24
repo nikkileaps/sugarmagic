@@ -3733,13 +3733,17 @@ describe("plugin infrastructure", () => {
       openAiVectorStoreId: "",
       anthropicModel: "",
       anthropicSummaryModel: "",
-      maxEvidenceResults: 8,
-      maxEvidenceCharsPerItem: 600,
+      anthropicRegenModel: "",
+      maxLoreResults: 4,
+      maxLoreCharsPerItem: 600,
       memoryEnabled: true,
       memoryDigestMaxChars: 800,
       questAwareNpcsEnabled: true,
       debugLogging: true,
-      tone: ""
+      tone: "",
+      moderationEnabled: false,
+      blocklist: "",
+      worldPremise: ""
     });
   });
 
@@ -3761,13 +3765,17 @@ describe("plugin infrastructure", () => {
       openAiVectorStoreId: "",
       anthropicModel: "",
       anthropicSummaryModel: "",
-      maxEvidenceResults: 4,
-      maxEvidenceCharsPerItem: 600,
+      anthropicRegenModel: "",
+      maxLoreResults: 4,
+      maxLoreCharsPerItem: 600,
       memoryEnabled: true,
       memoryDigestMaxChars: 800,
       questAwareNpcsEnabled: true,
       debugLogging: false,
-      tone: ""
+      tone: "",
+      moderationEnabled: false,
+      blocklist: "",
+      worldPremise: ""
     });
   });
 

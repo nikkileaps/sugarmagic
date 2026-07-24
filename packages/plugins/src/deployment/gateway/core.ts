@@ -822,10 +822,13 @@ export async function handleSugarAgentGenerate(
   const purpose =
     typeof body["purpose"] === "string" ? body["purpose"].trim() : "";
   const model =
-    typeof body["model"] === "string" && body["model"].trim()
-      ? body["model"].trim()
-      : purpose === "summary"
-        ? resolveEnv("SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL", "claude-haiku-4-5")
+    purpose === "summary"
+      ? resolveEnv("SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL", "claude-haiku-4-5")
+      : purpose === "regen"
+        ? resolveEnv(
+            "SUGARMAGIC_SUGARAGENT_REGEN_MODEL",
+            resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5")
+          )
         : resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5");
   // The ground-truth record of which model each call used — grep it in
   // `docker compose logs` to verify a model config change actually landed.

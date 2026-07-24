@@ -45,6 +45,7 @@ function makeInput(overrides: {
   usedLlm?: boolean;
   text?: string;
   personaDigest?: string;
+  npcDescription?: string;
 }) {
   return {
     execution: {
@@ -52,6 +53,7 @@ function makeInput(overrides: {
         conversationKind: "free-form" as const,
         npcDefinitionId: "npc-1",
         npcDisplayName: "Mira",
+        npcDescription: overrides.npcDescription ?? null,
         interactionMode: "agent" as const
       },
       input: { kind: "free_text" as const, text: "hello" },
@@ -152,7 +154,7 @@ describe("JudgeStage", () => {
   it("returns passed=true when provider approves the reply", async () => {
     const provider = makeProvider({ passed: true, violations: [], repairHint: null });
     const stage = new JudgeStage(provider);
-    const result = await stage.execute(makeInput({}) as never, makeContext() as never);
+    const result = await stage.execute(makeInput({ npcDescription: "A village merchant." }) as never, makeContext() as never);
 
     expect(result.output.passed).toBe(true);
     expect(result.output.skipped).toBe(false);
@@ -165,7 +167,7 @@ describe("JudgeStage", () => {
     const violations = ["NPC broke character by mentioning the real world."];
     const provider = makeProvider({ passed: false, violations, repairHint: "Stay in character." });
     const stage = new JudgeStage(provider);
-    const result = await stage.execute(makeInput({}) as never, makeContext() as never);
+    const result = await stage.execute(makeInput({ npcDescription: "A village merchant." }) as never, makeContext() as never);
 
     expect(result.output.passed).toBe(false);
     expect(result.output.violations).toEqual(violations);
@@ -181,7 +183,7 @@ describe("JudgeStage", () => {
       judgeReply: vi.fn().mockRejectedValue(new Error("network timeout"))
     };
     const stage = new JudgeStage(provider);
-    const result = await stage.execute(makeInput({}) as never, makeContext() as never);
+    const result = await stage.execute(makeInput({ npcDescription: "A village merchant." }) as never, makeContext() as never);
 
     expect(result.output.passed).toBe(true);
     expect(result.output.errorOccurred).toBe(true);

@@ -232,6 +232,10 @@ export function normalizeSugarAgentPluginConfig(
       typeof config?.anthropicSummaryModel === "string"
         ? config.anthropicSummaryModel.trim()
         : "",
+    anthropicRegenModel:
+      typeof config?.anthropicRegenModel === "string"
+        ? config.anthropicRegenModel.trim()
+        : "",
     maxLoreCharsPerItem:
       typeof config?.maxLoreCharsPerItem === "number" &&
       Number.isFinite(config.maxLoreCharsPerItem)
@@ -334,6 +338,15 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       description:
         "Model for the end-of-conversation NPC memory summary — a cheap background task, keep it smaller/faster than the dialogue model. Applied at deploy. Empty = claude-haiku-4-5.",
       placeholder: "claude-haiku-4-5"
+    },
+    {
+      configKey: "anthropicRegenModel",
+      label: "Anthropic Regen Model",
+      type: "text",
+      group: "Gateway Runtime Config",
+      description:
+        "Model the gateway uses when regenerating a reply that failed the judge. A better model here improves repair quality without raising per-turn cost. Applied at deploy. Empty = same as Dialogue Model.",
+      placeholder: "claude-sonnet-4-5"
     },
     {
       configKey: "maxLoreResults",
@@ -451,6 +464,13 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       nonSecretAttestation: "safe-to-expose-publicly"
     },
     {
+      configKey: "anthropicRegenModel",
+      envVarName: "SUGARMAGIC_SUGARAGENT_REGEN_MODEL",
+      description:
+        "Anthropic model the gateway uses when regenerating a reply that failed the judge (purpose:\"regen\"). Falls back to SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL when unset.",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    },
+    {
       configKey: "blocklist",
       envVarName: "SUGARMAGIC_SUGARAGENT_BLOCKLIST",
       description:
@@ -466,6 +486,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     openAiVectorStoreId: "",
     anthropicModel: "",
     anthropicSummaryModel: "",
+    anthropicRegenModel: "",
     maxLoreResults: 4,
     maxLoreCharsPerItem: 600,
     memoryEnabled: true,

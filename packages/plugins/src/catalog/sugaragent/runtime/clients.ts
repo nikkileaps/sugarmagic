@@ -18,14 +18,13 @@ export interface OpenAIVectorStoreEqFilter {
 export type OpenAIVectorStoreFilter = OpenAIVectorStoreEqFilter;
 
 export interface LLMGenerateRequest {
-  model: string;
   systemPrompt: string;
   userPrompt: string;
   maxTokens?: number;
-  /** Plan 073.2 — request category the gateway maps to a server-side model
-   *  env var. "summary" uses the cheap memory-summary model; anything else
-   *  (default) uses the dialogue model. No model id crosses the wire. */
-  purpose?: "dialogue" | "summary";
+  /** Gateway-side model routing. "summary" uses SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL;
+   *  "regen" uses SUGARMAGIC_SUGARAGENT_REGEN_MODEL (falls back to dialogue model);
+   *  omit or "dialogue" uses SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL. */
+  purpose?: "dialogue" | "summary" | "regen";
 }
 
 /** Plan 072.7 — the LLM result now carries usage + the model actually used. */
@@ -253,7 +252,6 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
 
   async generateStructuredTurn(request: LLMGenerateRequest): Promise<LLMGenerateResult> {
     const response = await this.client.generate({
-      model: request.model.trim() || undefined,
       purpose: request.purpose,
       // Plan 072.5 — send the system prompt as one cacheable block (a single
       // cache breakpoint at the end of the full system prompt). sugaragent's

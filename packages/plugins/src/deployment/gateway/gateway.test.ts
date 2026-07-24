@@ -417,7 +417,7 @@ describe("handleSugarAgentGenerate", () => {
       "claude-haiku-4-5-20251001"
     );
 
-    // Response omits model -> fall back to the requested id.
+    // Response omits model -> fall back to the env-var-resolved model (body model is ignored).
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -434,11 +434,11 @@ describe("handleSugarAgentGenerate", () => {
         method: "POST",
         url: "/api/sugaragent/generate",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ systemPrompt: "s", userPrompt: "u", model: "claude-opus-4-8" })
+        body: JSON.stringify({ systemPrompt: "s", userPrompt: "u" })
       }),
       res2
     );
-    expect((JSON.parse(res2.body) as { model: string }).model).toBe("claude-opus-4-8");
+    expect((JSON.parse(res2.body) as { model: string }).model).toBe("claude-haiku-4-5");
   });
 
   it("072.5 — accepts systemBlocks alone (no systemPrompt) and passes usage through", async () => {

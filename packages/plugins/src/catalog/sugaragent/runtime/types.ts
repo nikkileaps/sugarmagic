@@ -87,6 +87,9 @@ export interface SugarAgentPluginConfig {
    * gatewayRuntimeConfigKeys). Empty => gateway default `claude-haiku-4-5`.
    */
   anthropicSummaryModel: string;
+  /** Model the gateway uses for regen calls (purpose:"regen"). Falls back to
+   *  SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL when unset. */
+  anthropicRegenModel: string;
   maxLoreResults: number;
   /**
    * Plan 072.6 — per-evidence-item character budget forwarded to the prompt.

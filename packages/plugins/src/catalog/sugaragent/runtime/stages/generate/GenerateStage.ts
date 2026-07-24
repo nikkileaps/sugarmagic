@@ -461,8 +461,6 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         for (let attempt = 0; attempt <= GENERATE_RETRY_BACKOFF_MS.length; attempt += 1) {
           try {
             const result = await this.llmProvider.generateStructuredTurn({
-              // Plan 072.7 — per-NPC override; empty → gateway default.
-              model: input.execution.selection.agentModelOverride?.trim() || "",
               systemPrompt,
               userPrompt,
               maxTokens: 300

@@ -234,7 +234,7 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
     let regenText = "";
     try {
       const result = await this.llmProvider.generateStructuredTurn({
-        model: "",
+        purpose: "regen",
         systemPrompt: regenSystemPrompt,
         userPrompt: regenUserPrompt,
         maxTokens: 200
