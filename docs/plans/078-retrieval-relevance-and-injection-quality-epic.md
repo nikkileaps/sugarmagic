@@ -1,6 +1,6 @@
 # Plan 078 -- Retrieval Relevance + Knowledge-Injection Quality
 
-Status: Locked (epic-review passed 2026-07-24, 3 rounds) -- stories execute as written; deviations need STOP + amendment + re-gate.
+Status: COMPLETE 2026-07-24 (epic-review passed 2026-07-24, 3 rounds)
 Owner: nikki + claude
 Date: 2026-07-24
 

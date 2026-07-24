@@ -189,7 +189,7 @@ __sugaragentRetrieval.dump()
 __sugaragentRetrieval.dump("npc:finnick")
 ```
 
-Each entry: `{ npcDefinitionId, loreScores, loreSearchPerformed, broadenedBeyondLorePage, ownPageExcluded }`.
+Each entry: `{ npcDefinitionId, loreScores, loreSearchPerformed, broadenedBeyondLorePage, ownPageExcluded, droppedByFloor }`.
 
 `loreScores` is an array of `{ score, source, pageId, fileId }`, one entry per
 chunk in the final `loreContext` for that turn. The `source` tag says why the
@@ -217,6 +217,44 @@ Reading `source` alongside `score` is what makes the floor tunable: a score of
 `pinned` chunk is the identity anchor doing its job.
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/stages/retrieval-debug.ts`
+
+## Tuning the Relevance Floor
+
+Use `__sugaragentRetrieval.dump()` to observe score distributions before
+setting `loreRelevanceFloor`. Four steps:
+
+**Step 1 -- Read on-topic vs off-topic scores.**
+Start a session with a representative NPC. Ask one clear on-topic question
+(something the NPC's lore page covers) and one off-topic question (a topic
+from a different part of the world). After each turn:
+
+```javascript
+__sugaragentRetrieval.dump("npc:your-npc-id")
+```
+
+Look at `loreScores.filter(s => s.source === "retrieved")`. On-topic turns
+should return higher scores; off-topic turns should return lower scores or
+nothing. Note where relevance visibly flips.
+
+**Step 2 -- Check stability across repeats.**
+Ask the same question twice without advancing the conversation. Compare
+scores across two dumps. If scores vary by more than 0.05-0.10 on the same
+query, the boundary is noisy. Your floor must be at least 0.1 below the
+lowest score you want to reliably keep, or you will intermittently filter
+chunks you need.
+
+**Step 3 -- Set the floor conservatively LOW.**
+Pick a value that clears obvious noise (0.2-0.35 is a typical noise floor for
+OpenAI text-embedding-3) with a comfortable margin below your weakest
+on-topic score. A floor of 0.3 is a reasonable first cut for most lore sets.
+Do not set above 0.7 without verifying on a large sample of on-topic queries.
+
+**Step 4 -- Confirm graceful abstain on off-topic turns.**
+With the floor set, ask a clearly off-topic question. If all retrieved chunks
+fall below the floor, `loreContext` will be empty and the NPC will abstain
+("I don't know enough about that yet") rather than hallucinating. Check
+`droppedByFloor` in the dump to confirm chunks were dropped rather than simply
+absent from the search results.
 
 ## NPC Identity Fallback (no lore page)
 
@@ -294,6 +332,13 @@ check. Without it the judge grades against generic RPG assumptions. Example:
 `"Wordlark Hollow is a cozy village where everyone is an anthropomorphic animal."`
 
 Set in Studio > SugarAgent > NPC Behavior > World Premise.
+
+`loreRelevanceFloor: number` (default `0`) -- minimum vector similarity score
+for a retrieved lore chunk to enter the NPC's context. Range: 0..1 (0 = no
+filter, 1 = nothing passes). Only filters `retrieved` chunks; `pinned` and
+`synthetic-location` chunks always pass. See Tuning the Relevance Floor above.
+
+Set in Studio > SugarAgent > NPC Behavior > Lore Relevance Floor.
 
 ---
 
