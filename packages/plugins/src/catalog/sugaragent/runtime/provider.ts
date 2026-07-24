@@ -12,6 +12,8 @@ import {
   // client classes were deleted because the browser-side SugarAgent
   // never reads raw Anthropic / OpenAI keys (they live server-side, in
   // the local SugarDeploy gateway (dev) or the deployed Cloud Run gateway).
+  SugarAgentGatewayJudgeClient,
+  SugarAgentGatewayJudgeProvider,
   SugarAgentGatewayLLMClient,
   SugarAgentGatewayLLMProvider,
   SugarAgentGatewayLoreClient,
@@ -19,6 +21,7 @@ import {
   SugarAgentGatewayVectorStoreClient,
   SugarAgentGatewayVectorStoreProvider,
   type BearerTokenGetter,
+  type JudgeProvider,
   type LLMProvider,
   type PersonaLoader,
   type VectorStoreProvider
@@ -30,8 +33,9 @@ import {
   AuditStage,
   GenerateStage,
   InterpretStage,
+  JudgeStage,
   PlanStage,
-  RepairStage,
+  RegenerateStage,
   RetrieveStage
 } from "./stages";
 import { buildTerminalFallbackReply } from "./stages/helpers";
@@ -69,6 +73,7 @@ function ensureProviderState(
     sessionId: createUuid(),
     turnCount: 0,
     consecutiveFallbackTurns: 0,
+    consecutiveJudgeFailures: 0,
     closeRequested: false,
     history: [],
     transcript: [],
@@ -112,7 +117,11 @@ function isStalledTurn(
     (stage) => stage.status === "degraded"
   );
   const hasRealDegradedFallback = degradedStages.some(
-    (stage) => stage.fallbackReason && stage.fallbackReason !== "generic-only-policy"
+    (stage) =>
+      stage.fallbackReason &&
+      stage.fallbackReason !== "generic-only-policy" &&
+      // 075.1: judge errors are fail-open; don't let a judge outage 3-strike-close conversations.
+      stage.fallbackReason !== "judge-error"
   );
   if (hasRealDegradedFallback) {
     return true;
@@ -142,7 +151,10 @@ function shouldAutoCloseAfterTurn(
     return false;
   }
 
-  return diagnostics.Generate?.fallbackReason === "llm-retry-exhausted";
+  return (
+    diagnostics.Generate?.fallbackReason === "llm-retry-exhausted" ||
+    diagnostics.Regenerate?.fallbackReason === "llm-retry-exhausted"
+  );
 }
 
 async function runStage<TInput, TOutput>(
@@ -211,6 +223,7 @@ function resolveProviders(
   _logger: SugarAgentLogger
 ): {
   llmProvider: LLMProvider | null;
+  judgeProvider: JudgeProvider | null;
   vectorStoreProvider: VectorStoreProvider | null;
   personaLoader: PersonaLoader;
 } {
@@ -236,6 +249,10 @@ function resolveProviders(
   return {
     llmProvider: new SugarAgentGatewayLLMProvider(
       new SugarAgentGatewayLLMClient(baseUrl, getBearerToken)
+    ),
+    // Plan 075.1: judge provider routes to the dedicated /judge sub-path.
+    judgeProvider: new SugarAgentGatewayJudgeProvider(
+      new SugarAgentGatewayJudgeClient(baseUrl, getBearerToken)
     ),
     vectorStoreProvider: new SugarAgentGatewayVectorStoreProvider(
       new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken)
@@ -327,8 +344,9 @@ async function executePipeline(args: {
     retrieve: RetrieveStage;
     plan: PlanStage;
     generate: GenerateStage;
+    judge: JudgeStage;
     audit: AuditStage;
-    repair: RepairStage;
+    regenerate: RegenerateStage;
   };
 }): Promise<ConversationTurnEnvelope> {
   const { execution, state, config, logger, stages } =
@@ -395,16 +413,28 @@ async function executePipeline(args: {
       }
     };
   }
+  const { output: judge, diagnostics: judgeDiagnostics } = await runStage(
+    stages.judge,
+    { execution, state, plan, retrieve, generate },
+    context
+  );
   const { output: audit, diagnostics: auditDiagnostics } = await runStage(
     stages.audit,
     { execution, generate, plan },
     context
   );
-  const { output: repair, diagnostics: repairDiagnostics } = await runStage(
-    stages.repair,
-    { execution, interpret, retrieve, plan, generate, audit },
+  const { output: repair, diagnostics: regenerateDiagnostics } = await runStage(
+    stages.regenerate,
+    { execution, state, interpret, retrieve, plan, generate, judge, audit },
     context
   );
+
+  // Plan 075.2: update consecutive judge-failure counter for the 3-strike governor.
+  if (!judge.skipped && !judge.errorOccurred && !judge.passed) {
+    state.consecutiveJudgeFailures = (state.consecutiveJudgeFailures ?? 0) + 1;
+  } else if (!judge.skipped && !judge.errorOccurred) {
+    state.consecutiveJudgeFailures = 0;
+  }
 
   state.turnCount += 1;
   state.lastTurnDiagnostics = {
@@ -412,8 +442,9 @@ async function executePipeline(args: {
     Retrieve: retrieveDiagnostics,
     Plan: planDiagnostics,
     Generate: generateDiagnostics,
+    Judge: judgeDiagnostics,
     Audit: auditDiagnostics,
-    Repair: repairDiagnostics
+    Regenerate: regenerateDiagnostics
   };
   state.consecutiveFallbackTurns = isStalledTurn(
     state.lastTurnDiagnostics,
@@ -490,7 +521,7 @@ export function createSugarAgentConversationProvider(
   // (mandatory) proxyBaseUrl, which pinned logging always-on and made the
   // setting a no-op. Now stage logging + the prompt dump follow the flag.
   const logger = createSugarAgentLogger(config.debugLogging);
-  const { llmProvider, vectorStoreProvider, personaLoader } = resolveProviders(
+  const { llmProvider, judgeProvider, vectorStoreProvider, personaLoader } = resolveProviders(
     config,
     logger
   );
@@ -499,13 +530,15 @@ export function createSugarAgentConversationProvider(
     retrieve: new RetrieveStage(vectorStoreProvider),
     plan: new PlanStage(),
     generate: new GenerateStage(llmProvider),
+    judge: new JudgeStage(judgeProvider),
     audit: new AuditStage(),
-    repair: new RepairStage()
+    regenerate: new RegenerateStage(llmProvider)
   };
 
   logger.logPluginEvent("provider-registered", {
     providerId: SUGARAGENT_PROVIDER_ID,
     llmBackend: llmProvider ? "anthropic" : "deterministic",
+    judgeBackend: judgeProvider ? "gateway" : "none",
     vectorStoreBackend: vectorStoreProvider ? "gateway" : "none"
   });
 

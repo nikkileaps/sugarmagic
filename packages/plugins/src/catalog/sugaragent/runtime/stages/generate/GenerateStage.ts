@@ -491,6 +491,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           throw new Error("empty-normalized-generation");
         }
       } catch (error) {
+        llmBackend = "deterministic"; // 075.1: reset -- LLM produced no usable text
         status = "degraded";
         if (isRetryableGenerationError(error)) {
           fallbackReason = "llm-retry-exhausted";

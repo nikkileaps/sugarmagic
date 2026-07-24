@@ -114,6 +114,19 @@ export interface SugarAgentPluginConfig {
   debugLogging: boolean;
   /** Overall tone for NPC dialogue (e.g. "cozy", "gritty", "whimsical"). */
   tone: string;
+  /**
+   * Plan 075.3 -- master switch for input/output moderation. When false,
+   * the moderation middleware is not registered.
+   */
+  moderationEnabled: boolean;
+  /**
+   * Plan 075.4 -- comma-separated topic blocklist applied to player input
+   * at the gateway (pre-moderation) and inside the /generate handler
+   * (defense-in-depth). Hotfixable via the sugardeploy update-blocklist
+   * action without a client rebuild. Stored in deployable config so the
+   * initial value is version-controlled; fast updates bypass this path.
+   */
+  blocklist: string;
 }
 
 export interface SugarAgentSessionHistoryEntry {
@@ -162,6 +175,8 @@ export interface SugarAgentProviderState {
   sessionId: string;
   turnCount: number;
   consecutiveFallbackTurns: number;
+  /** Plan 075.2 -- 3-strike governor: consecutive turns where judge failed and regen ran */
+  consecutiveJudgeFailures: number;
   closeRequested: boolean;
   history: SugarAgentSessionHistoryEntry[];
   lastTurnDiagnostics: Record<string, TurnStageDiagnostics>;
@@ -327,6 +342,16 @@ export interface GenerateResult {
 export interface AuditResult {
   passed: boolean;
   violations: string[];
+}
+
+export interface JudgeResult {
+  passed: boolean;
+  violations: string[];
+  repairHint: string | null;
+  /** true when the judge was not invoked (no LLM text, no provider) */
+  skipped: boolean;
+  /** true when the judge errored; verdict is fail-open (passed: true) */
+  errorOccurred: boolean;
 }
 
 export interface RepairResult {

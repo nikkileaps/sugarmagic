@@ -272,6 +272,106 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Plan 075.1 -- judge client + provider
+// ---------------------------------------------------------------------------
+
+export interface JudgeRequest {
+  replyText: string;
+  personaDigest: string;
+  responseIntent: string;
+  worldContext: string | null;
+  evidenceSummary: string[];
+}
+
+export interface JudgeVerdict {
+  passed: boolean;
+  violations: string[];
+  repairHint: string | null;
+}
+
+export interface JudgeProvider {
+  judgeReply: (request: JudgeRequest) => Promise<JudgeVerdict>;
+}
+
+export class SugarAgentGatewayJudgeClient {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly getBearerToken: BearerTokenGetter = async () => null
+  ) {}
+
+  async judge(request: JudgeRequest): Promise<JudgeVerdict> {
+    const response = await fetch(
+      `${normalizeBaseUrl(this.baseUrl)}/api/sugaragent/generate/judge`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeaders(this.getBearerToken))
+        },
+        body: JSON.stringify(request)
+      }
+    );
+    return parseJsonResponse<JudgeVerdict>(response, "SugarAgent gateway judge request");
+  }
+}
+
+export class SugarAgentGatewayJudgeProvider implements JudgeProvider {
+  constructor(private readonly client: SugarAgentGatewayJudgeClient) {}
+
+  async judgeReply(request: JudgeRequest): Promise<JudgeVerdict> {
+    return this.client.judge(request);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Plan 075.3 -- moderation client + provider
+// ---------------------------------------------------------------------------
+
+export interface ModerationRequest {
+  text: string;
+}
+
+export interface ModerationResult {
+  flagged: boolean;
+  categories: string[];
+  blocklisted: boolean;
+}
+
+export interface ModerationProvider {
+  moderate: (request: ModerationRequest) => Promise<ModerationResult>;
+}
+
+export class SugarAgentGatewayModerationClient {
+  constructor(
+    private readonly baseUrl: string,
+    private readonly getBearerToken: BearerTokenGetter = async () => null
+  ) {}
+
+  async moderate(request: ModerationRequest): Promise<ModerationResult> {
+    const response = await fetch(
+      `${normalizeBaseUrl(this.baseUrl)}/api/sugaragent/generate/moderate`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(await authHeaders(this.getBearerToken))
+        },
+        body: JSON.stringify(request)
+      }
+    );
+    return parseJsonResponse<ModerationResult>(response, "SugarAgent gateway moderation request");
+  }
+}
+
+export class SugarAgentGatewayModerationProvider implements ModerationProvider {
+  constructor(private readonly client: SugarAgentGatewayModerationClient) {}
+
+  async moderate(request: ModerationRequest): Promise<ModerationResult> {
+    return this.client.moderate(request);
+  }
+}
+
 export class SugarAgentGatewayVectorStoreProvider implements VectorStoreProvider {
   constructor(private readonly client: SugarAgentGatewayVectorStoreClient) {}
 

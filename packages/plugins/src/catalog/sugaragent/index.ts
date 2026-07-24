@@ -18,6 +18,14 @@ import {
   QUEST_CONTEXT_MIDDLEWARE_ID
 } from "./runtime/quest/quest-context-middleware";
 import { installQuestContextDebugHandle } from "./runtime/quest/quest-context-debug";
+import {
+  createModerationMiddleware,
+  MODERATION_MIDDLEWARE_ID
+} from "./runtime/moderation/moderation-middleware";
+import {
+  SugarAgentGatewayModerationClient,
+  SugarAgentGatewayModerationProvider
+} from "./runtime/clients";
 import type { SugarAgentPluginConfig } from "./runtime/types";
 import type { RuntimePluginEnvironment } from "../../runtime";
 
@@ -242,7 +250,9 @@ export function normalizeSugarAgentPluginConfig(
         : 800,
     questAwareNpcsEnabled: config?.questAwareNpcsEnabled !== false,
     debugLogging: config?.debugLogging === true,
-    tone: typeof config?.tone === "string" ? config.tone.trim() : ""
+    tone: typeof config?.tone === "string" ? config.tone.trim() : "",
+    moderationEnabled: config?.moderationEnabled === true,
+    blocklist: typeof config?.blocklist === "string" ? config.blocklist.trim() : ""
   };
 }
 
@@ -383,6 +393,24 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       group: "Runtime Behavior",
       description:
         "Overall tone for NPC dialogue (e.g. cozy, gritty, whimsical). Leave empty for no tone directive."
+    },
+    {
+      configKey: "moderationEnabled",
+      label: "Content Moderation",
+      type: "boolean",
+      group: "Safety",
+      default: false,
+      description:
+        "When on, player input and NPC output are checked against the OpenAI moderation API before reaching the player. Fail-open: a moderation outage never silences NPCs."
+    },
+    {
+      configKey: "blocklist",
+      label: "Topic Blocklist",
+      type: "text",
+      group: "Safety",
+      description:
+        "Comma-separated terms the gateway refuses at the input layer (pre-moderation) and as defense-in-depth inside the /generate handler. Hotfix via the sugardeploy update-blocklist action -- no rebuild needed.",
+      placeholder: "jailbreak,ignore instructions,forget everything"
     }
   ],
   // Story 46.15 — per-game non-secret gateway runtime env vars.
@@ -412,6 +440,13 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
         "Anthropic model the gateway uses for the cheap end-of-conversation NPC memory summary (Plan 073.2). Resolved server-side from purpose:\"summary\" requests.",
       nonSecretAttestation: "safe-to-expose-publicly"
     },
+    {
+      configKey: "blocklist",
+      envVarName: "SUGARMAGIC_SUGARAGENT_BLOCKLIST",
+      description:
+        "Comma-separated terms the gateway refuses at the /moderate and /generate layers. Hotfixable via the sugardeploy update-blocklist action (no image rebuild needed).",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    }
   ],
   defaultConfig: {
     loreSourceKind: "local",
@@ -427,7 +462,9 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     memoryDigestMaxChars: 800,
     questAwareNpcsEnabled: true,
     debugLogging: false,
-    tone: ""
+    tone: "",
+    moderationEnabled: false,
+    blocklist: ""
   },
   runtime: {
     createRuntimePlugin: ({ configuration, environment }) => {
@@ -500,8 +537,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
               middlewareId: NPC_MEMORY_MIDDLEWARE_ID,
               summary:
                 "Loads NPC memory once per conversation; memoizes the digest for the prompt and annotates first-meeting.",
-              stage: "context",
-              status: "ready",
+              stage: "context" as const,
+              status: "ready" as const,
               middleware: createNpcMemoryMiddleware({
                 logger: createSugarAgentLogger(config.debugLogging),
                 enabled: config.memoryEnabled,
@@ -509,6 +546,38 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
               })
             }
           },
+          // Plan 075.3 -- policy-stage middleware: moderates player input
+          // (prepare) and NPC output (finalize) via the /moderate gateway
+          // route. Fail-open: a moderation outage never silences NPCs.
+          // Gated by moderationEnabled (off by default to avoid surprise
+          // latency for games that don't need it).
+          ...(config.moderationEnabled
+            ? [
+                {
+                  pluginId: configuration.pluginId,
+                  contributionId: "sugaragent.moderation-middleware",
+                  kind: "conversation.middleware" as const,
+                  displayName: "SugarAgent Content Moderation",
+                  priority: 20,
+                  payload: {
+                    middlewareId: MODERATION_MIDDLEWARE_ID,
+                    summary:
+                      "Checks player input and NPC output against the OpenAI moderation API; replaces flagged text with an in-character deflection.",
+                    stage: "policy" as const,
+                    status: "ready" as const,
+                    middleware: createModerationMiddleware({
+                      moderationProvider: new SugarAgentGatewayModerationProvider(
+                        new SugarAgentGatewayModerationClient(
+                          config.proxyBaseUrl,
+                          async () => config.gatewayBearerToken || null
+                        )
+                      ),
+                      enabled: true
+                    })
+                  }
+                }
+              ]
+            : []),
           // Plan 077.2 -- context-stage middleware that resolves quest-relevant
           // world lore once per quest-state (D3), memoizes it, and annotates
           // questWorldContext for the prompt builder (D2 prompt invariant: the
@@ -527,7 +596,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
                     middlewareId: QUEST_CONTEXT_MIDDLEWARE_ID,
                     summary:
                       "Resolves quest-relevant world lore once per quest-state; supplies world-framed context to NPC dialogue without leaking the player's private objective.",
-                    stage: "context",
+                    stage: "context" as const,
                     status: "ready" as const,
                     middleware: createQuestContextMiddleware({
                       vectorStoreProvider: createSugarAgentVectorStoreProvider(config),
