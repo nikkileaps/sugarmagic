@@ -285,7 +285,14 @@ export class DialogueManager {
       (input) => {
         void this.handleAdvance(input);
       },
-      () => this.end("cancelled")
+      () => {
+        // A turn with no choices and no free-text input has no advance path —
+        // the close/ESC button is the only exit. Treat as completed so
+        // onCompleteActions fire (single-node scripted dialogue pattern).
+        const isTerminal =
+          turn.choices.length === 0 && turn.inputMode !== "free_text";
+        this.end(isTerminal ? "completed" : "cancelled");
+      }
     );
 
     if (autoCloseAfterMs !== null) {
