@@ -52,11 +52,14 @@ export class WorldTimeStore {
     this.onDayChange = cb;
   }
 
-  /** Restore state from a save slice. Does NOT fire callbacks --
-   *  074.2' wires the blackboard after deserialization completes. */
+  /** Restore state from a save slice. Fires callbacks unconditionally so the
+   *  blackboard tracks the restored state (callbacks are wired in
+   *  gameplay-session before saveParticipantRegistry.deserializeAll runs). */
   restore(state: WorldTimeState): void {
     this._band = state.band;
     this._day = state.day;
+    this.onBandChange?.(state.band);
+    this.onDayChange?.(state.day);
   }
 }
 

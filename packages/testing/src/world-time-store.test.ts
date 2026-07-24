@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createWorldTimeStore,
-  WorldTimeStore
-} from "@sugarmagic/runtime-core";
-import {
+  WorldTimeStore,
   createWorldTimeSaveParticipant,
   WORLD_TIME_PARTICIPANT_ID,
   WORLD_TIME_SLICE_SCHEMA_VERSION,
-  type WorldTimeSlice
+  type WorldTimeSlice,
+  createRuntimeBlackboard,
+  getTimeOfDayBand,
+  getWorldDay,
+  setWorldTimeOfDay,
+  setWorldDay,
+  WORLD_TIME_OF_DAY_FACT,
+  WORLD_DAY_FACT
 } from "@sugarmagic/runtime-core";
 import type { SaveSlice } from "@sugarmagic/domain";
 
@@ -73,7 +78,7 @@ describe("WorldTimeStore", () => {
     expect(store.getState()).toEqual({ day: 2, band: "evening" });
   });
 
-  it("restore sets state without firing callbacks", () => {
+  it("restore fires both callbacks unconditionally (blackboard tracks restored state)", () => {
     const store = createWorldTimeStore();
     const bandCb = vi.fn();
     const dayCb = vi.fn();
@@ -82,8 +87,60 @@ describe("WorldTimeStore", () => {
     store.restore({ day: 5, band: "dusk" });
     expect(store.getBand()).toBe("dusk");
     expect(store.getDay()).toBe(5);
-    expect(bandCb).not.toHaveBeenCalled();
-    expect(dayCb).not.toHaveBeenCalled();
+    expect(bandCb).toHaveBeenCalledOnce();
+    expect(bandCb).toHaveBeenCalledWith("dusk");
+    expect(dayCb).toHaveBeenCalledOnce();
+    expect(dayCb).toHaveBeenCalledWith(5);
+  });
+
+  it("restore without callbacks wired does not throw", () => {
+    const store = createWorldTimeStore();
+    expect(() => store.restore({ day: 5, band: "dusk" })).not.toThrow();
+  });
+});
+
+describe("world.time-of-day and world.day blackboard facts", () => {
+  it("getTimeOfDayBand defaults to morning when no fact set", () => {
+    const bb = createRuntimeBlackboard();
+    expect(getTimeOfDayBand(bb)).toBe("morning");
+  });
+
+  it("getWorldDay defaults to 1 when no fact set", () => {
+    const bb = createRuntimeBlackboard();
+    expect(getWorldDay(bb)).toBe(1);
+  });
+
+  it("setWorldTimeOfDay / getTimeOfDayBand round-trip", () => {
+    const bb = createRuntimeBlackboard();
+    setWorldTimeOfDay(bb, "dusk");
+    expect(getTimeOfDayBand(bb)).toBe("dusk");
+  });
+
+  it("setWorldDay / getWorldDay round-trip", () => {
+    const bb = createRuntimeBlackboard();
+    setWorldDay(bb, 4);
+    expect(getWorldDay(bb)).toBe(4);
+  });
+
+  it("fact definitions exist in RUNTIME_BLACKBOARD_FACT_DEFINITIONS (blackboard accepts them)", () => {
+    const bb = createRuntimeBlackboard();
+    setWorldTimeOfDay(bb, "night");
+    setWorldDay(bb, 7);
+    expect(getTimeOfDayBand(bb)).toBe("night");
+    expect(getWorldDay(bb)).toBe(7);
+  });
+
+  it("store callback -> blackboard round-trip via setWorldTimeOfDay", () => {
+    const store = createWorldTimeStore();
+    const bb = createRuntimeBlackboard();
+    store.setBandChangeCallback((band) => setWorldTimeOfDay(bb, band));
+    store.setDayChangeCallback((day) => setWorldDay(bb, day));
+    setWorldTimeOfDay(bb, store.getBand());
+    setWorldDay(bb, store.getDay());
+    store.setTimeBand("evening");
+    store.advanceDay();
+    expect(getTimeOfDayBand(bb)).toBe("evening");
+    expect(getWorldDay(bb)).toBe(2);
   });
 });
 

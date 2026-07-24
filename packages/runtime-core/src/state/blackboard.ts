@@ -1,4 +1,5 @@
 import type { RegionAreaKind } from "@sugarmagic/domain";
+import type { TimeOfDayBand } from "../world/time-store";
 
 export type BlackboardScopeKind =
   | "global"
@@ -302,6 +303,31 @@ export const GOAL_SURFACED_COUNT_FACT = defineBlackboardFact<number>({
   lifecycle: { kind: "session" }
 });
 
+/**
+ * Plan 074 §074.2' -- world clock facts.
+ *
+ * Written ONLY by worldTimeStore callbacks wired in gameplay-session.ts.
+ * The sole write path is quest actions (set-time-of-day / advance-day)
+ * dispatched through QuestManager -> gameplay-session.setActionHandler ->
+ * worldTimeStore. Direct setFact calls outside that path will throw
+ * (assertWriteAllowed enforces the ownerSystem).
+ */
+export const WORLD_TIME_SOURCE_SYSTEM = "world-time-system";
+
+export const WORLD_TIME_OF_DAY_FACT = defineBlackboardFact<TimeOfDayBand>({
+  key: "world.time-of-day",
+  ownerSystem: WORLD_TIME_SOURCE_SYSTEM,
+  allowedScopeKinds: ["global"],
+  lifecycle: { kind: "session" }
+});
+
+export const WORLD_DAY_FACT = defineBlackboardFact<number>({
+  key: "world.day",
+  ownerSystem: WORLD_TIME_SOURCE_SYSTEM,
+  allowedScopeKinds: ["global"],
+  lifecycle: { kind: "session" }
+});
+
 export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   ENTITY_POSITION_FACT,
   ENTITY_LOCATION_FACT,
@@ -314,7 +340,9 @@ export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   TRACKED_QUEST_FACT,
   QUEST_ACTIVE_STAGE_FACT,
   QUEST_ACTIVE_OBJECTIVES_FACT,
-  GOAL_SURFACED_COUNT_FACT
+  GOAL_SURFACED_COUNT_FACT,
+  WORLD_TIME_OF_DAY_FACT,
+  WORLD_DAY_FACT
 ] as const satisfies readonly BlackboardFactDefinition<unknown>[];
 
 export function defineBlackboardFact<TValue>(
@@ -854,6 +882,47 @@ export function bumpGoalSurfacedCount(
     scope: createBlackboardScope("quest", questId),
     value: current + 1,
     sourceSystem: NARRATIVE_SOURCE_SYSTEM
+  });
+}
+
+// Plan 074 §074.2' -- world clock getters/setters.
+
+export function getTimeOfDayBand(blackboard: RuntimeBlackboard): TimeOfDayBand {
+  return (
+    blackboard.getFact(
+      WORLD_TIME_OF_DAY_FACT,
+      createBlackboardScope("global", "world.time-of-day")
+    )?.value ?? "morning"
+  );
+}
+
+export function getWorldDay(blackboard: RuntimeBlackboard): number {
+  return (
+    blackboard.getFact(
+      WORLD_DAY_FACT,
+      createBlackboardScope("global", "world.day")
+    )?.value ?? 1
+  );
+}
+
+export function setWorldTimeOfDay(
+  blackboard: RuntimeBlackboard,
+  band: TimeOfDayBand
+): void {
+  blackboard.setFact({
+    definition: WORLD_TIME_OF_DAY_FACT,
+    scope: createBlackboardScope("global", "world.time-of-day"),
+    value: band,
+    sourceSystem: WORLD_TIME_SOURCE_SYSTEM
+  });
+}
+
+export function setWorldDay(blackboard: RuntimeBlackboard, day: number): void {
+  blackboard.setFact({
+    definition: WORLD_DAY_FACT,
+    scope: createBlackboardScope("global", "world.day"),
+    value: day,
+    sourceSystem: WORLD_TIME_SOURCE_SYSTEM
   });
 }
 

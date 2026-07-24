@@ -132,6 +132,8 @@ import {
   clearActiveQuestObjectives,
   clearActiveQuestStage,
   clearTrackedQuest,
+  setWorldTimeOfDay,
+  setWorldDay,
   createRuntimeBlackboard,
   getActiveQuestObjectives,
   getEntityCurrentActivity,
@@ -590,6 +592,10 @@ export function createRuntimeGameplaySessionController(
   let lastTrackedQuestDefinitionId: string | null = null;
   let npcBehaviorSystem: RuntimeNpcBehaviorSystem | null = null;
   const worldTimeStore = createWorldTimeStore();
+  worldTimeStore.setBandChangeCallback((band) => setWorldTimeOfDay(blackboard, band));
+  worldTimeStore.setDayChangeCallback((day) => setWorldDay(blackboard, day));
+  setWorldTimeOfDay(blackboard, worldTimeStore.getBand());
+  setWorldDay(blackboard, worldTimeStore.getDay());
   const billboardSystem = new BillboardSystem();
   const billboardOnlyEntities = new Set<Entity>();
   const debugBillboardBindings = new Map<Entity, DebugBillboardBinding>();
