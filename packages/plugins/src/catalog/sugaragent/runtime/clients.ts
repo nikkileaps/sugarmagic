@@ -282,6 +282,7 @@ export interface JudgeRequest {
   responseIntent: string;
   worldContext: string | null;
   loreContextSummary: string[];
+  worldPremise: string;
 }
 
 export interface JudgeVerdict {

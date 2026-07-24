@@ -252,7 +252,8 @@ export function normalizeSugarAgentPluginConfig(
     debugLogging: config?.debugLogging === true,
     tone: typeof config?.tone === "string" ? config.tone.trim() : "",
     moderationEnabled: config?.moderationEnabled === true,
-    blocklist: typeof config?.blocklist === "string" ? config.blocklist.trim() : ""
+    blocklist: typeof config?.blocklist === "string" ? config.blocklist.trim() : "",
+    worldPremise: typeof config?.worldPremise === "string" ? config.worldPremise.trim() : ""
   };
 }
 
@@ -411,6 +412,15 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       description:
         "Comma-separated terms the gateway refuses at the input layer (pre-moderation) and as defense-in-depth inside the /generate handler. Hotfix via the sugardeploy update-blocklist action -- no rebuild needed.",
       placeholder: "jailbreak,ignore instructions,forget everything"
+    },
+    {
+      configKey: "worldPremise",
+      label: "World Premise",
+      type: "textarea",
+      group: "NPC Behavior",
+      description:
+        "Short description of the game world sent to the judge. Grounds the WORLD-GROUNDED check against your actual setting instead of generic RPG assumptions.",
+      placeholder: "A cozy fantasy village where..."
     }
   ],
   // Story 46.15 — per-game non-secret gateway runtime env vars.
@@ -464,7 +474,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     debugLogging: false,
     tone: "",
     moderationEnabled: false,
-    blocklist: ""
+    blocklist: "",
+    worldPremise: ""
   },
   runtime: {
     createRuntimePlugin: ({ configuration, environment }) => {

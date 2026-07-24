@@ -72,7 +72,7 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
 
   async execute(
     input: JudgeStageInput,
-    _context: TurnStageContext
+    context: TurnStageContext
   ): Promise<TurnStageResult<JudgeResult>> {
     const startedAt = Date.now();
 
@@ -124,7 +124,8 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
         personaDigest,
         responseIntent: input.plan.responseIntent,
         worldContext,
-        loreContextSummary
+        loreContextSummary,
+        worldPremise: context.config.worldPremise ?? ""
       });
 
       const output: JudgeResult = {

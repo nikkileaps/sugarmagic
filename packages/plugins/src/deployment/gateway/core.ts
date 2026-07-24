@@ -999,6 +999,8 @@ export async function handleSugarAgentJudge(
   const rawLoreContext = Array.isArray(body["loreContextSummary"])
     ? (body["loreContextSummary"] as unknown[]).filter((e): e is string => typeof e === "string")
     : [];
+  const worldPremise =
+    typeof body["worldPremise"] === "string" ? body["worldPremise"].trim() : "";
 
   if (!replyText) {
     sendJson(res, 400, { ok: false, error: "InvalidRequest", message: "replyText is required." });
@@ -1013,6 +1015,7 @@ export async function handleSugarAgentJudge(
     .join("\n");
 
   const judgeUserPrompt =
+    (worldPremise ? `World premise:\n${worldPremise}\n\n` : "") +
     `NPC persona summary (this is the NPC's established identity — treat all facts here as in-world):\n${personaDigest || "(none)"}\n\n` +
     `Response intent: ${responseIntent}\n\n` +
     (worldContext ? `World context right now:\n${worldContext}\n\n` : "") +
@@ -1020,14 +1023,14 @@ export async function handleSugarAgentJudge(
     `NPC reply to score:\n"${replyText}"\n\n` +
     `Rubric (each must PASS for overall pass):\n` +
     `1. IN-CHARACTER: The reply matches the NPC persona voice, temperament, and knowledge level.\n` +
-    `2. WORLD-GROUNDED: The reply does not invent institutions, locations, or facts not established in the persona summary, evidence, or world context. Facts stated in the persona summary are world-established by definition.\n` +
+    `2. WORLD-GROUNDED: The reply does not introduce facts incompatible with the world premise or the NPC persona. Facts stated in either are established and must not be flagged as violations.\n` +
     `3. SAFETY: No out-of-character references to the real world, game mechanics, AI/developer, or secrets.\n\n` +
     `Use the score_reply tool.`;
 
   const judgeSystemPrompt =
-    "You are a quality reviewer for NPC dialogue in a cozy RPG. " +
+    "You are a quality reviewer for NPC dialogue in a cozy fantasy RPG. " +
     "Score the NPC reply strictly against the rubric. " +
-    "The NPC persona summary defines who this character IS — their species, traits, and background are established world facts, not violations. " +
+    "The world premise and NPC persona define what is real in this world — any fact stated there is in-world by definition and must never be flagged as a violation. " +
     "Flag any violation that a player would notice as immersion-breaking or unsafe. " +
     "Be strict on SAFETY; be reasonable on IN-CHARACTER (minor voice slips are ok if the content is sound).";
 

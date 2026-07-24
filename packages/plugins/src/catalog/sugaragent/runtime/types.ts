@@ -127,6 +127,13 @@ export interface SugarAgentPluginConfig {
    * initial value is version-controlled; fast updates bypass this path.
    */
   blocklist: string;
+  /**
+   * Plan 075 -- short author-written description of the game world, sent to
+   * the judge so WORLD-GROUNDED checks against the actual setting rather than
+   * generic RPG assumptions. Optional; leave empty to omit the world premise
+   * block from the judge prompt.
+   */
+  worldPremise: string;
 }
 
 export interface SugarAgentSessionHistoryEntry {
