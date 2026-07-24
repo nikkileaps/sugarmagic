@@ -427,7 +427,19 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         // session. Read from runtimeContext (populated by the blackboard
         // middleware via bumpGoalSurfacedCount). Null -> first NPC to offer.
         goalSurfacedCount:
-          input.execution.runtimeContext?.goalSurfacedCount ?? null
+          input.execution.runtimeContext?.goalSurfacedCount ?? null,
+        // Plan 074 §074.3: world clock band, read from the blackboard each turn.
+        timeOfDay: input.execution.runtimeContext?.timeOfDay ?? null,
+        // Plan 074 §074.5: player-known-facts, read from the blackboard each turn.
+        knownFacts:
+          (input.execution.runtimeContext?.knownFacts?.length ?? 0) > 0
+            ? (input.execution.runtimeContext?.knownFacts ?? null)
+            : null,
+        // Plan 074 §074.6': recent world events (session-only, not persisted).
+        recentWorldEvents:
+          (input.execution.runtimeContext?.recentWorldEvents?.length ?? 0) > 0
+            ? (input.execution.runtimeContext?.recentWorldEvents ?? null)
+            : null
       };
 
       const prompts = buildGeneratePrompt(promptContext);

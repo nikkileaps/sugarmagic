@@ -108,10 +108,12 @@ import {
   createInventoryPlayerSaveParticipant,
   createNpcBehaviorSaveParticipant,
   createPlaythroughIdentitySaveParticipant,
+  createPlayerKnownFactsSaveParticipant,
   createQuestManagerSaveParticipant,
   type QuestManagerSlice,
   createRuntimeGameplayAssembly,
   createWorldPresenceSaveParticipant,
+  createWorldTimeSaveParticipant,
   WorldPresenceTracker,
   type RuntimeBannerContribution,
   createPlayerVisualController,
@@ -2727,6 +2729,18 @@ export function createWebRuntimeHost(
       createNpcBehaviorSaveParticipant({
         getNpcBehaviorSystem: () =>
           gameplaySession?.npcBehaviorSystem ?? null
+      })
+    );
+    saveParticipantRegistry.register(
+      createWorldTimeSaveParticipant({
+        getWorldTimeStore: () =>
+          gameplaySession?.worldTimeStore ?? null
+      })
+    );
+    saveParticipantRegistry.register(
+      createPlayerKnownFactsSaveParticipant({
+        getPlayerKnownFactsStore: () =>
+          gameplaySession?.playerKnownFactsStore ?? null
       })
     );
     saveParticipantRegistry.deserializeAll(restoredSlices, ["default"]);

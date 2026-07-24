@@ -142,6 +142,18 @@ function buildWorldStateUserLines(
       ? `This topic has been brought up in conversation ${context.goalSurfacedCount} time(s) already. If another character has already offered guidance on this, let the player discover it without repeating the nudge. You can acknowledge the topic if the player raises it, but do not volunteer the same information again.`
       : null,
 
+    context.timeOfDay
+      ? `Time of day: ${context.timeOfDay}.`
+      : null,
+
+    context.knownFacts && context.knownFacts.length > 0
+      ? `The player already knows:\n${context.knownFacts.map((f) => `- ${f}`).join("\n")}`
+      : null,
+
+    context.recentWorldEvents && context.recentWorldEvents.length > 0
+      ? `Recent world events:\n${context.recentWorldEvents.map((e) => `- ${e}`).join("\n")}`
+      : null,
+
     context.currentLocationDisplayName
       ? `Current runtime location: ${context.currentLocationDisplayName}.`
       : null,

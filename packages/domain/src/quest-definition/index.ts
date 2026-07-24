@@ -1,5 +1,15 @@
 import { createUuid } from "../shared/identity";
 
+// Plan 074 §074.1' -- canonical location; runtime-core re-exports from here.
+export type TimeOfDayBand =
+  | "dawn"
+  | "morning"
+  | "midday"
+  | "afternoon"
+  | "dusk"
+  | "evening"
+  | "night";
+
 export type QuestNodeBehavior = "objective" | "narrative" | "condition" | "branch";
 export type QuestObjectiveSubtype =
   | "talk"
@@ -42,6 +52,15 @@ export type QuestActionType =
   // targetId is omitted).
   | "unlockScene"
   | "advanceToNextScene"
+  // Plan 074 §074.1' — Beat-driven world clock. `set-time-of-day`
+  // uses targetId as the TimeOfDayBand value; `advance-day` needs
+  // no value. Both dispatch through the existing quest action chain.
+  | "set-time-of-day"
+  | "advance-day"
+  // Plan 074 §074.5 -- Player-known-facts. `learn-fact` uses targetId
+  // as the fact id (dedup key) and value (string) as the display text.
+  // QUEST ACTIONS ONLY -- no dialogue node surface.
+  | "learn-fact"
   | "custom";
 
 export interface QuestActionDefinition {

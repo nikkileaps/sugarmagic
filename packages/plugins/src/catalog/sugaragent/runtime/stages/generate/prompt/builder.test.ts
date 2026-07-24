@@ -54,6 +54,8 @@ function baseContext(
     },
     personaDigest: "Warm, brisk, proud.\nVoice: Short sentences; says 'love'.",
     memoryDigest: "",
+    knownFacts: null,
+    recentWorldEvents: null,
     ...overrides
   };
 }
@@ -334,5 +336,57 @@ describe("buildGeneratePrompt — no-lore description fallback", () => {
       })
     );
     expect(systemPrompt).not.toContain("Who you are:");
+  });
+});
+
+describe("buildGeneratePrompt -- known-facts block (074.5)", () => {
+  it("renders knownFacts as bullet list in the user message", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        knownFacts: [
+          "The harbourmaster confirmed unclaimed baggage goes to the claim office after 24 hours.",
+          "The claim office is on the lower dock level."
+        ]
+      })
+    );
+    expect(userPrompt).toContain("The player already knows:");
+    expect(userPrompt).toContain("- The harbourmaster confirmed unclaimed baggage goes to the claim office after 24 hours.");
+    expect(userPrompt).toContain("- The claim office is on the lower dock level.");
+  });
+
+  it("omits the block when knownFacts is null", () => {
+    const { userPrompt } = buildGeneratePrompt(baseContext({ knownFacts: null }));
+    expect(userPrompt).not.toContain("The player already knows:");
+  });
+
+  it("omits the block when knownFacts is empty", () => {
+    const { userPrompt } = buildGeneratePrompt(baseContext({ knownFacts: [] }));
+    expect(userPrompt).not.toContain("The player already knows:");
+  });
+});
+
+describe("buildGeneratePrompt -- recent-events block (074.6')", () => {
+  it("renders recentWorldEvents as bullet list in the user message", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        recentWorldEvents: [
+          "Day advanced to 2.",
+          "Quest 'The Lost Cargo' completed."
+        ]
+      })
+    );
+    expect(userPrompt).toContain("Recent world events:");
+    expect(userPrompt).toContain("- Day advanced to 2.");
+    expect(userPrompt).toContain("- Quest 'The Lost Cargo' completed.");
+  });
+
+  it("omits the block when recentWorldEvents is null", () => {
+    const { userPrompt } = buildGeneratePrompt(baseContext({ recentWorldEvents: null }));
+    expect(userPrompt).not.toContain("Recent world events:");
+  });
+
+  it("omits the block when recentWorldEvents is empty", () => {
+    const { userPrompt } = buildGeneratePrompt(baseContext({ recentWorldEvents: [] }));
+    expect(userPrompt).not.toContain("Recent world events:");
   });
 });

@@ -100,7 +100,6 @@ export interface DirectiveLifetime {
     | "player_code_switch"
     | "quest_stage_change"
     | "location_change"
-    | "affective_shift"
   >;
 }
 

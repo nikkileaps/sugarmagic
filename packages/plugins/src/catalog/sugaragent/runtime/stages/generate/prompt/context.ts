@@ -111,6 +111,28 @@ export interface BasePromptContext {
   goalSurfacedCount: number | null;
 
   /**
+   * Plan 074 §074.3 -- world clock band read from the blackboard each turn.
+   * Injected into the uncached user message (per-turn, not cache-busting).
+   * Null or absent -> omit the line (default morning is an uninteresting
+   * default that doesn't need explicit mention).
+   */
+  timeOfDay: string | null;
+  /**
+   * Plan 074 §074.5 -- player-known-facts display texts, capped + ordered
+   * most-recent-last. Injected into the uncached user message so the NPC
+   * can reference what the player already knows. Empty/null -> omit.
+   */
+  knownFacts: string[] | null;
+
+  /**
+   * Plan 074 §074.6' -- recent world events (session-only), human-readable
+   * strings: quest stage advances, quest completions, day advances. Capped
+   * at 10; empty after a load. Injected into the uncached user message.
+   * Empty/null -> omit.
+   */
+  recentWorldEvents: string[] | null;
+
+  /**
    * Plan 072.8 — compact persona drift-reminder, re-injected at the END of the
    * user message (after history). Empty string = nothing to re-inject.
    */

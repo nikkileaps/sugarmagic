@@ -132,6 +132,11 @@ import {
   clearActiveQuestObjectives,
   clearActiveQuestStage,
   clearTrackedQuest,
+  setWorldTimeOfDay,
+  setWorldDay,
+  getTimeOfDayBand,
+  getPlayerKnownFacts,
+  setPlayerKnownFacts,
   createRuntimeBlackboard,
   getActiveQuestObjectives,
   getEntityCurrentActivity,
@@ -152,6 +157,15 @@ import {
 import { PlayerControlled } from "../ecs";
 import { buildLocationReference } from "../spatial";
 import { createRuntimeSpatialResolverSystem } from "../spatial/system";
+import {
+  createWorldTimeStore,
+  createPlayerKnownFactsStore,
+  createRecentEventCollector,
+  type TimeOfDayBand,
+  type WorldTimeStore,
+  type PlayerKnownFactsStore,
+  type RecentEventCollector
+} from "../world";
 
 export interface RuntimeSpellCastFeedback {
   spellDefinitionId: string;
@@ -263,6 +277,8 @@ export interface RuntimeGameplaySessionController {
   readonly questSystem: QuestSystem;
   readonly blackboard: RuntimeBlackboard;
   readonly audioController: RuntimeAudioController;
+  readonly worldTimeStore: WorldTimeStore;
+  readonly playerKnownFactsStore: PlayerKnownFactsStore;
   /** Plan 055 §055.4 — kick off every loaded quest definition
    *  via the quest-dialogue coordinator. Idempotent: startQuest
    *  short-circuits on quests already active or completed. The
@@ -583,6 +599,19 @@ export function createRuntimeGameplaySessionController(
   let pendingScriptedFollowupDialogueId: string | null = null;
   let lastTrackedQuestDefinitionId: string | null = null;
   let npcBehaviorSystem: RuntimeNpcBehaviorSystem | null = null;
+  const worldTimeStore = createWorldTimeStore();
+  const recentEventCollector = createRecentEventCollector();
+  worldTimeStore.setBandChangeCallback((band) => setWorldTimeOfDay(blackboard, band));
+  worldTimeStore.setDayChangeCallback((day) => {
+    setWorldDay(blackboard, day);
+    recentEventCollector.onDayAdvance(day);
+  });
+  worldTimeStore.setDayRestoreCallback((day) => setWorldDay(blackboard, day));
+  setWorldTimeOfDay(blackboard, worldTimeStore.getBand());
+  setWorldDay(blackboard, worldTimeStore.getDay());
+  const playerKnownFactsStore = createPlayerKnownFactsStore();
+  playerKnownFactsStore.setChangeCallback((texts) => setPlayerKnownFacts(blackboard, texts));
+  setPlayerKnownFacts(blackboard, []);
   const billboardSystem = new BillboardSystem();
   const billboardOnlyEntities = new Set<Entity>();
   const debugBillboardBindings = new Map<Entity, DebugBillboardBinding>();
@@ -945,7 +974,10 @@ export function createRuntimeGameplaySessionController(
         trackedQuest,
         activeQuestStage,
         activeQuestObjectives,
-        goalSurfacedCount
+        goalSurfacedCount,
+        timeOfDay: getTimeOfDayBand(blackboard),
+        knownFacts: getPlayerKnownFacts(blackboard),
+        recentWorldEvents: recentEventCollector.getRecentEvents()
       };
 
       return {
@@ -1708,6 +1740,25 @@ export function createRuntimeGameplaySessionController(
         sceneId: action.targetId ?? null
       });
     }
+
+    if (action.type === "set-time-of-day" && action.targetId) {
+      worldTimeStore.setTimeBand(action.targetId as TimeOfDayBand);
+      return;
+    }
+
+    if (action.type === "advance-day") {
+      worldTimeStore.advanceDay();
+      return;
+    }
+
+    if (
+      action.type === "learn-fact" &&
+      action.targetId &&
+      typeof action.value === "string"
+    ) {
+      playerKnownFactsStore.learnFact(action.targetId, action.value);
+      return;
+    }
   });
   questManager.setStateChangeHandler(() => {
     syncQuestUi();
@@ -1717,6 +1768,7 @@ export function createRuntimeGameplaySessionController(
   });
   questManager.setEventHandler((event) => {
     questNotificationCenter.push(event);
+    recentEventCollector.onQuestEvent(event);
     if (event.type === "quest-complete") {
       audioController.emitEvent("quest.reward", {
         instanceKey: `quest.reward:${event.questDefinitionId}`
@@ -2028,6 +2080,8 @@ export function createRuntimeGameplaySessionController(
     inventoryManager,
     casterManager,
     npcBehaviorSystem,
+    worldTimeStore,
+    playerKnownFactsStore,
     interactionSystem,
     questSystem,
     blackboard,

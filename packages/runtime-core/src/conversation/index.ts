@@ -17,6 +17,7 @@ import type {
   TrackedQuestFact,
   LocationReference
 } from "../state";
+import type { TimeOfDayBand } from "../world";
 import type { RuntimeNpcCurrentTask } from "../behavior";
 
 export type ConversationKind = "scripted-dialogue" | "free-form";
@@ -151,6 +152,28 @@ export interface ConversationRuntimeContext {
    * means no NPC has been prompted on it yet.
    */
   goalSurfacedCount?: number | null;
+  /**
+   * Plan 074 §074.3 -- world clock band. Read from the blackboard
+   * (world.time-of-day) each turn; forwarded to the prompt builder so the
+   * NPC knows what part of the day it is. Null when no world clock is
+   * active (should not happen in practice -- defaults to "morning").
+   */
+  timeOfDay?: TimeOfDayBand | null;
+  /**
+   * Plan 074 §074.5 -- player-known-facts. Display texts of facts the player
+   * has learned via learn-fact quest actions this session. Forwarded to the
+   * prompt builder as a compact "the player already knows" block. Empty
+   * array = no facts learned yet.
+   */
+  knownFacts?: string[] | null;
+  /**
+   * Plan 074 §074.6' -- recent world events (session-only). Human-readable
+   * strings describing notable events since the last load: quest stage
+   * advances, quest completions, day advances. Capped at 10; empty after a
+   * load/restore. Forwarded to the prompt builder as a compact "recent events"
+   * block so NPC responses can reflect things that just happened in the world.
+   */
+  recentWorldEvents?: string[] | null;
 }
 
 export interface ConversationRuntimeNpcBehaviorContext {

@@ -1,3 +1,4 @@
+import type { TimeOfDayBand } from "../quest-definition";
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId, createUuid } from "../shared/identity";
 import type {
@@ -297,6 +298,9 @@ export interface RegionNPCBehaviorTask {
   currentActivity: string;
   currentGoal: string;
   activation: RegionBehaviorQuestBinding;
+  // Plan 074 §074.4 -- time-window gating. When set, this task is only active
+  // if the current world.time-of-day band is in the array. Null/absent = any time.
+  timeWindow?: { bands: TimeOfDayBand[] } | null;
 }
 
 export const REGION_NPC_BEHAVIOR_ACTIVITY_OPTIONS = [
@@ -323,6 +327,20 @@ export const REGION_NPC_BEHAVIOR_GOAL_OPTIONS = [
   { value: "return_to_shop", label: "Return to Shop" },
   { value: "observe_situation", label: "Observe Situation" }
 ] as const;
+
+// Plan 074 §074.4 -- time-of-day bands for task time-window authoring.
+export const REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS: Array<{
+  value: TimeOfDayBand;
+  label: string;
+}> = [
+  { value: "dawn", label: "Dawn" },
+  { value: "morning", label: "Morning" },
+  { value: "midday", label: "Midday" },
+  { value: "afternoon", label: "Afternoon" },
+  { value: "dusk", label: "Dusk" },
+  { value: "evening", label: "Evening" },
+  { value: "night", label: "Night" }
+];
 
 export interface RegionNPCBehaviorDefinition {
   behaviorId: string;
@@ -821,7 +839,8 @@ export function createRegionNPCBehaviorTask(
       overrides.currentGoal.trim().length > 0
         ? overrides.currentGoal.trim()
         : "idle",
-    activation: createRegionBehaviorQuestBinding(overrides.activation)
+    activation: createRegionBehaviorQuestBinding(overrides.activation),
+    timeWindow: overrides.timeWindow ?? null
   };
 }
 

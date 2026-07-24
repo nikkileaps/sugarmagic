@@ -1,4 +1,5 @@
 import type { RegionAreaKind } from "@sugarmagic/domain";
+import type { TimeOfDayBand } from "@sugarmagic/domain";
 
 export type BlackboardScopeKind =
   | "global"
@@ -145,28 +146,6 @@ export interface EntityCurrentGoalFact {
   goal: string;
 }
 
-export type EntityMood =
-  | "neutral"
-  | "friendly"
-  | "hostile"
-  | "anxious"
-  | "relieved";
-
-export type EntityUrgency = "calm" | "alert" | "urgent" | "critical";
-
-export type EntityStance =
-  | "open"
-  | "guarded"
-  | "defensive"
-  | "aggressive";
-
-export interface EntityAffectFact {
-  entityId: string;
-  mood: EntityMood | null;
-  urgency: EntityUrgency | null;
-  stance: EntityStance | null;
-}
-
 export interface TrackedQuestFact {
   questId: string;
   displayName: string;
@@ -220,13 +199,6 @@ export const ENTITY_PLAYER_SPATIAL_RELATION_FACT =
     allowedScopeKinds: ["entity"],
     lifecycle: { kind: "frame" }
   });
-
-export const ENTITY_AFFECT_FACT = defineBlackboardFact<EntityAffectFact>({
-  key: "entity.affect",
-  ownerSystem: "behavior-system",
-  allowedScopeKinds: ["entity"],
-  lifecycle: { kind: "session" }
-});
 
 export const ENTITY_MOVEMENT_FACT = defineBlackboardFact<EntityMovementFact>({
   key: "entity.movement",
@@ -302,19 +274,60 @@ export const GOAL_SURFACED_COUNT_FACT = defineBlackboardFact<number>({
   lifecycle: { kind: "session" }
 });
 
+/**
+ * Plan 074 §074.2' -- world clock facts.
+ *
+ * Written ONLY by worldTimeStore callbacks wired in gameplay-session.ts.
+ * The sole write path is quest actions (set-time-of-day / advance-day)
+ * dispatched through QuestManager -> gameplay-session.setActionHandler ->
+ * worldTimeStore. Direct setFact calls outside that path will throw
+ * (assertWriteAllowed enforces the ownerSystem).
+ */
+export const WORLD_TIME_SOURCE_SYSTEM = "world-time-system";
+
+export const WORLD_TIME_OF_DAY_FACT = defineBlackboardFact<TimeOfDayBand>({
+  key: "world.time-of-day",
+  ownerSystem: WORLD_TIME_SOURCE_SYSTEM,
+  allowedScopeKinds: ["global"],
+  lifecycle: { kind: "session" }
+});
+
+export const WORLD_DAY_FACT = defineBlackboardFact<number>({
+  key: "world.day",
+  ownerSystem: WORLD_TIME_SOURCE_SYSTEM,
+  allowedScopeKinds: ["global"],
+  lifecycle: { kind: "session" }
+});
+
+// Plan 074 §074.5 -- player-known-facts. Sole write path: learn-fact quest
+// actions dispatched through QuestManager -> gameplay-session.setActionHandler
+// -> playerKnownFactsStore.learnFact -> callback. The blackboard `persistent`
+// lifecycle tag is inert (survives only session-clear); the SaveParticipant
+// re-writes the fact array into the blackboard on restore.
+export const PLAYER_FACTS_SOURCE_SYSTEM = "player-facts-system";
+
+export const PLAYER_KNOWN_FACTS_FACT = defineBlackboardFact<string[]>({
+  key: "player.known-facts",
+  ownerSystem: PLAYER_FACTS_SOURCE_SYSTEM,
+  allowedScopeKinds: ["global"],
+  lifecycle: { kind: "session" }
+});
+
 export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   ENTITY_POSITION_FACT,
   ENTITY_LOCATION_FACT,
   ENTITY_CURRENT_AREA_FACT,
   ENTITY_PLAYER_SPATIAL_RELATION_FACT,
-  ENTITY_AFFECT_FACT,
   ENTITY_MOVEMENT_FACT,
   ENTITY_CURRENT_ACTIVITY_FACT,
   ENTITY_CURRENT_GOAL_FACT,
   TRACKED_QUEST_FACT,
   QUEST_ACTIVE_STAGE_FACT,
   QUEST_ACTIVE_OBJECTIVES_FACT,
-  GOAL_SURFACED_COUNT_FACT
+  GOAL_SURFACED_COUNT_FACT,
+  WORLD_TIME_OF_DAY_FACT,
+  WORLD_DAY_FACT,
+  PLAYER_KNOWN_FACTS_FACT
 ] as const satisfies readonly BlackboardFactDefinition<unknown>[];
 
 export function defineBlackboardFact<TValue>(
@@ -626,29 +639,6 @@ export function setEntityLocation(
   });
 }
 
-export function getEntityAffect(
-  blackboard: RuntimeBlackboard,
-  entityId: string
-): EntityAffectFact | null {
-  return (
-    blackboard.getFact(ENTITY_AFFECT_FACT, createBlackboardScope("entity", entityId))?.value ??
-    null
-  );
-}
-
-export function setEntityAffect(
-  blackboard: RuntimeBlackboard,
-  value: EntityAffectFact,
-  options: { sourceSystem?: string } = {}
-): BlackboardFactEnvelope<EntityAffectFact> {
-  return blackboard.setFact({
-    definition: ENTITY_AFFECT_FACT,
-    scope: createBlackboardScope("entity", value.entityId),
-    value,
-    sourceSystem: options.sourceSystem ?? ENTITY_AFFECT_FACT.ownerSystem
-  });
-}
-
 export function getEntityMovement(
   blackboard: RuntimeBlackboard,
   entityId: string
@@ -854,6 +844,70 @@ export function bumpGoalSurfacedCount(
     scope: createBlackboardScope("quest", questId),
     value: current + 1,
     sourceSystem: NARRATIVE_SOURCE_SYSTEM
+  });
+}
+
+// Plan 074 §074.2' -- world clock getters/setters.
+
+export function getTimeOfDayBand(blackboard: RuntimeBlackboard): TimeOfDayBand {
+  return (
+    blackboard.getFact(
+      WORLD_TIME_OF_DAY_FACT,
+      createBlackboardScope("global", "world.time-of-day")
+    )?.value ?? "morning"
+  );
+}
+
+export function getWorldDay(blackboard: RuntimeBlackboard): number {
+  return (
+    blackboard.getFact(
+      WORLD_DAY_FACT,
+      createBlackboardScope("global", "world.day")
+    )?.value ?? 1
+  );
+}
+
+export function setWorldTimeOfDay(
+  blackboard: RuntimeBlackboard,
+  band: TimeOfDayBand
+): void {
+  blackboard.setFact({
+    definition: WORLD_TIME_OF_DAY_FACT,
+    scope: createBlackboardScope("global", "world.time-of-day"),
+    value: band,
+    sourceSystem: WORLD_TIME_SOURCE_SYSTEM
+  });
+}
+
+export function setWorldDay(blackboard: RuntimeBlackboard, day: number): void {
+  blackboard.setFact({
+    definition: WORLD_DAY_FACT,
+    scope: createBlackboardScope("global", "world.day"),
+    value: day,
+    sourceSystem: WORLD_TIME_SOURCE_SYSTEM
+  });
+}
+
+// Plan 074 §074.5 -- player-known-facts getters/setters.
+
+export function getPlayerKnownFacts(blackboard: RuntimeBlackboard): string[] {
+  return (
+    blackboard.getFact(
+      PLAYER_KNOWN_FACTS_FACT,
+      createBlackboardScope("global", "player.known-facts")
+    )?.value ?? []
+  );
+}
+
+export function setPlayerKnownFacts(
+  blackboard: RuntimeBlackboard,
+  facts: string[]
+): void {
+  blackboard.setFact({
+    definition: PLAYER_KNOWN_FACTS_FACT,
+    scope: createBlackboardScope("global", "player.known-facts"),
+    value: facts,
+    sourceSystem: PLAYER_FACTS_SOURCE_SYSTEM
   });
 }
 
