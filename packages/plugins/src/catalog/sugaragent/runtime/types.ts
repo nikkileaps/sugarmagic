@@ -318,6 +318,14 @@ export interface RetrievedEvidenceItem {
   attributes: Record<string, unknown>;
 }
 
+export interface RetrievalScoreEntry {
+  score: number;
+  /** How this chunk entered loreContext. */
+  source: "retrieved" | "pinned" | "synthetic-location";
+  pageId: string | null;
+  fileId: string;
+}
+
 export interface RetrieveResult {
   loreContext: RetrievedEvidenceItem[];
   loreSearchPerformed: boolean;

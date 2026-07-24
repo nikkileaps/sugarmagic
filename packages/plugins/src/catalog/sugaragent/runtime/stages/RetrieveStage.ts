@@ -6,12 +6,10 @@ import {
 } from "../clients";
 import { createDiagnostics } from "./diagnostics";
 import { normalizeRetrievedEvidenceText, summarizeEvidence } from "./helpers";
-import {
-  type RetrievalScoreEntry,
-  recordRetrievalSnapshot
-} from "./retrieval-debug";
+import { recordRetrievalSnapshot } from "./retrieval-debug";
 import type {
   InterpretResult,
+  RetrievalScoreEntry,
   RetrievedEvidenceItem,
   RetrieveResult,
   TurnStage,

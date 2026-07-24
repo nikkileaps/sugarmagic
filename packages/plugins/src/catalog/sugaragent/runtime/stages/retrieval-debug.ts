@@ -17,15 +17,9 @@
  * Status: active (Plan 078.1)
  */
 
-export const SUGARAGENT_RETRIEVAL_WINDOW_KEY = "__sugaragentRetrieval";
+import type { RetrievalScoreEntry } from "../types";
 
-export interface RetrievalScoreEntry {
-  score: number;
-  /** How this chunk entered loreContext. */
-  source: "retrieved" | "pinned" | "synthetic-location";
-  pageId: string | null;
-  fileId: string;
-}
+export const SUGARAGENT_RETRIEVAL_WINDOW_KEY = "__sugaragentRetrieval";
 
 export interface RetrievalSnapshot {
   npcDefinitionId: string;

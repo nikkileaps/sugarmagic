@@ -187,6 +187,7 @@ describe("RetrieveStage loreScores tagging (078.1)", () => {
       score: number;
       source: string;
       pageId: string | null;
+      fileId: string;
     }>;
     // The synthetic-location evidence also has pageId "lore.location.dock" (it uses
     // area.lorePageId), so select by fileId to avoid ambiguity.
@@ -335,9 +336,11 @@ describe("RetrieveStage loreRelevanceFloor (078.2)", () => {
     // The retrieved chunk (0.1) is dropped by the floor; the synthetic prepend survives.
     const stage = new RetrieveStage(makeProvider([0.1]));
     const result = await stage.execute(makeInput(true) as never, makeFloorContext(0.99) as never);
-    // shouldPinNpcLore fires here (location-anchored, persona loaded), but the pin mock
-    // returns the same 0.1-score chunk, which is NOT the NPC's own page and doesn't pass
-    // the page_id check for pinning. droppedByFloor covers both primary + (zero) pin results.
+    // shouldPinNpcLore fires here (location-anchored, persona loaded). makeProvider returns
+    // page_id="lore.npc.horace" which IS the NPC's own page -- the pin page_id check passes
+    // and the chunk IS merged into loreContext after the floor filter (pin bypasses floor by
+    // structure). droppedByFloor covers only the primary search drop (1); the synthetic
+    // runtime-location item is also present since contextAnchor="current_location".
     const synth = result.output.loreContext.find(
       (item) => item.fileId === "runtime:blackboard:current-location"
     );

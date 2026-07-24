@@ -94,6 +94,7 @@ and surfaces other world lore; when degraded it keeps the legacy
 own-page-preferred targeting. Ingest header lines (`Page ID:`/`Title:`/`Section:`)
 are stripped from evidence text before it reaches the prompt.
 
-> Known limitation: retrieval has no relevance floor yet — it returns the top-K
-> by similarity regardless of score, so weak queries can surface loosely-related
-> chunks. A relevance-thresholded retrieval pass is planned as its own epic.
+A `loreRelevanceFloor` config field (0..1, default 0) post-filters retrieved
+chunks below the given score before they reach the prompt. `pinned` and
+`synthetic-location` chunks bypass the floor by structure. See the tuning
+recipe in `docs/api/sugaragent-npcs.md` (Tuning the Relevance Floor).
