@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  ENTITY_AFFECT_FACT,
   ENTITY_POSITION_FACT,
   ENTITY_PLAYER_SPATIAL_RELATION_FACT,
   QUEST_ACTIVE_STAGE_FACT,
@@ -9,11 +8,9 @@ import {
   createRuntimeBlackboard,
   defineBlackboardFact,
   getActiveQuestStage,
-  getEntityAffect,
   getEntityPlayerSpatialRelation,
   getEntityPosition,
   setActiveQuestStage,
-  setEntityAffect,
   setEntityPlayerSpatialRelation,
   setEntityPosition
 } from "@sugarmagic/runtime-core";
@@ -141,18 +138,11 @@ describe("RuntimeBlackboard", () => {
   it("supports typed accessors while keeping listFacts for inspection", () => {
     const blackboard = createRuntimeBlackboard({
       definitions: [
-        ENTITY_AFFECT_FACT,
         ENTITY_POSITION_FACT,
         ENTITY_PLAYER_SPATIAL_RELATION_FACT
       ]
     });
 
-    setEntityAffect(blackboard, {
-      entityId: "npc:rick-roll",
-      mood: "friendly",
-      urgency: "calm",
-      stance: "open"
-    });
     setEntityPosition(blackboard, {
       entityId: "npc:rick-roll",
       x: 8,
@@ -172,14 +162,12 @@ describe("RuntimeBlackboard", () => {
       distanceMeters: 8.5
     });
 
-    expect(getEntityAffect(blackboard, "npc:rick-roll")?.mood).toBe("friendly");
     expect(getEntityPosition(blackboard, "npc:rick-roll")?.x).toBe(8);
     expect(getEntityPlayerSpatialRelation(blackboard, "npc:rick-roll")?.proximityBand).toBe("remote");
 
     const listedFacts = blackboard.listFacts(createBlackboardScope("entity", "npc:rick-roll"));
-    expect(listedFacts).toHaveLength(3);
+    expect(listedFacts).toHaveLength(2);
     expect(listedFacts.map((fact) => fact.key).sort()).toEqual([
-      "entity.affect",
       "entity.player-spatial-relation",
       "entity.position"
     ]);

@@ -146,28 +146,6 @@ export interface EntityCurrentGoalFact {
   goal: string;
 }
 
-export type EntityMood =
-  | "neutral"
-  | "friendly"
-  | "hostile"
-  | "anxious"
-  | "relieved";
-
-export type EntityUrgency = "calm" | "alert" | "urgent" | "critical";
-
-export type EntityStance =
-  | "open"
-  | "guarded"
-  | "defensive"
-  | "aggressive";
-
-export interface EntityAffectFact {
-  entityId: string;
-  mood: EntityMood | null;
-  urgency: EntityUrgency | null;
-  stance: EntityStance | null;
-}
-
 export interface TrackedQuestFact {
   questId: string;
   displayName: string;
@@ -221,13 +199,6 @@ export const ENTITY_PLAYER_SPATIAL_RELATION_FACT =
     allowedScopeKinds: ["entity"],
     lifecycle: { kind: "frame" }
   });
-
-export const ENTITY_AFFECT_FACT = defineBlackboardFact<EntityAffectFact>({
-  key: "entity.affect",
-  ownerSystem: "behavior-system",
-  allowedScopeKinds: ["entity"],
-  lifecycle: { kind: "session" }
-});
 
 export const ENTITY_MOVEMENT_FACT = defineBlackboardFact<EntityMovementFact>({
   key: "entity.movement",
@@ -347,7 +318,6 @@ export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   ENTITY_LOCATION_FACT,
   ENTITY_CURRENT_AREA_FACT,
   ENTITY_PLAYER_SPATIAL_RELATION_FACT,
-  ENTITY_AFFECT_FACT,
   ENTITY_MOVEMENT_FACT,
   ENTITY_CURRENT_ACTIVITY_FACT,
   ENTITY_CURRENT_GOAL_FACT,
@@ -666,29 +636,6 @@ export function setEntityLocation(
     scope: createBlackboardScope("entity", value.entityId),
     value,
     sourceSystem: options.sourceSystem ?? ENTITY_LOCATION_FACT.ownerSystem
-  });
-}
-
-export function getEntityAffect(
-  blackboard: RuntimeBlackboard,
-  entityId: string
-): EntityAffectFact | null {
-  return (
-    blackboard.getFact(ENTITY_AFFECT_FACT, createBlackboardScope("entity", entityId))?.value ??
-    null
-  );
-}
-
-export function setEntityAffect(
-  blackboard: RuntimeBlackboard,
-  value: EntityAffectFact,
-  options: { sourceSystem?: string } = {}
-): BlackboardFactEnvelope<EntityAffectFact> {
-  return blackboard.setFact({
-    definition: ENTITY_AFFECT_FACT,
-    scope: createBlackboardScope("entity", value.entityId),
-    value,
-    sourceSystem: options.sourceSystem ?? ENTITY_AFFECT_FACT.ownerSystem
   });
 }
 

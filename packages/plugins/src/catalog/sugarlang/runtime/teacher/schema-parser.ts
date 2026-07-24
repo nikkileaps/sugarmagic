@@ -84,8 +84,7 @@ const ACCEPTABLE_RESPONSE_FORMS = [
 const INVALIDATION_TRIGGERS = [
   "player_code_switch",
   "quest_stage_change",
-  "location_change",
-  "affective_shift"
+  "location_change"
 ] as const;
 
 const lemmaRefSchema = {

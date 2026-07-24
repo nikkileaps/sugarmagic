@@ -16,7 +16,6 @@
  */
 
 import {
-  ENTITY_AFFECT_FACT,
   ENTITY_LOCATION_FACT,
   QUEST_ACTIVE_STAGE_FACT,
   type BlackboardChangeEvent,
@@ -33,7 +32,6 @@ export type InvalidationReason =
   | "max_turns_exceeded"
   | "quest_stage_change"
   | "location_change"
-  | "affective_shift"
   | "player_code_switch"
   | "manual";
 
@@ -127,10 +125,6 @@ export class DirectiveCache {
     }
     if (event.key === ENTITY_LOCATION_FACT.key) {
       this.invalidateAll("location_change");
-      return;
-    }
-    if (event.key === ENTITY_AFFECT_FACT.key) {
-      this.invalidateAll("affective_shift");
     }
   }
 }
