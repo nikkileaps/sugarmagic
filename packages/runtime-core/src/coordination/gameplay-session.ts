@@ -606,6 +606,7 @@ export function createRuntimeGameplaySessionController(
     setWorldDay(blackboard, day);
     recentEventCollector.onDayAdvance(day);
   });
+  worldTimeStore.setDayRestoreCallback((day) => setWorldDay(blackboard, day));
   setWorldTimeOfDay(blackboard, worldTimeStore.getBand());
   setWorldDay(blackboard, worldTimeStore.getDay());
   const playerKnownFactsStore = createPlayerKnownFactsStore();

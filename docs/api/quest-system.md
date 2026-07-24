@@ -200,13 +200,14 @@ The world clock has two values: a `TimeOfDayBand` and an integer day counter
 ```
 
 `set-time-of-day` sets the band. `advance-day` increments the day counter by
-1 and resets the band to `"dawn"`. Both actions dispatch through the
-existing quest action chain; no special wiring needed.
+1 (band is unchanged). Both actions dispatch through the existing quest action
+chain; no special wiring needed. To advance the day and set a specific band,
+author them as two sequential actions (see Pattern D).
 
 **Runtime blackboard facts:**
 
-- `world.time-of-day` (`WorldTimeOfDayFact`) -- the current band; frame
-  lifecycle (updates each tick).
+- `world.time-of-day` (`WorldTimeOfDayFact`) -- the current band; session
+  lifecycle (updated on band change, not each tick).
 - `world.day` (`WorldDayFact`) -- the current day counter; session lifecycle.
 
 **NPC prompt injection:** Each NPC turn reads `world.time-of-day` from the

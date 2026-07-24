@@ -239,19 +239,7 @@ function resolveBehaviorTask(
     behavior.tasks.find((task) =>
       taskMatchesActivation(task, activeQuest, hasWorldFlag, currentTimeBand)
     ) ?? null;
-  if (questMatchedTask) {
-    return questMatchedTask;
-  }
-
-  return (
-    behavior.tasks.find(
-      (task) =>
-        task.activation.questDefinitionId === null &&
-        task.activation.questStageId === null &&
-        task.activation.worldFlagEquals === null &&
-        taskMatchesActivation(task, activeQuest, hasWorldFlag, currentTimeBand)
-    ) ?? null
-  );
+  return questMatchedTask;
 }
 
 function distance2d(

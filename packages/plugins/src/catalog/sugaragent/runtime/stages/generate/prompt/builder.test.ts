@@ -339,6 +339,32 @@ describe("buildGeneratePrompt — no-lore description fallback", () => {
   });
 });
 
+describe("buildGeneratePrompt -- known-facts block (074.5)", () => {
+  it("renders knownFacts as bullet list in the user message", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        knownFacts: [
+          "The harbourmaster confirmed unclaimed baggage goes to the claim office after 24 hours.",
+          "The claim office is on the lower dock level."
+        ]
+      })
+    );
+    expect(userPrompt).toContain("The player already knows:");
+    expect(userPrompt).toContain("- The harbourmaster confirmed unclaimed baggage goes to the claim office after 24 hours.");
+    expect(userPrompt).toContain("- The claim office is on the lower dock level.");
+  });
+
+  it("omits the block when knownFacts is null", () => {
+    const { userPrompt } = buildGeneratePrompt(baseContext({ knownFacts: null }));
+    expect(userPrompt).not.toContain("The player already knows:");
+  });
+
+  it("omits the block when knownFacts is empty", () => {
+    const { userPrompt } = buildGeneratePrompt(baseContext({ knownFacts: [] }));
+    expect(userPrompt).not.toContain("The player already knows:");
+  });
+});
+
 describe("buildGeneratePrompt -- recent-events block (074.6')", () => {
   it("renders recentWorldEvents as bullet list in the user message", () => {
     const { userPrompt } = buildGeneratePrompt(

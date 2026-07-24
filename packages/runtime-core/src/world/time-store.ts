@@ -14,6 +14,7 @@ export class WorldTimeStore {
   private _day: number = DEFAULT_DAY;
   private onBandChange: ((band: TimeOfDayBand) => void) | null = null;
   private onDayChange: ((day: number) => void) | null = null;
+  private onDayRestore: ((day: number) => void) | null = null;
 
   getState(): WorldTimeState {
     return { day: this._day, band: this._band };
@@ -46,14 +47,20 @@ export class WorldTimeStore {
     this.onDayChange = cb;
   }
 
-  /** Restore state from a save slice. Fires callbacks unconditionally so the
-   *  blackboard tracks the restored state (callbacks are wired in
-   *  gameplay-session before saveParticipantRegistry.deserializeAll runs). */
+  /** Separate callback slot fired only by restore(), not by advanceDay().
+   *  Use this to sync the blackboard without recording a recent-event. */
+  setDayRestoreCallback(cb: (day: number) => void): void {
+    this.onDayRestore = cb;
+  }
+
+  /** Restore state from a save slice. Fires band and day-restore callbacks so
+   *  the blackboard tracks the restored state. Does NOT fire onDayChange so
+   *  the event collector does not record a spurious day-advance event. */
   restore(state: WorldTimeState): void {
     this._band = state.band;
     this._day = state.day;
     this.onBandChange?.(state.band);
-    this.onDayChange?.(state.day);
+    this.onDayRestore?.(state.day);
   }
 }
 

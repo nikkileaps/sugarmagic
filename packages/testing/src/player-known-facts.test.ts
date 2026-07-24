@@ -41,6 +41,18 @@ describe("PlayerKnownFactsStore", () => {
     expect(texts).toEqual(["Another fact.", "Mim's suitcase was lost on the airship."]);
   });
 
+  it("caps at 20 facts, dropping the oldest when exceeded", () => {
+    const store = createPlayerKnownFactsStore();
+    for (let i = 0; i < 22; i += 1) {
+      store.learnFact(`fact:${i}`, `Fact ${i}.`);
+    }
+    const texts = store.getFactTexts();
+    expect(texts).toHaveLength(20);
+    // oldest (fact:0, fact:1) dropped; newest retained
+    expect(texts[0]).toBe("Fact 2.");
+    expect(texts[19]).toBe("Fact 21.");
+  });
+
   it("fires callback on learnFact", () => {
     const store = createPlayerKnownFactsStore();
     const received: string[][] = [];

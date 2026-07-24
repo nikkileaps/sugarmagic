@@ -1,5 +1,5 @@
 import type { RegionAreaKind } from "@sugarmagic/domain";
-import type { TimeOfDayBand } from "../world/time-store";
+import type { TimeOfDayBand } from "@sugarmagic/domain";
 
 export type BlackboardScopeKind =
   | "global"

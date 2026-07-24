@@ -78,19 +78,22 @@ describe("WorldTimeStore", () => {
     expect(store.getState()).toEqual({ day: 2, band: "evening" });
   });
 
-  it("restore fires both callbacks unconditionally (blackboard tracks restored state)", () => {
+  it("restore fires band and day-restore callbacks (not day-change) so blackboard syncs without a recent-event", () => {
     const store = createWorldTimeStore();
     const bandCb = vi.fn();
-    const dayCb = vi.fn();
+    const dayChangeCb = vi.fn();
+    const dayRestoreCb = vi.fn();
     store.setBandChangeCallback(bandCb);
-    store.setDayChangeCallback(dayCb);
+    store.setDayChangeCallback(dayChangeCb);
+    store.setDayRestoreCallback(dayRestoreCb);
     store.restore({ day: 5, band: "dusk" });
     expect(store.getBand()).toBe("dusk");
     expect(store.getDay()).toBe(5);
     expect(bandCb).toHaveBeenCalledOnce();
     expect(bandCb).toHaveBeenCalledWith("dusk");
-    expect(dayCb).toHaveBeenCalledOnce();
-    expect(dayCb).toHaveBeenCalledWith(5);
+    expect(dayRestoreCb).toHaveBeenCalledOnce();
+    expect(dayRestoreCb).toHaveBeenCalledWith(5);
+    expect(dayChangeCb).not.toHaveBeenCalled();
   });
 
   it("restore without callbacks wired does not throw", () => {
