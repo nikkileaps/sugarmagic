@@ -64,13 +64,8 @@ import {
   createNoOpTelemetrySink,
   type TelemetrySink
 } from "./telemetry/telemetry";
-
-export interface SugarlangLoggerLike {
-  debug: (message: string, payload?: Record<string, unknown>) => void;
-  info: (message: string, payload?: Record<string, unknown>) => void;
-  warn: (message: string, payload?: Record<string, unknown>) => void;
-  error: (message: string, payload?: Record<string, unknown>) => void;
-}
+import type { SugarlangLoggerLike } from "./logger";
+export type { SugarlangLoggerLike } from "./logger";
 
 export interface SugarlangExecutionServices {
   atlas: CefrLexAtlasProvider;

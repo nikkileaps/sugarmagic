@@ -28,12 +28,12 @@ import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
 import { emitPlacementCompleted } from "../quest-integration/placement-completion";
+import { createSugarlangLogger } from "../logger";
 import {
   SUGARLANG_COMPLETED_OBJECTIVE_IDS_ANNOTATION,
   SUGARLANG_COMPREHENSION_PROBE_ID_ANNOTATION,
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
-  createNoOpSugarlangLogger,
   createObservationEvent,
   getChoiceLemmaRef,
   getHoverLemma,
@@ -99,7 +99,7 @@ function isLikelySupportLanguageFallback(
 export function createSugarLangObserveMiddleware(
   deps: SugarLangObserveMiddlewareDeps
 ): ConversationMiddleware {
-  const logger = deps.logger ?? createNoOpSugarlangLogger();
+  const logger = deps.logger ?? createSugarlangLogger({ debugLogging: false });
   const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {

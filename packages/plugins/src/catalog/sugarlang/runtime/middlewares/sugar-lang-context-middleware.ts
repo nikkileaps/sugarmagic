@@ -35,6 +35,7 @@ import {
   getPlacementQuestionnaireVersion,
   type PlacementPhaseStateValue
 } from "../placement/placement-flow-orchestrator";
+import { createSugarlangLogger } from "../logger";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION,
@@ -51,7 +52,6 @@ import {
   buildLearnerSnapshot,
   computePendingProvisionalLemmas,
   computeProbeFloorState,
-  createNoOpSugarlangLogger,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
@@ -146,7 +146,7 @@ function pickPrePlacementOpeningLine(executionText: {
 export function createSugarLangContextMiddleware(
   deps: SugarLangContextMiddlewareDeps
 ): ConversationMiddleware {
-  const logger = deps.logger ?? createNoOpSugarlangLogger();
+  const logger = deps.logger ?? createSugarlangLogger({ debugLogging: false });
   const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {

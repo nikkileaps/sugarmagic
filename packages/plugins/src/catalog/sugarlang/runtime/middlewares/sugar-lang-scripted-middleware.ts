@@ -28,13 +28,13 @@ import {
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { tokenize } from "../classifier/tokenize";
+import { createSugarlangLogger } from "../logger";
 import type { SugarlangLoggerLike } from "./shared";
 import {
   isScriptedMode,
   normalizeTurn,
   shouldRunSugarlangForExecution,
-  SUGARLANG_CONSTRAINT_ANNOTATION,
-  createNoOpSugarlangLogger
+  SUGARLANG_CONSTRAINT_ANNOTATION
 } from "./shared";
 
 export interface SugarLangScriptedMiddlewareDeps {
@@ -54,7 +54,7 @@ function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
 export function createSugarLangScriptedMiddleware(
   deps: SugarLangScriptedMiddlewareDeps
 ): ConversationMiddleware {
-  const logger = deps.logger ?? createNoOpSugarlangLogger();
+  const logger = deps.logger ?? createSugarlangLogger({ debugLogging: false });
 
   return {
     middlewareId: "sugarlang.scripted",

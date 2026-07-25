@@ -51,7 +51,7 @@ import {
 import {
   SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
 } from "./runtime/learner/fact-definitions";
-import { createNoOpSugarlangLogger } from "./runtime/middlewares/shared";
+import { createSugarlangLogger } from "./runtime/logger";
 import { createSugarlangDialogueContribution } from "./runtime/dialogue-entry-decorator";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
 import { resolveSugarlangTelemetrySink } from "./runtime/telemetry/telemetry";
@@ -73,22 +73,7 @@ export function createSugarlangPlugin(
 
   // Wire the chunk extraction toggle so Studio shell components respect it.
   setSugarlangChunkExtractionEnabled(config.chunkExtraction.enabled);
-  const logger = config.debugLogging
-    ? {
-        debug(message: string, payload?: Record<string, unknown>) {
-          console.debug("[sugarlang]", message, payload ?? {});
-        },
-        info(message: string, payload?: Record<string, unknown>) {
-          console.info("[sugarlang]", message, payload ?? {});
-        },
-        warn(message: string, payload?: Record<string, unknown>) {
-          console.warn("[sugarlang]", message, payload ?? {});
-        },
-        error(message: string, payload?: Record<string, unknown>) {
-          console.error("[sugarlang]", message, payload ?? {});
-        }
-      }
-    : createNoOpSugarlangLogger();
+  const logger = createSugarlangLogger({ debugLogging: config.debugLogging });
   const telemetry = resolveSugarlangTelemetrySink(context.boot);
   const services = new SugarlangRuntimeServices({
     config,

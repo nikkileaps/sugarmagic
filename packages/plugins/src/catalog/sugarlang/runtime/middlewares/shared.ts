@@ -37,13 +37,7 @@ import type {
   ProbeFloorState,
   SugarlangConstraint
 } from "../types";
-
-export interface SugarlangLoggerLike {
-  debug: (message: string, payload?: Record<string, unknown>) => void;
-  info: (message: string, payload?: Record<string, unknown>) => void;
-  warn: (message: string, payload?: Record<string, unknown>) => void;
-  error: (message: string, payload?: Record<string, unknown>) => void;
-}
+export type { SugarlangLoggerLike } from "../logger";
 
 export interface LearnerSnapshot {
   learnerId: string;
@@ -106,25 +100,6 @@ export const SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE =
 export const SUGARLANG_PLACEMENT_PHASE_STATE = "sugarlang.placementPhase";
 export const SUGARLANG_TURNS_SINCE_LAST_PROBE_STATE =
   "sugarlang.turnsSinceLastProbe";
-
-const NO_OP_LOGGER: SugarlangLoggerLike = {
-  debug() {
-    return undefined;
-  },
-  info() {
-    return undefined;
-  },
-  warn() {
-    return undefined;
-  },
-  error() {
-    return undefined;
-  }
-};
-
-export function createNoOpSugarlangLogger(): SugarlangLoggerLike {
-  return NO_OP_LOGGER;
-}
 
 export function getSceneId(execution: ConversationExecutionContext): string | null {
   return execution.runtimeContext?.here?.sceneId ?? null;
