@@ -52,7 +52,7 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
 
     const actionProposals: ConversationActionProposal[] = [];
     if (
-      input.execution.selection.interactionMode === "agent" &&
+      input.execution.selection.conversationKind === "free-form" &&
       input.interpret.interpretation.intent === "quest_guidance" &&
       typeof scriptedFollowupDialogueDefinitionId === "string" &&
       scriptedFollowupDialogueDefinitionId.length > 0
