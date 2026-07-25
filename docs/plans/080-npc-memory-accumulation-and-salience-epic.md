@@ -1,7 +1,7 @@
 # Plan 080 -- NPC Memory Accumulation and Salience
 
-Status: Draft (pre-epic-review; NOT locked -- stories are not built until the
-epic-review gate passes and this header is stamped Locked).
+Status: Locked (epic-review passed 2026-07-24, 2 rounds) -- stories execute as
+written in the stated EXECUTION ORDER; deviations need STOP + amendment + re-gate.
 Owner: nikki + claude
 Date: 2026-07-24
 
@@ -162,8 +162,9 @@ was read from producing code during discovery; re-verify at the gate.
   (`sugarlang-card-store:${profileId}`, object store `lemma-cards`) vs
   (`sugaragent-npc-memory:${userId}`, object store `npc-memory`). Sugarlang never reads
   any sugaragent memory field; the `minimalGreetingMode` flag is deliberately decoupled
-  from `metCount` (explicit comment `sugar-lang-teacher-middleware.ts:392-395`). The only
-  dataflow is the reverse (sugaragent reads sugarlang's greeting flag).
+  from `metCount` (explicit comment
+  `runtime/middlewares/sugar-lang-teacher-middleware.ts:392-396`). The only dataflow is the
+  reverse (sugaragent reads sugarlang's greeting flag).
 
 ## Research (2026-07-24 sweep; citations are primary sources, quoted)
 
@@ -242,9 +243,19 @@ lean on it as a design heuristic, not a proven law.
   `SUMMARY_SYSTEM_PROMPT` + `summarySchema` (`conversation-summarizer.ts`) so the one call
   we already make also returns (a) an `importance` 1-10 per item (Generative Agents
   poignancy) and (b) a new `disclosures` list -- things the NPC TOLD the player this
-  conversation (see D4). Same call, same round-trip, a few more output tokens. This is the
-  crux of why accumulation is cheap: the fact-extraction call already runs; we ask it for
-  more, not again.
+  conversation (see D4). Same call, same round-trip. NOTE the structured output is NOT
+  gateway-enforced: `generateStructuredTurn` sends `purpose:"summary"` with a plain
+  system/user prompt (`clients.ts:253-270`); "structured" means prompt-instructed JSON
+  parsed tolerantly client-side and AJV-validated (`parseSummaryDelta`,
+  `conversation-summarizer.ts:104-144`). So extending is prompt + `summarySchema` +
+  coercer work only. TOKEN HEADROOM (verify in 080.2): the call is `maxTokens:400`
+  (`DEFAULT_SUMMARY_MAX_TOKENS`) and already emits up to 5 fields x 8 items; adding
+  per-item importance and an 8-item disclosures list raises OUTPUT tokens meaningfully. A
+  mid-object truncation makes the ENTIRE summary fail validation and drop
+  (`:119-126` -> parse-failed), losing the deterministic-only fallback's richness. 080.2
+  MUST evaluate and, if needed, raise `DEFAULT_SUMMARY_MAX_TOKENS`, and test that a full
+  importance+disclosures payload fits within the cap. This is the crux of why accumulation
+  is cheap: the fact-extraction call already runs; we ask it for more, not again.
 
 - **D4 -- Capture SELF-DISCLOSURE as a first-class facet -- this is the repetition lever.**
   The current schema captures what the NPC learned about the PLAYER
@@ -255,18 +266,36 @@ lean on it as a design heuristic, not a proven law.
   Distinguish clearly: stable bio (Maggie, gouda) lives in the persona/definition;
   `disclosures` records the ACT of having shared it with THIS player. The digest injects a
   "you have already shared with this player:" line, and D5's directive tells the model to
-  not reintroduce them.
+  not reintroduce them. CRITICAL budget rule (see D5): disclosures are the repetition lever,
+  so they must NOT be starved out of the 800-char digest by low LLM-assigned importance
+  competing with other items. The disclosures line gets a RESERVED sub-budget (or a
+  ranking floor) so the highest-ranked disclosures always render even when the overall pile
+  is over budget -- otherwise a disclosure ranked out is exactly the re-introduction the
+  epic exists to kill.
 
 - **D5 -- Deterministic salience ranking at digest render; NO LLM at render; fix the
   freshest-first truncation bug.** Replace `buildMemoryDigest`'s fixed-order-join +
   blunt-truncate with: rank all memory items by `importance x recency-decay`
   (Generative Agents, minus embedding-relevance for v1 -- see Deferred), then fill the
-  800-char budget highest-first, dropping the lowest-ranked. This IS the "compaction" for
-  the digest, and it is pure deterministic code -- cheap, debuggable, no drift. It fixes
+  800-char budget highest-first, dropping the lowest-ranked. Disclosures get a RESERVED
+  sub-budget within the 800 chars (or a floor that exempts the top-ranked disclosures from
+  being dropped): the repetition lever must not be starved by other items or by a low LLM
+  importance score (D4). Rank WITHIN each class (facts/promises/beats vs disclosures)
+  by importance x recency; reserve first, then fill the remainder with the rest. This IS
+  the "compaction" for the digest, and it is pure deterministic code -- cheap, debuggable,
+  no drift. It fixes
   the current bug where overflow drops the freshest content (`digest.ts:101`). Recency
-  decay keys off last-updated/last-retrieved per item (warm items survive). Rendering
-  stays byte-stable enough for the cached-prefix slot 073.3 established (the digest is a
-  stable slot; ranking is deterministic given the record).
+  decay keys off each item's LAST-UPDATED `conversationCounter` ONLY (a monotonic
+  counter, not wall-clock -- 073 §D5). It deliberately does NOT implement Generative
+  Agents' "last-retrieved warming" (recalled items stay warm): that would require a WRITE
+  on the render/read path, which breaks the load-once, byte-stable, frozen-record contract
+  (073 §D4; `memory-middleware.ts` loads the record once and freezes it). Retrieval-warming
+  is Deferred with embedding-relevance. Rendering is byte-stable for the cached-prefix slot
+  073.3 established: there is NO tension with the byte-stability tests -- the digest is
+  memoized once per session (`memory-middleware.ts` freezes the record at load), so ranking
+  runs exactly once per conversation; the string is constant across turns regardless of
+  ranking. Deterministic-but-content-different renders only occur BETWEEN conversations
+  (a fresh load), which is exactly when the cache SHOULD invalidate (073 §D4).
 
 - **D6 -- Defer the LLM reflection/consolidation pass behind a size trigger (Strategy
   pattern seam).** The append-then-distill LLM call (re-read the whole item pile, merge
@@ -326,10 +355,14 @@ lean on it as a design heuristic, not a proven law.
   central change and the main regression risk -- the migration must not lose or duplicate
   existing single-summary records.
 - **Migration is NOT version-gated.** `migrateNpcMemoryRecord` (`:169-189`) unconditionally
-  coerces every read to defaults regardless of stored `schemaVersion`. Adding fields needs
-  the defensive coerce updated AND a real `NPC_MEMORY_SCHEMA_VERSION` bump with a genuine
-  upgrade branch (old records: existing single-summary lists become the initial accumulated
-  items, importance defaulted).
+  coerces every read to defaults regardless of stored `schemaVersion`, AND stamps
+  `schemaVersion: NPC_MEMORY_SCHEMA_VERSION` immediately -- so it DISCARDS the stored
+  version before any branch can read it. The v1->v2 branch (080.1) must read the RAW stored
+  `schemaVersion` BEFORE coercing. And beware: if the list field shape changes from
+  `string[]` to scored objects, the current `coerceStringArray` will silently DROP every v1
+  string item (they aren't the new shape) -- the migration must convert v1 strings into
+  initial scored items (default importance, current `conversationCounter` as timestamp), not
+  rely on the defensive coercer. `disclosures` starts empty.
 - **Two constants share the string `"sugaragent.memory"`** (`MEMORY_STATE_KEY` and
   `MEMORY_ANNOTATION_KEY`, `digest.ts:30,32`) in different namespaces. Do not merge them.
 - **LLM importance scores are noisy.** Never let game logic branch on them (D8). Ranking
@@ -345,21 +378,29 @@ lean on it as a design heuristic, not a proven law.
 ### 080.1 Record shape v2: accumulating scored items + disclosures + migration
 Extend `NpcMemoryRecord` so list fields carry scored, timestamped items (item = text +
 importance + last-updated counter) and add the `disclosures` list. Bump
-`NPC_MEMORY_SCHEMA_VERSION` and give `migrateNpcMemoryRecord` a real v1->v2 branch: an old
-record's existing `salientFacts`/etc. become initial items with a default importance and
-the current `conversationCounter` as their timestamp; `disclosures` starts empty. Preserve
-`metCount`/counters exactly. Exit: unit tests -- v1 record loads and upgrades losslessly to
-v2 (no dropped content, metCount/counters intact); a fresh record has empty accumulating
-lists; the in-memory and IndexedDB backends both round-trip the new shape.
+`NPC_MEMORY_SCHEMA_VERSION` and give `migrateNpcMemoryRecord` a real v1->v2 branch that
+reads the RAW stored `schemaVersion` BEFORE coercing (the function currently overwrites it
+immediately -- Gotcha): an old (v1) record's existing `salientFacts`/etc. STRING items are
+converted into initial scored items (default importance, current `conversationCounter` as
+timestamp) -- do NOT lean on `coerceStringArray`, which would drop them under the new object
+shape; `disclosures` starts empty. Preserve `metCount`/counters exactly. Exit: unit tests --
+a v1 record (with `schemaVersion:1` and string lists) loads and upgrades losslessly to v2
+(no dropped content, string facts become scored items, metCount/counters intact); a fresh
+record has empty accumulating lists; the in-memory and IndexedDB backends both round-trip
+the new shape.
 
 ### 080.2 Extraction upgrade: importance + disclosures on the existing dispose call (D3)
 Extend `SUMMARY_SYSTEM_PROMPT` and `summarySchema` so `runAsyncSummary`'s single existing
 call also returns per-item `importance` (1-10) and a `disclosures` list (things the NPC
 told the player this conversation). Extend `parseSummaryDelta` coercion/caps accordingly
-(clamp importance to 1-10; cap disclosures like other lists). NO new call, NO routing
-change. Exit: unit tests with a mock gateway -- a summary response with importance +
+(clamp importance to 1-10; cap disclosures like other lists). Evaluate `maxTokens`: the
+current `DEFAULT_SUMMARY_MAX_TOKENS = 400` must hold a full importance+disclosures payload
+without mid-object truncation (a truncated JSON fails AJV and drops the WHOLE summary,
+`:119-126`) -- raise the default if a worst-case payload doesn't fit. NO new call, NO
+routing change. Exit: unit tests with a mock gateway -- a summary response with importance +
 disclosures parses and validates; out-of-range importance clamps; a response missing the
-new fields still parses (back-compat) with importance defaulted.
+new fields still parses (back-compat) with importance defaulted; a worst-case full payload
+(all lists at cap, every item scored) serializes within the token budget.
 
 ### 080.3 Accumulating merge with reconciliation (D2) -- replaces wholesale overwrite
 Rewrite `mergeSummary` to UPSERT the incoming scored items into the record's accumulating
@@ -373,10 +414,13 @@ clears the pile.
 ### 080.4 Salience-ranked digest render (D5) -- fixes freshest-first truncation
 Replace `buildMemoryDigest`'s fixed-order-join+truncate with importance x recency-decay
 ranking that fills the 800-char budget highest-first. Inject a distinct "you have already
-shared with this player:" line sourced from `disclosures`. Keep render deterministic for
-the cached-prefix slot. Exit: unit tests -- over-budget records keep the highest-ranked
-items and drop lowest (NOT freshest); the disclosures line renders and is bounded; two
-renders of the same record are byte-identical; a null/empty record renders as today
+shared with this player:" line sourced from `disclosures`, with a RESERVED sub-budget (or
+top-disclosure floor) so disclosures cannot be starved out by other items or a low
+importance score (D4/D5). Keep render deterministic for the cached-prefix slot. Exit: unit
+tests -- over-budget records keep the highest-ranked items and drop lowest (NOT freshest);
+a record whose disclosures rank LOW on importance still renders its top disclosures (the
+reserved budget holds under pile pressure); the disclosures line renders and is bounded;
+two renders of the same record are byte-identical; a null/empty record renders as today
 (first-meeting path unchanged).
 
 ### 080.5 Prompt directive: use disclosures to suppress re-disclosure (D4)
@@ -386,15 +430,26 @@ directive appears in the assembled prompt when disclosures exist and is absent w
 a prompt-builder unit test asserts the block placement/stability.
 
 ### 080.6 Wrap: docs, dev-handle tests, golden acceptance, deferred reflection trigger
-Update `docs/api/sugaragent-npcs.md`: the accumulating-memory model, the blackboard-vs-
-memory boundary (D8), the disclosures/repetition mechanism, and the record shape v2. Add
-the golden acceptance test (below) via `__sugaragentMemory`. File D6 (LLM reflection pass)
-as a backlog task with the size-count revisit trigger AND a code comment at the merge seam.
+Update `docs/api/sugaragent-npc-memory.md` (API 009 -- the memory-model doc; NOT
+`sugaragent-npcs.md`/API 008, which is quest-awareness): the accumulating-memory model, the
+blackboard-vs-memory boundary (D8), the disclosures/repetition mechanism, and the record
+shape v2. Note that the v2 path inherits the existing `memoryEnabled` master switch
+(`index.ts:255`, `provider.ts:599`) -- disabling it is the rollback, no new flag. Add the
+golden acceptance test (below) via `__sugaragentMemory`. File D6 (LLM reflection pass) as a
+backlog task with the size-count revisit trigger AND a code comment at the merge seam.
 Retire/close #415 in favor of this epic; keep #414 (server sync) and the new reflection
 task as the live deferred items. Exit: docs updated, `pnpm test` green, deferred task +
 code comment filed.
 
 ## Golden use case (primary acceptance criteria)
+
+The CI-GATING assertions are DETERMINISTIC and live at the record/digest/prompt level, NOT
+at the LLM generation: (a) disclosures are present in the record after a conversation that
+discloses (080.2/080.3 unit + `dump()`); (b) the disclosures block AND the
+"do-not-re-disclose" directive are present in the assembled prompt when disclosures exist
+(080.4/080.5 unit); (c) accumulation + dedup + budget-bounded ranking hold on the record
+(080.3/080.4 unit). Step 3 below ("Finnick does not repeat himself") depends on LLM
+generation and is a MANUAL preview spot-check, never a CI assertion.
 
 The feature works iff cross-conversation repetition stops:
 
@@ -416,10 +471,12 @@ The feature works iff cross-conversation repetition stops:
 
 ## Verification recipe (nikki)
 
-1. `pnpm test` green.
-2. Run the golden use case above in preview. The pass/fail signal is step 3 (Finnick does
-   not repeat himself) plus step 4 (`dump()` shows accumulation + dedup, digest within
-   budget).
+1. `pnpm test` green -- this is the CI gate (deterministic record/digest/prompt assertions,
+   per the golden-use-case preamble).
+2. Run the golden use case above in preview as a QUALITY spot-check (not a gate). The
+   deterministic signal is step 2 + step 4 (`dump()` shows disclosures with scores,
+   accumulation + dedup, digest within budget); step 3 (Finnick does not repeat himself) is
+   the felt-quality signal a human observes, not a hard pass/fail.
 3. Force compaction early to stress-test salience: set `memoryDigestMaxChars` low (e.g.
    300) via config so ranking fires constantly; confirm the NPC still "remembers the right
    things" (high-importance disclosures survive; trivia drops) -- the quality signal that
@@ -439,7 +496,15 @@ The feature works iff cross-conversation repetition stops:
   Revisit trigger: when the digest budget forces dropping items that ARE relevant to the
   current conversation topic but rank low on importance x recency -- add a relevance term
   (embedding similarity of item vs current topic), completing the Generative Agents triad.
-  Needs an embedding source in the runtime path.
+  Needs an embedding source in the runtime path (none exists today; the only seam is the
+  deferred `RetrieveStage.ts:182-183` local-embeddings note).
+- **Retrieval-warming recency (Generative Agents "recalled items stay warm").** D5 decays
+  recency off LAST-UPDATED only, because warming an item when it's retrieved would require a
+  write on the render/read path, breaking load-once byte-stability (073 §D4). Revisit
+  trigger: if useful older items get ranked out because they're never re-updated even though
+  they keep getting recalled -- then introduce an explicit, deliberate write-back path
+  (separate from the frozen digest render) that bumps a last-retrieved counter, and re-derive
+  the digest from it on the NEXT conversation only.
 - **Server-side / cross-device memory sync (#414).** Push records server-side so memory
   follows the player across devices. Revisit trigger: real accounts + multi-device play.
   The v2 record shape is designed so this is a transport change, not a redesign.
