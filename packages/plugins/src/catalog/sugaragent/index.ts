@@ -61,7 +61,8 @@ export {
   type NpcMemoryBackend,
   type NpcMemoryStoreOptions,
   type DeterministicMemoryDelta,
-  type SummaryMemoryDelta
+  type SummaryMemoryDelta,
+  type SummaryScoredItem
 } from "./runtime/memory/npc-memory-store";
 export {
   resolveNpcMemoryStore,

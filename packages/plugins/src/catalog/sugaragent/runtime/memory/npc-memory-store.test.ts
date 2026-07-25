@@ -148,7 +148,7 @@ describe("NpcMemoryStore summary merge + staleness gate", () => {
       {
         npcDefinitionId: FINNICK,
         relationshipSummary: "warming up",
-        salientFacts: ["likes cheese"]
+        salientFacts: [{ text: "likes cheese", importance: 7 }]
       },
       1
     );
@@ -156,9 +156,10 @@ describe("NpcMemoryStore summary merge + staleness gate", () => {
 
     const record = await store.load(FINNICK);
     expect(record?.relationshipSummary).toBe("warming up");
-    // 080.1: the summary delta's strings are shimmed into scored items.
+    // 080.2: the delta's scored items land with importance preserved and
+    // recency stamped from the conversation counter.
     expect(record?.salientFacts.map((item) => item.text)).toEqual(["likes cheese"]);
-    expect(record?.salientFacts[0]?.importance).toBe(5); // DEFAULT_ITEM_IMPORTANCE
+    expect(record?.salientFacts[0]?.importance).toBe(7);
     expect(record?.salientFacts[0]?.lastUpdated).toBe(1); // the summary counter
     // Untouched fields keep their prior values.
     expect(record?.promises).toEqual([]);
@@ -397,7 +398,7 @@ describe("NpcMemoryStore IndexedDB backend (durability smoke)", () => {
       lastExchange: "persisted"
     });
     await first.mergeSummary(
-      { npcDefinitionId: FINNICK, salientFacts: ["remembered"] },
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "remembered", importance: 6 }] },
       1
     );
 
@@ -413,7 +414,7 @@ describe("NpcMemoryStore IndexedDB backend (durability smoke)", () => {
     expect(record?.metCount).toBe(1);
     expect(record?.lastExchange).toBe("persisted");
     expect(record?.salientFacts.map((item) => item.text)).toEqual(["remembered"]);
-    expect(record?.salientFacts[0]?.importance).toBe(5);
+    expect(record?.salientFacts[0]?.importance).toBe(6);
     expect(record?.disclosures).toEqual([]);
   });
 

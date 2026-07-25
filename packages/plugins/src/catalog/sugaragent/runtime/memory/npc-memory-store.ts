@@ -129,15 +129,26 @@ export interface DeterministicMemoryDelta {
   lastExchange: string;
 }
 
+/** A scored item as it arrives in a summary delta -- text + importance,
+ *  no `lastUpdated` (the store stamps recency from the conversation
+ *  counter at merge time). Plan 080 §080.2. */
+export interface SummaryScoredItem {
+  text: string;
+  importance: number;
+}
+
 /** The async LLM-summary upgrade (Plan 073 §D3 phase 2). Every
  *  field is optional — a partial summary merges only what it carries,
  *  leaving the rest of the record intact. */
 export interface SummaryMemoryDelta {
   npcDefinitionId: string;
   relationshipSummary?: string;
-  salientFacts?: string[];
-  promises?: string[];
-  emotionalBeats?: string[];
+  salientFacts?: SummaryScoredItem[];
+  promises?: SummaryScoredItem[];
+  emotionalBeats?: SummaryScoredItem[];
+  /** Things the NPC told the player about ITSELF this conversation -- the
+   *  cross-conversation repetition lever. Plan 080 §D4. */
+  disclosures?: SummaryScoredItem[];
   lastConversationSummary?: string;
 }
 
@@ -194,10 +205,10 @@ export function clampImportance(value: unknown): number {
 }
 
 /**
- * Convert plain strings into scored items at the default importance,
- * timestamped to the given conversationCounter. Used for BOTH the v1->v2
- * migration (legacy string lists) and the 080.1 summary-delta shim (a
- * pre-080.2 delta still carries strings). Non-strings/empties drop.
+ * Convert legacy plain strings into scored items at the default
+ * importance, timestamped to the given conversationCounter. Used by the
+ * v1->v2 migration (a v1 record's list fields were plain strings).
+ * Non-strings/empties drop.
  */
 function stringsToScoredItems(value: unknown, timestamp: number): ScoredMemoryItem[] {
   if (!Array.isArray(value)) return [];
@@ -211,6 +222,27 @@ function stringsToScoredItems(value: unknown, timestamp: number): ScoredMemoryIt
     });
   }
   return items;
+}
+
+/**
+ * Map a summary delta's scored items into durable items, clamping
+ * importance and stamping recency from the conversation counter. Empties
+ * drop. Plan 080 §080.2.
+ */
+function itemsFromDelta(
+  items: SummaryScoredItem[],
+  timestamp: number
+): ScoredMemoryItem[] {
+  const out: ScoredMemoryItem[] = [];
+  for (const item of items) {
+    if (!item || typeof item.text !== "string" || item.text.length === 0) continue;
+    out.push({
+      text: item.text,
+      importance: clampImportance(item.importance),
+      lastUpdated: timestamp
+    });
+  }
+  return out;
 }
 
 /** Defensively coerce a stored v2 scored-item list: keep well-formed
@@ -519,11 +551,10 @@ export class NpcMemoryStore {
    * whether the summary was applied.
    */
   // Plan 080 §080.3 SEAM — this still REPLACES the list fields wholesale
-  // (the v1 behavior). 080.1 shims the incoming plain-string delta into
-  // scored items (default importance, `counter` as the recency timestamp)
-  // so the record holds the v2 shape; 080.3 rewrites this to ACCUMULATE +
-  // reconcile (upsert) instead of replace. The staleness gate below is
-  // preserved across that change. Tracked in the backlog.
+  // (the v1 behavior). The incoming scored items are stamped with `counter`
+  // as their recency; 080.3 rewrites this to ACCUMULATE + reconcile (upsert)
+  // against the existing items instead of replacing. The staleness gate below
+  // is preserved across that change. Tracked in the backlog.
   mergeSummary(delta: SummaryMemoryDelta, counter: number): Promise<boolean> {
     return this.enqueue(async () => {
       const record =
@@ -538,13 +569,16 @@ export class NpcMemoryStore {
         record.relationshipSummary = delta.relationshipSummary;
       }
       if (delta.salientFacts !== undefined) {
-        record.salientFacts = stringsToScoredItems(delta.salientFacts, counter);
+        record.salientFacts = itemsFromDelta(delta.salientFacts, counter);
       }
       if (delta.promises !== undefined) {
-        record.promises = stringsToScoredItems(delta.promises, counter);
+        record.promises = itemsFromDelta(delta.promises, counter);
       }
       if (delta.emotionalBeats !== undefined) {
-        record.emotionalBeats = stringsToScoredItems(delta.emotionalBeats, counter);
+        record.emotionalBeats = itemsFromDelta(delta.emotionalBeats, counter);
+      }
+      if (delta.disclosures !== undefined) {
+        record.disclosures = itemsFromDelta(delta.disclosures, counter);
       }
       if (delta.lastConversationSummary !== undefined) {
         record.lastConversationSummary = delta.lastConversationSummary;

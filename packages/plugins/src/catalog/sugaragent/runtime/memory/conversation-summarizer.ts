@@ -28,26 +28,62 @@ import Ajv from "ajv";
 import type { LLMProvider } from "../clients";
 import type { SugarAgentLogger } from "../logger";
 import type { SugarAgentSessionHistoryEntry } from "../types";
-import type { NpcMemoryStore, SummaryMemoryDelta } from "./npc-memory-store";
+import {
+  clampImportance,
+  type NpcMemoryStore,
+  type SummaryMemoryDelta,
+  type SummaryScoredItem
+} from "./npc-memory-store";
 
-/** One capped call per conversation. */
-export const DEFAULT_SUMMARY_MAX_TOKENS = 400;
+/**
+ * One capped call per conversation. Raised from 400 (v1) at 080.2: the v2
+ * schema adds per-item `importance` and a 4th list (`disclosures`), so a
+ * within-caps payload is materially larger. 400 could truncate a rich
+ * response mid-JSON, which fails AJV and drops the WHOLE summary (leaving
+ * only the deterministic record). This ceiling comfortably fits the
+ * defensive worst case (all four lists at MAX_LIST_ITEMS x MAX_FACT_CHARS
+ * plus both summaries at MAX_SUMMARY_CHARS) -- see the worst-case token
+ * test. It is a CEILING, not a target: a compact real summary emits far
+ * less and costs the same as before, and the summary model is small/cheap.
+ */
+export const DEFAULT_SUMMARY_MAX_TOKENS = 3000;
 
-/** Defensive caps so a chatty summary can't bloat the durable record. */
-const MAX_SUMMARY_CHARS = 600;
-const MAX_FACT_CHARS = 200;
-const MAX_LIST_ITEMS = 8;
+/** Defensive caps so a chatty summary can't bloat the durable record.
+ *  Exported so the worst-case token-budget test derives the same bound. */
+export const MAX_SUMMARY_CHARS = 600;
+export const MAX_FACT_CHARS = 200;
+export const MAX_LIST_ITEMS = 8;
 
 const ajv = new Ajv({ allErrors: true, strict: false, removeAdditional: false });
+
+/** A summary-list item: a scored object, or a bare string (a model that
+ *  ignores the object shape) which coerces to the default importance. */
+const scoredItemSchema = {
+  anyOf: [
+    { type: "string" },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["text"],
+      properties: {
+        text: { type: "string" },
+        // Any type -- coerceScoredList/clampImportance sanitize it. Kept
+        // lenient so a bad importance never rejects (drops) the whole summary.
+        importance: {}
+      }
+    }
+  ]
+} as const;
 
 const summarySchema = {
   type: "object",
   additionalProperties: false,
   properties: {
     relationshipSummary: { type: "string" },
-    salientFacts: { type: "array", items: { type: "string" } },
-    promises: { type: "array", items: { type: "string" } },
-    emotionalBeats: { type: "array", items: { type: "string" } },
+    salientFacts: { type: "array", items: scoredItemSchema },
+    promises: { type: "array", items: scoredItemSchema },
+    emotionalBeats: { type: "array", items: scoredItemSchema },
+    disclosures: { type: "array", items: scoredItemSchema },
     lastConversationSummary: { type: "string" }
   }
 } as const;
@@ -84,16 +120,35 @@ function coerceString(value: unknown, maxChars: number): string {
   return trimmed.length <= maxChars ? trimmed : trimmed.slice(0, maxChars);
 }
 
-function coerceList(value: unknown): string[] {
+/**
+ * Coerce a summary-list value into scored items. Accepts either scored
+ * objects `{ text, importance }` or bare strings (a model that ignored
+ * the object shape -> default importance). Trims + caps text length,
+ * drops empties, clamps importance, and caps the list length. Plan 080
+ * §080.2.
+ */
+function coerceScoredList(value: unknown): SummaryScoredItem[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .filter((entry): entry is string => typeof entry === "string")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
-    .map((entry) =>
-      entry.length <= MAX_FACT_CHARS ? entry : entry.slice(0, MAX_FACT_CHARS)
-    )
-    .slice(0, MAX_LIST_ITEMS);
+  const items: SummaryScoredItem[] = [];
+  for (const entry of value) {
+    let rawText: unknown;
+    let rawImportance: unknown;
+    if (typeof entry === "string") {
+      rawText = entry;
+    } else if (entry && typeof entry === "object") {
+      rawText = (entry as { text?: unknown }).text;
+      rawImportance = (entry as { importance?: unknown }).importance;
+    }
+    if (typeof rawText !== "string") continue;
+    const trimmed = rawText.trim();
+    if (trimmed.length === 0) continue;
+    items.push({
+      text: trimmed.length <= MAX_FACT_CHARS ? trimmed : trimmed.slice(0, MAX_FACT_CHARS),
+      importance: clampImportance(rawImportance)
+    });
+    if (items.length >= MAX_LIST_ITEMS) break;
+  }
+  return items;
 }
 
 /**
@@ -132,9 +187,10 @@ export function parseSummaryDelta(
         record.relationshipSummary,
         MAX_SUMMARY_CHARS
       ),
-      salientFacts: coerceList(record.salientFacts),
-      promises: coerceList(record.promises),
-      emotionalBeats: coerceList(record.emotionalBeats),
+      salientFacts: coerceScoredList(record.salientFacts),
+      promises: coerceScoredList(record.promises),
+      emotionalBeats: coerceScoredList(record.emotionalBeats),
+      disclosures: coerceScoredList(record.disclosures),
       lastConversationSummary: coerceString(
         record.lastConversationSummary,
         MAX_SUMMARY_CHARS
@@ -145,14 +201,22 @@ export function parseSummaryDelta(
 
 const SUMMARY_SYSTEM_PROMPT = [
   "You maintain one NPC's private memory of a player across conversations.",
-  "Read the transcript and distill what THIS NPC should remember about the PLAYER.",
+  "Read the transcript and distill what THIS NPC should remember.",
   "Respond with ONLY a JSON object, no prose, with these fields:",
   '- "relationshipSummary": one short paragraph on the relationship so far.',
-  '- "salientFacts": array of concrete facts the player revealed about themselves.',
-  '- "promises": array of promises or undertakings either side made.',
-  '- "emotionalBeats": array of notable emotional moments.',
+  '- "salientFacts": things the PLAYER revealed about themselves.',
+  '- "promises": promises or undertakings either side made.',
+  '- "emotionalBeats": notable emotional moments.',
+  '- "disclosures": things the NPC told the PLAYER about ITSELF this',
+  "  conversation, so it does NOT repeat them next time -- e.g. \"told them",
+  '  my wife is Maggie", "told them I love aged gouda".',
   '- "lastConversationSummary": 1-2 sentences summarizing this conversation.',
-  "Keep every field compact. Omit a field (or use an empty array/string) when nothing applies.",
+  "salientFacts, promises, emotionalBeats, and disclosures are arrays of",
+  'objects: { "text": "<one short clause>", "importance": <integer 1-10> },',
+  "where importance is how much this matters for future conversations",
+  "(1 = trivial, 10 = pivotal).",
+  "Keep every field compact; prefer FEW, high-signal items. Omit a field (or",
+  "use an empty array/string) when nothing applies.",
   "Do NOT invent details not present in the transcript.",
   "Do NOT use dates, clock times, or 'today/yesterday' language — order is tracked elsewhere."
 ].join("\n");

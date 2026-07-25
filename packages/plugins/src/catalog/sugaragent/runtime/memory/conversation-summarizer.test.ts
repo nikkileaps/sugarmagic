@@ -22,6 +22,10 @@ import {
   NpcMemoryStore
 } from "./npc-memory-store";
 import {
+  DEFAULT_SUMMARY_MAX_TOKENS,
+  MAX_FACT_CHARS,
+  MAX_LIST_ITEMS,
+  MAX_SUMMARY_CHARS,
   parseSummaryDelta,
   summarizeConversationAtDispose,
   type ConversationSummaryDeps
@@ -54,9 +58,13 @@ function mockProvider(
 
 const VALID_SUMMARY = JSON.stringify({
   relationshipSummary: "Met Mim, a friendly newcomer who likes cheese.",
-  salientFacts: ["Name is Mim", "Loves aged gouda"],
+  salientFacts: [
+    { text: "Name is Mim", importance: 8 },
+    { text: "Loves aged gouda", importance: 6 }
+  ],
   promises: [],
-  emotionalBeats: ["warm first meeting"],
+  emotionalBeats: [{ text: "warm first meeting", importance: 5 }],
+  disclosures: [{ text: "told them my wife is Maggie", importance: 7 }],
   lastConversationSummary: "Mim introduced themselves and their taste in cheese."
 });
 
@@ -108,8 +116,12 @@ describe("summarizeConversationAtDispose", () => {
 
     const record = await store.load(FINNICK);
     expect(record?.relationshipSummary).toContain("Mim");
-    // 080.1: summary strings are shimmed into scored items.
+    // 080.2: scored items land with importance preserved; disclosures too.
     expect(record?.salientFacts.map((item) => item.text)).toContain("Loves aged gouda");
+    expect(record?.salientFacts.find((item) => item.text === "Name is Mim")?.importance).toBe(8);
+    expect(record?.disclosures.map((item) => item.text)).toContain(
+      "told them my wife is Maggie"
+    );
     expect(record?.lastConversationSummary).toContain("introduced");
   });
 
@@ -237,7 +249,52 @@ describe("parseSummaryDelta", () => {
     const result = parseSummaryDelta(FINNICK, text);
     expect("delta" in result).toBe(true);
     if ("delta" in result) {
-      expect(result.delta.salientFacts).toEqual(["Name is Mim", "Loves aged gouda"]);
+      expect(result.delta.salientFacts?.map((item) => item.text)).toEqual([
+        "Name is Mim",
+        "Loves aged gouda"
+      ]);
+      expect(result.delta.salientFacts?.[0]?.importance).toBe(8);
+      expect(result.delta.disclosures?.map((item) => item.text)).toEqual([
+        "told them my wife is Maggie"
+      ]);
+    }
+  });
+
+  it("clamps out-of-range or missing importance into 1-10 (080.2)", () => {
+    const result = parseSummaryDelta(
+      FINNICK,
+      JSON.stringify({
+        salientFacts: [
+          { text: "too high", importance: 99 },
+          { text: "too low", importance: -4 },
+          { text: "not a number", importance: "high" },
+          { text: "missing" }
+        ]
+      })
+    );
+    expect("delta" in result).toBe(true);
+    if ("delta" in result) {
+      const byText = Object.fromEntries(
+        (result.delta.salientFacts ?? []).map((item) => [item.text, item.importance])
+      );
+      expect(byText["too high"]).toBe(10);
+      expect(byText["too low"]).toBe(1);
+      expect(byText["not a number"]).toBe(5); // DEFAULT_ITEM_IMPORTANCE
+      expect(byText["missing"]).toBe(5);
+    }
+  });
+
+  it("accepts bare strings for back-compat, defaulting importance (080.2)", () => {
+    const result = parseSummaryDelta(
+      FINNICK,
+      JSON.stringify({ salientFacts: ["Name is Mim", "Loves gouda"] })
+    );
+    expect("delta" in result).toBe(true);
+    if ("delta" in result) {
+      expect(result.delta.salientFacts).toEqual([
+        { text: "Name is Mim", importance: 5 },
+        { text: "Loves gouda", importance: 5 }
+      ]);
     }
   });
 
@@ -267,5 +324,28 @@ describe("parseSummaryDelta", () => {
       expect(result.delta.relationshipSummary?.length).toBeLessThanOrEqual(600);
       expect(result.delta.salientFacts?.length).toBeLessThanOrEqual(8);
     }
+  });
+});
+
+describe("summary token budget (080.2)", () => {
+  it("a worst-case at-caps payload fits DEFAULT_SUMMARY_MAX_TOKENS", () => {
+    // The defensive worst case the caps allow: all four scored lists at
+    // MAX_LIST_ITEMS x MAX_FACT_CHARS, every item scored, plus both summaries
+    // at MAX_SUMMARY_CHARS. If this fits the output ceiling, no within-caps
+    // response can truncate mid-JSON and drop the whole summary.
+    const item = { text: "x".repeat(MAX_FACT_CHARS), importance: 10 };
+    const list = Array.from({ length: MAX_LIST_ITEMS }, () => item);
+    const worstCase = JSON.stringify({
+      relationshipSummary: "x".repeat(MAX_SUMMARY_CHARS),
+      salientFacts: list,
+      promises: list,
+      emotionalBeats: list,
+      disclosures: list,
+      lastConversationSummary: "x".repeat(MAX_SUMMARY_CHARS)
+    });
+    // ~4 chars/token is the standard rough estimate; use a conservative
+    // (denser) 3.2 so the assertion holds even for token-heavy JSON.
+    const estimatedTokens = Math.ceil(worstCase.length / 3.2);
+    expect(estimatedTokens).toBeLessThanOrEqual(DEFAULT_SUMMARY_MAX_TOKENS);
   });
 });
