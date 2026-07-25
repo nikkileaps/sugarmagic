@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { RegionDocument } from "@sugarmagic/domain";
+import type { RegionBehaviorQuestBinding, RegionDocument } from "@sugarmagic/domain";
 import {
   applyCommand,
   createAuthoringSession,
@@ -107,11 +107,7 @@ function makeCreateCmd() {
 }
 
 function makeSetConditionCmd(
-  condition: {
-    questDefinitionId: string | null;
-    questStageId: string | null;
-    worldFlagEquals: { flagId: string; expectedValue: boolean } | null;
-  } | null
+  condition: RegionBehaviorQuestBinding | null
 ) {
   return {
     kind: "SetNPCPresenceCondition" as const,

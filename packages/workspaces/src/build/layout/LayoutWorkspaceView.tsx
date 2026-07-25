@@ -38,7 +38,6 @@ import type {
   ItemDefinition,
   NPCDefinition,
   PlayerDefinition,
-  RegionBehaviorQuestBinding,
   SemanticCommand,
   RegionDocument,
   SoundCueDefinition,
@@ -802,11 +801,11 @@ export function useLayoutWorkspaceView(
     [getRegion, getRegionContents, onCommand]
   );
 
-  const handleSetNPCPresenceCondition = useCallback(
-    (condition: RegionBehaviorQuestBinding | null) => {
+  const handleSetNPCPresenceLabel = useCallback(
+    (label: string | null) => {
       if (!region || !selectedNPCPresence) return;
       onCommand({
-        kind: "SetNPCPresenceCondition",
+        kind: "SetNPCPresenceLabel",
         target: {
           aggregateKind: "region-document",
           aggregateId: region.identity.id
@@ -817,7 +816,7 @@ export function useLayoutWorkspaceView(
         },
         payload: {
           presenceId: selectedNPCPresence.presenceId,
-          condition
+          label
         }
       });
     },
@@ -1936,86 +1935,15 @@ export function useLayoutWorkspaceView(
                 )
               }
             />
-            <Stack gap={4}>
-              <Text size="xs" fw={500}>Show when</Text>
-              <TextInput
-                label="Quest"
-                size="xs"
-                placeholder="quest:find-suitcase"
-                value={selectedNPCPresence.condition?.questDefinitionId ?? ""}
-                onChange={(e) => {
-                  const questDefinitionId = e.currentTarget.value || null;
-                  const cur = selectedNPCPresence.condition;
-                  const questStageId = cur?.questStageId ?? null;
-                  const worldFlagEquals = cur?.worldFlagEquals ?? null;
-                  const allNull = !questDefinitionId && !questStageId && !worldFlagEquals;
-                  handleSetNPCPresenceCondition(
-                    allNull ? null : { questDefinitionId, questStageId, worldFlagEquals }
-                  );
-                }}
-              />
-              <TextInput
-                label="Quest stage"
-                size="xs"
-                placeholder="stage:arrival"
-                value={selectedNPCPresence.condition?.questStageId ?? ""}
-                onChange={(e) => {
-                  const questStageId = e.currentTarget.value || null;
-                  const cur = selectedNPCPresence.condition;
-                  const questDefinitionId = cur?.questDefinitionId ?? null;
-                  const worldFlagEquals = cur?.worldFlagEquals ?? null;
-                  const allNull = !questDefinitionId && !questStageId && !worldFlagEquals;
-                  handleSetNPCPresenceCondition(
-                    allNull ? null : { questDefinitionId, questStageId, worldFlagEquals }
-                  );
-                }}
-              />
-              <Group grow>
-                <TextInput
-                  label="Flag"
-                  size="xs"
-                  placeholder="finn_arrived"
-                  value={selectedNPCPresence.condition?.worldFlagEquals?.key ?? ""}
-                  onChange={(e) => {
-                    const flagKey = e.currentTarget.value || null;
-                    const cur = selectedNPCPresence.condition;
-                    const questDefinitionId = cur?.questDefinitionId ?? null;
-                    const questStageId = cur?.questStageId ?? null;
-                    const worldFlagEquals = flagKey
-                      ? {
-                          key: flagKey,
-                          valueType: cur?.worldFlagEquals?.valueType ?? ("boolean" as const),
-                          value: cur?.worldFlagEquals?.value ?? "true"
-                        }
-                      : null;
-                    const allNull = !questDefinitionId && !questStageId && !worldFlagEquals;
-                    handleSetNPCPresenceCondition(
-                      allNull ? null : { questDefinitionId, questStageId, worldFlagEquals }
-                    );
-                  }}
-                />
-                <TextInput
-                  label="equals"
-                  size="xs"
-                  placeholder="true"
-                  value={selectedNPCPresence.condition?.worldFlagEquals?.value ?? ""}
-                  disabled={!selectedNPCPresence.condition?.worldFlagEquals?.key}
-                  onChange={(e) => {
-                    const cur = selectedNPCPresence.condition;
-                    if (!cur?.worldFlagEquals?.key) return;
-                    handleSetNPCPresenceCondition({
-                      questDefinitionId: cur.questDefinitionId,
-                      questStageId: cur.questStageId,
-                      worldFlagEquals: {
-                        key: cur.worldFlagEquals.key,
-                        valueType: cur.worldFlagEquals.valueType,
-                        value: e.currentTarget.value
-                      }
-                    });
-                  }}
-                />
-              </Group>
-            </Stack>
+            <TextInput
+              label="Placement label"
+              size="xs"
+              placeholder="e.g. Finnick at the docks"
+              value={selectedNPCPresence.placementLabel ?? ""}
+              onChange={(e) =>
+                handleSetNPCPresenceLabel(e.currentTarget.value || null)
+              }
+            />
           </Stack>
         ) : selectedItemPresence ? (
           <Stack gap="md">
