@@ -202,6 +202,7 @@ Recorded here deliberately: both need real game wiring beyond the dialogue layer
 - Strain-driven adaptation of non-language game difficulty (full L4D idiom)
 - Monetization posture at launch planning: one-time purchase + disclosed genAI (market evidence is unambiguous)
 - FSRS parameter refitting from our own telemetry once volume exists
+- Learner profile-core cross-session persistence (found in 081 epic-review round 2): FSRS cards survive reload via the IndexedDB card store, but the profile core (posterior, band, placement verdict) lives only in session-scoped blackboard facts -- no plugin-owned profile store exists, so a reload today loses the band estimate and placement status. Per the ADR 020 boundary, sugarlang owns this store keyed on userId. Revisit no later than epic F (evidence is worthless if the profile resets); a small story in any earlier epic is fine.
 
 ## Sources (condensed)
 
