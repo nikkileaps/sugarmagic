@@ -51,12 +51,18 @@ export {
   InMemoryNpcMemoryBackend,
   IndexedDBNpcMemoryBackend,
   migrateNpcMemoryRecord,
+  clampImportance,
   NPC_MEMORY_SCHEMA_VERSION,
+  MIN_ITEM_IMPORTANCE,
+  MAX_ITEM_IMPORTANCE,
+  DEFAULT_ITEM_IMPORTANCE,
   type NpcMemoryRecord,
+  type ScoredMemoryItem,
   type NpcMemoryBackend,
   type NpcMemoryStoreOptions,
   type DeterministicMemoryDelta,
-  type SummaryMemoryDelta
+  type SummaryMemoryDelta,
+  type SummaryScoredItem
 } from "./runtime/memory/npc-memory-store";
 export {
   resolveNpcMemoryStore,

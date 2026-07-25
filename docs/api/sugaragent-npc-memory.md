@@ -2,24 +2,53 @@
 
 ## Purpose
 
-This document covers the NPC memory system (Plan 073). It explains the
-two-tier memory model, what persists and when, the plugin config surface,
-first-meeting semantics, and the dev inspection handle.
+This document covers the NPC memory system (Plan 073, extended by Plan 080).
+It explains the memory model, the accumulating record shape and its salience-
+ranked digest, what persists and when, the plugin config surface, first-
+meeting semantics, and the dev inspection handle.
 
 ## Overview
 
 NPC memory gives agentified NPCs cross-conversation continuity. A returning
-player is greeted as an acquaintance, not a stranger. Memory has two tiers:
+player is greeted as an acquaintance, not a stranger, and characters
+accumulate durable memory of the player rather than only recalling the last
+conversation. Memory has two tiers:
 
 1. **Durable record** -- a per-NPC, per-playthrough JSON record stored in
-   the browser's IndexedDB (`sugaragent-npc-memory` database). Written once
-   per conversation end (conversation summarizer). Survives game restarts.
-   Keyed by `(playthroughId, npcDefinitionId)`.
+   the browser's IndexedDB (`sugaragent-npc-memory:${userId}` database).
+   Written once per conversation end (conversation summarizer). Survives game
+   restarts. Keyed by `(userId, playthroughId, npcDefinitionId)`. As of Plan
+   080 the list fields **accumulate scored items across conversations**
+   (they no longer replace wholesale); see Record Shape below.
 
 2. **Session digest** -- a capped, human-readable text summary derived from
    the durable record at conversation start and injected into the NPC's
    byte-stable system-prompt prefix. Byte-stable within a conversation;
-   never re-derived mid-conversation. Controlled by `memoryDigestMaxChars`.
+   never re-derived mid-conversation. As of Plan 080 the digest is
+   **salience-ranked** (importance x recency) and budget-packed, so the most
+   relevant memories survive the `memoryDigestMaxChars` cap rather than
+   whatever sorts last.
+
+Plan 080 is on by default: it reuses the existing `memoryEnabled` master
+switch (no new flag). Disabling `memoryEnabled` is the rollback to pre-073
+stateless behavior.
+
+## NPC memory vs. the runtime blackboard (do not conflate)
+
+Two separate "fact" systems exist, deliberately:
+
+- **Runtime blackboard** -- objective, authoritative world/quest state that
+  game logic branches on (quest stage, time-of-day, `player-known-facts`
+  from Plan 074.5). Deterministic and trustworthy.
+- **NPC memory** (this system) -- a character's SUBJECTIVE, LLM-extracted
+  recollection of its conversations with the player. Fallible; it only
+  flavors dialogue.
+
+They must not cross-feed. A quest gate never reads NPC memory (it is not
+reliable enough to drive logic); if a quest must react to something the
+player did, use a `learn-fact` quest action writing the blackboard, not a
+memory item. `player-known-facts` (what the PLAYER knows) is a distinct
+concept from NPC memory (what an NPC remembers ABOUT the player).
 
 ## Memory Middleware
 
@@ -55,28 +84,45 @@ conversation landing mid-session does not re-load or mutate the live digest.
 
 Runs at conversation dispose (two-phase: synchronous deterministic merge
 first, then an async LLM upgrade). One gateway call per conversation, routed
-to a small/fast model via the `SUMMARY_MODEL` env var on the gateway side
-(`anthropicSummaryModel` plugin config on the client side).
+to a small/fast model server-side via `purpose: "summary"` ->
+`SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL`.
 
-- **Deterministic merge** always lands (no LLM needed): updates `metCount`
-  and appends a minimal transcript-derived note. If the LLM call fails, this
-  is the persisted result.
-- **LLM delta merge** (async): generates a richer digest and merges it.
-  Staleness guard: if `metCount` changed between when the call was issued and
-  when it returns (another conversation completed in parallel), the delta is
-  dropped.
+- **Deterministic merge** always lands (no LLM needed): bumps `metCount` and
+  `conversationCounter` and stores the truncated last exchange. If the LLM
+  call fails, this is the persisted result. (A session in which the player
+  never spoke is skipped entirely -- no `metCount` bump.)
+- **LLM delta merge** (async): the summarizer returns a structured delta
+  whose list fields are scored objects `{ text, importance (1-10) }`,
+  including a `disclosures` list (things the NPC told the player about
+  itself). The delta is validated (AJV; tolerant of bare strings and bad
+  importance) and merged. **Staleness guard:** the delta is tagged with the
+  `conversationCounter` it reflects; if that counter is behind the record's
+  `summaryCounter` (a later conversation already summarized), the delta is
+  dropped wholesale. As of Plan 080 the merge **accumulates** (upsert) rather
+  than replacing -- see Record Shape.
+
+The client sets the output token ceiling generously (`DEFAULT_SUMMARY_MAX_TOKENS`)
+so a rich importance + disclosures payload cannot truncate mid-JSON (a
+truncated response fails validation and drops the whole summary).
 
 ## NPC Memory Store
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/memory/npc-memory-store.ts`
 
-IndexedDB-backed store. All reads and writes are scoped to the current
-`playthroughId` (a `SaveParticipant`-owned UUID from Plan 055).
+IndexedDB-backed store, scoped per user (database name) and keyed by
+`(userId, playthroughId, npcDefinitionId)`. All operations serialize on a
+single promise chain (a load issued after a merge observes it).
 
 ```typescript
-interface NpcMemoryStore {
+class NpcMemoryStore {
   load(npcDefinitionId: string): Promise<NpcMemoryRecord | null>;
-  save(npcDefinitionId: string, record: NpcMemoryRecord): Promise<void>;
+  // Phase 1 (sync at dispose): bumps metCount + conversationCounter, stores
+  // the truncated last exchange. Returns the new conversationCounter.
+  mergeDeterministic(delta: DeterministicMemoryDelta): Promise<{ conversationCounter: number }>;
+  // Phase 2 (async): accumulates the scored delta (upsert), counter-gated.
+  mergeSummary(delta: SummaryMemoryDelta, counter: number): Promise<boolean>;
+  // New Game / playthrough change: prunes other playthroughs' rows.
+  reset(): Promise<void>;
   // Dev-only:
   debugListRecords(): Promise<NpcMemoryRecord[]>;
   debugForget(npcDefinitionId?: string): Promise<void>;
@@ -86,6 +132,80 @@ interface NpcMemoryStore {
 The store is a process singleton registered via `resolveNpcMemoryStore`
 (store-registry.ts). It is null until `playthroughId` is available (boot
 completes and a save slot is active).
+
+### Record Shape (v2, Plan 080)
+
+`NPC_MEMORY_SCHEMA_VERSION` is `2`. The list fields hold **scored, accumulating
+items**, not plain strings:
+
+```typescript
+interface ScoredMemoryItem {
+  text: string;
+  importance: number;   // 1-10 (Generative Agents "poignancy")
+  lastUpdated: number;  // conversationCounter at last add/refresh (recency)
+}
+
+interface NpcMemoryRecord {
+  key; userId; playthroughId; npcDefinitionId; schemaVersion;
+  metCount: number;              // distinct conversations (monotonic)
+  conversationCounter: number;   // monotonic; staleness clock
+  lastExchange: string;          // deterministic continuity floor
+  relationshipSummary: string;   // prose (replaced each summary)
+  salientFacts: ScoredMemoryItem[];
+  promises: ScoredMemoryItem[];
+  emotionalBeats: ScoredMemoryItem[];
+  disclosures: ScoredMemoryItem[]; // things the NPC told the player about ITSELF
+  lastConversationSummary: string; // prose (replaced each summary)
+  summaryCounter: number;          // which conversation the summary reflects
+}
+```
+
+**Accumulation + reconciliation.** `mergeSummary` upserts each incoming scored
+item into the existing list: a near/exact match refreshes recency and lifts
+importance (max); a novel item is appended. Near-match is a code-level test
+(no embeddings in v1): normalized-text equality or heavy word-set overlap
+(Jaccard >= 0.6). It is deliberately conservative and does NOT treat substring
+containment as a match (that would false-merge a fact with its negation, e.g.
+"married" vs "not married anymore"). The two prose fields
+(`relationshipSummary`, `lastConversationSummary`) replace, not accumulate.
+
+**No eviction (deferred).** Lists grow across conversations by design; there is
+no hard cap on the stored record. The digest render bounds what is injected.
+Soft-forget eviction and an LLM reflection/compaction pass are deferred (Plan
+080 §D6) until records grow large in real play.
+
+**Migration.** `migrateNpcMemoryRecord` reads the RAW stored `schemaVersion`
+before stamping current, and branches: a v1 record's plain-string lists convert
+losslessly into scored items (default importance, timestamped to the record's
+`conversationCounter`); `disclosures` starts empty. metCount/counters are
+preserved exactly.
+
+### Disclosures and the repetition mechanism (Plan 080 §D4)
+
+`disclosures` is the lever that stops cross-conversation repetition (a character
+re-introducing their spouse or re-telling a favorite-food story every session).
+The summarizer records what the NPC SHARED ABOUT ITSELF; the digest injects a
+"You have already told this player about: ..." line followed by a POSITIVE-framed
+directive:
+
+> You can refer to these naturally as things already shared between you; you
+> needn't introduce or explain them again as if for the first time.
+
+Positive framing is intentional (Anthropic's "tell it what to do, not what not
+to do"): a hard prohibition risks the NPC clamming up and avoiding the topic
+entirely. The NPC stays free to mention the thing; it just stops re-introducing
+it as new.
+
+### Digest salience ranking (Plan 080 §D5)
+
+`buildMemoryDigest` ranks items by `importance x recency-decay`
+(`RECENCY_DECAY_BASE^age`, age in conversations off `lastUpdated`) and packs the
+highest-scored into the `memoryDigestMaxChars` budget. Disclosures get a reserved
+sub-budget and render first so they are never starved by higher-scored facts;
+`lastConversationSummary` is prioritized above detail facts (a returning player's
+freshest continuity is no longer the first thing truncated). The render is a pure
+function of the record (byte-stable for the cached prompt slot); recency keys off
+`lastUpdated`, never a read-time mutation.
 
 ## First-Meeting Semantics
 
@@ -106,9 +226,17 @@ Memory records survive game restarts and page reloads within the same
 playthrough. The `playthroughId` is what scopes them -- all IDB queries
 include it as a key component.
 
-**New Game** generates a new `playthroughId`, making all previous records
-invisible without deleting them. This is correct: a fresh playthrough is a
-genuinely fresh start; the prior records are still there if you Continue.
+**New Game** generates a new `playthroughId` (minted whenever the playthrough-
+identity `SaveParticipant` deserializes with no usable stored id -- New Game,
+first boot, or a legacy save without the slice). This clears memory two ways:
+the new id's keys miss every prior record (instant clean slate), and the
+store's `reset()` prunes the prior playthrough's rows so the device-local
+database doesn't grow across New Games. Guarded by an integration test (073.1c):
+New Game -> empty memories, sugarlang's vocab store untouched.
+
+Note memory is device-local (browser IndexedDB), so it also does not follow a
+save to another device, and clearing site data wipes it independently of the
+saved `playthroughId`. Cross-device sync is a named non-goal (backlog).
 
 ## Plugin Config
 
@@ -145,9 +273,11 @@ await __sugaragentMemory.forget("npc:finnick")
 await __sugaragentMemory.forget()
 ```
 
-`dump()` returns the raw `NpcMemoryRecord` shape: `{ npcDefinitionId,
-playthroughId, metCount, digest, lastUpdated }`. Returns `null` when no
-record exists yet (NPC not yet talked to this playthrough).
+`dump(npcId)` returns the raw `NpcMemoryRecord` (see Record Shape) -- inspect
+`disclosures`, the scored `salientFacts`/`promises`/`emotionalBeats`,
+`metCount`, and the counters. `dump()` with no argument returns every record
+for the current playthrough. Returns `null` when no record exists yet (NPC not
+yet talked to this playthrough).
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/memory/memory-debug.ts`
 

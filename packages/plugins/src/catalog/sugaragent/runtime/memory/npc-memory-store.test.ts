@@ -148,7 +148,7 @@ describe("NpcMemoryStore summary merge + staleness gate", () => {
       {
         npcDefinitionId: FINNICK,
         relationshipSummary: "warming up",
-        salientFacts: ["likes cheese"]
+        salientFacts: [{ text: "likes cheese", importance: 7 }]
       },
       1
     );
@@ -156,7 +156,11 @@ describe("NpcMemoryStore summary merge + staleness gate", () => {
 
     const record = await store.load(FINNICK);
     expect(record?.relationshipSummary).toBe("warming up");
-    expect(record?.salientFacts).toEqual(["likes cheese"]);
+    // 080.2: the delta's scored items land with importance preserved and
+    // recency stamped from the conversation counter.
+    expect(record?.salientFacts.map((item) => item.text)).toEqual(["likes cheese"]);
+    expect(record?.salientFacts[0]?.importance).toBe(7);
+    expect(record?.salientFacts[0]?.lastUpdated).toBe(1); // the summary counter
     // Untouched fields keep their prior values.
     expect(record?.promises).toEqual([]);
     expect(record?.lastExchange).toBe("hello");
@@ -185,6 +189,172 @@ describe("NpcMemoryStore summary merge + staleness gate", () => {
     const record = await store.load(FINNICK);
     expect(record?.relationshipSummary).toBe("from conversation 2");
     expect(record?.summaryCounter).toBe(2);
+  });
+});
+
+describe("NpcMemoryStore accumulating summary merge (080.3)", () => {
+  it("accumulates scored items across conversations (does not replace)", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeSummary(
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "Name is Mim", importance: 8 }] },
+      1
+    );
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c2" });
+    await store.mergeSummary(
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "Plays the lute", importance: 6 }] },
+      2
+    );
+
+    const record = await store.load(FINNICK);
+    expect(record?.salientFacts.map((item) => item.text).sort()).toEqual(
+      ["Name is Mim", "Plays the lute"].sort()
+    );
+    // metCount never regresses across accumulating summaries.
+    expect(record?.metCount).toBe(2);
+  });
+
+  it("dedups a repeated fact, refreshing recency and lifting importance", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeSummary(
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "Loves aged gouda", importance: 6 }] },
+      1
+    );
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c2" });
+    await store.mergeSummary(
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "loves aged gouda", importance: 9 }] },
+      2
+    );
+
+    const record = await store.load(FINNICK);
+    expect(record?.salientFacts).toHaveLength(1);
+    expect(record?.salientFacts[0]?.importance).toBe(9); // max of 6, 9
+    expect(record?.salientFacts[0]?.lastUpdated).toBe(2); // recency refreshed
+  });
+
+  it("near-matches a reworded fact instead of duplicating", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeSummary(
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "Loves aged gouda", importance: 6 }] },
+      1
+    );
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c2" });
+    // "loves gouda" overlaps "loves aged gouda" heavily -> treated as the same.
+    await store.mergeSummary(
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "loves gouda", importance: 5 }] },
+      2
+    );
+
+    const record = await store.load(FINNICK);
+    expect(record?.salientFacts).toHaveLength(1);
+  });
+
+  it("accumulates disclosures across conversations (the repetition lever)", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeSummary(
+      {
+        npcDefinitionId: FINNICK,
+        disclosures: [{ text: "told them my wife is Maggie", importance: 7 }]
+      },
+      1
+    );
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c2" });
+    await store.mergeSummary(
+      {
+        npcDefinitionId: FINNICK,
+        disclosures: [{ text: "told them I love aged gouda", importance: 5 }]
+      },
+      2
+    );
+
+    const record = await store.load(FINNICK);
+    expect(record?.disclosures.map((item) => item.text).sort()).toEqual(
+      ["told them I love aged gouda", "told them my wife is Maggie"].sort()
+    );
+  });
+
+  it("collapses near-duplicate items WITHIN a single summary delta (080.6)", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeSummary(
+      {
+        npcDefinitionId: FINNICK,
+        salientFacts: [
+          { text: "Loves aged gouda", importance: 6 },
+          { text: "loves aged gouda", importance: 9 }
+        ]
+      },
+      1
+    );
+    const record = await store.load(FINNICK);
+    expect(record?.salientFacts).toHaveLength(1);
+    expect(record?.salientFacts[0]?.importance).toBe(9);
+  });
+
+  it("does NOT merge an unrelated fact or a negation (080.6, conservative dedup)", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeSummary(
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "married", importance: 6 }] },
+      1
+    );
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c2" });
+    await store.mergeSummary(
+      {
+        npcDefinitionId: FINNICK,
+        salientFacts: [
+          { text: "not married anymore", importance: 7 },
+          { text: "plays the fiddle", importance: 5 }
+        ]
+      },
+      2
+    );
+    const record = await store.load(FINNICK);
+    // The negation is kept as its own fact (NOT collapsed into "married" by a
+    // substring match), and the unrelated fact stays separate.
+    expect(record?.salientFacts.map((item) => item.text).sort()).toEqual(
+      ["married", "not married anymore", "plays the fiddle"].sort()
+    );
+  });
+
+  it("drops whitespace-only item text rather than persisting a blank item (080.6)", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeSummary(
+      {
+        npcDefinitionId: FINNICK,
+        salientFacts: [
+          { text: "   ", importance: 5 },
+          { text: "real fact", importance: 6 }
+        ]
+      },
+      1
+    );
+    const record = await store.load(FINNICK);
+    expect(record?.salientFacts.map((item) => item.text)).toEqual(["real fact"]);
+  });
+
+  it("a stale summary does not accumulate its items", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c2" });
+    // Conversation 2 summarizes first.
+    await store.mergeSummary(
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "current", importance: 5 }] },
+      2
+    );
+    // Conversation 1's summary lands late -> dropped, its item never accumulates.
+    const applied = await store.mergeSummary(
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "stale item", importance: 5 }] },
+      1
+    );
+    expect(applied).toBe(false);
+
+    const record = await store.load(FINNICK);
+    expect(record?.salientFacts.map((item) => item.text)).toEqual(["current"]);
   });
 });
 
@@ -238,11 +408,69 @@ describe("NpcMemoryStore record migration", () => {
     const store = storeOn(backend);
     const record = await store.load(FINNICK);
 
-    expect(record?.schemaVersion).toBe(1);
+    expect(record?.schemaVersion).toBe(2);
     expect(record?.metCount).toBe(3);
     expect(record?.salientFacts).toEqual([]);
     expect(record?.promises).toEqual([]);
+    expect(record?.disclosures).toEqual([]);
     expect(record?.relationshipSummary).toBe("");
+  });
+
+  it("upgrades a v1 record's string lists into scored items (080.1, lossless)", async () => {
+    const backend = new InMemoryNpcMemoryBackend();
+    const key = `${USER}::${PLAY_A}::${FINNICK}`;
+    // A genuine v1 record: schemaVersion 1, list fields are plain strings,
+    // no disclosures field at all.
+    await backend.put({
+      key,
+      userId: USER,
+      playthroughId: PLAY_A,
+      npcDefinitionId: FINNICK,
+      schemaVersion: 1,
+      metCount: 4,
+      conversationCounter: 4,
+      lastExchange: "Player: bye\nNPC: see you",
+      relationshipSummary: "old friends",
+      salientFacts: ["Name is Mim", "Loves aged gouda"],
+      promises: ["Save a wedge"],
+      emotionalBeats: ["laughed together"],
+      lastConversationSummary: "talked cheese",
+      summaryCounter: 4
+    } as unknown as NpcMemoryRecord);
+
+    const record = await storeOn(backend).load(FINNICK);
+
+    expect(record?.schemaVersion).toBe(2);
+    // Counters + summary strings preserved exactly.
+    expect(record?.metCount).toBe(4);
+    expect(record?.conversationCounter).toBe(4);
+    expect(record?.relationshipSummary).toBe("old friends");
+    expect(record?.lastConversationSummary).toBe("talked cheese");
+    // String lists become scored items -- no content dropped, importance
+    // defaulted, timestamped to the record's conversationCounter.
+    expect(record?.salientFacts.map((item) => item.text)).toEqual([
+      "Name is Mim",
+      "Loves aged gouda"
+    ]);
+    expect(record?.salientFacts.every((item) => item.importance === 5)).toBe(true);
+    expect(record?.salientFacts.every((item) => item.lastUpdated === 4)).toBe(true);
+    expect(record?.promises.map((item) => item.text)).toEqual(["Save a wedge"]);
+    expect(record?.emotionalBeats.map((item) => item.text)).toEqual([
+      "laughed together"
+    ]);
+    // disclosures did not exist pre-v2 -> empty.
+    expect(record?.disclosures).toEqual([]);
+  });
+
+  it("a fresh record has empty accumulating lists including disclosures", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "hi" });
+    const record = await store.load(FINNICK);
+    expect(record?.schemaVersion).toBe(2);
+    expect(record?.salientFacts).toEqual([]);
+    expect(record?.promises).toEqual([]);
+    expect(record?.emotionalBeats).toEqual([]);
+    expect(record?.disclosures).toEqual([]);
   });
 
   it("migrateNpcMemoryRecord returns null for a non-record", () => {
@@ -336,11 +564,12 @@ describe("NpcMemoryStore IndexedDB backend (durability smoke)", () => {
       lastExchange: "persisted"
     });
     await first.mergeSummary(
-      { npcDefinitionId: FINNICK, salientFacts: ["remembered"] },
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "remembered", importance: 6 }] },
       1
     );
 
-    // A fresh store over the same factory/user reads the durable record.
+    // A fresh store over the same factory/user reads the durable record --
+    // exercising the v2 scored-item shape through IndexedDB round-trip.
     const second = new NpcMemoryStore({
       userId: USER,
       playthroughId: PLAY_A,
@@ -350,7 +579,9 @@ describe("NpcMemoryStore IndexedDB backend (durability smoke)", () => {
 
     expect(record?.metCount).toBe(1);
     expect(record?.lastExchange).toBe("persisted");
-    expect(record?.salientFacts).toEqual(["remembered"]);
+    expect(record?.salientFacts.map((item) => item.text)).toEqual(["remembered"]);
+    expect(record?.salientFacts[0]?.importance).toBe(6);
+    expect(record?.disclosures).toEqual([]);
   });
 
   it("falls back to memory when no IndexedDB factory is available", async () => {
