@@ -18,9 +18,12 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
 import {
+  GatewaySugarlangTelemetrySink,
   IndexedDBTelemetrySink,
   MemoryTelemetrySink,
-  createTelemetryEvent
+  NoOpTelemetrySink,
+  createTelemetryEvent,
+  resolveSugarlangTelemetrySink
 } from "../../runtime/telemetry/telemetry";
 
 describe("telemetry sinks", () => {
@@ -119,5 +122,34 @@ describe("telemetry sinks", () => {
       "chunk.extraction-started",
       "chunk.hit-during-classification"
     ]);
+  });
+});
+
+describe("resolveSugarlangTelemetrySink", () => {
+  it("returns GatewaySugarlangTelemetrySink for published-target with proxy URL", () => {
+    const sink = resolveSugarlangTelemetrySink(
+      {
+        hostKind: "web-browser",
+        compileProfile: "published-target",
+        contentSource: "published-artifact",
+        runtimeFamily: "sugarmagic-shared-runtime",
+        usesSharedSemantics: true,
+        sessionBoundary: "isolated-runtime-session"
+      },
+      { proxyBaseUrl: "http://localhost:8080" }
+    );
+    expect(sink).toBeInstanceOf(GatewaySugarlangTelemetrySink);
+  });
+
+  it("returns NoOpTelemetrySink for published-target without proxy URL", () => {
+    const sink = resolveSugarlangTelemetrySink({
+      hostKind: "web-browser",
+      compileProfile: "published-target",
+      contentSource: "published-artifact",
+      runtimeFamily: "sugarmagic-shared-runtime",
+      usesSharedSemantics: true,
+      sessionBoundary: "isolated-runtime-session"
+    });
+    expect(sink).toBeInstanceOf(NoOpTelemetrySink);
   });
 });

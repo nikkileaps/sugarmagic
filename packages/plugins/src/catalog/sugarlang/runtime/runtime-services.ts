@@ -294,7 +294,8 @@ export class SugarlangRuntimeServices {
       telemetry: this.telemetry
     });
     const directiveCache = new DirectiveCache({
-      blackboard: this.boundContext.blackboard
+      blackboard: this.boundContext.blackboard,
+      telemetry: this.telemetry
     });
     const fallbackPolicy = new FallbackTeacherPolicy();
     const llmPolicy =

@@ -23,6 +23,11 @@ import {
 } from "@sugarmagic/runtime-core";
 import type { PedagogicalDirective } from "../types";
 import {
+  createTelemetryEvent,
+  emitTelemetry,
+  type TelemetrySink
+} from "../telemetry/telemetry";
+import {
   ACTIVE_DIRECTIVE_FACT,
   SUGARLANG_DIRECTOR_WRITER,
   createActiveDirectiveFactScope
@@ -38,17 +43,20 @@ export type InvalidationReason =
 export interface DirectiveCacheOptions {
   blackboard: RuntimeBlackboard;
   now?: () => number;
+  telemetry?: TelemetrySink;
 }
 
 export class DirectiveCache {
   private readonly blackboard: RuntimeBlackboard;
   private readonly now: () => number;
+  private readonly telemetry: TelemetrySink | undefined;
   private readonly cachedConversationIds = new Set<string>();
   private readonly unsubscribe: (() => void) | null;
 
   constructor(options: DirectiveCacheOptions) {
     this.blackboard = options.blackboard;
     this.now = options.now ?? (() => Date.now());
+    this.telemetry = options.telemetry;
     this.unsubscribe = this.blackboard.subscribe((event) => {
       this.handleBlackboardEvent(event);
     });
@@ -103,13 +111,23 @@ export class DirectiveCache {
     this.cachedConversationIds.add(conversationId);
   }
 
-  invalidate(conversationId: string, _reason: InvalidationReason): void {
+  invalidate(conversationId: string, reason: InvalidationReason): void {
     this.blackboard.clearFact({
       definition: ACTIVE_DIRECTIVE_FACT,
       scope: createActiveDirectiveFactScope(conversationId),
       sourceSystem: SUGARLANG_DIRECTOR_WRITER
     });
     this.cachedConversationIds.delete(conversationId);
+    if (this.telemetry) {
+      void emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("directive-cache.invalidated", {
+          timestamp: this.now(),
+          conversationId,
+          reason
+        })
+      );
+    }
   }
 
   private invalidateAll(reason: InvalidationReason): void {

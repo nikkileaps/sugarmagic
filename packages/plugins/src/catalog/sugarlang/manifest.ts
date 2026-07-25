@@ -21,12 +21,16 @@
 
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import type { RuntimePluginFactoryContext } from "../../runtime";
+import {
+  createDeploymentRequirementId,
+  type DeploymentRequirement
+} from "@sugarmagic/domain";
 import type {
   ConversationMiddlewareContribution,
   DialogueEntryDecoratorContribution,
   RuntimePluginInstance
 } from "@sugarmagic/runtime-core";
-import { normalizeSugarLangPluginConfig } from "./config";
+import { normalizeSugarLangPluginConfig, SUGARLANG_PROXY_BASE_URL_ENV } from "./config";
 import {
   createSugarLangContextMiddleware
 } from "./runtime/middlewares/sugar-lang-context-middleware";
@@ -63,6 +67,25 @@ import {
 export const SUGARLANG_PLUGIN_ID = "sugarlang";
 export const SUGARLANG_DISPLAY_NAME = "Sugarlang";
 
+const deploymentRequirements: DeploymentRequirement[] = [
+  {
+    requirementId: createDeploymentRequirementId({
+      ownerId: SUGARLANG_PLUGIN_ID,
+      kind: "proxy-route",
+      key: "sugarlang-telemetry"
+    }),
+    ownerId: SUGARLANG_PLUGIN_ID,
+    ownerKind: "plugin",
+    kind: "proxy-route",
+    required: false,
+    routeId: "sugarlang-telemetry",
+    protocol: "http-json",
+    consumer: "browser-runtime",
+    pathHint: "/api/sugarlang/telemetry",
+    description: "Browser-to-backend telemetry ingestion route for sugarlang teaching analytics."
+  }
+];
+
 export function createSugarlangPlugin(
   context: RuntimePluginFactoryContext
 ): RuntimePluginInstance {
@@ -74,7 +97,11 @@ export function createSugarlangPlugin(
   // Wire the chunk extraction toggle so Studio shell components respect it.
   setSugarlangChunkExtractionEnabled(config.chunkExtraction.enabled);
   const logger = createSugarlangLogger({ debugLogging: config.debugLogging });
-  const telemetry = resolveSugarlangTelemetrySink(context.boot);
+  const proxyBaseUrl =
+    context.environment?.[SUGARLANG_PROXY_BASE_URL_ENV]?.trim() ||
+    context.environment?.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL?.trim() ||
+    "";
+  const telemetry = resolveSugarlangTelemetrySink(context.boot, { proxyBaseUrl });
   const services = new SugarlangRuntimeServices({
     config,
     environment: context.environment,
@@ -145,6 +172,7 @@ export const SUGARLANG_MIDDLEWARE_FACTORIES = [
 ] as const;
 
 export const pluginDefinition: DiscoveredPluginDefinition = {
+  deploymentRequirements,
   manifest: {
     pluginId: SUGARLANG_PLUGIN_ID,
     displayName: SUGARLANG_DISPLAY_NAME,

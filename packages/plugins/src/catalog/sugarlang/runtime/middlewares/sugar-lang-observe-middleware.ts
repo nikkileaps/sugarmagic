@@ -220,6 +220,13 @@ export function createSugarLangObserveMiddleware(
       const learner = await services.learnerStore.getCurrentProfile();
       const storedCheck = getStoredComprehensionCheck(execution);
       if (storedCheck && execution.input?.kind === "free_text") {
+        const predictedRetrievabilities: Record<string, number> = {};
+        for (const lemma of storedCheck.targetLemmas) {
+          const card = learner.lemmaCards[lemma.lemmaId];
+          if (card && typeof card.retrievability === "number") {
+            predictedRetrievabilities[lemma.lemmaId] = card.retrievability;
+          }
+        }
         const responseLemmas = new Set(
           collectLemmasFromText(execution.input.text, learner.targetLanguage)
             .map((entry) => entry.lemmaId)
@@ -314,7 +321,10 @@ export function createSugarLangObserveMiddleware(
               targetLemmas: storedCheck.targetLemmas,
               playerResponseText: execution.input.text,
               lemmasPassed: passed.map((lemma) => lemma.lemmaId),
-              classifierReasoning
+              classifierReasoning,
+              predictedRetrievabilities: Object.keys(predictedRetrievabilities).length > 0
+                ? predictedRetrievabilities
+                : undefined
             }),
             logger
           );
@@ -333,7 +343,10 @@ export function createSugarLangObserveMiddleware(
               targetLemmas: storedCheck.targetLemmas,
               playerResponseText: execution.input.text,
               lemmasFailed: failed.map((lemma) => lemma.lemmaId),
-              classifierReasoning
+              classifierReasoning,
+              predictedRetrievabilities: Object.keys(predictedRetrievabilities).length > 0
+                ? predictedRetrievabilities
+                : undefined
             }),
             logger
           );
@@ -353,7 +366,10 @@ export function createSugarLangObserveMiddleware(
               playerResponseText: execution.input.text,
               lemmasPassed: passed.map((lemma) => lemma.lemmaId),
               lemmasFailed: failed.map((lemma) => lemma.lemmaId),
-              classifierReasoning
+              classifierReasoning,
+              predictedRetrievabilities: Object.keys(predictedRetrievabilities).length > 0
+                ? predictedRetrievabilities
+                : undefined
             }),
             logger
           );

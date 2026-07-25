@@ -573,6 +573,27 @@ export type TelemetryEvent =
         highBandLemmas: string[];
         suggestion: string;
       }
+    >
+  | TelemetryEventOf<
+      "directive-cache.invalidated",
+      {
+        conversationId: string;
+        reason:
+          | "max_turns_exceeded"
+          | "quest_stage_change"
+          | "location_change"
+          | "player_code_switch"
+          | "manual";
+      }
+    >
+  | TelemetryEventOf<
+      "fsrs.review-outcome",
+      {
+        probeId: string;
+        lemmaId: string;
+        predictedRetrievability: number;
+        observedOutcome: "pass" | "fail";
+      }
     >;
 
 export type TelemetryEventKind = TelemetryEvent["kind"];
@@ -941,10 +962,83 @@ export function createNoOpTelemetrySink(): TelemetrySink {
   return new NoOpTelemetrySink();
 }
 
+const GATEWAY_BATCH_SIZE_CAP = 100;
+
+const SERVER_BOUND_PII_FIELDS: ReadonlySet<string> = new Set([
+  "inputText",
+  "originalText",
+  "repairedText",
+  "playerResponseText"
+]);
+
+function stripPii(event: TelemetryEvent): Record<string, unknown> {
+  const stripped: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(event as Record<string, unknown>)) {
+    if (!SERVER_BOUND_PII_FIELDS.has(key)) {
+      stripped[key] = value;
+    }
+  }
+  return stripped;
+}
+
+export class GatewaySugarlangTelemetrySink implements TelemetrySink {
+  private readonly url: string;
+  private readonly flushIntervalMs: number;
+  private readonly pending: TelemetryEvent[] = [];
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(options: { proxyBaseUrl: string; flushIntervalMs?: number }) {
+    const base = options.proxyBaseUrl.endsWith("/")
+      ? options.proxyBaseUrl.slice(0, -1)
+      : options.proxyBaseUrl;
+    this.url = `${base}/api/sugarlang/telemetry`;
+    this.flushIntervalMs = options.flushIntervalMs ?? 5000;
+  }
+
+  emit(event: TelemetryEvent): void {
+    this.pending.push(event);
+    if (this.flushTimer !== null) {
+      return;
+    }
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      void this.flush();
+    }, this.flushIntervalMs);
+  }
+
+  async flush(): Promise<void> {
+    if (this.pending.length === 0) {
+      return;
+    }
+    const batch = this.pending.splice(0, GATEWAY_BATCH_SIZE_CAP);
+    try {
+      await fetch(this.url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          events: batch.map(stripPii),
+          schemaVersion: SUGARLANG_TELEMETRY_SCHEMA_VERSION
+        })
+      });
+    } catch {
+      // drop-on-failure: never block a turn
+    }
+  }
+}
+
 export function resolveSugarlangTelemetrySink(
-  boot: RuntimeBootModel
+  boot: RuntimeBootModel,
+  options?: { proxyBaseUrl?: string }
 ): TelemetrySink {
-  if (boot.compileProfile === "published-target" || typeof indexedDB === "undefined") {
+  const proxyBaseUrl = options?.proxyBaseUrl?.trim() ?? "";
+
+  if (boot.compileProfile === "published-target") {
+    return proxyBaseUrl
+      ? new GatewaySugarlangTelemetrySink({ proxyBaseUrl })
+      : new NoOpTelemetrySink();
+  }
+
+  if (typeof indexedDB === "undefined") {
     return new NoOpTelemetrySink();
   }
 
