@@ -2413,7 +2413,7 @@ export function applyCommand(
   // activeRegionId for commands that predate explicit targeting.
   const targetRegion =
     command.target.aggregateKind === "region-document"
-      ? (session.regions.get(command.target.aggregateId) ?? getActiveRegion(session))
+      ? (session.regions.get(command.target.aggregateId) ?? null)
       : getActiveRegion(session);
   if (!targetRegion) return session;
   // Plan 058 §058.1 -- the executor operates on the Base + Overlay

@@ -829,7 +829,9 @@ export function createRuntimeGameplaySessionController(
     const [playerX, playerY, playerZ] = resolvePlayerPositionTuple();
     spatialResolverSystem.sync({
       playerPosition: { x: playerX, y: playerY, z: playerZ },
-      npcPositions: (regionContents?.npcPresences ?? []).map((presence) => {
+      npcPositions: (regionContents?.npcPresences ?? [])
+        .filter((presence) => npcInteractableEntities.has(presence.presenceId))
+        .map((presence) => {
         const runtimeNpcEntity =
           npcInteractableEntities.get(presence.presenceId)?.entity ?? null;
         const runtimePosition =
@@ -1189,6 +1191,31 @@ export function createRuntimeGameplaySessionController(
       npcDefinitionId: presence.npcDefinitionId,
       entity: interactableEntity
     });
+    if (debugBillboardsInitialized) {
+      debugBillboardBindings.set(interactableEntity, {
+        entity: interactableEntity,
+        entityKind: "npc",
+        definitionId: presence.npcDefinitionId,
+        displayName: npcDefinition?.displayName ?? "NPC",
+        sceneId: activeRegion?.identity.id ?? null
+      });
+      createBillboard({
+        entity: interactableEntity,
+        descriptor: {
+          kind: "text",
+          content: npcDefinition?.displayName ?? "NPC",
+          style: DEBUG_BILLBOARD_STYLE
+        },
+        component: {
+          orientation: "spherical",
+          displayMode: "overlay",
+          size: { width: 1.6, height: 0.5 },
+          offset: { x: 0, y: 2.2, z: 0 },
+          enabled: false
+        }
+      });
+      applyDebugBillboardEnabledState();
+    }
   }
 
   function despawnNpcInteractable(presenceId: string) {
