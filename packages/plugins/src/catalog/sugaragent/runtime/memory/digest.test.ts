@@ -174,6 +174,25 @@ describe("buildMemoryDigest salience ranking (080.4)", () => {
   });
 });
 
+describe("buildMemoryDigest disclosures directive (080.5)", () => {
+  it("renders the positive-framed directive when disclosures exist", () => {
+    const digest = buildMemoryDigest(
+      record({ disclosures: [scored("told them my wife is Maggie", 7, 2)] })
+    );
+    expect(digest).toContain("told them my wife is Maggie");
+    // Positive framing: permission to mention naturally, not a prohibition.
+    expect(digest).toContain("You can refer to these naturally");
+    expect(digest).toContain("already shared between you");
+    expect(digest).toContain("as if for the first time");
+  });
+
+  it("omits the directive when there are no disclosures", () => {
+    const digest = buildMemoryDigest(record({ disclosures: [] }));
+    expect(digest).not.toContain("already shared between you");
+    expect(digest).not.toContain("as if for the first time");
+  });
+});
+
 describe("buildMemoryAnnotation", () => {
   it("flags a first meeting", () => {
     const memory: MemoizedNpcMemory = { record: null, digest: "", metCount: 0 };

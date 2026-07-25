@@ -47,6 +47,18 @@ const DISCLOSURE_BUDGET_FRACTION = 0.3;
  *  (Plan 080 §D5, epic-review round-1 fix). */
 const RECENCY_DECAY_BASE = 0.9;
 
+/**
+ * The disclosures directive (Plan 080 §D4/§080.5). POSITIVE framing on
+ * purpose: prohibitions ("do not mention") make models over-suppress
+ * (the NPC clams up and avoids the topic entirely) or over-focus on the
+ * named thing. We want the opposite -- the NPC should still bring these up
+ * naturally; it just shouldn't RE-INTRODUCE them as if new. So we grant
+ * permission + describe the state, per Anthropic's "tell it what to do,
+ * not what not to do" guidance. Rendered only when disclosures exist. */
+const DISCLOSURE_DIRECTIVE =
+  "You can refer to these naturally as things already shared between you; " +
+  "you needn't introduce or explain them again as if for the first time.";
+
 /** The memory loaded once per conversation and memoized in execution state. */
 export interface MemoizedNpcMemory {
   /** The loaded record, or null when this NPC has no memory yet. */
@@ -169,6 +181,9 @@ export function buildMemoryDigest(
   );
   if (disclosuresJoined) {
     addLine(`You have already told this player about: ${disclosuresJoined}`);
+    // The positive-framed directive (080.5) -- keep the NPC free to mention
+    // these, just not to re-introduce them as new.
+    addLine(DISCLOSURE_DIRECTIVE);
   }
 
   // 2. Relationship overview (prose, clipped to fit).
