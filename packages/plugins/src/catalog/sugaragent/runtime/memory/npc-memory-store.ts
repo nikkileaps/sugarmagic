@@ -214,9 +214,11 @@ function stringsToScoredItems(value: unknown, timestamp: number): ScoredMemoryIt
   if (!Array.isArray(value)) return [];
   const items: ScoredMemoryItem[] = [];
   for (const entry of value) {
-    if (typeof entry !== "string" || entry.length === 0) continue;
+    if (typeof entry !== "string") continue;
+    const text = entry.trim();
+    if (text.length === 0) continue; // trim BEFORE the length check (080.6)
     items.push({
-      text: entry,
+      text,
       importance: DEFAULT_ITEM_IMPORTANCE,
       lastUpdated: timestamp
     });
@@ -235,9 +237,11 @@ function itemsFromDelta(
 ): ScoredMemoryItem[] {
   const out: ScoredMemoryItem[] = [];
   for (const item of items) {
-    if (!item || typeof item.text !== "string" || item.text.length === 0) continue;
+    if (!item || typeof item.text !== "string") continue;
+    const text = item.text.trim();
+    if (text.length === 0) continue; // trim BEFORE the length check (080.6)
     out.push({
-      text: item.text,
+      text,
       importance: clampImportance(item.importance),
       lastUpdated: timestamp
     });
@@ -257,19 +261,22 @@ function normalizeItemText(text: string): string {
 
 /**
  * Code-level near-match test (Plan 080 §D2 -- no embeddings in v1). Two
- * item texts are "the same memory" when their normalized forms are equal,
- * one contains the other (e.g. "loves aged gouda" vs "loves gouda"), or
- * their word sets overlap heavily (Jaccard >= 0.6). This is deliberately
- * conservative; better semantic dedup is the deferred reflection pass.
+ * item texts are "the same memory" when their normalized forms are equal
+ * or their word sets overlap heavily (Jaccard >= 0.6, e.g. "loves aged
+ * gouda" vs "loves gouda"). Deliberately conservative -- better semantic
+ * dedup is the deferred reflection pass.
+ *
+ * We intentionally do NOT treat substring containment as a match: it
+ * false-merges a fact with its own negation ("married" vs "not married
+ * anymore"), which would silently retain the stale fact and drop the
+ * correction. Jaccard already covers the intended reworded-duplicate
+ * cases (080.6, mini-review finding).
  */
 function isNearMatch(a: string, b: string): boolean {
   const na = normalizeItemText(a);
   const nb = normalizeItemText(b);
   if (na.length === 0 || nb.length === 0) return na === nb;
   if (na === nb) return true;
-  if (na.length >= 6 && nb.length >= 6 && (na.includes(nb) || nb.includes(na))) {
-    return true;
-  }
   const sa = new Set(na.split(" ").filter(Boolean));
   const sb = new Set(nb.split(" ").filter(Boolean));
   let intersection = 0;
@@ -316,9 +323,11 @@ function coerceScoredItems(value: unknown, fallbackTimestamp: number): ScoredMem
   for (const entry of value) {
     if (!entry || typeof entry !== "object") continue;
     const candidate = entry as Partial<ScoredMemoryItem>;
-    if (typeof candidate.text !== "string" || candidate.text.length === 0) continue;
+    if (typeof candidate.text !== "string") continue;
+    const text = candidate.text.trim();
+    if (text.length === 0) continue; // trim BEFORE the length check (080.6)
     items.push({
-      text: candidate.text,
+      text,
       importance: clampImportance(candidate.importance),
       lastUpdated:
         typeof candidate.lastUpdated === "number" &&

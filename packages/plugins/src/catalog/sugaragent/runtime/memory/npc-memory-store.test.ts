@@ -276,6 +276,67 @@ describe("NpcMemoryStore accumulating summary merge (080.3)", () => {
     );
   });
 
+  it("collapses near-duplicate items WITHIN a single summary delta (080.6)", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeSummary(
+      {
+        npcDefinitionId: FINNICK,
+        salientFacts: [
+          { text: "Loves aged gouda", importance: 6 },
+          { text: "loves aged gouda", importance: 9 }
+        ]
+      },
+      1
+    );
+    const record = await store.load(FINNICK);
+    expect(record?.salientFacts).toHaveLength(1);
+    expect(record?.salientFacts[0]?.importance).toBe(9);
+  });
+
+  it("does NOT merge an unrelated fact or a negation (080.6, conservative dedup)", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeSummary(
+      { npcDefinitionId: FINNICK, salientFacts: [{ text: "married", importance: 6 }] },
+      1
+    );
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c2" });
+    await store.mergeSummary(
+      {
+        npcDefinitionId: FINNICK,
+        salientFacts: [
+          { text: "not married anymore", importance: 7 },
+          { text: "plays the fiddle", importance: 5 }
+        ]
+      },
+      2
+    );
+    const record = await store.load(FINNICK);
+    // The negation is kept as its own fact (NOT collapsed into "married" by a
+    // substring match), and the unrelated fact stays separate.
+    expect(record?.salientFacts.map((item) => item.text).sort()).toEqual(
+      ["married", "not married anymore", "plays the fiddle"].sort()
+    );
+  });
+
+  it("drops whitespace-only item text rather than persisting a blank item (080.6)", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });
+    await store.mergeSummary(
+      {
+        npcDefinitionId: FINNICK,
+        salientFacts: [
+          { text: "   ", importance: 5 },
+          { text: "real fact", importance: 6 }
+        ]
+      },
+      1
+    );
+    const record = await store.load(FINNICK);
+    expect(record?.salientFacts.map((item) => item.text)).toEqual(["real fact"]);
+  });
+
   it("a stale summary does not accumulate its items", async () => {
     const store = storeOn(new InMemoryNpcMemoryBackend());
     await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "c1" });

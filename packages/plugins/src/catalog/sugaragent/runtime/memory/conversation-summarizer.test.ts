@@ -21,6 +21,7 @@ import {
   InMemoryNpcMemoryBackend,
   NpcMemoryStore
 } from "./npc-memory-store";
+import { buildMemoryDigest } from "./digest";
 import {
   DEFAULT_SUMMARY_MAX_TOKENS,
   MAX_FACT_CHARS,
@@ -235,6 +236,72 @@ describe("summarizeConversationAtDispose", () => {
     );
     expect((await handle.summaryComplete).status).toBe("skipped-no-llm");
     expect((await store.load(FINNICK))?.metCount).toBe(1);
+  });
+});
+
+describe("golden use case: cross-conversation repetition (080.6)", () => {
+  // Deterministic record/digest-level proof of the gouda/Maggie scenario.
+  // (The actual "Finnick does not repeat himself" dialogue is a manual
+  // preview spot-check, never a CI assertion -- Plan 080 golden criteria.)
+  it("captures a disclosure, accumulates it, and injects it + the directive into the next digest", async () => {
+    const store = newStore();
+
+    const conversationOne = JSON.stringify({
+      relationshipSummary: "Met Mim, warming up.",
+      disclosures: [{ text: "told them my wife is Maggie", importance: 7 }],
+      lastConversationSummary: "Introduced Maggie."
+    });
+    const handle1 = await summarizeConversationAtDispose(
+      {
+        store,
+        logger,
+        llmProvider: mockProvider(() => ({
+          text: conversationOne,
+          usage: null,
+          model: "m"
+        }))
+      },
+      { npcDefinitionId: FINNICK, transcript: transcript() }
+    );
+    expect((await handle1.summaryComplete).status).toBe("merged");
+
+    // The disclosure is captured, and the NEXT conversation's digest carries
+    // it plus the positive-framed do-not-re-introduce directive.
+    const afterOne = await store.load(FINNICK);
+    expect(afterOne?.disclosures.map((item) => item.text)).toContain(
+      "told them my wife is Maggie"
+    );
+    const digestOne = buildMemoryDigest(afterOne);
+    expect(digestOne).toContain("told them my wife is Maggie");
+    expect(digestOne).toContain("You can refer to these naturally");
+
+    // A second conversation discloses something new -> it ACCUMULATES (the
+    // Maggie disclosure is not replaced).
+    const conversationTwo = JSON.stringify({
+      disclosures: [{ text: "told them I love aged gouda", importance: 6 }],
+      lastConversationSummary: "Talked cheese."
+    });
+    const handle2 = await summarizeConversationAtDispose(
+      {
+        store,
+        logger,
+        llmProvider: mockProvider(() => ({
+          text: conversationTwo,
+          usage: null,
+          model: "m"
+        }))
+      },
+      { npcDefinitionId: FINNICK, transcript: transcript() }
+    );
+    expect((await handle2.summaryComplete).status).toBe("merged");
+
+    const afterTwo = await store.load(FINNICK);
+    expect(afterTwo?.disclosures.map((item) => item.text).sort()).toEqual(
+      ["told them I love aged gouda", "told them my wife is Maggie"].sort()
+    );
+    const digestTwo = buildMemoryDigest(afterTwo);
+    expect(digestTwo).toContain("told them my wife is Maggie");
+    expect(digestTwo).toContain("told them I love aged gouda");
   });
 });
 
