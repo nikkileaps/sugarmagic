@@ -245,6 +245,69 @@ function itemsFromDelta(
   return out;
 }
 
+/** Normalize item text for dedup: lowercase, collapse whitespace, strip
+ *  surrounding punctuation. */
+function normalizeItemText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, "");
+}
+
+/**
+ * Code-level near-match test (Plan 080 §D2 -- no embeddings in v1). Two
+ * item texts are "the same memory" when their normalized forms are equal,
+ * one contains the other (e.g. "loves aged gouda" vs "loves gouda"), or
+ * their word sets overlap heavily (Jaccard >= 0.6). This is deliberately
+ * conservative; better semantic dedup is the deferred reflection pass.
+ */
+function isNearMatch(a: string, b: string): boolean {
+  const na = normalizeItemText(a);
+  const nb = normalizeItemText(b);
+  if (na.length === 0 || nb.length === 0) return na === nb;
+  if (na === nb) return true;
+  if (na.length >= 6 && nb.length >= 6 && (na.includes(nb) || nb.includes(na))) {
+    return true;
+  }
+  const sa = new Set(na.split(" ").filter(Boolean));
+  const sb = new Set(nb.split(" ").filter(Boolean));
+  let intersection = 0;
+  for (const word of sa) {
+    if (sb.has(word)) intersection += 1;
+  }
+  const union = sa.size + sb.size - intersection;
+  return union > 0 && intersection / union >= 0.6;
+}
+
+/**
+ * Accumulate incoming scored items into an existing list (Plan 080 §D2,
+ * §080.3): a near/exact match refreshes the existing item's recency and
+ * lifts its importance (max); a novel item is appended. Intra-batch dups
+ * collapse too (a later incoming item can match an already-appended one).
+ *
+ * NOTE: this does NOT evict -- the list grows across conversations by
+ * design. Hard soft-forget eviction and the LLM reflection/compaction pass
+ * are deferred (Plan 080 Deferred + §D6); the digest RENDER (080.4) bounds
+ * what is actually injected each conversation via salience ranking.
+ */
+function reconcileItems(
+  existing: ScoredMemoryItem[],
+  incoming: ScoredMemoryItem[]
+): ScoredMemoryItem[] {
+  const merged = existing.map((item) => ({ ...item }));
+  for (const item of incoming) {
+    const match = merged.find((candidate) => isNearMatch(candidate.text, item.text));
+    if (match) {
+      match.lastUpdated = Math.max(match.lastUpdated, item.lastUpdated);
+      match.importance = Math.max(match.importance, item.importance);
+    } else {
+      merged.push({ ...item });
+    }
+  }
+  return merged;
+}
+
 /** Defensively coerce a stored v2 scored-item list: keep well-formed
  *  items, clamp importance, default a missing timestamp. */
 function coerceScoredItems(value: unknown, fallbackTimestamp: number): ScoredMemoryItem[] {
@@ -550,11 +613,15 @@ export class NpcMemoryStore {
    * record's current `summaryCounter` (stale-summary gate). Returns
    * whether the summary was applied.
    */
-  // Plan 080 §080.3 SEAM — this still REPLACES the list fields wholesale
-  // (the v1 behavior). The incoming scored items are stamped with `counter`
-  // as their recency; 080.3 rewrites this to ACCUMULATE + reconcile (upsert)
-  // against the existing items instead of replacing. The staleness gate below
-  // is preserved across that change. Tracked in the backlog.
+  /**
+   * Phase-2 summary upgrade (Plan 073 §D3), now ACCUMULATING (Plan 080
+   * §080.3). Each scored list is reconciled (upsert) against the existing
+   * items rather than replaced: a near/exact match refreshes recency +
+   * importance, a novel item is appended. The two prose summary fields
+   * (relationship / last-conversation) still replace, since they are
+   * "latest summary", not accumulating collections. The staleness gate is
+   * unchanged: a summary older than the applied one is dropped wholesale.
+   */
   mergeSummary(delta: SummaryMemoryDelta, counter: number): Promise<boolean> {
     return this.enqueue(async () => {
       const record =
@@ -569,16 +636,28 @@ export class NpcMemoryStore {
         record.relationshipSummary = delta.relationshipSummary;
       }
       if (delta.salientFacts !== undefined) {
-        record.salientFacts = itemsFromDelta(delta.salientFacts, counter);
+        record.salientFacts = reconcileItems(
+          record.salientFacts,
+          itemsFromDelta(delta.salientFacts, counter)
+        );
       }
       if (delta.promises !== undefined) {
-        record.promises = itemsFromDelta(delta.promises, counter);
+        record.promises = reconcileItems(
+          record.promises,
+          itemsFromDelta(delta.promises, counter)
+        );
       }
       if (delta.emotionalBeats !== undefined) {
-        record.emotionalBeats = itemsFromDelta(delta.emotionalBeats, counter);
+        record.emotionalBeats = reconcileItems(
+          record.emotionalBeats,
+          itemsFromDelta(delta.emotionalBeats, counter)
+        );
       }
       if (delta.disclosures !== undefined) {
-        record.disclosures = itemsFromDelta(delta.disclosures, counter);
+        record.disclosures = reconcileItems(
+          record.disclosures,
+          itemsFromDelta(delta.disclosures, counter)
+        );
       }
       if (delta.lastConversationSummary !== undefined) {
         record.lastConversationSummary = delta.lastConversationSummary;
