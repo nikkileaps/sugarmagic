@@ -32,10 +32,18 @@ import type {
 } from "../types";
 import type { CardStore } from "./card-store";
 import {
+  CEFR_BAND_ORDER,
+  computeEvidenceShare,
   computePointEstimate,
+  seedCefrPosteriorFromPlacement,
   seedCefrPosteriorFromSelfReport,
   updatePosterior
 } from "./cefr-posterior";
+import {
+  CALIBRATION_CONFIDENCE_CEILING,
+  CALIBRATION_OBSERVATION_WEIGHT,
+  isInPostPlacementCalibration
+} from "./calibration-window";
 import {
   computeFatigueScore
 } from "./session-signals";
@@ -287,6 +295,12 @@ export class LearnerStateReducer {
           evaluatedAtMs: event.completedAtMs
         };
         profile.estimatedCefrBand = event.cefrBand;
+        // 081.4: the calibration window starts from what placement actually
+        // concluded, not from whatever self-report seeded.
+        profile.cefrPosterior = seedCefrPosteriorFromPlacement(
+          event.cefrBand,
+          event.confidence
+        );
         this.options.blackboard.setFact({
           definition: SUGARLANG_PLACEMENT_STATUS_FACT,
           scope: createSugarlangPlacementStatusScope(this.options.profileId),
@@ -446,12 +460,21 @@ export class LearnerStateReducer {
       );
     }
 
+    // Turns must be current before the calibration-window predicate reads them.
+    currentSession.turns = accumulator.turns;
+
     const success = computeObservationSuccess(outcome);
     if (success !== null) {
+      // 081.4: during the post-placement calibration window, observations
+      // carry elevated weight and confidence is recomputed from evidence
+      // share, so the window closes on evidence with the turn backstop as
+      // ceiling. Outside the window, evaluated confidence stays frozen.
+      const inCalibrationWindow = isInPostPlacementCalibration(profile);
       profile.cefrPosterior = updatePosterior(
         profile.cefrPosterior,
         nextCard.cefrPriorBand,
-        success
+        success,
+        inCalibrationWindow ? CALIBRATION_OBSERVATION_WEIGHT : 1
       );
       const pointEstimate = computePointEstimate(profile.cefrPosterior);
       profile.estimatedCefrBand = pointEstimate.band;
@@ -461,10 +484,42 @@ export class LearnerStateReducer {
           status: "estimated",
           cefrConfidence: pointEstimate.confidence
         };
+      } else if (inCalibrationWindow) {
+        const settledConfidence = computeEvidenceShare(
+          profile.cefrPosterior,
+          pointEstimate.band
+        );
+        profile.assessment = {
+          ...profile.assessment,
+          cefrConfidence: settledConfidence
+        };
+        if (!isInPostPlacementCalibration(profile)) {
+          const placementBand =
+            profile.assessment.evaluatedCefrBand ?? profile.estimatedCefrBand;
+          await emitTelemetry(
+            this.telemetry,
+            createTelemetryEvent("calibration.window-closed", {
+              sessionId: currentSession.sessionId,
+              turnId: observationEvent.context.turnId,
+              conversationId: observationEvent.context.conversationId,
+              timestamp: observationEvent.observation.observedAtMs,
+              closeReason:
+                settledConfidence >= CALIBRATION_CONFIDENCE_CEILING
+                  ? "confidence"
+                  : "turn-backstop",
+              placementBand,
+              settledBand: pointEstimate.band,
+              bandDelta:
+                CEFR_BAND_ORDER.indexOf(pointEstimate.band) -
+                CEFR_BAND_ORDER.indexOf(placementBand),
+              settledConfidence,
+              sessionTurn: accumulator.turns
+            })
+          );
+        }
       }
     }
 
-    currentSession.turns = accumulator.turns;
     currentSession.hoverRate =
       accumulator.lemmasSeen > 0 ? accumulator.hoverCount / accumulator.lemmasSeen : 0;
     currentSession.retryRate =

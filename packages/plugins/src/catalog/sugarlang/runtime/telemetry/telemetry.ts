@@ -594,6 +594,17 @@ export type TelemetryEvent =
         predictedRetrievability: number;
         observedOutcome: "pass" | "fail";
       }
+    >
+  | TelemetryEventOf<
+      "calibration.window-closed",
+      {
+        closeReason: "confidence" | "turn-backstop";
+        placementBand: string;
+        settledBand: string;
+        bandDelta: number;
+        settledConfidence: number;
+        sessionTurn: number;
+      }
     >;
 
 export type TelemetryEventKind = TelemetryEvent["kind"];
@@ -973,7 +984,7 @@ const SERVER_BOUND_PII_FIELDS: ReadonlySet<string> = new Set([
 
 function stripPii(event: TelemetryEvent): Record<string, unknown> {
   const stripped: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(event as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(event as unknown as Record<string, unknown>)) {
     if (!SERVER_BOUND_PII_FIELDS.has(key)) {
       stripped[key] = value;
     }

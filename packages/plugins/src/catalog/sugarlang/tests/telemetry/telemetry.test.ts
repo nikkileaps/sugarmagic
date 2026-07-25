@@ -129,7 +129,7 @@ describe("resolveSugarlangTelemetrySink", () => {
   it("returns GatewaySugarlangTelemetrySink for published-target with proxy URL", () => {
     const sink = resolveSugarlangTelemetrySink(
       {
-        hostKind: "web-browser",
+        hostKind: "published-web",
         compileProfile: "published-target",
         contentSource: "published-artifact",
         runtimeFamily: "sugarmagic-shared-runtime",
@@ -143,7 +143,7 @@ describe("resolveSugarlangTelemetrySink", () => {
 
   it("returns NoOpTelemetrySink for published-target without proxy URL", () => {
     const sink = resolveSugarlangTelemetrySink({
-      hostKind: "web-browser",
+      hostKind: "published-web",
       compileProfile: "published-target",
       contentSource: "published-artifact",
       runtimeFamily: "sugarmagic-shared-runtime",
