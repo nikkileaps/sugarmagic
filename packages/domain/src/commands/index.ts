@@ -860,6 +860,15 @@ export type SetNPCPresenceConditionCommand = SemanticCommandBase<
   }
 >;
 
+export type SetNPCPresenceLabelCommand = SemanticCommandBase<
+  "SetNPCPresenceLabel",
+  {
+    presenceId: string;
+    /** null clears the label; picker falls back to NPC definition displayName. */
+    label: string | null;
+  }
+>;
+
 export type TransformItemPresenceCommand = SemanticCommandBase<
   "TransformItemPresence",
   {
@@ -1143,6 +1152,7 @@ export type SemanticCommand =
   | UpdateItemPresenceCommand
   | RemoveNPCPresenceCommand
   | SetNPCPresenceConditionCommand
+  | SetNPCPresenceLabelCommand
   | RemoveItemPresenceCommand
   | AssignPlacedAssetInspectableCommand
   | UpdatePlacedAssetInspectableCommand

@@ -100,6 +100,7 @@ import type {
   SetNPCPresenceShaderParameterOverrideCommand,
   ClearNPCPresenceShaderParameterOverrideCommand,
   SetNPCPresenceConditionCommand,
+  SetNPCPresenceLabelCommand,
   SetItemPresenceShaderParameterOverrideCommand,
   ClearItemPresenceShaderParameterOverrideCommand
 } from "../commands";

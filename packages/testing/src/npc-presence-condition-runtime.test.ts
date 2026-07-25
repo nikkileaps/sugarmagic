@@ -51,7 +51,8 @@ const GATED_PRESENCE: RegionNPCPresence = {
       valueType: "boolean",
       value: "true"
     }
-  }
+  },
+  placementLabel: null
 };
 
 const ALWAYS_PRESENCE: RegionNPCPresence = {
@@ -60,7 +61,8 @@ const ALWAYS_PRESENCE: RegionNPCPresence = {
   shaderOverride: null,
   shaderParameterOverrides: [],
   transform: { position: [5, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] },
-  condition: null
+  condition: null,
+  placementLabel: null
 };
 
 const PRESENCES = [GATED_PRESENCE, ALWAYS_PRESENCE];

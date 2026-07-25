@@ -4,6 +4,7 @@
  * Purpose: Guards Plan 079.1 -- condition field on RegionNPCPresence,
  * SetNPCPresenceCondition command round-trip, legacy-load normalization,
  * and factory normalization.
+ * Also guards Plan 079.6 -- placementLabel field + SetNPCPresenceLabel command.
  *
  * Status: active
  */
@@ -19,6 +20,21 @@ import {
   getActiveRegionContents,
   normalizeGameProject
 } from "@sugarmagic/domain";
+
+function makeSetLabelCmd(label: string | null) {
+  return {
+    kind: "SetNPCPresenceLabel" as const,
+    target: {
+      aggregateKind: "region-document" as const,
+      aggregateId: REGION_ID
+    },
+    subject: {
+      subjectKind: "npc-presence" as const,
+      subjectId: PRESENCE_ID
+    },
+    payload: { presenceId: PRESENCE_ID, label }
+  };
+}
 
 const REGION_ID = "region:hollow";
 const PRESENCE_ID = "p:cheese-merchant";
@@ -220,5 +236,70 @@ describe("RegionNPCPresence condition field (079.1)", () => {
       // condition deliberately omitted -- simulates a legacy saved record
     });
     expect(presence.condition).toBeNull();
+  });
+});
+
+describe("RegionNPCPresence placementLabel field (079.6)", () => {
+  it("factory defaults placementLabel to null", () => {
+    const presence = createRegionNPCPresence({ npcDefinitionId: NPC_DEF_ID });
+    expect(presence.placementLabel).toBeNull();
+  });
+
+  it("CreateNPCPresence sets placementLabel null on new presences", () => {
+    const session = applyCommand(makeSession(), makeCreateCmd());
+    const contents = getActiveRegionContents(session);
+    const presence = contents?.npcPresences.find(
+      (p) => p.presenceId === PRESENCE_ID
+    );
+    expect(presence?.placementLabel).toBeNull();
+  });
+
+  it("SetNPCPresenceLabel round-trip: create -> set label -> read back", () => {
+    const s1 = applyCommand(makeSession(), makeCreateCmd());
+    const s2 = applyCommand(s1, makeSetLabelCmd("Finnick at the docks"));
+
+    const contents = getActiveRegionContents(s2);
+    const presence = contents?.npcPresences.find(
+      (p) => p.presenceId === PRESENCE_ID
+    );
+    expect(presence?.placementLabel).toBe("Finnick at the docks");
+  });
+
+  it("SetNPCPresenceLabel with null clears an existing label", () => {
+    const s1 = applyCommand(makeSession(), makeCreateCmd());
+    const s2 = applyCommand(s1, makeSetLabelCmd("Finnick at the docks"));
+    const s3 = applyCommand(s2, makeSetLabelCmd(null));
+
+    const contents = getActiveRegionContents(s3);
+    const presence = contents?.npcPresences.find(
+      (p) => p.presenceId === PRESENCE_ID
+    );
+    expect(presence?.placementLabel).toBeNull();
+  });
+
+  it("SetNPCPresenceLabel on missing presenceId is a no-op", () => {
+    const s1 = applyCommand(makeSession(), makeCreateCmd());
+    const s2 = applyCommand(s1, {
+      kind: "SetNPCPresenceLabel" as const,
+      target: { aggregateKind: "region-document" as const, aggregateId: REGION_ID },
+      subject: { subjectKind: "npc-presence" as const, subjectId: "p:ghost" },
+      payload: { presenceId: "p:ghost", label: "Ghost NPC" }
+    });
+
+    const contents = getActiveRegionContents(s2);
+    expect(contents?.npcPresences).toHaveLength(1);
+    const presence = contents?.npcPresences.find(
+      (p) => p.presenceId === PRESENCE_ID
+    );
+    expect(presence?.placementLabel).toBeNull();
+  });
+
+  it("legacy presence with no placementLabel field normalizes to null via factory", () => {
+    const presence = createRegionNPCPresence({
+      presenceId: PRESENCE_ID,
+      npcDefinitionId: NPC_DEF_ID
+      // placementLabel deliberately omitted -- simulates a pre-079.6 saved record
+    });
+    expect(presence.placementLabel).toBeNull();
   });
 });

@@ -100,6 +100,9 @@ export interface RegionNPCPresence {
   transform: RegionSceneTransform;
   /** Plan 079.1 -- null means unconditional (always spawn). */
   condition: RegionBehaviorQuestBinding | null;
+  /** Plan 079.6 -- author-supplied label for disambiguation in the quest stage picker.
+   *  Null falls back to the NPC definition's displayName. */
+  placementLabel: string | null;
 }
 
 export interface RegionItemPresence {
@@ -1033,7 +1036,8 @@ export function createRegionNPCPresence(
     transform: createRegionSceneTransform(overrides.transform),
     condition: overrides.condition
       ? createRegionBehaviorQuestBinding(overrides.condition)
-      : null
+      : null,
+    placementLabel: overrides.placementLabel ?? null
   };
 }
 

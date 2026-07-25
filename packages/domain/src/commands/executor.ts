@@ -70,6 +70,7 @@ import type {
   TransformNPCPresenceCommand,
   RemoveNPCPresenceCommand,
   SetNPCPresenceConditionCommand,
+  SetNPCPresenceLabelCommand,
   CreateItemPresenceCommand,
   TransformItemPresenceCommand,
   UpdateItemPresenceCommand,
@@ -635,7 +636,8 @@ function createNPCPresenceFromCommand(
       rotation: command.payload.rotation,
       scale: command.payload.scale
     },
-    condition: null
+    condition: null,
+    placementLabel: null
   };
 }
 
@@ -1075,6 +1077,19 @@ function applySetNPCPresenceCondition(
     presences.map((presence) =>
       presence.presenceId === command.payload.presenceId
         ? { ...presence, condition: command.payload.condition }
+        : presence
+    )
+  );
+}
+
+function applySetNPCPresenceLabel(
+  context: CommandExecutionContext,
+  command: SetNPCPresenceLabelCommand
+): Scene {
+  return mapOverlayNpcPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? { ...presence, placementLabel: command.payload.label }
         : presence
     )
   );
@@ -1829,6 +1844,9 @@ export function executeCommand(
       break;
     case "SetNPCPresenceCondition":
       updatedScene = applySetNPCPresenceCondition(context, command);
+      break;
+    case "SetNPCPresenceLabel":
+      updatedScene = applySetNPCPresenceLabel(context, command);
       break;
     case "RemoveNPCPresence":
       updatedScene = applyRemoveNPCPresence(context, command);
