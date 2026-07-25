@@ -24,7 +24,7 @@
  * Status: active
  */
 
-import type { NpcMemoryRecord } from "./npc-memory-store";
+import type { NpcMemoryRecord, ScoredMemoryItem } from "./npc-memory-store";
 
 /** Key under which the memoized memory lives in `execution.state`. */
 export const MEMORY_STATE_KEY = "sugaragent.memory";
@@ -57,8 +57,8 @@ function truncate(text: string, maxChars: number): string {
   return text.length <= maxChars ? text : `${text.slice(0, maxChars - 1)}…`;
 }
 
-function joinItems(items: string[]): string {
-  return items.map((item) => item.trim()).filter(Boolean).join("; ");
+function joinItems(items: ScoredMemoryItem[]): string {
+  return items.map((item) => item.text.trim()).filter(Boolean).join("; ");
 }
 
 /**

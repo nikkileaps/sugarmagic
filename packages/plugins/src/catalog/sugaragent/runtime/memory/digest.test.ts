@@ -13,12 +13,18 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { NpcMemoryRecord } from "./npc-memory-store";
+import type { NpcMemoryRecord, ScoredMemoryItem } from "./npc-memory-store";
 import {
   buildMemoryAnnotation,
   buildMemoryDigest,
   type MemoizedNpcMemory
 } from "./digest";
+
+/** Build scored items from plain strings for fixtures (importance/recency
+ *  do not affect the current behavior-preserving digest render). */
+function items(...texts: string[]): ScoredMemoryItem[] {
+  return texts.map((text) => ({ text, importance: 5, lastUpdated: 1 }));
+}
 
 function record(overrides: Partial<NpcMemoryRecord> = {}): NpcMemoryRecord {
   return {
@@ -26,14 +32,15 @@ function record(overrides: Partial<NpcMemoryRecord> = {}): NpcMemoryRecord {
     userId: "u",
     playthroughId: "p",
     npcDefinitionId: "npc.finnick",
-    schemaVersion: 1,
+    schemaVersion: 2,
     metCount: 2,
     conversationCounter: 2,
     lastExchange: "Player: bye\nNPC: see you",
     relationshipSummary: "Warming to Mim, a cheese enthusiast.",
-    salientFacts: ["Name is Mim", "Loves aged gouda"],
-    promises: ["Save a wedge of gouda"],
-    emotionalBeats: ["laughed together"],
+    salientFacts: items("Name is Mim", "Loves aged gouda"),
+    promises: items("Save a wedge of gouda"),
+    emotionalBeats: items("laughed together"),
+    disclosures: [],
     lastConversationSummary: "Mim asked about the shop's oldest cheese.",
     summaryCounter: 2,
     ...overrides

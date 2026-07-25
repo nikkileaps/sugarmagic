@@ -25,7 +25,7 @@ function record(overrides: Partial<NpcMemoryRecord> = {}): NpcMemoryRecord {
     userId: "u",
     playthroughId: "p",
     npcDefinitionId: "npc.finnick",
-    schemaVersion: 1,
+    schemaVersion: 2,
     metCount: 1,
     conversationCounter: 1,
     lastExchange: "",
@@ -33,6 +33,7 @@ function record(overrides: Partial<NpcMemoryRecord> = {}): NpcMemoryRecord {
     salientFacts: [],
     promises: [],
     emotionalBeats: [],
+    disclosures: [],
     lastConversationSummary: "",
     summaryCounter: 0,
     ...overrides

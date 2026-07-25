@@ -48,8 +48,19 @@
 import { getActivePlaythroughId, getActiveUserId } from "@sugarmagic/runtime-core";
 
 /** Current record schema. Bump when the record shape changes
- *  incompatibly; `migrateRecord` owns the upgrade path. */
-export const NPC_MEMORY_SCHEMA_VERSION = 1;
+ *  incompatibly; `migrateRecord` owns the upgrade path.
+ *  v2 (Plan 080): list fields hold scored items, not plain strings;
+ *  `disclosures` added. */
+export const NPC_MEMORY_SCHEMA_VERSION = 2;
+
+/** Salience bounds for a memory item's importance -- Generative Agents
+ *  "poignancy" (1 = mundane, 10 = pivotal). Plan 080 §D2/§D5. */
+export const MIN_ITEM_IMPORTANCE = 1;
+export const MAX_ITEM_IMPORTANCE = 10;
+/** Importance for an item that carries no score -- a migrated v1 string,
+ *  or a pre-080.2 summary delta. Neutral-mid so it neither starves nor
+ *  dominates ranking. */
+export const DEFAULT_ITEM_IMPORTANCE = 5;
 
 /** IndexedDB database name prefix; the active userId is appended so
  *  each user gets an isolated database (sugarlang card-store idiom). */
@@ -60,6 +71,19 @@ const DB_VERSION = 1;
 /** Last-exchange continuity text is truncated to keep records
  *  bounded; the full transcript never enters the durable record. */
 const DEFAULT_LAST_EXCHANGE_MAX_CHARS = 600;
+
+/**
+ * One durable memory item: the text, its salience score, and the
+ * conversationCounter when it was last added or refreshed (the recency
+ * key for salience ranking). Plan 080 §D2.
+ */
+export interface ScoredMemoryItem {
+  text: string;
+  /** Salience 1-10 (Generative Agents poignancy). */
+  importance: number;
+  /** conversationCounter at last add/refresh -- recency for ranking. */
+  lastUpdated: number;
+}
 
 /**
  * One NPC's memory of the player for a single playthrough. Tier 1
@@ -82,12 +106,15 @@ export interface NpcMemoryRecord {
   lastExchange: string;
   /** Durable relationship summary (LLM). */
   relationshipSummary: string;
-  /** Salient facts learned about the player (LLM). */
-  salientFacts: string[];
-  /** Promises / undertakings made (LLM). */
-  promises: string[];
-  /** Emotional beats worth remembering (LLM). */
-  emotionalBeats: string[];
+  /** Salient facts learned about the player (LLM), scored + accumulated. */
+  salientFacts: ScoredMemoryItem[];
+  /** Promises / undertakings made (LLM), scored + accumulated. */
+  promises: ScoredMemoryItem[];
+  /** Emotional beats worth remembering (LLM), scored + accumulated. */
+  emotionalBeats: ScoredMemoryItem[];
+  /** Things the NPC has already SHARED with the player (self-disclosure).
+   *  The cross-conversation repetition lever -- Plan 080 §D4. */
+  disclosures: ScoredMemoryItem[];
   /** Freshest conversation's summary (tier 2 continuity). */
   lastConversationSummary: string;
   /** The conversationCounter the current summary reflects; a summary
@@ -148,15 +175,65 @@ function coerceString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function coerceStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((entry): entry is string => typeof entry === "string");
-}
-
 function coerceCount(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0
     ? Math.floor(value)
     : 0;
+}
+
+/** Clamp/round an unknown into the valid importance band, defaulting a
+ *  missing/invalid score to the neutral-mid value. */
+export function clampImportance(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_ITEM_IMPORTANCE;
+  }
+  return Math.min(
+    MAX_ITEM_IMPORTANCE,
+    Math.max(MIN_ITEM_IMPORTANCE, Math.round(value))
+  );
+}
+
+/**
+ * Convert plain strings into scored items at the default importance,
+ * timestamped to the given conversationCounter. Used for BOTH the v1->v2
+ * migration (legacy string lists) and the 080.1 summary-delta shim (a
+ * pre-080.2 delta still carries strings). Non-strings/empties drop.
+ */
+function stringsToScoredItems(value: unknown, timestamp: number): ScoredMemoryItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: ScoredMemoryItem[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string" || entry.length === 0) continue;
+    items.push({
+      text: entry,
+      importance: DEFAULT_ITEM_IMPORTANCE,
+      lastUpdated: timestamp
+    });
+  }
+  return items;
+}
+
+/** Defensively coerce a stored v2 scored-item list: keep well-formed
+ *  items, clamp importance, default a missing timestamp. */
+function coerceScoredItems(value: unknown, fallbackTimestamp: number): ScoredMemoryItem[] {
+  if (!Array.isArray(value)) return [];
+  const items: ScoredMemoryItem[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const candidate = entry as Partial<ScoredMemoryItem>;
+    if (typeof candidate.text !== "string" || candidate.text.length === 0) continue;
+    items.push({
+      text: candidate.text,
+      importance: clampImportance(candidate.importance),
+      lastUpdated:
+        typeof candidate.lastUpdated === "number" &&
+        Number.isFinite(candidate.lastUpdated) &&
+        candidate.lastUpdated >= 0
+          ? Math.floor(candidate.lastUpdated)
+          : fallbackTimestamp
+    });
+  }
+  return items;
 }
 
 /**
@@ -165,11 +242,28 @@ function coerceCount(value: unknown): number {
  * `schemaVersion` is stamped current — this doubles as the forward
  * migration seam and a defensive read. Returns `null` for a
  * non-object (absent record).
+ *
+ * Plan 080 §080.1: the list fields changed shape (string[] -> scored
+ * items) at v2, so we read the RAW stored `schemaVersion` BEFORE the
+ * return stamps it current, and branch the coercer: v1 (and any legacy
+ * version < 2) stored plain strings -> convert to scored items at the
+ * default importance, timestamped to the record's conversationCounter;
+ * v2+ already stores scored items -> coerce defensively. `disclosures`
+ * did not exist pre-v2, so a v1 record's (undefined) disclosures becomes
+ * an empty list.
  */
 export function migrateNpcMemoryRecord(raw: unknown): NpcMemoryRecord | null {
   if (!raw || typeof raw !== "object") return null;
-  const record = raw as Partial<NpcMemoryRecord>;
+  const record = raw as Partial<NpcMemoryRecord> & { schemaVersion?: unknown };
   if (typeof record.key !== "string") return null;
+
+  const storedVersion = coerceCount(record.schemaVersion);
+  const conversationCounter = coerceCount(record.conversationCounter);
+  const toItems = (value: unknown): ScoredMemoryItem[] =>
+    storedVersion >= 2
+      ? coerceScoredItems(value, conversationCounter)
+      : stringsToScoredItems(value, conversationCounter);
+
   return {
     key: record.key,
     userId: coerceString(record.userId),
@@ -177,12 +271,13 @@ export function migrateNpcMemoryRecord(raw: unknown): NpcMemoryRecord | null {
     npcDefinitionId: coerceString(record.npcDefinitionId),
     schemaVersion: NPC_MEMORY_SCHEMA_VERSION,
     metCount: coerceCount(record.metCount),
-    conversationCounter: coerceCount(record.conversationCounter),
+    conversationCounter,
     lastExchange: coerceString(record.lastExchange),
     relationshipSummary: coerceString(record.relationshipSummary),
-    salientFacts: coerceStringArray(record.salientFacts),
-    promises: coerceStringArray(record.promises),
-    emotionalBeats: coerceStringArray(record.emotionalBeats),
+    salientFacts: toItems(record.salientFacts),
+    promises: toItems(record.promises),
+    emotionalBeats: toItems(record.emotionalBeats),
+    disclosures: toItems(record.disclosures),
     lastConversationSummary: coerceString(record.lastConversationSummary),
     summaryCounter: coerceCount(record.summaryCounter)
   };
@@ -365,6 +460,7 @@ export class NpcMemoryStore {
       salientFacts: [],
       promises: [],
       emotionalBeats: [],
+      disclosures: [],
       lastConversationSummary: "",
       summaryCounter: 0
     };
@@ -422,10 +518,12 @@ export class NpcMemoryStore {
    * record's current `summaryCounter` (stale-summary gate). Returns
    * whether the summary was applied.
    */
-  // DEFERRED SEAM (Plan 073) — consolidation (merge/forget/compress across many
-  // conversations) belongs here: today a new summary REPLACES fields wholesale.
-  // Revisit when records approach the digest cap in real play; the store API +
-  // this merge are the seam. Tracked in the backlog.
+  // Plan 080 §080.3 SEAM — this still REPLACES the list fields wholesale
+  // (the v1 behavior). 080.1 shims the incoming plain-string delta into
+  // scored items (default importance, `counter` as the recency timestamp)
+  // so the record holds the v2 shape; 080.3 rewrites this to ACCUMULATE +
+  // reconcile (upsert) instead of replace. The staleness gate below is
+  // preserved across that change. Tracked in the backlog.
   mergeSummary(delta: SummaryMemoryDelta, counter: number): Promise<boolean> {
     return this.enqueue(async () => {
       const record =
@@ -440,13 +538,13 @@ export class NpcMemoryStore {
         record.relationshipSummary = delta.relationshipSummary;
       }
       if (delta.salientFacts !== undefined) {
-        record.salientFacts = [...delta.salientFacts];
+        record.salientFacts = stringsToScoredItems(delta.salientFacts, counter);
       }
       if (delta.promises !== undefined) {
-        record.promises = [...delta.promises];
+        record.promises = stringsToScoredItems(delta.promises, counter);
       }
       if (delta.emotionalBeats !== undefined) {
-        record.emotionalBeats = [...delta.emotionalBeats];
+        record.emotionalBeats = stringsToScoredItems(delta.emotionalBeats, counter);
       }
       if (delta.lastConversationSummary !== undefined) {
         record.lastConversationSummary = delta.lastConversationSummary;

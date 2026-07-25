@@ -108,7 +108,8 @@ describe("summarizeConversationAtDispose", () => {
 
     const record = await store.load(FINNICK);
     expect(record?.relationshipSummary).toContain("Mim");
-    expect(record?.salientFacts).toContain("Loves aged gouda");
+    // 080.1: summary strings are shimmed into scored items.
+    expect(record?.salientFacts.map((item) => item.text)).toContain("Loves aged gouda");
     expect(record?.lastConversationSummary).toContain("introduced");
   });
 

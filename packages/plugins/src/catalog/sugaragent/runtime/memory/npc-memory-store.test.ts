@@ -156,7 +156,10 @@ describe("NpcMemoryStore summary merge + staleness gate", () => {
 
     const record = await store.load(FINNICK);
     expect(record?.relationshipSummary).toBe("warming up");
-    expect(record?.salientFacts).toEqual(["likes cheese"]);
+    // 080.1: the summary delta's strings are shimmed into scored items.
+    expect(record?.salientFacts.map((item) => item.text)).toEqual(["likes cheese"]);
+    expect(record?.salientFacts[0]?.importance).toBe(5); // DEFAULT_ITEM_IMPORTANCE
+    expect(record?.salientFacts[0]?.lastUpdated).toBe(1); // the summary counter
     // Untouched fields keep their prior values.
     expect(record?.promises).toEqual([]);
     expect(record?.lastExchange).toBe("hello");
@@ -238,11 +241,69 @@ describe("NpcMemoryStore record migration", () => {
     const store = storeOn(backend);
     const record = await store.load(FINNICK);
 
-    expect(record?.schemaVersion).toBe(1);
+    expect(record?.schemaVersion).toBe(2);
     expect(record?.metCount).toBe(3);
     expect(record?.salientFacts).toEqual([]);
     expect(record?.promises).toEqual([]);
+    expect(record?.disclosures).toEqual([]);
     expect(record?.relationshipSummary).toBe("");
+  });
+
+  it("upgrades a v1 record's string lists into scored items (080.1, lossless)", async () => {
+    const backend = new InMemoryNpcMemoryBackend();
+    const key = `${USER}::${PLAY_A}::${FINNICK}`;
+    // A genuine v1 record: schemaVersion 1, list fields are plain strings,
+    // no disclosures field at all.
+    await backend.put({
+      key,
+      userId: USER,
+      playthroughId: PLAY_A,
+      npcDefinitionId: FINNICK,
+      schemaVersion: 1,
+      metCount: 4,
+      conversationCounter: 4,
+      lastExchange: "Player: bye\nNPC: see you",
+      relationshipSummary: "old friends",
+      salientFacts: ["Name is Mim", "Loves aged gouda"],
+      promises: ["Save a wedge"],
+      emotionalBeats: ["laughed together"],
+      lastConversationSummary: "talked cheese",
+      summaryCounter: 4
+    } as unknown as NpcMemoryRecord);
+
+    const record = await storeOn(backend).load(FINNICK);
+
+    expect(record?.schemaVersion).toBe(2);
+    // Counters + summary strings preserved exactly.
+    expect(record?.metCount).toBe(4);
+    expect(record?.conversationCounter).toBe(4);
+    expect(record?.relationshipSummary).toBe("old friends");
+    expect(record?.lastConversationSummary).toBe("talked cheese");
+    // String lists become scored items -- no content dropped, importance
+    // defaulted, timestamped to the record's conversationCounter.
+    expect(record?.salientFacts.map((item) => item.text)).toEqual([
+      "Name is Mim",
+      "Loves aged gouda"
+    ]);
+    expect(record?.salientFacts.every((item) => item.importance === 5)).toBe(true);
+    expect(record?.salientFacts.every((item) => item.lastUpdated === 4)).toBe(true);
+    expect(record?.promises.map((item) => item.text)).toEqual(["Save a wedge"]);
+    expect(record?.emotionalBeats.map((item) => item.text)).toEqual([
+      "laughed together"
+    ]);
+    // disclosures did not exist pre-v2 -> empty.
+    expect(record?.disclosures).toEqual([]);
+  });
+
+  it("a fresh record has empty accumulating lists including disclosures", async () => {
+    const store = storeOn(new InMemoryNpcMemoryBackend());
+    await store.mergeDeterministic({ npcDefinitionId: FINNICK, lastExchange: "hi" });
+    const record = await store.load(FINNICK);
+    expect(record?.schemaVersion).toBe(2);
+    expect(record?.salientFacts).toEqual([]);
+    expect(record?.promises).toEqual([]);
+    expect(record?.emotionalBeats).toEqual([]);
+    expect(record?.disclosures).toEqual([]);
   });
 
   it("migrateNpcMemoryRecord returns null for a non-record", () => {
@@ -340,7 +401,8 @@ describe("NpcMemoryStore IndexedDB backend (durability smoke)", () => {
       1
     );
 
-    // A fresh store over the same factory/user reads the durable record.
+    // A fresh store over the same factory/user reads the durable record --
+    // exercising the v2 scored-item shape through IndexedDB round-trip.
     const second = new NpcMemoryStore({
       userId: USER,
       playthroughId: PLAY_A,
@@ -350,7 +412,9 @@ describe("NpcMemoryStore IndexedDB backend (durability smoke)", () => {
 
     expect(record?.metCount).toBe(1);
     expect(record?.lastExchange).toBe("persisted");
-    expect(record?.salientFacts).toEqual(["remembered"]);
+    expect(record?.salientFacts.map((item) => item.text)).toEqual(["remembered"]);
+    expect(record?.salientFacts[0]?.importance).toBe(5);
+    expect(record?.disclosures).toEqual([]);
   });
 
   it("falls back to memory when no IndexedDB factory is available", async () => {
