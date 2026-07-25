@@ -22,6 +22,7 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   Group,
   Menu,
   Modal,
@@ -690,6 +691,67 @@ export function useQuestWorkspaceView({
 
     return links;
   }, [effectiveSelectedQuestId, npcDefinitions, regions]);
+
+  // Plan 079.7 -- all NPC presences across all scenes/regions, for the stage picker.
+  // Deduped by presenceId (first scene overlay wins); tracks which region owns each
+  // and the presence's current condition (to derive checked state in the picker).
+  const allNpcPresences = useMemo(() => {
+    const seen = new Set<string>();
+    const items: Array<{
+      presenceId: string;
+      regionId: string;
+      regionDisplayName: string;
+      displayLabel: string;
+      condition: { questDefinitionId: string | null; questStageId: string | null } | null;
+    }> = [];
+    for (const scene of scenes) {
+      for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
+        const region = regions.find((r) => r.identity.id === regionId);
+        const regionDisplayName = region?.displayName ?? regionId;
+        for (const presence of overlay.npcPresences) {
+          if (seen.has(presence.presenceId)) continue;
+          seen.add(presence.presenceId);
+          const npcDef = npcDefinitions.find(
+            (n) => n.definitionId === presence.npcDefinitionId
+          );
+          const baseName = npcDef?.displayName ?? presence.npcDefinitionId;
+          items.push({
+            presenceId: presence.presenceId,
+            regionId,
+            regionDisplayName,
+            displayLabel: presence.placementLabel ?? baseName,
+            condition: presence.condition
+              ? { questDefinitionId: presence.condition.questDefinitionId, questStageId: presence.condition.questStageId }
+              : null
+          });
+        }
+      }
+    }
+    return items;
+  }, [scenes, regions, npcDefinitions]);
+
+  const handleToggleNPCPresence = useCallback(
+    (
+      presenceId: string,
+      regionId: string,
+      questDefinitionId: string,
+      stageId: string,
+      checked: boolean
+    ) => {
+      onCommand({
+        kind: "SetNPCPresenceCondition",
+        target: { aggregateKind: "region-document", aggregateId: regionId },
+        subject: { subjectKind: "npc-presence", subjectId: presenceId },
+        payload: {
+          presenceId,
+          condition: checked
+            ? { questDefinitionId, questStageId: stageId, worldFlagEquals: null }
+            : null
+        }
+      });
+    },
+    [onCommand]
+  );
 
   useEffect(() => {
     if (navigationTarget?.kind !== "quest-stage") {
@@ -1403,6 +1465,42 @@ export function useQuestWorkspaceView({
               ))
             )}
           </Stack>
+          {allNpcPresences.length > 0 && (
+            <Stack gap="xs">
+              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+                NPCs visible in this stage
+              </Text>
+              {allNpcPresences.map((item) => {
+                const isChecked =
+                  item.condition?.questDefinitionId === selectedQuest.definitionId &&
+                  item.condition?.questStageId === selectedStage.stageId;
+                return (
+                  <Group key={item.presenceId} gap="xs" wrap="nowrap">
+                    <Checkbox
+                      checked={isChecked}
+                      onChange={(e) =>
+                        handleToggleNPCPresence(
+                          item.presenceId,
+                          item.regionId,
+                          selectedQuest.definitionId,
+                          selectedStage.stageId,
+                          e.currentTarget.checked
+                        )
+                      }
+                    />
+                    <Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
+                      <Text size="xs" fw={600} truncate>
+                        {item.displayLabel}
+                      </Text>
+                      <Text size="xs" c="dimmed" truncate>
+                        {item.regionDisplayName}
+                      </Text>
+                    </Stack>
+                  </Group>
+                );
+              })}
+            </Stack>
+          )}
           <Button
             color="red"
             variant="light"

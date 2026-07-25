@@ -99,6 +99,8 @@ import type {
   ClearPlacedAssetShaderParameterOverrideCommand,
   SetNPCPresenceShaderParameterOverrideCommand,
   ClearNPCPresenceShaderParameterOverrideCommand,
+  SetNPCPresenceConditionCommand,
+  SetNPCPresenceLabelCommand,
   SetItemPresenceShaderParameterOverrideCommand,
   ClearItemPresenceShaderParameterOverrideCommand
 } from "../commands";
@@ -2406,16 +2408,22 @@ export function applyCommand(
     return applyDeleteQuestDefinitionCommand(session, command);
   }
 
-  const activeRegion = getActiveRegion(session);
-  if (!activeRegion) return session;
-  // Plan 058 §058.1 — the executor operates on the Base + Overlay
+  // Plan 079.7 -- use target.aggregateId when the command explicitly names a region,
+  // so quest-side dispatches (no activeRegionId) route correctly. Falls back to
+  // activeRegionId for commands that predate explicit targeting.
+  const targetRegion =
+    command.target.aggregateKind === "region-document"
+      ? (session.regions.get(command.target.aggregateId) ?? null)
+      : getActiveRegion(session);
+  if (!targetRegion) return session;
+  // Plan 058 §058.1 -- the executor operates on the Base + Overlay
   // pair. The active Scene is the Ambient Context that decides
   // which Scene presence / overlay-scoped commands land in.
   const activeScene = getActiveScene(session);
   if (!activeScene) return session;
 
   const result = executeCommand(
-    { region: activeRegion, scene: activeScene },
+    { region: targetRegion, scene: activeScene },
     command
   );
   const newHistory = pushTransaction(session.history, result.transaction);

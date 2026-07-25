@@ -158,7 +158,9 @@ describe("layout scene presences", () => {
                 position: [3, 0, -2],
                 rotation: [0, 0, 0],
                 scale: [1, 1, 1]
-              }
+              },
+              condition: null,
+              placementLabel: null
             }
           ],
           itemPresences: []

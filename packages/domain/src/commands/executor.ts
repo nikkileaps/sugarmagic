@@ -22,7 +22,8 @@ import type {
   RegionSceneFolder,
   RegionNPCPresence,
   RegionPlayerPresence,
-  RegionItemPresence
+  RegionItemPresence,
+  RegionBehaviorQuestBinding
 } from "../region-authoring";
 import type { LandscapeSurfaceSlot } from "../surface";
 import type { TransactionBoundary } from "../transactions";
@@ -68,6 +69,8 @@ import type {
   CreateNPCPresenceCommand,
   TransformNPCPresenceCommand,
   RemoveNPCPresenceCommand,
+  SetNPCPresenceConditionCommand,
+  SetNPCPresenceLabelCommand,
   CreateItemPresenceCommand,
   TransformItemPresenceCommand,
   UpdateItemPresenceCommand,
@@ -632,7 +635,9 @@ function createNPCPresenceFromCommand(
       position: command.payload.position,
       rotation: command.payload.rotation,
       scale: command.payload.scale
-    }
+    },
+    condition: null,
+    placementLabel: null
   };
 }
 
@@ -1059,6 +1064,32 @@ function applyTransformNPCPresence(
               scale: command.payload.scale
             }
           }
+        : presence
+    )
+  );
+}
+
+function applySetNPCPresenceCondition(
+  context: CommandExecutionContext,
+  command: SetNPCPresenceConditionCommand
+): Scene {
+  return mapOverlayNpcPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? { ...presence, condition: command.payload.condition }
+        : presence
+    )
+  );
+}
+
+function applySetNPCPresenceLabel(
+  context: CommandExecutionContext,
+  command: SetNPCPresenceLabelCommand
+): Scene {
+  return mapOverlayNpcPresences(context, (presences) =>
+    presences.map((presence) =>
+      presence.presenceId === command.payload.presenceId
+        ? { ...presence, placementLabel: command.payload.label }
         : presence
     )
   );
@@ -1810,6 +1841,12 @@ export function executeCommand(
         context,
         command
       );
+      break;
+    case "SetNPCPresenceCondition":
+      updatedScene = applySetNPCPresenceCondition(context, command);
+      break;
+    case "SetNPCPresenceLabel":
+      updatedScene = applySetNPCPresenceLabel(context, command);
       break;
     case "RemoveNPCPresence":
       updatedScene = applyRemoveNPCPresence(context, command);

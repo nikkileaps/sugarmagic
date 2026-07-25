@@ -801,6 +801,28 @@ export function useLayoutWorkspaceView(
     [getRegion, getRegionContents, onCommand]
   );
 
+  const handleSetNPCPresenceLabel = useCallback(
+    (label: string | null) => {
+      if (!region || !selectedNPCPresence) return;
+      onCommand({
+        kind: "SetNPCPresenceLabel",
+        target: {
+          aggregateKind: "region-document",
+          aggregateId: region.identity.id
+        },
+        subject: {
+          subjectKind: "npc-presence",
+          subjectId: selectedNPCPresence.presenceId
+        },
+        payload: {
+          presenceId: selectedNPCPresence.presenceId,
+          label
+        }
+      });
+    },
+    [region, selectedNPCPresence, onCommand]
+  );
+
   const handleCreateFolder = useCallback(
     (parentFolderId: string | null) => {
       const currentRegion = getRegion();
@@ -1911,6 +1933,15 @@ export function useLayoutWorkspaceView(
                   axis,
                   value
                 )
+              }
+            />
+            <TextInput
+              label="Placement label"
+              size="xs"
+              placeholder="e.g. Finnick at the docks"
+              value={selectedNPCPresence.placementLabel ?? ""}
+              onChange={(e) =>
+                handleSetNPCPresenceLabel(e.currentTarget.value || null)
               }
             />
           </Stack>
