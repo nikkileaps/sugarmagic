@@ -81,6 +81,16 @@ The risk is band QUALITY, not missing data: auto-assigned bands skew the envelop
 (b) if the audit finds material misbanding -- "it" is config-hidden until a correction pass lands.
 - Exit: decision recorded here with the audit numbers; config state matches the decision; if enabled, a smoke run in Italian (placement + one conversation + hover glossing) passes.
 
+### 081.7 Debug levers: set language + level manually (verification tooling; runs any time after 081.1)
+
+Verifying any band-dependent behavior currently requires playing the full placement flow per run. Target language is already settable without ceremony (LanguageConfigSection contribution sets targetLanguage/supportLanguage); the missing lever is LEVEL.
+
+Ship two surfaces over one mechanism, dev contexts only (Studio + preview; published runtime gets none of it):
+- Mechanism: a debug override writes the learner profile directly -- estimatedCefrBand set, posterior concentrated on the chosen band, assessment status "evaluated" with confidence 1.0 (placement flow skipped, calibration window closed), placement status fact marked complete. Reset lever wipes profile + card store for a clean cold start. Decide-in-story: whether an override PINS the band for the session (no posterior drift while testing) -- recommended as an optional flag, default unpinned.
+- Studio/preview panel: a small Learner Override section beside the existing SugarlangTurnInspector -- band picker, pin toggle, reset button, current-state readout.
+- Dev-only window handle for automated verification (house pattern: __smperfRun): `window.__sugarlangDebug` with setBand/pin/reset/getState, so scripted QA can drive band changes without UI.
+- Exit: from a fresh New Game, set B1 via the panel and talk to an NPC -- speech arrives at B1 with no placement flow; reset restores the customs-form path; grep/build proof that published runtime excludes the handle and panel.
+
 ## Verification recipe (nikki)
 
 1. `pnpm test` -- green, including the three new goldens run twice back-to-back. `pnpm lint` -- clean.
@@ -88,10 +98,11 @@ The risk is band QUALITY, not missing data: auto-assigned bands skew the envelop
 3. docker compose gateway up: play one conversation; gateway output shows structured telemetry JSON (prescription, directive, verdict, prediction/outcome).
 4. Calibration probe: place yourself deliberately low (answer the customs form as a beginner), then chat at your real level for a few turns -- band moves within the session (visible in the turn inspector), and the close event appears in telemetry.
 5. If 081.6 chose enable: switch targetLanguage to "it", run placement + one conversation, hover a gloss.
+6. Debug levers: fresh New Game -> Learner Override panel -> set B1 -> talk to an NPC (no placement, B1 speech); reset -> customs form returns. Repeat a band via `window.__sugarlangDebug.setBand(...)` from the console.
 
 ## Epic wrap
 
-docs/api touch per house norm: telemetry page (event taxonomy, schema version, gateway route), learner-state page (calibration window semantics), middlewares page (turn-path guard contract). Backlog sweep of any DEFERRED SEAM comments added here. Update Strategy 002's epic A entry to note the ENTITY_AFFECT item was verified pre-satisfied.
+docs/api touch per house norm: telemetry page (event taxonomy, schema version, gateway route), learner-state page (calibration window semantics + debug override contract), middlewares page (turn-path guard contract). Backlog sweep of any DEFERRED SEAM comments added here. Update Strategy 002's epic A entry to note the ENTITY_AFFECT item was verified pre-satisfied.
 
 ## Deferred (with revisit triggers)
 
