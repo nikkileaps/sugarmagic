@@ -37,7 +37,7 @@ function buildFillFragments(template: string): { prefix: string; suffix: string 
 
 const S: Record<string, CSSProperties> = {
   backdrop: {
-    position: "absolute",
+    position: "fixed",
     inset: 0,
     background: "rgba(7, 7, 15, 0.82)",
     display: "flex",
