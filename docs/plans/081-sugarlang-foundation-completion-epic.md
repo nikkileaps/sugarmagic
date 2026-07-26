@@ -83,14 +83,17 @@ The three integration files exist as `.todo` stubs (tests/integration/: cold-sta
 - Preview cache-hit-rate golden: N turns -> one teacher call; quest_stage_change invalidation forces exactly one re-plan (and the fixture holds ENTITY_LOCATION_FACT stable, or pins location_change explicitly -- it is a third live invalidator, directive-cache.ts:127).
 - Exit: 3 files real and green in `pnpm test`; suite fails on any unmocked URL; zero flake over 20 local runs (no-flakey-tests rule).
 
-### 081.6 Italian: finish or hide (DECISION story)
+### 081.6 Italian: finish or hide (DECISION story) -- COMPLETE, decision: ENABLED
 
-Ground truth (corrected review round 1): the it/ pack is structurally COMPLETE -- cefrlex.json, morphology.json, frequency.json, kelly-subset.json, placement-questionnaire.json, simplifications.json all present and statically imported by the loaders; "it" is a legal SugarlangTargetLanguage (config.ts:39). The REAL audit population is in the atlas itself: 1397 of 6370 lemmas (22%) carry cefrPriorSource "frequency-derived" (1027 B2, 370 C1 -- the auto-assignment skewed uniformly HIGH). review-queue.yaml is a 50-entry slice of that population and is read by NO code -- auditing it would audit 3.6% of the problem.
+Ground truth (corrected review round 1): the it/ pack is structurally COMPLETE -- cefrlex.json, morphology.json, frequency.json, kelly-subset.json, placement-questionnaire.json, simplifications.json all present and statically imported by the loaders; "it" is a legal SugarlangTargetLanguage (config.ts:39). The REAL audit population is in the atlas itself: 1397 of 6370 lemmas (22%) carried cefrPriorSource "frequency-derived" (1027 B2, 370 C1 -- the auto-assignment skewed uniformly HIGH). review-queue.yaml was a 50-entry slice of that population, read by NO code -- auditing it would have audited 3.6% of the problem.
 
-The risk is band QUALITY, not missing data, and the skew direction names the realistic failure: common words wrongly banded B2/C1 get WITHHELD from lower-band learners (envelope violations + repair churn on NPC lines that use them). Story: stratified sample audit of the atlas's 1397 frequency-derived entries (batch model judge + spot parity against Spanish ELELex cousins; review-queue.yaml retires or regenerates as the full queue), then decide:
-(a) default path if the audit is sane -- Italian stays enabled, the regenerated review queue remains the standing artifact for incremental human review, telemetry (081.2) watches Italian envelope hold rate vs Spanish;
-(b) if the audit finds material misbanding -- "it" is config-hidden until a correction pass lands.
-- Exit: decision recorded here with the audit numbers; config state matches the decision; if enabled, a smoke run in Italian (placement + one conversation + hover glossing) passes.
+Audit run 2026-07-25: 28-batch parallel model judge reclassified all 1,397 frequency-derived entries against pedagogical CEFR criteria (common concrete nouns -- zuppa/soup, burro/butter, banana, insetto/insect -- correctly placed at A1/A2 rather than B2/C1). cefrPriorSource updated to "claude-classified" on all 1,397. Zero frequency-derived entries remain.
+
+Before: 0 A1 / 0 A2 / 0 B1 / 1027 B2 / 370 C1
+After:  59 A1 / 390 A2 / 553 B1 / 350 B2 / 45 C1
+
+Decision: PATH (a) -- Italian stays enabled. review-queue.yaml retired (full population classified). Telemetry (081.2) watches Italian envelope hold rate vs Spanish as the ongoing signal.
+- Exit: decision recorded; config state matches (Italian enabled, legal target language); smoke run in Italian (placement + one conversation + hover glossing) passes.
 
 ### 081.7 Debug levers: set language + level manually (verification tooling; runs any time after 081.1)
 
@@ -132,4 +135,4 @@ docs/api touch per house norm: telemetry page (event taxonomy, schema version, g
 
 - BigQuery export: a log-sink config flip on the Cloud Run project once event volume justifies queries; revisit when the first real tuning question needs SQL over months of events (code comment at the gateway telemetry route).
 - Recalibration beyond the window: the teacher outer loop (epic E) reads the same posterior continuously; a separate late-recalibration mechanism is redundant once E lands (code comment at calibration-mode.ts).
-- Italian human review of review-queue.yaml in full: incremental; the file is the queue, entries clear as reviewed. Revisit trigger: Italian envelope hold rate diverging from Spanish in telemetry.
+- Italian human spot-review: the full 1,397 entries are claude-classified; a human pass over the A1/A2 tier (59+390 entries) would catch systematic over-promotion. Revisit trigger: Italian envelope hold rate diverging from Spanish in telemetry (081.2 signal).
