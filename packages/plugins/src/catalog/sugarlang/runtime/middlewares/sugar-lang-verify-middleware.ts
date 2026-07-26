@@ -27,6 +27,7 @@ import type { SugarlangLLMClient } from "../llm/types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type { SugarlangConstraint } from "../types";
 import { createSugarlangLogger } from "../logger";
+import { languageDisplayName } from "../language-names";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
@@ -61,10 +62,10 @@ async function attemptRepair(
     return null;
   }
 
+  const targetLang = languageDisplayName(constraint.targetLanguage);
   const result = await llmClient.generate({
     model: "claude-sonnet-4-6",
-    systemPrompt:
-      "Rewrite the NPC turn so it keeps the same meaning but uses simpler vocabulary and obeys the supplied language-learning constraints. Return only the rewritten NPC line.",
+    systemPrompt: `You are editing an NPC line for a ${targetLang}-learning game. The NPC must speak primarily in ${targetLang}. Rewrite the line to match the supplied instructions exactly. Return only the rewritten NPC line.`,
     userPrompt: [
       `Original: ${originalText}`,
       `Required fixes: ${instructions.join(" | ")}`,
@@ -156,22 +157,28 @@ export function createSugarLangVerifyMiddleware(
 
       const learner = await services.learnerStore.getCurrentProfile();
       const sceneId = getSceneId(execution);
-      if (!sceneId) {
-        return normalizedTurn;
+
+      // Load scene when available. The ratio check runs even without it -- empty
+      // proper-noun exclusion is accepted noise; telemetry notes the degraded path.
+      let scene: Awaited<ReturnType<typeof services.sceneLexiconStore.ensure>> | null = null;
+      if (sceneId) {
+        scene = await services.sceneLexiconStore.ensure(sceneId);
       }
-      const scene = await services.sceneLexiconStore.ensure(sceneId);
+
       const questEssentialLemmaIds = execution.annotations[
         "sugarlang.questEssentialLemmaIds"
       ] as Set<string> | undefined;
       const verdict = services.classifier.check(normalizedTurn.text, learner, {
-        prescription: constraint.rawPrescription,
-        knownEntities: new Set(scene.properNouns),
+        prescription: scene ? constraint.rawPrescription : null,
+        knownEntities: scene ? new Set(scene.properNouns) : new Set(),
         questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
         lang: constraint.targetLanguage,
-        sceneLexicon: scene,
+        sceneLexicon: scene ?? undefined,
         conversationId,
         sessionId,
-        turnId: traceTurnId
+        turnId: traceTurnId,
+        directedRatio: constraint.targetLanguageRatio,
+        supportPosture: constraint.supportPosture
       });
       await emitTelemetry(
         telemetry,
@@ -180,7 +187,7 @@ export function createSugarLangVerifyMiddleware(
           sessionId,
           turnId: traceTurnId,
           timestamp: Date.now(),
-          sceneId,
+          sceneId: sceneId ?? null,
           learnerSnapshot: buildLearnerSnapshot(learner),
           prescription: constraint.rawPrescription,
           verdict,
@@ -189,113 +196,151 @@ export function createSugarLangVerifyMiddleware(
         }),
         logger
       );
-      for (const lemmaId of verdict.profile.questEssentialLemmasMatched) {
-        const questEssential = constraint.questEssentialLemmas?.find(
-          (entry) => entry.lemmaRef.lemmaId === lemmaId
-        );
-        if (!questEssential) {
-          continue;
+      await emitTelemetry(
+        telemetry,
+        createTelemetryEvent("verify.ratio-verdict", {
+          conversationId,
+          sessionId,
+          turnId: traceTurnId,
+          timestamp: Date.now(),
+          sceneId: sceneId ?? null,
+          measuredRatio: verdict.languageRatioVerdict.measuredRatio,
+          directedRatio: verdict.languageRatioVerdict.directedRatio,
+          posture: verdict.languageRatioVerdict.posture,
+          conformance: verdict.languageRatioVerdict.conformance,
+          denominator: verdict.profile.ratioCheckTokens,
+          degradedExclusion: !sceneId
+        }),
+        logger
+      );
+      if (scene) {
+        for (const lemmaId of verdict.profile.questEssentialLemmasMatched) {
+          const questEssential = constraint.questEssentialLemmas?.find(
+            (entry) => entry.lemmaRef.lemmaId === lemmaId
+          );
+          if (!questEssential) {
+            continue;
+          }
+          await emitTelemetry(
+            telemetry,
+            createTelemetryEvent("quest-essential.classifier-exempted-lemma", {
+              conversationId,
+              sessionId,
+              turnId: traceTurnId,
+              timestamp: Date.now(),
+              sceneId,
+              lemmaRef: questEssential.lemmaRef,
+              cefrBand:
+                scene.questEssentialLemmas.find((entry) => entry.lemmaId === lemmaId)?.cefrBand ??
+                "unknown",
+              learnerBand: learner.estimatedCefrBand,
+              sourceObjectiveDisplayName: questEssential.sourceObjectiveDisplayName
+            }),
+            logger
+          );
         }
-        await emitTelemetry(
-          telemetry,
-          createTelemetryEvent("quest-essential.classifier-exempted-lemma", {
-            conversationId,
-            sessionId,
-            turnId: traceTurnId,
-            timestamp: Date.now(),
-            sceneId,
-            lemmaRef: questEssential.lemmaRef,
-            cefrBand:
-              scene.questEssentialLemmas.find((entry) => entry.lemmaId === lemmaId)?.cefrBand ??
-              "unknown",
-            learnerBand: learner.estimatedCefrBand,
-            sourceObjectiveDisplayName: questEssential.sourceObjectiveDisplayName
-          }),
-          logger
-        );
       }
 
       // Parenthetical gloss enforcement removed — the UI handles vocabulary
       // glossing via hover tooltips. The NPC speaks naturally.
 
-      if (verdict.withinEnvelope) {
+      const ratioVerdict = verdict.languageRatioVerdict;
+      if (verdict.withinEnvelope && ratioVerdict.conformance !== "under-ratio") {
         return normalizedTurn;
       }
 
-      const instructions = [
+      // Build repair instructions for every failing dimension.
+      const instructions: string[] = [];
+
+      if (ratioVerdict.conformance === "under-ratio") {
+        const pct = Math.round(constraint.targetLanguageRatio * 100);
+        instructions.push(
+          `Rewrite this reply so about ${pct}% of it is in ${languageDisplayName(constraint.targetLanguage)}; keep the meaning.`
+        );
+      }
+
+      instructions.push(
         ...verdict.violations.map(
           (violation) => `Remove or simplify "${violation.lemmaRef.lemmaId}".`
         )
-      ];
-      if (instructions.length > 0) {
-        const repairedText = await attemptRepair(
-          normalizedTurn.text,
-          instructions,
-          services.llmClient,
-          constraint
-        );
-        if (repairedText) {
-          const repairedVerdict = services.classifier.check(repairedText, learner, {
-            prescription: constraint.rawPrescription,
-            knownEntities: new Set(scene.properNouns),
-            questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
-            lang: constraint.targetLanguage,
-            sceneLexicon: scene,
-            conversationId,
-            sessionId,
-            turnId: traceTurnId
-          });
-          if (repairedVerdict.withinEnvelope) {
-            normalizedTurn.text = repairedText;
-            await emitTelemetry(
-              telemetry,
-              createTelemetryEvent("verify.repair-triggered", {
-                conversationId,
-                sessionId,
-                turnId: traceTurnId,
-                timestamp: Date.now(),
-                sceneId,
-                originalText: originalTurnText,
-                repairedText,
-                violations: instructions,
-                repairPrompt: instructions
-              }),
-              logger
-            );
-            return normalizedTurn;
-          }
-        }
+      );
 
-        if (verdict.violations.length > 0) {
-          try {
-            const simplified = autoSimplify(
-              normalizedTurn.text,
-              verdict.violations.map((violation) => violation.lemmaRef),
-              learner
-            );
-            const originalText = normalizedTurn.text;
-            normalizedTurn.text = simplified.text;
-            await emitTelemetry(
-              telemetry,
-              createTelemetryEvent("verify.auto-simplify-triggered", {
-                conversationId,
-                sessionId,
-                turnId: traceTurnId,
-                timestamp: Date.now(),
-                sceneId,
-                originalText,
-                simplifiedText: simplified.text,
-                substitutions: verdict.violations.map(
-                  (violation) => violation.lemmaRef.lemmaId
-                )
-              }),
-              logger
-            );
-          } catch (error) {
-            logger.warn("Sugarlang autoSimplify failed; returning original turn.", {
-              reason: error instanceof Error ? error.message : String(error)
-            });
-          }
+      // Coverage-only failure: in-language but comprehension envelope failed with no specific lemmas.
+      if (!verdict.withinEnvelope && instructions.length === 0) {
+        instructions.push("Say it simpler using words the learner knows.");
+      }
+
+      const repairedText = await attemptRepair(
+        normalizedTurn.text,
+        instructions,
+        services.llmClient,
+        constraint
+      );
+      if (repairedText) {
+        const repairedVerdict = services.classifier.check(repairedText, learner, {
+          prescription: scene ? constraint.rawPrescription : null,
+          knownEntities: scene ? new Set(scene.properNouns) : new Set(),
+          questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
+          lang: constraint.targetLanguage,
+          sceneLexicon: scene ?? undefined,
+          conversationId,
+          sessionId,
+          turnId: traceTurnId,
+          directedRatio: constraint.targetLanguageRatio,
+          supportPosture: constraint.supportPosture
+        });
+        if (repairedVerdict.withinEnvelope && repairedVerdict.languageRatioVerdict.conformance !== "under-ratio") {
+          normalizedTurn.text = repairedText;
+          await emitTelemetry(
+            telemetry,
+            createTelemetryEvent("verify.repair-triggered", {
+              conversationId,
+              sessionId,
+              turnId: traceTurnId,
+              timestamp: Date.now(),
+              sceneId: sceneId ?? "",
+              originalText: originalTurnText,
+              repairedText,
+              violations: instructions,
+              repairPrompt: instructions
+            }),
+            logger
+          );
+          return normalizedTurn;
+        }
+      }
+
+      // Lemma-substitution fallback: autoSimplify handles lemma violations only.
+      // For ratio-only failures it early-returns unchanged (no lemmas to substitute).
+      if (verdict.violations.length > 0) {
+        try {
+          const simplified = autoSimplify(
+            normalizedTurn.text,
+            verdict.violations.map((violation) => violation.lemmaRef),
+            learner
+          );
+          const originalText = normalizedTurn.text;
+          normalizedTurn.text = simplified.text;
+          await emitTelemetry(
+            telemetry,
+            createTelemetryEvent("verify.auto-simplify-triggered", {
+              conversationId,
+              sessionId,
+              turnId: traceTurnId,
+              timestamp: Date.now(),
+              sceneId: sceneId ?? "",
+              originalText,
+              simplifiedText: simplified.text,
+              substitutions: verdict.violations.map(
+                (violation) => violation.lemmaRef.lemmaId
+              )
+            }),
+            logger
+          );
+        } catch (error) {
+          logger.warn("Sugarlang autoSimplify failed; returning original turn.", {
+            reason: error instanceof Error ? error.message : String(error)
+          });
         }
       }
 

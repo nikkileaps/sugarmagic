@@ -84,9 +84,13 @@ export function computeCoverage(
   let knownTokens = 0;
   let inBandTokens = 0;
   let unknownTokens = 0;
+  let ratioCheckTokens = 0;
+  let resolvedTargetLanguageTokens = 0;
 
   for (const chunkToken of chunkMatches) {
     totalTokens += 1;
+    ratioCheckTokens += 1;
+    resolvedTargetLanguageTokens += 1;
     bandHistogram[chunkToken.cefrBand] += 1;
 
     if (compareCefrBands(chunkToken.cefrBand, learnerBand) <= 0) {
@@ -118,6 +122,7 @@ export function computeCoverage(
     totalTokens += 1;
 
     if (token.kind === "number") {
+      // Numbers excluded from language-ratio denominator (not target-language evidence).
       knownTokens += 1;
       inBandTokens += 1;
       bandHistogram[learnerBand] += 1;
@@ -125,11 +130,14 @@ export function computeCoverage(
     }
 
     if (normalizedKnownEntities.has(token.surface.normalize("NFC").toLocaleLowerCase())) {
+      // Known entities excluded from language-ratio denominator.
       knownTokens += 1;
       inBandTokens += 1;
       bandHistogram[learnerBand] += 1;
       continue;
     }
+
+    ratioCheckTokens += 1;
 
     const lemma = lemmatize(token, learner.targetLanguage, morphologyIndex);
     if (!lemma) {
@@ -146,6 +154,8 @@ export function computeCoverage(
       unknownTokens += 1;
       continue;
     }
+
+    resolvedTargetLanguageTokens += 1;
 
     bandHistogram[band] += 1;
 
@@ -188,6 +198,8 @@ export function computeCoverage(
       cefrBand: match.cefrBand,
       constituentLemmaIds: [...match.constituentLemmaIds]
     })),
-    coverageRatio: totalTokens === 0 ? 1 : knownTokens / totalTokens
+    coverageRatio: totalTokens === 0 ? 1 : knownTokens / totalTokens,
+    ratioCheckTokens,
+    resolvedTargetLanguageTokens
   };
 }

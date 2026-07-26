@@ -47,9 +47,9 @@ export interface SugarLangPluginConfig {
   /** The player's native / support language. Defaults to "en". */
   supportLanguage: SugarlangSupportLanguage;
   debugLogging: boolean;
-  /** Temporary debugging escape hatch: when false, Sugarlang verify is fully
-   *  bypassed so we can inspect raw Director + Generate behavior without the
-   *  post-generation watchdog mutating turns. */
+  /** When false, Sugarlang verify is bypassed. Default is true; set to false or
+   *  use SUGARMAGIC_SUGARLANG_VERIFY_DISABLED=1 only to inspect raw Director +
+   *  Generate behavior without the post-generation enforcement pass. */
   verifyEnabled: boolean;
   /** Model to use for scripted dialogue adaptation. Defaults to Haiku for speed/cost. */
   scriptedAdaptationModel: string;
@@ -69,6 +69,9 @@ export const SUGARLANG_PROXY_BASE_URL_ENV =
 
 export const SUGARLANG_VERIFY_ENABLED_ENV =
   "SUGARMAGIC_SUGARLANG_VERIFY_ENABLED";
+
+export const SUGARLANG_VERIFY_DISABLED_ENV =
+  "SUGARMAGIC_SUGARLANG_VERIFY_DISABLED";
 
 function readEnvBoolean(
   environment: RuntimePluginEnvironment | undefined,
@@ -135,8 +138,8 @@ export function normalizeSugarLangPluginConfig(
       config?.debugLogging === true ||
       readEnvBoolean(_environment, "SUGARMAGIC_SUGARLANG_DEBUG_LOGGING"),
     verifyEnabled:
-      config?.verifyEnabled === true ||
-      readEnvBoolean(_environment, SUGARLANG_VERIFY_ENABLED_ENV),
+      config?.verifyEnabled !== false &&
+      !readEnvBoolean(_environment, SUGARLANG_VERIFY_DISABLED_ENV),
     scriptedAdaptationModel:
       typeof config?.scriptedAdaptationModel === "string" && config.scriptedAdaptationModel.trim()
         ? config.scriptedAdaptationModel.trim()

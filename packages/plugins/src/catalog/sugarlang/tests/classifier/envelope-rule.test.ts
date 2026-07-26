@@ -58,6 +58,8 @@ function createProfile(
     matchedChunks: [],
     matchedChunkTokens: [],
     coverageRatio: 1,
+    ratioCheckTokens: 10,
+    resolvedTargetLanguageTokens: 10,
     ...overrides
   };
 }
