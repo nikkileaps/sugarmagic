@@ -141,6 +141,26 @@ Stage by stage, both installed:
 
 Degradation is just "the note is missing." Sugaragent alone: no constraint annotation, NPCs speak unconstrained -- a generic agentified game. Sugarlang alone: no actor, so sugarlang is the whole show -- intent comes from authored lines, rendering is the weave / baked-floor / live-render ladder, and interpret-derived evidence is replaced by dialogue-choice and probe evidence. Nothing in any mode checks whether the other plugin is installed; each finds the other's artifacts on the bus, or does not.
 
+### The strategic happy path (one turn, everything built)
+
+The fixture every epic builds toward. Concrete framing: B1 learner, Rosa the cheesemonger, player just typed "gracias! y... que es 'aniejo'?" Both plugins on, all child epics landed.
+
+- BEFORE THE CONVERSATION (E, deterministic, zero LLM): the outer loop has read the board -- FSRS due queue, encounter debts (queso needs 4 more diverse encounters), the strain estimate (player struggled last scene, so this scene is a consolidation valley), the function inventory (B), Rosa's function tags (buy / ask-price / thank), quest lookahead. Output: a schedule -- reinforce queso and comprar, introduce nothing new, probe aniejo if the moment comes.
+- PREPARE (every turn): sugaragent loads memory digest + quest context; moderation screens the input (clean). Sugarlang's inner loop realizes the schedule into a directive and writes BOTH artifacts: `sugarlang.constraint` (flow control) and the `sugaragent.contrib/sugarlang` contribution (H) -- generate overlay (supported posture, ~65% ratio, vocab), terminal language reminder (D), judge directive, regen directive, preserveActionTags, interpret lexicon fed from the inventory (B closes the loop H opened).
+- INTERPRET (deterministic): "gracias" hits the contributed gratitude forms (H); "que es...?" hits the question-stem / non-understanding categories (F). Routed as gratitude + a clarification request about a specific word -- and the move itself is learner evidence: an unprompted meta-language function.
+- RETRIEVE: lore retrieval biased toward teachable-relevant pages via the constraint seam (E) -- Rosa's cheese lore ranks up because aniejo is in play.
+- PLAN: response intent -- answer the question, warmly. The agent-mode intent source.
+- GENERATE (LLM call #1): persona/core (cached system half) + world state + memory + the merged contribution overlay + terminal reminders (persona drift + language restatement). Because the player asked "que es?", the directive runs the repair ladder from the NPC's side: explain aniejo IN Spanish with known words first, gesture at the wheel by name, no English gloss unless needed. Out comes: "Ah, buena pregunta! *golpea la rueda* Aniejo es... viejo. Un queso que duerme mucho tiempo. Entiendes?" -- voice intact, gesture tag intact (H's preserveActionTags), comprehension probe at the end because the teacher scheduled it (F).
+- JUDGE (LLM call #2): character/world fidelity ONLY. The judge directive says mixed Spanish is directed, never an IN-CHARACTER violation; SAFETY untouched (H). Passes.
+- AUDIT (deterministic): meta-leak clean; asterisk spans exempt; cue checks satisfied via the contributed lexicon (H). Passes.
+- REGENERATE: passthrough. (A genuine character fail regens ONCE, with the constraint spliced in, so even the fix keeps the Spanish -- H.)
+- FINALIZE, in stage order: moderation (policy) -- clean, no stamp. Sugarlang verify (analysis) -- all three verdicts deterministic: envelope (coverage + CEFR ceiling), ratio (measured vs directed), voice retention (D). All pass, zero model calls, the turn plays untouched. A ratio fail would cost exactly ONE best-of-N say-it-simpler call, candidates scored deterministically including the voice score, masked by the typing indicator (D).
+- OBSERVE (last): gloss/highlight annotations; queso's debt pays down one more diverse encounter (E); "que es...?" logs as a produced meta-language function; the async labeler grades it off the critical path (F); drift telemetry records ratio/envelope/voice per turn index (D).
+- PLAYER'S SCREEN: hover glosses live; hovering aniejo pronounces it (G). A right answer to the probe is strong evidence; "no entiendo" makes next turn's directive climb one rung of the repair ladder -- and the help level needed IS the measurement (F).
+- CLOSE: Rosa writes her memory of the player (dies on New Game); sugarlang rolls session signals into the persistent learner profile (survives everything -- F).
+
+Turn budget on the common path: exactly two model calls, generate + judge, plus the teacher's directive refresh every ~3 turns and the async labeler off-path; a verify fail adds exactly one. The two plugins never fight, because every stage that produces, mutates, or judges text can see the note the teacher slipped the actor.
+
 ### Plugin boundary (unchanged, restated)
 
 sugarlang -> sugaragent: only `sugarlang.constraint`. sugaragent -> anyone: annotations (`sugaragent.memory`, `sugaragent.questContext`) and runtimeContext facts. The teacher consumes only neutral published facts and degrades gracefully when sugaragent is absent. ADR 010 boundary tests extend to every new surface. Nothing in this strategy adds a cross-import in either direction.
