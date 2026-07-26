@@ -3116,7 +3116,10 @@ export function App() {
     session?.gameProject
   ]);
   const genericPluginView = useMemo(() => {
-    if (activePluginWorkspaceDefinition) {
+    // Skip only if the active plugin view already owns the center panel.
+    // Auto-mounted schema-only workspaces have no centerPanel, so design
+    // sections still need to render here even when activePluginView exists.
+    if (activePluginView?.centerPanel) {
       return null;
     }
 
@@ -3175,7 +3178,7 @@ export function App() {
     };
   }, [
     activeDesignKind,
-    activePluginWorkspaceDefinition,
+    activePluginView,
     activeRegion,
     pluginConfigurations,
     pluginShellContributions.designSections,
@@ -3185,8 +3188,16 @@ export function App() {
     sugarlangTargetLanguage
   ]);
 
-  const activeDesignPanels =
-    activePluginView ?? genericPluginView ?? designView;
+  // When activePluginView is an auto-mounted schema-only workspace (leftPanel
+  // only, no centerPanel), supplement with genericPluginView's centerPanel so
+  // design sections appear alongside the settings panel.
+  const activeDesignPanels = (() => {
+    const base = activePluginView ?? genericPluginView ?? designView;
+    if (activePluginView && !activePluginView.centerPanel && genericPluginView?.centerPanel) {
+      return { ...activePluginView, centerPanel: genericPluginView.centerPanel };
+    }
+    return base;
+  })();
   const shouldRenderSharedViewport = shouldShowSharedViewport({
     phase,
     activeProductMode,
