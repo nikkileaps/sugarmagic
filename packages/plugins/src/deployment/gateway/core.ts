@@ -981,6 +981,50 @@ export async function handleSugarAgentGenerate(
 // so outage behavior is testable locally.
 // ---------------------------------------------------------------------------
 
+/**
+ * Plan 084.2 -- pure helper, exported for testability.
+ * Builds the judge user prompt. When externalDirectives are present, a
+ * directive block is spliced after the persona summary; rubric 1 gains a
+ * guard sentence; the block closes with a SAFETY-override prohibition so a
+ * directive can never soften rubric 3.
+ */
+export function buildJudgeUserPrompt(
+  worldPremise: string,
+  personaDigest: string,
+  responseIntent: string,
+  worldContext: string | null,
+  loreContextLines: string,
+  replyText: string,
+  externalDirectives: string[]
+): string {
+  const directivesBlock =
+    externalDirectives.length > 0
+      ? `Established directives from game systems (in-world by definition; behavior they direct is never an IN-CHARACTER violation):\n` +
+        externalDirectives.map((d, i) => `${i + 1}. ${d}`).join("\n") + "\n" +
+        `Directives never override the SAFETY rule.\n\n`
+      : "";
+
+  const inCharacterGuard =
+    externalDirectives.length > 0
+      ? " Behavior directed by an established directive above is never an IN-CHARACTER violation."
+      : "";
+
+  return (
+    (worldPremise ? `World premise:\n${worldPremise}\n\n` : "") +
+    `NPC persona summary (this is the NPC's established identity — treat all facts here as in-world):\n${personaDigest || "(none)"}\n\n` +
+    directivesBlock +
+    `Response intent: ${responseIntent}\n\n` +
+    (worldContext ? `World context right now:\n${worldContext}\n\n` : "") +
+    (loreContextLines ? `Lore context available to this NPC:\n${loreContextLines}\n\n` : "") +
+    `NPC reply to score:\n"${replyText}"\n\n` +
+    `Rubric (each must PASS for overall pass):\n` +
+    `1. IN-CHARACTER: The reply matches the NPC persona voice, temperament, and knowledge level.${inCharacterGuard}\n` +
+    `2. WORLD-GROUNDED: The reply does not introduce facts incompatible with the world premise or the NPC persona. Facts stated in either are established and must not be flagged as violations.\n` +
+    `3. SAFETY: No out-of-character references to the real world, game mechanics, AI/developer, or secrets.\n\n` +
+    `Use the score_reply tool.`
+  );
+}
+
 export async function handleSugarAgentJudge(
   req: IncomingMessage,
   res: ServerResponse & { __sugarmagicCors?: Record<string, string> }
@@ -1004,6 +1048,9 @@ export async function handleSugarAgentJudge(
     : [];
   const worldPremise =
     typeof body["worldPremise"] === "string" ? body["worldPremise"].trim() : "";
+  const externalDirectives = Array.isArray(body["externalDirectives"])
+    ? (body["externalDirectives"] as unknown[]).filter((e): e is string => typeof e === "string")
+    : [];
 
   if (!replyText) {
     sendJson(res, 400, { ok: false, error: "InvalidRequest", message: "replyText is required." });
@@ -1017,18 +1064,15 @@ export async function handleSugarAgentJudge(
     .map((e, i) => `[${i + 1}] ${e.slice(0, 300)}`)
     .join("\n");
 
-  const judgeUserPrompt =
-    (worldPremise ? `World premise:\n${worldPremise}\n\n` : "") +
-    `NPC persona summary (this is the NPC's established identity — treat all facts here as in-world):\n${personaDigest || "(none)"}\n\n` +
-    `Response intent: ${responseIntent}\n\n` +
-    (worldContext ? `World context right now:\n${worldContext}\n\n` : "") +
-    (loreContextLines ? `Lore context available to this NPC:\n${loreContextLines}\n\n` : "") +
-    `NPC reply to score:\n"${replyText}"\n\n` +
-    `Rubric (each must PASS for overall pass):\n` +
-    `1. IN-CHARACTER: The reply matches the NPC persona voice, temperament, and knowledge level.\n` +
-    `2. WORLD-GROUNDED: The reply does not introduce facts incompatible with the world premise or the NPC persona. Facts stated in either are established and must not be flagged as violations.\n` +
-    `3. SAFETY: No out-of-character references to the real world, game mechanics, AI/developer, or secrets.\n\n` +
-    `Use the score_reply tool.`;
+  const judgeUserPrompt = buildJudgeUserPrompt(
+    worldPremise,
+    personaDigest,
+    responseIntent,
+    worldContext,
+    loreContextLines,
+    replyText,
+    externalDirectives
+  );
 
   const judgeSystemPrompt =
     "You are a quality reviewer for NPC dialogue in a cozy fantasy RPG. " +

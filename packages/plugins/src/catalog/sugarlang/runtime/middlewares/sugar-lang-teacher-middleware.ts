@@ -36,6 +36,7 @@ import type {
   SugarlangConstraint
 } from "../types";
 import { createSugarlangLogger } from "../logger";
+import { languageDisplayName } from "../language-names";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_COMPREHENSION_IN_FLIGHT_ANNOTATION,
@@ -64,8 +65,23 @@ import {
 interface SugarlangContributionShape {
   schemaVersion: 1;
   generateOverlay: string;
+  judgeDirectives?: string[];
 }
 const SUGARAGENT_CONTRIB_SUGARLANG_KEY = "sugaragent.contrib/sugarlang" as const;
+
+function buildLanguageJudgeDirective(
+  targetLanguageRatio: number,
+  targetLanguage: string
+): string | null {
+  if (targetLanguageRatio <= 0) return null;
+  const ratioPercent = Math.round(targetLanguageRatio * 100);
+  const langName = languageDisplayName(targetLanguage);
+  return (
+    `This NPC reply is language-directed for a language-learning player: ` +
+    `about ${ratioPercent}% ${langName} mixed with the support language is intentional game system behavior. ` +
+    `Language choice and language mixing are never IN-CHARACTER violations.`
+  );
+}
 
 export interface SugarLangTeacherMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -206,9 +222,14 @@ export function createSugarLangTeacherMiddleware(
           rawPrescription: prescription ?? buildEmptyPrescription("scripted-mode-no-prescription")
         };
         execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+        const scriptedJudgeDirective = buildLanguageJudgeDirective(
+          constraint.targetLanguageRatio,
+          constraint.targetLanguage
+        );
         const scriptedContrib: SugarlangContributionShape = {
           schemaVersion: 1,
-          generateOverlay: constraint.generatorPromptOverlay
+          generateOverlay: constraint.generatorPromptOverlay,
+          ...(scriptedJudgeDirective ? { judgeDirectives: [scriptedJudgeDirective] } : {})
         };
         execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = scriptedContrib;
         logger.debug("Scripted mode: lightweight constraint built.", {
@@ -413,9 +434,14 @@ export function createSugarLangTeacherMiddleware(
 
       execution.annotations[SUGARLANG_DIRECTIVE_ANNOTATION] = directive;
       execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+      const judgeDirective = buildLanguageJudgeDirective(
+        constraint.targetLanguageRatio,
+        constraint.targetLanguage
+      );
       const contrib: SugarlangContributionShape = {
         schemaVersion: 1,
-        generateOverlay: constraint.generatorPromptOverlay
+        generateOverlay: constraint.generatorPromptOverlay,
+        ...(judgeDirective ? { judgeDirectives: [judgeDirective] } : {})
       };
       execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = contrib;
       logger.info("Teacher finalized Sugarlang guidance and constraint.", {

@@ -46,6 +46,7 @@ function makeInput(overrides: {
   text?: string;
   personaDigest?: string;
   npcDescription?: string;
+  annotations?: Record<string, unknown>;
 }) {
   return {
     execution: {
@@ -58,7 +59,7 @@ function makeInput(overrides: {
       },
       input: { kind: "free_text" as const, text: "hello" },
       state: {},
-      annotations: {} as Record<string, unknown>,
+      annotations: overrides.annotations ?? ({} as Record<string, unknown>),
       runtimeContext: {
         here: null,
         playerLocation: null,
@@ -191,5 +192,70 @@ describe("JudgeStage", () => {
     expect(result.diagnostics.fallbackReason).toBe("judge-error");
     // Status is degraded but passed=true so the NPC reply is not suppressed.
     expect(result.status).toBe("degraded");
+  });
+
+  // Plan 084.2 -- directive pass-through tests
+  it("passes judgeDirectives from the contribution bus as externalDirectives on the request", async () => {
+    const provider = makeProvider({ passed: true, violations: [], repairHint: null });
+    const stage = new JudgeStage(provider);
+    const directive = "This reply is language-directed: 85% Spanish is intentional. Language mixing is never an IN-CHARACTER violation.";
+    const input = makeInput({
+      npcDescription: "A harbour fisherman.",
+      annotations: {
+        "sugaragent.contrib/sugarlang": {
+          schemaVersion: 1,
+          judgeDirectives: [directive]
+        }
+      }
+    });
+    await stage.execute(input as never, makeContext() as never);
+
+    expect(provider.judgeReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        externalDirectives: [directive]
+      })
+    );
+  });
+
+  it("omits externalDirectives from the request when no contributions are present", async () => {
+    const provider = makeProvider({ passed: true, violations: [], repairHint: null });
+    const stage = new JudgeStage(provider);
+    const input = makeInput({ npcDescription: "A village merchant." });
+    await stage.execute(input as never, makeContext() as never);
+
+    const call = (provider.judgeReply as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(call?.externalDirectives).toBeUndefined();
+  });
+
+  it("integration mock: a directed-Spanish turn carries the sugarlang directive (the bug fix)", async () => {
+    const provider = makeProvider({ passed: true, violations: [], repairHint: null });
+    const stage = new JudgeStage(provider);
+    // This is the contribution the teacher middleware writes on a B2 Finnick turn.
+    const input = makeInput({
+      npcDescription: "Finnick: a harbour fisherman.",
+      text: "Mira el mar -- esta tranquilo esta manana, si?",
+      annotations: {
+        "sugaragent.contrib/sugarlang": {
+          schemaVersion: 1,
+          generateOverlay: "Language constraint: 85% Spanish...",
+          judgeDirectives: [
+            "This NPC reply is language-directed for a language-learning player: about 85% Spanish mixed with the support language is intentional game system behavior. Language choice and language mixing are never IN-CHARACTER violations."
+          ]
+        }
+      }
+    });
+    const result = await stage.execute(input as never, makeContext() as never);
+
+    // Judge receives the directive -- Spanish reply is never flagged as IN-CHARACTER violation.
+    expect(provider.judgeReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replyText: "Mira el mar -- esta tranquilo esta manana, si?",
+        externalDirectives: expect.arrayContaining([
+          expect.stringContaining("language-directed")
+        ])
+      })
+    );
+    expect(result.output.passed).toBe(true);
+    expect(result.output.skipped).toBe(false);
   });
 });
