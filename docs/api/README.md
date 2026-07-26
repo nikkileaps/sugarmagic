@@ -32,6 +32,9 @@ They are architecture-facing developer API documents that explain how the system
 - [SugarAgent NPC Memory](/Users/nikki/projects/sugarmagic/docs/api/sugaragent-npc-memory.md) — two-tier memory model (IDB record + session digest), first-meeting semantics, plugin config, `__sugaragentMemory` dev handle (epic 073)
 - [SugarAgent Quest-Aware NPCs](/Users/nikki/projects/sugarmagic/docs/api/sugaragent-npcs.md) — quest-context middleware, world-narrative blackboard facts, firewall contract (secrets vs nudges), no-director design (epic 077)
 - [Quest System](/Users/nikki/projects/sugarmagic/docs/api/quest-system.md) — quest definitions, stages/nodes/actions, world flags, NPC behavior tasks, world clock, player known facts, recent events, dev handles (epics 074, 077)
+- [Sugarlang Telemetry](/Users/nikki/projects/sugarmagic/docs/api/sugarlang-telemetry.md) -- event taxonomy + schema versioning, sink resolution (Studio IndexedDB vs published gateway), the `/api/sugarlang/telemetry` ingestion route, client-side PII scrub, proxy base URL env resolution (epic 081)
+- [Sugarlang Learner State](/Users/nikki/projects/sugarmagic/docs/api/sugarlang-learner-state.md) -- learner profile shape, blackboard vs IndexedDB persistence (what survives reload), CEFR posterior + post-placement calibration window, dev-only band override + `__sugarlangDebug` handle (epic 081)
+- [Sugarlang Conversation Middlewares](/Users/nikki/projects/sugarmagic/docs/api/sugarlang-middlewares.md) -- the five middlewares (stages/priorities), the conversationKind turn-path guard, the `sugarlang.constraint` seam, and verify's actual enforcement scope (epic 081)
 
 ## Relationship to Proposals and ADRs
 
