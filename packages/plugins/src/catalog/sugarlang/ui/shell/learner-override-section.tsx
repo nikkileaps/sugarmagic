@@ -18,6 +18,7 @@
  */
 
 import { useState, useEffect, type ReactElement } from "react";
+import { PanelSection } from "@sugarmagic/ui";
 import type { SugarlangDebugState } from "../../runtime/runtime-services";
 
 const BANDS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
@@ -74,13 +75,16 @@ export function LearnerOverrideSection(): ReactElement {
 
   if (noHandle) {
     return (
-      <div style={{ fontSize: "0.75rem", color: "var(--sm-color-subtext)", padding: "0.5rem 0" }}>
-        __sugarlangDebug not registered. Run in DEV mode with a game loaded.
-      </div>
+      <PanelSection title="Learner Override" icon="🎓">
+        <div style={{ fontSize: "0.75rem", color: "var(--sm-color-subtext)", padding: "0.5rem 0" }}>
+          __sugarlangDebug not registered. Run in DEV mode with a game loaded.
+        </div>
+      </PanelSection>
     );
   }
 
   return (
+    <PanelSection title="Learner Override" icon="🎓">
     <div style={{ display: "grid", gap: "0.75rem" }}>
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
         <label style={{ fontSize: "0.8rem", fontWeight: 600 }}>Band</label>
@@ -185,5 +189,6 @@ export function LearnerOverrideSection(): ReactElement {
         </div>
       )}
     </div>
+    </PanelSection>
   );
 }

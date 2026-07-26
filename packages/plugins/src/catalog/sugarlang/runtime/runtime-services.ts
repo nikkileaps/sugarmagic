@@ -345,9 +345,9 @@ export class SugarlangRuntimeServices {
     );
   }
 
-  resolveForExecution(
+  async resolveForExecution(
     execution: ConversationExecutionContext
-  ): SugarlangExecutionServices | null {
+  ): Promise<SugarlangExecutionServices | null> {
     if (!this.boundContext) {
       this.logger.warn("Sugarlang runtime services requested before binding.");
       return null;
@@ -436,6 +436,21 @@ export class SugarlangRuntimeServices {
       llmClient: this.gatewayClient
     };
     this.executionServices.set(key, services);
+
+    // Config-driven band override: skip placement and pin the learner at the
+    // configured band. Applied once per language pair per session.
+    if (this.config.debugBandOverride) {
+      const overrideEvent: PlacementCompletionEvent = {
+        type: "placement-completion",
+        cefrBand: this.config.debugBandOverride as CEFRBand,
+        confidence: 1.0,
+        completedAtMs: Date.now(),
+        lemmasSeededFromFreeText: []
+      };
+      await learnerStateReducer.apply(overrideEvent);
+      this._debugPinnedBand = this.config.debugBandOverride as CEFRBand;
+    }
+
     return services;
   }
 

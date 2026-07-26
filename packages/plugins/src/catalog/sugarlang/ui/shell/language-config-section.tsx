@@ -14,24 +14,28 @@
  */
 
 import { useState, type ReactElement } from "react";
+import { PanelSection } from "@sugarmagic/ui";
 
 export interface LanguageConfigSectionProps {
   targetLanguage: string;
   supportLanguage: string;
   debugLogging: boolean;
+  debugBandOverride: string;
   onChangeTargetLanguage: (lang: string) => void;
   onChangeDebugLogging: (enabled: boolean) => void;
+  onChangeDebugBandOverride: (band: string) => void;
   onResetLearner?: () => Promise<void>;
 }
 
 export function LanguageConfigSection(
   props: LanguageConfigSectionProps
 ): ReactElement {
-  const { targetLanguage, supportLanguage, debugLogging, onChangeTargetLanguage, onChangeDebugLogging, onResetLearner } = props;
+  const { targetLanguage, supportLanguage, debugLogging, debugBandOverride, onChangeTargetLanguage, onChangeDebugLogging, onChangeDebugBandOverride, onResetLearner } = props;
   const [resetting, setResetting] = useState(false);
   const [resetDone, setResetDone] = useState(false);
 
   return (
+    <PanelSection title="Language Config" icon="🌐">
     <div style={{ display: "grid", gap: "0.75rem" }}>
       {!targetLanguage && (
         <div
@@ -95,6 +99,36 @@ export function LanguageConfigSection(
           }}
         >
           <option value="en">English</option>
+        </select>
+      </label>
+
+      <label style={{ display: "grid", gap: "0.35rem" }}>
+        <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
+          Band Override
+        </span>
+        <span style={{ fontSize: "0.7rem", color: "var(--sm-color-subtext)" }}>
+          Skip placement and boot at this CEFR band. Reload Preview to apply.
+        </span>
+        <select
+          aria-label="Band override"
+          value={debugBandOverride}
+          onChange={(event) => onChangeDebugBandOverride(event.target.value)}
+          style={{
+            padding: "0.4rem",
+            borderRadius: "0.25rem",
+            border: "1px solid var(--sm-color-surface1, #444)",
+            background: "var(--sm-color-base, #1e1e2e)",
+            color: "var(--sm-color-text, #cdd6f4)",
+            fontSize: "0.85rem"
+          }}
+        >
+          <option value="">(off -- use placement flow)</option>
+          <option value="A1">A1</option>
+          <option value="A2">A2</option>
+          <option value="B1">B1</option>
+          <option value="B2">B2</option>
+          <option value="C1">C1</option>
+          <option value="C2">C2</option>
         </select>
       </label>
 
@@ -163,5 +197,6 @@ export function LanguageConfigSection(
         </div>
       ) : null}
     </div>
+    </PanelSection>
   );
 }

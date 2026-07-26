@@ -147,7 +147,7 @@ export function createSugarLangTeacherMiddleware(
         return execution;
       }
 
-      const services = deps.services.resolveForExecution(execution);
+      const services = await deps.services.resolveForExecution(execution);
       if (!services) {
         return execution;
       }

@@ -73,7 +73,7 @@ export function createSugarLangScriptedMiddleware(
       ] as SugarlangConstraint | undefined;
       if (!constraint?.generatorPromptOverlay) return normalizedTurn;
 
-      const services = deps.services.resolveForExecution(execution);
+      const services = await deps.services.resolveForExecution(execution);
       if (!services?.llmClient) {
         logger.warn("Scripted adaptation skipped — no LLM client available.");
         return normalizedTurn;

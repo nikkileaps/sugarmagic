@@ -172,7 +172,7 @@ export function createSugarLangContextMiddleware(
       // Ensure the selection carries targetLanguage for downstream readers.
       execution.selection.targetLanguage = targetLanguage;
 
-      const services = deps.services.resolveForExecution(execution);
+      const services = await deps.services.resolveForExecution(execution);
       if (!services) {
         return execution;
       }

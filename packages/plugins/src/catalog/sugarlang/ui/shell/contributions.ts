@@ -157,8 +157,13 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
                 : "",
             supportLanguage: "en",
             debugLogging: currentConfig?.debugLogging === true,
+            debugBandOverride:
+              typeof currentConfig?.debugBandOverride === "string"
+                ? currentConfig.debugBandOverride
+                : "",
             onChangeTargetLanguage: (lang: string) => updateConfig({ targetLanguage: lang }),
             onChangeDebugLogging: (enabled: boolean) => updateConfig({ debugLogging: enabled }),
+            onChangeDebugBandOverride: (band: string) => updateConfig({ debugBandOverride: band }),
             onResetLearner: () => resetSugarlangLearnerData()
           });
         }

@@ -38,6 +38,7 @@ export interface SugarLangChunkExtractionConfig {
 
 export type SugarlangTargetLanguage = "es" | "it" | "";
 export type SugarlangSupportLanguage = "en";
+export type SugarlangDebugBandOverride = "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "";
 
 export interface SugarLangPluginConfig {
   /** The target language the player is learning. Required — if empty and the
@@ -54,6 +55,10 @@ export interface SugarLangPluginConfig {
   scriptedAdaptationModel: string;
   placement: SugarLangPlacementConfig;
   chunkExtraction: SugarLangChunkExtractionConfig;
+  /** Dev-only: when set, skip placement and boot the learner at this CEFR band.
+   *  Applied at conversation start via a synthetic PlacementCompletionEvent.
+   *  Set to "" to disable. Never affects production deployments. */
+  debugBandOverride: SugarlangDebugBandOverride;
 }
 
 export const SUGARLANG_TARGET_LANGUAGE_ENV =
@@ -100,10 +105,18 @@ function normalizeConfidenceFloor(value: unknown, fallback: number): number {
 }
 
 const VALID_TARGET_LANGUAGES = new Set<SugarlangTargetLanguage>(["es", "it"]);
+const VALID_DEBUG_BANDS = new Set<SugarlangDebugBandOverride>(["A1", "A2", "B1", "B2", "C1", "C2"]);
 
 function normalizeTargetLanguage(value: unknown): SugarlangTargetLanguage {
   if (typeof value === "string" && VALID_TARGET_LANGUAGES.has(value as SugarlangTargetLanguage)) {
     return value as SugarlangTargetLanguage;
+  }
+  return "";
+}
+
+function normalizeDebugBandOverride(value: unknown): SugarlangDebugBandOverride {
+  if (typeof value === "string" && VALID_DEBUG_BANDS.has(value as SugarlangDebugBandOverride)) {
+    return value as SugarlangDebugBandOverride;
   }
   return "";
 }
@@ -134,6 +147,7 @@ export function normalizeSugarLangPluginConfig(
           ? chunkConfig.enabled
           : true
     },
+    debugBandOverride: normalizeDebugBandOverride(config?.debugBandOverride),
     placement: {
       enabled:
         typeof placementConfig?.enabled === "boolean"
