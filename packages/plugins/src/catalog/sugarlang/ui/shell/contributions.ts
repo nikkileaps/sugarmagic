@@ -17,6 +17,7 @@
 
 import type { PluginShellContributionDefinition } from "../../../../shell";
 import { createElement } from "react";
+import { resetSugarlangLearnerDatabases } from "../../runtime/learner/reset-learner-data";
 import { ComprehensionCheckMonitor } from "./comprehension-check-monitor";
 import { LanguageConfigSection } from "./language-config-section";
 import { ManualRebuildButton } from "./manual-rebuild-button";
@@ -29,30 +30,16 @@ import { LearnerOverrideSection } from "./learner-override-section";
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
 /**
- * Deletes sugarlang-owned IndexedDB databases: FSRS card store and telemetry.
- * After calling this, reload Preview to start fresh (blackboard facts are
- * session-scoped and clear on reload automatically).
+ * Deletes sugarlang-owned IndexedDB databases (FSRS card store and telemetry)
+ * via the shared reset enforcer. Runs in Studio shell context without a
+ * runtime services handle, so it cannot clear in-session blackboard facts or
+ * a live Preview's in-memory learner state: reload Preview to start fresh
+ * (blackboard facts are session-scoped and clear on reload automatically).
+ * If a live Preview holds the database open, the reset reports the block via
+ * console.warn instead of silently pretending it worked.
  */
 async function resetSugarlangLearnerData(): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  const databases = await indexedDB.databases();
-  const sugarlangDbs = databases.filter(
-    (db) =>
-      db.name?.startsWith("sugarlang-card-store") ||
-      db.name?.startsWith("sugarlang-telemetry")
-  );
-  await Promise.all(
-    sugarlangDbs.map(
-      (db) =>
-        new Promise<void>((resolve) => {
-          if (!db.name) { resolve(); return; }
-          const request = indexedDB.deleteDatabase(db.name);
-          request.onsuccess = () => resolve();
-          request.onerror = () => resolve();
-          request.onblocked = () => resolve();
-        })
-    )
-  );
+  await resetSugarlangLearnerDatabases();
 }
 
 /**

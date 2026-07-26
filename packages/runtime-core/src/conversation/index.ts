@@ -68,6 +68,12 @@ export interface ConversationQuestFormResponse {
 
 export interface QuestFormDefinition {
   schemaVersion: number;
+  // DEFERRED (081 wrap): lang/targetLanguage/supportLanguage are
+  // language-learning concepts riding a supposedly generic form contract
+  // (promoted as-is from the sugarlang placement questionnaire). Revisit
+  // when the 082 dialogue/conversation taxonomy lands or when a second,
+  // non-sugarlang quest form ships: move these into an opaque
+  // plugin-owned payload and keep the core contract language-free.
   lang: string;
   targetLanguage: string;
   supportLanguage: string;

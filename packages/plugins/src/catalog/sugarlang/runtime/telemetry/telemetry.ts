@@ -6,9 +6,12 @@
  * Exports:
  *   - Telemetry event/query types
  *   - Telemetry sink interfaces and helpers
+ *   - TELEMETRY_DB_NAME
  *   - MemoryTelemetrySink
  *   - IndexedDBTelemetrySink
  *   - NoOpTelemetrySink
+ *   - GatewaySugarlangTelemetrySink
+ *   - CompositeTelemetrySink
  *   - resolveSugarlangTelemetrySink
  *
  * Relationships:
@@ -61,7 +64,12 @@ export const SUGARLANG_TELEMETRY_SCHEMA_VERSION = 1 as const;
 export const SUGARLANG_STUDIO_TELEMETRY_WORKSPACE_ID =
   "sugarlang-telemetry:studio";
 
-const TELEMETRY_DB_NAME = "sugarlang-telemetry";
+/**
+ * Owned here: the telemetry sink's database name. The shared learner-data
+ * reset (learner/reset-learner-data.ts) is the only other consumer -- do not
+ * hard-code the literal anywhere else.
+ */
+export const TELEMETRY_DB_NAME = "sugarlang-telemetry";
 const TELEMETRY_DB_VERSION = 1;
 const TELEMETRY_STORE_NAME = "sugarlang-telemetry";
 
@@ -414,6 +422,7 @@ export type TelemetryEvent =
         playerResponseText: string;
         lemmasPassed: string[];
         classifierReasoning: string;
+        predictedRetrievabilities?: Record<string, number>;
       }
     >
   | TelemetryEventOf<
@@ -427,6 +436,7 @@ export type TelemetryEvent =
         playerResponseText: string;
         lemmasFailed: string[];
         classifierReasoning: string;
+        predictedRetrievabilities?: Record<string, number>;
       }
     >
   | TelemetryEventOf<
@@ -441,6 +451,7 @@ export type TelemetryEvent =
         lemmasPassed: string[];
         lemmasFailed: string[];
         classifierReasoning: string;
+        predictedRetrievabilities?: Record<string, number>;
       }
     >
   | TelemetryEventOf<
@@ -587,15 +598,6 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "fsrs.review-outcome",
-      {
-        probeId: string;
-        lemmaId: string;
-        predictedRetrievability: number;
-        observedOutcome: "pass" | "fail";
-      }
-    >
-  | TelemetryEventOf<
       "calibration.window-closed",
       {
         closeReason: "confidence" | "turn-backstop";
@@ -625,6 +627,11 @@ export interface TelemetrySink {
   emit: (event: TelemetryEvent) => void | Promise<void>;
   flush?: () => Promise<void>;
   query?: (filter: TelemetryQuery) => Promise<TelemetryEvent[]>;
+  /**
+   * Flushes any buffered events and tears down timers/listeners. Called from
+   * the sugarlang plugin's dispose(). Emits after dispose are dropped.
+   */
+  dispose?: () => Promise<void> | void;
 }
 
 export interface QueryableTelemetrySink extends TelemetrySink {
@@ -975,6 +982,9 @@ export function createNoOpTelemetrySink(): TelemetrySink {
 
 const GATEWAY_BATCH_SIZE_CAP = 100;
 
+// Keep in sync with SUGARLANG_TELEMETRY_PII_FIELDS in
+// packages/plugins/src/deployment/gateway/core.ts (the gateway compiles
+// standalone and cannot import from the sugarlang runtime).
 const SERVER_BOUND_PII_FIELDS: ReadonlySet<string> = new Set([
   "inputText",
   "originalText",
@@ -982,12 +992,39 @@ const SERVER_BOUND_PII_FIELDS: ReadonlySet<string> = new Set([
   "playerResponseText"
 ]);
 
+// observe.observations-applied nests player-typed text at
+// observations[].observation.inputText (produced-typed observations, see
+// contracts/observation.ts). Strip that one known nested path; anything
+// broader belongs in a deliberate schema change, not a deep scrubber.
+function stripObservationPii(value: unknown): unknown {
+  if (!Array.isArray(value)) {
+    return value;
+  }
+  return value.map((entry) => {
+    if (typeof entry !== "object" || entry === null) {
+      return entry;
+    }
+    const observation = (entry as { observation?: unknown }).observation;
+    if (
+      typeof observation !== "object" ||
+      observation === null ||
+      !("inputText" in observation)
+    ) {
+      return entry;
+    }
+    const rest = { ...(observation as Record<string, unknown>) };
+    delete rest.inputText;
+    return { ...(entry as Record<string, unknown>), observation: rest };
+  });
+}
+
 function stripPii(event: TelemetryEvent): Record<string, unknown> {
   const stripped: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(event as unknown as Record<string, unknown>)) {
-    if (!SERVER_BOUND_PII_FIELDS.has(key)) {
-      stripped[key] = value;
+    if (SERVER_BOUND_PII_FIELDS.has(key)) {
+      continue;
     }
+    stripped[key] = key === "observations" ? stripObservationPii(value) : value;
   }
   return stripped;
 }
@@ -997,6 +1034,17 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
   private readonly flushIntervalMs: number;
   private readonly pending: TelemetryEvent[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
+  private disposed = false;
+
+  // Bound handlers so dispose() can remove exactly what was added.
+  private readonly handlePageHide = (): void => {
+    this.flushOnHide();
+  };
+  private readonly handleVisibilityChange = (): void => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      this.flushOnHide();
+    }
+  };
 
   constructor(options: { proxyBaseUrl: string; flushIntervalMs?: number }) {
     const base = options.proxyBaseUrl.endsWith("/")
@@ -1004,17 +1052,20 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
       : options.proxyBaseUrl;
     this.url = `${base}/api/sugarlang/telemetry`;
     this.flushIntervalMs = options.flushIntervalMs ?? 5000;
+    if (typeof window !== "undefined") {
+      window.addEventListener("pagehide", this.handlePageHide);
+    }
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", this.handleVisibilityChange);
+    }
   }
 
   emit(event: TelemetryEvent): void {
-    this.pending.push(event);
-    if (this.flushTimer !== null) {
+    if (this.disposed) {
       return;
     }
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = null;
-      void this.flush();
-    }, this.flushIntervalMs);
+    this.pending.push(event);
+    this.scheduleFlush(this.flushIntervalMs);
   }
 
   async flush(): Promise<void> {
@@ -1022,6 +1073,11 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
       return;
     }
     const batch = this.pending.splice(0, GATEWAY_BATCH_SIZE_CAP);
+    if (this.pending.length > 0) {
+      // A burst larger than the cap must not strand the remainder until the
+      // next emit; drain it on the next tick.
+      this.scheduleFlush(0);
+    }
     try {
       await fetch(this.url, {
         method: "POST",
@@ -1034,6 +1090,98 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
     } catch {
       // drop-on-failure: never block a turn
     }
+  }
+
+  async dispose(): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    if (this.flushTimer !== null) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pagehide", this.handlePageHide);
+    }
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+    }
+    while (this.pending.length > 0) {
+      await this.flush();
+    }
+  }
+
+  private scheduleFlush(delayMs: number): void {
+    if (this.disposed || this.flushTimer !== null) {
+      return;
+    }
+    this.flushTimer = setTimeout(() => {
+      this.flushTimer = null;
+      void this.flush();
+    }, delayMs);
+  }
+
+  // Tab-close path: awaited fetches never complete after unload, so fire
+  // keepalive requests for every pending batch without awaiting. keepalive
+  // bodies share a 64KB in-flight quota; overflow requests fail and drop,
+  // which matches the drop-on-failure posture.
+  private flushOnHide(): void {
+    if (this.flushTimer !== null) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    while (this.pending.length > 0) {
+      const batch = this.pending.splice(0, GATEWAY_BATCH_SIZE_CAP);
+      try {
+        void fetch(this.url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({
+            events: batch.map(stripPii),
+            schemaVersion: SUGARLANG_TELEMETRY_SCHEMA_VERSION
+          })
+        });
+      } catch {
+        // drop-on-failure: never block unload
+      }
+    }
+  }
+}
+
+/**
+ * Fans out emit/flush/dispose to every sink; query is served by the first
+ * queryable sink (the Studio inspector reads from IndexedDB).
+ */
+export class CompositeTelemetrySink implements TelemetrySink {
+  private readonly sinks: TelemetrySink[];
+
+  constructor(sinks: TelemetrySink[]) {
+    this.sinks = sinks;
+  }
+
+  emit(event: TelemetryEvent): void {
+    for (const sink of this.sinks) {
+      void sink.emit(event);
+    }
+  }
+
+  async flush(): Promise<void> {
+    await Promise.all(this.sinks.map((sink) => sink.flush?.()));
+  }
+
+  async query(filter: TelemetryQuery): Promise<TelemetryEvent[]> {
+    for (const sink of this.sinks) {
+      if (sink.query) {
+        return sink.query(filter);
+      }
+    }
+    throw new NotSupportedTelemetryQueryError();
+  }
+
+  async dispose(): Promise<void> {
+    await Promise.all(this.sinks.map((sink) => sink.dispose?.()));
   }
 }
 
@@ -1053,7 +1201,19 @@ export function resolveSugarlangTelemetrySink(
     return new NoOpTelemetrySink();
   }
 
-  return new IndexedDBTelemetrySink({
+  const indexedDbSink = new IndexedDBTelemetrySink({
     workspaceId: SUGARLANG_STUDIO_TELEMETRY_WORKSPACE_ID
   });
+
+  // Studio/preview with a configured proxy also ships events to the gateway
+  // (same production path as published targets); IndexedDB stays first so
+  // the Studio inspector keeps its queryable local copy.
+  if (proxyBaseUrl) {
+    return new CompositeTelemetrySink([
+      indexedDbSink,
+      new GatewaySugarlangTelemetrySink({ proxyBaseUrl })
+    ]);
+  }
+
+  return indexedDbSink;
 }

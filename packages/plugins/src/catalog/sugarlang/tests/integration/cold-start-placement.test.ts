@@ -17,7 +17,7 @@
  * Status: active
  */
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDefaultPlayerDefinition } from "@sugarmagic/domain";
 import {
   RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
@@ -44,6 +44,7 @@ import { createSugarlangLogger } from "../../runtime/logger";
 import { isInPostPlacementCalibration } from "../../runtime/learner/calibration-window";
 import { CEFR_BAND_ORDER } from "../../runtime/learner/cefr-posterior";
 import { clearSugarlangRuntimeCompileCache } from "../../runtime/compile/runtime-cache-state";
+import { installFetchGuard, uninstallFetchGuard } from "./fetch-guard";
 
 function makeFixedTurn(text: string, turnId: string): ConversationTurnEnvelope {
   return {
@@ -131,7 +132,13 @@ function makeAssessmentRuntimeContextMiddleware(npcDefinitionId: string): Conver
 }
 
 describe("cold-start placement golden", () => {
+  beforeEach(() => {
+    // 081.5 exit criterion: the suite fails on any unmocked URL. This flow is
+    // fully deterministic (no proxy URL configured), so any fetch is a bug.
+    installFetchGuard();
+  });
   afterEach(async () => {
+    uninstallFetchGuard();
     await clearSugarlangRuntimeCompileCache();
   });
 

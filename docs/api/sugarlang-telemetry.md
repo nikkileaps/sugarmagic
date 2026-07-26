@@ -95,6 +95,13 @@ Grouped by family, with the producing file (all paths relative to
 | `comprehension.probe-fired` | `sugar-lang-observe-middleware.ts` |
 | `comprehension.probe-response-received` | `sugar-lang-observe-middleware.ts` |
 | `comprehension.probe-passed` / `-failed` / `-mixed-result` | `sugar-lang-observe-middleware.ts` |
+
+The three probe-outcome events (`-passed` / `-failed` / `-mixed-result`) carry
+an optional `predictedRetrievabilities?: Record<string, number>` map of
+lemmaId to the FSRS-predicted retrievability at response time, for lemmas that
+had a card with a numeric `retrievability`. Omitted when no target lemma had
+one. This is the predicted-vs-observed calibration signal: join it against
+`lemmasPassed` / `lemmasFailed` on the same event.
 | `comprehension.probe-language-fallback` | `sugar-lang-observe-middleware.ts` |
 | `comprehension.director-hard-floor-violated` | `sugar-lang-teacher-middleware.ts` and `runtime/teacher/schema-parser.ts` |
 
@@ -118,24 +125,40 @@ Grouped by family, with the producing file (all paths relative to
 | `chunk.extraction-stale-discarded` | `runtime/compile/compile-scheduler.ts` |
 | `chunk.hit-during-classification` | `runtime/classifier/envelope-classifier.ts` |
 
-**Declared but not yet emitted.** Four kinds exist in the union with no
+**Declared but not yet emitted.** Three kinds exist in the union with no
 producing `createTelemetryEvent` call anywhere in the sugarlang tree:
 `quest-essential.generator-missed-gloss`,
-`quest-essential.generator-missed-required`,
-`quest-essential.compile-diagnostic-deadlock-prone`, and
-`fsrs.review-outcome`. Treat them as reserved schema, not live signals.
+`quest-essential.generator-missed-required`, and
+`quest-essential.compile-diagnostic-deadlock-prone`. Treat them as reserved
+schema, not live signals.
 
 ## Sinks and Resolution
 
-`TelemetrySink` is the extension point: `emit` (required), `flush` and
-`query` (optional). `QueryableTelemetrySink` requires both.
+`TelemetrySink` is the extension point: `emit` (required), `flush`, `query`,
+and `dispose` (optional). `QueryableTelemetrySink` requires `flush` and
+`query`. `dispose` flushes buffered events and tears down timers/listeners;
+the plugin's `dispose()` in `manifest.ts` calls `flushTelemetry` and then
+`sink.dispose?.()` so the session tail is not lost on teardown.
 
 | Sink | Storage | Notes |
 |---|---|---|
 | `MemoryTelemetrySink` | in-memory ring | capacity 1000 (default), queryable; used in tests |
 | `IndexedDBTelemetrySink` | IDB db `sugarlang-telemetry`, store `sugarlang-telemetry` | workspace `sugarlang-telemetry:studio`, capacity 50,000, batched flush every 100ms, queryable |
 | `NoOpTelemetrySink` | none | `query()` throws `NotSupportedTelemetryQueryError` |
-| `GatewaySugarlangTelemetrySink` | POST to gateway | batches up to 100 events, flush every 5s, drop-on-failure |
+| `GatewaySugarlangTelemetrySink` | POST to gateway | batches up to 100 events per request, flush every 5s, drop-on-failure |
+| `CompositeTelemetrySink` | fan-out | `emit`/`flush`/`dispose` fan out to all member sinks; `query` served by the first queryable member |
+
+`GatewaySugarlangTelemetrySink` delivery guarantees:
+
+- A flush drains at most 100 events; if more are pending it immediately
+  reschedules itself, so a burst larger than the cap drains in successive
+  batches instead of stranding the remainder.
+- On `pagehide` and on `visibilitychange` to `hidden`, all pending batches
+  are fired with `fetch(..., { keepalive: true })` so the last few seconds
+  of a session survive tab close (keepalive shares a 64KB in-flight quota;
+  overflow drops, matching the drop-on-failure posture).
+- `dispose()` clears the flush timer, removes both listeners, and drains
+  everything still pending.
 
 `resolveSugarlangTelemetrySink(boot, { proxyBaseUrl })` picks one, called once
 per plugin instance in `manifest.ts`:
@@ -143,11 +166,16 @@ per plugin instance in `manifest.ts`:
 - `boot.compileProfile === "published-target"`: `GatewaySugarlangTelemetrySink`
   when a proxy base URL is configured, else `NoOpTelemetrySink` (events
   dropped).
-- Otherwise (Studio / preview): `IndexedDBTelemetrySink` when `indexedDB`
-  exists, else `NoOpTelemetrySink`.
+- Otherwise (Studio / preview): `NoOpTelemetrySink` when `indexedDB` is
+  missing; `IndexedDBTelemetrySink` when no proxy base URL is configured;
+  with a proxy base URL, a `CompositeTelemetrySink` of
+  `[IndexedDBTelemetrySink, GatewaySugarlangTelemetrySink]` -- the local
+  queryable copy for the Studio inspector plus the same gateway path a
+  published target uses.
 
-So Studio sessions accumulate locally queryable events; published games ship
-them to the gateway; a published game without a gateway drops everything.
+So Studio sessions always accumulate locally queryable events (and also ship
+to the gateway when a proxy is configured); published games ship them to the
+gateway; a published game without a gateway drops everything.
 
 ## Gateway Ingestion Route
 
@@ -180,17 +208,28 @@ Client batch shape (from `GatewaySugarlangTelemetrySink.flush`):
 
 ## PII Scrub
 
-The scrub is CLIENT-side, in `GatewaySugarlangTelemetrySink`. Before an event
-leaves the browser, `stripPii` drops these top-level fields
+The primary scrub is CLIENT-side, in `GatewaySugarlangTelemetrySink`. Before
+an event leaves the browser, `stripPii` drops these top-level fields
 (`SERVER_BOUND_PII_FIELDS`):
 
 - `inputText` (classifier.verdict)
 - `originalText`, `repairedText` (verify.repair-triggered / auto-simplify)
 - `playerResponseText` (comprehension probe events)
 
-The gateway logs whatever arrives; it does not re-scrub. The local
-IndexedDB sink stores full events including these fields -- that is the
-debugging point of the Studio sink.
+plus one known nested path: `observe.observations-applied` nests player-typed
+text at `observations[].observation.inputText` (`produced-typed`
+observations, see `runtime/contracts/observation.ts`), which `stripPii`
+removes while keeping the rest of the observation.
+
+The gateway re-scrubs as defense in depth: `scrubSugarlangTelemetryEvent`
+in `packages/plugins/src/deployment/gateway/core.ts` deletes the same
+top-level fields and the nested `observation.inputText` from every event
+before it is written to stdout. The field list is duplicated there
+(`SUGARLANG_TELEMETRY_PII_FIELDS`) because the gateway compiles standalone;
+keep it in sync with `SERVER_BOUND_PII_FIELDS` in `telemetry.ts`.
+
+The local IndexedDB sink stores full events including these fields -- that is
+the debugging point of the Studio sink.
 
 ## Proxy Base URL Resolution
 

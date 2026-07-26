@@ -33,7 +33,7 @@ import type {
   RuntimeBlackboard
 } from "@sugarmagic/runtime-core";
 import type { SugarLangPluginConfig } from "../config";
-import { resolveSugarLangTargetLanguage, SUGARLANG_PROXY_BASE_URL_ENV } from "../config";
+import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
 import type { SugarlangLLMClient } from "./llm/types";
 import { LexicalBudgeter } from "./budgeter/lexical-budgeter";
@@ -52,6 +52,10 @@ import { DirectiveCache } from "./teacher/directive-cache";
 import { FallbackTeacherPolicy } from "./teacher/policies/fallback-teacher-policy";
 import { SugarLangTeacher } from "./teacher/sugar-lang-teacher";
 import { IndexedDBCardStore, MemoryCardStore, type CardStore } from "./learner/card-store";
+import {
+  resetSugarlangLearnerDatabases,
+  type SugarlangLearnerDataResetResult
+} from "./learner/reset-learner-data";
 import { LearnerStateReducer } from "./learner/learner-state-reducer";
 import {
   PlacementQuestionnaireLoader
@@ -90,6 +94,7 @@ export interface SugarlangExecutionServices {
   placementScoreEngine: PlacementScoreEngine;
   learnerStore: BlackboardLearnerStore;
   learnerStateReducer: LearnerStateReducer;
+  cardStore: CardStore;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
   teacher: SugarLangTeacher;
   llmClient: SugarlangLLMClient | null;
@@ -198,10 +203,7 @@ export class SugarlangRuntimeServices {
     // All sugarlang LLM calls go through the shared SugarDeploy gateway.
     // The /api/sugaragent/generate handler is a generic Claude proxy — not
     // sugaragent-specific — so both plugins share it.
-    const proxyBaseUrl =
-      this.environment?.[SUGARLANG_PROXY_BASE_URL_ENV]?.trim() ||
-      this.environment?.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL?.trim() ||
-      "";
+    const proxyBaseUrl = resolveSugarlangProxyBaseUrl(this.environment);
     this.gatewayClient = proxyBaseUrl
       ? new SugarlangGatewayClient(proxyBaseUrl)
       : null;
@@ -292,8 +294,17 @@ export class SugarlangRuntimeServices {
     };
   }
 
-  async resetDebugState(): Promise<void> {
+  async resetDebugState(): Promise<SugarlangLearnerDataResetResult> {
     this._debugPinnedBand = null;
+    // Close the live card-store connections and delete the sugarlang
+    // databases through the single shared enforcer (also used by the Studio
+    // shell reset button). A blocked delete is reported, not swallowed.
+    const resetResult = await resetSugarlangLearnerDatabases({
+      closeables: Array.from(
+        this.executionServices.values(),
+        (entry) => entry.cardStore
+      )
+    });
     const services = this.getFirstExecutionServices();
     const bb = this.boundContext?.blackboard;
     if (bb && services) {
@@ -308,25 +319,15 @@ export class SugarlangRuntimeServices {
         sourceSystem: SUGARLANG_PLACEMENT_WRITER
       });
     }
-    if (typeof indexedDB === "undefined") return;
-    const databases = await indexedDB.databases();
-    const sugarlangDbs = databases.filter(
-      (db) =>
-        db.name?.startsWith("sugarlang-card-store") ||
-        db.name?.startsWith("sugarlang-telemetry")
-    );
-    await Promise.all(
-      sugarlangDbs.map(
-        (db) =>
-          new Promise<void>((resolve) => {
-            if (!db.name) { resolve(); return; }
-            const req = indexedDB.deleteDatabase(db.name);
-            req.onsuccess = () => resolve();
-            req.onerror = () => resolve();
-            req.onblocked = () => resolve();
-          })
-      )
-    );
+    // Middlewares may still hold references to the old services, so clear
+    // their session accumulators before dropping the cache; the next resolve
+    // then builds fresh stores and reducers instead of rehydrating pre-reset
+    // state.
+    for (const entry of this.executionServices.values()) {
+      entry.learnerStateReducer.resetSessionAccumulators();
+    }
+    this.executionServices.clear();
+    return resetResult;
   }
 
   getPlayerDefinitionId(): string | null {
@@ -432,6 +433,7 @@ export class SugarlangRuntimeServices {
       playerEntityId: this.boundContext.playerDefinition.definitionId,
       learnerStore,
       learnerStateReducer,
+      cardStore,
       teacher,
       llmClient: this.gatewayClient
     };

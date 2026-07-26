@@ -191,6 +191,12 @@ export function createSugarLangContextMiddleware(
         ? (execution.state["sugaragent.session"] as { turnCount: number }).turnCount
         : 0;
       const placementState = readPlacementState(execution);
+      // DEFERRED (081 wrap): activeQuestObjectives carries only the TRACKED
+      // quest's objectives, so placement triggers only while the assessment
+      // quest is tracked. Accepted 2026-07-26: the dock area will contain
+      // the player until placement completes, making the assessment quest
+      // the only meaningful track there. Revisit if dock containment does
+      // not ship, or if placement ever moves past the first playable area.
       const isPlacementNpc =
         config.placement.enabled &&
         (execution.runtimeContext?.activeQuestObjectives?.objectives.some(

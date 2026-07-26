@@ -1833,6 +1833,41 @@ export async function handleSugarAgentLoreProbe(
 // DEFERRED (081): events land in Cloud Run structured logs via stdout only.
 // BigQuery export is a log-sink config flip on the Cloud Run project; revisit
 // when the first real tuning question needs SQL over months of events.
+
+// Server-side re-strip of player-text PII before events hit stdout/logs.
+// The client (GatewaySugarlangTelemetrySink.stripPii) already strips these;
+// this is a cheap defense-in-depth pass for old or misbehaving clients.
+// Keep in sync with SERVER_BOUND_PII_FIELDS in
+// packages/plugins/src/catalog/sugarlang/runtime/telemetry/telemetry.ts
+// (the gateway compiles standalone and cannot import from that package).
+const SUGARLANG_TELEMETRY_PII_FIELDS = [
+  "inputText",
+  "originalText",
+  "repairedText",
+  "playerResponseText"
+];
+
+function scrubSugarlangTelemetryEvent(event: Record<string, unknown>): void {
+  for (const field of SUGARLANG_TELEMETRY_PII_FIELDS) {
+    delete event[field];
+  }
+  // observe.observations-applied nests player-typed text at
+  // observations[].observation.inputText.
+  const observations = event.observations;
+  if (!Array.isArray(observations)) {
+    return;
+  }
+  for (const entry of observations) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const observation = (entry as { observation?: unknown }).observation;
+    if (typeof observation === "object" && observation !== null) {
+      delete (observation as Record<string, unknown>).inputText;
+    }
+  }
+}
+
 async function handleSugarlangTelemetry(
   req: IncomingMessage,
   res: ServerResponse
@@ -1865,6 +1900,7 @@ async function handleSugarlangTelemetry(
   for (let i = 0; i < accepted; i++) {
     const event = events[i];
     if (typeof event === "object" && event !== null) {
+      scrubSugarlangTelemetryEvent(event as Record<string, unknown>);
       process.stdout.write(JSON.stringify(event) + "\n");
     }
   }

@@ -31,7 +31,10 @@ import type {
   Scene
 } from "@sugarmagic/domain";
 import { composeRegionContents } from "@sugarmagic/domain";
-import { SUGARLANG_PROXY_BASE_URL_ENV } from "../../config";
+import {
+  SUGARLANG_PROXY_BASE_URL_ENV,
+  resolveSugarlangProxyBaseUrl
+} from "../../config";
 import {
   createSceneAuthoringContext,
   type SceneAuthoringContext,
@@ -159,9 +162,10 @@ export function resolveSugarlangGatewayBaseUrl(
   environment?: SugarlangGatewayEnvironment,
   host: Record<string, unknown> = globalThis as Record<string, unknown>
 ): string {
+  // Env resolution is the shared config.ts resolver; only the host-global
+  // fallback (compile-time contexts without a plugin environment) is local.
   const value =
-    environment?.[SUGARLANG_PROXY_BASE_URL_ENV]?.trim() ||
-    environment?.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL?.trim() ||
+    resolveSugarlangProxyBaseUrl(environment) ||
     (typeof host[SUGARLANG_PROXY_BASE_URL_ENV] === "string"
       ? String(host[SUGARLANG_PROXY_BASE_URL_ENV]).trim()
       : "") ||

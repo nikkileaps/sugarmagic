@@ -303,6 +303,7 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
         {/* 081.8 -- quest form overlay, above dialogue panel (z-40 > z-20). */}
         {state.questFormOpen && state.questFormDefinition ? (
           <QuestFormOverlay
+            key={state.questFormDefinition.formId ?? "quest-form"}
             definition={state.questFormDefinition}
             onSubmit={props.onQuestFormSubmit}
             onDismiss={props.onQuestFormDismiss}

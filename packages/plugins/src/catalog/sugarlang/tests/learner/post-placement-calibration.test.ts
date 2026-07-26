@@ -226,4 +226,49 @@ describe("post-placement calibration window (081.4)", () => {
       expect.objectContaining({ kind: "calibration.window-closed" })
     );
   });
+
+  it("emits a turn-backstop close when the window expires without settling", async () => {
+    const { reducer, emit, readProfile } = createCalibrationReducer();
+
+    await reducer.apply({
+      type: "session-start",
+      sessionId: "session-1",
+      startedAtMs: 1000
+    });
+    await reducer.apply({
+      type: "placement-completion",
+      cefrBand: "A2",
+      confidence: 0.4,
+      completedAtMs: 2000,
+      lemmasSeededFromFreeText: []
+    });
+
+    // Failures never raise any band's evidence share, so confidence cannot
+    // cross the ceiling; the window must die at the turn backstop AND emit
+    // the close event with the backstop reason (regression: the pre-turn
+    // window state must be read before the turn counter lands, or backstop
+    // expiries look like "never open" and stay silent).
+    for (let turn = 1; turn <= 10; turn += 1) {
+      await reducer.apply({
+        type: "observation",
+        observationEvent: createReducerObservationEvent({
+          lemmaId: "viajar",
+          kind: "produced-incorrect",
+          turnId: `turn-${turn}`,
+          observedAtMs: 2000 + turn * 500
+        })
+      });
+    }
+
+    const profile = readProfile();
+    expect(profile.currentSession?.turns).toBe(10);
+    expect(profile.assessment.cefrConfidence).toBeLessThan(0.65);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "calibration.window-closed",
+        closeReason: "turn-backstop",
+        placementBand: "A2"
+      })
+    );
+  });
 });

@@ -42,6 +42,7 @@ import { createSugarlangLogger } from "../../runtime/logger";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import { createTestRegion, createTestActiveScene } from "../compile/test-helpers";
 import { clearSugarlangRuntimeCompileCache } from "../../runtime/compile/runtime-cache-state";
+import { installFetchGuard, uninstallFetchGuard } from "./fetch-guard";
 
 const SCENE_ID = "scene-station";
 
@@ -170,9 +171,13 @@ function makeStableNpcProvider(): ConversationProvider {
 
 describe("preview directive cache hit rate golden", () => {
   beforeEach(async () => {
+    // 081.5 exit criterion: the suite fails on any unmocked URL. This flow is
+    // fully deterministic (no proxy URL configured), so any fetch is a bug.
+    installFetchGuard();
     await clearSugarlangRuntimeCompileCache();
   });
   afterEach(async () => {
+    uninstallFetchGuard();
     await clearSugarlangRuntimeCompileCache();
   });
 

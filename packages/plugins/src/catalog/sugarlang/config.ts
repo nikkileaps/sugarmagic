@@ -184,3 +184,20 @@ export function resolveSugarLangTargetLanguage(
 
   return value.trim().toLowerCase();
 }
+
+/**
+ * Single resolver for the sugarlang gateway proxy base URL: the
+ * sugarlang-scoped env var wins, falling back to sugaragent's (the two
+ * plugins share one gateway). Returns "" when neither is set.
+ * lore-resolution.ts layers a host-global fallback on top of this for
+ * compile-time contexts; all other call sites use this directly.
+ */
+export function resolveSugarlangProxyBaseUrl(
+  environment: RuntimePluginEnvironment | undefined
+): string {
+  return (
+    environment?.[SUGARLANG_PROXY_BASE_URL_ENV]?.trim() ||
+    environment?.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL?.trim() ||
+    ""
+  );
+}

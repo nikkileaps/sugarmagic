@@ -5,6 +5,7 @@
  *
  * Exports:
  *   - CARD_STORE_PAGE_SIZE
+ *   - CARD_STORE_DB_NAME_PREFIX
  *   - CardStorePage
  *   - CardStore
  *   - MemoryCardStore
@@ -23,7 +24,12 @@ import type { LemmaCard } from "../types";
 
 export const CARD_STORE_PAGE_SIZE = 250;
 
-const DB_NAME_PREFIX = "sugarlang-card-store";
+/**
+ * Owned here: every card-store database name starts with this prefix. The
+ * shared learner-data reset (reset-learner-data.ts) is the only other
+ * consumer -- do not hard-code the literal anywhere else.
+ */
+export const CARD_STORE_DB_NAME_PREFIX = "sugarlang-card-store";
 const CARD_STORE_NAME = "lemma-cards";
 
 export interface CardStorePage {
@@ -40,6 +46,12 @@ export interface CardStore {
   listPage: (cursor?: string | null, limit?: number) => Promise<CardStorePage>;
   count: () => Promise<number>;
   clear: () => Promise<void>;
+  /**
+   * Releases any live database connection so deleteDatabase can proceed.
+   * Optional: pure in-memory stores have nothing to release. A closed store
+   * must re-open cleanly on the next operation.
+   */
+  close?: () => Promise<void>;
 }
 
 function cloneCard(card: LemmaCard): LemmaCard {
@@ -230,11 +242,30 @@ export class IndexedDBCardStore implements CardStore {
     return select(transaction.objectStore(CARD_STORE_NAME));
   }
 
+  /**
+   * Closes the cached connection (if any) and drops it so the next operation
+   * re-opens the database from scratch. Called by the shared learner-data
+   * reset before deleteDatabase so the delete is not blocked.
+   */
+  async close(): Promise<void> {
+    const pending = this.dbPromise;
+    this.dbPromise = null;
+    if (!pending) {
+      return;
+    }
+    try {
+      const db = await pending;
+      db.close();
+    } catch {
+      // The open itself failed; there is no connection to release.
+    }
+  }
+
   private async getDatabase(): Promise<IDBDatabase> {
     if (!this.dbPromise) {
-      this.dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+      const opened = new Promise<IDBDatabase>((resolve, reject) => {
         const request = this.indexedDbFactory.open(
-          `${DB_NAME_PREFIX}:${this.options.profileId}`,
+          `${CARD_STORE_DB_NAME_PREFIX}:${this.options.profileId}`,
           1
         );
 
@@ -248,9 +279,19 @@ export class IndexedDBCardStore implements CardStore {
           }
         };
         request.onsuccess = () => {
-          resolve(request.result);
+          const db = request.result;
+          // Standard IDB practice: yield to deleteDatabase / version upgrades
+          // instead of blocking them forever with this cached connection.
+          db.onversionchange = () => {
+            db.close();
+            if (this.dbPromise === opened) {
+              this.dbPromise = null;
+            }
+          };
+          resolve(db);
         };
       });
+      this.dbPromise = opened;
     }
 
     return this.dbPromise;

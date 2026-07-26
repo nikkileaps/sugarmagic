@@ -30,7 +30,7 @@ import type {
   DialogueEntryDecoratorContribution,
   RuntimePluginInstance
 } from "@sugarmagic/runtime-core";
-import { normalizeSugarLangPluginConfig, SUGARLANG_PROXY_BASE_URL_ENV } from "./config";
+import { normalizeSugarLangPluginConfig, resolveSugarlangProxyBaseUrl } from "./config";
 import {
   createSugarLangContextMiddleware
 } from "./runtime/middlewares/sugar-lang-context-middleware";
@@ -58,7 +58,10 @@ import {
 import { createSugarlangLogger } from "./runtime/logger";
 import { createSugarlangDialogueContribution } from "./runtime/dialogue-entry-decorator";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
-import { resolveSugarlangTelemetrySink } from "./runtime/telemetry/telemetry";
+import {
+  flushTelemetry,
+  resolveSugarlangTelemetrySink
+} from "./runtime/telemetry/telemetry";
 import {
   sugarlangShellContributionDefinition,
   setSugarlangChunkExtractionEnabled
@@ -97,10 +100,7 @@ export function createSugarlangPlugin(
   // Wire the chunk extraction toggle so Studio shell components respect it.
   setSugarlangChunkExtractionEnabled(config.chunkExtraction.enabled);
   const logger = createSugarlangLogger({ debugLogging: config.debugLogging });
-  const proxyBaseUrl =
-    context.environment?.[SUGARLANG_PROXY_BASE_URL_ENV]?.trim() ||
-    context.environment?.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL?.trim() ||
-    "";
+  const proxyBaseUrl = resolveSugarlangProxyBaseUrl(context.environment);
   const telemetry = resolveSugarlangTelemetrySink(context.boot, { proxyBaseUrl });
   const services = new SugarlangRuntimeServices({
     config,
@@ -169,8 +169,11 @@ export function createSugarlangPlugin(
         };
       }
     },
-    dispose() {
-      return undefined;
+    async dispose() {
+      // 081.2: flush buffered telemetry on conversation/plugin teardown so
+      // the session tail is not lost, then tear down sink timers/listeners.
+      await flushTelemetry(telemetry, logger);
+      await telemetry.dispose?.();
     },
     serializeState: () => ({ enabled: context.configuration.enabled })
   };

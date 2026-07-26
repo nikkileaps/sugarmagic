@@ -226,6 +226,15 @@ export class LearnerStateReducer {
     await pending;
   }
 
+  /**
+   * Drops every in-memory session accumulator (turn counts, latency /
+   * hover / retry running sums). Called by the debug reset path so a wiped
+   * learner does not inherit the previous session's signals.
+   */
+  resetSessionAccumulators(): void {
+    this.sessionAccumulators.clear();
+  }
+
   private async applyInternal(event: ReducerEvent): Promise<void> {
     const profile = await loadLearnerProfile({
       blackboard: this.options.blackboard,
@@ -464,6 +473,10 @@ export class LearnerStateReducer {
       );
     }
 
+    // Window state BEFORE this observation's turn count lands: a backstop
+    // expiry on this very turn must still read as a close transition when
+    // the close event is emitted below.
+    const wasInCalibrationWindow = isInPostPlacementCalibration(profile);
     // Turns must be current before the calibration-window predicate reads them.
     currentSession.turns = accumulator.turns;
 
@@ -499,31 +512,38 @@ export class LearnerStateReducer {
           ...profile.assessment,
           cefrConfidence: settledConfidence
         };
-        if (!isInPostPlacementCalibration(profile)) {
-          const placementBand =
-            profile.assessment.evaluatedCefrBand ?? profile.estimatedCefrBand;
-          await emitTelemetry(
-            this.telemetry,
-            createTelemetryEvent("calibration.window-closed", {
-              sessionId: currentSession.sessionId,
-              turnId: observationEvent.context.turnId,
-              conversationId: observationEvent.context.conversationId,
-              timestamp: observationEvent.observation.observedAtMs,
-              closeReason:
-                settledConfidence >= CALIBRATION_CONFIDENCE_CEILING
-                  ? "confidence"
-                  : "turn-backstop",
-              placementBand,
-              settledBand: pointEstimate.band,
-              bandDelta:
-                CEFR_BAND_ORDER.indexOf(pointEstimate.band) -
-                CEFR_BAND_ORDER.indexOf(placementBand),
-              settledConfidence,
-              sessionTurn: accumulator.turns
-            })
-          );
-        }
       }
+    }
+
+    // Close-event emission sits outside the graded-observation block: a
+    // turn-backstop close can land on a turn whose observation is ungraded
+    // (success === null) and must still emit, and the window predicate must
+    // be compared against its pre-turn state or backstop expiries on this
+    // very turn read as "never open" and stay silent.
+    if (wasInCalibrationWindow && !isInPostPlacementCalibration(profile)) {
+      const placementBand =
+        profile.assessment.evaluatedCefrBand ?? profile.estimatedCefrBand;
+      const settledConfidence = profile.assessment.cefrConfidence;
+      await emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("calibration.window-closed", {
+          sessionId: currentSession.sessionId,
+          turnId: observationEvent.context.turnId,
+          conversationId: observationEvent.context.conversationId,
+          timestamp: observationEvent.observation.observedAtMs,
+          closeReason:
+            settledConfidence >= CALIBRATION_CONFIDENCE_CEILING
+              ? "confidence"
+              : "turn-backstop",
+          placementBand,
+          settledBand: profile.estimatedCefrBand,
+          bandDelta:
+            CEFR_BAND_ORDER.indexOf(profile.estimatedCefrBand) -
+            CEFR_BAND_ORDER.indexOf(placementBand),
+          settledConfidence,
+          sessionTurn: accumulator.turns
+        })
+      );
     }
 
     currentSession.hoverRate =

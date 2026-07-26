@@ -9,8 +9,11 @@
  * Relationships:
  *   - Drives the full middleware chain (081.3 conversationKind routing) through a
  *     mock provider via createConversationHost.
- *   - Covers: scripted constraint annotation, observation on card, directive cache hit,
- *     and verify repair path (autoSimplify fallback when no LLM client).
+ *   - Covers: scripted constraint annotation + authored-text passthrough (no LLM),
+ *     scripted adaptation via a stubbed gateway LLM + authored-text fallback on
+ *     LLM failure, observation on card, directive cache hit, verify pass
+ *     (in-envelope text unchanged), and verify repair path (autoSimplify
+ *     fallback when no LLM client).
  *
  * Implements: Plan 081 story 081.5 (E2E goldens)
  *
@@ -47,6 +50,7 @@ import { SUGARLANG_CONSTRAINT_ANNOTATION } from "../../runtime/middlewares/share
 import { createTestRegion, createTestActiveScene } from "../compile/test-helpers";
 import { createBudgeterSceneLexicon } from "../budgeter/test-helpers";
 import { clearSugarlangRuntimeCompileCache } from "../../runtime/compile/runtime-cache-state";
+import { installFetchGuard, uninstallFetchGuard, jsonResponse } from "./fetch-guard";
 
 // Minimal pre-compiled lexicon for "scene-station" with just "hola" as A1.
 // Seeded via services.seedPreviewLexicons before startSession so the budgeter
@@ -131,7 +135,7 @@ function makeRuntimeContextMiddleware(): ConversationMiddleware {
   };
 }
 
-function makeNpcTurnProvider(npcText: string): ConversationProvider {
+function makeNpcTurnProvider(npcText: string, initialText = "Hola."): ConversationProvider {
   let turnIndex = 0;
   return {
     providerId: "test.npc-provider",
@@ -175,7 +179,7 @@ function makeNpcTurnProvider(npcText: string): ConversationProvider {
           conversationKind: "scripted-dialogue",
           speakerId: "npc-orrin",
           speakerLabel: "Orrin",
-          text: "Hola.",
+          text: initialText,
           choices: [],
           inputMode: "advance",
           annotations: {},
@@ -188,7 +192,11 @@ function makeNpcTurnProvider(npcText: string): ConversationProvider {
 
 function makeSharedSetup(
   configOverrides: Record<string, unknown> = {},
-  npcText = "Hola, bienvenido."
+  npcText = "Hola, bienvenido.",
+  options: {
+    environment?: Record<string, string | undefined>;
+    initialText?: string;
+  } = {}
 ) {
   const blackboard = createRuntimeBlackboard({
     definitions: [
@@ -206,7 +214,12 @@ function makeSharedSetup(
     ...configOverrides
   });
   const logger = createSugarlangLogger({ debugLogging: false });
-  const services = new SugarlangRuntimeServices({ config, logger, telemetry });
+  const services = new SugarlangRuntimeServices({
+    config,
+    logger,
+    telemetry,
+    environment: options.environment
+  });
   services.bindRuntime({
     boot: createRuntimeBootModel({
       hostKind: "studio",
@@ -229,7 +242,7 @@ function makeSharedSetup(
     ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => factory({ services, logger, telemetry }))
   ];
   const host = createConversationHost({
-    providers: [makeNpcTurnProvider(npcText)],
+    providers: [makeNpcTurnProvider(npcText, options.initialText)],
     middlewares
   });
 
@@ -238,9 +251,13 @@ function makeSharedSetup(
 
 describe("end-to-end conversation golden", () => {
   beforeEach(() => {
+    // 081.5 exit criterion: the suite fails on any unmocked URL. Tests that
+    // need a gateway response re-install the guard with an explicit handler.
+    installFetchGuard();
     clearSugarlangRuntimeCompileCache();
   });
   afterEach(() => {
+    uninstallFetchGuard();
     clearSugarlangRuntimeCompileCache();
   });
 
@@ -295,7 +312,7 @@ describe("end-to-end conversation golden", () => {
       middlewares
     });
 
-    await host.startSession({
+    const initialTurn = await host.startSession({
       conversationKind: "scripted-dialogue",
       npcDefinitionId: "npc-orrin",
       npcDisplayName: "Orrin",
@@ -310,6 +327,83 @@ describe("end-to-end conversation golden", () => {
     };
     expect(constraint.targetLanguage).toBe("es");
     expect(constraint.learnerCefr).toBeDefined();
+
+    // Deterministic path: with no proxy URL there is no LLM client, so the
+    // scripted middleware intentionally SKIPS adaptation and the authored line
+    // passes through verbatim. The adapted path is pinned separately below with
+    // a stubbed gateway ("scripted line is adapted through the gateway LLM").
+    expect(initialTurn?.text).toBe("Hola.");
+  });
+
+  it("scripted line is adapted through the gateway LLM when one is configured", async () => {
+    // A proxy base URL makes SugarlangRuntimeServices construct the gateway
+    // LLM client; the fetch guard claims ONLY the generate route and returns a
+    // deterministic adapted line. Any other URL still throws.
+    const authoredLine = "Welcome to the station, traveler.";
+    const adaptedLine = "Hola. Welcome to the station.";
+    const generateCalls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    installFetchGuard((url, init) => {
+      if (url === "http://localhost:8787/api/sugaragent/generate") {
+        generateCalls.push({
+          url,
+          body: JSON.parse(String(init?.body)) as Record<string, unknown>
+        });
+        return jsonResponse({ text: adaptedLine, requestId: "adapt-1" });
+      }
+      return null;
+    });
+
+    const { host } = makeSharedSetup({}, "Hola.", {
+      environment: { SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: "http://localhost:8787" },
+      initialText: authoredLine
+    });
+
+    const turn = await host.startSession({
+      conversationKind: "scripted-dialogue",
+      npcDefinitionId: "npc-orrin",
+      npcDisplayName: "Orrin",
+      targetLanguage: "es",
+      supportLanguage: "en"
+    });
+
+    // The scripted middleware replaced the authored English line with the
+    // gateway's adapted version.
+    expect(turn?.text).toBe(adaptedLine);
+    expect(turn?.text).not.toBe(authoredLine);
+
+    // Exactly one generate call fired, and it was the scripted adaptation
+    // (its user prompt carries the authored line); scripted mode skips the
+    // teacher LLM, so no other gateway traffic exists.
+    expect(generateCalls.length).toBe(1);
+    expect(String(generateCalls[0]!.body.userPrompt)).toContain(authoredLine);
+  });
+
+  it("scripted adaptation falls back to the authored line when the gateway LLM fails", async () => {
+    // Same setup as the adapted case, but the generate route returns 500. The
+    // scripted middleware catches the failure and the authored English line
+    // renders unchanged instead of erroring.
+    const authoredLine = "Welcome to the station, traveler.";
+    installFetchGuard((url) => {
+      if (url === "http://localhost:8787/api/sugaragent/generate") {
+        return jsonResponse({ error: "gateway exploded" }, 500);
+      }
+      return null;
+    });
+
+    const { host } = makeSharedSetup({}, "Hola.", {
+      environment: { SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: "http://localhost:8787" },
+      initialText: authoredLine
+    });
+
+    const turn = await host.startSession({
+      conversationKind: "scripted-dialogue",
+      npcDefinitionId: "npc-orrin",
+      npcDisplayName: "Orrin",
+      targetLanguage: "es",
+      supportLanguage: "en"
+    });
+
+    expect(turn?.text).toBe(authoredLine);
   });
 
   it("free-form player input creates an encountered observation card for a target lemma", async () => {
@@ -373,6 +467,49 @@ describe("end-to-end conversation golden", () => {
 
     expect(newDirectives.length).toBe(1);
     expect(cacheHits.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("verify pass: NPC text within the envelope passes through verify unchanged", async () => {
+    // Inverse of the repair-path case below: "hola" is A1 vocabulary the test
+    // learner knows (seeded as the sole lexicon entry, same trick as the
+    // observation test), so the generated turn is within the envelope and must
+    // come out of finalize byte-for-byte identical to what the provider
+    // generated -- no repair, no auto-simplify.
+    const npcText = "Hola.";
+    const { telemetry, services, host } = makeSharedSetup({}, npcText);
+
+    services.seedPreviewLexicons({ lexicons: [HOLA_PREVIEW_LEXICON] });
+
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc-orrin",
+      npcDisplayName: "Orrin",
+      targetLanguage: "es",
+      supportLanguage: "en"
+    });
+
+    const turn = await host.submitInput({ kind: "advance" });
+
+    // Exact equality: the provider generated npcText and verify (enabled in
+    // makeSharedSetup) returned it untouched.
+    expect(turn?.text).toBe(npcText);
+
+    // The verify middleware actually ran and judged the text within the
+    // envelope -- this is a pass verdict, not a bypass.
+    const verdicts = await telemetry.query({ eventKinds: ["classifier.verdict"] });
+    expect(verdicts.length).toBeGreaterThan(0);
+    const lastVerdict = verdicts[verdicts.length - 1] as unknown as {
+      verdict: { withinEnvelope: boolean };
+    };
+    expect(lastVerdict.verdict.withinEnvelope).toBe(true);
+
+    // And neither repair mechanism fired anywhere in the run.
+    const repairs = await telemetry.query({ eventKinds: ["verify.repair-triggered"] });
+    const simplifications = await telemetry.query({
+      eventKinds: ["verify.auto-simplify-triggered"]
+    });
+    expect(repairs.length).toBe(0);
+    expect(simplifications.length).toBe(0);
   });
 
   it("verify repair path: NPC text violating the envelope is auto-simplified (no LLM needed)", async () => {
