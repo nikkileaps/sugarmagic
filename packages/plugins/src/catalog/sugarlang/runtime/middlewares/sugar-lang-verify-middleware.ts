@@ -23,6 +23,7 @@ import {
   emitTelemetry,
   type TelemetrySink
 } from "../telemetry/telemetry";
+import type { EnvelopeVerdict, RatioConformance } from "../types";
 import type { SugarlangLLMClient } from "../llm/types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type { SugarlangConstraint } from "../types";
@@ -52,30 +53,124 @@ export interface SugarLangVerifyMiddlewareDeps {
   telemetry?: TelemetrySink;
 }
 
-async function attemptRepair(
+const REPAIR_CANDIDATE_COUNT = 3;
+
+interface CandidateScore {
+  score: number;
+  passes: boolean;
+  coverageRatio: number;
+  measuredRatio: number;
+  conformance: RatioConformance;
+}
+
+interface RepairResult {
+  selectedText: string;
+  selectedIndex: number;
+  selectedPasses: boolean;
+  candidateScores: CandidateScore[];
+}
+
+function scoreCandidateVerdict(verdict: EnvelopeVerdict): CandidateScore {
+  const directed = verdict.languageRatioVerdict.directedRatio;
+  const ratioFraction = directed > 0
+    ? Math.min(verdict.languageRatioVerdict.measuredRatio / directed, 1)
+    : 1;
+  return {
+    score: verdict.profile.coverageRatio * 0.5 + ratioFraction * 0.5,
+    passes: verdict.withinEnvelope && verdict.languageRatioVerdict.conformance !== "under-ratio",
+    coverageRatio: verdict.profile.coverageRatio,
+    measuredRatio: verdict.languageRatioVerdict.measuredRatio,
+    conformance: verdict.languageRatioVerdict.conformance
+  };
+}
+
+function parseCandidates(text: string): string[] {
+  try {
+    const parsed = JSON.parse(text.trim()) as unknown;
+    if (Array.isArray(parsed) && parsed.every((c) => typeof c === "string")) {
+      return (parsed as string[]).filter((c) => (c as string).trim().length > 0);
+    }
+  } catch {}
+  // Fallback: treat the whole response as a single candidate
+  const fallback = text.trim();
+  return fallback ? [fallback] : [];
+}
+
+async function repairWithBestOfN(
   originalText: string,
-  instructions: string[],
+  originalVerdict: EnvelopeVerdict,
+  constraint: SugarlangConstraint,
   llmClient: SugarlangLLMClient | null,
-  constraint: SugarlangConstraint
-): Promise<string | null> {
+  checkCandidate: (text: string) => EnvelopeVerdict,
+  n: number = REPAIR_CANDIDATE_COUNT
+): Promise<RepairResult | null> {
   if (!llmClient) {
     return null;
   }
 
   const targetLang = languageDisplayName(constraint.targetLanguage);
+  const pct = Math.round(constraint.targetLanguageRatio * 100);
+  const vocabContext = [
+    `Forbidden words (use simpler synonyms): ${constraint.targetVocab.avoid.map((l) => l.lemmaId).join(", ") || "(none)"}.`,
+    `Use these words if natural: ${[
+      ...constraint.targetVocab.introduce.map((l) => l.lemmaId),
+      ...constraint.targetVocab.reinforce.map((l) => l.lemmaId)
+    ].join(", ") || "(none)"}. Do not force them.`
+  ].join("\n");
+
   const result = await llmClient.generate({
-    model: "claude-sonnet-4-6",
-    systemPrompt: `You are editing an NPC line for a ${targetLang}-learning game. The NPC must speak primarily in ${targetLang}. Rewrite the line to match the supplied instructions exactly. Return only the rewritten NPC line.`,
+    systemPrompt:
+      `You are editing an NPC line for a ${targetLang}-learning game. ` +
+      `Say the same thing in simpler, clearer language. ` +
+      `Preserve the meaning and any important information. ` +
+      `Simplify the expression, never change what is being communicated. ` +
+      `Return exactly ${n} alternative versions as a JSON array.`,
     userPrompt: [
       `Original: ${originalText}`,
-      `Required fixes: ${instructions.join(" | ")}`,
-      `Forbidden lemmas: ${constraint.targetVocab.avoid.map((lemma) => lemma.lemmaId).join(", ") || "(none)"}`,
-      `Introduce once: ${constraint.targetVocab.introduce.map((lemma) => lemma.lemmaId).join(", ") || "(none)"}`,
-      `Reinforce naturally: ${constraint.targetVocab.reinforce.map((lemma) => lemma.lemmaId).join(", ") || "(none)"}`
+      `Learner level: ${constraint.learnerCefr}. Sentence complexity: ${constraint.sentenceComplexityCap}.`,
+      `About ${pct}% of the words should be in ${targetLang}.`,
+      vocabContext,
+      ``,
+      `Return a JSON array of exactly ${n} versions, nothing else: ["...", "...", "..."]`
     ].join("\n"),
-    maxTokens: 220
+    maxTokens: 160 * n + 40
   });
-  return result.text.trim() || null;
+
+  const candidates = parseCandidates(result.text);
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const originalScore = scoreCandidateVerdict(originalVerdict);
+  const scored = candidates.map((text) => ({
+    text,
+    details: scoreCandidateVerdict(checkCandidate(text))
+  }));
+
+  // First passing candidate wins
+  const firstPassing = scored.find((c) => c.details.passes);
+  if (firstPassing) {
+    const idx = scored.indexOf(firstPassing);
+    return {
+      selectedText: firstPassing.text,
+      selectedIndex: idx,
+      selectedPasses: true,
+      candidateScores: scored.map((c) => c.details)
+    };
+  }
+
+  // No passing candidate: use best-scoring if it beats the original
+  const best = scored.reduce((a, b) => (b.details.score > a.details.score ? b : a));
+  if (best.details.score > originalScore.score) {
+    return {
+      selectedText: best.text,
+      selectedIndex: scored.indexOf(best),
+      selectedPasses: false,
+      candidateScores: scored.map((c) => c.details)
+    };
+  }
+
+  return null;
 }
 
 export function createSugarLangVerifyMiddleware(
@@ -249,35 +344,26 @@ export function createSugarLangVerifyMiddleware(
         return normalizedTurn;
       }
 
-      // Build repair instructions for every failing dimension.
-      const instructions: string[] = [];
-
+      // Build violation labels for telemetry (not used as the repair prompt -- 083.2
+      // uses the SAY IT SIMPLER framing inside repairWithBestOfN).
+      const violationLabels: string[] = [];
       if (ratioVerdict.conformance === "under-ratio") {
         const pct = Math.round(constraint.targetLanguageRatio * 100);
-        instructions.push(
+        violationLabels.push(
           `Rewrite this reply so about ${pct}% of it is in ${languageDisplayName(constraint.targetLanguage)}; keep the meaning.`
         );
       }
-
-      instructions.push(
+      violationLabels.push(
         ...verdict.violations.map(
           (violation) => `Remove or simplify "${violation.lemmaRef.lemmaId}".`
         )
       );
-
-      // Coverage-only failure: in-language but comprehension envelope failed with no specific lemmas.
-      if (!verdict.withinEnvelope && instructions.length === 0) {
-        instructions.push("Say it simpler using words the learner knows.");
+      if (!verdict.withinEnvelope && violationLabels.length === 0) {
+        violationLabels.push("Say it simpler using words the learner knows.");
       }
 
-      const repairedText = await attemptRepair(
-        normalizedTurn.text,
-        instructions,
-        services.llmClient,
-        constraint
-      );
-      if (repairedText) {
-        const repairedVerdict = services.classifier.check(repairedText, learner, {
+      const checkCandidate = (text: string): EnvelopeVerdict =>
+        services.classifier.check(text, learner, {
           prescription: scene ? constraint.rawPrescription : null,
           knownEntities: scene ? new Set(scene.properNouns) : new Set(),
           questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
@@ -289,8 +375,18 @@ export function createSugarLangVerifyMiddleware(
           directedRatio: constraint.targetLanguageRatio,
           supportPosture: constraint.supportPosture
         });
-        if (repairedVerdict.withinEnvelope && repairedVerdict.languageRatioVerdict.conformance !== "under-ratio") {
-          normalizedTurn.text = repairedText;
+
+      const repairResult = await repairWithBestOfN(
+        normalizedTurn.text,
+        verdict,
+        constraint,
+        services.llmClient,
+        checkCandidate
+      );
+
+      if (repairResult) {
+        normalizedTurn.text = repairResult.selectedText;
+        if (repairResult.selectedPasses) {
           await emitTelemetry(
             telemetry,
             createTelemetryEvent("verify.repair-triggered", {
@@ -300,18 +396,23 @@ export function createSugarLangVerifyMiddleware(
               timestamp: Date.now(),
               sceneId: sceneId ?? "",
               originalText: originalTurnText,
-              repairedText,
-              violations: instructions,
-              repairPrompt: instructions
+              repairedText: repairResult.selectedText,
+              violations: violationLabels,
+              repairPrompt: violationLabels,
+              candidateCount: repairResult.candidateScores.length,
+              selectedIndex: repairResult.selectedIndex,
+              candidateScores: repairResult.candidateScores
             }),
             logger
           );
-          return normalizedTurn;
         }
+        return normalizedTurn;
       }
 
+      // repairResult is null: no candidate beat the original.
       // Lemma-substitution fallback: autoSimplify handles lemma violations only.
-      // For ratio-only failures it early-returns unchanged (no lemmas to substitute).
+      // For ratio-only failures autoSimplify is a no-op (zero violations) -- the
+      // original is the terminal result. (083.2, review round 1)
       if (verdict.violations.length > 0) {
         try {
           const simplified = autoSimplify(

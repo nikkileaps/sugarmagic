@@ -427,8 +427,184 @@ describe("SugarLangVerifyMiddleware", () => {
 
     expect(llmClient.generate).toHaveBeenCalledTimes(1);
     const repairCall = llmClient.generate.mock.calls[0][0];
-    expect(repairCall.userPrompt).toContain("Say it simpler");
+    // SAY IT SIMPLER framing is now in the system prompt (083.2); user prompt carries
+    // context (ratio goal, vocab constraints) not the individual instruction strings.
+    expect(repairCall.systemPrompt).toContain("simpler");
     expect(result?.text).toBe("zzzz hola qqqq bienvenidos");
+  });
+
+  it("083.2: N-candidate JSON response -- scorer picks the first passing candidate by index", async () => {
+    // LLM returns a JSON array of 3 candidates. Only the second (index 1) passes
+    // the classifier. The scorer must pick it and leave the others unused.
+    const candidates = ["primera falla.", "¡Hola amigo!", "otra versión."];
+    const llmClient = {
+      generate: vi.fn().mockResolvedValue({
+        text: JSON.stringify(candidates),
+        requestId: null
+      })
+    };
+    const failProfile = {
+      totalTokens: 5,
+      knownTokens: 0,
+      inBandTokens: 0,
+      unknownTokens: 5,
+      bandHistogram: { A1: 0, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
+      outOfEnvelopeLemmas: [],
+      ceilingExceededLemmas: [],
+      questEssentialLemmasMatched: [],
+      coverageRatio: 0,
+      ratioCheckTokens: 5,
+      resolvedTargetLanguageTokens: 0
+    };
+    const passProfile = {
+      totalTokens: 2,
+      knownTokens: 2,
+      inBandTokens: 2,
+      unknownTokens: 0,
+      bandHistogram: { A1: 2, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
+      outOfEnvelopeLemmas: [],
+      ceilingExceededLemmas: [],
+      questEssentialLemmasMatched: [],
+      coverageRatio: 1,
+      ratioCheckTokens: 2,
+      resolvedTargetLanguageTokens: 2
+    };
+    const ratioVerdictUnder = { measuredRatio: 0, directedRatio: 0.85, posture: "target-dominant", conformance: "under-ratio" };
+    const ratioVerdictPass = { measuredRatio: 1, directedRatio: 0.85, posture: "target-dominant", conformance: "conformant" };
+    const classifierCheck = vi
+      .fn()
+      // original
+      .mockReturnValueOnce({ withinEnvelope: false, profile: failProfile, worstViolation: null, rule: "test", violations: [], exemptionsApplied: [], languageRatioVerdict: ratioVerdictUnder })
+      // candidate 0 -- fails
+      .mockReturnValueOnce({ withinEnvelope: false, profile: failProfile, worstViolation: null, rule: "test", violations: [], exemptionsApplied: [], languageRatioVerdict: ratioVerdictUnder })
+      // candidate 1 -- passes
+      .mockReturnValueOnce({ withinEnvelope: true, profile: passProfile, worstViolation: null, rule: "test", violations: [], exemptionsApplied: [], languageRatioVerdict: ratioVerdictPass })
+      // candidate 2 -- doesn't matter
+      .mockReturnValueOnce({ withinEnvelope: true, profile: passProfile, worstViolation: null, rule: "test", violations: [], exemptionsApplied: [], languageRatioVerdict: ratioVerdictPass });
+
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
+          classifier: { check: classifierCheck },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({ supportPosture: "target-dominant", targetLanguageRatio: 0.85 });
+
+    const result = await middleware.finalize?.(execution, createTestTurn("I only speak English today."));
+
+    expect(llmClient.generate).toHaveBeenCalledTimes(1);
+    expect(result?.text).toBe("¡Hola amigo!");
+  });
+
+  it("083.2: ratio-only failure with no passing candidate returns best-scoring candidate over original", async () => {
+    // directedRatio=1.0 (target-only), failFloor=0.7. Original is all-English (score=0).
+    // Repair candidate has measuredRatio=0.5 -- still under-ratio but score=0.5 > 0.
+    // repairWithBestOfN returns the candidate with selectedPasses=false.
+    // violations.length===0 so autoSimplify is a no-op; candidate is the terminal result.
+    const repairCandidate = "Un poco en español hoy.";
+    const llmClient = {
+      generate: vi.fn().mockResolvedValue({ text: repairCandidate, requestId: null })
+    };
+    const classifierCheck = vi
+      .fn()
+      .mockReturnValueOnce({
+        withinEnvelope: false,
+        profile: { totalTokens: 5, knownTokens: 0, inBandTokens: 0, unknownTokens: 5, bandHistogram: { A1: 0, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 }, outOfEnvelopeLemmas: [], ceilingExceededLemmas: [], questEssentialLemmasMatched: [], coverageRatio: 0, ratioCheckTokens: 5, resolvedTargetLanguageTokens: 0 },
+        worstViolation: null, rule: "test", violations: [], exemptionsApplied: [],
+        languageRatioVerdict: { measuredRatio: 0, directedRatio: 1.0, posture: "target-only", conformance: "under-ratio" }
+      })
+      .mockReturnValueOnce({
+        withinEnvelope: false,
+        profile: { totalTokens: 5, knownTokens: 3, inBandTokens: 3, unknownTokens: 2, bandHistogram: { A1: 3, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 }, outOfEnvelopeLemmas: [], ceilingExceededLemmas: [], questEssentialLemmasMatched: [], coverageRatio: 0.6, ratioCheckTokens: 5, resolvedTargetLanguageTokens: 3 },
+        worstViolation: null, rule: "test", violations: [], exemptionsApplied: [],
+        languageRatioVerdict: { measuredRatio: 0.6, directedRatio: 1.0, posture: "target-only", conformance: "under-ratio" }
+      });
+
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
+          classifier: { check: classifierCheck },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({ supportPosture: "target-only", targetLanguageRatio: 1.0 });
+
+    const result = await middleware.finalize?.(execution, createTestTurn("I only speak English today."));
+
+    expect(llmClient.generate).toHaveBeenCalledTimes(1);
+    expect(result?.text).toBe(repairCandidate);
+    expect(result?.text).not.toBe("I only speak English today.");
+  });
+
+  it("083.2: lemma-violation with empty LLM response falls through to autoSimplify", async () => {
+    // LLM returns empty string -> parseCandidates returns [] -> repairWithBestOfN returns null.
+    // Original has a lemma violation; autoSimplify substitutes it.
+    const llmClient = {
+      generate: vi.fn().mockResolvedValue({ text: "", requestId: null })
+    };
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
+          classifier: {
+            check: vi.fn().mockReturnValue({
+              withinEnvelope: false,
+              profile: { totalTokens: 2, knownTokens: 0, inBandTokens: 0, unknownTokens: 2, bandHistogram: { A1: 0, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 }, outOfEnvelopeLemmas: [{ lemmaId: "adelante", surfaceForm: "adelante", lang: "es" }], ceilingExceededLemmas: [], questEssentialLemmasMatched: [], coverageRatio: 0, ratioCheckTokens: 2, resolvedTargetLanguageTokens: 0 },
+              worstViolation: null, rule: "test",
+              violations: [{ lemmaRef: { lemmaId: "adelante", surfaceForm: "adelante", lang: "es" }, surfaceForm: "adelante", cefrBand: "B1", reason: "out-of-band" }],
+              exemptionsApplied: [],
+              languageRatioVerdict: { measuredRatio: 0.5, directedRatio: 0.65, posture: "supported", conformance: "conformant" }
+            })
+          },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+
+    const result = await middleware.finalize?.(execution, createTestTurn("Hola, adelante."));
+
+    expect(llmClient.generate).toHaveBeenCalledTimes(1);
+    // autoSimplify substituted "adelante" since repair returned nothing
+    expect(result?.text?.toLowerCase()).not.toContain("adelante");
+  });
+
+  it("083.2: verify-pass path makes zero LLM calls (turn-budget guard)", async () => {
+    const llmClient = { generate: vi.fn() };
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
+          classifier: {
+            check: vi.fn().mockReturnValue({
+              withinEnvelope: true,
+              profile: { totalTokens: 2, knownTokens: 2, inBandTokens: 2, unknownTokens: 0, bandHistogram: { A1: 2, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 }, outOfEnvelopeLemmas: [], ceilingExceededLemmas: [], questEssentialLemmasMatched: [], coverageRatio: 1, ratioCheckTokens: 2, resolvedTargetLanguageTokens: 2 },
+              worstViolation: null, rule: "test", violations: [], exemptionsApplied: [],
+              languageRatioVerdict: { measuredRatio: 1, directedRatio: 0.65, posture: "supported", conformance: "conformant" }
+            })
+          },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+
+    await middleware.finalize?.(execution, createTestTurn("Hola amigo."));
+
+    expect(llmClient.generate).not.toHaveBeenCalled();
   });
 
   it("does not trigger quest-essential repair on a generic opening turn that is not quest-focused", async () => {

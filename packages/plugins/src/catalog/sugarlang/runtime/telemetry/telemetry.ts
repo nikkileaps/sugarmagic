@@ -296,6 +296,15 @@ export type TelemetryEvent =
         repairedText?: string | null;
         violations: string[];
         repairPrompt: string[];
+        candidateCount: number;
+        selectedIndex: number;
+        candidateScores: Array<{
+          score: number;
+          passes: boolean;
+          coverageRatio: number;
+          measuredRatio: number;
+          conformance: string;
+        }>;
       }
     >
   | TelemetryEventOf<
