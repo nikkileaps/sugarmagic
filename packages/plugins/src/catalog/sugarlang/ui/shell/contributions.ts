@@ -24,13 +24,14 @@ import { PlacementQuestionBankViewer } from "./placement-question-bank-viewer";
 import { QuestNodeEventHint } from "./quest-node-event-hint";
 import { SceneDensityHistogram } from "./scene-density-histogram";
 import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
+import { LearnerOverrideSection } from "./learner-override-section";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
 /**
- * Deletes all sugarlang-owned IndexedDB databases: FSRS card store, telemetry,
- * compile cache, and chunk cache. After calling this, the learner is a blank
- * slate — reload Preview to start fresh.
+ * Deletes sugarlang-owned IndexedDB databases: FSRS card store and telemetry.
+ * After calling this, reload Preview to start fresh (blackboard facts are
+ * session-scoped and clear on reload automatically).
  */
 async function resetSugarlangLearnerData(): Promise<void> {
   if (typeof indexedDB === "undefined") return;
@@ -203,6 +204,14 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
         label: "Comprehension Monitor",
         summary: "Shows probe lifecycle telemetry, outcomes, and session rollups.",
         render: () => createElement(ComprehensionCheckMonitor)
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
+        sectionId: "learner-override",
+        label: "Learner Override",
+        summary: "DEV-only: set estimated CEFR band directly and skip the placement flow. Requires a running game session.",
+        render: () => createElement(LearnerOverrideSection)
       }
     ],
     npcInteractionOptions: []

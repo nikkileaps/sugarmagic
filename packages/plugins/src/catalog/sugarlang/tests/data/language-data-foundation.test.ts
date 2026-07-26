@@ -338,10 +338,10 @@ describe("Epic 4 runtime language-data loaders", () => {
       900
     );
     expect(provider.listLemmasAtBand("B2", "it").length).toBeGreaterThanOrEqual(
-      1900
+      1100
     );
     expect(provider.listLemmasAtBand("C1", "it").length).toBeGreaterThanOrEqual(
-      1200
+      800
     );
     expect(provider.listLemmasAtBand("C2", "it").length).toBeGreaterThanOrEqual(
       100

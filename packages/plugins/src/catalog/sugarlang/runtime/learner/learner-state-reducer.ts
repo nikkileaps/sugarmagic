@@ -137,6 +137,10 @@ export interface LearnerStateReducerOptions {
   targetLanguage: string;
   supportLanguage: string;
   blackboard: RuntimeBlackboard;
+  /** When provided and returns a non-null band, posterior and estimatedCefrBand
+   *  updates are suppressed during observations (band stays pinned). FSRS card
+   *  scheduling and session accumulators are unaffected. Debug-only. */
+  debugPinnedBand?: () => CEFRBand | null;
   cardStore: CardStore;
   atlas: LexicalAtlasProvider;
   learnerPriorProvider: LearnerPriorProvider;
@@ -464,11 +468,13 @@ export class LearnerStateReducer {
     currentSession.turns = accumulator.turns;
 
     const success = computeObservationSuccess(outcome);
-    if (success !== null) {
+    if (success !== null && !this.options.debugPinnedBand?.()) {
       // 081.4: during the post-placement calibration window, observations
       // carry elevated weight and confidence is recomputed from evidence
       // share, so the window closes on evidence with the turn backstop as
       // ceiling. Outside the window, evaluated confidence stays frozen.
+      // When debugPinnedBand is active the block above is skipped to keep
+      // the estimated band stable during automated verification sessions.
       const inCalibrationWindow = isInPostPlacementCalibration(profile);
       profile.cefrPosterior = updatePosterior(
         profile.cefrPosterior,

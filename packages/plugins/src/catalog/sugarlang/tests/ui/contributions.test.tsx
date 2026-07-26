@@ -37,7 +37,8 @@ describe("sugarlang shell contributions", () => {
       "compile-status",
       "placement-question-bank",
       "turn-inspector",
-      "comprehension-check-monitor"
+      "comprehension-check-monitor",
+      "learner-override"
     ]);
   });
 });

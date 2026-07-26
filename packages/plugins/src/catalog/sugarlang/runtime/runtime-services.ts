@@ -66,8 +66,22 @@ import {
 } from "./telemetry/telemetry";
 import type { SugarlangLoggerLike } from "./logger";
 export type { SugarlangLoggerLike } from "./logger";
+import type { CEFRBand } from "./types";
+import {
+  LEARNER_PROFILE_FACT,
+  SUGARLANG_LEARNER_STATE_WRITER,
+  SUGARLANG_PLACEMENT_STATUS_FACT,
+  SUGARLANG_PLACEMENT_WRITER,
+  createLearnerProfileFactScope,
+  createSugarlangPlacementStatusScope,
+  getSugarlangPlacementStatus
+} from "./learner/fact-definitions";
+import { isInPostPlacementCalibration } from "./learner/calibration-window";
+import type { PlacementCompletionEvent } from "./learner/learner-state-reducer";
 
 export interface SugarlangExecutionServices {
+  profileId: string;
+  playerEntityId: string;
   atlas: CefrLexAtlasProvider;
   morphology: MorphologyLoader;
   classifier: EnvelopeClassifier;
@@ -79,6 +93,16 @@ export interface SugarlangExecutionServices {
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
   teacher: SugarLangTeacher;
   llmClient: SugarlangLLMClient | null;
+}
+
+export interface SugarlangDebugState {
+  estimatedCefrBand: CEFRBand;
+  assessmentStatus: "unassessed" | "estimated" | "evaluated";
+  cefrConfidence: number;
+  placementStatus: "not-started" | "in-progress" | "completed";
+  inCalibration: boolean;
+  pinned: boolean;
+  pinnedBand: CEFRBand | null;
 }
 
 export interface SugarlangRuntimeServicesOptions {
@@ -161,6 +185,7 @@ export class SugarlangRuntimeServices {
   private boundContext: BoundRuntimeContext | null = null;
   private readonly gatewayClient: SugarlangLLMClient | null;
   private readonly llmModel: string;
+  private _debugPinnedBand: CEFRBand | null = null;
 
   constructor(options: SugarlangRuntimeServicesOptions) {
     this.config = options.config;
@@ -230,6 +255,80 @@ export class SugarlangRuntimeServices {
     return this.config.targetLanguage || null;
   }
 
+  private getFirstExecutionServices(): SugarlangExecutionServices | null {
+    return this.executionServices.values().next().value ?? null;
+  }
+
+  async applyDebugBandOverride(band: CEFRBand, pin: boolean): Promise<void> {
+    this._debugPinnedBand = pin ? band : null;
+    const services = this.getFirstExecutionServices();
+    if (!services) return;
+    const event: PlacementCompletionEvent = {
+      type: "placement-completion",
+      cefrBand: band,
+      confidence: 1.0,
+      completedAtMs: Date.now(),
+      lemmasSeededFromFreeText: []
+    };
+    await services.learnerStateReducer.apply(event);
+  }
+
+  async getDebugState(): Promise<SugarlangDebugState | null> {
+    const services = this.getFirstExecutionServices();
+    if (!services || !this.boundContext) return null;
+    const profile = await services.learnerStore.getCurrentProfile();
+    const placement = getSugarlangPlacementStatus(
+      this.boundContext.blackboard,
+      services.profileId
+    );
+    return {
+      estimatedCefrBand: profile.estimatedCefrBand,
+      assessmentStatus: profile.assessment.status,
+      cefrConfidence: profile.assessment.cefrConfidence,
+      placementStatus: placement.status,
+      inCalibration: isInPostPlacementCalibration(profile),
+      pinned: this._debugPinnedBand !== null,
+      pinnedBand: this._debugPinnedBand
+    };
+  }
+
+  async resetDebugState(): Promise<void> {
+    this._debugPinnedBand = null;
+    const services = this.getFirstExecutionServices();
+    const bb = this.boundContext?.blackboard;
+    if (bb && services) {
+      bb.clearFact({
+        definition: LEARNER_PROFILE_FACT,
+        scope: createLearnerProfileFactScope(services.playerEntityId),
+        sourceSystem: SUGARLANG_LEARNER_STATE_WRITER
+      });
+      bb.clearFact({
+        definition: SUGARLANG_PLACEMENT_STATUS_FACT,
+        scope: createSugarlangPlacementStatusScope(services.profileId),
+        sourceSystem: SUGARLANG_PLACEMENT_WRITER
+      });
+    }
+    if (typeof indexedDB === "undefined") return;
+    const databases = await indexedDB.databases();
+    const sugarlangDbs = databases.filter(
+      (db) =>
+        db.name?.startsWith("sugarlang-card-store") ||
+        db.name?.startsWith("sugarlang-telemetry")
+    );
+    await Promise.all(
+      sugarlangDbs.map(
+        (db) =>
+          new Promise<void>((resolve) => {
+            if (!db.name) { resolve(); return; }
+            const req = indexedDB.deleteDatabase(db.name);
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            req.onblocked = () => resolve();
+          })
+      )
+    );
+  }
+
   getPlayerDefinitionId(): string | null {
     return this.boundContext?.playerDefinition.definitionId ?? null;
   }
@@ -291,7 +390,8 @@ export class SugarlangRuntimeServices {
       cardStore,
       atlas: languageBundle.atlas,
       learnerPriorProvider,
-      telemetry: this.telemetry
+      telemetry: this.telemetry,
+      debugPinnedBand: () => this._debugPinnedBand
     });
     const directiveCache = new DirectiveCache({
       blackboard: this.boundContext.blackboard,
@@ -328,6 +428,8 @@ export class SugarlangRuntimeServices {
 
     const services: SugarlangExecutionServices = {
       ...languageBundle,
+      profileId: learnerId,
+      playerEntityId: this.boundContext.playerDefinition.definitionId,
       learnerStore,
       learnerStateReducer,
       teacher,

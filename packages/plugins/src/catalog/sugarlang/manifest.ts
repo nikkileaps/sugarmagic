@@ -155,6 +155,19 @@ export function createSugarlangPlugin(
       services.seedPreviewLexicons(
         runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID]
       );
+      // Dev-only debug handle for automated verification and manual band
+      // overrides. Same DEV guard as __sugarmagicDebug (targets/web
+      // runtimeHost.ts). Never present in a published artifact.
+      if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+        (globalThis as { __sugarlangDebug?: unknown }).__sugarlangDebug = {
+          setBand: (band: string, pin = false) =>
+            services.applyDebugBandOverride(band as never, pin),
+          pin: (band: string) =>
+            services.applyDebugBandOverride(band as never, true),
+          reset: () => services.resetDebugState(),
+          getState: () => services.getDebugState()
+        };
+      }
     },
     dispose() {
       return undefined;
