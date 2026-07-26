@@ -21,6 +21,8 @@ function makeState(patch: Partial<RuntimeUIState> = {}): RuntimeUIState {
     savePresent: false,
     loginModalOpen: false,
     episodesOpen: false,
+    questFormOpen: false,
+    questFormDefinition: null,
     ...patch
   };
 }

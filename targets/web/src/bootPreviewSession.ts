@@ -121,7 +121,10 @@ export function bootPreviewSession(
         // Plan 061 §061.3 — show authored exit buttons in the UI
         // preview so authors can see + position them regardless of
         // plugin config (dispatch is a no-op here anyway).
-        exitToSiteAvailable: true
+        exitToSiteAvailable: true,
+        // 081.8 -- quest form not used in UI preview; no-ops.
+        onQuestFormSubmit: () => {},
+        onQuestFormDismiss: () => {}
       })
     );
   }

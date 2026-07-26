@@ -15,7 +15,7 @@
  * Status: active
  */
 
-import type { NPCDefinition, QuestDefinition, QuestNodeDefinition } from "@sugarmagic/domain";
+import type { QuestDefinition, QuestNodeDefinition } from "@sugarmagic/domain";
 import { PanelSection } from "@sugarmagic/ui";
 import type { ReactElement } from "react";
 import { SUGARLANG_PLACEMENT_COMPLETED_EVENT } from "../../runtime/quest-integration/placement-completion";
@@ -27,18 +27,17 @@ import {
 export interface QuestNodeEventHintProps {
   selectedQuest: QuestDefinition | null;
   selectedQuestNode: QuestNodeDefinition | null;
-  npcDefinitions: NPCDefinition[];
   updateQuest: (definition: QuestDefinition) => void;
 }
 
 export function QuestNodeEventHint(
   props: QuestNodeEventHintProps
 ): ReactElement | null {
-  const { selectedQuest, selectedQuestNode, npcDefinitions, updateQuest } = props;
+  const { selectedQuest, selectedQuestNode, updateQuest } = props;
   if (
     !selectedQuest ||
     !selectedQuestNode ||
-    !shouldSuggestPlacementEvent(selectedQuestNode, npcDefinitions)
+    !shouldSuggestPlacementEvent(selectedQuestNode)
   ) {
     return null;
   }
@@ -50,7 +49,7 @@ export function QuestNodeEventHint(
           Suggested event name: <code>{SUGARLANG_PLACEMENT_COMPLETED_EVENT}</code>
         </p>
         <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--sm-color-overlay0)" }}>
-          This fires when the target placement NPC finishes the cold-start assessment.
+          This fires when the player completes the language assessment for this quest node.
         </p>
         <button
           type="button"

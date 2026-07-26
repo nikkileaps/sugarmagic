@@ -131,7 +131,7 @@ describe("SugarLangObserveMiddleware", () => {
     });
     const execution = createTestExecution({
       input: {
-        kind: "placement_questionnaire",
+        kind: "quest_form",
         response: {
           questionnaireId: "es-placement-v1",
           submittedAtMs: 1234,

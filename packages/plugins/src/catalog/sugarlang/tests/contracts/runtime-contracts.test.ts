@@ -425,7 +425,7 @@ describe("sugarlang runtime contracts", () => {
         npcDefinitionId: "npc-orinn",
         displayName: "Orrin",
         lorePageId: "root.characters.orinn",
-        metadata: { sugarlangRole: "placement" }
+        metadata: {}
       },
       recentTurns: [
         {
@@ -449,7 +449,7 @@ describe("sugarlang runtime contracts", () => {
       ],
       probeFloorState,
       activeQuestEssentialLemmas: [pendingLemma],
-      selectionMetadata: { sugarlangRole: "placement" }
+      selectionMetadata: {}
     };
     const atlas: LexicalAtlasProvider = {
       getLemma: () =>

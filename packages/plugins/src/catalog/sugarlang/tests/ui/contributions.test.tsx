@@ -31,7 +31,6 @@ describe("sugarlang shell contributions", () => {
         (section) => section.sectionId
       )
     ).toEqual([
-      "sugarlang-role",
       "scene-density",
       "placement-event-hint",
       "language-config",

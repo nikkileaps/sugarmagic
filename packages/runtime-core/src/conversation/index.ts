@@ -27,6 +27,8 @@ export interface ConversationActiveQuestObjectiveContext {
   nodeId: string;
   displayName: string;
   description: string;
+  objectiveSubtype?: string;
+  targetId?: string;
 }
 
 export interface ConversationActiveQuestContext {
@@ -51,17 +53,67 @@ export interface ConversationSelectionContext {
   metadata?: Record<string, unknown>;
 }
 
-export interface ConversationPlacementQuestionnaireResponse {
+export type QuestFormAnswerValue =
+  | { kind: "multiple-choice"; optionId: string }
+  | { kind: "free-text"; text: string }
+  | { kind: "yes-no"; answer: "yes" | "no" }
+  | { kind: "fill-in-blank"; text: string }
+  | { kind: "skipped" };
+
+export interface ConversationQuestFormResponse {
   questionnaireId: string;
   submittedAtMs: number;
-  answers: Record<
-    string,
-    | { kind: "multiple-choice"; optionId: string }
-    | { kind: "free-text"; text: string }
-    | { kind: "yes-no"; answer: "yes" | "no" }
-    | { kind: "fill-in-blank"; text: string }
-    | { kind: "skipped" }
+  answers: Record<string, QuestFormAnswerValue>;
+}
+
+export interface QuestFormDefinition {
+  schemaVersion: number;
+  lang: string;
+  targetLanguage: string;
+  supportLanguage: string;
+  formTitle: string;
+  formIntro: string;
+  minAnswersForValid: number;
+  formId?: string;
+  questions: Array<
+    | {
+        kind: "multiple-choice";
+        questionId: string;
+        promptText: string;
+        supportText?: string;
+        options: Array<{ optionId: string; text: string }>;
+      }
+    | {
+        kind: "free-text";
+        questionId: string;
+        promptText: string;
+        supportText?: string;
+      }
+    | {
+        kind: "yes-no";
+        questionId: string;
+        promptText: string;
+        supportText?: string;
+        yesLabel: string;
+        noLabel: string;
+      }
+    | {
+        kind: "fill-in-blank";
+        questionId: string;
+        promptText: string;
+        supportText?: string;
+        sentenceTemplate: string;
+      }
   >;
+}
+
+export function isQuestFormDefinition(value: unknown): value is QuestFormDefinition {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Array.isArray((value as QuestFormDefinition).questions) &&
+    typeof (value as QuestFormDefinition).formTitle === "string"
+  );
 }
 
 export type ConversationPlayerInput =
@@ -69,8 +121,8 @@ export type ConversationPlayerInput =
   | { kind: "choice"; choiceId: string }
   | { kind: "free_text"; text: string }
   | {
-      kind: "placement_questionnaire";
-      response: ConversationPlacementQuestionnaireResponse;
+      kind: "quest_form";
+      response: ConversationQuestFormResponse;
     };
 
 export interface ConversationChoice {

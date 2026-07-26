@@ -19,7 +19,6 @@
 
 import type {
   GameProject,
-  NPCDefinition,
   QuestDefinition,
   QuestNodeDefinition,
   RegionDocument
@@ -52,8 +51,6 @@ import type {
   PlacementQuestionnaire
 } from "../../runtime/types";
 
-export type SugarlangNpcRole = "" | "placement";
-
 export interface SceneBandCount {
   band: CEFRBand;
   count: number;
@@ -83,44 +80,8 @@ const atlas = new CefrLexAtlasProvider();
 const morphology = new MorphologyLoader();
 const SCENE_BANDS: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 
-function normalizedSugarlangMetadata(
-  npc: NPCDefinition
-): Record<string, unknown> {
-  return typeof npc.metadata === "object" && npc.metadata !== null
-    ? { ...npc.metadata }
-    : {};
-}
-
-export function getSugarlangNpcRole(npc: NPCDefinition | null | undefined): SugarlangNpcRole {
-  const value = npc?.metadata?.sugarlangRole;
-  return value === "placement" ? "placement" : "";
-}
-
-export function setSugarlangNpcRole(
-  npc: NPCDefinition,
-  role: SugarlangNpcRole
-): NPCDefinition {
-  const metadata = normalizedSugarlangMetadata(npc);
-  if (!role) {
-    delete metadata.sugarlangRole;
-    const { metadata: _previousMetadata, ...rest } = npc;
-    return {
-      ...rest,
-      ...(Object.keys(metadata).length > 0 ? { metadata } : {})
-    };
-  }
-
-  return {
-    ...npc,
-    metadata: {
-      ...metadata,
-      sugarlangRole: role
-    }
-  };
-}
-
-export function isPlacementNpc(npc: NPCDefinition | null | undefined): boolean {
-  return getSugarlangNpcRole(npc) === "placement";
+export function isAssessmentObjectiveNode(node: QuestNodeDefinition | null | undefined): boolean {
+  return node?.objectiveSubtype === "assessment";
 }
 
 export function applyPlacementEventSuggestion(
@@ -144,15 +105,9 @@ export function applyPlacementEventSuggestion(
 }
 
 export function shouldSuggestPlacementEvent(
-  node: QuestNodeDefinition | null | undefined,
-  npcDefinitions: NPCDefinition[]
+  node: QuestNodeDefinition | null | undefined
 ): boolean {
-  if (!node || node.targetId == null) {
-    return false;
-  }
-
-  const npc = npcDefinitions.find((entry) => entry.definitionId === node.targetId) ?? null;
-  return isPlacementNpc(npc);
+  return isAssessmentObjectiveNode(node);
 }
 
 export function resolveStudioCompileWorkspaceId(gameProjectId: string | null): string {

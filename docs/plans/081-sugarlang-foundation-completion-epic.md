@@ -102,6 +102,18 @@ Ship two surfaces over one mechanism, dev contexts only (Studio + preview; publi
 - Dev-only window handle for automated verification: `window.__sugarlangDebug` with setBand/pin/reset/getState, gated behind `import.meta.env.DEV` following the `__sugarmagicDebug` precedent (targets/web runtimeHost.ts:2045-2060, never present in a published artifact) -- NOT the ungated `__smperfRun` pattern.
 - Exit: from a fresh New Game, set B1 via the panel and talk to an NPC -- speech arrives at B1 with no placement flow; reset restores the customs-form path INCLUDING the blackboard facts; grep/build proof that published runtime excludes the handle and panel.
 
+### 081.8 Quest Form Overlay (AMENDMENT added 2026-07-25)
+
+The placement questionnaire currently renders inline inside the DOM dialogue panel, shoehorning a multi-question form into a narrow chat widget. This story lifts it to a full-screen React overlay and wires the general infrastructure any future quest-triggered form can reuse through the same channel.
+
+Changes:
+1. **Type promotion**: Promote `PlacementQuestionnaireView` from a private type in `DialoguePanel.ts` to an exported `QuestFormDefinition` in `runtime-core/conversation/index.ts`. Rename `ConversationPlayerInput` kind `"placement_questionnaire"` -> `"quest_form"` and `ConversationPlacementQuestionnaireResponse` -> `ConversationQuestFormResponse`. Add `formId?: string` to `QuestFormDefinition` so the overlay can set it in the response.
+2. **UIStateStore bridge**: `RuntimeUIState` gains `questFormOpen: boolean` + `questFormDefinition: QuestFormDefinition | null`. `DialoguePanel` on `inputMode === "quest_form"` signals these (enriching the definition with the questionnaire version from the turn metadata) instead of rendering an inline form. Expose `submitQuestFormResponse(response)` and `cancelQuestForm()` on `RuntimeDialoguePanel`; forward both on `RuntimeGameplaySessionController`.
+3. **React overlay**: `QuestFormOverlay` component in `targets/web/src/ui/` -- full-viewport document-style form renderer with per-question-type controls (multiple-choice, yes-no, free-text, fill-in-blank), submit-enabled-when-min-answered gate, and `onSubmit`/`onDismiss` callbacks. `GameUILayer` renders it when `state.questFormOpen`, above the dialogue panel (z-index already correct: GameUILayer lives at z-40, dialogue panel at z-20). `runtimeHost.ts` wires `onQuestFormSubmit` -> `gameplaySession.submitQuestFormResponse` and `onQuestFormDismiss` -> `gameplaySession.cancelQuestForm`.
+4. **Plugin side**: `GenerateStage.ts` emits `inputMode: "quest_form"` (was `"placement_questionnaire"`). Observe and context middlewares check `input.kind === "quest_form"`. Tests updated throughout.
+- Reuse contract: future quest forms emit `inputMode: "quest_form"` with a `QuestFormDefinition`-shaped object under any annotation key, and handle the `quest_form` ConversationPlayerInput kind in their own observe middleware. No new architecture required.
+- Exit: placement questionnaire renders full-screen as a document-style form, not inside the dialogue panel; submit and dismiss both work; `pnpm test` green; type-checks clean.
+
 ## Verification recipe (nikki)
 
 1. `pnpm test` -- green, including the three new goldens run twice back-to-back. `pnpm lint` -- clean.

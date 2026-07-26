@@ -168,7 +168,7 @@ export function createSugarLangObserveMiddleware(
         return normalizedTurn;
       }
 
-      if (execution.input?.kind === "placement_questionnaire") {
+      if (execution.input?.kind === "quest_form") {
         if (
           normalizedTurn &&
           placementFlow?.phase === "closing-dialog" &&

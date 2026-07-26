@@ -193,7 +193,9 @@ export function createSugarLangContextMiddleware(
       const placementState = readPlacementState(execution);
       const isPlacementNpc =
         config.placement.enabled &&
-        execution.selection.metadata?.sugarlangRole === "placement";
+        (execution.runtimeContext?.activeQuestObjectives?.objectives.some(
+          (o) => o.objectiveSubtype === "assessment" && o.targetId === execution.selection.npcDefinitionId
+        ) ?? false);
       let placementPhase: PlacementFlowAnnotation["phase"] =
         !isPlacementNpc || placementStatus?.status === "completed"
           ? placementState?.phase === "closing-dialog" &&
@@ -205,7 +207,7 @@ export function createSugarLangContextMiddleware(
 
       if (
         placementPhase === "questionnaire" &&
-        execution.input?.kind === "placement_questionnaire"
+        execution.input?.kind === "quest_form"
       ) {
         const questionnaire = services.placementQuestionnaireLoader.getQuestionnaire(
           execution.selection.targetLanguage ?? learner.targetLanguage

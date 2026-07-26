@@ -25,6 +25,8 @@ export interface QuestActiveObjectiveView {
   nodeId: string;
   displayName: string;
   description: string;
+  objectiveSubtype?: string;
+  targetId?: string;
   showInHud: boolean;
   optional: boolean;
 }
@@ -522,6 +524,8 @@ export class QuestManager {
         nodeId: node.nodeId,
         displayName: node.displayName,
         description: node.description,
+        objectiveSubtype: node.objectiveSubtype,
+        targetId: node.targetId,
         showInHud: node.showInHud,
         optional: node.optional ?? false
       }));

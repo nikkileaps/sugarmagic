@@ -20,7 +20,6 @@ import { createElement } from "react";
 import { ComprehensionCheckMonitor } from "./comprehension-check-monitor";
 import { LanguageConfigSection } from "./language-config-section";
 import { ManualRebuildButton } from "./manual-rebuild-button";
-import { NpcInspectorRoleDropdown } from "./npc-inspector-role-dropdown";
 import { PlacementQuestionBankViewer } from "./placement-question-bank-viewer";
 import { QuestNodeEventHint } from "./quest-node-event-hint";
 import { SceneDensityHistogram } from "./scene-density-histogram";
@@ -86,20 +85,6 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
     designSections: [
       {
         pluginId: SUGARLANG_SHELL_PLUGIN_ID,
-        workspaceKind: "npcs",
-        sectionId: "sugarlang-role",
-        label: "Sugarlang Role",
-        summary: "Tags agent NPCs with Sugarlang placement behavior.",
-        render: (props) =>
-          props.selectedNPC && props.updateNPC
-            ? createElement(NpcInspectorRoleDropdown, {
-                selectedNPC: props.selectedNPC,
-                updateNPC: props.updateNPC
-              })
-            : null
-      },
-      {
-        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
         workspaceKind: "layout",
         sectionId: "scene-density",
         label: "Scene Density",
@@ -121,12 +106,10 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
         render: (props) =>
           props.selectedQuest &&
           props.selectedQuestNode &&
-          props.updateQuest &&
-          props.gameProject
+          props.updateQuest
             ? createElement(QuestNodeEventHint, {
                 selectedQuest: props.selectedQuest,
                 selectedQuestNode: props.selectedQuestNode,
-                npcDefinitions: props.gameProject.npcDefinitions,
                 updateQuest: props.updateQuest
               })
             : null

@@ -2921,7 +2921,14 @@ export function createWebRuntimeHost(
         userStore,
         // Plan 061 §061.3 — authored exit buttons render only
         // when there's a Play page to exit to.
-        exitToSiteAvailable: bootPlayPageUrl.length > 0
+        exitToSiteAvailable: bootPlayPageUrl.length > 0,
+        // 081.8 -- quest form overlay callbacks.
+        onQuestFormSubmit: (response) => {
+          gameplaySession?.submitQuestFormResponse(response);
+        },
+        onQuestFormDismiss: () => {
+          gameplaySession?.cancelQuestForm();
+        }
       })
     );
     // Runtime host drives its own render loop (renderFrame ticks gameplay

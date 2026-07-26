@@ -25,18 +25,12 @@ export function resolveNPCInteractionOptions(
   const seen = new Set<NPCInteractionMode>(["scripted"]);
 
   for (const option of pluginOptions) {
-    if (
-      option.interactionMode !== "scripted" &&
-      option.interactionMode !== "agent"
-    ) {
+    if (seen.has(option.interactionMode as NPCInteractionMode)) {
       continue;
     }
-    if (seen.has(option.interactionMode)) {
-      continue;
-    }
-    seen.add(option.interactionMode);
+    seen.add(option.interactionMode as NPCInteractionMode);
     resolved.push({
-      value: option.interactionMode,
+      value: option.interactionMode as NPCInteractionMode,
       label: option.label,
       description: option.summary
     });

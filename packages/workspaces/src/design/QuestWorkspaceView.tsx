@@ -1576,6 +1576,7 @@ export function useQuestWorkspaceView({
                   { value: "collect", label: "Collect" },
                   { value: "trigger", label: "Trigger" },
                   { value: "castSpell", label: "Cast Spell" },
+                  { value: "assessment", label: "Assessment" },
                   { value: "custom", label: "Custom" }
                 ]}
                 onChange={(value) => value && updateNode({ ...selectedNode, objectiveSubtype: value as QuestNodeDefinition["objectiveSubtype"] })}

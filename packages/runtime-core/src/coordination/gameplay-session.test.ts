@@ -31,11 +31,11 @@ describe("gameplay session NPC metadata propagation", () => {
         definitionId: "npc.orinn",
         displayName: "Orrin",
         interactionMode: "agent",
-        metadata: { sugarlangRole: "placement" }
+        metadata: { customTag: "placement-npc" }
       })
     });
 
-    expect(selection?.metadata?.sugarlangRole).toBe("placement");
+    expect(selection?.metadata?.customTag).toBe("placement-npc");
   });
 
   it("leaves selection metadata undefined when the NPC has no metadata", () => {
@@ -55,7 +55,7 @@ describe("gameplay session NPC metadata propagation", () => {
       definitionId: "npc.orinn",
       displayName: "Orrin",
       interactionMode: "agent",
-      metadata: { sugarlangRole: "placement" }
+      metadata: { customTag: "placement-npc" }
     });
     const selection = createConversationSelectionFromNpc({ npcDefinition });
 
@@ -63,9 +63,9 @@ describe("gameplay session NPC metadata propagation", () => {
       throw new Error("expected metadata to be present");
     }
 
-    selection.metadata.sugarlangRole = "changed";
+    selection.metadata.customTag = "changed";
 
-    expect(npcDefinition.metadata?.sugarlangRole).toBe("placement");
+    expect(npcDefinition.metadata?.customTag).toBe("placement-npc");
   });
 
   it("merges preexisting selection metadata with NPC metadata and lets NPC keys win", () => {
@@ -75,20 +75,20 @@ describe("gameplay session NPC metadata propagation", () => {
         displayName: "Orrin",
         interactionMode: "agent",
         metadata: {
-          sugarlangRole: "placement",
-          sugarlangPlacementQuestionOverrideId: "npc-authored"
+          customTag: "placement-npc",
+          customOverrideId: "npc-authored"
         }
       }),
       metadata: {
         source: "existing-selection",
-        sugarlangPlacementQuestionOverrideId: "upstream"
+        customOverrideId: "upstream"
       }
     });
 
     expect(selection?.metadata).toEqual({
       source: "existing-selection",
-      sugarlangRole: "placement",
-      sugarlangPlacementQuestionOverrideId: "npc-authored"
+      customTag: "placement-npc",
+      customOverrideId: "npc-authored"
     });
   });
 
@@ -101,7 +101,7 @@ describe("gameplay session NPC metadata propagation", () => {
       priority: 0,
       stage: "context",
       prepare(context) {
-        observedRole = context.selection.metadata?.sugarlangRole ?? null;
+        observedRole = context.selection.metadata?.customTag ?? null;
         return context;
       }
     };
@@ -134,13 +134,13 @@ describe("gameplay session NPC metadata propagation", () => {
         definitionId: "npc.orinn",
         displayName: "Orrin",
         interactionMode: "agent",
-        metadata: { sugarlangRole: "placement" }
+        metadata: { customTag: "placement-npc" }
       })
     });
 
     const initialTurn = selection ? await host.startSession(selection) : null;
 
     expect(initialTurn?.text).toBe("hello");
-    expect(observedRole).toBe("placement");
+    expect(observedRole).toBe("placement-npc");
   });
 });

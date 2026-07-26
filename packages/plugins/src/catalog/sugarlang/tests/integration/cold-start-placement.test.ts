@@ -22,7 +22,9 @@ import {
   RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
   createBlackboardScope,
   createConversationHost,
-  createRuntimeBlackboard
+  createRuntimeBlackboard,
+  type ConversationMiddleware,
+  type ConversationRuntimeContext
 } from "@sugarmagic/runtime-core";
 import type {
   ConversationProvider,
@@ -91,6 +93,41 @@ function makePlacementMockProvider(): ConversationProvider {
   };
 }
 
+// Injects runtimeContext with an active assessment quest objective targeting
+// npc-inspector so the context middleware activates the placement flow.
+function makeAssessmentRuntimeContextMiddleware(npcDefinitionId: string): ConversationMiddleware {
+  const runtimeContext: ConversationRuntimeContext = {
+    here: { regionId: "region-test", regionDisplayName: "Test", regionLorePageId: null, sceneId: "scene-test", sceneDisplayName: "Test", area: null, parentArea: null },
+    playerLocation: null, playerPosition: null, playerArea: null,
+    npcLocation: null, npcPosition: null, npcArea: null,
+    npcPlayerRelation: null, npcBehavior: null, trackedQuest: null,
+    activeQuestStage: null,
+    activeQuestObjectives: {
+      questId: "quest-placement",
+      displayName: "Placement Quest",
+      stageId: "stage-1",
+      stageDisplayName: "Stage 1",
+      objectives: [{
+        nodeId: "node-assessment",
+        displayName: "Assessment",
+        description: "Language assessment",
+        objectiveSubtype: "assessment",
+        targetId: npcDefinitionId
+      }]
+    }
+  };
+  return {
+    middlewareId: "test.assessment-runtime-context",
+    displayName: "Test Assessment Runtime Context",
+    priority: 1,
+    stage: "context",
+    prepare(execution) {
+      execution.runtimeContext = runtimeContext;
+      return execution;
+    }
+  };
+}
+
 describe("cold-start placement golden", () => {
   afterEach(async () => {
     await clearSugarlangRuntimeCompileCache();
@@ -124,9 +161,10 @@ describe("cold-start placement golden", () => {
       documentDefinitions: []
     });
 
-    const middlewares = SUGARLANG_MIDDLEWARE_FACTORIES.map(
-      (factory) => factory({ services, logger })
-    );
+    const middlewares = [
+      makeAssessmentRuntimeContextMiddleware("npc-inspector"),
+      ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => factory({ services, logger }))
+    ];
     const host = createConversationHost({
       providers: [makePlacementMockProvider()],
       middlewares
@@ -138,8 +176,7 @@ describe("cold-start placement golden", () => {
       npcDefinitionId: "npc-inspector",
       npcDisplayName: "Inspector",
       targetLanguage: "es",
-      supportLanguage: "en",
-      metadata: { sugarlangRole: "placement" }
+      supportLanguage: "en"
     });
 
     // Turn 1: advance (context middleware reads turnCount=0 -> still opening-dialog).
@@ -151,7 +188,7 @@ describe("cold-start placement golden", () => {
     // Turn 3: submit an empty questionnaire -> A1 with low confidence (< 0.65 threshold).
     // Empty answers produce a low-confidence A1 result, which opens the calibration window.
     await host.submitInput({
-      kind: "placement_questionnaire",
+      kind: "quest_form",
       response: {
         questionnaireId: "es-placement-v1",
         submittedAtMs: 1000,
