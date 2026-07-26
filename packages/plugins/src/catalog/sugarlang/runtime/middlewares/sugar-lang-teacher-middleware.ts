@@ -59,6 +59,14 @@ import {
   type SugarlangLoggerLike
 } from "./shared";
 
+// Local structural type matching SugaragentContribution (sugaragent owns the
+// full interface; we mirror only the fields we write -- no import needed).
+interface SugarlangContributionShape {
+  schemaVersion: 1;
+  generateOverlay: string;
+}
+const SUGARAGENT_CONTRIB_SUGARLANG_KEY = "sugaragent.contrib/sugarlang" as const;
+
 export interface SugarLangTeacherMiddlewareDeps {
   services: SugarlangRuntimeServices;
   logger?: SugarlangLoggerLike;
@@ -198,6 +206,11 @@ export function createSugarLangTeacherMiddleware(
           rawPrescription: prescription ?? buildEmptyPrescription("scripted-mode-no-prescription")
         };
         execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+        const scriptedContrib: SugarlangContributionShape = {
+          schemaVersion: 1,
+          generateOverlay: constraint.generatorPromptOverlay
+        };
+        execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = scriptedContrib;
         logger.debug("Scripted mode: lightweight constraint built.", {
           learnerCefr: learner.estimatedCefrBand,
           posture,
@@ -400,6 +413,11 @@ export function createSugarLangTeacherMiddleware(
 
       execution.annotations[SUGARLANG_DIRECTIVE_ANNOTATION] = directive;
       execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+      const contrib: SugarlangContributionShape = {
+        schemaVersion: 1,
+        generateOverlay: constraint.generatorPromptOverlay
+      };
+      execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = contrib;
       logger.info("Teacher finalized Sugarlang guidance and constraint.", {
         conversationId,
         sessionId,

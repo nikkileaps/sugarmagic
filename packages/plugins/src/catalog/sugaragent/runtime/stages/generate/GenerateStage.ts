@@ -29,6 +29,7 @@ interface LanguageLearningConstraint {
   };
 }
 import type { LLMProvider } from "../../clients";
+import { collectContributions } from "../../contributions";
 import { createDiagnostics } from "../diagnostics";
 import {
   buildFallbackReply,
@@ -398,7 +399,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           : null,
         loreContextSummary,
         recentHistory: input.state.history.slice(-4),
-        languageLearningOverlay: constraint?.generatorPromptOverlay || null,
+        languageLearningOverlay: collectContributions(input.execution.annotations).mergedOverlay || null,
         // Plan 072.4 — persona/core loaded once at session start (072.3).
         persona: input.state.persona
           ? {

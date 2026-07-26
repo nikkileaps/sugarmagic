@@ -186,14 +186,20 @@ describe("GenerateStage", () => {
     expect(result.output.usedLlm).toBe(false);
   });
 
-  it("injects the Sugarlang constraint block into the system prompt", async () => {
+  it("injects the Sugarlang constraint block into the user prompt via the contribution bus", async () => {
     const llmProvider = {
       generateStructuredTurn: vi.fn().mockResolvedValue({ text: "Respuesta corta.", usage: null, model: "claude-haiku-4-5" })
     };
     const stage = new GenerateStage(llmProvider);
     const input = createStageInput();
+    const overlay = "Language constraint: Use a mixed reply. Keep roughly 65% of the reply in es and the rest in the support language so meaning stays easy to follow.\nMust-use vocabulary (weave naturally into your reply): hola.\nNew vocabulary to introduce this turn (use each exactly once, clearly in context): llave.\nForbidden vocabulary (use simpler synonyms): complicado.\nCEFR envelope: learner is A2; keep >=95% of lemmas at or below A2+1 band.\nSupport posture: supported. Target-language ratio: 0.65. Sentence complexity: two-clause.\nDo NOT add parenthetical translations or inline glosses. The UI handles vocabulary glossing via hover tooltips. Let the NPC speak naturally.";
+    // Plan 084.1 -- overlay arrives via the contribution bus, not constraint.generatorPromptOverlay.
+    input.execution.annotations["sugaragent.contrib/sugarlang"] = {
+      schemaVersion: 1,
+      generateOverlay: overlay
+    };
     input.execution.annotations["sugarlang.constraint"] = {
-      generatorPromptOverlay: "Language constraint: Use a mixed reply. Keep roughly 65% of the reply in es and the rest in the support language so meaning stays easy to follow.\nMust-use vocabulary (weave naturally into your reply): hola.\nNew vocabulary to introduce this turn (use each exactly once, clearly in context): llave.\nForbidden vocabulary (use simpler synonyms): complicado.\nCEFR envelope: learner is A2; keep >=95% of lemmas at or below A2+1 band.\nSupport posture: supported. Target-language ratio: 0.65. Sentence complexity: two-clause.\nDo NOT add parenthetical translations or inline glosses. The UI handles vocabulary glossing via hover tooltips. Let the NPC speak naturally.",
+      generatorPromptOverlay: "",
       minimalGreetingMode: false,
       targetVocab: {
         introduce: [{ lemmaId: "llave", lang: "es" }],
@@ -223,13 +229,11 @@ describe("GenerateStage", () => {
 
     const result = await stage.execute(input as never, createStageContext() as never);
 
-    // Plan 072.4 — the sugarlang overlay moved from the system prompt to the
-    // per-turn USER message (cache-boundary restructure).
+    // Plan 072.4 -- overlay in the per-turn user message (not system prompt).
+    // Plan 084.1 -- overlay source is the contribution bus, not constraint field.
     expect(llmProvider.generateStructuredTurn).toHaveBeenCalledWith(
       expect.objectContaining({
-        userPrompt: expect.stringContaining(
-          "Language constraint: Use a mixed reply."
-        )
+        userPrompt: expect.stringContaining("Language constraint: Use a mixed reply.")
       })
     );
     expect(String(result.diagnostics.payload.userPrompt ?? "")).toContain(
@@ -238,6 +242,37 @@ describe("GenerateStage", () => {
     expect(resultDiagnosticsSystemPrompt(result)).not.toContain(
       "Language constraint: Use a mixed reply."
     );
+  });
+
+  it("contribution bus: constraint.generatorPromptOverlay alone does NOT reach the prompt (migration complete)", async () => {
+    const llmProvider = {
+      generateStructuredTurn: vi.fn().mockResolvedValue({ text: "Plain reply.", usage: null, model: "claude-haiku-4-5" })
+    };
+    const stage = new GenerateStage(llmProvider);
+    const input = createStageInput();
+    // Set constraint with overlay -- but NO contribution annotation.
+    input.execution.annotations["sugarlang.constraint"] = {
+      generatorPromptOverlay: "SHOULD_NOT_APPEAR_IN_PROMPT",
+      minimalGreetingMode: false,
+      targetVocab: { introduce: [], reinforce: [], avoid: [] },
+      supportPosture: "supported",
+      targetLanguageRatio: 0.65,
+      interactionStyle: "guided_dialogue",
+      glossingStrategy: "none",
+      sentenceComplexityCap: "two-clause",
+      targetLanguage: "es",
+      learnerCefr: "A2",
+      rawPrescription: {
+        introduce: [],
+        reinforce: [],
+        avoid: [],
+        budget: { newItemsAllowed: 0 },
+        rationale: { candidateSetSize: 0, envelopeSurvivorCount: 0, priorityScores: [], reasons: [] }
+      }
+    };
+    const result = await stage.execute(input as never, createStageContext() as never);
+    expect(String(result.diagnostics.payload.userPrompt ?? "")).not.toContain("SHOULD_NOT_APPEAR_IN_PROMPT");
+    expect(resultDiagnosticsSystemPrompt(result)).not.toContain("SHOULD_NOT_APPEAR_IN_PROMPT");
   });
 
   it("skips the generic-only fast path when a Sugarlang constraint is present", async () => {
