@@ -154,7 +154,7 @@ sugarlang -> sugaragent: only `sugarlang.constraint`. sugaragent -> anyone: anno
 Numbers assigned from the docs/plans global sequence when each is drafted. Each passes epic-review before build.
 
 ### A. Foundation completion + trust repair (small, first)
-Implement the logger (kill the throwing stub); telemetry production sink decision (the BigQuery TODO) plus the rationale-trace instrumentation later tuning needs; delete the ENTITY_AFFECT vestige (in-plugin scope now); honest post-placement calibration wiring; an architectural guard test that every NPC turn path passes through the sugarlang middleware chain (makes the 071.5 bug class structurally impossible); revive internal E2E goldens (internal epic 15); decide finish-or-hide for the Italian pack.
+Implement the logger (kill the throwing stub); telemetry production sink decision (the BigQuery TODO) plus the rationale-trace instrumentation later tuning needs; delete the ENTITY_AFFECT vestige (in-plugin scope now; verified pre-satisfied at 081 wrap -- zero code references remained); honest post-placement calibration wiring; an architectural guard test that every NPC turn path passes through the sugarlang middleware chain (makes the 071.5 bug class structurally impossible); revive internal E2E goldens (internal epic 15); decide finish-or-hide for the Italian pack.
 Depends: nothing.
 
 ### B. Functions-as-chunks curriculum
@@ -165,8 +165,8 @@ Depends: A (soft -- telemetry to observe it working).
 Line-intent authoring model (must-convey facts, beat) with authored English as fidelity anchor; deterministic runtime diglot weave for anchored/supported postures (prescription-driven substitutions via atlas morphology); bake-time full-L2 variant generation for deep-end bands with triple verification (envelope + must-convey fidelity + voice) and the Studio exception-review report (back-glosses, flags); directed live render path (opportunity-triggered by the teacher's outer loop, same triple verification at runtime, baked-variant fallback on failure, cached by line x band x posture x teachables); delete today's unconditional runtime scripted LLM call; verify the zero-LLM floor end-to-end.
 Depends: A. Parallel with B; adopts D's prompt shape and voice verifier if D lands first (soft); the live-render trigger arrives with E (until then the floor plays).
 
-### D. Two-channel voice + verified level control
-Per-NPC voice-channel spec (interjection whitelist, tics, gesture tags) with a source per install mode; voice-retention verifier beside the envelope verdict; best-of-N sample-and-select in verify; say-it-simpler repair; constraint re-injection cadence against drift.
+### D. Two-channel voice + verified level control (Plan 083, DRAFT)
+Per-NPC voice-channel spec (interjection whitelist, tics, gesture tags) with a source per install mode; voice-retention verifier beside the envelope verdict; best-of-N sample-and-select in verify; say-it-simpler repair; constraint re-injection cadence against drift. Target-language-ratio conformance is part of the verified level control (ratified 2026-07-26): verify measures each turn's target-language token share against the directive's ratio and posture and fails grossly-under turns (live testing at B2 saw a directed-0.85-ratio turn come back 100% English and pass verify untouched).
 Depends: A. Parallel with B and C.
 
 ### E. The Teacher outer loop (the hinge)
