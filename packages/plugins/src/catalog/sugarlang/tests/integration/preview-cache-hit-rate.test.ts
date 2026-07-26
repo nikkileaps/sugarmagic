@@ -23,6 +23,7 @@ import {
   createBlackboardScope,
   createConversationHost,
   createRuntimeBlackboard,
+  createRuntimeBootModel,
   type ConversationMiddleware,
   type ConversationRuntimeContext
 } from "@sugarmagic/runtime-core";
@@ -31,6 +32,7 @@ import type {
   ConversationProviderStartResult,
   ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
+import { createDefaultPlayerDefinition } from "@sugarmagic/domain";
 import type { DialogueDefinition, NPCDefinition } from "@sugarmagic/domain";
 import { normalizeSugarLangPluginConfig } from "../../config";
 import { SUGARLANG_BLACKBOARD_FACT_DEFINITIONS } from "../../runtime/learner/fact-definitions";
@@ -189,8 +191,13 @@ describe("preview directive cache hit rate golden", () => {
     const logger = createSugarlangLogger({ debugLogging: false });
     const services = new SugarlangRuntimeServices({ config, logger, telemetry });
     services.bindRuntime({
+      boot: createRuntimeBootModel({
+        hostKind: "studio",
+        compileProfile: "authoring-preview",
+        contentSource: "authored-game-root"
+      }),
       blackboard,
-      playerDefinition: { definitionId: "player-1" },
+      playerDefinition: createDefaultPlayerDefinition("project-1", { definitionId: "player-1" }),
       activeRegion: region,
       activeScene,
       npcDefinitions: TEST_NPC_DEFINITIONS,

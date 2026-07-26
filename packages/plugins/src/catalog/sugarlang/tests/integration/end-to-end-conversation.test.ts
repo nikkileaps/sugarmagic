@@ -23,6 +23,7 @@ import {
   createBlackboardScope,
   createConversationHost,
   createRuntimeBlackboard,
+  createRuntimeBootModel,
   type ConversationMiddleware,
   type ConversationRuntimeContext
 } from "@sugarmagic/runtime-core";
@@ -31,6 +32,7 @@ import type {
   ConversationProviderStartResult,
   ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
+import { createDefaultPlayerDefinition } from "@sugarmagic/domain";
 import type { DialogueDefinition, NPCDefinition } from "@sugarmagic/domain";
 import { normalizeSugarLangPluginConfig } from "../../config";
 import {
@@ -206,8 +208,13 @@ function makeSharedSetup(
   const logger = createSugarlangLogger({ debugLogging: false });
   const services = new SugarlangRuntimeServices({ config, logger, telemetry });
   services.bindRuntime({
+    boot: createRuntimeBootModel({
+      hostKind: "studio",
+      compileProfile: "authoring-preview",
+      contentSource: "authored-game-root"
+    }),
     blackboard,
-    playerDefinition: { definitionId: "player-1" },
+    playerDefinition: createDefaultPlayerDefinition("project-1", { definitionId: "player-1" }),
     activeRegion: region,
     activeScene,
     npcDefinitions: TEST_NPC_DEFINITIONS,
@@ -251,8 +258,13 @@ describe("end-to-end conversation golden", () => {
     const logger = createSugarlangLogger({ debugLogging: false });
     const services = new SugarlangRuntimeServices({ config, logger });
     services.bindRuntime({
+      boot: createRuntimeBootModel({
+        hostKind: "studio",
+        compileProfile: "authoring-preview",
+        contentSource: "authored-game-root"
+      }),
       blackboard,
-      playerDefinition: { definitionId: "player-1" },
+      playerDefinition: createDefaultPlayerDefinition("project-1", { definitionId: "player-1" }),
       activeRegion: null,
       activeScene: null,
       npcDefinitions: [],

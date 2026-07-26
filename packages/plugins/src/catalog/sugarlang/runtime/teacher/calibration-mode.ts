@@ -17,6 +17,10 @@
  * Status: active
  */
 
+// DEFERRED (081): no recalibration mechanism exists beyond the post-placement
+// window. The teacher outer loop (Strategy 002 epic E) reads the same posterior
+// continuously, making a separate late-recalibration mechanism redundant once
+// E lands; do not add one here in the meantime.
 export { isInPostPlacementCalibration } from "../learner/calibration-window";
 
 export function buildPostPlacementCalibrationHint(): string {

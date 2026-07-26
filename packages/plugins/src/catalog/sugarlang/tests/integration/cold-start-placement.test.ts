@@ -18,11 +18,13 @@
  */
 
 import { afterEach, describe, expect, it } from "vitest";
+import { createDefaultPlayerDefinition } from "@sugarmagic/domain";
 import {
   RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
   createBlackboardScope,
   createConversationHost,
   createRuntimeBlackboard,
+  createRuntimeBootModel,
   type ConversationMiddleware,
   type ConversationRuntimeContext
 } from "@sugarmagic/runtime-core";
@@ -150,8 +152,13 @@ describe("cold-start placement golden", () => {
     const logger = createSugarlangLogger({ debugLogging: false });
     const services = new SugarlangRuntimeServices({ config, logger });
     services.bindRuntime({
+      boot: createRuntimeBootModel({
+        hostKind: "studio",
+        compileProfile: "authoring-preview",
+        contentSource: "authored-game-root"
+      }),
       blackboard,
-      playerDefinition: { definitionId: "player-1" },
+      playerDefinition: createDefaultPlayerDefinition("project-1", { definitionId: "player-1" }),
       activeRegion: null,
       activeScene: null,
       npcDefinitions: [],

@@ -438,8 +438,13 @@ export class SugarlangRuntimeServices {
     this.executionServices.set(key, services);
 
     // Config-driven band override: skip placement and pin the learner at the
-    // configured band. Applied once per language pair per session.
-    if (this.config.debugBandOverride) {
+    // configured band. Applied once per language pair per session. DEV-gated
+    // (same guard as __sugarlangDebug in manifest.ts): a published build
+    // ignores a debugBandOverride left set in the plugin config.
+    if (
+      (import.meta as { env?: { DEV?: boolean } }).env?.DEV &&
+      this.config.debugBandOverride
+    ) {
       const overrideEvent: PlacementCompletionEvent = {
         type: "placement-completion",
         cefrBand: this.config.debugBandOverride as CEFRBand,

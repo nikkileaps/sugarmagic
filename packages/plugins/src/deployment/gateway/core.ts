@@ -1830,6 +1830,9 @@ export async function handleSugarAgentLoreProbe(
 }
 
 // Plan 081.2 -- /api/sugarlang/telemetry
+// DEFERRED (081): events land in Cloud Run structured logs via stdout only.
+// BigQuery export is a log-sink config flip on the Cloud Run project; revisit
+// when the first real tuning question needs SQL over months of events.
 async function handleSugarlangTelemetry(
   req: IncomingMessage,
   res: ServerResponse
