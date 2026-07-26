@@ -127,7 +127,7 @@ function buildPlacementQuestionnaireEnvelope(
     displayName: input.execution.selection.npcDisplayName,
     text: effectiveQuestionnaire.formIntro,
     choices: [],
-    inputMode: "placement_questionnaire",
+    inputMode: "quest_form",
     proposedActions: [],
     metadata: {
       "sugarlang.placementQuestionnaire": effectiveQuestionnaire,

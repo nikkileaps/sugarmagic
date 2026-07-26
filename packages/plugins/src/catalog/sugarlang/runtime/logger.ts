@@ -1,28 +1,54 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/logger.ts
  *
- * Purpose: Reserves the namespaced logger surface for sugarlang runtime diagnostics.
+ * Purpose: Single real logger factory for sugarlang runtime diagnostics.
  *
  * Exports:
- *   - SugarlangLogger
+ *   - SugarlangLoggerLike
  *   - createSugarlangLogger
  *
  * Relationships:
- *   - Will be consumed by runtime subsystems that need consistent debug logging.
- *   - Will feed the telemetry and debug-panel work in later epics.
+ *   - Consumed by runtime-services, manifest, and middleware factories.
  *
- * Implements: Proposal 001 §Verification, Failure Modes, and Guardrails
+ * Implements: Plan 081 story 081.1 (Epic 13 skeleton replaced)
  *
- * Status: skeleton (no implementation yet; see Epic 13)
+ * Status: active
  */
 
-export interface SugarlangLogger {
+export interface SugarlangLoggerLike {
   debug: (message: string, payload?: Record<string, unknown>) => void;
   info: (message: string, payload?: Record<string, unknown>) => void;
   warn: (message: string, payload?: Record<string, unknown>) => void;
   error: (message: string, payload?: Record<string, unknown>) => void;
 }
 
-export function createSugarlangLogger(_namespace = "sugarlang"): SugarlangLogger {
-  throw new Error("TODO: Epic 13");
+const SILENT_LOGGER: SugarlangLoggerLike = {
+  debug() {},
+  info() {},
+  warn() {},
+  error() {}
+};
+
+export function createSugarlangLogger(options: {
+  debugLogging: boolean;
+  namespace?: string;
+}): SugarlangLoggerLike {
+  if (!options.debugLogging) {
+    return SILENT_LOGGER;
+  }
+  const tag = `[${options.namespace ?? "sugarlang"}]`;
+  return {
+    debug(message, payload) {
+      console.debug(tag, message, payload ?? {});
+    },
+    info(message, payload) {
+      console.info(tag, message, payload ?? {});
+    },
+    warn(message, payload) {
+      console.warn(tag, message, payload ?? {});
+    },
+    error(message, payload) {
+      console.error(tag, message, payload ?? {});
+    }
+  };
 }

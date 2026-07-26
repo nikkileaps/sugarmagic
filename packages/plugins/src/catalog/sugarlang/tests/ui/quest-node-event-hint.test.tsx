@@ -18,7 +18,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
-import type { NPCDefinition, QuestDefinition, QuestNodeDefinition } from "@sugarmagic/domain";
+import type { QuestDefinition, QuestNodeDefinition } from "@sugarmagic/domain";
 vi.mock("@sugarmagic/ui", () => ({
   PanelSection: ({
     title,
@@ -40,24 +40,25 @@ import {
 } from "../../ui/shell/editor-support";
 import { SUGARLANG_PLACEMENT_COMPLETED_EVENT } from "../../runtime/quest-integration/placement-completion";
 
-const PLACEMENT_NPC: NPCDefinition = {
-  definitionId: "npc-orrin",
-  displayName: "Orrin",
-  description: "Station manager",
-  interactionMode: "agent",
-  lorePageId: null,
-  metadata: {
-    sugarlangRole: "placement"
-  },
-  presentation: {
-    modelAssetDefinitionId: null,
-    modelHeight: 1.7,
-    animationAssetBindings: { idle: null, walk: null, run: null }
-  }
+const ASSESSMENT_NODE: QuestNodeDefinition = {
+  nodeId: "node-1",
+  displayName: "Language Assessment",
+  description: "Complete the language placement assessment.",
+  nodeBehavior: "objective",
+  objectiveSubtype: "assessment",
+  targetId: "npc-orrin",
+  count: 1,
+  optional: false,
+  prerequisiteNodeIds: [],
+  failTargetNodeIds: [],
+  onEnterActions: [],
+  onCompleteActions: [],
+  showInHud: true,
+  graphPosition: { x: 80, y: 80 }
 };
 
 const TALK_NODE: QuestNodeDefinition = {
-  nodeId: "node-1",
+  nodeId: "node-2",
   displayName: "Talk to Orrin",
   description: "Meet the station manager.",
   nodeBehavior: "objective",
@@ -86,34 +87,49 @@ const QUEST: QuestDefinition = {
       displayName: "Stage 1",
       nextStageId: null,
       entryNodeIds: ["node-1"],
-      nodeDefinitions: [TALK_NODE]
+      nodeDefinitions: [ASSESSMENT_NODE, TALK_NODE]
     }
   ]
 };
 
 describe("QuestNodeEventHint", () => {
-  it("suggests the placement completion event for placement NPC targets", () => {
-    expect(shouldSuggestPlacementEvent(TALK_NODE, [PLACEMENT_NPC])).toBe(true);
+  it("suggests the placement completion event for assessment nodes", () => {
+    expect(shouldSuggestPlacementEvent(ASSESSMENT_NODE)).toBe(true);
+  });
+
+  it("does not suggest the placement event for non-assessment nodes", () => {
+    expect(shouldSuggestPlacementEvent(TALK_NODE)).toBe(false);
   });
 
   it("writes the suggested event name into the selected node", () => {
-    const updatedQuest = applyPlacementEventSuggestion(QUEST, TALK_NODE.nodeId);
+    const updatedQuest = applyPlacementEventSuggestion(QUEST, ASSESSMENT_NODE.nodeId);
 
     expect(updatedQuest.stageDefinitions[0]?.nodeDefinitions[0]?.eventName).toBe(
       SUGARLANG_PLACEMENT_COMPLETED_EVENT
     );
   });
 
-  it("renders the suggestion text when the target NPC is a placement NPC", () => {
+  it("renders the suggestion text for an assessment node", () => {
     const markup = renderToStaticMarkup(
       <QuestNodeEventHint
         selectedQuest={QUEST}
-        selectedQuestNode={TALK_NODE}
-        npcDefinitions={[PLACEMENT_NPC]}
+        selectedQuestNode={ASSESSMENT_NODE}
         updateQuest={vi.fn()}
       />
     );
 
     expect(markup).toContain(SUGARLANG_PLACEMENT_COMPLETED_EVENT);
+  });
+
+  it("renders nothing for a non-assessment node", () => {
+    const markup = renderToStaticMarkup(
+      <QuestNodeEventHint
+        selectedQuest={QUEST}
+        selectedQuestNode={TALK_NODE}
+        updateQuest={vi.fn()}
+      />
+    );
+
+    expect(markup).toBe("");
   });
 });

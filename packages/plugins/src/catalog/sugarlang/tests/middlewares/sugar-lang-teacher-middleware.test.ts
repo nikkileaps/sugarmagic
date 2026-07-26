@@ -53,11 +53,14 @@ describe("SugarLangTeacherMiddleware", () => {
     const middleware = createSugarLangTeacherMiddleware({
       services: services as never
     });
-    const baseExecution = createTestExecution();
     const execution = createTestExecution({
       selection: {
-        ...baseExecution.selection,
-        interactionMode: "scripted"
+        conversationKind: "scripted-dialogue",
+        npcDefinitionId: "npc-1",
+        npcDisplayName: "Marisol",
+        targetLanguage: "es",
+        supportLanguage: "en",
+        metadata: {}
       }
     });
     // Deliberately no SUGARLANG_PRESCRIPTION_ANNOTATION.

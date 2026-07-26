@@ -21,12 +21,16 @@
 
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import type { RuntimePluginFactoryContext } from "../../runtime";
+import {
+  createDeploymentRequirementId,
+  type DeploymentRequirement
+} from "@sugarmagic/domain";
 import type {
   ConversationMiddlewareContribution,
   DialogueEntryDecoratorContribution,
   RuntimePluginInstance
 } from "@sugarmagic/runtime-core";
-import { normalizeSugarLangPluginConfig } from "./config";
+import { normalizeSugarLangPluginConfig, resolveSugarlangProxyBaseUrl } from "./config";
 import {
   createSugarLangContextMiddleware
 } from "./runtime/middlewares/sugar-lang-context-middleware";
@@ -51,10 +55,13 @@ import {
 import {
   SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
 } from "./runtime/learner/fact-definitions";
-import { createNoOpSugarlangLogger } from "./runtime/middlewares/shared";
+import { createSugarlangLogger } from "./runtime/logger";
 import { createSugarlangDialogueContribution } from "./runtime/dialogue-entry-decorator";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
-import { resolveSugarlangTelemetrySink } from "./runtime/telemetry/telemetry";
+import {
+  flushTelemetry,
+  resolveSugarlangTelemetrySink
+} from "./runtime/telemetry/telemetry";
 import {
   sugarlangShellContributionDefinition,
   setSugarlangChunkExtractionEnabled
@@ -62,6 +69,25 @@ import {
 
 export const SUGARLANG_PLUGIN_ID = "sugarlang";
 export const SUGARLANG_DISPLAY_NAME = "Sugarlang";
+
+const deploymentRequirements: DeploymentRequirement[] = [
+  {
+    requirementId: createDeploymentRequirementId({
+      ownerId: SUGARLANG_PLUGIN_ID,
+      kind: "proxy-route",
+      key: "sugarlang-telemetry"
+    }),
+    ownerId: SUGARLANG_PLUGIN_ID,
+    ownerKind: "plugin",
+    kind: "proxy-route",
+    required: false,
+    routeId: "sugarlang-telemetry",
+    protocol: "http-json",
+    consumer: "browser-runtime",
+    pathHint: "/api/sugarlang/telemetry",
+    description: "Browser-to-backend telemetry ingestion route for sugarlang teaching analytics."
+  }
+];
 
 export function createSugarlangPlugin(
   context: RuntimePluginFactoryContext
@@ -73,23 +99,9 @@ export function createSugarlangPlugin(
 
   // Wire the chunk extraction toggle so Studio shell components respect it.
   setSugarlangChunkExtractionEnabled(config.chunkExtraction.enabled);
-  const logger = config.debugLogging
-    ? {
-        debug(message: string, payload?: Record<string, unknown>) {
-          console.debug("[sugarlang]", message, payload ?? {});
-        },
-        info(message: string, payload?: Record<string, unknown>) {
-          console.info("[sugarlang]", message, payload ?? {});
-        },
-        warn(message: string, payload?: Record<string, unknown>) {
-          console.warn("[sugarlang]", message, payload ?? {});
-        },
-        error(message: string, payload?: Record<string, unknown>) {
-          console.error("[sugarlang]", message, payload ?? {});
-        }
-      }
-    : createNoOpSugarlangLogger();
-  const telemetry = resolveSugarlangTelemetrySink(context.boot);
+  const logger = createSugarlangLogger({ debugLogging: config.debugLogging });
+  const proxyBaseUrl = resolveSugarlangProxyBaseUrl(context.environment);
+  const telemetry = resolveSugarlangTelemetrySink(context.boot, { proxyBaseUrl });
   const services = new SugarlangRuntimeServices({
     config,
     environment: context.environment,
@@ -143,9 +155,25 @@ export function createSugarlangPlugin(
       services.seedPreviewLexicons(
         runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID]
       );
+      // Dev-only debug handle for automated verification and manual band
+      // overrides. Same DEV guard as __sugarmagicDebug (targets/web
+      // runtimeHost.ts). Never present in a published artifact.
+      if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+        (globalThis as { __sugarlangDebug?: unknown }).__sugarlangDebug = {
+          setBand: (band: string, pin = false) =>
+            services.applyDebugBandOverride(band as never, pin),
+          pin: (band: string) =>
+            services.applyDebugBandOverride(band as never, true),
+          reset: () => services.resetDebugState(),
+          getState: () => services.getDebugState()
+        };
+      }
     },
-    dispose() {
-      return undefined;
+    async dispose() {
+      // 081.2: flush buffered telemetry on conversation/plugin teardown so
+      // the session tail is not lost, then tear down sink timers/listeners.
+      await flushTelemetry(telemetry, logger);
+      await telemetry.dispose?.();
     },
     serializeState: () => ({ enabled: context.configuration.enabled })
   };
@@ -160,6 +188,7 @@ export const SUGARLANG_MIDDLEWARE_FACTORIES = [
 ] as const;
 
 export const pluginDefinition: DiscoveredPluginDefinition = {
+  deploymentRequirements,
   manifest: {
     pluginId: SUGARLANG_PLUGIN_ID,
     displayName: SUGARLANG_DISPLAY_NAME,
@@ -183,6 +212,22 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
         { value: "", label: "(unset)" },
         { value: "es", label: "Spanish (es)" },
         { value: "it", label: "Italian (it)" }
+      ],
+      default: ""
+    },
+    {
+      configKey: "debugBandOverride",
+      label: "Band Override (dev)",
+      type: "select",
+      description: "Skip placement and start at this CEFR band. Off = normal placement flow.",
+      options: [
+        { value: "", label: "(off — use placement)" },
+        { value: "A1", label: "A1" },
+        { value: "A2", label: "A2" },
+        { value: "B1", label: "B1" },
+        { value: "B2", label: "B2" },
+        { value: "C1", label: "C1" },
+        { value: "C2", label: "C2" }
       ],
       default: ""
     }

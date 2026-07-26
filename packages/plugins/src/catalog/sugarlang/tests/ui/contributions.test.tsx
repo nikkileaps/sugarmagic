@@ -31,14 +31,14 @@ describe("sugarlang shell contributions", () => {
         (section) => section.sectionId
       )
     ).toEqual([
-      "sugarlang-role",
       "scene-density",
       "placement-event-hint",
       "language-config",
       "compile-status",
       "placement-question-bank",
       "turn-inspector",
-      "comprehension-check-monitor"
+      "comprehension-check-monitor",
+      "learner-override"
     ]);
   });
 });

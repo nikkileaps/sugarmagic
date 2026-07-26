@@ -161,6 +161,8 @@ export interface QuestObjectiveSummary {
   nodeId: string;
   displayName: string;
   description: string;
+  objectiveSubtype?: string;
+  targetId?: string;
 }
 
 export interface QuestActiveObjectivesFact {

@@ -26,11 +26,11 @@ import {
 import type { SugarlangLLMClient } from "../llm/types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type { SugarlangConstraint } from "../types";
+import { createSugarlangLogger } from "../logger";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   buildLearnerSnapshot,
-  createNoOpSugarlangLogger,
   findQuestEssentialUses,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
@@ -80,7 +80,7 @@ async function attemptRepair(
 export function createSugarLangVerifyMiddleware(
   deps: SugarLangVerifyMiddlewareDeps
 ): ConversationMiddleware {
-  const logger = deps.logger ?? createNoOpSugarlangLogger();
+  const logger = deps.logger ?? createSugarlangLogger({ debugLogging: false });
   const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
@@ -148,7 +148,7 @@ export function createSugarLangVerifyMiddleware(
         return normalizedTurn;
       }
 
-      const services = deps.services.resolveForExecution(execution);
+      const services = await deps.services.resolveForExecution(execution);
       if (!services) {
         return normalizedTurn;
       }

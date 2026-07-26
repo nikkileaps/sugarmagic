@@ -2854,7 +2854,10 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
       // Story 50.1 — added to RuntimeUIState; defaults false.
       loginModalOpen: false,
       // Plan 059 §059.4 — added to RuntimeUIState; defaults false.
-      episodesOpen: false
+      episodesOpen: false,
+      // 081.8 — quest form overlay state; defaults false/null.
+      questFormOpen: false,
+      questFormDefinition: null
     });
   });
 

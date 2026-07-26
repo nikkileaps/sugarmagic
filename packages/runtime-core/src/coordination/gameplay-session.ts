@@ -330,6 +330,10 @@ export interface RuntimeGameplaySessionController {
   getNpcAgents: () => readonly CircleObstacle[];
   toggleInventory: () => void;
   toggleCaster: () => void;
+  /** 081.8 -- submits the active quest_form response through the dialogue panel. */
+  submitQuestFormResponse: (response: import("../conversation").ConversationQuestFormResponse) => void;
+  /** 081.8 -- cancels the active quest form conversation. */
+  cancelQuestForm: () => void;
   dispose: () => void;
 }
 
@@ -403,7 +407,9 @@ function toActiveQuestContext(
     objectives: trackedQuest.objectives.map((objective) => ({
       nodeId: objective.nodeId,
       displayName: objective.displayName,
-      description: objective.description
+      description: objective.description,
+      objectiveSubtype: objective.objectiveSubtype,
+      targetId: objective.targetId
     }))
   };
 }
@@ -886,7 +892,9 @@ export function createRuntimeGameplaySessionController(
       objectives: questManager.getActiveObjectivesForTrackedQuest().map((objective) => ({
         nodeId: objective.nodeId,
         displayName: objective.displayName,
-        description: objective.description
+        description: objective.description,
+        objectiveSubtype: objective.objectiveSubtype,
+        targetId: objective.targetId
       }))
     });
     lastTrackedQuestDefinitionId = trackedQuest.questDefinitionId;
@@ -2307,6 +2315,12 @@ export function createRuntimeGameplaySessionController(
     },
     toggleInventory: inventoryUi.toggle,
     toggleCaster: spellMenuUi.toggle,
+    submitQuestFormResponse(response) {
+      dialoguePanel.submitQuestFormResponse(response);
+    },
+    cancelQuestForm() {
+      dialoguePanel.cancelQuestForm();
+    },
     dispose() {
       for (const dispose of [...mechanicsEmitDisposers].reverse()) {
         dispose();

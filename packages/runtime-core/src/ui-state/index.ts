@@ -20,6 +20,8 @@
  * Status: active
  */
 
+import type { QuestFormDefinition } from "../conversation";
+
 export interface RuntimeUIState {
   /**
    * Overlay-menu key. Carries dialogue, future inventory /
@@ -51,6 +53,13 @@ export interface RuntimeUIState {
    * continue buttons.
    */
   episodesOpen: boolean;
+  /**
+   * 081.8 — true while a quest form overlay is shown. Set by
+   * DialoguePanel when a `quest_form` inputMode turn arrives.
+   * GameUILayer renders QuestFormOverlay when true.
+   */
+  questFormOpen: boolean;
+  questFormDefinition: QuestFormDefinition | null;
 }
 
 export interface RuntimeStore<TState> {
@@ -108,6 +117,8 @@ export function createUIStateStore(
     activeOverlayMenuKey: initialState.activeOverlayMenuKey ?? null,
     savePresent: initialState.savePresent ?? false,
     loginModalOpen: initialState.loginModalOpen ?? false,
-    episodesOpen: initialState.episodesOpen ?? false
+    episodesOpen: initialState.episodesOpen ?? false,
+    questFormOpen: initialState.questFormOpen ?? false,
+    questFormDefinition: initialState.questFormDefinition ?? null
   });
 }

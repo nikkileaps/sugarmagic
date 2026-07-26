@@ -28,12 +28,12 @@ import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
 import { emitPlacementCompleted } from "../quest-integration/placement-completion";
+import { createSugarlangLogger } from "../logger";
 import {
   SUGARLANG_COMPLETED_OBJECTIVE_IDS_ANNOTATION,
   SUGARLANG_COMPREHENSION_PROBE_ID_ANNOTATION,
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
-  createNoOpSugarlangLogger,
   createObservationEvent,
   getChoiceLemmaRef,
   getHoverLemma,
@@ -99,7 +99,7 @@ function isLikelySupportLanguageFallback(
 export function createSugarLangObserveMiddleware(
   deps: SugarLangObserveMiddlewareDeps
 ): ConversationMiddleware {
-  const logger = deps.logger ?? createNoOpSugarlangLogger();
+  const logger = deps.logger ?? createSugarlangLogger({ debugLogging: false });
   const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
@@ -124,7 +124,7 @@ export function createSugarLangObserveMiddleware(
         return normalizedTurn;
       }
 
-      const services = deps.services.resolveForExecution(execution);
+      const services = await deps.services.resolveForExecution(execution);
       if (!services) {
         return turn;
       }
@@ -168,7 +168,7 @@ export function createSugarLangObserveMiddleware(
         return normalizedTurn;
       }
 
-      if (execution.input?.kind === "placement_questionnaire") {
+      if (execution.input?.kind === "quest_form") {
         if (
           normalizedTurn &&
           placementFlow?.phase === "closing-dialog" &&
@@ -220,6 +220,13 @@ export function createSugarLangObserveMiddleware(
       const learner = await services.learnerStore.getCurrentProfile();
       const storedCheck = getStoredComprehensionCheck(execution);
       if (storedCheck && execution.input?.kind === "free_text") {
+        const predictedRetrievabilities: Record<string, number> = {};
+        for (const lemma of storedCheck.targetLemmas) {
+          const card = learner.lemmaCards[lemma.lemmaId];
+          if (card && typeof card.retrievability === "number") {
+            predictedRetrievabilities[lemma.lemmaId] = card.retrievability;
+          }
+        }
         const responseLemmas = new Set(
           collectLemmasFromText(execution.input.text, learner.targetLanguage)
             .map((entry) => entry.lemmaId)
@@ -314,7 +321,10 @@ export function createSugarLangObserveMiddleware(
               targetLemmas: storedCheck.targetLemmas,
               playerResponseText: execution.input.text,
               lemmasPassed: passed.map((lemma) => lemma.lemmaId),
-              classifierReasoning
+              classifierReasoning,
+              predictedRetrievabilities: Object.keys(predictedRetrievabilities).length > 0
+                ? predictedRetrievabilities
+                : undefined
             }),
             logger
           );
@@ -333,7 +343,10 @@ export function createSugarLangObserveMiddleware(
               targetLemmas: storedCheck.targetLemmas,
               playerResponseText: execution.input.text,
               lemmasFailed: failed.map((lemma) => lemma.lemmaId),
-              classifierReasoning
+              classifierReasoning,
+              predictedRetrievabilities: Object.keys(predictedRetrievabilities).length > 0
+                ? predictedRetrievabilities
+                : undefined
             }),
             logger
           );
@@ -353,7 +366,10 @@ export function createSugarLangObserveMiddleware(
               playerResponseText: execution.input.text,
               lemmasPassed: passed.map((lemma) => lemma.lemmaId),
               lemmasFailed: failed.map((lemma) => lemma.lemmaId),
-              classifierReasoning
+              classifierReasoning,
+              predictedRetrievabilities: Object.keys(predictedRetrievabilities).length > 0
+                ? predictedRetrievabilities
+                : undefined
             }),
             logger
           );

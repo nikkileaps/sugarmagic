@@ -26,93 +26,20 @@ import {
 } from "./DialogueManager";
 import type {
   ConversationPlayerInput,
-  ConversationTurnEnvelope
+  ConversationQuestFormResponse,
+  ConversationTurnEnvelope,
+  QuestFormDefinition
 } from "../conversation";
+import { isQuestFormDefinition } from "../conversation";
 import { findTermMatches, readDialogueHighlight } from "./highlight";
 
-interface PlacementQuestionnaireView {
-  schemaVersion: number;
-  lang: string;
-  targetLanguage: string;
-  supportLanguage: string;
-  formTitle: string;
-  formIntro: string;
-  minAnswersForValid: number;
-  questions: Array<
-    | {
-        kind: "multiple-choice";
-        questionId: string;
-        promptText: string;
-        supportText?: string;
-        options: Array<{ optionId: string; text: string }>;
-      }
-    | {
-        kind: "free-text";
-        questionId: string;
-        promptText: string;
-        supportText?: string;
-      }
-    | {
-        kind: "yes-no";
-        questionId: string;
-        promptText: string;
-        supportText?: string;
-        yesLabel: string;
-        noLabel: string;
-      }
-    | {
-        kind: "fill-in-blank";
-        questionId: string;
-        promptText: string;
-        supportText?: string;
-        sentenceTemplate: string;
-      }
-  >;
-}
-
-type PlacementAnswerValue =
-  | { kind: "multiple-choice"; optionId: string }
-  | { kind: "free-text"; text: string }
-  | { kind: "yes-no"; answer: "yes" | "no" }
-  | { kind: "fill-in-blank"; text: string }
-  | { kind: "skipped" };
-
-function isPlacementQuestionnaireView(
-  value: unknown
-): value is PlacementQuestionnaireView {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    Array.isArray((value as PlacementQuestionnaireView).questions) &&
-    typeof (value as PlacementQuestionnaireView).formTitle === "string"
-  );
-}
-
-function countAnsweredPlacementQuestions(
-  answers: Map<string, PlacementAnswerValue>
-): number {
-  let answered = 0;
-  for (const value of answers.values()) {
-    if (value.kind !== "skipped") {
-      answered += 1;
-    }
-  }
-  return answered;
-}
-
-function buildFillInBlankFragments(sentenceTemplate: string): {
-  prefix: string;
-  suffix: string;
-} {
-  const [prefix, suffix = ""] = sentenceTemplate.split("___", 2);
-  return {
-    prefix: prefix ?? "",
-    suffix
-  };
-}
 
 export interface RuntimeDialoguePanel extends DialoguePresenter {
   getElement: () => HTMLElement;
+  /** 081.8 -- submits the active quest_form response and closes the overlay. */
+  submitQuestFormResponse: (response: ConversationQuestFormResponse) => void;
+  /** 081.8 -- cancels the active quest_form conversation and closes the overlay. */
+  cancelQuestForm: () => void;
 }
 
 export type DialogueEntryDecorator = (
@@ -406,7 +333,7 @@ export function createRuntimeDialoguePanel(
       handler?.({ kind: "free_text", text: trimmed });
       return;
     }
-    if (input.kind === "placement_questionnaire") {
+    if (input.kind === "quest_form") {
       stopCurrent();
       handler?.(input);
       return;
@@ -450,185 +377,22 @@ export function createRuntimeDialoguePanel(
       return footer;
     }
 
-    if (currentInputMode === "placement_questionnaire") {
-      const questionnaire = isPlacementQuestionnaireView(
+    if (currentInputMode === "quest_form") {
+      // 081.8 -- form renders in the full-screen QuestFormOverlay React component.
+      // Signal UIStateStore to open it; actions area stays empty.
+      const formDef = isQuestFormDefinition(
         currentTurnMetadata?.["sugarlang.placementQuestionnaire"]
       )
-        ? (currentTurnMetadata?.["sugarlang.placementQuestionnaire"] as PlacementQuestionnaireView)
+        ? {
+            ...(currentTurnMetadata!["sugarlang.placementQuestionnaire"] as QuestFormDefinition),
+            formId:
+              typeof currentTurnMetadata?.["sugarlang.placementQuestionnaireVersion"] ===
+              "string"
+                ? (currentTurnMetadata["sugarlang.placementQuestionnaireVersion"] as string)
+                : "quest-form"
+          }
         : null;
-      const questionnaireVersion =
-        typeof currentTurnMetadata?.["sugarlang.placementQuestionnaireVersion"] ===
-        "string"
-          ? (currentTurnMetadata?.[
-              "sugarlang.placementQuestionnaireVersion"
-            ] as string)
-          : "placement-questionnaire";
-
-      if (!questionnaire) {
-        actionsContainer.appendChild(
-          createFooterRow(
-            'Press Enter to continue or <span class="sm-dialogue-key-hint">Esc</span> to close',
-            false
-          )
-        );
-        return;
-      }
-
-      const answers = new Map<string, PlacementAnswerValue>();
-      const form = document.createElement("form");
-      form.className = "sm-placement-form";
-      form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        if (answers.size < questionnaire.minAnswersForValid) {
-          return;
-        }
-        submitInput({
-          kind: "placement_questionnaire",
-          response: {
-            questionnaireId: questionnaireVersion,
-            submittedAtMs: Date.now(),
-            answers: Object.fromEntries(answers)
-          }
-        });
-      });
-
-      const title = document.createElement("h3");
-      title.className = "sm-placement-form-title";
-      title.textContent = questionnaire.formTitle;
-      form.appendChild(title);
-
-      const intro = document.createElement("p");
-      intro.className = "sm-placement-form-intro";
-      intro.textContent = questionnaire.formIntro;
-      form.appendChild(intro);
-
-      const submitButton = document.createElement("button");
-      submitButton.type = "submit";
-      submitButton.className = "sm-placement-submit-btn";
-      submitButton.textContent = "Submit form";
-      submitButton.disabled = true;
-
-      const refreshSubmitState = () => {
-        submitButton.disabled =
-          countAnsweredPlacementQuestions(answers) < questionnaire.minAnswersForValid;
-      };
-
-      for (const question of questionnaire.questions) {
-        const questionCard = document.createElement("section");
-        questionCard.className = "sm-placement-question";
-
-        const prompt = document.createElement("div");
-        prompt.className = "sm-placement-question-prompt";
-        prompt.textContent = question.promptText;
-        questionCard.appendChild(prompt);
-
-        if (question.supportText) {
-          const support = document.createElement("div");
-          support.className = "sm-placement-question-support";
-          support.textContent = question.supportText;
-          questionCard.appendChild(support);
-        }
-
-        if (question.kind === "multiple-choice") {
-          const options = document.createElement("div");
-          options.className = "sm-placement-question-options";
-          for (const option of question.options) {
-            const label = document.createElement("label");
-            label.className = "sm-placement-option";
-            const input = document.createElement("input");
-            input.type = "radio";
-            input.name = question.questionId;
-            input.addEventListener("change", () => {
-              answers.set(question.questionId, {
-                kind: "multiple-choice",
-                optionId: option.optionId
-              });
-              refreshSubmitState();
-            });
-            label.appendChild(input);
-            const text = document.createElement("span");
-            text.textContent = option.text;
-            label.appendChild(text);
-            options.appendChild(label);
-          }
-          questionCard.appendChild(options);
-        } else if (question.kind === "yes-no") {
-          const options = document.createElement("div");
-          options.className = "sm-placement-question-options";
-          for (const answer of [
-            { label: question.yesLabel, value: "yes" as const },
-            { label: question.noLabel, value: "no" as const }
-          ]) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "sm-placement-toggle-btn";
-            button.textContent = answer.label;
-            button.addEventListener("click", () => {
-              answers.set(question.questionId, {
-                kind: "yes-no",
-                answer: answer.value
-              });
-              refreshSubmitState();
-            });
-            options.appendChild(button);
-          }
-          questionCard.appendChild(options);
-        } else if (question.kind === "free-text") {
-          const input = document.createElement("textarea");
-          input.className = "sm-placement-textarea";
-          input.rows = 3;
-          input.placeholder = question.supportText ?? "";
-          input.addEventListener("input", () => {
-            answers.set(question.questionId, {
-              kind: "free-text",
-              text: input.value
-            });
-            refreshSubmitState();
-          });
-          questionCard.appendChild(input);
-        } else if (question.kind === "fill-in-blank") {
-          const wrap = document.createElement("label");
-          wrap.className = "sm-placement-fill";
-          const { prefix, suffix } = buildFillInBlankFragments(
-            question.sentenceTemplate
-          );
-          const prefixText = document.createElement("span");
-          prefixText.textContent = prefix;
-          const input = document.createElement("input");
-          input.type = "text";
-          input.className = "sm-placement-fill-input";
-          input.addEventListener("input", () => {
-            answers.set(question.questionId, {
-              kind: "fill-in-blank",
-              text: input.value
-            });
-            refreshSubmitState();
-          });
-          const suffixText = document.createElement("span");
-          suffixText.textContent = suffix;
-          wrap.appendChild(prefixText);
-          wrap.appendChild(input);
-          wrap.appendChild(suffixText);
-          questionCard.appendChild(wrap);
-        }
-
-        const skip = document.createElement("button");
-        skip.type = "button";
-        skip.className = "sm-placement-skip-btn";
-        skip.textContent = "Skip this one";
-        skip.addEventListener("click", () => {
-          answers.set(question.questionId, { kind: "skipped" });
-          refreshSubmitState();
-        });
-        questionCard.appendChild(skip);
-        form.appendChild(questionCard);
-      }
-
-      const footer = document.createElement("div");
-      footer.className = "sm-placement-form-footer";
-      footer.appendChild(submitButton);
-      form.appendChild(footer);
-      inputContainer.appendChild(form);
+      uiStateStore?.setState({ questFormOpen: true, questFormDefinition: formDef });
       return;
     }
 
@@ -702,12 +466,12 @@ export function createRuntimeDialoguePanel(
   // expanded to 11 registrations because the registry matches a
   // single key per action. Each handler guards with the visible
   // check so dispose-without-hide doesn't leave stray listeners.
-  // Free-text + placement_questionnaire input modes still submit
-  // via the form's own submit event (Enter inside the textarea
-  // is captured by `textInput.addEventListener("keydown", ...)`'s
-  // stopPropagation; the registry's `isInputContext` check would
-  // also bail), so we don't need a special-case Enter handler
-  // there.
+  // Free-text input mode still submits via the form's own submit
+  // event (Enter inside the textarea is captured by
+  // `textInput.addEventListener("keydown", ...)`'s stopPropagation;
+  // the registry's `isInputContext` check would also bail).
+  // quest_form input mode delegates to the React QuestFormOverlay;
+  // keyboard shortcuts are guarded below to avoid conflicting.
   const unregisterActions: Array<() => void> = [];
   function isVisible() {
     return container.classList.contains("visible");
@@ -732,12 +496,10 @@ export function createRuntimeDialoguePanel(
         key: "Enter",
         handler: (event) => {
           if (!isVisible()) return;
-          // Free-text / placement-questionnaire modes own Enter
-          // via their own input elements; the advance shortcut
-          // is only meaningful when the dialogue is in
-          // straight-advance mode (no input field).
+          // Free-text mode owns Enter via its own input element.
+          // quest_form mode defers to the React overlay.
           if (currentInputMode === "free_text") return;
-          if (currentInputMode === "placement_questionnaire") return;
+          if (currentInputMode === "quest_form") return;
           if (currentChoices.length > 1) return;
           event.preventDefault();
           submitInput({ kind: "advance" });
@@ -755,7 +517,7 @@ export function createRuntimeDialoguePanel(
           handler: (event) => {
             if (!isVisible()) return;
             if (currentInputMode === "free_text") return;
-            if (currentInputMode === "placement_questionnaire") return;
+            if (currentInputMode === "quest_form") return;
             if (choiceIndex >= currentChoices.length) return;
             event.preventDefault();
             submitInput({
@@ -788,6 +550,7 @@ export function createRuntimeDialoguePanel(
       inputContainer.innerHTML = "";
       entryCount = 0;
       stopCurrent();
+      uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
       // Story 50.5 — restore the in-game mode. If something else
       // had set activeOverlayMenuKey to a non-dialogue value before
       // this call, we'd clobber it — but in practice dialogue is
@@ -804,6 +567,7 @@ export function createRuntimeDialoguePanel(
       enrichmentContainer.innerHTML = "";
       inputContainer.innerHTML = "";
       entryCount = 0;
+      uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
     },
     showPending(options) {
       pendingSpeakerLabel = options?.speakerLabel ?? null;
@@ -834,6 +598,14 @@ export function createRuntimeDialoguePanel(
       renderActions();
       container.classList.add("visible");
       scrollToBottom();
+    },
+    submitQuestFormResponse(response: ConversationQuestFormResponse) {
+      uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
+      submitInput({ kind: "quest_form", response });
+    },
+    cancelQuestForm() {
+      uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
+      onCancel?.();
     },
     dispose() {
       for (const unregister of unregisterActions) unregister();

@@ -18,25 +18,27 @@ const BUILTIN_OPTION: NPCInteractionOption = {
   description: "Structured authored dialogue."
 };
 
+// The domain union is the source of truth for interaction modes; the
+// dropdown must stay inside it or writes fail at normalize. A plugin
+// wanting a new mode widens NPCInteractionMode first.
+const VALID_MODES: ReadonlySet<string> = new Set<NPCInteractionMode>([
+  "scripted",
+  "agent"
+]);
+
 export function resolveNPCInteractionOptions(
   pluginOptions: NPCInteractionOptionContribution[]
 ): NPCInteractionOption[] {
   const resolved: NPCInteractionOption[] = [BUILTIN_OPTION];
-  const seen = new Set<NPCInteractionMode>(["scripted"]);
+  const seen = new Set<string>(["scripted"]);
 
   for (const option of pluginOptions) {
-    if (
-      option.interactionMode !== "scripted" &&
-      option.interactionMode !== "agent"
-    ) {
-      continue;
-    }
-    if (seen.has(option.interactionMode)) {
+    if (!VALID_MODES.has(option.interactionMode) || seen.has(option.interactionMode)) {
       continue;
     }
     seen.add(option.interactionMode);
     resolved.push({
-      value: option.interactionMode,
+      value: option.interactionMode as NPCInteractionMode,
       label: option.label,
       description: option.summary
     });

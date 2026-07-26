@@ -17,42 +17,29 @@
 
 import type { PluginShellContributionDefinition } from "../../../../shell";
 import { createElement } from "react";
+import { resetSugarlangLearnerDatabases } from "../../runtime/learner/reset-learner-data";
 import { ComprehensionCheckMonitor } from "./comprehension-check-monitor";
 import { LanguageConfigSection } from "./language-config-section";
 import { ManualRebuildButton } from "./manual-rebuild-button";
-import { NpcInspectorRoleDropdown } from "./npc-inspector-role-dropdown";
 import { PlacementQuestionBankViewer } from "./placement-question-bank-viewer";
 import { QuestNodeEventHint } from "./quest-node-event-hint";
 import { SceneDensityHistogram } from "./scene-density-histogram";
 import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
+import { LearnerOverrideSection } from "./learner-override-section";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
 /**
- * Deletes all sugarlang-owned IndexedDB databases: FSRS card store, telemetry,
- * compile cache, and chunk cache. After calling this, the learner is a blank
- * slate — reload Preview to start fresh.
+ * Deletes sugarlang-owned IndexedDB databases (FSRS card store and telemetry)
+ * via the shared reset enforcer. Runs in Studio shell context without a
+ * runtime services handle, so it cannot clear in-session blackboard facts or
+ * a live Preview's in-memory learner state: reload Preview to start fresh
+ * (blackboard facts are session-scoped and clear on reload automatically).
+ * If a live Preview holds the database open, the reset reports the block via
+ * console.warn instead of silently pretending it worked.
  */
 async function resetSugarlangLearnerData(): Promise<void> {
-  if (typeof indexedDB === "undefined") return;
-  const databases = await indexedDB.databases();
-  const sugarlangDbs = databases.filter(
-    (db) =>
-      db.name?.startsWith("sugarlang-card-store") ||
-      db.name?.startsWith("sugarlang-telemetry")
-  );
-  await Promise.all(
-    sugarlangDbs.map(
-      (db) =>
-        new Promise<void>((resolve) => {
-          if (!db.name) { resolve(); return; }
-          const request = indexedDB.deleteDatabase(db.name);
-          request.onsuccess = () => resolve();
-          request.onerror = () => resolve();
-          request.onblocked = () => resolve();
-        })
-    )
-  );
+  await resetSugarlangLearnerDatabases();
 }
 
 /**
@@ -86,20 +73,6 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
     designSections: [
       {
         pluginId: SUGARLANG_SHELL_PLUGIN_ID,
-        workspaceKind: "npcs",
-        sectionId: "sugarlang-role",
-        label: "Sugarlang Role",
-        summary: "Tags agent NPCs with Sugarlang placement behavior.",
-        render: (props) =>
-          props.selectedNPC && props.updateNPC
-            ? createElement(NpcInspectorRoleDropdown, {
-                selectedNPC: props.selectedNPC,
-                updateNPC: props.updateNPC
-              })
-            : null
-      },
-      {
-        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
         workspaceKind: "layout",
         sectionId: "scene-density",
         label: "Scene Density",
@@ -121,12 +94,10 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
         render: (props) =>
           props.selectedQuest &&
           props.selectedQuestNode &&
-          props.updateQuest &&
-          props.gameProject
+          props.updateQuest
             ? createElement(QuestNodeEventHint, {
                 selectedQuest: props.selectedQuest,
                 selectedQuestNode: props.selectedQuestNode,
-                npcDefinitions: props.gameProject.npcDefinitions,
                 updateQuest: props.updateQuest
               })
             : null
@@ -173,8 +144,13 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
                 : "",
             supportLanguage: "en",
             debugLogging: currentConfig?.debugLogging === true,
+            debugBandOverride:
+              typeof currentConfig?.debugBandOverride === "string"
+                ? currentConfig.debugBandOverride
+                : "",
             onChangeTargetLanguage: (lang: string) => updateConfig({ targetLanguage: lang }),
             onChangeDebugLogging: (enabled: boolean) => updateConfig({ debugLogging: enabled }),
+            onChangeDebugBandOverride: (band: string) => updateConfig({ debugBandOverride: band }),
             onResetLearner: () => resetSugarlangLearnerData()
           });
         }
@@ -220,6 +196,14 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
         label: "Comprehension Monitor",
         summary: "Shows probe lifecycle telemetry, outcomes, and session rollups.",
         render: () => createElement(ComprehensionCheckMonitor)
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
+        sectionId: "learner-override",
+        label: "Learner Override",
+        summary: "DEV-only: set estimated CEFR band directly and skip the placement flow. Requires a running game session.",
+        render: () => createElement(LearnerOverrideSection)
       }
     ],
     npcInteractionOptions: []

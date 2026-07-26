@@ -1,33 +1,27 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/teacher/calibration-mode.ts
  *
- * Purpose: Reserves the minimal post-placement calibration hint surface for the Director.
+ * Purpose: Provides the Director-facing post-placement calibration hint.
  *
  * Exports:
- *   - isInPostPlacementCalibration
+ *   - isInPostPlacementCalibration (re-export; single definition lives in
+ *     learner/calibration-window)
  *   - buildPostPlacementCalibrationHint
  *
  * Relationships:
- *   - Depends on learner-profile types.
- *   - Will be consumed by the Teacher'sonce Epic 9 lands.
+ *   - Re-exports the window predicate from ../learner/calibration-window.
+ *   - Is consumed by the teacher policies to soften posture during the window.
  *
- * Implements: Proposal 001 §Cold Start Sequence
+ * Implements: Proposal 001 §Cold Start Sequence / Plan 081 story 081.4
  *
- * Status: skeleton (no implementation yet; see Epic 9)
+ * Status: active
  */
 
-import type { LearnerProfile } from "../types";
-
-export function isInPostPlacementCalibration(
-  learner: LearnerProfile
-): boolean {
-  if (learner.assessment.status !== "evaluated") {
-    return false;
-  }
-
-  const turns = learner.currentSession?.turns ?? 0;
-  return learner.assessment.cefrConfidence < 0.65 && turns < 10;
-}
+// DEFERRED (081): no recalibration mechanism exists beyond the post-placement
+// window. The teacher outer loop (Strategy 002 epic E) reads the same posterior
+// continuously, making a separate late-recalibration mechanism redundant once
+// E lands; do not add one here in the meantime.
+export { isInPostPlacementCalibration } from "../learner/calibration-window";
 
 export function buildPostPlacementCalibrationHint(): string {
   return "NOTE: This learner just completed their placement assessment but has not yet built up session history. Lean slightly toward the cautious side - prefer supported posture over target-dominant, prefer inline glossing on any new word, keep sentences at one or two clauses. This is a brief settling-in window, not a permanent constraint.";

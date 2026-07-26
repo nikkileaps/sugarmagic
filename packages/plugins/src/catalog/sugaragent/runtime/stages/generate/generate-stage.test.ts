@@ -457,7 +457,7 @@ describe("GenerateStage", () => {
     const result = await stage.execute(input as never, createStageContext() as never);
 
     expect(result.output.usedLlm).toBe(false);
-    expect(result.output.envelopeOverride?.inputMode).toBe("placement_questionnaire");
+    expect(result.output.envelopeOverride?.inputMode).toBe("quest_form");
     expect(
       result.output.envelopeOverride?.metadata?.["sugarlang.placementQuestionnaire"]
     ).toMatchObject({

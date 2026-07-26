@@ -17,6 +17,7 @@ export type QuestObjectiveSubtype =
   | "collect"
   | "trigger"
   | "castSpell"
+  | "assessment"
   | "custom";
 export type QuestNarrativeSubtype = "voiceover" | "dialogue" | "cutscene" | "event";
 export type QuestStageState = "active" | "completed";

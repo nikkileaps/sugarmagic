@@ -35,6 +35,7 @@ import type {
   ProbeFloorState,
   SugarlangConstraint
 } from "../types";
+import { createSugarlangLogger } from "../logger";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_COMPREHENSION_IN_FLIGHT_ANNOTATION,
@@ -48,7 +49,6 @@ import {
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   extractCharacterVoiceReminder,
   buildEmptyPrescription,
-  createNoOpSugarlangLogger,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
@@ -127,7 +127,7 @@ function buildRecentTurns(state: Record<string, unknown>): TeacherRecentTurn[] {
 export function createSugarLangTeacherMiddleware(
   deps: SugarLangTeacherMiddlewareDeps
 ): ConversationMiddleware {
-  const logger = deps.logger ?? createNoOpSugarlangLogger();
+  const logger = deps.logger ?? createSugarlangLogger({ debugLogging: false });
   const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
@@ -147,7 +147,7 @@ export function createSugarLangTeacherMiddleware(
         return execution;
       }
 
-      const services = deps.services.resolveForExecution(execution);
+      const services = await deps.services.resolveForExecution(execution);
       if (!services) {
         return execution;
       }

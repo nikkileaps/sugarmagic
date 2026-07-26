@@ -35,6 +35,8 @@ import { UIProgressBar } from "./ui/UIProgressBar";
 import { UISpacer } from "./ui/UISpacer";
 import { UIRuntimeBridgeProvider } from "./ui/UIContextProvider";
 import { EpisodesScreen, type EpisodesViewModel } from "./ui/EpisodesScreen";
+import { QuestFormOverlay } from "./ui/QuestFormOverlay";
+import type { ConversationQuestFormResponse } from "@sugarmagic/runtime-core";
 
 export interface GameUILayerProps {
   hudDefinition: HUDDefinition | null;
@@ -62,6 +64,10 @@ export interface GameUILayerProps {
   /** Plan 061 §061.3 — true when a Play page URL is configured;
    *  gates authored `exit-to-site` buttons. */
   exitToSiteAvailable: boolean;
+  /** 081.8 -- called when the user submits the quest form overlay. */
+  onQuestFormSubmit: (response: ConversationQuestFormResponse) => void;
+  /** 081.8 -- called when the user dismisses the quest form overlay. */
+  onQuestFormDismiss: () => void;
 }
 
 /**
@@ -292,6 +298,15 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
             episodes={props.episodes}
             onContinue={props.onEpisodesContinue}
             onClose={props.onEpisodesClose}
+          />
+        ) : null}
+        {/* 081.8 -- quest form overlay, above dialogue panel (z-40 > z-20). */}
+        {state.questFormOpen && state.questFormDefinition ? (
+          <QuestFormOverlay
+            key={state.questFormDefinition.formId ?? "quest-form"}
+            definition={state.questFormDefinition}
+            onSubmit={props.onQuestFormSubmit}
+            onDismiss={props.onQuestFormDismiss}
           />
         ) : null}
       </div>

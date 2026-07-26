@@ -32,10 +32,18 @@ import type {
 } from "../types";
 import type { CardStore } from "./card-store";
 import {
+  CEFR_BAND_ORDER,
+  computeEvidenceShare,
   computePointEstimate,
+  seedCefrPosteriorFromPlacement,
   seedCefrPosteriorFromSelfReport,
   updatePosterior
 } from "./cefr-posterior";
+import {
+  CALIBRATION_CONFIDENCE_CEILING,
+  CALIBRATION_OBSERVATION_WEIGHT,
+  isInPostPlacementCalibration
+} from "./calibration-window";
 import {
   computeFatigueScore
 } from "./session-signals";
@@ -129,6 +137,10 @@ export interface LearnerStateReducerOptions {
   targetLanguage: string;
   supportLanguage: string;
   blackboard: RuntimeBlackboard;
+  /** When provided and returns a non-null band, posterior and estimatedCefrBand
+   *  updates are suppressed during observations (band stays pinned). FSRS card
+   *  scheduling and session accumulators are unaffected. Debug-only. */
+  debugPinnedBand?: () => CEFRBand | null;
   cardStore: CardStore;
   atlas: LexicalAtlasProvider;
   learnerPriorProvider: LearnerPriorProvider;
@@ -214,6 +226,15 @@ export class LearnerStateReducer {
     await pending;
   }
 
+  /**
+   * Drops every in-memory session accumulator (turn counts, latency /
+   * hover / retry running sums). Called by the debug reset path so a wiped
+   * learner does not inherit the previous session's signals.
+   */
+  resetSessionAccumulators(): void {
+    this.sessionAccumulators.clear();
+  }
+
   private async applyInternal(event: ReducerEvent): Promise<void> {
     const profile = await loadLearnerProfile({
       blackboard: this.options.blackboard,
@@ -287,6 +308,12 @@ export class LearnerStateReducer {
           evaluatedAtMs: event.completedAtMs
         };
         profile.estimatedCefrBand = event.cefrBand;
+        // 081.4: the calibration window starts from what placement actually
+        // concluded, not from whatever self-report seeded.
+        profile.cefrPosterior = seedCefrPosteriorFromPlacement(
+          event.cefrBand,
+          event.confidence
+        );
         this.options.blackboard.setFact({
           definition: SUGARLANG_PLACEMENT_STATUS_FACT,
           scope: createSugarlangPlacementStatusScope(this.options.profileId),
@@ -446,12 +473,27 @@ export class LearnerStateReducer {
       );
     }
 
+    // Window state BEFORE this observation's turn count lands: a backstop
+    // expiry on this very turn must still read as a close transition when
+    // the close event is emitted below.
+    const wasInCalibrationWindow = isInPostPlacementCalibration(profile);
+    // Turns must be current before the calibration-window predicate reads them.
+    currentSession.turns = accumulator.turns;
+
     const success = computeObservationSuccess(outcome);
-    if (success !== null) {
+    if (success !== null && !this.options.debugPinnedBand?.()) {
+      // 081.4: during the post-placement calibration window, observations
+      // carry elevated weight and confidence is recomputed from evidence
+      // share, so the window closes on evidence with the turn backstop as
+      // ceiling. Outside the window, evaluated confidence stays frozen.
+      // When debugPinnedBand is active the block above is skipped to keep
+      // the estimated band stable during automated verification sessions.
+      const inCalibrationWindow = isInPostPlacementCalibration(profile);
       profile.cefrPosterior = updatePosterior(
         profile.cefrPosterior,
         nextCard.cefrPriorBand,
-        success
+        success,
+        inCalibrationWindow ? CALIBRATION_OBSERVATION_WEIGHT : 1
       );
       const pointEstimate = computePointEstimate(profile.cefrPosterior);
       profile.estimatedCefrBand = pointEstimate.band;
@@ -461,10 +503,49 @@ export class LearnerStateReducer {
           status: "estimated",
           cefrConfidence: pointEstimate.confidence
         };
+      } else if (inCalibrationWindow) {
+        const settledConfidence = computeEvidenceShare(
+          profile.cefrPosterior,
+          pointEstimate.band
+        );
+        profile.assessment = {
+          ...profile.assessment,
+          cefrConfidence: settledConfidence
+        };
       }
     }
 
-    currentSession.turns = accumulator.turns;
+    // Close-event emission sits outside the graded-observation block: a
+    // turn-backstop close can land on a turn whose observation is ungraded
+    // (success === null) and must still emit, and the window predicate must
+    // be compared against its pre-turn state or backstop expiries on this
+    // very turn read as "never open" and stay silent.
+    if (wasInCalibrationWindow && !isInPostPlacementCalibration(profile)) {
+      const placementBand =
+        profile.assessment.evaluatedCefrBand ?? profile.estimatedCefrBand;
+      const settledConfidence = profile.assessment.cefrConfidence;
+      await emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("calibration.window-closed", {
+          sessionId: currentSession.sessionId,
+          turnId: observationEvent.context.turnId,
+          conversationId: observationEvent.context.conversationId,
+          timestamp: observationEvent.observation.observedAtMs,
+          closeReason:
+            settledConfidence >= CALIBRATION_CONFIDENCE_CEILING
+              ? "confidence"
+              : "turn-backstop",
+          placementBand,
+          settledBand: profile.estimatedCefrBand,
+          bandDelta:
+            CEFR_BAND_ORDER.indexOf(profile.estimatedCefrBand) -
+            CEFR_BAND_ORDER.indexOf(placementBand),
+          settledConfidence,
+          sessionTurn: accumulator.turns
+        })
+      );
+    }
+
     currentSession.hoverRate =
       accumulator.lemmasSeen > 0 ? accumulator.hoverCount / accumulator.lemmasSeen : 0;
     currentSession.retryRate =

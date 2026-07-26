@@ -35,6 +35,7 @@ import {
   getPlacementQuestionnaireVersion,
   type PlacementPhaseStateValue
 } from "../placement/placement-flow-orchestrator";
+import { createSugarlangLogger } from "../logger";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION,
@@ -51,7 +52,6 @@ import {
   buildLearnerSnapshot,
   computePendingProvisionalLemmas,
   computeProbeFloorState,
-  createNoOpSugarlangLogger,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
@@ -146,7 +146,7 @@ function pickPrePlacementOpeningLine(executionText: {
 export function createSugarLangContextMiddleware(
   deps: SugarLangContextMiddlewareDeps
 ): ConversationMiddleware {
-  const logger = deps.logger ?? createNoOpSugarlangLogger();
+  const logger = deps.logger ?? createSugarlangLogger({ debugLogging: false });
   const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
@@ -172,7 +172,7 @@ export function createSugarLangContextMiddleware(
       // Ensure the selection carries targetLanguage for downstream readers.
       execution.selection.targetLanguage = targetLanguage;
 
-      const services = deps.services.resolveForExecution(execution);
+      const services = await deps.services.resolveForExecution(execution);
       if (!services) {
         return execution;
       }
@@ -191,9 +191,17 @@ export function createSugarLangContextMiddleware(
         ? (execution.state["sugaragent.session"] as { turnCount: number }).turnCount
         : 0;
       const placementState = readPlacementState(execution);
+      // DEFERRED (081 wrap): activeQuestObjectives carries only the TRACKED
+      // quest's objectives, so placement triggers only while the assessment
+      // quest is tracked. Accepted 2026-07-26: the dock area will contain
+      // the player until placement completes, making the assessment quest
+      // the only meaningful track there. Revisit if dock containment does
+      // not ship, or if placement ever moves past the first playable area.
       const isPlacementNpc =
         config.placement.enabled &&
-        execution.selection.metadata?.sugarlangRole === "placement";
+        (execution.runtimeContext?.activeQuestObjectives?.objectives.some(
+          (o) => o.objectiveSubtype === "assessment" && o.targetId === execution.selection.npcDefinitionId
+        ) ?? false);
       let placementPhase: PlacementFlowAnnotation["phase"] =
         !isPlacementNpc || placementStatus?.status === "completed"
           ? placementState?.phase === "closing-dialog" &&
@@ -205,7 +213,7 @@ export function createSugarLangContextMiddleware(
 
       if (
         placementPhase === "questionnaire" &&
-        execution.input?.kind === "placement_questionnaire"
+        execution.input?.kind === "quest_form"
       ) {
         const questionnaire = services.placementQuestionnaireLoader.getQuestionnaire(
           execution.selection.targetLanguage ?? learner.targetLanguage
