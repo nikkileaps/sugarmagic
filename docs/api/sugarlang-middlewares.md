@@ -156,6 +156,33 @@ a violating turn:
 3. **Fail-open** -- if autoSimplify throws, the original turn is returned
    unchanged.
 
+**Repair skip conditions.** Two turn types skip the repair ladder entirely
+(classifier still runs, telemetry still emits `verify.deterministic-bypass`):
+
+- **Deterministic-backend turns** -- `turn.diagnostics?.llmBackend === "deterministic"`.
+  These are canned/fallback replies where re-prompting an LLM makes no sense.
+- **Moderation-deflected turns** -- `turn.diagnostics?.moderationDeflected === true`.
+  The moderation middleware (stage `policy`, runs before `sugarlang.verify`
+  at stage `analysis`) replaces the original NPC reply with a safe canned line
+  and stamps this diagnostic. Attempting LLM repair on a moderation replacement
+  is wasteful and potentially unsafe.
+
+The `moderationDeflected` key is also exported from
+`packages/plugins/src/catalog/sugaragent/runtime/moderation/moderation-middleware.ts`
+as `MODERATION_DEFLECTED_DIAG_KEY` for consumers that want to inspect the diagnostic
+without hard-coding the string.
+
+**LLM repair prompt hygiene.** The repair system prompt includes an explicit
+instruction against inline glosses and parenthetical translations:
+`"Do NOT add inline glosses, parenthetical translations, or line-by-line word
+pairings. The NPC speaks naturally -- never write a word followed by its
+translation on the next line."` This prevents the model from "helping" by
+adding `(adiós = goodbye)` annotations to the repaired reply.
+
+The repair prompt also correctly strips LLM markdown code fences before
+JSON.parse (`/^```(?:json)?\\s*([\\s\\S]*?)```$/s`), so a model that wraps its
+JSON response in a ` ```json ` fence does not fail the best-of-N scorer.
+
 Honest scope notes:
 
 - **Language-ratio conformance is NOT verified.** The constraint's

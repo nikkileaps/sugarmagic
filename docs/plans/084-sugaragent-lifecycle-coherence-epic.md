@@ -1,6 +1,6 @@
 # Plan 084 -- Sugaragent Lifecycle Coherence (child epic H of Strategy 002)
 
-Status: Locked (epic-review passed 2026-07-26, 3 rounds)
+Status: Shipped (epic-review passed 2026-07-26, 3 rounds; all stories built + wrapped 2026-07-26)
 Owner: nikki + claude
 Date: 2026-07-26
 

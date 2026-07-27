@@ -1,8 +1,14 @@
 # Plan 083 -- Two-Channel Voice + Verified Level Control (child epic D of Strategy 002)
 
-Status: Locked (epic-review passed 2026-07-26, 2 rounds)
+Status: Locked (epic-review passed 2026-07-26, 2 rounds; PAUSED after 083.2 for epic H; resumes 2026-07-26 with amendments below)
 Owner: nikki + claude
 Date: 2026-07-26
+
+## Amendments (applied 2026-07-26 when epic H shipped)
+
+**083.3 -- action-tag preservation wire.** Epic 084.4 shipped `textConventions: { preserveActionTags: true }` as a contribution surface. Story 083.3 no longer needs to teach normalizeNpcSpeech or audit lint about gesture tags itself -- it writes `preserveActionTags: true` in the sugarlang.teacher contribution and the helpers respect it automatically. The 083.3 voice-channel spec authoring and classifier integration (interjection exemption, gesture-tag strip before tokenization) are still in scope as written; the output hygiene exemption is now a contribution flag rather than a new special-case in helpers.ts.
+
+**083.5 -- constraint re-injection via generateReminder.** Epic 084.1 shipped `generateReminder` as a contribution surface (the terminal slot beside the persona digest, builder.ts:249). Story 083.5 should write the constraint reminder via `generateReminder` in the sugarlang.teacher contribution rather than wiring a separate per-pair field on the generator prompt. The drift measurement and cadence logic (083.5's core stories) are unchanged.
 
 Related:
 - Strategy 002 (docs/plans/strategy/002-sugarlang-adaptive-language-acquisition-strategy.md) -- this is child epic D; scope from "Voice survives the envelope (two-channel speech)", "What the science says" item 7, and the turn-budget discipline in "Lines are intent"

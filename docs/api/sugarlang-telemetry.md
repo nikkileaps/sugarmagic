@@ -85,6 +85,7 @@ Grouped by family, with the producing file (all paths relative to
 | `quest-essential.classifier-exempted-lemma` | `sugar-lang-verify-middleware.ts` |
 | `verify.repair-triggered` | `sugar-lang-verify-middleware.ts` (LLM repair accepted) |
 | `verify.auto-simplify-triggered` | `sugar-lang-verify-middleware.ts` (deterministic fallback fired) |
+| `verify.deterministic-bypass` | `sugar-lang-verify-middleware.ts` (turn skips repair because LLM backend was deterministic or turn was moderation-deflected) |
 | `observe.observations-applied` | `sugar-lang-observe-middleware.ts` |
 
 **Comprehension probes**
