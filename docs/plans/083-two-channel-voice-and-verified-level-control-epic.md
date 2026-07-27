@@ -126,3 +126,4 @@ docs/api touch per house norm: middlewares page (verify contract: three verdict 
 - Barks and the wider bark system: strategy names them "later"; not in any story here.
 - Scripted-path and bake-time use of these verifiers: epic C composes them into its triple verification; this epic only guarantees they are callable outside the middleware (pure functions on the classifier facade).
 - Studio authoring UI polish for voice specs (form editor, live preview): floor here is lore-page text + NPC definition fields; revisit at first playtest complaint about authoring friction.
+- Interjection authoring UX: the `Interjections:` line in the `## Voice` lore section is free text parsed by convention -- behavioral/directorial config does not belong in narrative lore. Revisit trigger: when Studio gets a structured NPC voice panel (see above), move interjection list and gesture-tag flag there and drop the lore-section parser.
