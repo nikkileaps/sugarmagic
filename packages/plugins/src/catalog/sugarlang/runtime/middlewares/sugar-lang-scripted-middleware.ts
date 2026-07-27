@@ -50,6 +50,9 @@ import { INTENT_EXTRACTOR_PROMPT_VERSION } from "../compile/extract-intent";
 import type { LineIntentCacheKey } from "../compile/intent-cache";
 import type { CEFRBand } from "../contracts/learner-profile";
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
+import type { LiveRenderCacheKey } from "../compile/live-render-cache";
+import { buildTeachablesKey } from "../compile/live-render-cache";
+import { verifyLiveRender } from "../compile/verify-live-render";
 
 export interface SugarLangScriptedMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -221,6 +224,89 @@ export function createSugarLangScriptedMiddleware(
       const band = constraint.learnerCefr as CEFRBand;
 
       let usedVariant = false;
+
+      // 086.5: directed live render (dormant until epic E wires the trigger)
+      const liveRenderTriggered = false; // stub -- epic E replaces this
+      if (liveRenderTriggered) {
+        const introduce = constraint.targetVocab.introduce;
+        const teachablesKey = buildTeachablesKey(introduce);
+        const dialogueDefinitionId = String(
+          execution.annotations["sugarlang.dialogueDefinitionId"] ?? ""
+        );
+        const liveKey: LiveRenderCacheKey = {
+          nodeId,
+          dialogueDefinitionId,
+          lang: constraint.targetLanguage,
+          band,
+          posture: constraint.supportPosture,
+          teachablesKey
+        };
+
+        try {
+          // Cache hit: skip LLM entirely.
+          const cached = services.liveRenderCache?.get(liveKey) ?? null;
+          if (cached) {
+            normalizedTurn.text = cached.text;
+            usedVariant = true;
+            logger.debug("Scripted line: live-render cache hit (zero LLM).", {
+              nodeId,
+              band,
+              lang: constraint.targetLanguage
+            });
+          } else if (services.llmClient) {
+            // Cache miss: call the LLM to render the line live.
+            const inventoryChunks = getAllInventoryChunks(constraint.targetLanguage);
+            const llmResult = await services.llmClient.generate({
+              systemPrompt: [
+                `You are a dialogue writer for a language-learning game.`,
+                `Render the given English dialogue line in ${constraint.targetLanguage} for a ${band} learner.`,
+                `Return only the translated/adapted line, nothing else.`
+              ].join(" "),
+              userPrompt: [
+                `Target language: ${constraint.targetLanguage}`,
+                `Learner level: ${band}`,
+                `\nOriginal English line:\n${authoredText}`
+              ].join("\n"),
+              maxTokens: 300
+            });
+
+            const renderedText = llmResult.text.trim();
+            if (renderedText) {
+              // Verify with deterministic gates only (no LLM fidelity judge at runtime).
+              const verdict = verifyLiveRender({
+                text: renderedText,
+                targetLang: constraint.targetLanguage,
+                band,
+                posture: constraint.supportPosture,
+                directedRatio: constraint.targetLanguageRatio,
+                introduce,
+                inventoryChunks,
+                atlas: services.atlas
+              });
+
+              if (verdict.overallPasses) {
+                // Cache and use the live render.
+                services.liveRenderCache?.set(liveKey, {
+                  text: renderedText,
+                  verdict,
+                  cachedAtMs: Date.now()
+                });
+                normalizedTurn.text = renderedText;
+                usedVariant = true;
+                logger.debug("Scripted line: live-render produced and cached.", {
+                  nodeId,
+                  band,
+                  lang: constraint.targetLanguage
+                });
+              }
+              // On verify failure: fall through to baked variant below (usedVariant stays false).
+            }
+            // On empty response or LLM error caught below: fall through (usedVariant stays false).
+          }
+        } catch {
+          // Any live-render failure is non-fatal -- fall through to baked variant below.
+        }
+      }
 
       if (services.variantCache) {
         try {

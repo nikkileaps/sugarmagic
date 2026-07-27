@@ -739,6 +739,154 @@ describe("end-to-end conversation golden", () => {
     void host;
   });
 
+  it("086.5: with trigger off, behavior is byte-identical to 086.4 (no live render calls)", async () => {
+    // The liveRenderTriggered stub is hardcoded false, so the live-render path
+    // is never entered. This test confirms that:
+    //   1. A target-dominant scripted turn with a warm variant cache still uses the
+    //      baked variant text (086.4 behavior is unchanged).
+    //   2. Zero /generate calls reach the gateway (fetch guard enforces this).
+    // This is byte-identical to the "uses baked variant when variant cache is warm"
+    // test but explicitly documents that the trigger=off path adds no LLM calls.
+    const authoredLine = "Welcome to the station, traveler.";
+    const bakedVariantText = "Bienvenido a la estacion, viajero.";
+
+    const nodeId = "";
+    const contentHash = [nodeId, authoredLine, JSON.stringify({})].join("|");
+
+    const variantCache = new MemoryVariantCache();
+    const entry: VariantCacheEntry = {
+      key: {
+        lang: "es",
+        band: "B1",
+        contentHash,
+        variantPromptVersion: VARIANT_PROMPT_VERSION
+      },
+      variant: {
+        nodeId,
+        dialogueDefinitionId: "dialogue-orrin",
+        lang: "es",
+        band: "B1",
+        text: bakedVariantText,
+        verdict: {
+          envelopePasses: true,
+          ratioPasses: true,
+          voiceRetentionScore: 1.0,
+          fidelityPasses: true,
+          overallPasses: true
+        },
+        reviewFlag: false,
+        generatedAtMs: Date.now(),
+        generatedByModel: "test",
+        contentHash,
+        promptVersion: VARIANT_PROMPT_VERSION
+      }
+    };
+    await variantCache.set(entry);
+
+    // Allow nothing from the gateway -- the trigger=off path must make zero LLM calls.
+    installFetchGuard((_url) => null);
+
+    const { services, host } = makeSharedSetup({ debugBandOverride: "B1" }, "Hola.", {
+      initialText: authoredLine
+    });
+
+    const execServices = await services.resolveForExecution({
+      selection: {
+        conversationKind: "scripted-dialogue",
+        targetLanguage: "es",
+        supportLanguage: "en"
+      },
+      annotations: {},
+      state: {},
+      runtimeContext: null,
+      input: null
+    } as unknown as Parameters<typeof services.resolveForExecution>[0]);
+    if (execServices) {
+      execServices.variantCache = variantCache;
+      // No liveRenderCache set -- trigger is off anyway, but even if it were on,
+      // the cache miss path would be gated by liveRenderTriggered=false.
+    }
+
+    const turn = await host.startSession({
+      conversationKind: "scripted-dialogue",
+      npcDefinitionId: "npc-orrin",
+      npcDisplayName: "Orrin",
+      targetLanguage: "es",
+      supportLanguage: "en"
+    });
+
+    // 086.4 warm-cache behavior is unchanged: baked variant text is used.
+    expect(turn?.text).toBe(bakedVariantText);
+    expect(turn?.text).not.toBe(authoredLine);
+  });
+
+  it("086.5: LiveRenderCache and verifyLiveRender work end-to-end (trigger integration waits for epic E)", async () => {
+    // The middleware trigger is hardcoded false -- full middleware integration
+    // test waits on epic E wiring. This test exercises the cache and verifier
+    // directly to confirm the path works when called:
+    //   1. verifyLiveRender produces a valid VariantVerdict for target-dominant Spanish.
+    //   2. LiveRenderCache round-trips the entry correctly.
+    //   3. A second cache.get() returns the same entry (cache hit, zero extra work).
+    //
+    // This is a direct unit test of the two new modules, not through the middleware.
+    // Import them here (dynamic) so the test is self-contained and readable.
+    const { LiveRenderCache, buildTeachablesKey } = await import(
+      "../../runtime/compile/live-render-cache"
+    );
+    const { verifyLiveRender } = await import(
+      "../../runtime/compile/verify-live-render"
+    );
+    const { CefrLexAtlasProvider } = await import(
+      "../../runtime/providers/impls/cefr-lex-atlas-provider"
+    );
+    const { getAllInventoryChunks } = await import(
+      "../../runtime/inventory/function-inventory-loader"
+    );
+
+    const atlas = new CefrLexAtlasProvider();
+    const inventoryChunks = getAllInventoryChunks("es");
+    const introduce = [{ lemmaId: "hola", lang: "es" }];
+
+    // Verify a Spanish line that contains "hola" -- fidelity floor passes.
+    const verdict = verifyLiveRender({
+      text: "Hola, bienvenido viajero.",
+      targetLang: "es",
+      band: "B1",
+      posture: "target-dominant",
+      directedRatio: 0.8,
+      introduce,
+      inventoryChunks,
+      atlas
+    });
+    // Voice retention is always 1.0 (no voiceSpec at runtime).
+    expect(verdict.voiceRetentionScore).toBe(1.0);
+    // Fidelity floor: "hola" is present in the text -> passes.
+    expect(verdict.fidelityPasses).toBe(true);
+
+    // Cache round-trip.
+    const cache = new LiveRenderCache();
+    const key = {
+      nodeId: "node-1",
+      dialogueDefinitionId: "dialogue-orrin",
+      lang: "es",
+      band: "B1" as const,
+      posture: "target-dominant" as const,
+      teachablesKey: buildTeachablesKey(introduce)
+    };
+    const cacheEntry = {
+      text: "Hola, bienvenido viajero.",
+      verdict,
+      cachedAtMs: Date.now()
+    };
+
+    expect(cache.get(key)).toBeNull();
+    cache.set(key, cacheEntry);
+    expect(cache.get(key)).toBe(cacheEntry);
+    // Second get is the cache hit -- same object.
+    expect(cache.get(key)).toBe(cacheEntry);
+    expect(cache.size()).toBe(1);
+  });
+
   it("086.4 pin: prescription-less scripted line still produces introduce highlights from weave", async () => {
     // Pin for 086.4 deletion: the gloss-scan lineIntroduce variable is gone.
     // For prescription-less scripted lines the weave now runs with whatever

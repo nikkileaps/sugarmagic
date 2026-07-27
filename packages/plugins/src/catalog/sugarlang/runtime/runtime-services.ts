@@ -36,6 +36,7 @@ import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
 import type { SugarlangVariantCache } from "./compile/variant-cache";
 import type { SugarlangIntentCache } from "./compile/intent-cache";
+import type { LiveRenderCache } from "./compile/live-render-cache";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
 import type { SugarlangLLMClient } from "./llm/types";
 import { LexicalBudgeter } from "./budgeter/lexical-budgeter";
@@ -109,6 +110,8 @@ export interface SugarlangExecutionServices {
   variantCache?: SugarlangVariantCache;
   /** 086.4: optional intent cache injected by callers at bake time. */
   intentCache?: SugarlangIntentCache;
+  /** 086.5: optional live-render cache (in-memory only; no persistence needed). */
+  liveRenderCache?: LiveRenderCache;
 }
 
 export interface SugarlangDebugState {
