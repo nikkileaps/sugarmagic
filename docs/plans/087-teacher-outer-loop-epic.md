@@ -14,6 +14,21 @@ Related:
 
 ---
 
+## What ships, experienced (added 2026-07-27, nikki ask)
+
+Mostly orchestration -- little of this is visible in any single conversation; what changes is the shape of play ACROSS conversations and sessions. Concretely:
+
+1. **Authored lines that teach, live** (087.5). When the player is due on a word and an authored line's intent can carry it, that line renders live at their level with the teachable woven in, instead of the generic pre-baked band variant. First personalization of the scripted path to the individual learner rather than the band. Gateway down = baked plays, no visible failure.
+2. **Words stop vanishing after introduction** (087.2/087.3). An introduced word resurfaces from DIFFERENT NPCs in DIFFERENT scenes across days until ~10 diverse encounters. Learn queso from Rosa, the baker uses it too. Introduction-without-refeed becomes a tracked failure instead of the default outcome.
+3. **The game notices struggle and backs off** (087.4). Missed probes / heavy hovering / slow replies = the next stretch stops introducing and serves review; deliberately-scheduled easy scenes appear (all known vocabulary, at ease -- the fluency strand). Peaks and valleys replace the constant new-word drip.
+4. **New vocabulary arrives in a sane order** (087.3). Introductions follow band ordering + current learning progress, packed to a predicted comprehension rate per scene -- not whatever words the script happened to contain.
+5. **Agent NPCs steer toward due words** (087.6). Retrieval bias drifts free-form conversation toward topics that exercise what the learner needs -- the tutor's note to the locals, working.
+6. **Studio: intent auto-bakes** (087.5, inherited 086 debt). Saving a dialogue auto-extracts intent for unauthored lines; hand-authored fields win.
+
+For QA the biggest new capability is EXPLAINABILITY: every scheduling decision logs its inputs, queryable via telemetry -- "why did Rosa teach comprar" gets a concrete answer (due-ness, debt balance, strain, match reason). The verification recipe is built around exactly that.
+
+NOT expected: no new player-facing UI, no visible "teacher," no change to any story beat. If a player can tell the scheduler exists, we did it wrong -- the world should just happen to speak at exactly their level.
+
 ## Why now
 
 Everything below the teacher is (or will be, after B/C/D) built: a learner model with due scheduling, a function inventory, a rendering ladder, verified level control. What is missing is the "someone wise watching the whole board": today's teacher is a per-conversation REACTOR -- the inner loop realizes a directive from the current conversation's context and caches it for ~3 turns; nothing schedules across scenes and days, nothing enforces the encounter contract (~8-10 diverse re-encounters per introduced item -- introduction without re-feeding is wasted budget), nothing paces teach-peaks against consolidation valleys, and nothing ever decides "this authored line is the moment to teach comprar."
