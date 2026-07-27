@@ -22,6 +22,7 @@ import {
   computeVoiceRetentionScore
 } from "../../runtime/middlewares/sugar-lang-verify-middleware";
 import { SUGARLANG_CONSTRAINT_ANNOTATION } from "../../runtime/middlewares/shared";
+import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import {
   createBaseConstraint,
   createServicesStub,
@@ -849,6 +850,61 @@ describe("SugarLangVerifyMiddleware", () => {
     it("scores 1 when both interjection and gesture tag are present", () => {
       expect(computeVoiceRetentionScore("*sweeps hat* ¡Ay! Buenas tardes.", { interjections: ["ay"], hasGestureTags: true })).toBe(1);
     });
+  });
+
+  it("083.5: emits verify.drift-sample with turn index and voice retention score", async () => {
+    const passProfile = {
+      totalTokens: 3, knownTokens: 3, inBandTokens: 3, unknownTokens: 0,
+      bandHistogram: { A1: 3, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
+      outOfEnvelopeLemmas: [], ceilingExceededLemmas: [], questEssentialLemmasMatched: [],
+      coverageRatio: 1, ratioCheckTokens: 3, resolvedTargetLanguageTokens: 3
+    };
+    const classifierCheck = vi.fn().mockReturnValue({
+      withinEnvelope: true, profile: passProfile, worstViolation: null, rule: "test",
+      violations: [], exemptionsApplied: [],
+      languageRatioVerdict: { measuredRatio: 0.85, directedRatio: 0.85, posture: "target-dominant", conformance: "conformant" }
+    });
+    const sink = new MemoryTelemetrySink();
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({
+            sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1",
+            atlasVersion: "v1", profile: "runtime-preview",
+            lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [],
+            npcVoiceSpecs: { "npc-1": { interjections: ["ay"], hasGestureTags: false } }
+          }) },
+          classifier: { check: classifierCheck },
+          llmClient: null
+        })
+      }) as never,
+      telemetry: sink
+    });
+    const execution = createTestExecution();
+    // Simulate 3 history entries to set turn index
+    (execution.state["sugaragent.session"] as { history: unknown[] }).history = [
+      { role: "user", text: "hola" },
+      { role: "assistant", text: "hola amigo" },
+      { role: "user", text: "como estas" }
+    ];
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({
+      supportPosture: "target-dominant",
+      targetLanguageRatio: 0.85
+    });
+
+    await middleware.finalize?.(execution, createTestTurn("¡Ay! Hola amigo."));
+
+    const events = await sink.query({ eventKinds: ["verify.drift-sample"] });
+    expect(events).toHaveLength(1);
+    const drift = events[0] as Extract<typeof events[0], { kind: "verify.drift-sample" }>;
+    expect(drift.turnIndex).toBe(3);
+    expect(drift.measuredRatio).toBe(0.85);
+    expect(drift.directedRatio).toBe(0.85);
+    expect(drift.ratioConformance).toBe("conformant");
+    expect(drift.withinEnvelope).toBe(true);
+    // "¡Ay! Hola amigo." contains the interjection "ay" -- score should be 1
+    expect(drift.voiceRetentionScore).toBe(1);
   });
 
   it("083.4: among passing candidates, prefers the one retaining voice markers", async () => {

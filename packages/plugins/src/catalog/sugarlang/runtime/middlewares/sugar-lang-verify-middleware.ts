@@ -375,6 +375,29 @@ export function createSugarLangVerifyMiddleware(
         }),
         logger
       );
+      // 083.5 — per-turn drift sample: baseline ratio + envelope + voice score
+      // before any repair, keyed by conversation-ordinal turn index.
+      const sessionHistory = (
+        execution.state["sugaragent.session"] as { history?: unknown[] } | undefined
+      )?.history;
+      const turnIndex = Array.isArray(sessionHistory) ? sessionHistory.length : 0;
+      await emitTelemetry(
+        telemetry,
+        createTelemetryEvent("verify.drift-sample", {
+          conversationId,
+          sessionId,
+          turnId: traceTurnId,
+          timestamp: Date.now(),
+          sceneId: sceneId ?? null,
+          turnIndex,
+          measuredRatio: verdict.languageRatioVerdict.measuredRatio,
+          directedRatio: verdict.languageRatioVerdict.directedRatio,
+          ratioConformance: verdict.languageRatioVerdict.conformance,
+          withinEnvelope: verdict.withinEnvelope,
+          voiceRetentionScore: computeVoiceRetentionScore(originalTurnText, voiceSpec)
+        }),
+        logger
+      );
       if (scene) {
         for (const lemmaId of verdict.profile.questEssentialLemmasMatched) {
           const questEssential = constraint.questEssentialLemmas?.find(

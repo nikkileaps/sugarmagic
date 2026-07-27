@@ -53,6 +53,7 @@ function baseContext(
       ]
     },
     personaDigest: "Warm, brisk, proud.\nVoice: Short sentences; says 'love'.",
+    constraintReminder: "",
     memoryDigest: "",
     knownFacts: null,
     recentWorldEvents: null,
@@ -388,5 +389,42 @@ describe("buildGeneratePrompt -- recent-events block (074.6')", () => {
   it("omits the block when recentWorldEvents is empty", () => {
     const { userPrompt } = buildGeneratePrompt(baseContext({ recentWorldEvents: [] }));
     expect(userPrompt).not.toContain("Recent world events:");
+  });
+});
+
+// 083.5 -- constraint reminder terminal-slot splice.
+describe("buildGeneratePrompt -- constraint reminder (083.5)", () => {
+  it("includes the constraint reminder in the user message when set", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ constraintReminder: "Language constraint: ~85% Spanish, A1 level." })
+    );
+    expect(userPrompt).toContain("Language constraint: ~85% Spanish, A1 level.");
+  });
+
+  it("omits the constraint reminder block when empty string", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({ constraintReminder: "", languageLearningOverlay: null })
+    );
+    expect(userPrompt).not.toContain("Language constraint:");
+  });
+
+  it("places the constraint reminder before the persona digest in the user message", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        constraintReminder: "Language constraint: ~85% Spanish, A1 level.",
+        personaDigest: "Warm, brisk, proud."
+      })
+    );
+    const reminderIdx = userPrompt.indexOf("Language constraint:");
+    const digestIdx = userPrompt.indexOf("Remember who you are:");
+    expect(reminderIdx).toBeGreaterThanOrEqual(0);
+    expect(digestIdx).toBeGreaterThan(reminderIdx);
+  });
+
+  it("keeps the constraint reminder out of the system prompt", () => {
+    const { systemPrompt } = buildGeneratePrompt(
+      baseContext({ constraintReminder: "Language constraint: ~85% Spanish, A1 level." })
+    );
+    expect(systemPrompt).not.toContain("Language constraint:");
   });
 });

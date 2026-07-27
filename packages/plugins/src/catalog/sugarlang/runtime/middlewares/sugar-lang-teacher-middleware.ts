@@ -65,6 +65,7 @@ import {
 interface SugarlangContributionShape {
   schemaVersion: 1;
   generateOverlay: string;
+  generateReminder?: string;
   judgeDirectives?: string[];
   regenDirectives?: string[];
   interpretLexicon?: Record<string, string[]>;
@@ -79,6 +80,17 @@ const SPANISH_INTERPRET_LEXICON: Record<string, string[]> = {
   gratitude: ["gracias", "muchas gracias", "mil gracias"],
   acknowledgement: ["sí", "si", "claro", "vale", "de acuerdo", "entendido", "perfecto", "genial", "bueno"]
 };
+
+function buildConstraintReminder(
+  targetLanguageRatio: number,
+  targetLanguage: string,
+  learnerCefr: string
+): string | null {
+  if (targetLanguageRatio <= 0) return null;
+  const pct = Math.round(targetLanguageRatio * 100);
+  const langName = languageDisplayName(targetLanguage);
+  return `Language constraint: ~${pct}% ${langName}, learner at ${learnerCefr} level.`;
+}
 
 function buildInterpretLexicon(targetLanguage: string): Record<string, string[]> | undefined {
   if (targetLanguage === "es") return SPANISH_INTERPRET_LEXICON;
@@ -243,9 +255,15 @@ export function createSugarLangTeacherMiddleware(
           constraint.targetLanguage
         );
         const scriptedLexicon = buildInterpretLexicon(constraint.targetLanguage);
+        const scriptedReminder = buildConstraintReminder(
+          constraint.targetLanguageRatio,
+          constraint.targetLanguage,
+          constraint.learnerCefr
+        );
         const scriptedContrib: SugarlangContributionShape = {
           schemaVersion: 1,
           generateOverlay: constraint.generatorPromptOverlay,
+          ...(scriptedReminder ? { generateReminder: scriptedReminder } : {}),
           ...(scriptedJudgeDirective ? { judgeDirectives: [scriptedJudgeDirective], regenDirectives: [scriptedJudgeDirective] } : {}),
           ...(scriptedLexicon ? { interpretLexicon: scriptedLexicon } : {})
         };
@@ -462,9 +480,15 @@ export function createSugarLangTeacherMiddleware(
         npcDefId && scene?.npcVoiceSpecs
           ? (scene.npcVoiceSpecs[npcDefId] ?? null)
           : null;
+      const constraintReminder = buildConstraintReminder(
+        constraint.targetLanguageRatio,
+        constraint.targetLanguage,
+        constraint.learnerCefr
+      );
       const contrib: SugarlangContributionShape = {
         schemaVersion: 1,
         generateOverlay: constraint.generatorPromptOverlay,
+        ...(constraintReminder ? { generateReminder: constraintReminder } : {}),
         ...(judgeDirective ? { judgeDirectives: [judgeDirective], regenDirectives: [judgeDirective] } : {}),
         ...(langLexicon ? { interpretLexicon: langLexicon } : {}),
         ...(voiceSpec?.hasGestureTags ? { textConventions: { preserveActionTags: true } } : {})

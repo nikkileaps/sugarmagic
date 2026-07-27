@@ -369,6 +369,26 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
+      "verify.deterministic-bypass",
+      {
+        sceneId?: string | null;
+        reason: string;
+      }
+    >
+  | TelemetryEventOf<
+      "verify.drift-sample",
+      {
+        sceneId: string | null;
+        /** Ordinal turn index within the conversation (0-based). */
+        turnIndex: number;
+        measuredRatio: number;
+        directedRatio: number;
+        ratioConformance: string;
+        withinEnvelope: boolean;
+        voiceRetentionScore: number;
+      }
+    >
+  | TelemetryEventOf<
       "verify.ratio-verdict",
       {
         sceneId: string | null;

@@ -415,6 +415,8 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
             ?.digest ?? "",
         // Plan 072.8 — drift-reminder digest, re-injected at end of user message.
         personaDigest: input.state.persona?.digest ?? "",
+        // 083.5 — constraint reminder from contributions, spliced at terminal slot.
+        constraintReminder: contributions.mergedReminder || "",
         // Plan 077.2 -- world-framed quest context (D2/D3). Populated by the
         // quest-context middleware annotation when it resolved world lore for
         // the active objective. Null when no quest is active or the middleware
