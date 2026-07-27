@@ -25,7 +25,10 @@ import {
 import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
-import { getFunctionForChunk as getInventoryFunctionForChunk } from "../inventory/function-inventory-loader";
+import {
+  getFunctionForChunk as getInventoryFunctionForChunk,
+  getAllInventoryChunks
+} from "../inventory/function-inventory-loader";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
@@ -386,12 +389,14 @@ export function createSugarLangObserveMiddleware(
         return normalizedTurn;
       }
 
-      // 085.3: Load scene lexicon once; create chunk matcher if chunks are present.
-      // chunks is optional on CompiledSceneLexicon (absent when chunk extraction hasn't run).
-      const scene = await services.sceneLexiconStore.ensure(sceneId);
+      // 085.3: Load scene lexicon (used for lore/voice); build chunk matcher from the
+      // hand-curated function inventory so dynamic NPC greetings are detected even when
+      // the phrase never appears verbatim in authored scene text.
+      await services.sceneLexiconStore.ensure(sceneId);
+      const inventoryChunks = getAllInventoryChunks(learner.targetLanguage);
       const chunkMatcher =
-        scene?.chunks && scene.chunks.length > 0
-          ? createChunkMatcher(scene.chunks, learner.targetLanguage)
+        inventoryChunks.length > 0
+          ? createChunkMatcher(inventoryChunks, learner.targetLanguage)
           : null;
 
       const appliedObservations = [] as ReturnType<typeof createObservationEvent>[];

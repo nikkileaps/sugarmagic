@@ -21,18 +21,24 @@ import type { LexicalChunk } from "../types";
 import type { Token } from "./tokenize";
 import { tokenize } from "./tokenize";
 
+/** Minimum chunk shape accepted by the matcher -- satisfied by both LexicalChunk and InventoryChunk. */
+export type ChunkSpec = Pick<
+  LexicalChunk,
+  "chunkId" | "normalizedForm" | "surfaceForms" | "cefrBand" | "constituentLemmas"
+>;
+
 interface ChunkTrieNode {
   children: Map<string, ChunkTrieNode>;
-  terminals: LexicalChunk[];
+  terminals: ChunkSpec[];
 }
 
 export interface ChunkMatch {
-  chunk: LexicalChunk;
+  chunk: ChunkSpec;
   normalizedForm: string;
   surfaceMatched: string;
   start: number;
   end: number;
-  cefrBand: LexicalChunk["cefrBand"];
+  cefrBand: ChunkSpec["cefrBand"];
   constituentLemmaIds: string[];
   tokenIndexes: number[];
 }
@@ -61,7 +67,7 @@ function normalizeChunkTokens(surface: string, lang: string): string[] {
  * so a cached matcher works correctly across different turn texts.
  */
 export function createChunkMatcher(
-  chunks: LexicalChunk[] | undefined,
+  chunks: ChunkSpec[] | undefined,
   lang: string
 ): ChunkMatcher {
   const root = createTrieNode();

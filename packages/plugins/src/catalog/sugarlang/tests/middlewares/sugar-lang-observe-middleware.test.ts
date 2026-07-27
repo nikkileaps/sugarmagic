@@ -305,7 +305,9 @@ describe("SugarLangObserveMiddleware", () => {
     expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("chunk:buenos_dias");
   });
 
-  it("085.3: no chunk observation when scene lexicon has no chunks", async () => {
+  it("085.3: detects inventory chunks even when scene.chunks is absent", async () => {
+    // Chunk detection uses the hand-curated function inventory, not scene.chunks.
+    // An NPC greeting is detected regardless of what the authoring pipeline extracted.
     const apply = vi.fn().mockResolvedValue(undefined);
     const services = createServicesStub({
       resolveForExecution: () => ({
@@ -328,7 +330,7 @@ describe("SugarLangObserveMiddleware", () => {
         (event.observationEvent?.observation.kind === "chunk-encountered" ||
           event.observationEvent?.observation.kind === "chunk-produced")
     );
-    expect(chunkObs).toBeUndefined();
+    expect(chunkObs).toBeDefined();
   });
 
   it("085.5: first NPC chunk-encountered writes a teach-record and teach-line annotation", async () => {
