@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { normalizeRetrievedEvidenceText } from "./helpers";
+import { findStageDirectionViolations, normalizeNpcSpeech, normalizeRetrievedEvidenceText } from "./helpers";
 
 describe("normalizeRetrievedEvidenceText", () => {
   it("strips ALL leading ingest headers even when separated by blank lines", () => {
@@ -44,5 +44,36 @@ describe("normalizeRetrievedEvidenceText", () => {
   it("falls back to the original when there is nothing but headers", () => {
     const headersOnly = ["Page ID: x", "Title: y"].join("\n\n");
     expect(normalizeRetrievedEvidenceText(headersOnly)).toBe(headersOnly);
+  });
+});
+
+// Plan 084.4 -- preserveActionTags gate
+describe("normalizeNpcSpeech", () => {
+  it("strips asterisk spans by default (byte-identical to today)", () => {
+    expect(normalizeNpcSpeech("*sweeps hat* Hello.")).not.toContain("*sweeps hat*");
+  });
+
+  it("preserves asterisk spans when preserveActionTags=true", () => {
+    expect(normalizeNpcSpeech("*sweeps hat* Hello.", true)).toContain("*sweeps hat*");
+  });
+
+  it("still strips bracket spans even when preserveActionTags=true", () => {
+    const result = normalizeNpcSpeech("*waves* [stage dir] Hi.", true);
+    expect(result).toContain("*waves*");
+    expect(result).not.toContain("[stage dir]");
+  });
+});
+
+describe("findStageDirectionViolations", () => {
+  it("flags asterisk spans by default (byte-identical to today)", () => {
+    expect(findStageDirectionViolations("*waves*")).toContain("contains-asterisk-stage-direction");
+  });
+
+  it("does not flag asterisk spans when preserveActionTags=true", () => {
+    expect(findStageDirectionViolations("*waves*", true)).not.toContain("contains-asterisk-stage-direction");
+  });
+
+  it("still flags bracket spans even when preserveActionTags=true", () => {
+    expect(findStageDirectionViolations("[stage direction]", true)).toContain("contains-bracket-stage-direction");
   });
 });

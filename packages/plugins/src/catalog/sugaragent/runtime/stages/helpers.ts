@@ -79,8 +79,11 @@ export function findMetaLeakViolations(text: string): string[] {
     .map((entry) => entry.violation);
 }
 
-export function findStageDirectionViolations(text: string): string[] {
-  return STAGE_DIRECTION_PATTERNS
+export function findStageDirectionViolations(text: string, preserveActionTags?: boolean): string[] {
+  const patterns = preserveActionTags
+    ? STAGE_DIRECTION_PATTERNS.filter((e) => e.violation !== "contains-asterisk-stage-direction")
+    : STAGE_DIRECTION_PATTERNS;
+  return patterns
     .filter((entry) => entry.pattern.test(text))
     .map((entry) => entry.violation);
 }
@@ -142,8 +145,9 @@ export function findSpatialGroundingViolations(
   return violations;
 }
 
-export function normalizeNpcSpeech(text: string): string {
-  let normalized = text.replace(/\*[^*]+\*/g, " ");
+// 083.3 consumes preserveActionTags=true via the textConventions contribution (084.4).
+export function normalizeNpcSpeech(text: string, preserveActionTags?: boolean): string {
+  let normalized = preserveActionTags ? text : text.replace(/\*[^*]+\*/g, " ");
   normalized = normalized.replace(/\[[^\]]+\]/g, " ");
   normalized = normalized.replace(/^\s*\(([^)]{2,})\)\s*/gm, "");
 

@@ -226,7 +226,7 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
     const violationList = input.judge.violations.join("; ");
     const repairHint = input.judge.repairHint ? ` Hint: ${input.judge.repairHint}` : "";
 
-    const { mergedOverlay, regenDirectives } = collectContributions(input.execution.annotations);
+    const { mergedOverlay, regenDirectives, preserveActionTags } = collectContributions(input.execution.annotations);
     const constraintBlock = [mergedOverlay, ...regenDirectives].filter(Boolean).join("\n");
 
     const regenUserPrompt =
@@ -245,7 +245,7 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
         userPrompt: regenUserPrompt,
         maxTokens: constraintBlock ? 300 : 200
       });
-      regenText = normalizeNpcSpeech(result.text);
+      regenText = normalizeNpcSpeech(result.text, preserveActionTags);
     } catch {
       // Regen failed -- deterministic fallback.
     }
@@ -254,7 +254,7 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
       // Re-lint (no second judge call -- cost/latency cap per D2).
       const relintViolations = [
         ...findMetaLeakViolations(regenText),
-        ...findStageDirectionViolations(regenText)
+        ...findStageDirectionViolations(regenText, preserveActionTags)
       ];
       if (relintViolations.length === 0) {
         return {

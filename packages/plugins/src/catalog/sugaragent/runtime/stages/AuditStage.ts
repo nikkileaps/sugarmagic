@@ -1,3 +1,4 @@
+import { collectContributions } from "../contributions";
 import { createDiagnostics } from "./diagnostics";
 import {
   findGenericOnlyViolations,
@@ -37,9 +38,10 @@ export class AuditStage implements TurnStage<AuditStageInput, AuditResult> {
     input: AuditStageInput
   ): Promise<TurnStageResult<AuditResult>> {
     const startedAt = Date.now();
+    const { preserveActionTags } = collectContributions(input.execution.annotations);
     const violations: string[] = [
       ...findMetaLeakViolations(input.generate.text),
-      ...findStageDirectionViolations(input.generate.text),
+      ...findStageDirectionViolations(input.generate.text, preserveActionTags),
       ...findSpatialGroundingViolations(input.generate.text, input.execution)
     ];
     // The generic-only length/sentence caps exist for the DETERMINISTIC canned
