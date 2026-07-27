@@ -94,8 +94,18 @@ type VariantCacheKey = {
 };
 ```
 
-The IDB database is `sugarlang-variant-cache`, object store `sugarlang-variants`.
-`MemoryVariantCache` is used in tests and server-side bake runs.
+The IDB database name is `sugarlang-variant-cache:${workspaceId}` where
+`workspaceId = "sugarlang-studio:${gameProject.identity.id}"`. The object store
+is `"sugarlang-variants"`. `MemoryVariantCache` is used in tests and server-side
+bake runs.
+
+The runtime variant cache is wired through the preview boot payload. Studio
+includes `studioWorkspaceId` in `SugarlangPreviewBootPayload`; the plugin `init`
+reads it via `extractSugarlangStudioWorkspaceId` and calls
+`services.wireStudioVariantCache(studioWorkspaceId)`, which instantiates an
+`IndexedDBVariantCache` against the Studio origin's IDB (shared because Studio
+and Preview run on the same origin). If `studioWorkspaceId` is absent from the
+boot payload, `variantCache` is undefined and the middleware degrades silently.
 
 On a cache miss at runtime, the middleware degrades to the diglot weave (Tier
 A1) so the turn always completes.
@@ -170,8 +180,10 @@ Run by `generateVariant` on every LLM-generated variant before caching.
 | 3. Voice retention | `computeVoiceRetentionScore` | Score >= 1.0 (no NPC voice spec at bake time -> always 1.0; score becomes meaningful when a voice spec is available). |
 | 4. Fidelity | LLM judge call (`runFidelityCheck`) | All `mustConveyFacts` are present in the generated line. Skipped (passes) when `mustConveyFacts` is empty. On LLM failure: gate fails conservatively. |
 
-A variant with `overallPasses: false` is still cached but `reviewFlag` is set.
-It plays as a degraded floor; Studio surfaces it in the exception report.
+A variant with `overallPasses: false` is still cached and still served at
+runtime -- `reviewFlag` is an authoring signal only, not a runtime gate. Studio
+surfaces flagged variants in the exception report so authors can review and
+manually correct them.
 
 ### Runtime (three gates -- deterministic only, no LLM fidelity judge)
 
@@ -260,5 +272,5 @@ The compile scheduler picks up variant pipeline options via
 | `VARIANT_PROMPT_VERSION` | `generate-variant.ts` | `"086.3.0"` |
 | `INTENT_EXTRACTOR_PROMPT_VERSION` | `extract-intent.ts` | set at 086.1 bake |
 | `DISPLAY_BANDS` | `variants-popover.tsx` | `["B1", "B2", "C1", "C2"]` |
-| IDB db name | `variant-cache.ts` | `"sugarlang-variant-cache"` |
+| IDB db name | `variant-cache.ts` | `"sugarlang-variant-cache:${workspaceId}"` |
 | IDB store name | `variant-cache.ts` | `"sugarlang-variants"` |
