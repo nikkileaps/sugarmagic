@@ -42,12 +42,15 @@ import {
   isScriptedMode,
   normalizeTurn,
   shouldRunSugarlangForExecution,
-  SUGARLANG_CONSTRAINT_ANNOTATION
+  SUGARLANG_CONSTRAINT_ANNOTATION,
+  SUGARLANG_SCHEDULE_ANNOTATION
 } from "./shared";
+import type { TeachSchedule } from "../scheduler/teach-schedule";
 import type { VariantCacheKey } from "../compile/variant-cache";
 import { VARIANT_PROMPT_VERSION } from "../compile/generate-variant";
 import { INTENT_EXTRACTOR_PROMPT_VERSION } from "../compile/extract-intent";
 import type { LineIntentCacheKey } from "../compile/intent-cache";
+import { buildIntentContentHash } from "../compile/intent-cache";
 import type { CEFRBand } from "../contracts/learner-profile";
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
 import type { LiveRenderCacheKey } from "../compile/live-render-cache";
@@ -69,11 +72,11 @@ function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
 }
 
 /**
- * Builds the contentHash for a dialogue node as the variant cache expects it.
- * Matches the key computed in compile-scheduler variantPipeline:
- *   [nodeId, text, JSON.stringify(intent)].join("|")
- * At runtime we have no intent artifact yet (that's a bake-time product), so
- * we use JSON.stringify({}) to match the scheduler's no-intent default.
+ * Builds the contentHash for a dialogue node as the VARIANT cache expects it.
+ * The variant pipeline keys on JSON.stringify({}) on both bake and runtime sides
+ * deliberately -- intent is embedded in the LLM prompt, not the cache key, so
+ * variant cache hits survive hand-authored intent edits.
+ * Do NOT use this for the intent cache key; use buildIntentContentHash there.
  */
 function buildVariantContentHash(nodeId: string, nodeText: string): string {
   return [nodeId, nodeText, JSON.stringify({})].join("|");
@@ -190,8 +193,14 @@ export function createSugarLangScriptedMiddleware(
         const nodeId = String(normalizedTurn.metadata?.nodeId ?? "");
         if (nodeId && services.intentCache) {
           try {
+            const dialogueDefId = execution.selection.dialogueDefinitionId ?? "";
+            const nodeIntent = dialogueDefId
+              ? services.dialogueDefinitions
+                  .find((d) => d.definitionId === dialogueDefId)
+                  ?.nodes.find((n) => n.nodeId === nodeId)?.intent
+              : undefined;
             const intentKey: LineIntentCacheKey = {
-              contentHash: buildVariantContentHash(nodeId, authoredText),
+              contentHash: buildIntentContentHash(nodeId, authoredText, nodeIntent),
               intentPromptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
             };
             const intentEntry = await services.intentCache.get(intentKey);
@@ -230,14 +239,47 @@ export function createSugarLangScriptedMiddleware(
 
       let usedVariant = false;
 
-      // 086.5: directed live render (dormant until epic E wires the trigger)
-      const liveRenderTriggered = false; // stub -- epic E replaces this
+      // 087.5: deterministic trigger -- due teachable x line-intent match x strain headroom.
+      // Reads the outer-loop schedule (written by context middleware) and the intent artifact
+      // for this node (baked by the compile pipeline). When a scheduled due item's id appears
+      // in the line's mustConveyFacts AND the learner is not in strain-suppressed mode,
+      // the line renders live with the due word woven in.
+      const dialogueDefinitionId = execution.selection.dialogueDefinitionId ?? "";
+      const nodeIntent = dialogueDefinitionId && nodeId
+        ? services.dialogueDefinitions
+            .find((d) => d.definitionId === dialogueDefinitionId)
+            ?.nodes.find((n) => n.nodeId === nodeId)?.intent
+        : undefined;
+      const intentContentHash = buildIntentContentHash(nodeId, authoredText, nodeIntent);
+      const schedule = execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] as TeachSchedule | undefined;
+      let liveRenderTriggered = false;
+      let liveRenderIntroduce = constraint.targetVocab.introduce;
+
+      if (nodeId && schedule && !schedule.strainSuppressed && services.intentCache) {
+        try {
+          const intentKey: LineIntentCacheKey = {
+            contentHash: buildIntentContentHash(nodeId, authoredText, nodeIntent),
+            intentPromptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+          };
+          const intentEntry = await services.intentCache.get(intentKey);
+          if (intentEntry && intentEntry.artifact.mustConveyFacts.length > 0) {
+            const factSet = new Set(intentEntry.artifact.mustConveyFacts);
+            const dueMatches: LemmaRef[] = schedule.teachables
+              .filter((t) => t.teachReason === "due" && factSet.has(t.id))
+              .map((t) => ({ lemmaId: t.id, lang: targetLanguage }));
+            if (dueMatches.length > 0) {
+              liveRenderTriggered = true;
+              liveRenderIntroduce = dueMatches;
+            }
+          }
+        } catch {
+          // Trigger check is optional -- never error the turn; fall through to baked variant
+        }
+      }
+
       if (liveRenderTriggered) {
-        const introduce = constraint.targetVocab.introduce;
+        const introduce = liveRenderIntroduce;
         const teachablesKey = buildTeachablesKey(introduce);
-        const dialogueDefinitionId = String(
-          execution.annotations["sugarlang.dialogueDefinitionId"] ?? ""
-        );
         const liveKey: LiveRenderCacheKey = {
           nodeId,
           dialogueDefinitionId,
@@ -330,7 +372,7 @@ export function createSugarLangScriptedMiddleware(
             if (services.intentCache) {
               try {
                 const intentKey: LineIntentCacheKey = {
-                  contentHash,
+                  contentHash: intentContentHash,
                   intentPromptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
                 };
                 const intentEntry = await services.intentCache.get(intentKey);

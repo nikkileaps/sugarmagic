@@ -32,6 +32,8 @@ import { SUGARLANG_COMPILE_PIPELINE_VERSION } from "../../runtime/compile/conten
 import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
 import { IndexedDBVariantCache } from "../../runtime/compile/variant-cache";
+import { IndexedDBIntentCache } from "../../runtime/compile/intent-cache";
+import { extractIntent, INTENT_EXTRACTOR_PROMPT_VERSION } from "../../runtime/compile/extract-intent";
 import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 import { getAllInventoryChunks } from "../../runtime/inventory/function-inventory-loader";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
@@ -319,8 +321,10 @@ export async function rebuildSugarlangCompileCache(
     ? new SugarlangGatewayClient(proxyBaseUrl)
     : null;
 
+  const dialogueDefinitions = gameProject?.dialogueDefinitions ?? [];
   const scheduler = new SugarlangAuthoringCompileScheduler({
     getScenes: () => scenes,
+    getDialogues: () => dialogueDefinitions,
     atlas,
     morphology,
     cache,
@@ -344,6 +348,23 @@ export async function rebuildSugarlangCompileCache(
             promptVersion: SUGARLANG_COMPILE_PIPELINE_VERSION
           }
         : undefined,
+    intentPipeline: gatewayClient
+      ? {
+          cache: new IndexedDBIntentCache({ workspaceId }),
+          extractNodeIntent: async (dialogueDefinitionId, node, contentHash) => {
+            return extractIntent({
+              nodeId: node.nodeId,
+              nodeText: node.text,
+              authoredIntent: node.intent,
+              contentHash,
+              dialogueDefinitionId,
+              llmClient: gatewayClient,
+              promptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+            });
+          },
+          promptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+        }
+      : undefined,
     onLog(message, detail) {
       if (message !== "compiled-scene") {
         return;
@@ -362,6 +383,7 @@ export async function rebuildSugarlangCompileCache(
   scheduler.rebuildAll();
   await scheduler.flush();
   await scheduler.flushChunks();
+  await scheduler.flushIntents();
   scheduler.stop();
 
   return readSugarlangCompileStatus(

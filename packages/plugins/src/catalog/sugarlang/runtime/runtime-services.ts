@@ -35,8 +35,8 @@ import type {
 import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
 import { IndexedDBVariantCache, type SugarlangVariantCache } from "./compile/variant-cache";
-import type { SugarlangIntentCache } from "./compile/intent-cache";
-import type { LiveRenderCache } from "./compile/live-render-cache";
+import { IndexedDBIntentCache, type SugarlangIntentCache } from "./compile/intent-cache";
+import { LiveRenderCache } from "./compile/live-render-cache";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
 import type { SugarlangLLMClient } from "./llm/types";
 import { LexicalBudgeter } from "./budgeter/lexical-budgeter";
@@ -479,12 +479,17 @@ export class SugarlangRuntimeServices {
     const variantCache: SugarlangVariantCache | undefined = this.studioWorkspaceId
       ? new IndexedDBVariantCache({ workspaceId: this.studioWorkspaceId })
       : undefined;
+    const intentCache: SugarlangIntentCache | undefined = this.studioWorkspaceId
+      ? new IndexedDBIntentCache({ workspaceId: this.studioWorkspaceId })
+      : undefined;
+    const liveRenderCache = new LiveRenderCache();
     const outerLoopScheduler = new OuterLoopScheduler({ telemetry: this.telemetry });
 
     const services: SugarlangExecutionServices = {
       ...languageBundle,
       profileId: learnerId,
       playerEntityId: this.boundContext.playerDefinition.definitionId,
+      dialogueDefinitions: this.boundContext.dialogueDefinitions,
       learnerStore,
       learnerStateReducer,
       cardStore,
@@ -493,6 +498,8 @@ export class SugarlangRuntimeServices {
       teacher,
       llmClient: this.gatewayClient,
       variantCache,
+      intentCache,
+      liveRenderCache,
       outerLoopScheduler
     };
     this.executionServices.set(key, services);
