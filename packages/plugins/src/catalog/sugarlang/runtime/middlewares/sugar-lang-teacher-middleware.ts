@@ -66,6 +66,7 @@ interface SugarlangContributionShape {
   schemaVersion: 1;
   generateOverlay: string;
   judgeDirectives?: string[];
+  regenDirectives?: string[];
 }
 const SUGARAGENT_CONTRIB_SUGARLANG_KEY = "sugaragent.contrib/sugarlang" as const;
 
@@ -229,7 +230,7 @@ export function createSugarLangTeacherMiddleware(
         const scriptedContrib: SugarlangContributionShape = {
           schemaVersion: 1,
           generateOverlay: constraint.generatorPromptOverlay,
-          ...(scriptedJudgeDirective ? { judgeDirectives: [scriptedJudgeDirective] } : {})
+          ...(scriptedJudgeDirective ? { judgeDirectives: [scriptedJudgeDirective], regenDirectives: [scriptedJudgeDirective] } : {})
         };
         execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = scriptedContrib;
         logger.debug("Scripted mode: lightweight constraint built.", {
@@ -441,7 +442,7 @@ export function createSugarLangTeacherMiddleware(
       const contrib: SugarlangContributionShape = {
         schemaVersion: 1,
         generateOverlay: constraint.generatorPromptOverlay,
-        ...(judgeDirective ? { judgeDirectives: [judgeDirective] } : {})
+        ...(judgeDirective ? { judgeDirectives: [judgeDirective], regenDirectives: [judgeDirective] } : {})
       };
       execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = contrib;
       logger.info("Teacher finalized Sugarlang guidance and constraint.", {

@@ -18,6 +18,7 @@
  */
 
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
+import { collectContributions } from "../contributions";
 import { createDiagnostics } from "./diagnostics";
 import {
   buildFallbackReply,
@@ -224,9 +225,14 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
 
     const violationList = input.judge.violations.join("; ");
     const repairHint = input.judge.repairHint ? ` Hint: ${input.judge.repairHint}` : "";
+
+    const { mergedOverlay, regenDirectives } = collectContributions(input.execution.annotations);
+    const constraintBlock = [mergedOverlay, ...regenDirectives].filter(Boolean).join("\n");
+
     const regenUserPrompt =
       `The previous reply failed quality review.\n` +
       `Issues: ${violationList}.${repairHint}\n\n` +
+      (constraintBlock ? `Language and style constraints that MUST be preserved in the corrected reply:\n${constraintBlock}\n\n` : "") +
       `Previous reply: "${input.generate.text}"\n\n` +
       `Write a corrected reply that fixes the issues above. ` +
       `Reply in character only:`;
@@ -237,7 +243,7 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
         purpose: "regen",
         systemPrompt: regenSystemPrompt,
         userPrompt: regenUserPrompt,
-        maxTokens: 200
+        maxTokens: constraintBlock ? 300 : 200
       });
       regenText = normalizeNpcSpeech(result.text);
     } catch {
