@@ -580,6 +580,53 @@ describe("SugarLangVerifyMiddleware", () => {
     expect(result?.text?.toLowerCase()).not.toContain("adelante");
   });
 
+  it("083.2: code-fenced JSON response is parsed correctly (live regression)", async () => {
+    // Regression: LLM wraps JSON in ```json ... ``` fences; parseCandidates must
+    // strip them before JSON.parse, else the raw fence string becomes the reply.
+    const candidates = ["¡Hola amigo!", "Buenos dias.", "Que tal."];
+    const fencedResponse = "```json\n" + JSON.stringify(candidates) + "\n```";
+    const llmClient = {
+      generate: vi.fn().mockResolvedValue({ text: fencedResponse, requestId: null })
+    };
+    const failVerdict = {
+      withinEnvelope: false,
+      profile: { totalTokens: 5, knownTokens: 0, inBandTokens: 0, unknownTokens: 5, bandHistogram: { A1: 0, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 }, outOfEnvelopeLemmas: [], ceilingExceededLemmas: [], questEssentialLemmasMatched: [], coverageRatio: 0, ratioCheckTokens: 5, resolvedTargetLanguageTokens: 0 },
+      worstViolation: null, rule: "test", violations: [], exemptionsApplied: [],
+      languageRatioVerdict: { measuredRatio: 0, directedRatio: 0.85, posture: "target-dominant", conformance: "under-ratio" }
+    };
+    const passVerdict = {
+      withinEnvelope: true,
+      profile: { totalTokens: 2, knownTokens: 2, inBandTokens: 2, unknownTokens: 0, bandHistogram: { A1: 2, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 }, outOfEnvelopeLemmas: [], ceilingExceededLemmas: [], questEssentialLemmasMatched: [], coverageRatio: 1, ratioCheckTokens: 2, resolvedTargetLanguageTokens: 2 },
+      worstViolation: null, rule: "test", violations: [], exemptionsApplied: [],
+      languageRatioVerdict: { measuredRatio: 1, directedRatio: 0.85, posture: "target-dominant", conformance: "conformant" }
+    };
+    // original fail + 3 candidates (all scored before first-pass selection)
+    const classifierCheck = vi
+      .fn()
+      .mockReturnValueOnce(failVerdict)   // original
+      .mockReturnValueOnce(passVerdict)   // candidate 0 -- passes
+      .mockReturnValueOnce(passVerdict)   // candidate 1
+      .mockReturnValueOnce(passVerdict);  // candidate 2
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
+          classifier: { check: classifierCheck },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({ supportPosture: "target-dominant", targetLanguageRatio: 0.85 });
+
+    const result = await middleware.finalize?.(execution, createTestTurn("I only speak English today."));
+
+    // Must resolve to the first candidate, NOT the raw fenced JSON string.
+    expect(result?.text).toBe("¡Hola amigo!");
+    expect(result?.text).not.toContain("```");
+  });
+
   it("083.2: verify-pass path makes zero LLM calls (turn-budget guard)", async () => {
     const llmClient = { generate: vi.fn() };
     const middleware = createSugarLangVerifyMiddleware({

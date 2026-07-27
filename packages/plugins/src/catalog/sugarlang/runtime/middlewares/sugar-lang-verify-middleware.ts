@@ -85,15 +85,20 @@ function scoreCandidateVerdict(verdict: EnvelopeVerdict): CandidateScore {
 }
 
 function parseCandidates(text: string): string[] {
+  let cleaned = text.trim();
+  // Strip markdown code fences (```json ... ``` or ``` ... ```) before parsing.
+  const fenceMatch = cleaned.match(/^```(?:json)?\s*([\s\S]*?)```$/s);
+  if (fenceMatch?.[1] !== undefined) {
+    cleaned = fenceMatch[1].trim();
+  }
   try {
-    const parsed = JSON.parse(text.trim()) as unknown;
+    const parsed = JSON.parse(cleaned) as unknown;
     if (Array.isArray(parsed) && parsed.every((c) => typeof c === "string")) {
       return (parsed as string[]).filter((c) => (c as string).trim().length > 0);
     }
   } catch {}
   // Fallback: treat the whole response as a single candidate
-  const fallback = text.trim();
-  return fallback ? [fallback] : [];
+  return cleaned ? [cleaned] : [];
 }
 
 async function repairWithBestOfN(
@@ -124,6 +129,8 @@ async function repairWithBestOfN(
       `Say the same thing in simpler, clearer language. ` +
       `Preserve the meaning and any important information. ` +
       `Simplify the expression, never change what is being communicated. ` +
+      `Do NOT add inline glosses, parenthetical translations, or line-by-line word pairings. ` +
+      `The NPC speaks naturally -- never write a word followed by its translation on the next line. ` +
       `Return exactly ${n} alternative versions as a JSON array.`,
     userPrompt: [
       `Original: ${originalText}`,
