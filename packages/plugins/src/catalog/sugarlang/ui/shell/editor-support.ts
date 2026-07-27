@@ -418,8 +418,15 @@ export interface VariantAuthoringClient {
 }
 
 export function createVariantAuthoringClient(): VariantAuthoringClient {
-  const proxyBaseUrl = resolveSugarlangGatewayBaseUrl();
-  const gatewayAvailable = proxyBaseUrl.trim().length > 0;
+  // Read directly from Vite's import.meta.env -- resolveSugarlangGatewayBaseUrl()
+  // reads globalThis which is never populated in the browser Vite context.
+  const metaEnv = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
+  const proxyBaseUrl = (
+    metaEnv["VITE_SUGARMAGIC_SUGARLANG_PROXY_BASE_URL"] ||
+    metaEnv["VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL"] ||
+    ""
+  ).trim();
+  const gatewayAvailable = proxyBaseUrl.length > 0;
   const llmClient = gatewayAvailable ? new SugarlangGatewayClient(proxyBaseUrl) : null;
 
   function getCache(workspaceId: string): IndexedDBVariantCache {
