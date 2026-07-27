@@ -86,14 +86,16 @@ NPC speech decomposes into a constrained lexical channel and a level-free voice 
 
 ### 083.4 Voice-retention verdict beside the envelope verdict
 
-Repair must not flatten the character; the literature has no joint CEFR+persona benchmark, so we ship our own check.
+**Amendment (2026-07-26):** Exemplar-line similarity scoring dropped -- lexical overlap against 2-4 short sentences is noise, not signal, and the candidates are already voice-shaped by the generate prompt. Scope is interjection/gesture-tag retention only: deterministic, zero model calls, zero latency.
 
-1. Deterministic voice score (floor, zero model calls): marker-feature similarity against the NPC's `VoiceChannelSpec` -- presence of signature interjections/tics, punctuation/tempo habit match, gesture-tag retention, plus cheap lexical similarity against the exemplar lines. Scored on the original turn AND on every 083.2 candidate.
-2. Wiring: the score joins the 083.2 candidate scorer, so best-of-N selection prefers candidates that keep the voice; a repair that strips all voice markers loses to one that keeps them. On the common path the score is telemetry-only (a low-voice ORIGINAL turn does not fail verification by itself in this story -- character fidelity of first-pass generation is the judge's domain; decide-in-story whether a hard floor on repair OUTPUT rejects candidates outright).
-3. One rubric line rides the 083.2 repair prompt (the strategy's "one rubric line where the judge already runs" lands here rather than in sugaragent's judge -- see Non-goals): "Keep <NPC>'s voice: <interjections/tics summary>. These are exempt from simplification."
+Repair must not silently strip the NPC's characteristic markers; this story adds a retention check so best-of-N selection prefers candidates that keep them.
+
+1. Deterministic voice score (zero model calls): presence of the NPC's whitelisted interjections and gesture-tag spans in the candidate text. Scored on every 083.2 candidate. No exemplar similarity.
+2. Wiring: the score is a preference signal in the 083.2 candidate scorer -- a candidate retaining the voice markers beats one that stripped them, all else equal. Not a hard rejection gate; if no candidate retains markers the least-bad candidate still wins. Telemetry-only on the common path (a low-voice ORIGINAL turn does not fail verification -- character fidelity of first-pass generation is the judge's domain).
+3. One rubric line rides the 083.2 repair prompt: "Keep <NPC>'s signature interjections and gesture tags verbatim -- these are exempt from simplification."
 4. NPCs with no voice spec: score is neutral, everything degrades to 083.2 behavior.
 
-- Exit: unit tests -- candidate keeping "Ah! ... *sweeps hat*" outscores the flattened candidate on the same text; neutral score without a spec. Integration: forced repair on a voiced NPC returns a selected candidate retaining at least the interjection markers; voice-score telemetry emitted per repair.
+- Exit: unit tests -- candidate keeping "¡Ay! ... *sweeps hat*" outscores the flattened candidate; neutral score without a spec. Integration: forced repair on a voiced NPC returns a selected candidate retaining the interjection markers; voice-score telemetry emitted per repair.
 
 ### 083.5 Constraint re-injection cadence + drift measurement
 
