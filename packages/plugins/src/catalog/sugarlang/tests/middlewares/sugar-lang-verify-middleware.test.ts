@@ -749,4 +749,68 @@ describe("SugarLangVerifyMiddleware", () => {
     expect(result?.text).toBe("Hello. What can I help you with today?");
     expect(llmClient.generate).not.toHaveBeenCalled();
   });
+
+  // Plan 084.6 -- deterministic bypass
+  it("084.6: deterministic-backend turn skips repair but still runs classifier (zero LLM calls)", async () => {
+    const classifierCheck = vi.fn().mockReturnValue({
+      withinEnvelope: false,
+      profile: { totalTokens: 5, knownTokens: 0, inBandTokens: 0, unknownTokens: 5, bandHistogram: { A1: 0, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 }, outOfEnvelopeLemmas: [], ceilingExceededLemmas: [], questEssentialLemmasMatched: [], coverageRatio: 0, ratioCheckTokens: 5, resolvedTargetLanguageTokens: 0 },
+      worstViolation: null, rule: "test", violations: [], exemptionsApplied: [],
+      languageRatioVerdict: { measuredRatio: 0, directedRatio: 0.85, posture: "target-dominant", conformance: "under-ratio" }
+    });
+    const llmClient = { generate: vi.fn() };
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
+          classifier: { check: classifierCheck },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({ supportPosture: "target-dominant", targetLanguageRatio: 0.85 });
+    const turn = createTestTurn("Sorry, I need to get back to my work.");
+    turn.diagnostics = { llmBackend: "deterministic" };
+
+    const result = await middleware.finalize?.(execution, turn);
+
+    // Classifier ran (ratio telemetry recorded) but no repair call.
+    expect(classifierCheck).toHaveBeenCalledTimes(1);
+    expect(llmClient.generate).not.toHaveBeenCalled();
+    // Text unchanged.
+    expect(result?.text).toBe("Sorry, I need to get back to my work.");
+  });
+
+  it("084.6: moderation-deflected turn skips repair regardless of llmBackend", async () => {
+    const classifierCheck = vi.fn().mockReturnValue({
+      withinEnvelope: false,
+      profile: { totalTokens: 5, knownTokens: 0, inBandTokens: 0, unknownTokens: 5, bandHistogram: { A1: 0, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 }, outOfEnvelopeLemmas: [], ceilingExceededLemmas: [], questEssentialLemmasMatched: [], coverageRatio: 0, ratioCheckTokens: 5, resolvedTargetLanguageTokens: 0 },
+      worstViolation: null, rule: "test", violations: [], exemptionsApplied: [],
+      languageRatioVerdict: { measuredRatio: 0, directedRatio: 0.85, posture: "target-dominant", conformance: "under-ratio" }
+    });
+    const llmClient = { generate: vi.fn() };
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({ sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1", atlasVersion: "v1", profile: "runtime-preview", lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [] }) },
+          classifier: { check: classifierCheck },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({ supportPosture: "target-dominant", targetLanguageRatio: 0.85 });
+    const turn = createTestTurn("Hmm, I'm not sure how to respond to that.");
+    // Simulate moderation-deflected stamp (llmBackend is still "anthropic").
+    turn.diagnostics = { llmBackend: "anthropic", moderationDeflected: true };
+
+    const result = await middleware.finalize?.(execution, turn);
+
+    expect(classifierCheck).toHaveBeenCalledTimes(1);
+    expect(llmClient.generate).not.toHaveBeenCalled();
+    expect(result?.text).toBe("Hmm, I'm not sure how to respond to that.");
+  });
 });

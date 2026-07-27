@@ -54,6 +54,9 @@ export interface SugarLangVerifyMiddlewareDeps {
 }
 
 const REPAIR_CANDIDATE_COUNT = 3;
+// Published diagnostic key from sugaragent's moderation middleware (084.6).
+// Matches MODERATION_DEFLECTED_DIAG_KEY; never import across the plugin boundary.
+const MODERATION_DEFLECTED_DIAG = "moderationDeflected";
 
 interface CandidateScore {
   score: number;
@@ -348,6 +351,27 @@ export function createSugarLangVerifyMiddleware(
 
       const ratioVerdict = verdict.languageRatioVerdict;
       if (verdict.withinEnvelope && ratioVerdict.conformance !== "under-ratio") {
+        return normalizedTurn;
+      }
+
+      // Deterministic-skip: no repair on canned/fallback turns (084.6).
+      // Classifier + telemetry ran above to keep the metric honest.
+      const isDeterministic =
+        normalizedTurn.diagnostics?.llmBackend === "deterministic" ||
+        normalizedTurn.diagnostics?.[MODERATION_DEFLECTED_DIAG] === true;
+      if (isDeterministic) {
+        await emitTelemetry(
+          telemetry,
+          createTelemetryEvent("verify.deterministic-bypass", {
+            conversationId,
+            sessionId,
+            turnId: traceTurnId,
+            timestamp: Date.now(),
+            sceneId: sceneId ?? null,
+            reason: normalizedTurn.diagnostics?.moderationDeflected === true ? "moderation-deflected" : "deterministic-backend"
+          }),
+          logger
+        );
         return normalizedTurn;
       }
 
