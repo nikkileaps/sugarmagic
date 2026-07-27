@@ -53,6 +53,7 @@ type PartialInput = {
   generateText?: string;
   violations?: string[];
   repairHint?: string | null;
+  annotations?: Record<string, unknown>;
 };
 
 function makeInput(overrides: PartialInput = {}) {
@@ -66,7 +67,7 @@ function makeInput(overrides: PartialInput = {}) {
       },
       input: { kind: "free_text" as const, text: "hello" },
       state: {},
-      annotations: {} as Record<string, unknown>,
+      annotations: (overrides.annotations ?? {}) as Record<string, unknown>,
       runtimeContext: {
         here: null,
         playerLocation: null,
@@ -277,5 +278,105 @@ describe("RegenerateStage", () => {
 
     // Only one regen call -- no second judge, no recursive regen
     expect(llmProvider.generateStructuredTurn).toHaveBeenCalledTimes(1);
+  });
+
+  // Plan 084.3 -- regen keeps the constraint
+  it("084.3: regen user prompt contains the constraint overlay when contributions are present", async () => {
+    const llmProvider = makeLlmProvider("Buenos dias, amigo.");
+    const stage = new RegenerateStage(llmProvider);
+    const overlay = "Language constraint: reply must be 85% Spanish. Mix Spanish and English naturally.";
+    const input = makeInput({
+      auditPassed: true,
+      judgePassed: false,
+      violations: ["NPC mentioned the game developer."],
+      annotations: {
+        "sugaragent.contrib/sugarlang": {
+          schemaVersion: 1,
+          generateOverlay: overlay,
+          regenDirectives: ["Language mixing is intentional; preserve the Spanish ratio in the corrected reply."]
+        }
+      }
+    });
+    await stage.execute(input as never, makeContext() as never);
+
+    const call = (llmProvider.generateStructuredTurn as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.userPrompt).toContain(overlay);
+    expect(call.userPrompt).toContain("Language and style constraints");
+  });
+
+  it("084.3: regen user prompt is byte-identical to today when no contributions are present", async () => {
+    const llmProvider = makeLlmProvider("Good day to you.");
+    const stage = new RegenerateStage(llmProvider);
+    const inputWithout = makeInput({
+      auditPassed: true,
+      judgePassed: false,
+      violations: ["Off-character."]
+    });
+    await stage.execute(inputWithout as never, makeContext() as never);
+
+    const call = (llmProvider.generateStructuredTurn as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    // No constraint block should appear when there are no contributions.
+    expect(call.userPrompt).not.toContain("Language and style constraints");
+    expect(call.maxTokens).toBe(200);
+  });
+
+  it("084.3: maxTokens is raised to 300 when a constraint block is present", async () => {
+    const llmProvider = makeLlmProvider("Hola, como estas.");
+    const stage = new RegenerateStage(llmProvider);
+    const input = makeInput({
+      auditPassed: true,
+      judgePassed: false,
+      violations: ["Broke character."],
+      annotations: {
+        "sugaragent.contrib/sugarlang": {
+          schemaVersion: 1,
+          generateOverlay: "85% Spanish constraint."
+        }
+      }
+    });
+    await stage.execute(input as never, makeContext() as never);
+
+    const call = (llmProvider.generateStructuredTurn as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.maxTokens).toBe(300);
+  });
+
+  // Plan 084.4 -- regen re-lint respects preserveActionTags
+  it("084.4: regen re-lint keeps asterisk-tagged reply when preserveActionTags=true", async () => {
+    // LLM produces a reply with action tags. Without preserveActionTags those would
+    // trip the re-lint and fall through to deterministic fallback. With the flag,
+    // the re-lint skips the asterisk pattern and the reply survives.
+    const llmProvider = makeLlmProvider("*sweeps hat* Buenos dias, amigo.");
+    const stage = new RegenerateStage(llmProvider);
+    const input = makeInput({
+      auditPassed: true,
+      judgePassed: false,
+      violations: ["Broke character."],
+      annotations: {
+        "sugaragent.contrib/test-plugin": {
+          schemaVersion: 1,
+          textConventions: { preserveActionTags: true }
+        }
+      }
+    });
+    const result = await stage.execute(input as never, makeContext() as never);
+
+    expect(result.output.text).toContain("*sweeps hat*");
+    expect(result.output.llmBackend).not.toBe("deterministic");
+  });
+
+  it("084.4: asterisk spans are stripped from regen output when preserveActionTags=false (byte-identical to today)", async () => {
+    // Without the flag, normalizeNpcSpeech removes asterisk spans.
+    const llmProvider = makeLlmProvider("*sweeps hat* Buenos dias.");
+    const stage = new RegenerateStage(llmProvider);
+    const input = makeInput({
+      auditPassed: true,
+      judgePassed: false,
+      violations: ["Broke character."]
+      // no annotations -> preserveActionTags defaults to false
+    });
+    const result = await stage.execute(input as never, makeContext() as never);
+
+    expect(result.output.text).not.toContain("*sweeps hat*");
+    expect(result.output.llmBackend).toBe("anthropic");
   });
 });

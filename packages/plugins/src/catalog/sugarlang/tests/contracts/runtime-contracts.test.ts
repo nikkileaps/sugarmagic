@@ -387,7 +387,9 @@ describe("sugarlang runtime contracts", () => {
           constituentLemmaIds: [...chunk.constituentLemmas]
         }
       ],
-      coverageRatio: 0.9
+      coverageRatio: 0.9,
+      ratioCheckTokens: 10,
+      resolvedTargetLanguageTokens: 9
     };
     const verdict: EnvelopeVerdict = {
       withinEnvelope: false,
@@ -400,7 +402,13 @@ describe("sugarlang runtime contracts", () => {
       },
       rule: "coverage>=0.95 && i+1 ceiling",
       violations: [],
-      exemptionsApplied: ["quest-essential"]
+      exemptionsApplied: ["quest-essential"],
+      languageRatioVerdict: {
+        measuredRatio: 0.9,
+        directedRatio: 0.65,
+        posture: "supported",
+        conformance: "conformant"
+      }
     };
     const pendingLemma: ActiveQuestEssentialLemma = {
       lemmaRef: { lemmaId: "billete", lang: "es" },

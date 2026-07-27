@@ -137,6 +137,12 @@ export interface BasePromptContext {
    * user message (after history). Empty string = nothing to re-inject.
    */
   personaDigest: string;
+
+  /**
+   * 083.5 — short language-constraint reminder (e.g. "Language constraint: ~85% Spanish, A1 level.")
+   * spliced into the terminal slot, just before personaDigest. Empty string = nothing to inject.
+   */
+  constraintReminder: string;
 }
 
 /**

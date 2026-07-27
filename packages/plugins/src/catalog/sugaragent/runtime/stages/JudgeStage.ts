@@ -21,6 +21,7 @@
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
 import { QUEST_CONTEXT_ANNOTATION_KEY } from "../quest/quest-context-middleware";
 import type { QuestContextAnnotation } from "../quest/quest-context-middleware";
+import { collectContributions } from "../contributions";
 import { createDiagnostics } from "./diagnostics";
 import { findMetaLeakViolations } from "./helpers";
 import type {
@@ -127,6 +128,8 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
         | undefined;
     const worldContext = questAnnotation?.worldContext ?? null;
 
+    const { judgeDirectives } = collectContributions(input.execution.annotations);
+
     try {
       const verdict = await this.judgeProvider.judgeReply({
         replyText: input.generate.text,
@@ -134,7 +137,8 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
         responseIntent: input.plan.responseIntent,
         worldContext,
         loreContextSummary,
-        worldPremise: context.config.worldPremise ?? ""
+        worldPremise: context.config.worldPremise ?? "",
+        ...(judgeDirectives.length > 0 ? { externalDirectives: judgeDirectives } : {})
       });
 
       const output: JudgeResult = {

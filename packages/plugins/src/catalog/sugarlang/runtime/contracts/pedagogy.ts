@@ -167,9 +167,11 @@ export interface SugarlangConstraint {
   rawPrescription: LexicalPrescription;
   /**
    * Pre-formatted prompt overlay for the NPC generator. Sugarlang builds this
-   * string; the generator splices it into the system prompt without
-   * interpreting the fields. This keeps sugarlang and sugaragent composable
-   * but independent.
+   * string for its own internal use (sugar-lang-scripted-middleware.ts reads it
+   * to adapt authored scripted lines). Sugaragent reads the overlay via the
+   * contribution bus (sugaragent.contrib/sugarlang -> generateOverlay) instead.
+   * This field is deleted when epic C (Plan 086.4) removes the scripted runtime
+   * adaptation entirely.
    */
   generatorPromptOverlay: string;
   /**

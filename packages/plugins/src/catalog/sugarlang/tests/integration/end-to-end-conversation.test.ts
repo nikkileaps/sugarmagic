@@ -512,6 +512,63 @@ describe("end-to-end conversation golden", () => {
     expect(simplifications.length).toBe(0);
   });
 
+  it("B2 learner: all-English NPC turn triggers ratio repair (the playtest bug)", async () => {
+    // debugBandOverride:"B2" fires a synthetic PlacementCompletionEvent
+    // (confidence=1.0) during the first resolveForExecution call. FallbackTeacherPolicy
+    // picks target-dominant posture (confidence >= 0.7) with directedRatio=0.85.
+    // The NPC provider returns pure English text -> measuredRatio=0 -> under-ratio ->
+    // repair fires with the "rewrite in es" instruction -> repaired Spanish passes.
+    const allEnglishText =
+      "I cannot believe this magnificent performance, it is truly wonderful.";
+    const repairedSpanishText = "Es muy bueno. Me gusta mucho.";
+
+    const generateCalls: Array<{ body: Record<string, unknown> }> = [];
+    installFetchGuard((url, init) => {
+      if (url === "http://localhost:8787/api/sugaragent/generate") {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        generateCalls.push({ body });
+        if (String(body.systemPrompt).startsWith("You are editing an NPC line")) {
+          return jsonResponse({ text: repairedSpanishText, requestId: "repair-b2" });
+        }
+        // Teacher call -> 500 triggers FallbackTeacherPolicy at B2
+        return jsonResponse({ error: "teacher unavailable" }, 500);
+      }
+      return null;
+    });
+
+    const { telemetry, host } = makeSharedSetup(
+      { debugBandOverride: "B2" },
+      allEnglishText,
+      { environment: { SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: "http://localhost:8787" } }
+    );
+
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc-orrin",
+      npcDisplayName: "Orrin",
+      targetLanguage: "es",
+      supportLanguage: "en"
+    });
+
+    const turn = await host.submitInput({ kind: "advance" });
+
+    // The repaired Spanish text replaced the all-English original.
+    expect(turn?.text).toBe(repairedSpanishText);
+
+    // verify.ratio-verdict fired with under-ratio for the all-English original.
+    const ratioVerdicts = await telemetry.query({ eventKinds: ["verify.ratio-verdict"] });
+    const underRatioVerdicts = ratioVerdicts.filter(
+      (v) => (v as unknown as { conformance: string }).conformance === "under-ratio"
+    );
+    expect(underRatioVerdicts.length).toBeGreaterThan(0);
+
+    // verify.repair-triggered fired and its instruction referenced the target ratio.
+    const repairs = await telemetry.query({ eventKinds: ["verify.repair-triggered"] });
+    expect(repairs.length).toBeGreaterThan(0);
+    const repairEvent = repairs[0] as unknown as { violations: string[] };
+    expect(repairEvent.violations.some((v) => v.includes("85%") && v.includes("Spanish"))).toBe(true);
+  });
+
   it("verify repair path: NPC text violating the envelope is auto-simplified (no LLM needed)", async () => {
     // "adelante" is above A1 and has a known simplification ("bueno") in the
     // Spanish simplifications data. With no proxy URL the LLM repair returns null,

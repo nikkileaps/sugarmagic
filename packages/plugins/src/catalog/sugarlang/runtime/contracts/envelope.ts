@@ -5,6 +5,8 @@
  *
  * Exports:
  *   - CoverageProfile
+ *   - RatioConformance
+ *   - LanguageRatioVerdict
  *   - EnvelopeViolation
  *   - EnvelopeExemptionKind
  *   - EnvelopeRuleOptions
@@ -24,6 +26,7 @@
 import type { CEFRBand } from "./learner-profile";
 import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
 import type { LexicalChunk } from "./scene-lexicon";
+import type { SupportPosture } from "./pedagogy";
 
 /**
  * Virtual token emitted by the chunk-scan pre-pass before lemma coverage runs.
@@ -57,6 +60,27 @@ export interface CoverageProfile {
   matchedChunks: LexicalChunk[];
   matchedChunkTokens: VirtualChunkToken[];
   coverageRatio: number;
+  /** Word tokens included in the language-ratio denominator (excludes numbers and known entities). */
+  ratioCheckTokens: number;
+  /** Word tokens that resolved through target-language lemmatization + atlas (numerator for ratio). */
+  resolvedTargetLanguageTokens: number;
+}
+
+/**
+ * Whether measured target-language ratio meets the directed target.
+ * "skipped" means the denominator was below the minimum-denominator guard.
+ */
+export type RatioConformance = "conformant" | "under-ratio" | "skipped";
+
+/**
+ * Per-turn verdict on whether the output meets the directed language ratio.
+ * Computed deterministically alongside the envelope verdict; zero model calls.
+ */
+export interface LanguageRatioVerdict {
+  measuredRatio: number;
+  directedRatio: number;
+  posture: SupportPosture;
+  conformance: RatioConformance;
 }
 
 /**
@@ -79,7 +103,8 @@ export interface EnvelopeViolation {
 export type EnvelopeExemptionKind =
   | "prescription-introduce"
   | "named-entity"
-  | "quest-essential";
+  | "quest-essential"
+  | "voice-interjection";
 
 /**
  * Options passed to the deterministic envelope rule.
@@ -90,6 +115,8 @@ export interface EnvelopeRuleOptions {
   prescription?: LexicalPrescription | null;
   knownEntities?: Set<string>;
   questEssentialLemmas?: Set<string>;
+  /** NPC-authored interjection tokens whitelisted from envelope enforcement. See Plan 083 story 083.3. */
+  voiceInterjections?: Set<string>;
 }
 
 /**
@@ -115,6 +142,8 @@ export interface EnvelopeVerdict {
   rule: string;
   violations: EnvelopeViolation[];
   exemptionsApplied: EnvelopeExemptionKind[];
+  /** Language-ratio verdict; always present. "skipped" when denominator is below the minimum guard. */
+  languageRatioVerdict: LanguageRatioVerdict;
 }
 
 /**

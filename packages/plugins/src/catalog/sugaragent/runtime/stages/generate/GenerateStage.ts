@@ -29,6 +29,7 @@ interface LanguageLearningConstraint {
   };
 }
 import type { LLMProvider } from "../../clients";
+import { collectContributions } from "../../contributions";
 import { createDiagnostics } from "../diagnostics";
 import {
   buildFallbackReply,
@@ -371,6 +372,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     // Browser-side code passes an empty model string; the gateway
     // defaults it from its own configuration.
     if (this.llmProvider && canUseProxyDefaults) {
+      const contributions = collectContributions(input.execution.annotations);
       const promptContext: GeneratePromptContext = {
         mode: "agent",
         npcDisplayName,
@@ -398,7 +400,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           : null,
         loreContextSummary,
         recentHistory: input.state.history.slice(-4),
-        languageLearningOverlay: constraint?.generatorPromptOverlay || null,
+        languageLearningOverlay: contributions.mergedOverlay || null,
         // Plan 072.4 — persona/core loaded once at session start (072.3).
         persona: input.state.persona
           ? {
@@ -413,6 +415,8 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
             ?.digest ?? "",
         // Plan 072.8 — drift-reminder digest, re-injected at end of user message.
         personaDigest: input.state.persona?.digest ?? "",
+        // 083.5 — constraint reminder from contributions, spliced at terminal slot.
+        constraintReminder: contributions.mergedReminder || "",
         // Plan 077.2 -- world-framed quest context (D2/D3). Populated by the
         // quest-context middleware annotation when it resolved world lore for
         // the active objective. Null when no quest is active or the middleware
@@ -483,7 +487,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           }
         }
 
-        text = normalizeNpcSpeech(generatedText);
+        text = normalizeNpcSpeech(generatedText, contributions.preserveActionTags);
         llmBackend = "anthropic";
         if (!text) {
           throw new Error("empty-normalized-generation");

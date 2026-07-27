@@ -24,7 +24,8 @@ import type {
   QuestEssentialLemma,
   SceneAuthorWarning,
   SceneLemmaInfo,
-  SourceLocation
+  SourceLocation,
+  VoiceChannelSpec
 } from "../types";
 import { compareCefrBands, isBandAbove } from "../classifier/cefr-band-utils";
 import { lemmatize } from "../classifier/lemmatize";
@@ -178,6 +179,69 @@ function summarizeLocations(
       ? left.snippet.localeCompare(right.snippet)
       : left.file.localeCompare(right.file)
   );
+}
+
+// Matches "Interjections: word1, word2, ..." (case-insensitive, single line).
+const INTERJECTION_LINE_PATTERN = /^interjections:\s*(.+)$/im;
+// Gesture-tag span present anywhere in the section body.
+const GESTURE_TAG_PRESENT_PATTERN = /\*[^*\n]+\*/;
+
+function normalizeInterjection(token: string): string {
+  return token
+    .normalize("NFC")
+    .trim()
+    .replace(/^[¡¿]+/, "")
+    .replace(/[!?.,;:]+$/, "")
+    .trim()
+    .toLocaleLowerCase();
+}
+
+function parseVoiceSpec(sectionBody: string): VoiceChannelSpec {
+  const interjections: string[] = [];
+  const match = INTERJECTION_LINE_PATTERN.exec(sectionBody);
+  if (match) {
+    for (const token of match[1].split(",")) {
+      const normalized = normalizeInterjection(token);
+      if (normalized.length > 0) {
+        interjections.push(normalized);
+      }
+    }
+  }
+  return {
+    interjections,
+    hasGestureTags: GESTURE_TAG_PRESENT_PATTERN.test(sectionBody)
+  };
+}
+
+function buildNpcVoiceSpecs(
+  scene: SceneAuthoringContext
+): Record<string, VoiceChannelSpec> | undefined {
+  const specs: Record<string, VoiceChannelSpec> = {};
+  const lorePageById = new Map(
+    scene.lorePages.map((page) => [page.lorePageId, page])
+  );
+
+  for (const npc of scene.npcs) {
+    if (!npc.lorePageId) {
+      continue;
+    }
+    const lorePage = lorePageById.get(npc.lorePageId);
+    if (!lorePage) {
+      continue;
+    }
+    const voiceSection = lorePage.sections.find(
+      (section) => section.heading.trim().toLocaleLowerCase() === "voice"
+    );
+    if (!voiceSection) {
+      continue;
+    }
+    const spec = parseVoiceSpec(voiceSection.body);
+    if (spec.interjections.length > 0 || spec.hasGestureTags) {
+      specs[npc.definitionId] = spec;
+    }
+  }
+
+  return Object.keys(specs).length > 0 ? specs : undefined;
 }
 
 export function compileSugarlangScene(
@@ -390,6 +454,7 @@ export function compileSugarlangScene(
     }
   }
 
+  const npcVoiceSpecs = buildNpcVoiceSpecs(scene);
   const lexicon: CompiledSceneLexicon = {
     sceneId: scene.sceneId,
     contentHash,
@@ -401,7 +466,8 @@ export function compileSugarlangScene(
     ),
     properNouns: [...properNouns].sort(compareStrings),
     anchors: [...anchorLemmaIds].sort(compareStrings),
-    questEssentialLemmas
+    questEssentialLemmas,
+    ...(npcVoiceSpecs ? { npcVoiceSpecs } : {})
   };
 
   if (profile === "authoring-preview") {

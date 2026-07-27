@@ -22,9 +22,11 @@ import type {
   EnvelopeRule,
   EnvelopeViolation,
   EnvelopeVerdict,
+  LanguageRatioVerdict,
   LearnerProfile,
   LexicalAtlasProvider,
-  LexicalPrescription
+  LexicalPrescription,
+  SupportPosture
 } from "../types";
 import { MorphologyLoader } from "./morphology-loader";
 import { CefrLexAtlasProvider } from "../providers/impls/cefr-lex-atlas-provider";
@@ -39,6 +41,7 @@ import {
   emitTelemetry,
   type TelemetrySink
 } from "../telemetry/telemetry";
+import { computeLanguageRatioVerdict } from "./language-ratio";
 
 export interface EnvelopeClassifierOptions {
   rule?: EnvelopeRule;
@@ -49,11 +52,16 @@ export interface EnvelopeClassifierCheckOptions {
   prescription?: LexicalPrescription | null;
   knownEntities?: Set<string>;
   questEssentialLemmas?: Set<string>;
+  /** NPC-authored interjection tokens whitelisted from envelope enforcement. See Plan 083 story 083.3. */
+  voiceInterjections?: Set<string>;
   lang?: string;
   sceneLexicon?: Pick<CompiledSceneLexicon, "sceneId" | "contentHash" | "chunks"> | null;
   conversationId?: string;
   turnId?: string;
   sessionId?: string;
+  /** When provided, the verdict includes a language-ratio dimension. Pass from the constraint. */
+  directedRatio?: number;
+  supportPosture?: SupportPosture;
 }
 
 const DEFAULT_RULE_LABEL =
@@ -157,7 +165,8 @@ export class EnvelopeClassifier {
     const ruleResult = this.rule(profile, learner.estimatedCefrBand, {
       prescription: options.prescription,
       knownEntities: options.knownEntities,
-      questEssentialLemmas: options.questEssentialLemmas
+      questEssentialLemmas: options.questEssentialLemmas,
+      voiceInterjections: options.voiceInterjections
     });
 
     const violations = ruleResult.violations
@@ -179,13 +188,24 @@ export class EnvelopeClassifier {
       })
       .sort(compareViolationSeverity);
 
+    const languageRatioVerdict: LanguageRatioVerdict =
+      options.directedRatio !== undefined && options.supportPosture !== undefined
+        ? computeLanguageRatioVerdict(profile, options.directedRatio, options.supportPosture)
+        : {
+            measuredRatio: profile.ratioCheckTokens === 0 ? 1 : profile.resolvedTargetLanguageTokens / profile.ratioCheckTokens,
+            directedRatio: 0,
+            posture: "anchored",
+            conformance: "skipped"
+          };
+
     const verdict = {
       withinEnvelope: ruleResult.withinEnvelope,
       profile,
       worstViolation: violations[0] ?? null,
       rule: DEFAULT_RULE_LABEL,
       violations,
-      exemptionsApplied: ruleResult.exemptionsApplied
+      exemptionsApplied: ruleResult.exemptionsApplied,
+      languageRatioVerdict
     };
 
     if (

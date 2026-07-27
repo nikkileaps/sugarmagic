@@ -246,6 +246,9 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
           .join("\n")}`
       : "Recent history: none.",
 
+    // 083.5 — constraint reminder, terminal slot (before personaDigest).
+    context.constraintReminder || null,
+
     // Plan 072.8 — persona drift reminder, LAST block (after history). Lives in
     // the uncached user half, so it doesn't disturb 072.4 system byte-stability.
     context.personaDigest

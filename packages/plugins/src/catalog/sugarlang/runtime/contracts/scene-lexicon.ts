@@ -117,6 +117,20 @@ export interface LexicalChunk {
 }
 
 /**
+ * NPC voice-channel metadata extracted from the "Voice" lore section at compile time.
+ * interjections are exempt from the A1 envelope rule via the "voice-interjection" exemption kind.
+ * hasGestureTags drives textConventions.preserveActionTags in the teacher contribution.
+ *
+ * Implements: Plan 083 story 083.3
+ */
+export interface VoiceChannelSpec {
+  /** Normalized (NFC, lowercase) interjection tokens whitelisted from envelope enforcement. */
+  interjections: string[];
+  /** True when the Voice section's exemplar lines contain *...* gesture-tag spans. */
+  hasGestureTags: boolean;
+}
+
+/**
  * Canonical compiled artifact for one scene under one compile profile.
  *
  * Implements: Proposal 001 §Scene Lexicon Compilation: One Compiler, Three Profiles, Preview-First
@@ -138,4 +152,10 @@ export interface CompiledSceneLexicon {
    * Absent means the classifier should run in lemma-only mode.
    */
   chunks?: LexicalChunk[];
+  /**
+   * Per-NPC voice-channel specs keyed by NPCDefinition.definitionId.
+   * Populated at compile time from "Voice" lore page sections. Absent when no NPC
+   * in the scene has a Voice section.
+   */
+  npcVoiceSpecs?: Record<string, VoiceChannelSpec>;
 }

@@ -36,6 +36,7 @@ import type {
   SugarlangConstraint
 } from "../types";
 import { createSugarlangLogger } from "../logger";
+import { languageDisplayName } from "../language-names";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_COMPREHENSION_IN_FLIGHT_ANNOTATION,
@@ -58,6 +59,57 @@ import {
   shouldRunSugarlangForExecution,
   type SugarlangLoggerLike
 } from "./shared";
+
+// Local structural type matching SugaragentContribution (sugaragent owns the
+// full interface; we mirror only the fields we write -- no import needed).
+interface SugarlangContributionShape {
+  schemaVersion: 1;
+  generateOverlay: string;
+  generateReminder?: string;
+  judgeDirectives?: string[];
+  regenDirectives?: string[];
+  interpretLexicon?: Record<string, string[]>;
+  textConventions?: { preserveActionTags?: boolean };
+}
+const SUGARAGENT_CONTRIB_SUGARLANG_KEY = "sugaragent.contrib/sugarlang" as const;
+
+// 084.5: curated starter set for "es". Other languages added when packs ship.
+const SPANISH_INTERPRET_LEXICON: Record<string, string[]> = {
+  farewell: ["adiós", "adios", "hasta luego", "hasta pronto", "hasta mañana", "hasta manana", "chao", "chau", "nos vemos"],
+  greeting: ["hola", "buenos días", "buenos dias", "buenas tardes", "buenas noches", "buenas"],
+  gratitude: ["gracias", "muchas gracias", "mil gracias"],
+  acknowledgement: ["sí", "si", "claro", "vale", "de acuerdo", "entendido", "perfecto", "genial", "bueno"]
+};
+
+function buildConstraintReminder(
+  targetLanguageRatio: number,
+  targetLanguage: string,
+  learnerCefr: string
+): string | null {
+  if (targetLanguageRatio <= 0) return null;
+  const pct = Math.round(targetLanguageRatio * 100);
+  const langName = languageDisplayName(targetLanguage);
+  return `Language constraint: ~${pct}% ${langName}, learner at ${learnerCefr} level.`;
+}
+
+function buildInterpretLexicon(targetLanguage: string): Record<string, string[]> | undefined {
+  if (targetLanguage === "es") return SPANISH_INTERPRET_LEXICON;
+  return undefined;
+}
+
+function buildLanguageJudgeDirective(
+  targetLanguageRatio: number,
+  targetLanguage: string
+): string | null {
+  if (targetLanguageRatio <= 0) return null;
+  const ratioPercent = Math.round(targetLanguageRatio * 100);
+  const langName = languageDisplayName(targetLanguage);
+  return (
+    `This NPC reply is language-directed for a language-learning player: ` +
+    `about ${ratioPercent}% ${langName} mixed with the support language is intentional game system behavior. ` +
+    `Language choice and language mixing are never IN-CHARACTER violations.`
+  );
+}
 
 export interface SugarLangTeacherMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -198,6 +250,24 @@ export function createSugarLangTeacherMiddleware(
           rawPrescription: prescription ?? buildEmptyPrescription("scripted-mode-no-prescription")
         };
         execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+        const scriptedJudgeDirective = buildLanguageJudgeDirective(
+          constraint.targetLanguageRatio,
+          constraint.targetLanguage
+        );
+        const scriptedLexicon = buildInterpretLexicon(constraint.targetLanguage);
+        const scriptedReminder = buildConstraintReminder(
+          constraint.targetLanguageRatio,
+          constraint.targetLanguage,
+          constraint.learnerCefr
+        );
+        const scriptedContrib: SugarlangContributionShape = {
+          schemaVersion: 1,
+          generateOverlay: constraint.generatorPromptOverlay,
+          ...(scriptedReminder ? { generateReminder: scriptedReminder } : {}),
+          ...(scriptedJudgeDirective ? { judgeDirectives: [scriptedJudgeDirective], regenDirectives: [scriptedJudgeDirective] } : {}),
+          ...(scriptedLexicon ? { interpretLexicon: scriptedLexicon } : {})
+        };
+        execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = scriptedContrib;
         logger.debug("Scripted mode: lightweight constraint built.", {
           learnerCefr: learner.estimatedCefrBand,
           posture,
@@ -400,6 +470,30 @@ export function createSugarLangTeacherMiddleware(
 
       execution.annotations[SUGARLANG_DIRECTIVE_ANNOTATION] = directive;
       execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+      const judgeDirective = buildLanguageJudgeDirective(
+        constraint.targetLanguageRatio,
+        constraint.targetLanguage
+      );
+      const langLexicon = buildInterpretLexicon(constraint.targetLanguage);
+      const npcDefId = execution.selection.npcDefinitionId ?? null;
+      const voiceSpec =
+        npcDefId && scene?.npcVoiceSpecs
+          ? (scene.npcVoiceSpecs[npcDefId] ?? null)
+          : null;
+      const constraintReminder = buildConstraintReminder(
+        constraint.targetLanguageRatio,
+        constraint.targetLanguage,
+        constraint.learnerCefr
+      );
+      const contrib: SugarlangContributionShape = {
+        schemaVersion: 1,
+        generateOverlay: constraint.generatorPromptOverlay,
+        ...(constraintReminder ? { generateReminder: constraintReminder } : {}),
+        ...(judgeDirective ? { judgeDirectives: [judgeDirective], regenDirectives: [judgeDirective] } : {}),
+        ...(langLexicon ? { interpretLexicon: langLexicon } : {}),
+        ...(voiceSpec?.hasGestureTags ? { textConventions: { preserveActionTags: true } } : {})
+      };
+      execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = contrib;
       logger.info("Teacher finalized Sugarlang guidance and constraint.", {
         conversationId,
         sessionId,

@@ -306,4 +306,60 @@ describe("compileSugarlangScene", () => {
     const averageDurationMs = (performance.now() - startedAt) / 50;
     expect(averageDurationMs).toBeLessThan(50);
   });
+
+  it("populates npcVoiceSpecs from a Voice lore section", () => {
+    const context = createTestSceneAuthoringContext();
+    context.lorePages.push({
+      lorePageId: "doc-npc",
+      displayName: "Orrin",
+      pages: [],
+      sections: [
+        {
+          heading: "Voice",
+          body: "Warm and excitable.\n\nInterjections: ¡Ay!, mhm\n\n*slaps knee* Example gesture."
+        }
+      ]
+    });
+    const { atlas, morphology } = createCompileDependencies();
+
+    const lexicon = compileSugarlangScene(context, atlas, morphology, "runtime-preview");
+
+    expect(lexicon.npcVoiceSpecs).toBeDefined();
+    expect(lexicon.npcVoiceSpecs?.["npc-orrin"]).toEqual({
+      interjections: ["ay", "mhm"],
+      hasGestureTags: true
+    });
+  });
+
+  it("omits npcVoiceSpecs when no NPC has a Voice section", () => {
+    const context = createTestSceneAuthoringContext();
+    const { atlas, morphology } = createCompileDependencies();
+
+    const lexicon = compileSugarlangScene(context, atlas, morphology, "runtime-preview");
+
+    expect(lexicon.npcVoiceSpecs).toBeUndefined();
+  });
+
+  it("detects gesture tags even without an Interjections line", () => {
+    const context = createTestSceneAuthoringContext();
+    context.lorePages.push({
+      lorePageId: "doc-npc",
+      displayName: "Orrin",
+      pages: [],
+      sections: [
+        {
+          heading: "Voice",
+          body: "Expressive. *gestures broadly* at everything."
+        }
+      ]
+    });
+    const { atlas, morphology } = createCompileDependencies();
+
+    const lexicon = compileSugarlangScene(context, atlas, morphology, "runtime-preview");
+
+    expect(lexicon.npcVoiceSpecs?.["npc-orrin"]).toEqual({
+      interjections: [],
+      hasGestureTags: true
+    });
+  });
 });
