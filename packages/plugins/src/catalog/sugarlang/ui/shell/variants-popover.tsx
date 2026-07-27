@@ -116,26 +116,8 @@ export function VariantsPopover(props: VariantsPopoverProps): ReactElement {
         </Button>
       </Popover.Target>
 
-      <Popover.Dropdown>
+      <Popover.Dropdown style={{ maxHeight: "80vh", overflowY: "auto" }}>
         <Stack gap="md">
-          <Group justify="space-between" align="center">
-            <Group gap="xs" align="center">
-              <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-                Lang
-              </Text>
-              <Text size="xs">{targetLanguage || "en"}</Text>
-            </Group>
-            <Button
-              size="xs"
-              variant="light"
-              onClick={() => void handleGenerate()}
-              disabled={generating || !onGenerate}
-              leftSection={generating ? <Loader size={10} /> : undefined}
-            >
-              {generating ? "Generating..." : "Generate"}
-            </Button>
-          </Group>
-
           <Stack gap="sm">
             <Text size="xs" fw={600} tt="uppercase" c="dimmed">
               Intent
@@ -172,9 +154,23 @@ export function VariantsPopover(props: VariantsPopoverProps): ReactElement {
           </Stack>
 
           <Stack gap="sm">
-            <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-              Band Variants
-            </Text>
+            <Group justify="space-between" align="center">
+              <Group gap="xs" align="center">
+                <Text size="xs" fw={600} tt="uppercase" c="dimmed">
+                  Band Variants
+                </Text>
+                <Text size="xs" c="dimmed">{targetLanguage || "en"}</Text>
+              </Group>
+              <Button
+                size="xs"
+                variant="light"
+                onClick={() => void handleGenerate()}
+                disabled={generating || !onGenerate}
+                leftSection={generating ? <Loader size={10} /> : undefined}
+              >
+                {generating ? "Generating..." : "Generate"}
+              </Button>
+            </Group>
             {DISPLAY_BANDS.map((band) => {
               const variant = bandVariants?.[band];
               return (
