@@ -548,6 +548,7 @@ export function createSugarLangObserveMiddleware(
       // Player turns in scripted mode -> chunk-produced (productive use).
       // 085.5: First chunk-encountered that creates a new chunk card triggers a teach-record write
       // and a teach-line annotation on the turn (one per turn, earliest new function wins).
+      let teachLineSurface: string | null = null;
       if (chunkMatcher) {
         const turnTokens = tokenize(normalizedTurn.text, learner.targetLanguage);
         const chunkMatches = chunkMatcher.match(turnTokens, normalizedTurn.text);
@@ -611,6 +612,7 @@ export function createSugarLangObserveMiddleware(
                   text: `"${match.surfaceMatched}" is a ${fnEntry.displayName.toLowerCase()}.`
                 };
                 teachLineWritten = true;
+                teachLineSurface = match.surfaceMatched;
               }
             }
           }
@@ -754,6 +756,9 @@ export function createSugarLangObserveMiddleware(
         if (gloss) glosses[surface] = gloss;
       }
 
+      if (teachLineSurface && !introduceTerms.includes(teachLineSurface)) {
+        introduceTerms.push(teachLineSurface);
+      }
       const focusTerms = [...introduceTerms, ...reinforceTerms];
       if (focusTerms.length > 0) {
         normalizedTurn.annotations!["dialogueHighlight"] = {

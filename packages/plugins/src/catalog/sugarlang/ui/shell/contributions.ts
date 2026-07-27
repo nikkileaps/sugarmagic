@@ -25,6 +25,7 @@ import { PlacementQuestionBankViewer } from "./placement-question-bank-viewer";
 import { QuestNodeEventHint } from "./quest-node-event-hint";
 import { SceneDensityHistogram } from "./scene-density-histogram";
 import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
+import { LearnerCardInspector } from "./learner-card-inspector";
 import { LearnerOverrideSection } from "./learner-override-section";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
@@ -196,6 +197,14 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
         label: "Comprehension Monitor",
         summary: "Shows probe lifecycle telemetry, outcomes, and session rollups.",
         render: () => createElement(ComprehensionCheckMonitor)
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
+        sectionId: "learner-card-inspector",
+        label: "Learner Cards",
+        summary: "Reads chunk cards and teach records directly from IDB. No running game required.",
+        render: () => createElement(LearnerCardInspector)
       },
       {
         pluginId: SUGARLANG_SHELL_PLUGIN_ID,

@@ -192,7 +192,7 @@ export function LearnerOverrideSection(): ReactElement {
               </summary>
               <div style={{ fontFamily: "var(--sm-font-mono, monospace)", display: "grid", gap: "0.15rem", paddingLeft: "0.5rem" }}>
                 {state.chunkCards.map((c) => (
-                  <div key={c.lemmaId}>{c.lemmaId} - {c.cefrBand} - str {c.productiveStrength.toFixed(2)}/{c.receptiveStrength.toFixed(2)}</div>
+                  <div key={c.lemmaId}>{c.lemmaId} [{c.cefrPriorBand}] pro {c.productiveStrength.toFixed(2)}</div>
                 ))}
               </div>
             </details>
