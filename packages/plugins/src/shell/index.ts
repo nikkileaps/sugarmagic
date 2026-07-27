@@ -18,6 +18,8 @@
  */
 
 import type {
+  DialogueDefinition,
+  DialogueNodeDefinition,
   GameProject,
   NPCDefinition,
   PluginConfigurationRecord,
@@ -86,6 +88,9 @@ export interface PluginDesignSectionRenderProps {
   selectedQuest?: QuestDefinition | null;
   updateQuest?: (definition: QuestDefinition) => void;
   selectedQuestNode?: QuestNodeDefinition | null;
+  selectedDialogue?: DialogueDefinition | null;
+  selectedDialogueNode?: DialogueNodeDefinition | null;
+  updateDialogueNode?: (node: DialogueNodeDefinition) => void;
 }
 
 export interface PluginNPCInteractionOptionContribution {

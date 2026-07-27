@@ -39,7 +39,8 @@ describe("sugarlang shell contributions", () => {
       "turn-inspector",
       "comprehension-check-monitor",
       "learner-card-inspector",
-      "learner-override"
+      "learner-override",
+      "line-variants"
     ]);
   });
 });

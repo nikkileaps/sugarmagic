@@ -63,6 +63,12 @@ export interface DialogueNodePosition {
   y: number;
 }
 
+export interface DialogueLineIntent {
+  mustConveyFacts?: string[];
+  beat?: string;
+  voiceNote?: string;
+}
+
 export interface DialogueEdgeDefinition {
   targetNodeId: string;
   choiceText?: string;
@@ -76,6 +82,7 @@ export interface DialogueNodeDefinition {
   speakerLabel?: string;
   text: string;
   onEnterEventId?: string;
+  intent?: DialogueLineIntent;
   next: DialogueEdgeDefinition[];
   graphPosition: DialogueNodePosition;
 }
@@ -190,6 +197,7 @@ export function normalizeDialogueNodeDefinition(
     speakerLabel: node.speakerLabel ?? undefined,
     text: node.text ?? defaultNode.text,
     onEnterEventId: node.onEnterEventId ?? undefined,
+    ...(node.intent ? { intent: node.intent } : {}),
     next: (node.next ?? [])
       .map((edge) => normalizeDialogueEdgeDefinition(edge))
       .filter((edge): edge is DialogueEdgeDefinition => edge !== null),

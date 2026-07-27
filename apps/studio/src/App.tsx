@@ -3029,6 +3029,29 @@ export function App() {
           updateQuest,
           selectedQuestNode
         }
+      ),
+    renderDialogueInspectorSections: ({
+      selectedDialogue,
+      selectedDialogueNode,
+      updateDialogueNode
+    }) =>
+      renderPluginSectionGroup(
+        pluginShellContributions.designSections.filter(
+          (section) => section.workspaceKind === "dialogues"
+        ),
+        {
+          workspaceKind: "dialogues",
+          gameProjectId: session?.gameProject.identity.id ?? null,
+          gameProject: session?.gameProject ?? null,
+          pluginConfigurations,
+          regions: regionDocuments,
+          activeRegion,
+          targetLanguage: sugarlangTargetLanguage,
+          onCommand: dispatchCommand,
+          selectedDialogue,
+          selectedDialogueNode,
+          updateDialogueNode
+        }
       )
   });
   const renderView = useRenderProductModeView({

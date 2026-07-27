@@ -33,6 +33,9 @@ import { collectSceneText, type SceneAuthoringContext } from "./scene-traversal"
 import type { SugarlangChunkCache } from "./chunk-cache";
 import type { ExtractChunksResult } from "./extract-chunks";
 import type { SugarlangCompileCache } from "./sugarlang-compile-cache";
+import type { SugarlangIntentCache, LineIntentCacheEntry } from "./intent-cache";
+import type { ExtractIntentResult } from "./extract-intent";
+import type { DialogueDefinition } from "@sugarmagic/domain";
 
 export interface SugarlangAuthoringChunkPipelineOptions {
   cache: SugarlangChunkCache;
@@ -53,31 +56,51 @@ export interface SugarlangAuthoringChunkPipelineOptions {
   ) => void;
 }
 
+export interface SugarlangAuthoringIntentPipelineOptions {
+  cache: SugarlangIntentCache;
+  extractNodeIntent: (
+    dialogueDefinitionId: string,
+    node: { nodeId: string; text: string; intent?: import("@sugarmagic/domain").DialogueLineIntent },
+    contentHash: string
+  ) => Promise<ExtractIntentResult>;
+  promptVersion: string;
+  debounceMs?: number;
+  telemetry?: TelemetrySink;
+}
+
 export interface SugarlangAuthoringCompileSchedulerOptions {
   getScenes: () => SceneAuthoringContext[];
+  getDialogues?: () => DialogueDefinition[];
   atlas: LexicalAtlasProvider;
   morphology: MorphologyLoader;
   cache: SugarlangCompileCache;
   debounceMs?: number;
   chunkPipeline?: SugarlangAuthoringChunkPipelineOptions;
+  intentPipeline?: SugarlangAuthoringIntentPipelineOptions;
   onLog?: (message: string, detail?: Record<string, unknown>) => void;
 }
 
 export class SugarlangAuthoringCompileScheduler {
   private readonly pendingSceneIds = new Set<string>();
   private readonly pendingChunkSceneIds = new Set<string>();
+  private readonly pendingIntentDialogueIds = new Set<string>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private chunkTimer: ReturnType<typeof setTimeout> | null = null;
+  private intentTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly debounceMs: number;
   private readonly chunkDebounceMs: number;
+  private readonly intentDebounceMs: number;
   private readonly onLog?: SugarlangAuthoringCompileSchedulerOptions["onLog"];
   private readonly chunkPipeline: SugarlangAuthoringChunkPipelineOptions | null;
+  private readonly intentPipeline: SugarlangAuthoringIntentPipelineOptions | null;
   private readonly telemetry: TelemetrySink;
 
   constructor(private readonly options: SugarlangAuthoringCompileSchedulerOptions) {
     this.debounceMs = options.debounceMs ?? 250;
     this.chunkPipeline = options.chunkPipeline ?? null;
+    this.intentPipeline = options.intentPipeline ?? null;
     this.chunkDebounceMs = this.chunkPipeline?.debounceMs ?? 5000;
+    this.intentDebounceMs = this.intentPipeline?.debounceMs ?? 5000;
     this.onLog = options.onLog;
     this.telemetry = this.chunkPipeline?.telemetry ?? createNoOpTelemetrySink();
   }
@@ -96,6 +119,11 @@ export class SugarlangAuthoringCompileScheduler {
 
   rebuildAll(): void {
     this.scheduleScenes(this.options.getScenes().map((scene) => scene.sceneId));
+    if (this.intentPipeline && this.options.getDialogues) {
+      for (const dialogue of this.options.getDialogues()) {
+        this.pendingIntentDialogueIds.add(dialogue.definitionId);
+      }
+    }
   }
 
   private armTimer(): void {
@@ -120,6 +148,20 @@ export class SugarlangAuthoringCompileScheduler {
     this.chunkTimer = setTimeout(() => {
       void this.flushChunks();
     }, this.chunkDebounceMs);
+  }
+
+  private armIntentTimer(): void {
+    if (!this.intentPipeline || this.pendingIntentDialogueIds.size === 0) {
+      return;
+    }
+
+    if (this.intentTimer) {
+      clearTimeout(this.intentTimer);
+    }
+
+    this.intentTimer = setTimeout(() => {
+      void this.flushIntents();
+    }, this.intentDebounceMs);
   }
 
   private getRequestedScenes(requestedSceneIds: string[]): SceneAuthoringContext[] {
@@ -182,6 +224,7 @@ export class SugarlangAuthoringCompileScheduler {
     }
 
     this.armChunkTimer();
+    this.armIntentTimer();
     return compiled;
   }
 
@@ -297,6 +340,84 @@ export class SugarlangAuthoringCompileScheduler {
     }
   }
 
+  async flushIntents(): Promise<void> {
+    if (!this.intentPipeline || !this.options.getDialogues) {
+      return;
+    }
+
+    if (this.intentTimer) {
+      clearTimeout(this.intentTimer);
+      this.intentTimer = null;
+    }
+
+    const requestedIds = [...this.pendingIntentDialogueIds].sort((left, right) =>
+      left.localeCompare(right)
+    );
+    this.pendingIntentDialogueIds.clear();
+
+    const allDialogues = this.options.getDialogues();
+    const requestedSet = new Set(requestedIds);
+    const dialogues = allDialogues
+      .filter((d) => requestedSet.has(d.definitionId))
+      .sort((left, right) => left.definitionId.localeCompare(right.definitionId));
+
+    for (const dialogue of dialogues) {
+      for (const node of dialogue.nodes) {
+        const contentHash = [
+          node.nodeId,
+          node.text,
+          JSON.stringify(node.intent ?? {})
+        ].join("|");
+
+        const cacheKey = {
+          contentHash,
+          intentPromptVersion: this.intentPipeline.promptVersion
+        };
+        const cached = await this.intentPipeline.cache.get(cacheKey);
+        if (cached) {
+          this.onLog?.("intent-cache-hit", {
+            dialogueDefinitionId: dialogue.definitionId,
+            nodeId: node.nodeId
+          });
+          continue;
+        }
+
+        const result = await this.intentPipeline.extractNodeIntent(
+          dialogue.definitionId,
+          {
+            nodeId: node.nodeId,
+            text: node.text,
+            intent: node.intent
+          },
+          contentHash
+        );
+
+        if (result.failure) {
+          this.onLog?.("intent-extraction-failed", {
+            dialogueDefinitionId: dialogue.definitionId,
+            nodeId: node.nodeId,
+            reason: result.failure.message
+          });
+        }
+
+        const entry: LineIntentCacheEntry = {
+          key: cacheKey,
+          nodeId: node.nodeId,
+          dialogueDefinitionId: dialogue.definitionId,
+          artifact: result.artifact
+        };
+        await this.intentPipeline.cache.set(entry);
+
+        this.onLog?.("intent-extracted", {
+          dialogueDefinitionId: dialogue.definitionId,
+          nodeId: node.nodeId,
+          derived: result.artifact.derived,
+          reviewFlag: result.artifact.reviewFlag
+        });
+      }
+    }
+  }
+
   start(): void {
     this.onLog?.("scheduler-started");
   }
@@ -310,8 +431,13 @@ export class SugarlangAuthoringCompileScheduler {
       clearTimeout(this.chunkTimer);
       this.chunkTimer = null;
     }
+    if (this.intentTimer) {
+      clearTimeout(this.intentTimer);
+      this.intentTimer = null;
+    }
     this.pendingSceneIds.clear();
     this.pendingChunkSceneIds.clear();
+    this.pendingIntentDialogueIds.clear();
     this.onLog?.("scheduler-stopped");
   }
 }

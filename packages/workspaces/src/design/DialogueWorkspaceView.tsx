@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ActionIcon,
   Badge,
@@ -44,6 +44,11 @@ export interface DialogueWorkspaceViewProps {
   npcDefinitions: NPCDefinition[];
   spellDefinitions: SpellDefinition[];
   onCommand: (command: SemanticCommand) => void;
+  renderDialogueInspectorSections?: (context: {
+    selectedDialogue: DialogueDefinition | null;
+    selectedDialogueNode: DialogueNodeDefinition | null;
+    updateDialogueNode: (node: DialogueNodeDefinition) => void;
+  }) => ReactNode;
 }
 
 function getChoiceColor(index: number): string {
@@ -477,7 +482,8 @@ export function useDialogueWorkspaceView(
     itemDefinitions,
     npcDefinitions,
     spellDefinitions,
-    onCommand
+    onCommand,
+    renderDialogueInspectorSections
   } = props;
   const [selectedDialogueId, setSelectedDialogueId] = useState<string | null>(
     dialogueDefinitions[0]?.definitionId ?? null
@@ -1248,6 +1254,12 @@ export function useDialogueWorkspaceView(
                 Delete Node
               </Button>
             )}
+
+            {renderDialogueInspectorSections?.({
+              selectedDialogue,
+              selectedDialogueNode: selectedNode,
+              updateDialogueNode: updateNode
+            })}
           </Stack>
         ) : (
           <Stack gap="lg">

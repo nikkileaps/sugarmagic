@@ -27,6 +27,7 @@ import { SceneDensityHistogram } from "./scene-density-histogram";
 import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
 import { LearnerCardInspector } from "./learner-card-inspector";
 import { LearnerOverrideSection } from "./learner-override-section";
+import { VariantsPopover } from "./variants-popover";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
@@ -213,6 +214,21 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
         label: "Learner Override",
         summary: "DEV-only: set estimated CEFR band directly and skip the placement flow. Requires a running game session.",
         render: () => createElement(LearnerOverrideSection)
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: "dialogues",
+        sectionId: "line-variants",
+        label: "Line Variants",
+        summary: "Intent fields and language variants for the selected dialogue node. Variants button opens a popover in the node inspector.",
+        render: (props) => {
+          if (!props.selectedDialogueNode || !props.updateDialogueNode) return null;
+          return createElement(VariantsPopover, {
+            node: props.selectedDialogueNode,
+            onUpdateNode: props.updateDialogueNode,
+            targetLanguage: props.targetLanguage
+          });
+        }
       }
     ],
     npcInteractionOptions: []
