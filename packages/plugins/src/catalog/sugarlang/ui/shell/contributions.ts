@@ -27,8 +27,9 @@ import { SceneDensityHistogram } from "./scene-density-histogram";
 import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
 import { LearnerCardInspector } from "./learner-card-inspector";
 import { LearnerOverrideSection } from "./learner-override-section";
-import { VariantsPopover } from "./variants-popover";
 import { VariantReport } from "./variant-report";
+import { VariantsPopoverConnected } from "./variant-popover-connected";
+import { resolveStudioCompileWorkspaceId } from "./editor-support";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
@@ -224,10 +225,12 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
         summary: "Intent fields and language variants for the selected dialogue node. Variants button opens a popover in the node inspector.",
         render: (props) => {
           if (!props.selectedDialogueNode || !props.updateDialogueNode) return null;
-          return createElement(VariantsPopover, {
+          return createElement(VariantsPopoverConnected, {
             node: props.selectedDialogueNode,
             onUpdateNode: props.updateDialogueNode,
-            targetLanguage: props.targetLanguage
+            targetLanguage: props.targetLanguage,
+            dialogue: props.selectedDialogue ?? null,
+            workspaceId: resolveStudioCompileWorkspaceId(props.gameProjectId)
           });
         }
       },
