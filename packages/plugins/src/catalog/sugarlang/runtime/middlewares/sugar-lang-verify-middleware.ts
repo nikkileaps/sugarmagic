@@ -23,7 +23,7 @@ import {
   emitTelemetry,
   type TelemetrySink
 } from "../telemetry/telemetry";
-import type { EnvelopeVerdict, RatioConformance } from "../types";
+import type { EnvelopeVerdict, RatioConformance, VoiceChannelSpec } from "../types";
 import type { SugarlangLLMClient } from "../llm/types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type { SugarlangConstraint } from "../types";
@@ -64,6 +64,7 @@ interface CandidateScore {
   coverageRatio: number;
   measuredRatio: number;
   conformance: RatioConformance;
+  voiceRetentionScore: number;
 }
 
 interface RepairResult {
@@ -73,7 +74,7 @@ interface RepairResult {
   candidateScores: CandidateScore[];
 }
 
-function scoreCandidateVerdict(verdict: EnvelopeVerdict): CandidateScore {
+function scoreCandidateVerdict(verdict: EnvelopeVerdict): Omit<CandidateScore, "voiceRetentionScore"> {
   const directed = verdict.languageRatioVerdict.directedRatio;
   const ratioFraction = directed > 0
     ? Math.min(verdict.languageRatioVerdict.measuredRatio / directed, 1)
@@ -85,6 +86,43 @@ function scoreCandidateVerdict(verdict: EnvelopeVerdict): CandidateScore {
     measuredRatio: verdict.languageRatioVerdict.measuredRatio,
     conformance: verdict.languageRatioVerdict.conformance
   };
+}
+
+/**
+ * Returns [0,1]: fraction of the voice spec's markers (interjections, gesture tags)
+ * present in the candidate text. Returns 1 when spec is null (neutral -- no preference).
+ */
+export function computeVoiceRetentionScore(
+  text: string,
+  voiceSpec: VoiceChannelSpec | null | undefined
+): number {
+  if (!voiceSpec) return 1;
+  let checks = 0;
+  let retained = 0;
+  if (voiceSpec.interjections.length > 0) {
+    checks++;
+    const lowerText = text.normalize("NFC").toLocaleLowerCase();
+    if (voiceSpec.interjections.some((inj) => lowerText.includes(inj))) {
+      retained++;
+    }
+  }
+  if (voiceSpec.hasGestureTags) {
+    checks++;
+    if (/\*[^*\n]+\*/u.test(text)) retained++;
+  }
+  return checks === 0 ? 1 : retained / checks;
+}
+
+function buildVoiceRubricLine(spec: VoiceChannelSpec): string | null {
+  const parts: string[] = [];
+  if (spec.interjections.length > 0) {
+    parts.push(spec.interjections.join(", "));
+  }
+  if (spec.hasGestureTags) {
+    parts.push("any *...* gesture tags");
+  }
+  if (parts.length === 0) return null;
+  return `Keep the NPC's signature markers verbatim (${parts.join("; ")}) -- these are exempt from simplification.`;
 }
 
 function parseCandidates(text: string): string[] {
@@ -110,6 +148,7 @@ async function repairWithBestOfN(
   constraint: SugarlangConstraint,
   llmClient: SugarlangLLMClient | null,
   checkCandidate: (text: string) => EnvelopeVerdict,
+  voiceSpec: VoiceChannelSpec | null | undefined,
   n: number = REPAIR_CANDIDATE_COUNT
 ): Promise<RepairResult | null> {
   if (!llmClient) {
@@ -125,16 +164,19 @@ async function repairWithBestOfN(
       ...constraint.targetVocab.reinforce.map((l) => l.lemmaId)
     ].join(", ") || "(none)"}. Do not force them.`
   ].join("\n");
+  const voiceRubricLine = voiceSpec ? buildVoiceRubricLine(voiceSpec) : null;
 
   const result = await llmClient.generate({
-    systemPrompt:
-      `You are editing an NPC line for a ${targetLang}-learning game. ` +
-      `Say the same thing in simpler, clearer language. ` +
-      `Preserve the meaning and any important information. ` +
-      `Simplify the expression, never change what is being communicated. ` +
-      `Do NOT add inline glosses, parenthetical translations, or line-by-line word pairings. ` +
-      `The NPC speaks naturally -- never write a word followed by its translation on the next line. ` +
-      `Return exactly ${n} alternative versions as a JSON array.`,
+    systemPrompt: [
+      `You are editing an NPC line for a ${targetLang}-learning game.`,
+      `Say the same thing in simpler, clearer language.`,
+      `Preserve the meaning and any important information.`,
+      `Simplify the expression, never change what is being communicated.`,
+      `Do NOT add inline glosses, parenthetical translations, or line-by-line word pairings.`,
+      `The NPC speaks naturally -- never write a word followed by its translation on the next line.`,
+      ...(voiceRubricLine ? [voiceRubricLine] : []),
+      `Return exactly ${n} alternative versions as a JSON array.`
+    ].join(" "),
     userPrompt: [
       `Original: ${originalText}`,
       `Learner level: ${constraint.learnerCefr}. Sentence complexity: ${constraint.sentenceComplexityCap}.`,
@@ -154,22 +196,27 @@ async function repairWithBestOfN(
   const originalScore = scoreCandidateVerdict(originalVerdict);
   const scored = candidates.map((text) => ({
     text,
-    details: scoreCandidateVerdict(checkCandidate(text))
+    details: {
+      ...scoreCandidateVerdict(checkCandidate(text)),
+      voiceRetentionScore: computeVoiceRetentionScore(text, voiceSpec)
+    } satisfies CandidateScore
   }));
 
-  // First passing candidate wins
-  const firstPassing = scored.find((c) => c.details.passes);
-  if (firstPassing) {
-    const idx = scored.indexOf(firstPassing);
+  // Among passing candidates, prefer the one with highest voice retention
+  const passing = scored.filter((c) => c.details.passes);
+  if (passing.length > 0) {
+    const best = passing.reduce((a, b) =>
+      b.details.voiceRetentionScore > a.details.voiceRetentionScore ? b : a
+    );
     return {
-      selectedText: firstPassing.text,
-      selectedIndex: idx,
+      selectedText: best.text,
+      selectedIndex: scored.indexOf(best),
       selectedPasses: true,
       candidateScores: scored.map((c) => c.details)
     };
   }
 
-  // No passing candidate: use best-scoring if it beats the original
+  // No passing candidate: use best-scoring by envelope/ratio if it beats the original
   const best = scored.reduce((a, b) => (b.details.score > a.details.score ? b : a));
   if (best.details.score > originalScore.score) {
     return {
@@ -423,7 +470,8 @@ export function createSugarLangVerifyMiddleware(
         verdict,
         constraint,
         services.llmClient,
-        checkCandidate
+        checkCandidate,
+        voiceSpec
       );
 
       if (repairResult) {

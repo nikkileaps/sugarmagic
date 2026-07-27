@@ -17,7 +17,10 @@
 
 import { PLAYER_VO_SPEAKER } from "@sugarmagic/domain";
 import { describe, expect, it, vi } from "vitest";
-import { createSugarLangVerifyMiddleware } from "../../runtime/middlewares/sugar-lang-verify-middleware";
+import {
+  createSugarLangVerifyMiddleware,
+  computeVoiceRetentionScore
+} from "../../runtime/middlewares/sugar-lang-verify-middleware";
 import { SUGARLANG_CONSTRAINT_ANNOTATION } from "../../runtime/middlewares/shared";
 import {
   createBaseConstraint,
@@ -812,5 +815,82 @@ describe("SugarLangVerifyMiddleware", () => {
     expect(classifierCheck).toHaveBeenCalledTimes(1);
     expect(llmClient.generate).not.toHaveBeenCalled();
     expect(result?.text).toBe("Hmm, I'm not sure how to respond to that.");
+  });
+
+  describe("083.4: computeVoiceRetentionScore", () => {
+    it("returns 1 (neutral) when spec is null", () => {
+      expect(computeVoiceRetentionScore("any text", null)).toBe(1);
+    });
+
+    it("returns 1 (neutral) when spec has no interjections and no gesture tags", () => {
+      expect(computeVoiceRetentionScore("any text", { interjections: [], hasGestureTags: false })).toBe(1);
+    });
+
+    it("scores 1 when the interjection is present in the candidate", () => {
+      expect(computeVoiceRetentionScore("¡Ay, qué sorpresa!", { interjections: ["ay"], hasGestureTags: false })).toBe(1);
+    });
+
+    it("scores 0 when the interjection is absent from the candidate", () => {
+      expect(computeVoiceRetentionScore("Qué sorpresa.", { interjections: ["ay"], hasGestureTags: false })).toBe(0);
+    });
+
+    it("scores 1 when gesture tag is present and spec requires it", () => {
+      expect(computeVoiceRetentionScore("*sweeps hat* Buenas tardes.", { interjections: [], hasGestureTags: true })).toBe(1);
+    });
+
+    it("scores 0 when gesture tag is absent and spec requires it", () => {
+      expect(computeVoiceRetentionScore("Buenas tardes.", { interjections: [], hasGestureTags: true })).toBe(0);
+    });
+
+    it("scores 0.5 when interjection present but gesture tag stripped", () => {
+      expect(computeVoiceRetentionScore("¡Ay! Buenas tardes.", { interjections: ["ay"], hasGestureTags: true })).toBe(0.5);
+    });
+
+    it("scores 1 when both interjection and gesture tag are present", () => {
+      expect(computeVoiceRetentionScore("*sweeps hat* ¡Ay! Buenas tardes.", { interjections: ["ay"], hasGestureTags: true })).toBe(1);
+    });
+  });
+
+  it("083.4: among passing candidates, prefers the one retaining voice markers", async () => {
+    // Two passing candidates: index 0 strips the interjection, index 1 keeps it.
+    // Voice-aware selection should pick index 1.
+    const candidates = ["Buenas tardes, amigo.", "¡Ay! Buenas tardes, amigo."];
+    const llmClient = {
+      generate: vi.fn().mockResolvedValue({ text: JSON.stringify(candidates), requestId: null })
+    };
+    const passProfile = {
+      totalTokens: 3, knownTokens: 3, inBandTokens: 3, unknownTokens: 0,
+      bandHistogram: { A1: 3, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
+      outOfEnvelopeLemmas: [], ceilingExceededLemmas: [], questEssentialLemmasMatched: [],
+      coverageRatio: 1, ratioCheckTokens: 3, resolvedTargetLanguageTokens: 3
+    };
+    const ratioPass = { measuredRatio: 1, directedRatio: 0.85, posture: "target-dominant", conformance: "conformant" };
+    const classifierCheck = vi.fn()
+      .mockReturnValueOnce({ withinEnvelope: false, profile: passProfile, worstViolation: null, rule: "test", violations: [{ lemmaRef: { lemmaId: "x", lang: "es" }, surfaceForm: "x", cefrBand: "unknown", reason: "test" }], exemptionsApplied: [], languageRatioVerdict: { measuredRatio: 0.2, directedRatio: 0.85, posture: "target-dominant", conformance: "under-ratio" } })
+      .mockReturnValue({ withinEnvelope: true, profile: passProfile, worstViolation: null, rule: "test", violations: [], exemptionsApplied: [], languageRatioVerdict: ratioPass });
+
+    const voiceSpec = { interjections: ["ay"], hasGestureTags: false };
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile()) },
+          sceneLexiconStore: { ensure: vi.fn().mockResolvedValue({
+            sceneId: "scene-1", contentHash: "hash", pipelineVersion: "v1",
+            atlasVersion: "v1", profile: "runtime-preview",
+            lemmas: {}, properNouns: [], anchors: [], questEssentialLemmas: [],
+            npcVoiceSpecs: { "npc-test": voiceSpec }
+          }) },
+          classifier: { check: classifierCheck },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.selection = { ...execution.selection, npcDefinitionId: "npc-test" };
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({ supportPosture: "target-dominant", targetLanguageRatio: 0.85 });
+
+    const result = await middleware.finalize?.(execution, createTestTurn("The original text here."));
+
+    expect(result?.text).toBe("¡Ay! Buenas tardes, amigo.");
   });
 });
