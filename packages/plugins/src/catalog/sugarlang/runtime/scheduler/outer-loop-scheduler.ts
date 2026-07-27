@@ -51,6 +51,25 @@ import { estimateSceneComprehensionRate, STRETCH_COMPREHENSION_FLOOR } from "./c
 /** Retrievability below this = the learner is overdue on this item. */
 export const DUE_RETRIEVABILITY_FLOOR = 0.7;
 
+/**
+ * 087.4: When fatigueScore reaches this threshold, the scheduler enters strain-suppressed
+ * mode: introductions, function-affinity, and stretch candidates are dropped and fluency
+ * items (well-known lemmas) are surfaced instead. Modeled on L4D's tension-relief curve.
+ *
+ * At 0.70 the learner needs (e.g.) 35 turns + heavy hovering or 3/4 probes failed.
+ * The valley ends naturally as hoverRate drops with familiar material.
+ */
+export const STRAIN_SUPPRESS_THRESHOLD = 0.70;
+
+/**
+ * 087.4: Lemmas at or above this retrievability are "well known" for fluency recycling.
+ * Surfaces items the learner already has to create the at-ease consolidation experience.
+ */
+export const FLUENCY_RETRIEVABILITY_FLOOR = 0.90;
+
+/** Max fluency items surfaced per turn in strain-suppressed mode. */
+const FLUENCY_ITEM_CAP = 3;
+
 const CEFR_BAND_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
 
 function bandIndex(band: string): number {
@@ -85,6 +104,7 @@ export class OuterLoopScheduler {
 
     const dayAxisDegraded = scene.dayIndex === null;
     const sceneComprehensionRate = estimateSceneComprehensionRate(learner.lemmaCards, scene.sceneLemmaIds);
+    const strainSuppressed = learner.fatigueScore >= STRAIN_SUPPRESS_THRESHOLD;
 
     if (isColdStart) {
       void emitTelemetry(
@@ -106,7 +126,8 @@ export class OuterLoopScheduler {
           topTeachableReason: null,
           dayAxisDegraded,
           sceneComprehensionRate,
-          stretchAllowanceActive: false
+          stretchAllowanceActive: false,
+          strainSuppressed: false
         })
       );
       return {
@@ -115,7 +136,8 @@ export class OuterLoopScheduler {
         sceneId: scene.sceneId,
         conversationId,
         sceneComprehensionRate,
-        stretchAllowanceActive: false
+        stretchAllowanceActive: false,
+        strainSuppressed: false
       };
     }
 
@@ -153,13 +175,16 @@ export class OuterLoopScheduler {
     }
 
     // --- 3. Unintroduced functions, band ordering as the floor ---
+    // Skipped entirely in strain-suppressed mode (087.4). When strain is high the
+    // scheduler surfaces fluency items (section 4) instead of new introductions.
+    //
     // Above-band (band+1) functions are gated behind the stretch allowance:
     // only one is included per turn, only when scene comprehension >= STRETCH_COMPREHENSION_FLOOR,
     // and only when the function has scene affinity.
     const learnerBandIdx = bandIndex(learner.cefrBand);
     let stretchCandidateAdded = false;
 
-    for (const fn of curriculum.availableFunctions) {
+    if (!strainSuppressed) for (const fn of curriculum.availableFunctions) {
       if (curriculum.introducedFunctionIds.has(fn.functionId)) continue;
       if (curriculum.activeDebts.has(fn.functionId)) continue;
 
@@ -221,6 +246,29 @@ export class OuterLoopScheduler {
 
     const stretchAllowanceActive = stretchCandidateAdded;
 
+    // --- 4. Fluency recycling (087.4, strain-suppressed mode only) ---
+    // Surface well-known lemmas (retrievability >= FLUENCY_RETRIEVABILITY_FLOOR) as positive
+    // reinforcement. These are things the learner already knows, included so NPCs use familiar
+    // phrases during the valley period. Capped at FLUENCY_ITEM_CAP per turn.
+    // Mentor-line delivery timing: deferred to when a mentor NPC ships in authored content.
+    // Revisit at this section when a mentor NPC exists (see plan 087 deferred list).
+    if (strainSuppressed) {
+      let fluencyAdded = 0;
+      for (const [lemmaId, card] of Object.entries(learner.lemmaCards)) {
+        if (fluencyAdded >= FLUENCY_ITEM_CAP) break;
+        if (lemmaId.startsWith("chunk:")) continue;
+        if (card.retrievability < FLUENCY_RETRIEVABILITY_FLOOR) continue;
+        candidates.push({
+          id: lemmaId,
+          kind: "lemma",
+          priority: card.retrievability * 0.20, // low band: below due/debt but present
+          teachReason: "fluency",
+          affinityNpcIds: []
+        });
+        fluencyAdded += 1;
+      }
+    }
+
     // Sort descending by priority; break ties alphabetically by id for determinism.
     candidates.sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
 
@@ -249,7 +297,8 @@ export class OuterLoopScheduler {
         topTeachableReason: candidates[0]?.teachReason ?? null,
         dayAxisDegraded,
         sceneComprehensionRate,
-        stretchAllowanceActive
+        stretchAllowanceActive,
+        strainSuppressed
       })
     );
 
@@ -259,7 +308,8 @@ export class OuterLoopScheduler {
       sceneId: scene.sceneId,
       conversationId,
       sceneComprehensionRate,
-      stretchAllowanceActive
+      stretchAllowanceActive,
+      strainSuppressed
     };
   }
 }

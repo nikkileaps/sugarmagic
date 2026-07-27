@@ -94,7 +94,7 @@ describe("learner persistence", () => {
         turns: 4,
         avgResponseLatencyMs: 800,
         hoverRate: 0.25,
-        retryRate: 0.1,
+        probeFailRate: 0.1,
         fatigueScore: 0.3
       },
       sessionHistory: [

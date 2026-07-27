@@ -112,7 +112,8 @@ export interface CurrentSessionSignals {
   turns: number;
   avgResponseLatencyMs: number;
   hoverRate: number;
-  retryRate: number;
+  /** 087.4: fraction of probes that failed this session. Replaced retryRate (always 0 -- no producers). */
+  probeFailRate: number;
   fatigueScore: number;
 }
 

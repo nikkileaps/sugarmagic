@@ -318,6 +318,17 @@ export function createSugarLangObserveMiddleware(
           });
         }
 
+        // 087.4: Record the probe outcome in the session accumulator so it feeds fatigueScore.
+        // All-passed = good signal; anything else (full-fail or mixed) = strain signal.
+        try {
+          await services.learnerStateReducer.apply({
+            type: "record-probe-outcome",
+            passed: passed.length === storedCheck.targetLemmas.length
+          });
+        } catch {
+          // Non-fatal: strain signal missing for this probe, scheduling degrades gracefully.
+        }
+
         if (passed.length === storedCheck.targetLemmas.length) {
           await emitTelemetry(
             telemetry,

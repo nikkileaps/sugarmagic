@@ -192,9 +192,9 @@ export function deserializeLearnerProfile(json: string): LearnerProfile {
             typeof parsed.currentSession.hoverRate === "number"
               ? parsed.currentSession.hoverRate
               : 0,
-          retryRate:
-            typeof parsed.currentSession.retryRate === "number"
-              ? parsed.currentSession.retryRate
+          probeFailRate:
+            typeof parsed.currentSession.probeFailRate === "number"
+              ? parsed.currentSession.probeFailRate
               : 0,
           fatigueScore:
             typeof parsed.currentSession.fatigueScore === "number"

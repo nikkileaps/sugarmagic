@@ -28,7 +28,7 @@
  *   stretch          Above-band (band+1) function scheduled deliberately when scene comprehension
  *                    is high enough (>= STRETCH_COMPREHENSION_FLOOR) to support it safely.
  */
-export type TeachReason = "due" | "debt-service" | "introduction" | "function-affinity" | "stretch";
+export type TeachReason = "due" | "debt-service" | "introduction" | "function-affinity" | "stretch" | "fluency";
 
 export interface ScheduledTeachable {
   /**
@@ -76,4 +76,11 @@ export interface TeachSchedule {
    * a stretch (band+1) function was deliberately added to the schedule.
    */
   stretchAllowanceActive: boolean;
+  /**
+   * 087.4: True when fatigueScore >= STRAIN_SUPPRESS_THRESHOLD this turn.
+   * When true, introductions are suppressed and fluency items (well-known lemmas)
+   * are surfaced instead. Downstream consumers should expect teachReason="fluency"
+   * items and no "introduction" / "function-affinity" / "stretch" items.
+   */
+  strainSuppressed: boolean;
 }

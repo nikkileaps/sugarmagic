@@ -735,4 +735,163 @@ describe("OuterLoopScheduler", () => {
       expect(schedule).toHaveProperty("stretchAllowanceActive");
     });
   });
+
+  describe("strain curve + fluency valleys (087.4)", () => {
+    function highStrainBoard(fatigueScore: number, overrides: Parameters<typeof emptyBoard>[0] = {}): SchedulerBoardView {
+      return emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: { hola: makeCard("hola", 0.95) },
+          fatigueScore
+        },
+        curriculum: {
+          introducedFunctionIds: new Set(),
+          availableFunctions: FIXTURE_FUNCTIONS
+        },
+        ...overrides
+      });
+    }
+
+    it("strainSuppressed is false when fatigueScore is below STRAIN_SUPPRESS_THRESHOLD", () => {
+      const board = highStrainBoard(0.50);
+      const schedule = scheduler.compute(board);
+      expect(schedule.strainSuppressed).toBe(false);
+    });
+
+    it("strainSuppressed is true when fatigueScore >= STRAIN_SUPPRESS_THRESHOLD", () => {
+      const board = highStrainBoard(0.70);
+      const schedule = scheduler.compute(board);
+      expect(schedule.strainSuppressed).toBe(true);
+    });
+
+    it("introductions are suppressed when strain is high", () => {
+      const board = highStrainBoard(0.80);
+      const schedule = scheduler.compute(board);
+      const hasIntro = schedule.teachables.some(
+        (t) => t.teachReason === "introduction" || t.teachReason === "function-affinity" || t.teachReason === "stretch"
+      );
+      expect(hasIntro).toBe(false);
+    });
+
+    it("due items still appear in strain-suppressed mode", () => {
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: {
+            hola: makeCard("hola", 0.95),
+            adios: makeCard("adios", 0.30) // overdue
+          },
+          fatigueScore: 0.80
+        },
+        curriculum: {
+          introducedFunctionIds: new Set(),
+          availableFunctions: FIXTURE_FUNCTIONS
+        }
+      });
+      const schedule = scheduler.compute(board);
+      const dueItems = schedule.teachables.filter((t) => t.teachReason === "due");
+      expect(dueItems.length).toBeGreaterThan(0);
+      expect(dueItems.some((t) => t.id === "adios")).toBe(true);
+    });
+
+    it("fluency items appear when strain is suppressed (well-known lemmas recycled)", () => {
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: {
+            hola: makeCard("hola", 0.95),
+            gracias: makeCard("gracias", 0.92),
+            adios: makeCard("adios", 0.91)
+          },
+          fatigueScore: 0.75
+        }
+      });
+      const schedule = scheduler.compute(board);
+      const fluencyItems = schedule.teachables.filter((t) => t.teachReason === "fluency");
+      expect(fluencyItems.length).toBeGreaterThan(0);
+      fluencyItems.forEach((f) => {
+        expect(f.kind).toBe("lemma");
+        expect(f.id).not.toMatch(/^chunk:/);
+      });
+    });
+
+    it("fluency items are capped at 3 per turn", () => {
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: {
+            hola: makeCard("hola", 0.95),
+            gracias: makeCard("gracias", 0.94),
+            adios: makeCard("adios", 0.93),
+            bueno: makeCard("bueno", 0.92),
+            vale: makeCard("vale", 0.91)
+          },
+          fatigueScore: 0.80
+        }
+      });
+      const schedule = scheduler.compute(board);
+      const fluencyItems = schedule.teachables.filter((t) => t.teachReason === "fluency");
+      expect(fluencyItems.length).toBeLessThanOrEqual(3);
+    });
+
+    it("chunk: cards are excluded from fluency recycling", () => {
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: {
+            hola: makeCard("hola", 0.95),
+            "chunk:buenos_dias": makeCard("chunk:buenos_dias", 0.99)
+          },
+          fatigueScore: 0.80
+        }
+      });
+      const schedule = scheduler.compute(board);
+      const fluencyItems = schedule.teachables.filter((t) => t.teachReason === "fluency");
+      expect(fluencyItems.every((f) => !f.id.startsWith("chunk:"))).toBe(true);
+    });
+
+    it("no fluency items appear below the FLUENCY_RETRIEVABILITY_FLOOR", () => {
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: {
+            hola: makeCard("hola", 0.85) // below 0.90 floor
+          },
+          fatigueScore: 0.80
+        }
+      });
+      const schedule = scheduler.compute(board);
+      const fluencyItems = schedule.teachables.filter((t) => t.teachReason === "fluency");
+      expect(fluencyItems).toHaveLength(0);
+    });
+
+    it("below-threshold fatigue degrades to 087.3 behavior (no strainSuppressed, no fluency)", () => {
+      const board = highStrainBoard(0.30);
+      const schedule = scheduler.compute(board);
+      expect(schedule.strainSuppressed).toBe(false);
+      expect(schedule.teachables.some((t) => t.teachReason === "fluency")).toBe(false);
+      // Function candidates should appear normally
+      expect(schedule.teachables.some((t) => t.kind === "function")).toBe(true);
+    });
+
+    it("telemetry includes strainSuppressed flag", async () => {
+      const board = highStrainBoard(0.80);
+      scheduler.compute(board);
+      await telemetry.flush();
+      const events = await telemetry.query({ eventKinds: ["scheduler.computed"] });
+      const event = events[0] as unknown as Record<string, unknown>;
+      expect(event.strainSuppressed).toBe(true);
+    });
+
+    it("schedule always contains strainSuppressed", () => {
+      const schedule = scheduler.compute(emptyBoard());
+      expect(schedule).toHaveProperty("strainSuppressed");
+    });
+  });
 });

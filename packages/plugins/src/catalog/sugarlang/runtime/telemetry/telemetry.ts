@@ -671,6 +671,8 @@ export type TelemetryEvent =
         sceneComprehensionRate: number | null;
         /** 087.3: True when stretch allowance gate was triggered this turn. */
         stretchAllowanceActive: boolean;
+        /** 087.4: True when fatigueScore >= STRAIN_SUPPRESS_THRESHOLD; introductions suppressed. */
+        strainSuppressed: boolean;
       }
     >
   | TelemetryEventOf<
