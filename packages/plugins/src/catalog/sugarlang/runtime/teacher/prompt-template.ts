@@ -25,7 +25,8 @@ export const DIRECTOR_SYSTEM_TEMPLATE = [
   "{{cefrDescriptorsPrompt}}",
   "{{outputSchemaPrompt}}",
   "{{hardConstraintsPrompt}}",
-  "{{comprehensionGuidanceBlock}}"
+  "{{comprehensionGuidanceBlock}}",
+  "{{pragmaticFeedbackBlock}}"
 ].join("\n\n");
 
 export const DIRECTOR_USER_TEMPLATE = [

@@ -106,6 +106,8 @@ function createViolationReason(
   return `Lemma "${lemmaId}" is above learner band ${learner.estimatedCefrBand}.`;
 }
 
+const MAX_CHUNK_MATCHER_CACHE = 32;
+
 export class EnvelopeClassifier {
   private readonly rule: EnvelopeRule;
   private readonly telemetry: TelemetrySink;
@@ -121,7 +123,6 @@ export class EnvelopeClassifier {
   }
 
   private resolveChunkMatcher(
-    text: string,
     lang: string,
     sceneLexicon: Pick<CompiledSceneLexicon, "contentHash" | "chunks"> | null | undefined
   ): ChunkMatcher | null {
@@ -135,7 +136,15 @@ export class EnvelopeClassifier {
       return cached;
     }
 
-    const matcher = createChunkMatcher(sceneLexicon.chunks, lang, text);
+    // Evict oldest entry when the cache is full to bound memory use.
+    if (this.chunkMatcherCache.size >= MAX_CHUNK_MATCHER_CACHE) {
+      const firstKey = this.chunkMatcherCache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.chunkMatcherCache.delete(firstKey);
+      }
+    }
+
+    const matcher = createChunkMatcher(sceneLexicon.chunks, lang);
     this.chunkMatcherCache.set(cacheKey, matcher);
     return matcher;
   }
@@ -151,7 +160,7 @@ export class EnvelopeClassifier {
   ): EnvelopeVerdict {
     const lang = options.lang ?? learner.targetLanguage;
     const tokens = tokenize(text, lang);
-    const chunkMatcher = this.resolveChunkMatcher(text, lang, options.sceneLexicon);
+    const chunkMatcher = this.resolveChunkMatcher(lang, options.sceneLexicon);
     const profile = computeCoverage(
       tokens,
       learner,
@@ -160,7 +169,8 @@ export class EnvelopeClassifier {
       this.morphology,
       options.questEssentialLemmas ?? new Set(),
       chunkMatcher,
-      options.sceneLexicon?.chunks
+      options.sceneLexicon?.chunks,
+      text
     );
     const ruleResult = this.rule(profile, learner.estimatedCefrBand, {
       prescription: options.prescription,

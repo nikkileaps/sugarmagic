@@ -238,4 +238,49 @@ describe("EnvelopeClassifier", () => {
 
     expect(secondVerdict).toEqual(firstVerdict);
   });
+
+  it("085.1 regression: cached chunk matcher returns correct surfaceMatched for a different turn text", () => {
+    const classifier = new EnvelopeClassifier();
+    const learner = createLearnerProfile("A2");
+    const sceneLexicon = {
+      sceneId: "scene-1",
+      contentHash: "hash-cache-regression",
+      chunks: [
+        {
+          chunkId: "buenos_dias",
+          normalizedForm: "buenos_dias",
+          surfaceForms: ["buenos dias", "buenos días"],
+          cefrBand: "A1" as const,
+          constituentLemmas: ["bueno", "dia"],
+          extractedByModel: "test",
+          extractedAtMs: 1,
+          extractorPromptVersion: "1",
+          source: "llm-extracted" as const
+        }
+      ]
+    };
+
+    // First call seeds the cache.
+    const firstVerdict = classifier.check("Hola, buenos días, amigo.", learner, {
+      lang: "es",
+      sceneLexicon
+    });
+
+    // Second call uses a different text (same scene). Before the fix the cached
+    // matcher would slice surfaceMatched from the first text at new offsets.
+    const secondVerdict = classifier.check("buenos días de hoy", learner, {
+      lang: "es",
+      sceneLexicon
+    });
+
+    // Cache should have been reused (still 1 entry).
+    expect(classifier.getCachedChunkMatcherCount()).toBe(1);
+
+    // Both verdicts should find the chunk with correct surface slice.
+    expect(firstVerdict.profile.matchedChunkTokens[0]?.surfaceMatched).toMatch(/buenos d/i);
+    expect(secondVerdict.profile.matchedChunkTokens[0]?.surfaceMatched).toMatch(/buenos d/i);
+    // Specifically verify the second call's surfaceMatched starts at the right offset
+    // (not sliced from the first text).
+    expect(secondVerdict.profile.matchedChunkTokens[0]?.start).toBe(0);
+  });
 });

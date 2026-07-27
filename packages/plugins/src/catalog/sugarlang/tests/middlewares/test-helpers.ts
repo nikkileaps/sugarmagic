@@ -177,9 +177,45 @@ export function createTestTurn(
   };
 }
 
+// Default stores injected into every resolved-services mock so tests
+// that override resolveForExecution don't need to wire them up manually.
+const DEFAULT_SCENE_LEXICON_STORE = {
+  ensure: async () => null,
+  get: () => undefined
+};
+
+const DEFAULT_TEACH_RECORD_STORE = {
+  has: async () => false,
+  write: async () => undefined,
+  list: async () => []
+};
+
 export function createServicesStub(overrides: Record<string, unknown> = {}) {
+  const resolveForExecutionOverride = overrides.resolveForExecution as
+    | (() => object | null)
+    | undefined;
+
+  // Wrap any resolveForExecution override so the resolved services always include
+  // sceneLexiconStore (085.3: observe middleware now calls it).
+  const resolveForExecution = resolveForExecutionOverride
+    ? () => {
+        const resolved = resolveForExecutionOverride();
+        if (!resolved) return null;
+        return {
+          sceneLexiconStore: DEFAULT_SCENE_LEXICON_STORE,
+          teachRecordStore: DEFAULT_TEACH_RECORD_STORE,
+          ...resolved
+        };
+      }
+    : () => null;
+
+  const { resolveForExecution: _ignored, ...remainingOverrides } = overrides as Record<
+    string,
+    unknown
+  > & { resolveForExecution?: unknown };
+
   return {
-    resolveForExecution: () => null,
+    resolveForExecution,
     getBlackboard: () => null,
     getPlayerDefinitionId: () => null,
     getConfig: () => ({
@@ -199,6 +235,6 @@ export function createServicesStub(overrides: Record<string, unknown> = {}) {
       }
     }),
     findNpcDefinition: () => null,
-    ...overrides
+    ...remainingOverrides
   };
 }

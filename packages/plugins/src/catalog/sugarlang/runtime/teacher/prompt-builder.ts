@@ -11,6 +11,7 @@
  *   - DIRECTOR_OUTPUT_SCHEMA_PROMPT
  *   - DIRECTOR_HARD_CONSTRAINTS_PROMPT
  *   - DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK
+ *   - DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK
  *   - buildTeacherPrompt
  *   - estimatePromptTokens
  *   - formatLearnerSummary
@@ -102,6 +103,19 @@ export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 - Target lemmas for comprehension checks must come from the pending provisional list.
 - Keep citedSignals short and factual.`;
 
+export const DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK = `PRAGMATIC FEEDBACK RULES:
+
+When a player uses or attempts a communicative function the NPC has modeled
+(greetings, farewells, expressions of gratitude, acknowledgements, requests):
+
+- Correct use: respond with natural in-fiction warmth -- a smile, a matching
+  social beat, delight at being understood. Keep it brief and diegetic.
+- Misuse or awkward phrasing: react with gentle in-fiction confusion or a
+  light clarifying recast ("Perdona, no entiendo bien..."). The NPC never
+  corrects grammar explicitly; confusion is social, not pedagogical.
+- NEVER punish pragmatic mistakes with scolding, correction-as-correction,
+  or breaking the fourth wall. The NPC's job is to model, not to evaluate.`;
+
 export const DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK = `COMPREHENSION CHECKS:
 
 The learner's scheduler tracks committed evidence (real FSRS progress) and
@@ -128,6 +142,7 @@ const DIRECTOR_CACHE_MARKERS = [
   "director.system.schema",
   "director.system.constraints",
   "director.system.comprehension-guidance",
+  "director.system.pragmatic-feedback",
   "director.user.template"
 ] as const;
 
@@ -178,15 +193,20 @@ export function estimatePromptTokens(text: string): number {
 
 export function formatLearnerSummary(context: TeacherContext): string {
   const learner = context.learner;
-  const due = Object.values(learner.lemmaCards)
+  // Exclude chunk cards ("chunk:" prefix) -- they track pragmatic function acquisition,
+  // not vocabulary, and would pollute the due/active/struggling lists sent to the teacher.
+  const lemmaCardsOnly = Object.values(learner.lemmaCards).filter(
+    (card) => !card.lemmaId.startsWith("chunk:")
+  );
+  const due = lemmaCardsOnly
     .sort((left, right) => estimateDueScore(right) - estimateDueScore(left))
     .slice(0, MAX_DUE_LEMMAS)
     .map((card) => `${card.lemmaId} (ret ${card.retrievability.toFixed(2)})`);
-  const active = Object.values(learner.lemmaCards)
+  const active = lemmaCardsOnly
     .sort((left, right) => (right.lastReviewedAt ?? 0) - (left.lastReviewedAt ?? 0))
     .slice(0, MAX_RECENTLY_ACTIVE)
     .map((card) => `${card.lemmaId} (reviews ${card.reviewCount})`);
-  const struggling = Object.values(learner.lemmaCards)
+  const struggling = lemmaCardsOnly
     .sort((left, right) => {
       const leftScore = left.lapseCount * 10 + left.provisionalEvidence;
       const rightScore = right.lapseCount * 10 + right.provisionalEvidence;
@@ -203,7 +223,7 @@ export function formatLearnerSummary(context: TeacherContext): string {
     `- CEFR confidence: ${learner.assessment.cefrConfidence.toFixed(2)}`,
     `- target/support language: ${context.lang.targetLanguage} / ${context.lang.supportLanguage}`,
     `- session turns: ${learner.currentSession?.turns ?? 0}`,
-    `- known lemma cards: ${Object.keys(learner.lemmaCards).length}`,
+    `- known lemma cards: ${lemmaCardsOnly.length}`,
     `- top due: ${listOrNone(due)}`,
     `- recently active: ${listOrNone(active)}`,
     `- struggling: ${listOrNone(struggling)}`
@@ -401,7 +421,8 @@ export function buildTeacherPrompt(context: TeacherContext): DirectorPrompt {
     cefrDescriptorsPrompt: DIRECTOR_CEFR_DESCRIPTORS_PROMPT,
     outputSchemaPrompt: DIRECTOR_OUTPUT_SCHEMA_PROMPT,
     hardConstraintsPrompt: DIRECTOR_HARD_CONSTRAINTS_PROMPT,
-    comprehensionGuidanceBlock: DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK
+    comprehensionGuidanceBlock: DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK,
+    pragmaticFeedbackBlock: DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK
   });
 
   const user = renderDirectorPromptTemplate(DIRECTOR_USER_TEMPLATE, {

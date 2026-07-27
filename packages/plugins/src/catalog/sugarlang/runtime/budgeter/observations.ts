@@ -59,7 +59,11 @@ export const PRODUCTIVE_DELTAS = {
   producedChosen: 0.15,
   producedTyped: 0.3,
   producedUnprompted: 0.5,
-  producedIncorrect: -0.2
+  producedIncorrect: -0.2,
+  /** 085.3: receptive exposure of a chunk -- same weight as a single lemma encounter. */
+  chunkEncountered: 0,
+  /** 085.3: productive chunk use (string-match floor) -- between producedChosen and producedTyped. */
+  chunkProduced: 0.2
 } as const;
 
 function assertNever(value: never): never {
@@ -159,6 +163,22 @@ export function observationToOutcome(
       return {
         receptiveGrade: "Again",
         productiveStrengthDelta: PRODUCTIVE_DELTAS.producedIncorrect,
+        provisionalEvidenceDelta: 0
+      };
+
+    // 085.3: NPC said a chunk -- receptive exposure, no grade (chunks not in probe pool yet).
+    case "chunk-encountered":
+      return {
+        receptiveGrade: null,
+        productiveStrengthDelta: PRODUCTIVE_DELTAS.chunkEncountered,
+        provisionalEvidenceDelta: 0
+      };
+
+    // 085.3: player typed a chunk (string-match floor) -- productive signal.
+    case "chunk-produced":
+      return {
+        receptiveGrade: "Good",
+        productiveStrengthDelta: PRODUCTIVE_DELTAS.chunkProduced,
         provisionalEvidenceDelta: 0
       };
 

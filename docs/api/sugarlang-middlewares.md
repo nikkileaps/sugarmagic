@@ -53,6 +53,19 @@ the final `sugarlang.constraint` annotation (including the
 comprehension-probe triggering against the probe floor, and short-circuits
 with a fixed pre-placement directive during the opening dialog.
 
+The Director system prompt includes `DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK`
+(085.6): when the player uses or attempts a communicative function the NPC has
+modeled, the NPC reacts with in-fiction warmth (correct use) or gentle
+confusion (misuse). Explicit correction-as-correction is prohibited. The NPC
+never breaks the fourth wall to comment on grammar or pragmatic errors.
+
+The `interpretLexicon` contribution (084.5, now inventory-sourced in 085.6)
+is built from `buildInterpretLexiconFromInventory(targetLanguage)` instead
+of a hardcoded constant. Only the four categories consumed by
+`interpretation.ts` (farewell, greeting, gratitude, acknowledgement) are
+populated; functions without `interpretLexiconCategory` (including item-zero
+meta-language chunks) do not contribute.
+
 **`sugarlang.scripted` (analysis, 15).** Scripted-dialogue turns only. Takes
 the authored English line, scans it for teaching candidates via the
 gloss index (`atlas.resolveFromGloss`), and calls the LLM
@@ -77,6 +90,20 @@ probe lifecycle back half (classifying the player's probe response into
 passed/failed/mixed, language fallback detection, committing or discarding
 provisional evidence) and emits `placement.completed` when the questionnaire
 scores out.
+
+**Chunk detection (085.3/085.5).** Observe also runs the chunk matcher
+(`createChunkMatcher`) over the scene lexicon's chunk list. NPC turn text is
+scanned for chunk matches and emits `chunk-encountered` observations that
+create/update chunk cards (`lemmaId = "chunk:<chunkId>"`). Player free-text
+input and scripted player lines emit `chunk-produced`. First encounter of a
+chunk tied to a communicative function (the function has no existing teach
+record) triggers the explicit teach beat: one `TeachRecord` is written via
+`TeachRecordStore` and one `sugarlang.teachLine` annotation (`{ label, text }`)
+is written onto the turn. `DialoguePanel` renders the annotation below the
+turn text in the enrichment slot (`enrichmentContainer`, CSS class
+`sm-dialogue-teach-line`). Only one teach-line annotation is written per turn
+(earliest new function wins). Chunk cards are excluded from the prescription,
+probe, and teacher-summary systems.
 
 ## Turn-Path Guard
 

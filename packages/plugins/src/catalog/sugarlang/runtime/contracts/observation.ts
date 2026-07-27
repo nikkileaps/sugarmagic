@@ -32,11 +32,16 @@ export type ObservationKind =
   | "encountered"
   | "rapid-advance"
   | "hovered"
+  | "hovered-introduce"
   | "quest-success"
   | "produced-chosen"
   | "produced-typed"
   | "produced-unprompted"
-  | "produced-incorrect";
+  | "produced-incorrect"
+  /** 085.3: NPC turn contained a matched lexical chunk (receptive exposure). */
+  | "chunk-encountered"
+  /** 085.3: player produced a matched lexical chunk in free text (string-match floor). */
+  | "chunk-produced";
 
 /**
  * Convenience helper for narrowing to the four productive observation subkinds.
@@ -74,7 +79,11 @@ export type LemmaObservation =
       kind: "produced-incorrect";
       attemptedForm: string;
       expectedForm: string;
-    } & BaseObservation);
+    } & BaseObservation)
+  /** 085.3: receptive chunk exposure -- NPC said a matched chunk. */
+  | ({ kind: "chunk-encountered"; chunkId: string; surfaceMatched: string } & BaseObservation)
+  /** 085.3: productive chunk use -- player typed a matched chunk (string-match floor). */
+  | ({ kind: "chunk-produced"; chunkId: string; surfaceMatched: string } & BaseObservation);
 
 /**
  * Runtime context attached to one observation event.

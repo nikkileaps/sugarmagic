@@ -31,7 +31,7 @@ import type {
   QuestFormDefinition
 } from "../conversation";
 import { isQuestFormDefinition } from "../conversation";
-import { findTermMatches, readDialogueHighlight } from "./highlight";
+import { findTermMatches, readDialogueHighlight, readTeachLine } from "./highlight";
 
 
 export interface RuntimeDialoguePanel extends DialoguePresenter {
@@ -596,6 +596,17 @@ export function createRuntimeDialoguePanel(
       activeContainer.innerHTML = "";
       activeContainer.appendChild(createEntry(turn));
       renderActions();
+
+      // 085.5: Render the teach-line annotation in the enrichment slot if present.
+      const teachLine = readTeachLine(turn.annotations);
+      enrichmentContainer.innerHTML = "";
+      if (teachLine) {
+        const el = document.createElement("p");
+        el.className = "sm-dialogue-teach-line";
+        el.textContent = `${teachLine.label}: ${teachLine.text}`;
+        enrichmentContainer.appendChild(el);
+      }
+
       container.classList.add("visible");
       scrollToBottom();
     },

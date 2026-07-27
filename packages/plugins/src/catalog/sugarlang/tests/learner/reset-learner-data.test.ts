@@ -23,6 +23,7 @@ import {
   IndexedDBCardStore
 } from "../../runtime/learner/card-store";
 import { resetSugarlangLearnerDatabases } from "../../runtime/learner/reset-learner-data";
+import { TEACH_RECORD_DB_NAME_PREFIX } from "../../runtime/learner/teach-record-store";
 import { TELEMETRY_DB_NAME } from "../../runtime/telemetry/telemetry";
 import { createLemmaCard } from "./test-helpers";
 
@@ -152,6 +153,31 @@ describe("resetSugarlangLearnerDatabases", () => {
 
     expect(result.ok).toBe(true);
     expect(result.deletedDatabases).toEqual([]);
+  });
+});
+
+describe("teach-record reset coverage", () => {
+  it("TEACH_RECORD_DB_NAME_PREFIX starts with CARD_STORE_DB_NAME_PREFIX (auto-covered by reset enforcer)", () => {
+    // The reset enforcer deletes every IDB whose name starts with CARD_STORE_DB_NAME_PREFIX.
+    // Teach-record DBs are named ${TEACH_RECORD_DB_NAME_PREFIX}${learnerId}, and this
+    // prefix itself starts with CARD_STORE_DB_NAME_PREFIX, so they are deleted automatically
+    // without any explicit filter change.
+    expect(TEACH_RECORD_DB_NAME_PREFIX.startsWith(CARD_STORE_DB_NAME_PREFIX)).toBe(true);
+  });
+
+  it("deletes teach-record database alongside card-store databases", async () => {
+    const factory = new IDBFactory();
+    const cardDbName = `${CARD_STORE_DB_NAME_PREFIX}:learner-a`;
+    const teachDbName = `${TEACH_RECORD_DB_NAME_PREFIX}learner-a`;
+    (await openRawDatabase(factory, cardDbName)).close();
+    (await openRawDatabase(factory, teachDbName)).close();
+
+    const result = await resetSugarlangLearnerDatabases({ indexedDbFactory: factory });
+
+    expect(result.ok).toBe(true);
+    expect(result.deletedDatabases.sort()).toEqual([cardDbName, teachDbName].sort());
+    const remaining = await listDatabaseNames(factory);
+    expect(remaining).toEqual([]);
   });
 });
 

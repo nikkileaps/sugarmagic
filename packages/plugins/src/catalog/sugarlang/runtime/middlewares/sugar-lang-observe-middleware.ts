@@ -24,6 +24,11 @@ import {
 } from "../telemetry/telemetry";
 import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
+import { createChunkMatcher } from "../classifier/chunk-matcher";
+import {
+  getFunctionForChunk as getInventoryFunctionForChunk,
+  getAllInventoryChunks
+} from "../inventory/function-inventory-loader";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
@@ -53,6 +58,11 @@ import {
   type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
+
+import type { ChunkMatcher } from "../classifier/chunk-matcher";
+
+// Trie rebuild is O(inventory * avgSurfaceForms). Cache per language so it happens once per session.
+const chunkMatcherCache = new Map<string, ChunkMatcher | null>();
 
 export interface SugarLangObserveMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -383,7 +393,24 @@ export function createSugarLangObserveMiddleware(
       if (!sceneId) {
         return normalizedTurn;
       }
+
+      // 085.3: Build chunk matcher from the hand-curated function inventory so dynamic
+      // NPC greetings are detected even when the phrase never appears in authored scene text.
+      if (!chunkMatcherCache.has(learner.targetLanguage)) {
+        const inventoryChunks = getAllInventoryChunks(learner.targetLanguage);
+        chunkMatcherCache.set(
+          learner.targetLanguage,
+          inventoryChunks.length > 0
+            ? createChunkMatcher(inventoryChunks, learner.targetLanguage)
+            : null
+        );
+      }
+      const chunkMatcher = chunkMatcherCache.get(learner.targetLanguage) ?? null;
+
       const appliedObservations = [] as ReturnType<typeof createObservationEvent>[];
+      // Track chunks the player already produced so the NPC-turn isNewCard check doesn't fire
+      // on the same chunk within the same execution -- learner snapshot is stale after player pass.
+      const playerProducedChunkIds = new Set<string>();
 
       if (execution.input?.kind === "free_text") {
         const lemmaCandidates = collectLemmasFromText(
@@ -433,6 +460,36 @@ export function createSugarLangObserveMiddleware(
             type: "observation",
             observationEvent
           });
+        }
+
+        // 085.3: Chunk-produced observations for player free-text input.
+        if (chunkMatcher) {
+          const inputTokens = tokenize(execution.input.text, learner.targetLanguage);
+          const chunkMatches = chunkMatcher.match(inputTokens, execution.input.text);
+          const observedChunkIds = new Set<string>();
+          for (const match of chunkMatches) {
+            if (observedChunkIds.has(match.chunk.chunkId)) continue;
+            observedChunkIds.add(match.chunk.chunkId);
+            playerProducedChunkIds.add(match.chunk.chunkId);
+            const observationEvent = createObservationEvent({
+              execution,
+              lemma: {
+                lemmaId: `chunk:${match.chunk.chunkId}`,
+                lang: learner.targetLanguage
+              },
+              observation: {
+                kind: "chunk-produced",
+                chunkId: match.chunk.chunkId,
+                surfaceMatched: match.surfaceMatched,
+                observedAtMs
+              }
+            });
+            appliedObservations.push(observationEvent);
+            await services.learnerStateReducer.apply({
+              type: "observation",
+              observationEvent
+            });
+          }
         }
       }
 
@@ -501,6 +558,84 @@ export function createSugarLangObserveMiddleware(
           type: "observation",
           observationEvent
         });
+      }
+
+      // 085.3: Chunk observations on the turn text.
+      // NPC turns -> chunk-encountered (receptive exposure).
+      // Player turns in scripted mode -> chunk-produced (productive use).
+      // 085.5: First chunk-encountered that creates a new chunk card triggers a teach-record write
+      // and a teach-line annotation on the turn (one per turn, earliest new function wins).
+      let teachLineSurface: string | null = null;
+      if (chunkMatcher) {
+        const turnTokens = tokenize(normalizedTurn.text, learner.targetLanguage);
+        const chunkMatches = chunkMatcher.match(turnTokens, normalizedTurn.text);
+        const isPlayerTurn = isPlayerSpokenTurn(
+          normalizedTurn,
+          deps.services.getPlayerDefinitionId()
+        );
+        const observedChunkIds = new Set<string>();
+        let teachLineWritten = false;
+        for (const match of chunkMatches) {
+          if (observedChunkIds.has(match.chunk.chunkId)) continue;
+          observedChunkIds.add(match.chunk.chunkId);
+
+          // 085.5: Detect first-teach BEFORE applying the observation (new card = not yet in lemmaCards).
+          // Also exclude chunks the player already produced this turn -- learner snapshot is stale.
+          const isNewCard =
+            !isPlayerTurn &&
+            !(`chunk:${match.chunk.chunkId}` in learner.lemmaCards) &&
+            !playerProducedChunkIds.has(match.chunk.chunkId);
+
+          const observationEvent = createObservationEvent({
+            execution,
+            lemma: {
+              lemmaId: `chunk:${match.chunk.chunkId}`,
+              lang: learner.targetLanguage
+            },
+            observation: isPlayerTurn
+              ? {
+                  kind: "chunk-produced",
+                  chunkId: match.chunk.chunkId,
+                  surfaceMatched: match.surfaceMatched,
+                  observedAtMs
+                }
+              : {
+                  kind: "chunk-encountered",
+                  chunkId: match.chunk.chunkId,
+                  surfaceMatched: match.surfaceMatched,
+                  observedAtMs
+                }
+          });
+          appliedObservations.push(observationEvent);
+          await services.learnerStateReducer.apply({
+            type: "observation",
+            observationEvent
+          });
+
+          // 085.5: First-teach beat -- write teach-record and annotate the turn once.
+          if (isNewCard && !teachLineWritten) {
+            const fnEntry = getInventoryFunctionForChunk(
+              match.chunk.chunkId,
+              learner.targetLanguage
+            );
+            if (fnEntry) {
+              const alreadyTaught = await services.teachRecordStore.has(fnEntry.functionId);
+              if (!alreadyTaught) {
+                await services.teachRecordStore.write({
+                  functionId: fnEntry.functionId,
+                  taughtAtMs: observedAtMs,
+                  realizingChunkId: match.chunk.chunkId
+                });
+                normalizedTurn.annotations!["sugarlang.teachLine"] = {
+                  label: fnEntry.displayName,
+                  text: `"${match.surfaceMatched}" is a ${fnEntry.displayName.toLowerCase()}.`
+                };
+                teachLineWritten = true;
+                teachLineSurface = match.surfaceMatched;
+              }
+            }
+          }
+        }
       }
 
       const completedObjectiveNodeIds = execution.annotations[
@@ -640,6 +775,9 @@ export function createSugarLangObserveMiddleware(
         if (gloss) glosses[surface] = gloss;
       }
 
+      if (teachLineSurface && !introduceTerms.includes(teachLineSurface)) {
+        introduceTerms.push(teachLineSurface);
+      }
       const focusTerms = [...introduceTerms, ...reinforceTerms];
       if (focusTerms.length > 0) {
         normalizedTurn.annotations!["dialogueHighlight"] = {

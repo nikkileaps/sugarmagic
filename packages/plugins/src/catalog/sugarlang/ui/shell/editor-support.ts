@@ -357,6 +357,7 @@ export async function rebuildSugarlangCompileCache(
 
   scheduler.rebuildAll();
   await scheduler.flush();
+  await scheduler.flushChunks();
   scheduler.stop();
 
   return readSugarlangCompileStatus(

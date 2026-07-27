@@ -25,7 +25,7 @@ import type {
 import type { MorphologyDataFile } from "./morphology-loader";
 import { MorphologyLoader } from "./morphology-loader";
 import { compareCefrBands, isBandAbove } from "./cefr-band-utils";
-import type { ChunkMatcher } from "./chunk-matcher";
+import type { ChunkMatcher, ChunkSpec } from "./chunk-matcher";
 import { lemmatize } from "./lemmatize";
 import type { Token } from "./tokenize";
 
@@ -60,17 +60,18 @@ export function computeCoverage(
     | Record<string, string>,
   questEssentialLemmas: Set<string> = new Set(),
   chunkMatcher?: ChunkMatcher | null,
-  sceneChunks?: LexicalChunk[]
+  sceneChunks?: LexicalChunk[],
+  sourceText?: string
 ): CoverageProfile {
   const learnerBand = learner.estimatedCefrBand;
   const bandHistogram = createBandHistogram();
   const outOfEnvelopeLemmas = new Map<string, CoverageProfile["outOfEnvelopeLemmas"][number]>();
   const ceilingExceededLemmas = new Map<string, CoverageProfile["ceilingExceededLemmas"][number]>();
   const matchedQuestEssentialLemmas = new Set<string>();
-  const matchedChunks = new Map<string, LexicalChunk>();
+  const matchedChunks = new Map<string, ChunkSpec>();
   const normalizedKnownEntities = normalizeLookup(knownEntities);
   const normalizedQuestEssentialLemmas = normalizeLookup(questEssentialLemmas);
-  const chunkMatches = chunkMatcher?.match(tokens) ?? [];
+  const chunkMatches = chunkMatcher?.match(tokens, sourceText ?? "") ?? [];
   const consumedTokenIndexes = new Set<number>();
 
   for (const match of chunkMatches) {

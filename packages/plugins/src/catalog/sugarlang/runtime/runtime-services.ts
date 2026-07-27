@@ -53,6 +53,10 @@ import { FallbackTeacherPolicy } from "./teacher/policies/fallback-teacher-polic
 import { SugarLangTeacher } from "./teacher/sugar-lang-teacher";
 import { IndexedDBCardStore, MemoryCardStore, type CardStore } from "./learner/card-store";
 import {
+  createTeachRecordStore,
+  type TeachRecordStore
+} from "./learner/teach-record-store";
+import {
   resetSugarlangLearnerDatabases,
   type SugarlangLearnerDataResetResult
 } from "./learner/reset-learner-data";
@@ -95,6 +99,7 @@ export interface SugarlangExecutionServices {
   learnerStore: BlackboardLearnerStore;
   learnerStateReducer: LearnerStateReducer;
   cardStore: CardStore;
+  teachRecordStore: TeachRecordStore;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
   teacher: SugarLangTeacher;
   llmClient: SugarlangLLMClient | null;
@@ -108,6 +113,12 @@ export interface SugarlangDebugState {
   inCalibration: boolean;
   pinned: boolean;
   pinnedBand: CEFRBand | null;
+  /** 085.3: lemma cards in the learner store (excludes chunk cards). */
+  lemmaCards: import("./contracts/learner-profile").LemmaCard[];
+  /** 085.3: chunk cards (lemmaId starts with "chunk:") in the learner store. */
+  chunkCards: import("./contracts/learner-profile").LemmaCard[];
+  /** 085.5: teach records written for realized communicative functions. */
+  teachRecords: import("./learner/teach-record-store").TeachRecord[];
 }
 
 export interface SugarlangRuntimeServicesOptions {
@@ -278,7 +289,11 @@ export class SugarlangRuntimeServices {
   async getDebugState(): Promise<SugarlangDebugState | null> {
     const services = this.getFirstExecutionServices();
     if (!services || !this.boundContext) return null;
-    const profile = await services.learnerStore.getCurrentProfile();
+    const [profile, allCards, teachRecords] = await Promise.all([
+      services.learnerStore.getCurrentProfile(),
+      services.cardStore.list(),
+      services.teachRecordStore.list()
+    ]);
     const placement = getSugarlangPlacementStatus(
       this.boundContext.blackboard,
       services.profileId
@@ -290,7 +305,10 @@ export class SugarlangRuntimeServices {
       placementStatus: placement.status,
       inCalibration: isInPostPlacementCalibration(profile),
       pinned: this._debugPinnedBand !== null,
-      pinnedBand: this._debugPinnedBand
+      pinnedBand: this._debugPinnedBand,
+      lemmaCards: allCards.filter((c) => !c.lemmaId.startsWith("chunk:")),
+      chunkCards: allCards.filter((c) => c.lemmaId.startsWith("chunk:")),
+      teachRecords
     };
   }
 
@@ -300,10 +318,10 @@ export class SugarlangRuntimeServices {
     // databases through the single shared enforcer (also used by the Studio
     // shell reset button). A blocked delete is reported, not swallowed.
     const resetResult = await resetSugarlangLearnerDatabases({
-      closeables: Array.from(
-        this.executionServices.values(),
-        (entry) => entry.cardStore
-      )
+      closeables: Array.from(this.executionServices.values()).flatMap((entry) => [
+        entry.cardStore,
+        entry.teachRecordStore
+      ])
     });
     const services = this.getFirstExecutionServices();
     const bb = this.boundContext?.blackboard;
@@ -427,6 +445,7 @@ export class SugarlangRuntimeServices {
       telemetry: this.telemetry
     });
 
+    const teachRecordStore = createTeachRecordStore(learnerId);
     const services: SugarlangExecutionServices = {
       ...languageBundle,
       profileId: learnerId,
@@ -434,6 +453,7 @@ export class SugarlangRuntimeServices {
       learnerStore,
       learnerStateReducer,
       cardStore,
+      teachRecordStore,
       teacher,
       llmClient: this.gatewayClient
     };

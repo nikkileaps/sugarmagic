@@ -37,6 +37,7 @@ import type {
 } from "../types";
 import { createSugarlangLogger } from "../logger";
 import { languageDisplayName } from "../language-names";
+import { buildInterpretLexiconFromInventory } from "../inventory/function-inventory-loader";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_COMPREHENSION_IN_FLIGHT_ANNOTATION,
@@ -73,14 +74,6 @@ interface SugarlangContributionShape {
 }
 const SUGARAGENT_CONTRIB_SUGARLANG_KEY = "sugaragent.contrib/sugarlang" as const;
 
-// 084.5: curated starter set for "es". Other languages added when packs ship.
-const SPANISH_INTERPRET_LEXICON: Record<string, string[]> = {
-  farewell: ["adiós", "adios", "hasta luego", "hasta pronto", "hasta mañana", "hasta manana", "chao", "chau", "nos vemos"],
-  greeting: ["hola", "buenos días", "buenos dias", "buenas tardes", "buenas noches", "buenas"],
-  gratitude: ["gracias", "muchas gracias", "mil gracias"],
-  acknowledgement: ["sí", "si", "claro", "vale", "de acuerdo", "entendido", "perfecto", "genial", "bueno"]
-};
-
 function buildConstraintReminder(
   targetLanguageRatio: number,
   targetLanguage: string,
@@ -93,8 +86,13 @@ function buildConstraintReminder(
 }
 
 function buildInterpretLexicon(targetLanguage: string): Record<string, string[]> | undefined {
-  if (targetLanguage === "es") return SPANISH_INTERPRET_LEXICON;
-  return undefined;
+  try {
+    const lexicon = buildInterpretLexiconFromInventory(targetLanguage);
+    const hasAny = Object.values(lexicon).some((forms) => forms.length > 0);
+    return hasAny ? lexicon : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function buildLanguageJudgeDirective(

@@ -21,24 +21,31 @@ import type { LexicalChunk } from "../types";
 import type { Token } from "./tokenize";
 import { tokenize } from "./tokenize";
 
+/** Minimum chunk shape accepted by the matcher -- satisfied by both LexicalChunk and InventoryChunk. */
+export type ChunkSpec = Pick<
+  LexicalChunk,
+  "chunkId" | "normalizedForm" | "surfaceForms" | "cefrBand" | "constituentLemmas"
+>;
+
 interface ChunkTrieNode {
   children: Map<string, ChunkTrieNode>;
-  terminals: LexicalChunk[];
+  terminals: ChunkSpec[];
 }
 
 export interface ChunkMatch {
-  chunk: LexicalChunk;
+  chunk: ChunkSpec;
   normalizedForm: string;
   surfaceMatched: string;
   start: number;
   end: number;
-  cefrBand: LexicalChunk["cefrBand"];
+  cefrBand: ChunkSpec["cefrBand"];
   constituentLemmaIds: string[];
   tokenIndexes: number[];
 }
 
 export interface ChunkMatcher {
-  match: (tokens: Token[]) => ChunkMatch[];
+  /** Pass the same source text that was tokenized, so surfaceMatched slices are accurate. */
+  match: (tokens: Token[], sourceText: string) => ChunkMatch[];
 }
 
 function createTrieNode(): ChunkTrieNode {
@@ -54,12 +61,15 @@ function normalizeChunkTokens(surface: string, lang: string): string[] {
     .map((token) => token.surface.normalize("NFC").toLocaleLowerCase(lang));
 }
 
+/**
+ * Builds a trie-based chunk matcher for the given chunks and language.
+ * sourceText is NOT a constructor argument -- pass it to match() per call
+ * so a cached matcher works correctly across different turn texts.
+ */
 export function createChunkMatcher(
-  chunks: LexicalChunk[] | undefined,
-  lang: string,
-  sourceText: string
+  chunks: ChunkSpec[] | undefined,
+  lang: string
 ): ChunkMatcher {
-  const normalizedSourceText = sourceText.normalize("NFC");
   const root = createTrieNode();
 
   for (const chunk of chunks ?? []) {
@@ -87,7 +97,8 @@ export function createChunkMatcher(
   }
 
   return {
-    match(tokens: Token[]): ChunkMatch[] {
+    match(tokens: Token[], sourceText: string): ChunkMatch[] {
+      const normalizedSourceText = sourceText.normalize("NFC");
       const matches: ChunkMatch[] = [];
       let index = 0;
 
@@ -95,7 +106,7 @@ export function createChunkMatcher(
         let cursor: ChunkTrieNode | undefined = root;
         let candidate:
           | {
-              chunk: LexicalChunk;
+              chunk: ChunkSpec;
               endIndex: number;
             }
           | undefined;
