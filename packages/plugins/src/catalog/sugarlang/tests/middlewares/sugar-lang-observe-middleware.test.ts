@@ -331,6 +331,119 @@ describe("SugarLangObserveMiddleware", () => {
     expect(chunkObs).toBeUndefined();
   });
 
+  it("085.5: first NPC chunk-encountered writes a teach-record and teach-line annotation", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const writeRecord = vi.fn().mockResolvedValue(undefined);
+    const teachRecordStore = {
+      has: vi.fn().mockResolvedValue(false), // no prior record
+      write: writeRecord,
+      list: vi.fn().mockResolvedValue([])
+    };
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          // lemmaCards is empty so the chunk card is new
+          getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile({ lemmaCards: {} }))
+        },
+        learnerStateReducer: { apply },
+        sceneLexiconStore: makeSceneLexiconStoreWith([BUENOS_DIAS_CHUNK]),
+        teachRecordStore
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+
+    const result = await middleware.finalize?.(execution, createTestTurn("Buenos dias viajero!"));
+
+    // Teach-record should have been written for the "greet" function.
+    expect(writeRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionId: "greet",
+        realizingChunkId: "buenos_dias"
+      })
+    );
+    // Teach-line annotation should be present on the result turn.
+    expect(result?.annotations?.["sugarlang.teachLine"]).toBeDefined();
+    expect((result?.annotations?.["sugarlang.teachLine"] as { label: string }).label).toBe("Greet");
+  });
+
+  it("085.5: re-encounter of a chunk with an existing teach-record writes no second record or annotation", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const writeRecord = vi.fn().mockResolvedValue(undefined);
+    const teachRecordStore = {
+      has: vi.fn().mockResolvedValue(true), // record already exists
+      write: writeRecord,
+      list: vi.fn().mockResolvedValue([])
+    };
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile({ lemmaCards: {} }))
+        },
+        learnerStateReducer: { apply },
+        sceneLexiconStore: makeSceneLexiconStoreWith([BUENOS_DIAS_CHUNK]),
+        teachRecordStore
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+
+    const result = await middleware.finalize?.(execution, createTestTurn("Buenos dias viajero!"));
+
+    expect(writeRecord).not.toHaveBeenCalled();
+    expect(result?.annotations?.["sugarlang.teachLine"]).toBeUndefined();
+  });
+
+  it("085.5: no teach-record when chunk card already exists (not a first teach)", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const writeRecord = vi.fn().mockResolvedValue(undefined);
+    const teachRecordStore = {
+      has: vi.fn().mockResolvedValue(false),
+      write: writeRecord,
+      list: vi.fn().mockResolvedValue([])
+    };
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          // chunk card already exists in lemmaCards
+          getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile({
+            lemmaCards: {
+              "chunk:buenos_dias": {
+                lemmaId: "chunk:buenos_dias",
+                difficulty: 0.3,
+                stability: 1,
+                retrievability: 0.9,
+                lastReviewedAt: 1,
+                reviewCount: 1,
+                lapseCount: 0,
+                cefrPriorBand: "A1",
+                priorWeight: 1,
+                productiveStrength: 0,
+                lastProducedAtMs: null,
+                provisionalEvidence: 0,
+                provisionalEvidenceFirstSeenTurn: null
+              }
+            }
+          }))
+        },
+        learnerStateReducer: { apply },
+        sceneLexiconStore: makeSceneLexiconStoreWith([BUENOS_DIAS_CHUNK]),
+        teachRecordStore
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+
+    const result = await middleware.finalize?.(execution, createTestTurn("Buenos dias viajero!"));
+
+    // Card was not new, so no teach-record or annotation even if store has no record.
+    expect(writeRecord).not.toHaveBeenCalled();
+    expect(result?.annotations?.["sugarlang.teachLine"]).toBeUndefined();
+  });
+
   it("085.3: chunk cards filtered from computePendingProvisionalLemmas probe floor", () => {
     const profile = createTestLearnerProfile({
       lemmaCards: {

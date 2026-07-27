@@ -167,25 +167,52 @@ export function LearnerOverrideSection(): ReactElement {
       </div>
 
       {state ? (
-        <div
-          style={{
-            background: "var(--sm-color-surface0, #313244)",
-            borderRadius: "0.25rem",
-            padding: "0.5rem 0.75rem",
-            display: "grid",
-            gap: "0.2rem",
-            fontSize: "0.75rem",
-            fontFamily: "var(--sm-font-mono, monospace)"
-          }}
-        >
-          <div>band: <strong>{state.pinnedBand ?? state.estimatedCefrBand}</strong>{state.pinned ? " (pinned)" : ""}</div>
-          <div>assessment: {state.assessmentStatus} ({(state.cefrConfidence * 100).toFixed(0)}%)</div>
-          <div>placement: {state.placementStatus}</div>
-          <div>calibration: {state.inCalibration ? "open" : "closed"}</div>
+        <div style={{ display: "grid", gap: "0.5rem" }}>
+          <div
+            style={{
+              background: "var(--sm-color-surface0, #313244)",
+              borderRadius: "0.25rem",
+              padding: "0.5rem 0.75rem",
+              display: "grid",
+              gap: "0.2rem",
+              fontSize: "0.75rem",
+              fontFamily: "var(--sm-font-mono, monospace)"
+            }}
+          >
+            <div>band: <strong>{state.pinnedBand ?? state.estimatedCefrBand}</strong>{state.pinned ? " (pinned)" : ""}</div>
+            <div>assessment: {state.assessmentStatus} ({(state.cefrConfidence * 100).toFixed(0)}%)</div>
+            <div>placement: {state.placementStatus}</div>
+            <div>calibration: {state.inCalibration ? "open" : "closed"}</div>
+            <div>lemma cards: {state.lemmaCards.length} | chunk cards: {state.chunkCards.length} | teach records: {state.teachRecords.length}</div>
+          </div>
+          {state.chunkCards.length > 0 && (
+            <details style={{ fontSize: "0.72rem" }}>
+              <summary style={{ cursor: "pointer", color: "var(--sm-color-subtext, #6c7086)", marginBottom: "0.25rem" }}>
+                Chunk cards ({state.chunkCards.length})
+              </summary>
+              <div style={{ fontFamily: "var(--sm-font-mono, monospace)", display: "grid", gap: "0.15rem", paddingLeft: "0.5rem" }}>
+                {state.chunkCards.map((c) => (
+                  <div key={c.lemmaId}>{c.lemmaId} - {c.cefrBand} - str {c.productiveStrength.toFixed(2)}/{c.receptiveStrength.toFixed(2)}</div>
+                ))}
+              </div>
+            </details>
+          )}
+          {state.teachRecords.length > 0 && (
+            <details style={{ fontSize: "0.72rem" }}>
+              <summary style={{ cursor: "pointer", color: "var(--sm-color-subtext, #6c7086)", marginBottom: "0.25rem" }}>
+                Teach records ({state.teachRecords.length})
+              </summary>
+              <div style={{ fontFamily: "var(--sm-font-mono, monospace)", display: "grid", gap: "0.15rem", paddingLeft: "0.5rem" }}>
+                {state.teachRecords.map((r) => (
+                  <div key={r.functionId}>{r.functionId} via {r.realizingChunkId}</div>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       ) : (
         <div style={{ fontSize: "0.75rem", color: "var(--sm-color-subtext)" }}>
-          No state — start a game first, then Refresh.
+          No state - start a game first, then Refresh.
         </div>
       )}
     </div>

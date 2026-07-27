@@ -19,6 +19,8 @@
 
 import { CARD_STORE_DB_NAME_PREFIX } from "./card-store";
 import { TELEMETRY_DB_NAME } from "../telemetry/telemetry";
+// Note: teach-record DBs (085.5) use the prefix "${CARD_STORE_DB_NAME_PREFIX}:teach:" and are
+// automatically covered by the CARD_STORE_DB_NAME_PREFIX startsWith check below.
 
 const DEFAULT_BLOCKED_TIMEOUT_MS = 3000;
 

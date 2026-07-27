@@ -4,12 +4,15 @@
  * Purpose: Generic word-boundary-aware focus term matching for dialogue highlighting.
  *         Any plugin can write a DialogueHighlightAnnotation onto a turn's annotations
  *         under the key "dialogueHighlight" and the DialoguePanel will render it.
+ *         Also carries the TeachLineAnnotation contract (085.5) for function-first-teach beats.
  *
  * Exports:
  *   - HighlightMatch
  *   - DialogueHighlightAnnotation
+ *   - TeachLineAnnotation
  *   - findTermMatches
  *   - readDialogueHighlight
+ *   - readTeachLine
  *
  * Status: active
  */
@@ -34,6 +37,37 @@ export interface DialogueHighlightAnnotation {
 }
 
 const DIALOGUE_HIGHLIGHT_KEY = "dialogueHighlight";
+
+/**
+ * Written by sugarlang observe middleware on the first classifier-matched encounter
+ * of a chunk that realizes a communicative function (085.5 first-teach beat).
+ * DialoguePanel renders it in the enrichmentContainer as a labeled sub-line.
+ */
+export interface TeachLineAnnotation {
+  /** Short function label, e.g. "Greeting". */
+  label: string;
+  /** One-line teach note, e.g. '"Buenos dias" is a formal morning greeting.' */
+  text: string;
+}
+
+const TEACH_LINE_KEY = "sugarlang.teachLine";
+
+export function readTeachLine(
+  annotations: Record<string, unknown> | undefined
+): TeachLineAnnotation | null {
+  if (!annotations) return null;
+  const raw = annotations[TEACH_LINE_KEY];
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    typeof (raw as Record<string, unknown>).label !== "string" ||
+    typeof (raw as Record<string, unknown>).text !== "string"
+  ) {
+    return null;
+  }
+  const r = raw as Record<string, unknown>;
+  return { label: r.label as string, text: r.text as string };
+}
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

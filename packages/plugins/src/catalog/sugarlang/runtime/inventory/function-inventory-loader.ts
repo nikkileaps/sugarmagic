@@ -121,6 +121,20 @@ export class FunctionInventoryLoader {
   }
 
   /**
+   * Returns the FunctionEntry that owns the given chunkId for a language,
+   * or undefined if the chunk is not in the inventory.
+   * Used by the observe middleware to find the function for a first-teach event.
+   */
+  getFunctionForChunk(
+    chunkId: string,
+    lang: string
+  ): import("../contracts/function-inventory").FunctionEntry | undefined {
+    return this.load(lang).functions.find((fn) =>
+      (fn.chunks[lang] ?? []).some((c) => c.chunkId === chunkId)
+    );
+  }
+
+  /**
    * Builds the interpretLexicon contribution from inventory data.
    * Returns a Record<category, surfaceForm[]> consumed by interpretation.ts
    * to classify social moves (farewell / greeting / gratitude / acknowledgement).
@@ -163,4 +177,16 @@ export function buildInterpretLexiconFromInventory(
   lang: string
 ): Record<string, string[]> {
   return defaultLoader.buildInterpretLexicon(lang);
+}
+
+export function getFunctionForChunk(
+  chunkId: string,
+  lang: string
+): import("../contracts/function-inventory").FunctionEntry | undefined {
+  try {
+    return defaultLoader.getFunctionForChunk(chunkId, lang);
+  } catch {
+    // Missing inventory for language -- not a fatal error at observation time.
+    return undefined;
+  }
 }

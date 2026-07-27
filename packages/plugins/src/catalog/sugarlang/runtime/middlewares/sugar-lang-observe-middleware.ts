@@ -25,6 +25,7 @@ import {
 import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
+import { getFunctionForChunk as getInventoryFunctionForChunk } from "../inventory/function-inventory-loader";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
@@ -545,6 +546,8 @@ export function createSugarLangObserveMiddleware(
       // 085.3: Chunk observations on the turn text.
       // NPC turns -> chunk-encountered (receptive exposure).
       // Player turns in scripted mode -> chunk-produced (productive use).
+      // 085.5: First chunk-encountered that creates a new chunk card triggers a teach-record write
+      // and a teach-line annotation on the turn (one per turn, earliest new function wins).
       if (chunkMatcher) {
         const turnTokens = tokenize(normalizedTurn.text, learner.targetLanguage);
         const chunkMatches = chunkMatcher.match(turnTokens, normalizedTurn.text);
@@ -553,9 +556,16 @@ export function createSugarLangObserveMiddleware(
           deps.services.getPlayerDefinitionId()
         );
         const observedChunkIds = new Set<string>();
+        let teachLineWritten = false;
         for (const match of chunkMatches) {
           if (observedChunkIds.has(match.chunk.chunkId)) continue;
           observedChunkIds.add(match.chunk.chunkId);
+
+          // 085.5: Detect first-teach BEFORE applying the observation (new card = not yet in lemmaCards).
+          const isNewCard =
+            !isPlayerTurn &&
+            !(`chunk:${match.chunk.chunkId}` in learner.lemmaCards);
+
           const observationEvent = createObservationEvent({
             execution,
             lemma: {
@@ -581,6 +591,29 @@ export function createSugarLangObserveMiddleware(
             type: "observation",
             observationEvent
           });
+
+          // 085.5: First-teach beat -- write teach-record and annotate the turn once.
+          if (isNewCard && !teachLineWritten) {
+            const fnEntry = getInventoryFunctionForChunk(
+              match.chunk.chunkId,
+              learner.targetLanguage
+            );
+            if (fnEntry) {
+              const alreadyTaught = await services.teachRecordStore.has(fnEntry.functionId);
+              if (!alreadyTaught) {
+                await services.teachRecordStore.write({
+                  functionId: fnEntry.functionId,
+                  taughtAtMs: observedAtMs,
+                  realizingChunkId: match.chunk.chunkId
+                });
+                normalizedTurn.annotations!["sugarlang.teachLine"] = {
+                  label: fnEntry.displayName,
+                  text: `"${match.surfaceMatched}" is a ${fnEntry.displayName.toLowerCase()}.`
+                };
+                teachLineWritten = true;
+              }
+            }
+          }
         }
       }
 

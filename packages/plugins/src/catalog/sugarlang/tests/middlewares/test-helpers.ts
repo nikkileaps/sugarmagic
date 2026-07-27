@@ -177,11 +177,17 @@ export function createTestTurn(
   };
 }
 
-// Default sceneLexiconStore injected into every resolved-services mock so tests
-// that override resolveForExecution don't need to wire it up manually.
+// Default stores injected into every resolved-services mock so tests
+// that override resolveForExecution don't need to wire them up manually.
 const DEFAULT_SCENE_LEXICON_STORE = {
   ensure: async () => null,
   get: () => undefined
+};
+
+const DEFAULT_TEACH_RECORD_STORE = {
+  has: async () => false,
+  write: async () => undefined,
+  list: async () => []
 };
 
 export function createServicesStub(overrides: Record<string, unknown> = {}) {
@@ -197,6 +203,7 @@ export function createServicesStub(overrides: Record<string, unknown> = {}) {
         if (!resolved) return null;
         return {
           sceneLexiconStore: DEFAULT_SCENE_LEXICON_STORE,
+          teachRecordStore: DEFAULT_TEACH_RECORD_STORE,
           ...resolved
         };
       }
