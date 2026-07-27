@@ -35,6 +35,9 @@ import { MorphologyLoader } from "../classifier/morphology-loader";
 
 export const VARIANT_PROMPT_VERSION = "086.3.0";
 
+/** Minimum voice-retention score for a variant to pass the voice gate. */
+export const VOICE_RETENTION_PASS_THRESHOLD = 0.5;
+
 const ajv = new Ajv({ allErrors: true, strict: false });
 
 const FIDELITY_SCHEMA = {
@@ -298,7 +301,7 @@ export async function generateVariant(
   }
 
   const overallPasses =
-    envelopePasses && ratioPasses && voiceRetentionScore >= 1.0 && fidelityPasses;
+    envelopePasses && ratioPasses && voiceRetentionScore >= VOICE_RETENTION_PASS_THRESHOLD && fidelityPasses;
 
   const verdict: VariantVerdict = {
     envelopePasses,

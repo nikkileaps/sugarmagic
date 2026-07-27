@@ -492,10 +492,13 @@ export class SugarlangAuthoringCompileScheduler {
 
     for (const dialogue of dialogues) {
       for (const node of dialogue.nodes) {
+        // Intent excluded from variant contentHash: intent is embedded in the LLM
+        // prompt and the runtime lookup (buildVariantContentHash) has no access to
+        // the authored intent. Using {} here aligns bake and runtime key computation.
         const contentHash = [
           node.nodeId,
           node.text,
-          JSON.stringify(node.intent ?? {})
+          JSON.stringify({})
         ].join("|");
 
         for (const lang of languages) {

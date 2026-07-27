@@ -96,7 +96,12 @@ function applyWeave(
   posture: string
 ): void {
   const prescriptionIntroduce = constraint.targetVocab.introduce;
-  const inventoryChunks = getAllInventoryChunks(targetLanguage);
+  let inventoryChunks: import("../contracts/function-inventory").InventoryChunk[] = [];
+  try {
+    inventoryChunks = getAllInventoryChunks(targetLanguage);
+  } catch {
+    // Missing inventory for this language -- weave proceeds with no chunk substitutions.
+  }
   const weaveResult = diglotWeave(
     authoredText,
     prescriptionIntroduce,

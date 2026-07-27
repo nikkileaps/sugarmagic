@@ -29,6 +29,7 @@ import type { LexicalAtlasProvider } from "../types";
 import { applyMixedTextEnvelopePredicate } from "../classifier/envelope-rule";
 import { computeLanguageRatioVerdict } from "../classifier/language-ratio";
 import { computeVoiceRetentionScore } from "../classifier/envelope-classifier";
+import { VOICE_RETENTION_PASS_THRESHOLD } from "./generate-variant";
 import { computeCoverage } from "../classifier/coverage";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
 import { tokenize } from "../classifier/tokenize";
@@ -125,7 +126,7 @@ export function verifyLiveRender(input: VerifyLiveRenderInput): VariantVerdict {
     fidelityPasses = matchCount >= Math.ceil(introduce.length / 2);
   }
 
-  const overallPasses = envelopePasses && ratioPasses && voiceRetentionScore >= 0.5 && fidelityPasses;
+  const overallPasses = envelopePasses && ratioPasses && voiceRetentionScore >= VOICE_RETENTION_PASS_THRESHOLD && fidelityPasses;
 
   return {
     envelopePasses,
