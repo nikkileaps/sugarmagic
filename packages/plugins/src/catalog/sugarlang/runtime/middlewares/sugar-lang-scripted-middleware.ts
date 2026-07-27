@@ -2,13 +2,17 @@
  * packages/plugins/src/catalog/sugarlang/runtime/middlewares/sugar-lang-scripted-middleware.ts
  *
  * Purpose: Adapts scripted (authored English) NPC dialogue to the learner's
- *          language level via an LLM call. Runs in the analysis stage at
- *          priority 15 (after verify at 20, before observe at 90).
+ *          language level. Runs in the analysis stage at priority 15 (after
+ *          verify at 20, before observe at 90).
+ *
+ * For anchored/supported postures: diglot weave (zero LLM calls).
+ * For target-dominant posture: LLM call via the gateway (removed in 086.4).
  *
  * For scripted dialogue:
  *   1. Reads the authored English turn text
  *   2. Reads the sugarlang constraint (posture/ratio/overlay)
- *   3. Calls the LLM via the gateway to adapt the line
+ *   3a. anchored/supported: calls diglotWeave; updates constraint.targetVocab.introduce
+ *   3b. target-dominant: calls the LLM via the gateway to adapt the line
  *   4. Replaces turn.text with the adapted version
  *
  * Skips: agent mode turns, player VO turns, turns without a constraint.
@@ -28,6 +32,8 @@ import {
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { tokenize } from "../classifier/tokenize";
+import { diglotWeave } from "../classifier/diglot-weave";
+import { getAllInventoryChunks } from "../inventory/function-inventory-loader";
 import { createSugarlangLogger } from "../logger";
 import type { SugarlangLoggerLike } from "./shared";
 import {
@@ -73,13 +79,85 @@ export function createSugarLangScriptedMiddleware(
       ] as SugarlangConstraint | undefined;
       if (!constraint?.generatorPromptOverlay) return normalizedTurn;
 
+      const authoredText = normalizedTurn.text;
+      const targetLanguage = constraint.targetLanguage;
+      const supportLanguage = execution.selection.supportLanguage ?? "en";
+
+      // Anchored and supported postures use the zero-LLM weave path (086.2).
+      // The English frame is expected; introduced lemmas are substituted bare.
+      if (
+        constraint.supportPosture === "anchored" ||
+        constraint.supportPosture === "supported"
+      ) {
+        const services = await deps.services.resolveForExecution(execution);
+        if (!services) return normalizedTurn;
+
+        // Derive introduce candidates from the authored text via gloss lookup,
+        // just as the old lineIntroduce scan did. The prescription's introduce
+        // list is the priority source; the scan fills gaps for prescription-less
+        // scripted dialogue. Deleted with the rest of the gloss scan in 086.4
+        // once the intent artifact carries the line's teachables instead.
+        const prescriptionIntroduce = constraint.targetVocab.introduce;
+        const prescriptionSet = new Set(prescriptionIntroduce.map((l) => l.lemmaId));
+        const glossIntroduce: LemmaRef[] = [...prescriptionIntroduce];
+        const seen = new Set<string>(prescriptionSet);
+        for (const token of tokenize(authoredText, "en")) {
+          if (token.kind !== "word") continue;
+          const word = token.surface.toLowerCase();
+          if (word.length < 3 || seen.has(word)) continue;
+          seen.add(word);
+          const resolved = services.atlas.resolveFromGloss(word, targetLanguage, supportLanguage);
+          for (const entry of resolved) {
+            if (!seen.has(entry.lemmaId)) {
+              seen.add(entry.lemmaId);
+              glossIntroduce.push({ lemmaId: entry.lemmaId, lang: targetLanguage });
+            }
+          }
+        }
+
+        const inventoryChunks = getAllInventoryChunks(targetLanguage);
+        const weaveResult = diglotWeave(
+          authoredText,
+          glossIntroduce,
+          inventoryChunks,
+          services.atlas,
+          targetLanguage,
+          supportLanguage
+        );
+
+        if (weaveResult.weavedForms.length > 0) {
+          normalizedTurn.text = weaveResult.text;
+          // Replace the introduce list with only the woven forms so the observe
+          // middleware highlights exactly what was substituted.
+          const woveLemmaRefs: LemmaRef[] = weaveResult.weavedForms.map((wf) => ({
+            lemmaId: wf.lemmaId,
+            lang: targetLanguage
+          }));
+          constraint.targetVocab = {
+            introduce: woveLemmaRefs,
+            reinforce: constraint.targetVocab.reinforce,
+            avoid: constraint.targetVocab.avoid
+          };
+          execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+        }
+
+        logger.debug("Scripted line woven (anchored/supported, zero LLM).", {
+          authoredText,
+          wovenText: normalizedTurn.text,
+          weavedCount: weaveResult.weavedForms.length,
+          posture: constraint.supportPosture
+        });
+
+        return normalizedTurn;
+      }
+
+      // target-dominant posture: LLM adaptation path (removed in 086.4).
       const services = await deps.services.resolveForExecution(execution);
       if (!services?.llmClient) {
         logger.warn("Scripted adaptation skipped — no LLM client available.");
         return normalizedTurn;
       }
 
-      const authoredText = normalizedTurn.text;
       const npcDisplayName =
         normalizedTurn.speakerLabel ??
         execution.selection.npcDisplayName ??
@@ -88,8 +166,8 @@ export function createSugarLangScriptedMiddleware(
       // Scan the authored English text to find teaching candidates.
       // Each English word that resolves to a target-language lemma via the
       // gloss index becomes an introduce candidate.
-      const targetLanguage = constraint.targetLanguage;
-      const supportLanguage = execution.selection.supportLanguage ?? "en";
+      // NOTE: this block is superseded for anchored/supported (handled above)
+      // and will be deleted in 086.4 when target-dominant also moves to weave.
       const lineIntroduce: LemmaRef[] = [];
       const seen = new Set<string>();
       for (const token of tokenize(authoredText, "en")) {

@@ -230,6 +230,11 @@ export function createSugarLangTeacherMiddleware(
           ratio,
           targetLanguage
         );
+        // anchored/supported: "hover-only" because the weave places bare citation
+        // forms and the observe middleware delivers gloss data via dialogueHighlight.
+        // target-dominant: "none" -- the LLM-baked text is target-language already.
+        const glossingStrategy =
+          posture === "anchored" || posture === "supported" ? "hover-only" as const : "none" as const;
         const constraint: SugarlangConstraint = {
           generatorPromptOverlay: overlay,
           minimalGreetingMode: false,
@@ -241,7 +246,7 @@ export function createSugarLangTeacherMiddleware(
           supportPosture: posture,
           targetLanguageRatio: ratio,
           interactionStyle: "natural_dialogue",
-          glossingStrategy: "none",
+          glossingStrategy,
           sentenceComplexityCap: "free",
           targetLanguage,
           learnerCefr: learner.estimatedCefrBand,

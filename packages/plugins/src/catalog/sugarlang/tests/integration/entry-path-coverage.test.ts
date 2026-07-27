@@ -367,6 +367,8 @@ function buildHarness(
     environment?: Record<string, string>;
     assessment?: boolean;
     placementEnabled?: boolean;
+    /** Override CEFR band for testing posture-specific paths. */
+    debugBandOverride?: string;
   } = {}
 ) {
   const blackboard = createRuntimeBlackboard({
@@ -384,7 +386,8 @@ function buildHarness(
     verifyEnabled: true,
     ...(options.placementEnabled
       ? { placement: { enabled: true, openingDialogTurns: 1, closingDialogTurns: 1 } }
-      : {})
+      : {}),
+    ...(options.debugBandOverride ? { debugBandOverride: options.debugBandOverride } : {})
   });
   const logger = createSugarlangLogger({ debugLogging: false });
   const services = new SugarlangRuntimeServices({
@@ -608,8 +611,11 @@ describe("081.3 entry-path coverage", () => {
     // A configured gateway gives the scripted middleware a real llmClient;
     // the global fetch stub then fails the generate call, exercising the
     // catch-and-fall-back path in sugar-lang-scripted-middleware.ts.
+    // debugBandOverride:"B1" forces target-dominant posture so the LLM path
+    // fires (anchored/supported use the zero-LLM weave path as of 086.2).
     const { host, captured } = buildHarness({
-      environment: { SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: "http://localhost:8787" }
+      environment: { SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: "http://localhost:8787" },
+      debugBandOverride: "B1"
     });
 
     const turn = await host.startSession(START_SITE_SELECTION());
