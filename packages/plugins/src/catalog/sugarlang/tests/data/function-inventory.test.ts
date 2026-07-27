@@ -169,6 +169,26 @@ describe("FunctionInventoryLoader", () => {
     expect(Object.keys(lexicon)).toEqual(expect.arrayContaining(["farewell", "greeting", "gratitude", "acknowledgement"]));
   });
 
+  it("085.6: buildInterpretLexiconFromInventory includes gracias in gratitude (inventory replaces curated constant)", () => {
+    const lexicon = buildInterpretLexiconFromInventory("es");
+    expect(lexicon.gratitude).toContain("gracias");
+  });
+
+  it("085.6: item-zero functions do not leak into the four interpretLexicon categories", () => {
+    const loader = new FunctionInventoryLoader({ es: esInventory });
+    const itemZeroFns = esInventory.functions.filter((fn) => fn.isItemZero === true);
+    expect(itemZeroFns.length).toBeGreaterThan(0);
+    const lexicon = loader.buildInterpretLexicon("es");
+    for (const fn of itemZeroFns) {
+      const chunkForms = (fn.chunks.es ?? []).flatMap((c) => c.surfaceForms);
+      for (const form of chunkForms) {
+        for (const category of Object.keys(lexicon)) {
+          expect(lexicon[category], `item-zero form "${form}" must not appear in category "${category}"`).not.toContain(form);
+        }
+      }
+    }
+  });
+
   it("caches the parsed inventory -- second load returns same reference", () => {
     const loader = new FunctionInventoryLoader({ es: esInventory });
     const first = loader.load("es");

@@ -18,6 +18,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK,
+  DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK,
   buildTeacherPrompt,
   estimatePromptTokens,
   formatPendingProvisional
@@ -59,6 +60,7 @@ describe("buildTeacherPrompt", () => {
       "director.system.schema",
       "director.system.constraints",
       "director.system.comprehension-guidance",
+      "director.system.pragmatic-feedback",
       "director.user.template"
     ]);
   });
@@ -136,5 +138,16 @@ describe("buildTeacherPrompt", () => {
 
     expect(prompt.user).toContain("relationship state: probable_first_meeting");
     expect(prompt.user).toContain("A brief greeting or tiny self-introduction is enough.");
+  });
+
+  it("085.6: includes the pragmatic feedback block verbatim in the system prompt", () => {
+    const prompt = buildTeacherPrompt(createTeacherContext());
+    expect(prompt.system).toContain(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK);
+  });
+
+  it("085.6: pragmatic feedback block prohibits explicit correction", () => {
+    expect(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK).toContain("NEVER");
+    expect(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK).toContain("warmth");
+    expect(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK).toContain("confusion");
   });
 });

@@ -11,6 +11,7 @@
  *   - DIRECTOR_OUTPUT_SCHEMA_PROMPT
  *   - DIRECTOR_HARD_CONSTRAINTS_PROMPT
  *   - DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK
+ *   - DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK
  *   - buildTeacherPrompt
  *   - estimatePromptTokens
  *   - formatLearnerSummary
@@ -102,6 +103,19 @@ export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 - Target lemmas for comprehension checks must come from the pending provisional list.
 - Keep citedSignals short and factual.`;
 
+export const DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK = `PRAGMATIC FEEDBACK RULES:
+
+When a player uses or attempts a communicative function the NPC has modeled
+(greetings, farewells, expressions of gratitude, acknowledgements, requests):
+
+- Correct use: respond with natural in-fiction warmth -- a smile, a matching
+  social beat, delight at being understood. Keep it brief and diegetic.
+- Misuse or awkward phrasing: react with gentle in-fiction confusion or a
+  light clarifying recast ("Perdona, no entiendo bien..."). The NPC never
+  corrects grammar explicitly; confusion is social, not pedagogical.
+- NEVER punish pragmatic mistakes with scolding, correction-as-correction,
+  or breaking the fourth wall. The NPC's job is to model, not to evaluate.`;
+
 export const DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK = `COMPREHENSION CHECKS:
 
 The learner's scheduler tracks committed evidence (real FSRS progress) and
@@ -128,6 +142,7 @@ const DIRECTOR_CACHE_MARKERS = [
   "director.system.schema",
   "director.system.constraints",
   "director.system.comprehension-guidance",
+  "director.system.pragmatic-feedback",
   "director.user.template"
 ] as const;
 
@@ -406,7 +421,8 @@ export function buildTeacherPrompt(context: TeacherContext): DirectorPrompt {
     cefrDescriptorsPrompt: DIRECTOR_CEFR_DESCRIPTORS_PROMPT,
     outputSchemaPrompt: DIRECTOR_OUTPUT_SCHEMA_PROMPT,
     hardConstraintsPrompt: DIRECTOR_HARD_CONSTRAINTS_PROMPT,
-    comprehensionGuidanceBlock: DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK
+    comprehensionGuidanceBlock: DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK,
+    pragmaticFeedbackBlock: DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK
   });
 
   const user = renderDirectorPromptTemplate(DIRECTOR_USER_TEMPLATE, {
