@@ -31,6 +31,20 @@ prior (`cefrPriorBand`, `priorWeight`), productive knowledge
 provisional-evidence pair (`provisionalEvidence`, capped at 5, and
 `provisionalEvidenceFirstSeenTurn`).
 
+**Chunk cards (085.3):** `lemmaCards` also holds chunk cards alongside
+vocabulary cards. Chunk cards have `lemmaId` prefixed with `"chunk:"` (e.g.
+`"chunk:buenos-dias"`). They track receptive and productive exposure to
+formulaic chunks tied to communicative functions (greetings, farewells, etc.)
+using the same FSRS fields as vocabulary cards. Because the `"chunk:"` colon
+is unreachable by the normalizer, there is no DB version bump -- chunk cards
+live in the same `lemma-cards` IDB object store as vocabulary cards.
+
+The teacher, probe, and provisional systems exclude chunk cards via a
+`lemmaId.startsWith("chunk:")` guard (`shared.ts: computePendingProvisionalLemmas`,
+`prompt-builder.ts: formatLearnerSummary`). Chunk observations are emitted as
+`chunk-encountered` (NPC speech) and `chunk-produced` (player input) telemetry
+events and update `productiveStrength` / `receptiveStrength` directly.
+
 The `learnerId` is built in `runtime/runtime-services.ts` as
 `${playerDefinition.definitionId}:${targetLanguage}:${supportLanguage}`, so
 each language pair gets its own profile and card store.
@@ -51,11 +65,21 @@ Two storage tiers, split in
    contract explicitly excludes per-plugin learner state
    (`packages/runtime-core/src/save/index.ts` boundary note).
 
-2. **Lemma cards** -- `IndexedDBCardStore`
+2. **Lemma cards + chunk cards** -- `IndexedDBCardStore`
    (`runtime/learner/card-store.ts`), IDB database
    `sugarlang-card-store:<learnerId>`, object store `lemma-cards` keyed by
    `lemmaId`, paged at 250 cards. Falls back to `MemoryCardStore` when
    `indexedDB` is unavailable.
+
+3. **Teach records (085.5)** -- `IndexedDBTeachRecordStore`
+   (`runtime/learner/teach-record-store.ts`), IDB database
+   `sugarlang-card-store:teach:<learnerId>` (prefix starts with
+   `CARD_STORE_DB_NAME_PREFIX`, so the reset enforcer auto-covers it).
+   Holds one `{ functionId, taughtAtMs, realizingChunkId }` record per
+   communicative function the learner has encountered for the first time.
+   The no-rewrite guard (`write` is idempotent on `functionId`) makes the
+   record a permanent first-teach timestamp. Teach records are the data
+   source for any future phrasebook/journal UI (deferred to epic 089).
 
 Consequences on reload:
 
@@ -183,7 +207,11 @@ __sugarlangDebug.getState()          // SugarlangDebugState snapshot
 ```
 
 - `getState()` returns `{ estimatedCefrBand, assessmentStatus,
-  cefrConfidence, placementStatus, inCalibration, pinned, pinnedBand }`.
+  cefrConfidence, placementStatus, inCalibration, pinned, pinnedBand,
+  lemmaCards, chunkCards, teachRecords }` (085.3/085.5: the last three are
+  read directly from the card store and teach record store so the debug UI
+  can show chunk card counts and teach-record history without a Studio
+  data source).
 - **Pinning:** the reducer takes a `debugPinnedBand` callback; while a band
   is pinned, observation-driven posterior and `estimatedCefrBand` updates are
   suppressed entirely (FSRS card scheduling and session accumulators still
