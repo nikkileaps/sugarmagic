@@ -434,8 +434,8 @@ describe("SugarLangVerifyMiddleware", () => {
   });
 
   it("083.2: N-candidate JSON response -- scorer picks the first passing candidate by index", async () => {
-    // LLM returns a JSON array of 3 candidates. Only the second (index 1) passes
-    // the classifier. The scorer must pick it and leave the others unused.
+    // LLM returns a JSON array of 3 candidates. All are eagerly scored; only the
+    // second (index 1) passes the classifier, so it is selected.
     const candidates = ["primera falla.", "¡Hola amigo!", "otra versión."];
     const llmClient = {
       generate: vi.fn().mockResolvedValue({

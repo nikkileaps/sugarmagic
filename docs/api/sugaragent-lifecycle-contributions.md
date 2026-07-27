@@ -44,7 +44,7 @@ omits it or sets it to a different value. All other fields are optional.
 
 The annotation key format is strict: `sugaragent.contrib/<pluginId>` where
 pluginId is any non-empty string matching what you want logged in the warning
-path. The sugarlang plugin uses `sugaragent.contrib/sugarlang.teacher`.
+path. The sugarlang plugin uses `sugaragent.contrib/sugarlang`.
 
 ## Merge Semantics
 
@@ -55,7 +55,8 @@ of annotation insertion order.
 
 | Field | Merge rule |
 |---|---|
-| `generateOverlay`, `generateReminder` | Blank-line joined, in pluginId order |
+| `generateOverlay` | Blank-line joined, in pluginId order |
+| `generateReminder` (DEFERRED 083.5) | Blank-line joined, in pluginId order -- NOT YET WIRED to the generator prompt |
 | `judgeDirectives`, `regenDirectives` | Concatenated arrays, in pluginId order |
 | `textConventions.preserveActionTags` | Boolean OR across all contributors |
 | `interpretLexicon` | Union per category; duplicate forms not removed |
@@ -78,7 +79,7 @@ interface MergedContributions {
 | Surface | Stage | File | Effect |
 |---|---|---|---|
 | `generateOverlay` | GenerateStage | `generate/GenerateStage.ts` | Passed as `languageLearningOverlay` in `promptContext`; spliced verbatim into the generator user-message |
-| `generateReminder` | GenerateStage | `generate/GenerateStage.ts` | Passed as `generateReminder` in `promptContext`; injected into the terminal slot of the generator prompt (after conversation history) |
+| `generateReminder` (DEFERRED 083.5) | GenerateStage | `generate/GenerateStage.ts` | NOT YET WIRED. The field is collected but `mergedReminder` is not read by GenerateStage; the terminal drift-reminder splice lands in story 083.5. |
 | `judgeDirectives` | JudgeStage | `JudgeStage.ts` | Directives forwarded to `judgeNpcReply`; behavior directed by these is treated as in-character and never flagged as a violation |
 | `regenDirectives` | RegenerateStage | `RegenerateStage.ts` | Concatenated with `mergedOverlay` into a `constraintBlock` prepended to the regen user-message; preserved constraints after a judge fail |
 | `preserveActionTags` | RegenerateStage, AuditStage | `RegenerateStage.ts`, `AuditStage.ts` | When true: asterisk spans (`*waves*`) survive `normalizeNpcSpeech` and are not flagged by `findStageDirectionViolations` |
@@ -90,8 +91,8 @@ interface MergedContributions {
 key. Per-turn content must NEVER be injected into the system prompt. The
 contribution surfaces follow this rule:
 
-- `generateOverlay` and `generateReminder` go into the GENERATOR USER-MESSAGE
-  (per-turn, uncached). The generator builds a new user message every turn; the
+- `generateOverlay` goes into the GENERATOR USER-MESSAGE (per-turn, uncached).
+  The generator builds a new user message every turn; the
   system prompt does not change.
 - `regenDirectives` go into the REGEN USER-MESSAGE (per-turn uncached by
   construction since regen is triggered on specific turns only).
