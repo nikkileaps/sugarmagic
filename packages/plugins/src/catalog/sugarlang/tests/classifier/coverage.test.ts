@@ -170,7 +170,7 @@ describe("computeCoverage", () => {
     ];
     const text = "Voy de vez en cuando al mercado";
     const tokens = tokenize(text, "es");
-    const matcher = createChunkMatcher(chunks, "es", text);
+    const matcher = createChunkMatcher(chunks, "es");
 
     const profile = computeCoverage(
       tokens,
@@ -180,7 +180,8 @@ describe("computeCoverage", () => {
       morphology,
       new Set(),
       matcher,
-      chunks
+      chunks,
+      text
     );
 
     expect(profile.matchedChunks).toEqual(chunks);

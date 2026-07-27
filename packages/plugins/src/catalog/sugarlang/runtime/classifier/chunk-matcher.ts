@@ -38,7 +38,8 @@ export interface ChunkMatch {
 }
 
 export interface ChunkMatcher {
-  match: (tokens: Token[]) => ChunkMatch[];
+  /** Pass the same source text that was tokenized, so surfaceMatched slices are accurate. */
+  match: (tokens: Token[], sourceText: string) => ChunkMatch[];
 }
 
 function createTrieNode(): ChunkTrieNode {
@@ -54,12 +55,15 @@ function normalizeChunkTokens(surface: string, lang: string): string[] {
     .map((token) => token.surface.normalize("NFC").toLocaleLowerCase(lang));
 }
 
+/**
+ * Builds a trie-based chunk matcher for the given chunks and language.
+ * sourceText is NOT a constructor argument -- pass it to match() per call
+ * so a cached matcher works correctly across different turn texts.
+ */
 export function createChunkMatcher(
   chunks: LexicalChunk[] | undefined,
-  lang: string,
-  sourceText: string
+  lang: string
 ): ChunkMatcher {
-  const normalizedSourceText = sourceText.normalize("NFC");
   const root = createTrieNode();
 
   for (const chunk of chunks ?? []) {
@@ -87,7 +91,8 @@ export function createChunkMatcher(
   }
 
   return {
-    match(tokens: Token[]): ChunkMatch[] {
+    match(tokens: Token[], sourceText: string): ChunkMatch[] {
+      const normalizedSourceText = sourceText.normalize("NFC");
       const matches: ChunkMatch[] = [];
       let index = 0;
 

@@ -13,6 +13,34 @@ Related:
 
 ---
 
+## 085.1 Ground-truth findings (amendment, 2026-07-26)
+
+Verified against code at story-ship time:
+
+**Chunk pipeline -- confirmed active end to end:**
+- `extract-chunks.ts` (compile/): LLM-backed extractor, schema-validated, status active. Triggered by tier-2 compile scheduler (`config.ts chunkExtraction`, cost-gated) and publish pipeline.
+- `chunk-cache.ts`: caches extraction results keyed by scene contentHash + model prompt version.
+- `scene-lexicon-store.ts`: joins chunk cache output into `CompiledSceneLexicon.chunks`.
+- `envelope-classifier.ts`: `chunkMatcherCache` (Map, now bounded at 32 entries) keyed by `lang:contentHash`; creates a trie-based `ChunkMatcher` per unique scene.
+- `coverage.ts`: calls `chunkMatcher.match(tokens, sourceText)` -> `ChunkMatch[]`; returns `matchedChunkTokens` in the CoverageProfile.
+
+**Bugs fixed in this story:**
+- `chunkMatcherCache` stale-text bug: `createChunkMatcher` no longer takes `sourceText`; it is passed per-call to `match(tokens, sourceText)`. Regression test added to `envelope-classifier.test.ts`.
+- `chunkMatcherCache` unbounded: capped at 32 entries with first-in eviction.
+- `ObservationKind` union was missing `"hovered-introduce"` while `LemmaObservation` included it; added to union.
+
+**Observation kinds added for 085.3 (pre-wired here):**
+- `"chunk-encountered"` (receptive exposure, no FSRS grade, no productive delta)
+- `"chunk-produced"` (string-match floor, FSRS grade "Good", productiveDelta 0.2)
+
+**Confirmed absent (nothing to delete):**
+- No dead chunk code found -- every extraction, cache, and match path has an active consumer.
+- `CompiledSceneLexicon.chunks` is absent from compileSugarlangScene (chunk-pure, as per epic 14 rule 1) -- chunks join asynchronously via the scheduler / publish pipeline / scene-lexicon-store. This is correct behavior, not a bug.
+
+**Observe middleware (085.3 landing zone):** currently has no chunk matching -- confirmed. The matcher lives in envelope-classifier only. 085.3 adds chunk matching to the observe middleware independently (matcher-cache is now a per-instance concern on EnvelopeClassifier; observe will create its own matcher inline).
+
+---
+
 ## Why now
 
 Words only: sugarlang teaches and tracks LEMMAS. There is no teaching of FUNCTIONS (greeting, thanking, requesting) or pragmatics anywhere -- the strategy calls this the single biggest pedagogy gap. The science is settled: the notional-functional syllabus keyed to CEFR can-do descriptors is how CONCEPTS are sequenced; formulaic sequences are stored whole and carry most pragmatic appropriateness (teach "buenos dias" as an unanalyzed whole); situation + ONE light explicit line beats either alone (Taguchi 2015).

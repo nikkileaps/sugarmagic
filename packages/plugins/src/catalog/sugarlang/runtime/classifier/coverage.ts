@@ -60,7 +60,8 @@ export function computeCoverage(
     | Record<string, string>,
   questEssentialLemmas: Set<string> = new Set(),
   chunkMatcher?: ChunkMatcher | null,
-  sceneChunks?: LexicalChunk[]
+  sceneChunks?: LexicalChunk[],
+  sourceText?: string
 ): CoverageProfile {
   const learnerBand = learner.estimatedCefrBand;
   const bandHistogram = createBandHistogram();
@@ -70,7 +71,7 @@ export function computeCoverage(
   const matchedChunks = new Map<string, LexicalChunk>();
   const normalizedKnownEntities = normalizeLookup(knownEntities);
   const normalizedQuestEssentialLemmas = normalizeLookup(questEssentialLemmas);
-  const chunkMatches = chunkMatcher?.match(tokens) ?? [];
+  const chunkMatches = chunkMatcher?.match(tokens, sourceText ?? "") ?? [];
   const consumedTokenIndexes = new Set<number>();
 
   for (const match of chunkMatches) {
