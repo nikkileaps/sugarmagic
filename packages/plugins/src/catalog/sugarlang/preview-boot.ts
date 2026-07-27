@@ -77,5 +77,8 @@ export async function buildSugarlangPreviewBootPayloadForSession(
     }
   }
 
-  return buildSugarlangPreviewBootPayload(scenes, cache, atlas, morphology);
+  const payload = await buildSugarlangPreviewBootPayload(scenes, cache, atlas, morphology);
+  // Carry the Studio variant IDB workspaceId into the boot payload so the preview
+  // runtime can open the same db and serve baked variants without a round-trip.
+  return { ...payload, studioWorkspaceId: `sugarlang-studio:${session.gameProject.identity.id}` };
 }

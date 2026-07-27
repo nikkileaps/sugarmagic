@@ -34,7 +34,7 @@ import type {
 } from "@sugarmagic/runtime-core";
 import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
-import type { SugarlangVariantCache } from "./compile/variant-cache";
+import { IndexedDBVariantCache, type SugarlangVariantCache } from "./compile/variant-cache";
 import type { SugarlangIntentCache } from "./compile/intent-cache";
 import type { LiveRenderCache } from "./compile/live-render-cache";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
@@ -211,6 +211,8 @@ export class SugarlangRuntimeServices {
   private readonly gatewayClient: SugarlangLLMClient | null;
   private readonly llmModel: string;
   private _debugPinnedBand: CEFRBand | null = null;
+  /** WorkspaceId the Studio used when baking variants; wired from boot payload in manifest init. */
+  private studioWorkspaceId: string | null = null;
 
   constructor(options: SugarlangRuntimeServicesOptions) {
     this.config = options.config;
@@ -259,6 +261,10 @@ export class SugarlangRuntimeServices {
         this.previewLexicons.set(lexicon.sceneId, lexicon);
       }
     }
+  }
+
+  wireStudioVariantCache(workspaceId: string): void {
+    this.studioWorkspaceId = workspaceId;
   }
 
   isBound(): boolean {
@@ -455,6 +461,10 @@ export class SugarlangRuntimeServices {
     });
 
     const teachRecordStore = createTeachRecordStore(learnerId);
+    const variantCache: SugarlangVariantCache | undefined = this.studioWorkspaceId
+      ? new IndexedDBVariantCache({ workspaceId: this.studioWorkspaceId })
+      : undefined;
+
     const services: SugarlangExecutionServices = {
       ...languageBundle,
       profileId: learnerId,
@@ -464,7 +474,8 @@ export class SugarlangRuntimeServices {
       cardStore,
       teachRecordStore,
       teacher,
-      llmClient: this.gatewayClient
+      llmClient: this.gatewayClient,
+      variantCache
     };
     this.executionServices.set(key, services);
 

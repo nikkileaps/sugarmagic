@@ -26,6 +26,8 @@ import type { MorphologyLoader } from "../classifier/morphology-loader";
 
 export interface SugarlangPreviewBootPayload {
   compiledScenes: CompiledSceneLexicon[];
+  /** IDB workspaceId the Studio used when baking variants. Runtime reads it to open the same db. */
+  studioWorkspaceId?: string;
 }
 
 export async function buildSugarlangPreviewBootPayload(
@@ -69,4 +71,12 @@ export function extractSugarlangPreviewBootLexicons(
   return Array.isArray(record.compiledScenes)
     ? (record.compiledScenes as CompiledSceneLexicon[])
     : [];
+}
+
+export function extractSugarlangStudioWorkspaceId(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) {
+    return null;
+  }
+  const record = payload as Partial<SugarlangPreviewBootPayload>;
+  return typeof record.studioWorkspaceId === "string" ? record.studioWorkspaceId : null;
 }

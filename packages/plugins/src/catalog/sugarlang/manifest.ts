@@ -47,7 +47,8 @@ import {
   createSugarLangScriptedMiddleware
 } from "./runtime/middlewares/sugar-lang-scripted-middleware";
 import {
-  extractSugarlangPreviewBootLexicons
+  extractSugarlangPreviewBootLexicons,
+  extractSugarlangStudioWorkspaceId
 } from "./runtime/compile/preview-boot";
 import {
   seedSugarlangRuntimeCompileCache
@@ -148,13 +149,14 @@ export function createSugarlangPlugin(
     blackboardFactDefinitions: SUGARLANG_BLACKBOARD_FACT_DEFINITIONS,
     async init(runtimeContext) {
       services.bindRuntime(runtimeContext);
-      const lexicons = extractSugarlangPreviewBootLexicons(
-        runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID]
-      );
+      const bootPayload = runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID];
+      const lexicons = extractSugarlangPreviewBootLexicons(bootPayload);
       await seedSugarlangRuntimeCompileCache(lexicons);
-      services.seedPreviewLexicons(
-        runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID]
-      );
+      services.seedPreviewLexicons(bootPayload);
+      const studioWorkspaceId = extractSugarlangStudioWorkspaceId(bootPayload);
+      if (studioWorkspaceId) {
+        services.wireStudioVariantCache(studioWorkspaceId);
+      }
       // Dev-only debug handle for automated verification and manual band
       // overrides. Same DEV guard as __sugarmagicDebug (targets/web
       // runtimeHost.ts). Never present in a published artifact.
