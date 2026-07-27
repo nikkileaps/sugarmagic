@@ -58,6 +58,21 @@ function normalizeLower(text: unknown): string {
     .trim();
 }
 
+/** Strip combining diacritical marks so "adios" matches "adi\u00f3s"-sourced patterns. */
+export function nfdStrip(text: string): string {
+  return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+export function buildLexiconPattern(forms: string[]): RegExp | null {
+  if (!forms.length) return null;
+  const escaped = forms
+    .map((f) => nfdStrip(f.trim()))
+    .filter(Boolean)
+    .map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (!escaped.length) return null;
+  return new RegExp(`\\b(${escaped.join("|")})\\b`, "i");
+}
+
 function normalizeDeclaredName(text: string): string {
   return text
     .trim()
@@ -99,14 +114,29 @@ export function extractDeclaredIdentityName(inputText: string | null): string | 
   return null;
 }
 
-function detectSocialMove(inputText: string | null): SocialMove {
+function detectSocialMove(inputText: string | null, lexicon?: Record<string, string[]>): SocialMove {
   if (!inputText) return "greeting";
+  const stripped = nfdStrip(inputText);
+
   if (FAREWELL_PATTERN.test(inputText)) return "farewell";
+  const farewellLex = buildLexiconPattern(lexicon?.farewell ?? []);
+  if (farewellLex?.test(stripped)) return "farewell";
+
   if (extractDeclaredIdentityName(inputText)) return "introduction";
+
   if (GREETING_PATTERNS.some((pattern) => pattern.test(inputText))) return "greeting";
+  const greetingLex = buildLexiconPattern(lexicon?.greeting ?? []);
+  if (greetingLex?.test(stripped)) return "greeting";
+
   if (GRATITUDE_PATTERN.test(inputText) || ACKNOWLEDGEMENT_PATTERN.test(inputText)) {
     return "acknowledgement";
   }
+  const gratitudeLex = buildLexiconPattern([
+    ...(lexicon?.gratitude ?? []),
+    ...(lexicon?.acknowledgement ?? [])
+  ]);
+  if (gratitudeLex?.test(stripped)) return "acknowledgement";
+
   if (SMALLTALK_PATTERN.test(inputText)) return "smalltalk";
   return "none";
 }
@@ -192,12 +222,14 @@ export function interpretPlayerTurn(input: {
   npcDefinitionId: string | null | undefined;
   npcDisplayName: string | null | undefined;
   pendingExpectation: PendingExpectation;
+  /** Target-language surface forms from the interpretLexicon contribution. */
+  interpretLexicon?: Record<string, string[]>;
 }): Omit<InterpretResult, "pendingExpectation"> {
   const userText = input.userText;
   const focusText =
     normalizeMessage(userText) ||
     `${input.npcDisplayName ?? "NPC"} conversation context`;
-  const socialMove = detectSocialMove(userText);
+  const socialMove = detectSocialMove(userText, input.interpretLexicon);
   const declaredIdentityName = extractDeclaredIdentityName(userText);
   const hasFarewellCue = socialMove === "farewell";
   const hasQuestCue = hasQuestGuidanceCue(userText);

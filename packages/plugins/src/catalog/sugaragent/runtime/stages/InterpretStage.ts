@@ -1,4 +1,5 @@
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
+import { collectContributions } from "../contributions";
 import { createDiagnostics } from "./diagnostics";
 import { detectPendingExpectation, interpretPlayerTurn } from "./interpretation";
 import type {
@@ -36,12 +37,14 @@ export class InterpretStage implements TurnStage<InterpretStageInput, InterpretR
         ? input.execution.input.text.trim()
         : null;
     const pendingExpectation = detectPendingExpectation(input.state);
+    const { interpretLexicon } = collectContributions(input.execution.annotations);
     const result: InterpretResult = {
       ...interpretPlayerTurn({
         userText: userText || null,
         npcDefinitionId: input.execution.selection.npcDefinitionId,
         npcDisplayName: input.execution.selection.npcDisplayName,
-        pendingExpectation
+        pendingExpectation,
+        interpretLexicon: Object.keys(interpretLexicon).length ? interpretLexicon : undefined
       }),
       pendingExpectation
     };

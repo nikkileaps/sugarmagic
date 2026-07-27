@@ -6,6 +6,7 @@ import {
   findSpatialGroundingViolations,
   findStageDirectionViolations
 } from "./helpers";
+import { buildLexiconPattern, nfdStrip } from "./interpretation";
 import type {
   AuditResult,
   GenerateResult,
@@ -38,7 +39,8 @@ export class AuditStage implements TurnStage<AuditStageInput, AuditResult> {
     input: AuditStageInput
   ): Promise<TurnStageResult<AuditResult>> {
     const startedAt = Date.now();
-    const { preserveActionTags } = collectContributions(input.execution.annotations);
+    const { preserveActionTags, interpretLexicon } = collectContributions(input.execution.annotations);
+    const farewellLexPattern = buildLexiconPattern(interpretLexicon.farewell ?? []);
     const violations: string[] = [
       ...findMetaLeakViolations(input.generate.text),
       ...findStageDirectionViolations(input.generate.text, preserveActionTags),
@@ -60,7 +62,8 @@ export class AuditStage implements TurnStage<AuditStageInput, AuditResult> {
     }
     if (
       input.plan.responseIntent === "goodbye" &&
-      !/(bye|again|later|farewell|speak)/i.test(input.generate.text)
+      !/(bye|again|later|farewell|speak)/i.test(input.generate.text) &&
+      !(farewellLexPattern && farewellLexPattern.test(nfdStrip(input.generate.text)))
     ) {
       violations.push("missing-goodbye-cue");
     }
@@ -72,6 +75,7 @@ export class AuditStage implements TurnStage<AuditStageInput, AuditResult> {
     }
     if (
       input.plan.responseIntent === "abstain" &&
+      !Object.keys(interpretLexicon).length &&
       !/(don't know enough|do not know enough|need more context|not enough)/i.test(
         input.generate.text
       )
