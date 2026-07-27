@@ -662,10 +662,15 @@ export type TelemetryEvent =
         debtServiceCount: number;
         introductionCount: number;
         affinityCount: number;
+        stretchCount: number;
         topTeachableId: string | null;
         topTeachableReason: string | null;
         /** True when the world-day axis was unavailable and diversity degrades to npc x scene. */
         dayAxisDegraded: boolean;
+        /** 087.3: Estimated fraction of scene lemmas currently known by the learner. */
+        sceneComprehensionRate: number | null;
+        /** 087.3: True when stretch allowance gate was triggered this turn. */
+        stretchAllowanceActive: boolean;
       }
     >
   | TelemetryEventOf<

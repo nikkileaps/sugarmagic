@@ -46,6 +46,7 @@ import {
 } from "../telemetry/telemetry";
 import type { SchedulerBoardView } from "./scheduler-board-view";
 import type { ScheduledTeachable, TeachReason, TeachSchedule } from "./teach-schedule";
+import { estimateSceneComprehensionRate, STRETCH_COMPREHENSION_FLOOR } from "./comprehension-rate";
 
 /** Retrievability below this = the learner is overdue on this item. */
 export const DUE_RETRIEVABILITY_FLOOR = 0.7;
@@ -73,7 +74,7 @@ export class OuterLoopScheduler {
   }
 
   compute(board: SchedulerBoardView): TeachSchedule {
-    const { learner, curriculum, scene, conversationId, npcDefinitionId } = board;
+    const { learner, curriculum, scene, conversationId, npcDefinitionId, targetLanguage } = board;
     const now = Date.now();
 
     // Cold start: no card history AND no introduced functions means the learner
@@ -83,6 +84,7 @@ export class OuterLoopScheduler {
       curriculum.introducedFunctionIds.size === 0;
 
     const dayAxisDegraded = scene.dayIndex === null;
+    const sceneComprehensionRate = estimateSceneComprehensionRate(learner.lemmaCards, scene.sceneLemmaIds);
 
     if (isColdStart) {
       void emitTelemetry(
@@ -99,16 +101,21 @@ export class OuterLoopScheduler {
           debtServiceCount: 0,
           introductionCount: 0,
           affinityCount: 0,
+          stretchCount: 0,
           topTeachableId: null,
           topTeachableReason: null,
-          dayAxisDegraded
+          dayAxisDegraded,
+          sceneComprehensionRate,
+          stretchAllowanceActive: false
         })
       );
       return {
         teachables: [],
         isColdStart: true,
         sceneId: scene.sceneId,
-        conversationId
+        conversationId,
+        sceneComprehensionRate,
+        stretchAllowanceActive: false
       };
     }
 
@@ -146,34 +153,47 @@ export class OuterLoopScheduler {
     }
 
     // --- 3. Unintroduced functions, band ordering as the floor ---
-    // Prerequisite edges are deferred to 087.3; band order is the current floor.
+    // Above-band (band+1) functions are gated behind the stretch allowance:
+    // only one is included per turn, only when scene comprehension >= STRETCH_COMPREHENSION_FLOOR,
+    // and only when the function has scene affinity.
+    const learnerBandIdx = bandIndex(learner.cefrBand);
+    let stretchCandidateAdded = false;
+
     for (const fn of curriculum.availableFunctions) {
       if (curriculum.introducedFunctionIds.has(fn.functionId)) continue;
-      // Skip if this function already appears as a debt-service item
-      // (a function could theoretically be in both sets during a race; debt wins).
       if (curriculum.activeDebts.has(fn.functionId)) continue;
 
-      // Band-derived base priority: A1 = 0.50, decreasing to C2 = 0.20.
-      const bIdx = bandIndex(fn.band);
-      const basePriority = 0.50 - (bIdx / CEFR_BAND_ORDER.length) * 0.30;
+      const fnBandIdx = bandIndex(fn.band);
+      const isAboveBand = fnBandIdx > learnerBandIdx;
 
-      // Scene affinity boost: unintroduced functions present in the current scene
-      // get a higher priority since there is an authored moment to realize them.
+      // Stretch gate: above-band functions require comprehension floor + scene affinity,
+      // and only one is allowed per turn.
+      if (isAboveBand) {
+        if (stretchCandidateAdded) continue;
+        if (sceneComprehensionRate < STRETCH_COMPREHENSION_FLOOR) continue;
+        if (!scene.functionTags.sceneFunctions.includes(fn.functionId)) continue;
+      }
+
+      // familiarityBoost (087.3): fraction of constituent chunks already in card store × 0.05.
+      // Rewards progress toward a function even before formal introduction.
+      const chunks = fn.chunks[targetLanguage] ?? [];
+      const knownChunkCount = chunks.filter((c) => `chunk:${c.chunkId}` in learner.lemmaCards).length;
+      const familiarityBoost = chunks.length > 0 ? (knownChunkCount / chunks.length) * 0.05 : 0;
+
+      // Band-derived base priority: A1 = 0.50, decreasing to C2 = 0.20.
+      const basePriority = 0.50 - (fnBandIdx / CEFR_BAND_ORDER.length) * 0.30;
+
       let affinityBoost = 0;
       const affinityNpcIds: string[] = [];
       const isInScene = scene.functionTags.sceneFunctions.includes(fn.functionId);
 
       if (isInScene) {
         affinityBoost += 0.15;
-
-        // Collect all NPCs in this scene with authored lines for the function.
         for (const [npcId, npcFns] of Object.entries(scene.functionTags.npcFunctions)) {
           if (npcFns.includes(fn.functionId)) {
             affinityNpcIds.push(npcId);
           }
         }
-
-        // Extra boost when the current NPC can realize the function directly.
         if (
           npcDefinitionId &&
           scene.functionTags.npcFunctions[npcDefinitionId]?.includes(fn.functionId)
@@ -182,16 +202,24 @@ export class OuterLoopScheduler {
         }
       }
 
-      const teachReason: TeachReason = isInScene ? "function-affinity" : "introduction";
+      const teachReason: TeachReason = isAboveBand
+        ? "stretch"
+        : isInScene
+        ? "function-affinity"
+        : "introduction";
+
+      if (isAboveBand) stretchCandidateAdded = true;
 
       candidates.push({
         id: fn.functionId,
         kind: "function",
-        priority: clamp01(basePriority + affinityBoost),
+        priority: clamp01(basePriority + affinityBoost + familiarityBoost),
         teachReason,
         affinityNpcIds
       });
     }
+
+    const stretchAllowanceActive = stretchCandidateAdded;
 
     // Sort descending by priority; break ties alphabetically by id for determinism.
     candidates.sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
@@ -200,6 +228,7 @@ export class OuterLoopScheduler {
     const debtServiceCount = candidates.filter((c) => c.teachReason === "debt-service").length;
     const introCount = candidates.filter((c) => c.teachReason === "introduction").length;
     const affinityCount = candidates.filter((c) => c.teachReason === "function-affinity").length;
+    const stretchCount = candidates.filter((c) => c.teachReason === "stretch").length;
 
     void emitTelemetry(
       this.telemetry,
@@ -215,9 +244,12 @@ export class OuterLoopScheduler {
         debtServiceCount,
         introductionCount: introCount,
         affinityCount,
+        stretchCount,
         topTeachableId: candidates[0]?.id ?? null,
         topTeachableReason: candidates[0]?.teachReason ?? null,
-        dayAxisDegraded
+        dayAxisDegraded,
+        sceneComprehensionRate,
+        stretchAllowanceActive
       })
     );
 
@@ -225,7 +257,9 @@ export class OuterLoopScheduler {
       teachables: candidates,
       isColdStart: false,
       sceneId: scene.sceneId,
-      conversationId
+      conversationId,
+      sceneComprehensionRate,
+      stretchAllowanceActive
     };
   }
 }

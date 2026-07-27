@@ -20,8 +20,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { OuterLoopScheduler, DUE_RETRIEVABILITY_FLOOR } from "../../runtime/scheduler/outer-loop-scheduler";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
-import type { SchedulerBoardView } from "../../runtime/scheduler/scheduler-board-view";
+import type { SchedulerBoardView, SchedulerCurriculumView } from "../../runtime/scheduler/scheduler-board-view";
 import type { LemmaCard } from "../../runtime/types";
+import type { FunctionEntry } from "../../runtime/contracts/function-inventory";
 
 // ---------- fixture builders ----------
 
@@ -43,10 +44,14 @@ function makeCard(lemmaId: string, retrievability: number): LemmaCard {
   };
 }
 
-function emptyBoard(overrides: Partial<SchedulerBoardView> = {}): SchedulerBoardView {
-  const baseCurriculum = {
+function emptyBoard(
+  overrides: Partial<Omit<SchedulerBoardView, "curriculum">> & {
+    curriculum?: Partial<SchedulerCurriculumView>;
+  } = {}
+): SchedulerBoardView {
+  const baseCurriculum: SchedulerCurriculumView = {
     introducedFunctionIds: new Set<string>(),
-    availableFunctions: [] as typeof FIXTURE_FUNCTIONS,
+    availableFunctions: [],
     activeDebts: new Map<string, import("../../runtime/learner/encounter-debt-ledger").DebtStatus>()
   };
   return {
@@ -59,13 +64,14 @@ function emptyBoard(overrides: Partial<SchedulerBoardView> = {}): SchedulerBoard
     scene: {
       sceneId: "scene-1",
       functionTags: { sceneFunctions: [], npcFunctions: {} },
-      dayIndex: null
+      dayIndex: null,
+      sceneLemmaIds: []
     },
     conversationId: "conv-1",
     npcDefinitionId: null,
     targetLanguage: "es",
     ...overrides,
-    // Deep-merge curriculum so activeDebts is always present even when overrides sets curriculum.
+    // Deep-merge curriculum so activeDebts is always present even when overrides partially sets curriculum.
     curriculum: {
       ...baseCurriculum,
       ...(overrides.curriculum ?? {})
@@ -228,7 +234,8 @@ describe("OuterLoopScheduler", () => {
 
     it("function item gets kind=function and teachReason=introduction (no scene affinity)", () => {
       // Seed one well-known card so the board is not cold-start, then schedule
-      // the one unintroduced function.
+      // an unintroduced function that has no scene affinity.
+      // Use an A1 function for an A2 learner -- within band, included without stretch gate.
       const board = emptyBoard({
         learner: {
           cefrBand: "A2",
@@ -238,11 +245,11 @@ describe("OuterLoopScheduler", () => {
         },
         curriculum: {
           introducedFunctionIds: new Set(),
-          availableFunctions: [FIXTURE_FUNCTIONS[2]]  // buy (B1)
+          availableFunctions: [FIXTURE_FUNCTIONS[0]]  // greet (A1) -- within learner band, no scene affinity
         }
       });
       const teachable = scheduler.compute(board).teachables[0];
-      expect(teachable).toMatchObject({ id: "buy", kind: "function", teachReason: "introduction" });
+      expect(teachable).toMatchObject({ id: "greet", kind: "function", teachReason: "introduction" });
     });
   });
 
@@ -265,7 +272,8 @@ describe("OuterLoopScheduler", () => {
             sceneFunctions: ["buy"],
             npcFunctions: {}
           },
-          dayIndex: null
+          dayIndex: null,
+          sceneLemmaIds: []
         }
       });
       const schedule = scheduler.compute(board);
@@ -294,7 +302,8 @@ describe("OuterLoopScheduler", () => {
             sceneFunctions: ["greet", "buy"],
             npcFunctions: { "npc-market": ["buy"] }
           },
-          dayIndex: null
+          dayIndex: null,
+          sceneLemmaIds: []
         },
         npcDefinitionId: "npc-market"
       });
@@ -365,7 +374,7 @@ describe("OuterLoopScheduler", () => {
           lemmaCards: { hola: makeCard("hola", 0.5) },
           fatigueScore: 0
         },
-        scene: { sceneId: "my-scene", functionTags: { sceneFunctions: [], npcFunctions: {} }, dayIndex: null }
+        scene: { sceneId: "my-scene", functionTags: { sceneFunctions: [], npcFunctions: {} }, dayIndex: null, sceneLemmaIds: [] }
       });
       expect(scheduler.compute(board).sceneId).toBe("my-scene");
     });
@@ -402,7 +411,7 @@ describe("OuterLoopScheduler", () => {
       await telemetry.flush();
       const events = await telemetry.query({ eventKinds: ["scheduler.computed"] });
       expect(events).toHaveLength(1);
-      const event = events[0] as Record<string, unknown>;
+      const event = events[0] as unknown as Record<string, unknown>;
       expect(event.isColdStart).toBe(false);
       expect(typeof event.teachableCount).toBe("number");
       expect(typeof event.dueItemCount).toBe("number");
@@ -490,7 +499,7 @@ describe("OuterLoopScheduler", () => {
       expect(greetItems[0].teachReason).toBe("debt-service");
     });
 
-    it("debt telemetry includes debtServiceCount and dayAxisDegraded", async () => {
+    it("debt telemetry includes debtServiceCount, dayAxisDegraded, and new 087.3 fields", async () => {
       const board = emptyBoard({
         learner: {
           cefrBand: "A2",
@@ -503,15 +512,227 @@ describe("OuterLoopScheduler", () => {
           availableFunctions: [],
           activeDebts: new Map([["adios", { diverseEncounterCount: 5, targetEncounters: 10 }]])
         },
-        scene: { sceneId: null, functionTags: { sceneFunctions: [], npcFunctions: {} }, dayIndex: null }
+        scene: { sceneId: null, functionTags: { sceneFunctions: [], npcFunctions: {} }, dayIndex: null, sceneLemmaIds: [] }
       });
       scheduler.compute(board);
       await telemetry.flush();
       const events = await telemetry.query({ eventKinds: ["scheduler.computed"] });
       expect(events).toHaveLength(1);
-      const event = events[0] as Record<string, unknown>;
+      const event = events[0] as unknown as Record<string, unknown>;
       expect(event.debtServiceCount).toBe(1);
       expect(event.dayAxisDegraded).toBe(true);
+      expect(typeof event.sceneComprehensionRate).toBe("number");
+      expect(event.stretchAllowanceActive).toBe(false);
+    });
+  });
+
+  describe("comprehension rate + stretch allowance (087.3)", () => {
+    const A2_FN = {
+      functionId: "order-food",
+      displayName: "Order food",
+      cefrDescriptor: "",
+      band: "A2" as const,
+      chunks: {} as Record<string, { chunkId: string }[]>
+    } as unknown as FunctionEntry;
+    const B1_FN = {
+      functionId: "negotiate",
+      displayName: "Negotiate price",
+      cefrDescriptor: "",
+      band: "B1" as const,
+      chunks: {} as Record<string, { chunkId: string }[]>
+    } as unknown as FunctionEntry;
+
+    it("sceneComprehensionRate is 1.0 when sceneLemmaIds is empty", () => {
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: { hola: makeCard("hola", 0.95) },
+          fatigueScore: 0
+        }
+      });
+      const schedule = scheduler.compute(board);
+      expect(schedule.sceneComprehensionRate).toBe(1.0);
+    });
+
+    it("sceneComprehensionRate reflects the fraction of scene lemmas above the known threshold", () => {
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: {
+            hola: makeCard("hola", 0.95),    // known
+            adios: makeCard("adios", 0.30)   // not known
+          },
+          fatigueScore: 0
+        },
+        scene: {
+          sceneId: "test",
+          functionTags: { sceneFunctions: [], npcFunctions: {} },
+          dayIndex: null,
+          sceneLemmaIds: ["hola", "adios", "gracias"] // gracias has no card = 0 retrievability
+        }
+      });
+      const schedule = scheduler.compute(board);
+      // Only hola passes the 0.70 threshold; 1 / 3.
+      expect(schedule.sceneComprehensionRate).toBeCloseTo(1 / 3);
+    });
+
+    it("stretch allowance NOT triggered when comprehensionRate < STRETCH_COMPREHENSION_FLOOR", () => {
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: { hola: makeCard("hola", 0.95) },
+          fatigueScore: 0
+        },
+        curriculum: {
+          introducedFunctionIds: new Set(),
+          availableFunctions: [FIXTURE_FUNCTIONS[0], A2_FN]
+        },
+        scene: {
+          sceneId: "test",
+          functionTags: { sceneFunctions: ["order-food"], npcFunctions: {} },
+          dayIndex: null,
+          sceneLemmaIds: ["hola", "adios", "gracias"] // 1/3 known -- below 0.80
+        }
+      });
+      const schedule = scheduler.compute(board);
+      expect(schedule.stretchAllowanceActive).toBe(false);
+      expect(schedule.teachables.some((t) => t.teachReason === "stretch")).toBe(false);
+    });
+
+    it("stretch allowance triggered when comprehensionRate >= 0.80 and above-band function has scene affinity", () => {
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: {
+            hola: makeCard("hola", 0.95),
+            adios: makeCard("adios", 0.90),
+            gracias: makeCard("gracias", 0.85),
+            perdon: makeCard("perdon", 0.88)
+          },
+          fatigueScore: 0
+        },
+        curriculum: {
+          introducedFunctionIds: new Set(),
+          availableFunctions: [FIXTURE_FUNCTIONS[0], A2_FN]
+        },
+        scene: {
+          sceneId: "test",
+          functionTags: { sceneFunctions: ["order-food"], npcFunctions: {} },
+          dayIndex: null,
+          sceneLemmaIds: ["hola", "adios", "gracias", "perdon"] // 4/4 = 1.0 >= 0.80
+        }
+      });
+      const schedule = scheduler.compute(board);
+      expect(schedule.stretchAllowanceActive).toBe(true);
+      const stretchItem = schedule.teachables.find((t) => t.teachReason === "stretch");
+      expect(stretchItem).toBeDefined();
+      expect(stretchItem!.id).toBe("order-food");
+    });
+
+    it("above-band function with NO scene affinity is NOT added even when comprehension floor met", () => {
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: {
+            hola: makeCard("hola", 0.95),
+            adios: makeCard("adios", 0.90)
+          },
+          fatigueScore: 0
+        },
+        curriculum: {
+          introducedFunctionIds: new Set(),
+          availableFunctions: [FIXTURE_FUNCTIONS[0], B1_FN]
+        },
+        scene: {
+          sceneId: "test",
+          functionTags: { sceneFunctions: [], npcFunctions: {} }, // negotiate NOT in scene
+          dayIndex: null,
+          sceneLemmaIds: ["hola", "adios"] // 2/2 = 1.0 >= 0.80
+        }
+      });
+      const schedule = scheduler.compute(board);
+      expect(schedule.stretchAllowanceActive).toBe(false);
+      expect(schedule.teachables.some((t) => t.id === "negotiate")).toBe(false);
+    });
+
+    it("only one stretch item is added even when multiple above-band functions have scene affinity", () => {
+      const B1_FN_2 = {
+        functionId: "ask-directions",
+        displayName: "Ask directions",
+        cefrDescriptor: "",
+        band: "B1" as const,
+        chunks: {} as Record<string, { chunkId: string }[]>
+      } as unknown as FunctionEntry;
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: { hola: makeCard("hola", 0.95), adios: makeCard("adios", 0.90) },
+          fatigueScore: 0
+        },
+        curriculum: {
+          introducedFunctionIds: new Set(),
+          availableFunctions: [FIXTURE_FUNCTIONS[0], A2_FN, B1_FN_2]
+        },
+        scene: {
+          sceneId: "test",
+          functionTags: { sceneFunctions: ["order-food", "ask-directions"], npcFunctions: {} },
+          dayIndex: null,
+          sceneLemmaIds: ["hola", "adios"] // 2/2 = 1.0 >= 0.80
+        }
+      });
+      const schedule = scheduler.compute(board);
+      const stretchItems = schedule.teachables.filter((t) => t.teachReason === "stretch");
+      expect(stretchItems).toHaveLength(1);
+    });
+
+    it("familiarityBoost increases priority when some chunks are already known", () => {
+      const fnWithChunks = {
+        functionId: "greet-formal",
+        displayName: "Formal greeting",
+        cefrDescriptor: "",
+        band: "A1" as const,
+        chunks: { es: [{ chunkId: "buenos_dias" }, { chunkId: "buenas_tardes" }] }
+      } as unknown as FunctionEntry;
+      const fnNoChunks = {
+        functionId: "farewell-simple",
+        displayName: "Simple farewell",
+        cefrDescriptor: "",
+        band: "A1" as const,
+        chunks: {} as Record<string, { chunkId: string }[]>
+      } as unknown as FunctionEntry;
+      const board = emptyBoard({
+        learner: {
+          cefrBand: "A1",
+          cefrConfidence: 0.9,
+          lemmaCards: {
+            hola: makeCard("hola", 0.90),
+            "chunk:buenos_dias": makeCard("chunk:buenos_dias", 0.90) // 1/2 chunks known
+          },
+          fatigueScore: 0
+        },
+        curriculum: {
+          introducedFunctionIds: new Set(),
+          availableFunctions: [fnWithChunks, fnNoChunks]
+        },
+        targetLanguage: "es"
+      });
+      const schedule = scheduler.compute(board);
+      const formal = schedule.teachables.find((t) => t.id === "greet-formal");
+      const simple = schedule.teachables.find((t) => t.id === "farewell-simple");
+      // greet-formal gets (1/2) * 0.05 = 0.025 familiarityBoost; beats farewell-simple at same base
+      expect(formal!.priority).toBeGreaterThan(simple!.priority);
+    });
+
+    it("schedule always contains sceneComprehensionRate and stretchAllowanceActive", () => {
+      const schedule = scheduler.compute(emptyBoard());
+      expect(schedule).toHaveProperty("sceneComprehensionRate");
+      expect(schedule).toHaveProperty("stretchAllowanceActive");
     });
   });
 });

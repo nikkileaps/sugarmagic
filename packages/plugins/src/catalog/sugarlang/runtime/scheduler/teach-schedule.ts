@@ -25,8 +25,10 @@
  *   debt-service     Introduced item with fewer than TARGET_DEBT_ENCOUNTERS diverse re-encounters.
  *   introduction     Function or lemma not yet formally introduced; band ordering places it here.
  *   function-affinity Unintroduced function present in the current scene's authored content.
+ *   stretch          Above-band (band+1) function scheduled deliberately when scene comprehension
+ *                    is high enough (>= STRETCH_COMPREHENSION_FLOOR) to support it safely.
  */
-export type TeachReason = "due" | "debt-service" | "introduction" | "function-affinity";
+export type TeachReason = "due" | "debt-service" | "introduction" | "function-affinity" | "stretch";
 
 export interface ScheduledTeachable {
   /**
@@ -63,4 +65,15 @@ export interface TeachSchedule {
   sceneId: string | null;
   /** Conversation this schedule was computed for. */
   conversationId: string;
+  /**
+   * 087.3: Estimated fraction of scene lemmas the learner currently knows
+   * (retrievability >= KNOWN_RETRIEVABILITY_THRESHOLD). Null when no scene
+   * lemma data was available (same as no-scene: degrade safely).
+   */
+  sceneComprehensionRate: number | null;
+  /**
+   * 087.3: True when scene comprehension is >= STRETCH_COMPREHENSION_FLOOR and
+   * a stretch (band+1) function was deliberately added to the schedule.
+   */
+  stretchAllowanceActive: boolean;
 }

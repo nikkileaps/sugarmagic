@@ -72,6 +72,12 @@ export interface SchedulerSceneView {
    * The debt ledger (087.2) degrades day-diversity to NPC x scene when null.
    */
   dayIndex: number | null;
+  /**
+   * 087.3: LemmaIds of all non-chunk lemmas in the scene lexicon.
+   * Used by OuterLoopScheduler to estimate scene comprehension rate.
+   * Empty array when the scene lexicon has not been compiled.
+   */
+  sceneLemmaIds: string[];
 }
 
 /**
