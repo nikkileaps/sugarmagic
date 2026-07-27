@@ -10,6 +10,9 @@
  *   - buildGeneratorPromptOverlay
  *   - computeMinimalGreetingMode
  *
+ * Deleted in 086.4:
+ *   - buildScriptedGeneratorPromptOverlay (scripted path no longer uses an overlay)
+ *
  * Status: active
  */
 
@@ -39,6 +42,8 @@ function formatTargetLanguageGuidance(constraint: SugarlangConstraint): string {
 /**
  * Builds the prompt overlay string for the NPC generator. The generator
  * splices this into its system prompt without interpreting the fields.
+ * Note: buildScriptedGeneratorPromptOverlay was removed in 086.4 (scripted
+ * path no longer uses a generator prompt overlay).
  */
 export function buildGeneratorPromptOverlay(
   constraint: SugarlangConstraint
@@ -72,32 +77,6 @@ export function buildGeneratorPromptOverlay(
     );
   }
 
-  return lines.join("\n");
-}
-
-/**
- * Builds a lightweight overlay for scripted dialogue adaptation.
- * The authored text IS the curriculum — we don't select vocabulary.
- * We only tell the generator what language mix to use based on learner level.
- */
-export function buildScriptedGeneratorPromptOverlay(
-  learnerCefr: string,
-  supportPosture: string,
-  targetLanguageRatio: number,
-  targetLanguage: string
-): string {
-  const ratioPercent = Math.round(targetLanguageRatio * 100);
-  const lang = languageDisplayName(targetLanguage);
-  const lines = [
-    `Learner CEFR level: ${learnerCefr}.`,
-    `Target language: ${lang}.`,
-    `Support posture: ${supportPosture}. Target-language ratio: ~${ratioPercent}%.`,
-    `Adapt the authored line to use roughly ${ratioPercent}% ${lang} and the rest in English.`,
-    `For A1 learners: mostly English with a few key ${lang} words.`,
-    `For B2+ learners: mostly ${lang} with English only for complex concepts.`,
-    `Do NOT add parenthetical translations — the UI handles glossing via hover tooltips.`,
-    `Preserve the EXACT narrative meaning and all quest-critical information.`
-  ];
   return lines.join("\n");
 }
 

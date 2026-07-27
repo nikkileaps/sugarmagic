@@ -6,13 +6,16 @@
  *          verify at 20, before observe at 90).
  *
  * For anchored/supported postures: diglot weave (zero LLM calls).
- * For target-dominant posture: LLM call via the gateway (removed in 086.4).
+ * For target-dominant posture: reads baked variant from variant cache; degrades
+ *   to diglotWeave when cache miss or no variant cache wired (zero LLM calls).
  *
  * For scripted dialogue:
  *   1. Reads the authored English turn text
- *   2. Reads the sugarlang constraint (posture/ratio/overlay)
+ *   2. Reads the sugarlang constraint (posture/ratio)
  *   3a. anchored/supported: calls diglotWeave; updates constraint.targetVocab.introduce
- *   3b. target-dominant: calls the LLM via the gateway to adapt the line
+ *       from woven forms (supplemented by intent artifact teachables when available)
+ *   3b. target-dominant: reads baked variant from cache; updates constraint.targetVocab.introduce
+ *       from intent artifact teachables; degrades to weave on cache miss
  *   4. Replaces turn.text with the adapted version
  *
  * Skips: agent mode turns, player VO turns, turns without a constraint.
@@ -23,15 +26,14 @@
  * Status: active
  */
 
-import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
+import type { ConversationMiddleware, ConversationTurnEnvelope } from "@sugarmagic/runtime-core";
 import {
   PLAYER_VO_SPEAKER,
   NARRATOR_SPEAKER,
   EXCERPT_SPEAKER
 } from "@sugarmagic/domain";
 import type { LemmaRef, SugarlangConstraint } from "../types";
-import type { SugarlangRuntimeServices } from "../runtime-services";
-import { tokenize } from "../classifier/tokenize";
+import type { SugarlangRuntimeServices, SugarlangExecutionServices } from "../runtime-services";
 import { diglotWeave } from "../classifier/diglot-weave";
 import { getAllInventoryChunks } from "../inventory/function-inventory-loader";
 import { createSugarlangLogger } from "../logger";
@@ -42,19 +44,88 @@ import {
   shouldRunSugarlangForExecution,
   SUGARLANG_CONSTRAINT_ANNOTATION
 } from "./shared";
+import type { VariantCacheKey } from "../compile/variant-cache";
+import { VARIANT_PROMPT_VERSION } from "../compile/generate-variant";
+import { INTENT_EXTRACTOR_PROMPT_VERSION } from "../compile/extract-intent";
+import type { LineIntentCacheKey } from "../compile/intent-cache";
+import type { CEFRBand } from "../contracts/learner-profile";
+import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
 
 export interface SugarLangScriptedMiddlewareDeps {
   services: SugarlangRuntimeServices;
   logger?: SugarlangLoggerLike;
 }
 
-/** Speakers that should NOT be adapted — narration and voice-over stay as-is. */
+/** Speakers that should NOT be adapted -- narration and voice-over stay as-is. */
 function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
   return (
     speakerId === PLAYER_VO_SPEAKER.speakerId ||
     speakerId === NARRATOR_SPEAKER.speakerId ||
     speakerId === EXCERPT_SPEAKER.speakerId
   );
+}
+
+/**
+ * Builds the contentHash for a dialogue node as the variant cache expects it.
+ * Matches the key computed in compile-scheduler variantPipeline:
+ *   [nodeId, text, JSON.stringify(intent)].join("|")
+ * At runtime we have no intent artifact yet (that's a bake-time product), so
+ * we use JSON.stringify({}) to match the scheduler's no-intent default.
+ */
+function buildVariantContentHash(nodeId: string, nodeText: string): string {
+  return [nodeId, nodeText, JSON.stringify({})].join("|");
+}
+
+/**
+ * Runs diglotWeave on the authored text using the prescription's introduce list,
+ * then updates constraint.targetVocab.introduce with the woven forms.
+ * Shared between anchored/supported and the target-dominant degradation path.
+ */
+function applyWeave(
+  authoredText: string,
+  constraint: SugarlangConstraint,
+  execution: ConversationExecutionContext,
+  normalizedTurn: ConversationTurnEnvelope,
+  services: SugarlangExecutionServices,
+  targetLanguage: string,
+  supportLanguage: string,
+  logger: SugarlangLoggerLike,
+  posture: string
+): void {
+  const prescriptionIntroduce = constraint.targetVocab.introduce;
+  const inventoryChunks = getAllInventoryChunks(targetLanguage);
+  const weaveResult = diglotWeave(
+    authoredText,
+    prescriptionIntroduce,
+    inventoryChunks,
+    services.atlas,
+    targetLanguage,
+    supportLanguage
+  );
+
+  if (weaveResult.weavedForms.length > 0) {
+    normalizedTurn.text = weaveResult.text;
+    // Replace the introduce list with only the woven forms so the observe
+    // middleware highlights exactly what was substituted. (086.4: gloss-scan
+    // lineIntroduce deleted; weave forms + intent artifact are the signal.)
+    const wovenLemmaRefs: LemmaRef[] = weaveResult.weavedForms.map((wf) => ({
+      lemmaId: wf.lemmaId,
+      lang: targetLanguage
+    }));
+    constraint.targetVocab = {
+      introduce: wovenLemmaRefs,
+      reinforce: constraint.targetVocab.reinforce,
+      avoid: constraint.targetVocab.avoid
+    };
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+  }
+
+  logger.debug("Scripted line woven (zero LLM).", {
+    authoredText,
+    wovenText: normalizedTurn.text,
+    weavedCount: weaveResult.weavedForms.length,
+    posture
+  });
 }
 
 export function createSugarLangScriptedMiddleware(
@@ -77,7 +148,9 @@ export function createSugarLangScriptedMiddleware(
       const constraint = execution.annotations[
         SUGARLANG_CONSTRAINT_ANNOTATION
       ] as SugarlangConstraint | undefined;
-      if (!constraint?.generatorPromptOverlay) return normalizedTurn;
+      // 086.4: gate on constraint existence only (generatorPromptOverlay no
+      // longer set by the scripted branch of the teacher middleware).
+      if (!constraint) return normalizedTurn;
 
       const authoredText = normalizedTurn.text;
       const targetLanguage = constraint.targetLanguage;
@@ -92,165 +165,133 @@ export function createSugarLangScriptedMiddleware(
         const services = await deps.services.resolveForExecution(execution);
         if (!services) return normalizedTurn;
 
-        // Derive introduce candidates from the authored text via gloss lookup,
-        // just as the old lineIntroduce scan did. The prescription's introduce
-        // list is the priority source; the scan fills gaps for prescription-less
-        // scripted dialogue. Deleted with the rest of the gloss scan in 086.4
-        // once the intent artifact carries the line's teachables instead.
-        const prescriptionIntroduce = constraint.targetVocab.introduce;
-        const prescriptionSet = new Set(prescriptionIntroduce.map((l) => l.lemmaId));
-        const glossIntroduce: LemmaRef[] = [...prescriptionIntroduce];
-        const seen = new Set<string>(prescriptionSet);
-        for (const token of tokenize(authoredText, "en")) {
-          if (token.kind !== "word") continue;
-          const word = token.surface.toLowerCase();
-          if (word.length < 3 || seen.has(word)) continue;
-          seen.add(word);
-          const resolved = services.atlas.resolveFromGloss(word, targetLanguage, supportLanguage);
-          for (const entry of resolved) {
-            if (!seen.has(entry.lemmaId)) {
-              seen.add(entry.lemmaId);
-              glossIntroduce.push({ lemmaId: entry.lemmaId, lang: targetLanguage });
+        applyWeave(
+          authoredText,
+          constraint,
+          execution,
+          normalizedTurn,
+          services,
+          targetLanguage,
+          supportLanguage,
+          logger,
+          constraint.supportPosture
+        );
+
+        // Optional enrichment: supplement introduce list from intent artifact
+        // teachables if the intent cache has an entry for this node.
+        const nodeId = String(execution.annotations["sugarlang.currentNodeId"] ?? "");
+        if (nodeId && services.intentCache) {
+          try {
+            const intentKey: LineIntentCacheKey = {
+              contentHash: buildVariantContentHash(nodeId, authoredText),
+              intentPromptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+            };
+            const intentEntry = await services.intentCache.get(intentKey);
+            if (intentEntry && intentEntry.artifact.mustConveyFacts.length > 0) {
+              const existing = new Set(
+                constraint.targetVocab.introduce.map((l) => l.lemmaId)
+              );
+              const extras: LemmaRef[] = intentEntry.artifact.mustConveyFacts
+                .filter((fact) => !existing.has(fact))
+                .map((fact) => ({ lemmaId: fact, lang: targetLanguage }));
+              if (extras.length > 0) {
+                constraint.targetVocab = {
+                  introduce: [...constraint.targetVocab.introduce, ...extras],
+                  reinforce: constraint.targetVocab.reinforce,
+                  avoid: constraint.targetVocab.avoid
+                };
+                execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+              }
             }
+          } catch {
+            // Intent cache is optional enrichment -- never error the turn
           }
         }
-
-        const inventoryChunks = getAllInventoryChunks(targetLanguage);
-        const weaveResult = diglotWeave(
-          authoredText,
-          glossIntroduce,
-          inventoryChunks,
-          services.atlas,
-          targetLanguage,
-          supportLanguage
-        );
-
-        if (weaveResult.weavedForms.length > 0) {
-          normalizedTurn.text = weaveResult.text;
-          // Replace the introduce list with only the woven forms so the observe
-          // middleware highlights exactly what was substituted.
-          const woveLemmaRefs: LemmaRef[] = weaveResult.weavedForms.map((wf) => ({
-            lemmaId: wf.lemmaId,
-            lang: targetLanguage
-          }));
-          constraint.targetVocab = {
-            introduce: woveLemmaRefs,
-            reinforce: constraint.targetVocab.reinforce,
-            avoid: constraint.targetVocab.avoid
-          };
-          execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
-        }
-
-        logger.debug("Scripted line woven (anchored/supported, zero LLM).", {
-          authoredText,
-          wovenText: normalizedTurn.text,
-          weavedCount: weaveResult.weavedForms.length,
-          posture: constraint.supportPosture
-        });
 
         return normalizedTurn;
       }
 
-      // target-dominant posture: LLM adaptation path (removed in 086.4).
+      // target-dominant posture: read baked variant from variant cache (086.4).
+      // Degrades gracefully to diglotWeave when the cache is cold or unavailable.
       const services = await deps.services.resolveForExecution(execution);
-      if (!services?.llmClient) {
-        logger.warn("Scripted adaptation skipped — no LLM client available.");
-        return normalizedTurn;
-      }
+      if (!services) return normalizedTurn;
 
-      const npcDisplayName =
-        normalizedTurn.speakerLabel ??
-        execution.selection.npcDisplayName ??
-        "NPC";
+      const nodeId = String(execution.annotations["sugarlang.currentNodeId"] ?? "");
+      const contentHash = buildVariantContentHash(nodeId, authoredText);
+      const band = constraint.learnerCefr as CEFRBand;
 
-      // Scan the authored English text to find teaching candidates.
-      // Each English word that resolves to a target-language lemma via the
-      // gloss index becomes an introduce candidate.
-      // NOTE: this block is superseded for anchored/supported (handled above)
-      // and will be deleted in 086.4 when target-dominant also moves to weave.
-      const lineIntroduce: LemmaRef[] = [];
-      const seen = new Set<string>();
-      for (const token of tokenize(authoredText, "en")) {
-        if (token.kind !== "word") continue;
-        const word = token.surface.toLowerCase();
-        if (word.length < 3 || seen.has(word)) continue;
-        seen.add(word);
-        const resolved = services.atlas.resolveFromGloss(
-          word,
-          targetLanguage,
-          supportLanguage
-        );
-        for (const entry of resolved) {
-          if (!seen.has(entry.lemmaId)) {
-            seen.add(entry.lemmaId);
-            lineIntroduce.push({ lemmaId: entry.lemmaId, lang: targetLanguage });
+      let usedVariant = false;
+
+      if (services.variantCache) {
+        try {
+          const cacheKey: VariantCacheKey = {
+            lang: targetLanguage,
+            band,
+            contentHash,
+            variantPromptVersion: VARIANT_PROMPT_VERSION
+          };
+          const cached = await services.variantCache.get(cacheKey);
+          if (cached) {
+            normalizedTurn.text = cached.variant.text;
+            usedVariant = true;
+
+            // Populate introduce from intent artifact teachables when available.
+            if (services.intentCache) {
+              try {
+                const intentKey: LineIntentCacheKey = {
+                  contentHash,
+                  intentPromptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+                };
+                const intentEntry = await services.intentCache.get(intentKey);
+                if (intentEntry && intentEntry.artifact.mustConveyFacts.length > 0) {
+                  const lemmaRefs: LemmaRef[] = intentEntry.artifact.mustConveyFacts.map(
+                    (fact) => ({ lemmaId: fact, lang: targetLanguage })
+                  );
+                  constraint.targetVocab = {
+                    introduce: lemmaRefs,
+                    reinforce: constraint.targetVocab.reinforce,
+                    avoid: constraint.targetVocab.avoid
+                  };
+                  execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+                }
+              } catch {
+                // Intent cache enrichment is optional -- never error the turn
+              }
+            }
+
+            logger.debug("Scripted line: baked variant used (target-dominant, zero LLM).", {
+              authoredText,
+              variantText: cached.variant.text,
+              band,
+              lang: targetLanguage
+            });
           }
+        } catch {
+          // Variant cache failure is non-fatal -- degrade to weave below
         }
       }
 
-      // Update the constraint with line-specific vocabulary so the observe
-      // middleware can highlight these words in the adapted text.
-      if (lineIntroduce.length > 0) {
-        constraint.targetVocab = {
-          introduce: lineIntroduce,
-          reinforce: constraint.targetVocab.reinforce,
-          avoid: constraint.targetVocab.avoid
-        };
-        execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
-      }
-
-      const systemPrompt = [
-        `Speak as ${npcDisplayName}.`,
-        "Return only the NPC's spoken words.",
-        "You are adapting a pre-authored English dialogue line for a language learner.",
-        "You MUST preserve the exact narrative meaning, quest-critical information, and emotional tone.",
-        "Do NOT add, remove, or change any story content.",
-        "Do NOT add parenthetical translations — the UI handles glossing.",
-        "",
-        constraint.generatorPromptOverlay
-      ].join("\n");
-
-      const questContext =
-        execution.runtimeContext?.trackedQuest?.displayName ?? null;
-      const vocabHint = lineIntroduce.length > 0
-        ? `Target vocabulary to use in ${targetLanguage} (translate these English concepts): ${lineIntroduce.map((l) => l.lemmaId).join(", ")}.`
-        : null;
-      const userPrompt = [
-        "Adapt the following authored dialogue line for the learner's current level.",
-        `Speaker: ${npcDisplayName}`,
-        `Authored line: ${authoredText}`,
-        questContext ? `Quest context: ${questContext}` : null,
-        vocabHint,
-        "Preserve the EXACT meaning. Adjust the language mix to match the learner's level. Return only the adapted spoken line — no quotes, no stage directions."
-      ].filter(Boolean).join("\n\n");
-
-      try {
-        const model = deps.services.getConfig().scriptedAdaptationModel;
-        const result = await services.llmClient.generate({
-          model,
-          systemPrompt,
-          userPrompt,
-          maxTokens: 300
+      if (!usedVariant) {
+        // Degrade: no variant cache, cache miss, or lookup error.
+        // Run diglotWeave to at least produce introduce highlights.
+        logger.debug("Scripted line (target-dominant): variant cache miss -- degrading to weave.", {
+          authoredText,
+          band,
+          lang: targetLanguage,
+          hasVariantCache: Boolean(services.variantCache),
+          nodeId: nodeId || "(none)"
         });
-
-        let adapted = result.text.trim();
-        // Strip leading/trailing quotes the LLM may echo from the prompt format.
-        if (adapted.startsWith('"') && adapted.endsWith('"')) {
-          adapted = adapted.slice(1, -1).trim();
-        }
-        if (adapted) {
-          normalizedTurn.text = adapted;
-          logger.debug("Scripted line adapted.", {
-            authoredText,
-            adaptedText: adapted,
-            learnerCefr: constraint.learnerCefr
-          });
-        }
-      } catch (error) {
-        logger.warn("Scripted adaptation LLM call failed; using authored text.", {
-          error: error instanceof Error ? error.message : String(error)
-        });
-        // Fall back to original authored text — the quest still works
+        applyWeave(
+          authoredText,
+          constraint,
+          execution,
+          normalizedTurn,
+          services,
+          targetLanguage,
+          supportLanguage,
+          logger,
+          "target-dominant"
+        );
       }
 
       return normalizedTurn;

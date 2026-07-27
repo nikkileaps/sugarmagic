@@ -34,6 +34,8 @@ import type {
 } from "@sugarmagic/runtime-core";
 import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
+import type { SugarlangVariantCache } from "./compile/variant-cache";
+import type { SugarlangIntentCache } from "./compile/intent-cache";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
 import type { SugarlangLLMClient } from "./llm/types";
 import { LexicalBudgeter } from "./budgeter/lexical-budgeter";
@@ -103,6 +105,10 @@ export interface SugarlangExecutionServices {
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
   teacher: SugarLangTeacher;
   llmClient: SugarlangLLMClient | null;
+  /** 086.4: optional variant cache injected by callers at bake time. */
+  variantCache?: SugarlangVariantCache;
+  /** 086.4: optional intent cache injected by callers at bake time. */
+  intentCache?: SugarlangIntentCache;
 }
 
 export interface SugarlangDebugState {

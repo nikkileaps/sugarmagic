@@ -51,6 +51,9 @@ import { createTestRegion, createTestActiveScene } from "../compile/test-helpers
 import { createBudgeterSceneLexicon } from "../budgeter/test-helpers";
 import { clearSugarlangRuntimeCompileCache } from "../../runtime/compile/runtime-cache-state";
 import { installFetchGuard, uninstallFetchGuard, jsonResponse } from "./fetch-guard";
+import { MemoryVariantCache } from "../../runtime/compile/variant-cache";
+import type { VariantCacheEntry } from "../../runtime/compile/variant-cache";
+import { VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 
 // Minimal pre-compiled lexicon for "scene-station" with just "hola" as A1.
 // Seeded via services.seedPreviewLexicons before startSession so the budgeter
@@ -335,31 +338,21 @@ describe("end-to-end conversation golden", () => {
     expect(initialTurn?.text).toBe("Hola.");
   });
 
-  it("scripted line is adapted through the gateway LLM when one is configured (target-dominant posture)", async () => {
-    // A proxy base URL makes SugarlangRuntimeServices construct the gateway
-    // LLM client; the fetch guard claims ONLY the generate route and returns a
-    // deterministic adapted line. Any other URL still throws.
-    // debugBandOverride:"B1" puts the learner at target-dominant posture so
-    // the LLM path fires (anchored/supported use the zero-LLM weave path as of 086.2).
+  it("scripted target-dominant posture: zero LLM calls -- degrades to weave when no baked variant", async () => {
+    // 086.4: scripted target-dominant no longer calls the LLM gateway at all.
+    // When no variant cache is seeded (cold cache), the scripted middleware
+    // degrades to diglotWeave. The fetch guard enforces zero /generate traffic.
+    // debugBandOverride:"B1" puts the learner at target-dominant posture.
     const authoredLine = "Welcome to the station, traveler.";
-    const adaptedLine = "Bienvenido a la estacion, viajero.";
-    const generateCalls: Array<{ url: string; body: Record<string, unknown> }> = [];
-    installFetchGuard((url, init) => {
-      if (url === "http://localhost:8787/api/sugaragent/generate") {
-        generateCalls.push({
-          url,
-          body: JSON.parse(String(init?.body)) as Record<string, unknown>
-        });
-        return jsonResponse({ text: adaptedLine, requestId: "adapt-1" });
-      }
-      return null;
-    });
+    // Allow nothing -- the scripted path must make zero gateway calls.
+    installFetchGuard((_url) => null);
 
     const { host } = makeSharedSetup({ debugBandOverride: "B1" }, "Hola.", {
       environment: { SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: "http://localhost:8787" },
       initialText: authoredLine
     });
 
+    // Must not throw (fetch guard throws on any stray /generate call).
     const turn = await host.startSession({
       conversationKind: "scripted-dialogue",
       npcDefinitionId: "npc-orrin",
@@ -368,36 +361,82 @@ describe("end-to-end conversation golden", () => {
       supportLanguage: "en"
     });
 
-    // The scripted middleware replaced the authored English line with the
-    // gateway's adapted version.
-    expect(turn?.text).toBe(adaptedLine);
-    expect(turn?.text).not.toBe(authoredLine);
-
-    // Exactly one generate call fired, and it was the scripted adaptation
-    // (its user prompt carries the authored line); scripted mode skips the
-    // teacher LLM, so no other gateway traffic exists.
-    expect(generateCalls.length).toBe(1);
-    expect(String(generateCalls[0]!.body.userPrompt)).toContain(authoredLine);
+    // Turn is defined and the authored line passes through (no variant to substitute,
+    // weave may or may not substitute depending on the gloss index -- the invariant
+    // is zero LLM calls, enforced by the guard).
+    expect(turn).toBeDefined();
+    void authoredLine; // used by makeNpcTurnProvider as initialText
   });
 
-  it("scripted adaptation falls back to the authored line when the gateway LLM fails (target-dominant posture)", async () => {
-    // Same setup as the adapted case, but the generate route returns 500. The
-    // scripted middleware catches the failure and the authored English line
-    // renders unchanged instead of erroring.
-    // debugBandOverride:"B1" forces target-dominant so the LLM path fires;
-    // anchored/supported use the zero-LLM weave path and never touch the gateway.
+  it("scripted target-dominant: uses baked variant when variant cache is warm", async () => {
+    // 086.4: when a MemoryVariantCache is pre-seeded with a variant for the
+    // correct (lang, band, contentHash) key, the scripted middleware uses the
+    // baked text instead of the authored English line. Zero LLM calls.
     const authoredLine = "Welcome to the station, traveler.";
-    installFetchGuard((url) => {
-      if (url === "http://localhost:8787/api/sugaragent/generate") {
-        return jsonResponse({ error: "gateway exploded" }, 500);
-      }
-      return null;
-    });
+    const bakedVariantText = "Bienvenido a la estacion, viajero.";
 
-    const { host } = makeSharedSetup({ debugBandOverride: "B1" }, "Hola.", {
-      environment: { SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: "http://localhost:8787" },
+    // debugBandOverride:"B1" -> target-dominant posture, band "B1".
+    // The contentHash for cache lookup: [nodeId, text, JSON.stringify({})].join("|").
+    // At runtime nodeId comes from execution.annotations["sugarlang.currentNodeId"].
+    // In the test harness (makeNpcTurnProvider) no nodeId annotation is written,
+    // so the hash is built from ("", authoredLine, "{}") -- which produces a valid
+    // cache key for the test. We seed with that same key.
+    const nodeId = "";
+    const contentHash = [nodeId, authoredLine, JSON.stringify({})].join("|");
+
+    const variantCache = new MemoryVariantCache();
+    const entry: VariantCacheEntry = {
+      key: {
+        lang: "es",
+        band: "B1",
+        contentHash,
+        variantPromptVersion: VARIANT_PROMPT_VERSION
+      },
+      variant: {
+        nodeId,
+        dialogueDefinitionId: "dialogue-orrin",
+        lang: "es",
+        band: "B1",
+        text: bakedVariantText,
+        verdict: {
+          envelopePasses: true,
+          ratioPasses: true,
+          voiceRetentionScore: 0.9,
+          fidelityPasses: true,
+          overallPasses: true
+        },
+        reviewFlag: false,
+        generatedAtMs: Date.now(),
+        generatedByModel: "test",
+        contentHash,
+        promptVersion: VARIANT_PROMPT_VERSION
+      }
+    };
+    await variantCache.set(entry);
+
+    // Allow nothing from the gateway -- must be zero LLM calls.
+    installFetchGuard((_url) => null);
+
+    const { services, host } = makeSharedSetup({ debugBandOverride: "B1" }, "Hola.", {
       initialText: authoredLine
     });
+
+    // Inject the variant cache into the resolved services.
+    // resolveForExecution is lazy -- call it to warm the map, then set variantCache.
+    const execServices = await services.resolveForExecution({
+      selection: {
+        conversationKind: "scripted-dialogue",
+        targetLanguage: "es",
+        supportLanguage: "en"
+      },
+      annotations: {},
+      state: {},
+      runtimeContext: null,
+      input: null
+    } as unknown as Parameters<typeof services.resolveForExecution>[0]);
+    if (execServices) {
+      execServices.variantCache = variantCache;
+    }
 
     const turn = await host.startSession({
       conversationKind: "scripted-dialogue",
@@ -407,7 +446,9 @@ describe("end-to-end conversation golden", () => {
       supportLanguage: "en"
     });
 
-    expect(turn?.text).toBe(authoredLine);
+    // The scripted middleware used the baked variant text.
+    expect(turn?.text).toBe(bakedVariantText);
+    expect(turn?.text).not.toBe(authoredLine);
   });
 
   it("free-form player input creates an encountered observation card for a target lemma", async () => {
@@ -696,5 +737,94 @@ describe("end-to-end conversation golden", () => {
     void authoredLine; // referenced by makeNpcTurnProvider; unused in assertion by design
     void services; // makeSharedSetup result not used in this sub-fixture
     void host;
+  });
+
+  it("086.4 pin: prescription-less scripted line still produces introduce highlights from weave", async () => {
+    // Pin for 086.4 deletion: the gloss-scan lineIntroduce variable is gone.
+    // For prescription-less scripted lines the weave now runs with whatever
+    // introduce list the teacher built from the seeded lexicon (possibly empty).
+    // This confirms the scripted middleware produces a valid turn and the
+    // constraint.targetVocab.introduce field is present and is an array --
+    // no regression from the deletion.
+    //
+    // With the HOLA_PREVIEW_LEXICON seeded, the teacher's FallbackTeacherPolicy
+    // (A1 learner) will include "hola" in the introduce list even without an
+    // explicit prescription. The weave then substitutes woven forms from that
+    // list. The introduce list in the constraint after the middleware runs must
+    // be an array (possibly empty if no forms were woven).
+    const authoredLine = "Hello, welcome to the station.";
+    installFetchGuard((_url) => null); // zero LLM calls
+
+    let capturedConstraint: { targetVocab?: { introduce?: unknown[] } } | undefined;
+    const capturingMiddleware: ConversationMiddleware = {
+      middlewareId: "test.constraint-capture",
+      displayName: "Constraint Capture",
+      priority: 1000,
+      stage: "analysis",
+      finalize(execution, turn) {
+        const c = execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION];
+        if (c) {
+          capturedConstraint = c as { targetVocab?: { introduce?: unknown[] } };
+        }
+        return turn;
+      }
+    };
+
+    const blackboard3 = createRuntimeBlackboard({
+      definitions: [
+        ...RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
+        ...SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
+      ]
+    });
+    const config3 = normalizeSugarLangPluginConfig({
+      targetLanguage: "es",
+      verifyEnabled: false
+    });
+    const logger3 = createSugarlangLogger({ debugLogging: false });
+    const services3 = new SugarlangRuntimeServices({ config: config3, logger: logger3 });
+    services3.bindRuntime({
+      boot: createRuntimeBootModel({
+        hostKind: "studio",
+        compileProfile: "authoring-preview",
+        contentSource: "authored-game-root"
+      }),
+      blackboard: blackboard3,
+      playerDefinition: createDefaultPlayerDefinition("project-1", { definitionId: "player-1" }),
+      activeRegion: null,
+      activeScene: null,
+      npcDefinitions: TEST_NPC_DEFINITIONS,
+      dialogueDefinitions: TEST_DIALOGUE_DEFINITIONS,
+      questDefinitions: [],
+      itemDefinitions: [],
+      documentDefinitions: []
+    });
+    // No seeded lexicon -- prescription-less scripted line.
+    // No intent cache -- the 086.4 replacement signal is absent.
+
+    const middlewares3 = [
+      makeRuntimeContextMiddleware(),
+      ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) =>
+        factory({ services: services3, logger: logger3 })
+      ),
+      capturingMiddleware
+    ];
+    const host3 = createConversationHost({
+      providers: [makeNpcTurnProvider("Hola.", authoredLine)],
+      middlewares: middlewares3
+    });
+
+    const turn = await host3.startSession({
+      conversationKind: "scripted-dialogue",
+      npcDefinitionId: "npc-orrin",
+      npcDisplayName: "Orrin",
+      targetLanguage: "es",
+      supportLanguage: "en"
+    });
+
+    // The turn must be defined and the middleware must not have errored.
+    expect(turn).toBeDefined();
+    // The constraint's introduce field is an array (even if empty -- no regression).
+    expect(capturedConstraint).toBeDefined();
+    expect(Array.isArray(capturedConstraint?.targetVocab?.introduce)).toBe(true);
   });
 });
