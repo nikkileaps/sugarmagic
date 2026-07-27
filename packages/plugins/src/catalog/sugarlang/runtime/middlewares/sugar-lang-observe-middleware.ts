@@ -24,6 +24,7 @@ import {
 } from "../telemetry/telemetry";
 import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
+import { createChunkMatcher } from "../classifier/chunk-matcher";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
@@ -383,6 +384,15 @@ export function createSugarLangObserveMiddleware(
       if (!sceneId) {
         return normalizedTurn;
       }
+
+      // 085.3: Load scene lexicon once; create chunk matcher if chunks are present.
+      // chunks is optional on CompiledSceneLexicon (absent when chunk extraction hasn't run).
+      const scene = await services.sceneLexiconStore.ensure(sceneId);
+      const chunkMatcher =
+        scene?.chunks && scene.chunks.length > 0
+          ? createChunkMatcher(scene.chunks, learner.targetLanguage)
+          : null;
+
       const appliedObservations = [] as ReturnType<typeof createObservationEvent>[];
 
       if (execution.input?.kind === "free_text") {
@@ -433,6 +443,35 @@ export function createSugarLangObserveMiddleware(
             type: "observation",
             observationEvent
           });
+        }
+
+        // 085.3: Chunk-produced observations for player free-text input.
+        if (chunkMatcher) {
+          const inputTokens = tokenize(execution.input.text, learner.targetLanguage);
+          const chunkMatches = chunkMatcher.match(inputTokens, execution.input.text);
+          const observedChunkIds = new Set<string>();
+          for (const match of chunkMatches) {
+            if (observedChunkIds.has(match.chunk.chunkId)) continue;
+            observedChunkIds.add(match.chunk.chunkId);
+            const observationEvent = createObservationEvent({
+              execution,
+              lemma: {
+                lemmaId: `chunk:${match.chunk.chunkId}`,
+                lang: learner.targetLanguage
+              },
+              observation: {
+                kind: "chunk-produced",
+                chunkId: match.chunk.chunkId,
+                surfaceMatched: match.surfaceMatched,
+                observedAtMs
+              }
+            });
+            appliedObservations.push(observationEvent);
+            await services.learnerStateReducer.apply({
+              type: "observation",
+              observationEvent
+            });
+          }
         }
       }
 
@@ -501,6 +540,48 @@ export function createSugarLangObserveMiddleware(
           type: "observation",
           observationEvent
         });
+      }
+
+      // 085.3: Chunk observations on the turn text.
+      // NPC turns -> chunk-encountered (receptive exposure).
+      // Player turns in scripted mode -> chunk-produced (productive use).
+      if (chunkMatcher) {
+        const turnTokens = tokenize(normalizedTurn.text, learner.targetLanguage);
+        const chunkMatches = chunkMatcher.match(turnTokens, normalizedTurn.text);
+        const isPlayerTurn = isPlayerSpokenTurn(
+          normalizedTurn,
+          deps.services.getPlayerDefinitionId()
+        );
+        const observedChunkIds = new Set<string>();
+        for (const match of chunkMatches) {
+          if (observedChunkIds.has(match.chunk.chunkId)) continue;
+          observedChunkIds.add(match.chunk.chunkId);
+          const observationEvent = createObservationEvent({
+            execution,
+            lemma: {
+              lemmaId: `chunk:${match.chunk.chunkId}`,
+              lang: learner.targetLanguage
+            },
+            observation: isPlayerTurn
+              ? {
+                  kind: "chunk-produced",
+                  chunkId: match.chunk.chunkId,
+                  surfaceMatched: match.surfaceMatched,
+                  observedAtMs
+                }
+              : {
+                  kind: "chunk-encountered",
+                  chunkId: match.chunk.chunkId,
+                  surfaceMatched: match.surfaceMatched,
+                  observedAtMs
+                }
+          });
+          appliedObservations.push(observationEvent);
+          await services.learnerStateReducer.apply({
+            type: "observation",
+            observationEvent
+          });
+        }
       }
 
       const completedObjectiveNodeIds = execution.annotations[

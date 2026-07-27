@@ -15,13 +15,14 @@
  * Status: active
  */
 
-import { PLAYER_VO_SPEAKER } from "@sugarmagic/domain";
+import { PLAYER_SPEAKER, PLAYER_VO_SPEAKER } from "@sugarmagic/domain";
 import { describe, expect, it, vi } from "vitest";
 import { createSugarLangObserveMiddleware } from "../../runtime/middlewares/sugar-lang-observe-middleware";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE,
-  SUGARLANG_PLACEMENT_FLOW_ANNOTATION
+  SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
+  computePendingProvisionalLemmas
 } from "../../runtime/middlewares/shared";
 import {
   createBaseConstraint,
@@ -30,6 +31,30 @@ import {
   createTestLearnerProfile,
   createTestTurn
 } from "./test-helpers";
+
+// Minimal scene lexicon with a single chunk (buenos_dias) for chunk-observation tests.
+const BUENOS_DIAS_CHUNK = {
+  chunkId: "buenos_dias",
+  normalizedForm: "buenos_dias",
+  surfaceForms: ["buenos dias", "buenos días"],
+  cefrBand: "A1" as const,
+  constituentLemmas: ["bueno", "dia"],
+  extractedByModel: "test",
+  extractedAtMs: 1,
+  extractorPromptVersion: "1",
+  source: "llm-extracted" as const
+};
+
+function makeSceneLexiconStoreWith(chunks: typeof BUENOS_DIAS_CHUNK[]) {
+  return {
+    ensure: vi.fn().mockResolvedValue({
+      sceneId: "scene-1",
+      contentHash: "hash-1",
+      chunks
+    }),
+    get: () => undefined
+  };
+}
 
 describe("SugarLangObserveMiddleware", () => {
   it("bypasses observation for player voice-over turns", async () => {
@@ -186,5 +211,166 @@ describe("SugarLangObserveMiddleware", () => {
         })
       ])
     );
+  });
+
+  it("085.3: emits chunk-encountered when NPC turn text contains a chunk", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+        },
+        learnerStateReducer: { apply },
+        sceneLexiconStore: makeSceneLexiconStoreWith([BUENOS_DIAS_CHUNK])
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+
+    await middleware.finalize?.(execution, createTestTurn("Buenos dias viajero!"));
+
+    const chunkObs = (apply.mock.calls as Array<[{ type: string; observationEvent?: { lemma: { lemmaId: string }; observation: { kind: string } } }]>).find(
+      ([event]) =>
+        event.type === "observation" &&
+        event.observationEvent?.observation.kind === "chunk-encountered"
+    );
+    expect(chunkObs).toBeDefined();
+    expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("chunk:buenos_dias");
+  });
+
+  it("085.3: emits chunk-produced when player free-text input contains a chunk", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+        },
+        learnerStateReducer: { apply },
+        sceneLexiconStore: makeSceneLexiconStoreWith([BUENOS_DIAS_CHUNK])
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution({
+      input: { kind: "free_text", text: "buenos dias!" }
+    });
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+
+    await middleware.finalize?.(execution, createTestTurn("Hola! Como estas?"));
+
+    const chunkObs = (apply.mock.calls as Array<[{ type: string; observationEvent?: { lemma: { lemmaId: string }; observation: { kind: string } } }]>).find(
+      ([event]) =>
+        event.type === "observation" &&
+        event.observationEvent?.observation.kind === "chunk-produced"
+    );
+    expect(chunkObs).toBeDefined();
+    expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("chunk:buenos_dias");
+  });
+
+  it("085.3: emits chunk-produced for player-spoken scripted line containing a chunk", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const services = createServicesStub({
+      getPlayerDefinitionId: () => "player-1",
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+        },
+        learnerStateReducer: { apply },
+        sceneLexiconStore: makeSceneLexiconStoreWith([BUENOS_DIAS_CHUNK])
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution({
+      // scripted input kind -- not free_text
+      input: null
+    });
+    execution.selection = { ...execution.selection, conversationKind: "scripted-dialogue" as never };
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+
+    // A player-spoken scripted line that contains the chunk.
+    const playerTurn = {
+      ...createTestTurn("Buenos dias a todos!"),
+      speakerId: PLAYER_SPEAKER.speakerId,
+      speakerLabel: PLAYER_SPEAKER.displayName
+    };
+
+    await middleware.finalize?.(execution, playerTurn);
+
+    const chunkObs = (apply.mock.calls as Array<[{ type: string; observationEvent?: { lemma: { lemmaId: string }; observation: { kind: string } } }]>).find(
+      ([event]) =>
+        event.type === "observation" &&
+        event.observationEvent?.observation.kind === "chunk-produced"
+    );
+    expect(chunkObs).toBeDefined();
+    expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("chunk:buenos_dias");
+  });
+
+  it("085.3: no chunk observation when scene lexicon has no chunks", async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+        },
+        learnerStateReducer: { apply },
+        sceneLexiconStore: makeSceneLexiconStoreWith([])
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+
+    await middleware.finalize?.(execution, createTestTurn("Buenos dias viajero!"));
+
+    const chunkObs = (apply.mock.calls as Array<[{ type: string; observationEvent?: { observation: { kind: string } } }]>).find(
+      ([event]) =>
+        event.type === "observation" &&
+        (event.observationEvent?.observation.kind === "chunk-encountered" ||
+          event.observationEvent?.observation.kind === "chunk-produced")
+    );
+    expect(chunkObs).toBeUndefined();
+  });
+
+  it("085.3: chunk cards filtered from computePendingProvisionalLemmas probe floor", () => {
+    const profile = createTestLearnerProfile({
+      lemmaCards: {
+        hola: {
+          lemmaId: "hola",
+          difficulty: 0.3,
+          stability: 1,
+          retrievability: 0.9,
+          lastReviewedAt: 1,
+          reviewCount: 1,
+          lapseCount: 0,
+          cefrPriorBand: "A1",
+          priorWeight: 1,
+          productiveStrength: 0,
+          lastProducedAtMs: null,
+          provisionalEvidence: 2,
+          provisionalEvidenceFirstSeenTurn: 1
+        },
+        "chunk:buenos_dias": {
+          lemmaId: "chunk:buenos_dias",
+          difficulty: 0.3,
+          stability: 1,
+          retrievability: 0.9,
+          lastReviewedAt: 1,
+          reviewCount: 1,
+          lapseCount: 0,
+          cefrPriorBand: "A1",
+          priorWeight: 1,
+          productiveStrength: 0.2,
+          lastProducedAtMs: null,
+          provisionalEvidence: 0,
+          provisionalEvidenceFirstSeenTurn: null
+        }
+      }
+    });
+
+    const pending = computePendingProvisionalLemmas(profile);
+
+    // Only the real lemma (hola) appears; the chunk card is excluded.
+    expect(pending.map((p) => p.lemmaRef.lemmaId)).not.toContain("chunk:buenos_dias");
+    expect(pending.map((p) => p.lemmaRef.lemmaId)).toContain("hola");
   });
 });

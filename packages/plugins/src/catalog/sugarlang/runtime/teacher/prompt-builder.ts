@@ -178,15 +178,20 @@ export function estimatePromptTokens(text: string): number {
 
 export function formatLearnerSummary(context: TeacherContext): string {
   const learner = context.learner;
-  const due = Object.values(learner.lemmaCards)
+  // Exclude chunk cards ("chunk:" prefix) -- they track pragmatic function acquisition,
+  // not vocabulary, and would pollute the due/active/struggling lists sent to the teacher.
+  const lemmaCardsOnly = Object.values(learner.lemmaCards).filter(
+    (card) => !card.lemmaId.startsWith("chunk:")
+  );
+  const due = lemmaCardsOnly
     .sort((left, right) => estimateDueScore(right) - estimateDueScore(left))
     .slice(0, MAX_DUE_LEMMAS)
     .map((card) => `${card.lemmaId} (ret ${card.retrievability.toFixed(2)})`);
-  const active = Object.values(learner.lemmaCards)
+  const active = lemmaCardsOnly
     .sort((left, right) => (right.lastReviewedAt ?? 0) - (left.lastReviewedAt ?? 0))
     .slice(0, MAX_RECENTLY_ACTIVE)
     .map((card) => `${card.lemmaId} (reviews ${card.reviewCount})`);
-  const struggling = Object.values(learner.lemmaCards)
+  const struggling = lemmaCardsOnly
     .sort((left, right) => {
       const leftScore = left.lapseCount * 10 + left.provisionalEvidence;
       const rightScore = right.lapseCount * 10 + right.provisionalEvidence;
@@ -203,7 +208,7 @@ export function formatLearnerSummary(context: TeacherContext): string {
     `- CEFR confidence: ${learner.assessment.cefrConfidence.toFixed(2)}`,
     `- target/support language: ${context.lang.targetLanguage} / ${context.lang.supportLanguage}`,
     `- session turns: ${learner.currentSession?.turns ?? 0}`,
-    `- known lemma cards: ${Object.keys(learner.lemmaCards).length}`,
+    `- known lemma cards: ${lemmaCardsOnly.length}`,
     `- top due: ${listOrNone(due)}`,
     `- recently active: ${listOrNone(active)}`,
     `- struggling: ${listOrNone(struggling)}`
