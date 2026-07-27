@@ -356,6 +356,7 @@ export async function rebuildSugarlangCompileCache(
               nodeId: node.nodeId,
               nodeText: node.text,
               authoredIntent: node.intent,
+              targetLanguage,
               contentHash,
               dialogueDefinitionId,
               llmClient: gatewayClient,

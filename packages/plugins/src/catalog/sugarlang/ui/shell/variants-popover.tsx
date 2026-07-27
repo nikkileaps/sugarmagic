@@ -131,7 +131,7 @@ export function VariantsPopover(props: VariantsPopoverProps): ReactElement {
               placeholder="One fact per line"
               defaultValue={(intent.mustConveyFacts ?? []).join("\n")}
               onBlur={(event) => handleFactsBlur(event.currentTarget.value)}
-              description="Discrete facts this line must communicate"
+              description="Auto-extracted. Override: one item per line -- either a target-language vocab word (base form) or a short English fact."
             />
 
             <TextInput

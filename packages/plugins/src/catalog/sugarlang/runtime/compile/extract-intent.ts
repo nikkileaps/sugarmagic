@@ -56,6 +56,9 @@ export interface ExtractIntentInput {
   dialogueDefinitionId: string;
   nodeText: string;
   authoredIntent?: DialogueLineIntent;
+  /** Target language code (e.g. "es"). When provided, the extractor outputs
+   *  vocabulary lemmaIds from that language for teachable matching. */
+  targetLanguage?: string;
   llmClient: SugarlangLLMClient;
   contentHash: string;
   promptVersion?: string;
@@ -120,13 +123,24 @@ function isHandAuthored(intent: DialogueLineIntent | undefined): boolean {
 
 function buildIntentPrompt(
   nodeText: string,
-  promptVersion: string
+  promptVersion: string,
+  targetLanguage?: string
 ): { system: string; user: string } {
+  const vocabInstruction = targetLanguage
+    ? [
+        `  mustConveyFacts: identify vocabulary from the target language (${targetLanguage}) that this line introduces or reinforces.`,
+        `    Output each as the base/dictionary form (lemmaId) of the word, e.g. "comer", "hablar", "pan".`,
+        `    Also include any discrete English facts the line must communicate.`,
+        `    Each entry is either a target-language lemmaId or a short English fact string.`,
+        `    Can be empty.`
+      ].join("\n")
+    : "  mustConveyFacts: an array of discrete facts the line must communicate (can be empty)";
+
   const system = [
     "You are annotating dialogue intent metadata for a language-learning game.",
     "Return JSON only.",
     "Given a dialogue line, extract:",
-    "  mustConveyFacts: an array of discrete facts the line must communicate (can be empty)",
+    vocabInstruction,
     "  beat: a single short phrase describing the dramatic beat of the line",
     "  voiceNote: a single short phrase describing the voice character / delivery note for the line",
     "Keep each item concise. Do not invent facts not present in the text."
@@ -193,7 +207,7 @@ export async function extractIntent(
     };
   }
 
-  const prompt = buildIntentPrompt(input.nodeText, promptVersion);
+  const prompt = buildIntentPrompt(input.nodeText, promptVersion, input.targetLanguage);
   const startedAt = now();
 
   await emitTelemetry(
