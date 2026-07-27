@@ -187,7 +187,7 @@ export function createSugarLangScriptedMiddleware(
 
         // Optional enrichment: supplement introduce list from intent artifact
         // teachables if the intent cache has an entry for this node.
-        const nodeId = String(execution.annotations["sugarlang.currentNodeId"] ?? "");
+        const nodeId = String(normalizedTurn.metadata?.nodeId ?? "");
         if (nodeId && services.intentCache) {
           try {
             const intentKey: LineIntentCacheKey = {
@@ -224,7 +224,7 @@ export function createSugarLangScriptedMiddleware(
       const services = await deps.services.resolveForExecution(execution);
       if (!services) return normalizedTurn;
 
-      const nodeId = String(execution.annotations["sugarlang.currentNodeId"] ?? "");
+      const nodeId = String(normalizedTurn.metadata?.nodeId ?? "");
       const contentHash = buildVariantContentHash(nodeId, authoredText);
       const band = constraint.learnerCefr as CEFRBand;
 
