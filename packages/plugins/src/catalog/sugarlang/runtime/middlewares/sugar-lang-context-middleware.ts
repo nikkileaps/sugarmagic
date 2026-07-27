@@ -48,6 +48,7 @@ import {
   SUGARLANG_PRESCRIPTION_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_QUEST_ESSENTIAL_IDS_ANNOTATION,
+  SUGARLANG_SCHEDULE_ANNOTATION,
   buildEmptyPrescription,
   buildLearnerSnapshot,
   computePendingProvisionalLemmas,
@@ -61,6 +62,10 @@ import {
   type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
+import { loadFunctionInventory } from "../inventory/function-inventory-loader";
+import { resolveFunctionTags } from "../inventory/function-tag-resolver";
+import type { SchedulerBoardView } from "../scheduler/scheduler-board-view";
+import { getWorldDay } from "@sugarmagic/runtime-core";
 
 export interface SugarLangContextMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -349,6 +354,53 @@ export function createSugarLangContextMiddleware(
           reason: error instanceof Error ? error.message : String(error)
         });
         return execution;
+      }
+
+      // 087.1: outer-loop schedule. Computed from the scene lexicon + learner state
+      // that are already in hand. Fail-safe: any error means no annotation, which
+      // preserves today's rendering behavior exactly.
+      try {
+        let functionTags = { sceneFunctions: [] as string[], npcFunctions: {} as Record<string, string[]> };
+        try {
+          const inventory = loadFunctionInventory(targetLanguage);
+          const dialogues = deps.services.getDialogueDefinitions();
+          functionTags = resolveFunctionTags(sceneLexicon?.chunks, inventory, targetLanguage, dialogues);
+        } catch {
+          // Inventory not available for this language or tags failed; schedule degrades.
+        }
+        const teachRecords = await services.teachRecordStore.list();
+        const activeDebts = await services.ledgerStore.getActiveDebts();
+        let availableFunctions: import("../contracts/function-inventory").FunctionEntry[] = [];
+        try {
+          availableFunctions = loadFunctionInventory(targetLanguage).functions;
+        } catch {
+          // No inventory for this language.
+        }
+        const board: SchedulerBoardView = {
+          learner: {
+            cefrBand: learner.estimatedCefrBand,
+            cefrConfidence: learner.assessment.cefrConfidence,
+            lemmaCards: learner.lemmaCards,
+            fatigueScore: learner.currentSession?.fatigueScore ?? 0
+          },
+          curriculum: {
+            introducedFunctionIds: new Set(teachRecords.map((r) => r.functionId)),
+            availableFunctions,
+            activeDebts
+          },
+          scene: {
+            sceneId,
+            functionTags,
+            dayIndex: blackboard ? getWorldDay(blackboard) : null
+          },
+          conversationId: getSugarlangConversationId(execution),
+          npcDefinitionId: execution.selection.npcDefinitionId ?? null,
+          targetLanguage
+        };
+        execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] =
+          services.outerLoopScheduler.compute(board);
+      } catch {
+        // Scheduler failure is non-fatal.
       }
 
       await services.learnerStateReducer.apply({

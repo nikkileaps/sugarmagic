@@ -60,6 +60,10 @@ import {
   type TeachRecordStore
 } from "./learner/teach-record-store";
 import {
+  createEncounterDebtLedger,
+  type EncounterDebtLedger
+} from "./learner/encounter-debt-ledger";
+import {
   resetSugarlangLearnerDatabases,
   type SugarlangLearnerDataResetResult
 } from "./learner/reset-learner-data";
@@ -75,6 +79,7 @@ import {
   createNoOpTelemetrySink,
   type TelemetrySink
 } from "./telemetry/telemetry";
+import { OuterLoopScheduler } from "./scheduler/outer-loop-scheduler";
 import type { SugarlangLoggerLike } from "./logger";
 export type { SugarlangLoggerLike } from "./logger";
 import type { CEFRBand } from "./types";
@@ -103,6 +108,8 @@ export interface SugarlangExecutionServices {
   learnerStateReducer: LearnerStateReducer;
   cardStore: CardStore;
   teachRecordStore: TeachRecordStore;
+  /** 087.2: encounter-debt ledger -- tracks diverse re-encounter debt per introduced item. */
+  ledgerStore: EncounterDebtLedger;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
   teacher: SugarLangTeacher;
   llmClient: SugarlangLLMClient | null;
@@ -112,6 +119,8 @@ export interface SugarlangExecutionServices {
   intentCache?: SugarlangIntentCache;
   /** 086.5: optional live-render cache (in-memory only; no persistence needed). */
   liveRenderCache?: LiveRenderCache;
+  /** 087.1: outer-loop scheduler -- computes the cross-session teach schedule. */
+  outerLoopScheduler: OuterLoopScheduler;
 }
 
 export interface SugarlangDebugState {
@@ -335,7 +344,8 @@ export class SugarlangRuntimeServices {
     const resetResult = await resetSugarlangLearnerDatabases({
       closeables: Array.from(this.executionServices.values()).flatMap((entry) => [
         entry.cardStore,
-        entry.teachRecordStore
+        entry.teachRecordStore,
+        entry.ledgerStore
       ])
     });
     const services = this.getFirstExecutionServices();
@@ -361,6 +371,10 @@ export class SugarlangRuntimeServices {
     }
     this.executionServices.clear();
     return resetResult;
+  }
+
+  getDialogueDefinitions(): import("@sugarmagic/domain").DialogueDefinition[] {
+    return this.boundContext?.dialogueDefinitions ?? [];
   }
 
   getPlayerDefinitionId(): string | null {
@@ -461,9 +475,11 @@ export class SugarlangRuntimeServices {
     });
 
     const teachRecordStore = createTeachRecordStore(learnerId);
+    const ledgerStore = createEncounterDebtLedger(learnerId);
     const variantCache: SugarlangVariantCache | undefined = this.studioWorkspaceId
       ? new IndexedDBVariantCache({ workspaceId: this.studioWorkspaceId })
       : undefined;
+    const outerLoopScheduler = new OuterLoopScheduler({ telemetry: this.telemetry });
 
     const services: SugarlangExecutionServices = {
       ...languageBundle,
@@ -473,9 +489,11 @@ export class SugarlangRuntimeServices {
       learnerStateReducer,
       cardStore,
       teachRecordStore,
+      ledgerStore,
       teacher,
       llmClient: this.gatewayClient,
-      variantCache
+      variantCache,
+      outerLoopScheduler
     };
     this.executionServices.set(key, services);
 
