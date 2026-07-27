@@ -9,6 +9,8 @@ const META_LEAK_PATTERNS: Array<{ violation: string; pattern: RegExp }> = [
   { violation: "mentions-model", pattern: /\bmodel\b/i },
   { violation: "mentions-prompt", pattern: /\bprompt\b/i },
   { violation: "mentions-roleplaying", pattern: /\broleplay(?:ing)?\b/i },
+  // DEFERRED 084.7: /\bai\b/i matches Italian preposition "ai"; revisit when Italian
+  // pack ships or any target language collides with the lint list (plan 084 deferred).
   { violation: "mentions-ai", pattern: /\bai\b/i }
 ];
 
@@ -79,8 +81,11 @@ export function findMetaLeakViolations(text: string): string[] {
     .map((entry) => entry.violation);
 }
 
-export function findStageDirectionViolations(text: string): string[] {
-  return STAGE_DIRECTION_PATTERNS
+export function findStageDirectionViolations(text: string, preserveActionTags?: boolean): string[] {
+  const patterns = preserveActionTags
+    ? STAGE_DIRECTION_PATTERNS.filter((e) => e.violation !== "contains-asterisk-stage-direction")
+    : STAGE_DIRECTION_PATTERNS;
+  return patterns
     .filter((entry) => entry.pattern.test(text))
     .map((entry) => entry.violation);
 }
@@ -142,8 +147,9 @@ export function findSpatialGroundingViolations(
   return violations;
 }
 
-export function normalizeNpcSpeech(text: string): string {
-  let normalized = text.replace(/\*[^*]+\*/g, " ");
+// 083.3 consumes preserveActionTags=true via the textConventions contribution (084.4).
+export function normalizeNpcSpeech(text: string, preserveActionTags?: boolean): string {
+  let normalized = preserveActionTags ? text : text.replace(/\*[^*]+\*/g, " ");
   normalized = normalized.replace(/\[[^\]]+\]/g, " ");
   normalized = normalized.replace(/^\s*\(([^)]{2,})\)\s*/gm, "");
 
@@ -169,6 +175,8 @@ export function normalizeNpcSpeech(text: string): string {
   return normalized.trim();
 }
 
+// DEFERRED 084: localized fallback lines (English canned text breaks immersion at
+// target-dominant postures); revisit on first playtest report of immersion break.
 export function buildFallbackReply(input: {
   interpret: InterpretResult;
   responseIntent: PlanResult["responseIntent"];

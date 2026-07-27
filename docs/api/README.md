@@ -35,6 +35,7 @@ They are architecture-facing developer API documents that explain how the system
 - [Sugarlang Telemetry](/Users/nikki/projects/sugarmagic/docs/api/sugarlang-telemetry.md) -- event taxonomy + schema versioning, sink resolution (Studio IndexedDB vs published gateway), the `/api/sugarlang/telemetry` ingestion route, client-side PII scrub, proxy base URL env resolution (epic 081)
 - [Sugarlang Learner State](/Users/nikki/projects/sugarmagic/docs/api/sugarlang-learner-state.md) -- learner profile shape, blackboard vs IndexedDB persistence (what survives reload), CEFR posterior + post-placement calibration window, dev-only band override + `__sugarlangDebug` handle (epic 081)
 - [Sugarlang Conversation Middlewares](/Users/nikki/projects/sugarmagic/docs/api/sugarlang-middlewares.md) -- the five middlewares (stages/priorities), the conversationKind turn-path guard, the `sugarlang.constraint` seam, and verify's actual enforcement scope (epic 081)
+- [SugarAgent Lifecycle Contributions](/Users/nikki/projects/sugarmagic/docs/api/sugaragent-lifecycle-contributions.md) -- annotation-bus contribution contract (key format, merge semantics, per-surface consumers, cache hygiene, zero-contribution invariant) (epic 084)
 
 ## Relationship to Proposals and ADRs
 

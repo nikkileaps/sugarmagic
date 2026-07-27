@@ -211,7 +211,7 @@ export type TelemetryEvent =
   | TelemetryEventOf<
       "classifier.verdict",
       {
-        sceneId: string;
+        sceneId: string | null;
         learnerSnapshot: LearnerSnapshot;
         prescription: LexicalPrescription;
         verdict: EnvelopeVerdict;
@@ -296,6 +296,15 @@ export type TelemetryEvent =
         repairedText?: string | null;
         violations: string[];
         repairPrompt: string[];
+        candidateCount: number;
+        selectedIndex: number;
+        candidateScores: Array<{
+          score: number;
+          passes: boolean;
+          coverageRatio: number;
+          measuredRatio: number;
+          conformance: string;
+        }>;
       }
     >
   | TelemetryEventOf<
@@ -357,6 +366,19 @@ export type TelemetryEvent =
       "verify.pre-placement-bypass",
       {
         sceneId?: string | null;
+      }
+    >
+  | TelemetryEventOf<
+      "verify.ratio-verdict",
+      {
+        sceneId: string | null;
+        measuredRatio: number;
+        directedRatio: number;
+        posture: string;
+        conformance: string;
+        denominator: number;
+        /** True when the scene was unavailable; proper-noun exclusion degraded. */
+        degradedExclusion: boolean;
       }
     >
   | TelemetryEventOf<

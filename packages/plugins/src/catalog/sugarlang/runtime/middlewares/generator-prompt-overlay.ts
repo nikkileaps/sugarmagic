@@ -15,6 +15,7 @@
 
 import type { SugarlangConstraint } from "../types";
 import type { LemmaRef } from "../contracts/lexical-prescription";
+import { languageDisplayName } from "../language-names";
 
 function listLemmaIds(lemmas: LemmaRef[]): string {
   return lemmas.map((l) => l.lemmaId).join(", ");
@@ -22,15 +23,16 @@ function listLemmaIds(lemmas: LemmaRef[]): string {
 
 function formatTargetLanguageGuidance(constraint: SugarlangConstraint): string {
   const ratioPercent = Math.round(constraint.targetLanguageRatio * 100);
+  const lang = languageDisplayName(constraint.targetLanguage);
   switch (constraint.supportPosture) {
     case "anchored":
-      return `Language constraint: Reply mostly in the support language (English). Sprinkle in a few ${constraint.targetLanguage} words — about ${ratioPercent}% of the reply.`;
+      return `Language constraint: Reply mostly in the support language (English). Sprinkle in a few ${lang} words — about ${ratioPercent}% of the reply.`;
     case "supported":
-      return `Language constraint: Use a mixed reply. Keep roughly ${ratioPercent}% of the reply in ${constraint.targetLanguage} and the rest in the support language so meaning stays easy to follow.`;
+      return `Language constraint: Use a mixed reply. Keep roughly ${ratioPercent}% of the reply in ${lang} and the rest in the support language so meaning stays easy to follow.`;
     case "target-dominant":
-      return `Language constraint: Reply mostly in ${constraint.targetLanguage}, with brief support-language anchoring only when it helps comprehension. Aim for about ${ratioPercent}% ${constraint.targetLanguage}.`;
+      return `Language constraint: Reply mostly in ${lang}, with brief support-language anchoring only when it helps comprehension. Aim for about ${ratioPercent}% ${lang}.`;
     case "target-only":
-      return `Language constraint: Reply entirely in ${constraint.targetLanguage}.`;
+      return `Language constraint: Reply entirely in ${lang}.`;
   }
 }
 
@@ -85,13 +87,14 @@ export function buildScriptedGeneratorPromptOverlay(
   targetLanguage: string
 ): string {
   const ratioPercent = Math.round(targetLanguageRatio * 100);
+  const lang = languageDisplayName(targetLanguage);
   const lines = [
     `Learner CEFR level: ${learnerCefr}.`,
-    `Target language: ${targetLanguage}.`,
+    `Target language: ${lang}.`,
     `Support posture: ${supportPosture}. Target-language ratio: ~${ratioPercent}%.`,
-    `Adapt the authored line to use roughly ${ratioPercent}% ${targetLanguage} and the rest in English.`,
-    `For A1 learners: mostly English with a few key ${targetLanguage} words.`,
-    `For B2+ learners: mostly ${targetLanguage} with English only for complex concepts.`,
+    `Adapt the authored line to use roughly ${ratioPercent}% ${lang} and the rest in English.`,
+    `For A1 learners: mostly English with a few key ${lang} words.`,
+    `For B2+ learners: mostly ${lang} with English only for complex concepts.`,
     `Do NOT add parenthetical translations — the UI handles glossing via hover tooltips.`,
     `Preserve the EXACT narrative meaning and all quest-critical information.`
   ];

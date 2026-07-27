@@ -25,7 +25,7 @@ describe("normalizeSugarLangPluginConfig", () => {
       supportLanguage: "en",
       debugLogging: false,
       debugBandOverride: "",
-      verifyEnabled: false,
+      verifyEnabled: true,
       scriptedAdaptationModel: "claude-haiku-4-5-20251001",
       chunkExtraction: {
         enabled: true
@@ -61,7 +61,7 @@ describe("normalizeSugarLangPluginConfig", () => {
       supportLanguage: "en",
       debugLogging: true,
       debugBandOverride: "",
-      verifyEnabled: false,
+      verifyEnabled: true,
       scriptedAdaptationModel: "claude-haiku-4-5-20251001",
       chunkExtraction: {
         enabled: true
@@ -76,15 +76,16 @@ describe("normalizeSugarLangPluginConfig", () => {
     });
   });
 
-  it("keeps verify disabled by default but allows an environment opt-in", () => {
+  it("verify is enabled by default and can be disabled via env var", () => {
+    expect(normalizeSugarLangPluginConfig(undefined)).toEqual(
+      expect.objectContaining({ verifyEnabled: true })
+    );
     expect(
       normalizeSugarLangPluginConfig(undefined, {
-        SUGARMAGIC_SUGARLANG_VERIFY_ENABLED: "true"
+        SUGARMAGIC_SUGARLANG_VERIFY_DISABLED: "1"
       })
     ).toEqual(
-      expect.objectContaining({
-        verifyEnabled: true
-      })
+      expect.objectContaining({ verifyEnabled: false })
     );
   });
 });

@@ -4,13 +4,15 @@
  * prepare (policy stage): checks player input before the pipeline starts.
  *   - Calls /api/sugaragent/generate/moderate against the player's text.
  *   - If flagged: annotates the context with MODERATION_INPUT_FLAG_KEY.
- *     The pipeline can see this annotation; the InterpretStage uses it
- *     to substitute an in-character deflection intent.
+ *     MODERATION_INPUT_FLAG_KEY has zero readers outside this middleware --
+ *     InterpretStage does NOT consume it; deflection happens at finalize only.
  *   - Fail-open on errors: the annotation is not set, the pipeline proceeds.
  *
- * finalize (policy stage, ordered AFTER sugarlang.verify): moderates whatever
+ * finalize (policy stage, ordered BEFORE sugarlang.verify): moderates whatever
  *   text the player actually sees, from any provider. If flagged: replaces the
- *   turn text with an in-character deflection line.
+ *   turn text with an in-character deflection line and stamps
+ *   MODERATION_DEFLECTED_DIAG_KEY in turn.diagnostics so downstream analysis
+ *   stages (e.g. sugarlang.verify) can skip repair on canned text.
  *   - Fail-open on errors: returns the original turn unchanged.
  *
  * Status: active
@@ -25,6 +27,8 @@ import type { ModerationProvider } from "../clients";
 
 export const MODERATION_MIDDLEWARE_ID = "sugaragent.moderation";
 export const MODERATION_INPUT_FLAG_KEY = "sugaragent.moderationInputFlagged";
+/** Stamped in turn.diagnostics when moderation replaces text with a deflection. */
+export const MODERATION_DEFLECTED_DIAG_KEY = "moderationDeflected";
 
 const INPUT_DEFLECTIONS = [
   "Hmm, I'm not sure how to respond to that.",
@@ -101,7 +105,11 @@ export function createModerationMiddleware(
       const inputFlagged = context.annotations[MODERATION_INPUT_FLAG_KEY];
       if (inputFlagged) {
         const deflection = pickDeflection(INPUT_DEFLECTIONS, turn.text ?? "");
-        return { ...turn, text: deflection };
+        return {
+          ...turn,
+          text: deflection,
+          diagnostics: { ...(turn.diagnostics ?? {}), [MODERATION_DEFLECTED_DIAG_KEY]: true }
+        };
       }
 
       const outputText = turn.text?.trim() ?? "";
@@ -111,7 +119,11 @@ export function createModerationMiddleware(
         const result = await moderationProvider.moderate({ text: outputText });
         if (result.flagged || result.blocklisted) {
           const deflection = pickDeflection(OUTPUT_DEFLECTIONS, outputText);
-          return { ...turn, text: deflection };
+          return {
+            ...turn,
+            text: deflection,
+            diagnostics: { ...(turn.diagnostics ?? {}), [MODERATION_DEFLECTED_DIAG_KEY]: true }
+          };
         }
       } catch {
         // Fail-open.

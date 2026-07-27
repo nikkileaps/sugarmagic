@@ -281,6 +281,8 @@ export interface JudgeRequest {
   worldContext: string | null;
   loreContextSummary: string[];
   worldPremise: string;
+  /** Plan 084.2: directive strings from co-installed plugins; absent/empty = today's behavior. */
+  externalDirectives?: string[];
 }
 
 export interface JudgeVerdict {
