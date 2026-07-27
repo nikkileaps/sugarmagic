@@ -59,6 +59,11 @@ import {
   type SugarlangLoggerLike
 } from "./shared";
 
+import type { ChunkMatcher } from "../classifier/chunk-matcher";
+
+// Trie rebuild is O(inventory * avgSurfaceForms). Cache per language so it happens once per session.
+const chunkMatcherCache = new Map<string, ChunkMatcher | null>();
+
 export interface SugarLangObserveMiddlewareDeps {
   services: SugarlangRuntimeServices;
   logger?: SugarlangLoggerLike;
@@ -389,17 +394,23 @@ export function createSugarLangObserveMiddleware(
         return normalizedTurn;
       }
 
-      // 085.3: Load scene lexicon (used for lore/voice); build chunk matcher from the
-      // hand-curated function inventory so dynamic NPC greetings are detected even when
-      // the phrase never appears verbatim in authored scene text.
-      await services.sceneLexiconStore.ensure(sceneId);
-      const inventoryChunks = getAllInventoryChunks(learner.targetLanguage);
-      const chunkMatcher =
-        inventoryChunks.length > 0
-          ? createChunkMatcher(inventoryChunks, learner.targetLanguage)
-          : null;
+      // 085.3: Build chunk matcher from the hand-curated function inventory so dynamic
+      // NPC greetings are detected even when the phrase never appears in authored scene text.
+      if (!chunkMatcherCache.has(learner.targetLanguage)) {
+        const inventoryChunks = getAllInventoryChunks(learner.targetLanguage);
+        chunkMatcherCache.set(
+          learner.targetLanguage,
+          inventoryChunks.length > 0
+            ? createChunkMatcher(inventoryChunks, learner.targetLanguage)
+            : null
+        );
+      }
+      const chunkMatcher = chunkMatcherCache.get(learner.targetLanguage) ?? null;
 
       const appliedObservations = [] as ReturnType<typeof createObservationEvent>[];
+      // Track chunks the player already produced so the NPC-turn isNewCard check doesn't fire
+      // on the same chunk within the same execution -- learner snapshot is stale after player pass.
+      const playerProducedChunkIds = new Set<string>();
 
       if (execution.input?.kind === "free_text") {
         const lemmaCandidates = collectLemmasFromText(
@@ -459,6 +470,7 @@ export function createSugarLangObserveMiddleware(
           for (const match of chunkMatches) {
             if (observedChunkIds.has(match.chunk.chunkId)) continue;
             observedChunkIds.add(match.chunk.chunkId);
+            playerProducedChunkIds.add(match.chunk.chunkId);
             const observationEvent = createObservationEvent({
               execution,
               lemma: {
@@ -568,9 +580,11 @@ export function createSugarLangObserveMiddleware(
           observedChunkIds.add(match.chunk.chunkId);
 
           // 085.5: Detect first-teach BEFORE applying the observation (new card = not yet in lemmaCards).
+          // Also exclude chunks the player already produced this turn -- learner snapshot is stale.
           const isNewCard =
             !isPlayerTurn &&
-            !(`chunk:${match.chunk.chunkId}` in learner.lemmaCards);
+            !(`chunk:${match.chunk.chunkId}` in learner.lemmaCards) &&
+            !playerProducedChunkIds.has(match.chunk.chunkId);
 
           const observationEvent = createObservationEvent({
             execution,

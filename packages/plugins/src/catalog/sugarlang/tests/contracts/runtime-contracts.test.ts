@@ -108,6 +108,24 @@ function mapObservationKind(kind: ObservationKind): ObservationOutcome {
         productiveStrengthDelta: -0.2,
         provisionalEvidenceDelta: 0
       };
+    case "hovered-introduce":
+      return {
+        receptiveGrade: "Good",
+        productiveStrengthDelta: 0,
+        provisionalEvidenceDelta: 0
+      };
+    case "chunk-encountered":
+      return {
+        receptiveGrade: null,
+        productiveStrengthDelta: 0,
+        provisionalEvidenceDelta: 0
+      };
+    case "chunk-produced":
+      return {
+        receptiveGrade: "Good",
+        productiveStrengthDelta: 0.2,
+        provisionalEvidenceDelta: 0
+      };
     default:
       return assertNever(kind);
   }

@@ -25,7 +25,7 @@
 
 import type { CEFRBand } from "./learner-profile";
 import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
-import type { LexicalChunk } from "./scene-lexicon";
+import type { ChunkSpec } from "../classifier/chunk-matcher";
 import type { SupportPosture } from "./pedagogy";
 
 /**
@@ -57,7 +57,7 @@ export interface CoverageProfile {
   outOfEnvelopeLemmas: LemmaRef[];
   ceilingExceededLemmas: LemmaRef[];
   questEssentialLemmasMatched: string[];
-  matchedChunks: LexicalChunk[];
+  matchedChunks: ChunkSpec[];
   matchedChunkTokens: VirtualChunkToken[];
   coverageRatio: number;
   /** Word tokens included in the language-ratio denominator (excludes numbers and known entities). */

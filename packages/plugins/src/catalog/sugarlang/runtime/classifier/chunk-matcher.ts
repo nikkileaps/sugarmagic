@@ -106,7 +106,7 @@ export function createChunkMatcher(
         let cursor: ChunkTrieNode | undefined = root;
         let candidate:
           | {
-              chunk: LexicalChunk;
+              chunk: ChunkSpec;
               endIndex: number;
             }
           | undefined;

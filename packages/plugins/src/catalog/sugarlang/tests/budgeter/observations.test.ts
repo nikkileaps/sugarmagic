@@ -52,6 +52,12 @@ function createObservation(kind: ObservationKind): LemmaObservation {
         expectedForm: "hola",
         observedAtMs: 0
       };
+    case "hovered-introduce":
+      return { kind, observedAtMs: 0 };
+    case "chunk-encountered":
+      return { kind, chunkId: "hola", surfaceMatched: "hola", observedAtMs: 0 };
+    case "chunk-produced":
+      return { kind, chunkId: "hola", surfaceMatched: "hola", observedAtMs: 0 };
   }
 }
 
@@ -89,7 +95,10 @@ describe("budgeter observations", () => {
         attemptedForm: "ola",
         expectedForm: "hola",
         observedAtMs: 0
-      })
+      }),
+      "hovered-introduce": observationToOutcome({ kind: "hovered-introduce", observedAtMs: 0 }),
+      "chunk-encountered": observationToOutcome({ kind: "chunk-encountered", chunkId: "hola", surfaceMatched: "hola", observedAtMs: 0 }),
+      "chunk-produced": observationToOutcome({ kind: "chunk-produced", chunkId: "hola", surfaceMatched: "hola", observedAtMs: 0 })
     };
 
     expect(outcomes.encountered).toEqual({
