@@ -52,6 +52,8 @@ export interface EnvelopeClassifierCheckOptions {
   prescription?: LexicalPrescription | null;
   knownEntities?: Set<string>;
   questEssentialLemmas?: Set<string>;
+  /** NPC-authored interjection tokens whitelisted from envelope enforcement. See Plan 083 story 083.3. */
+  voiceInterjections?: Set<string>;
   lang?: string;
   sceneLexicon?: Pick<CompiledSceneLexicon, "sceneId" | "contentHash" | "chunks"> | null;
   conversationId?: string;
@@ -163,7 +165,8 @@ export class EnvelopeClassifier {
     const ruleResult = this.rule(profile, learner.estimatedCefrBand, {
       prescription: options.prescription,
       knownEntities: options.knownEntities,
-      questEssentialLemmas: options.questEssentialLemmas
+      questEssentialLemmas: options.questEssentialLemmas,
+      voiceInterjections: options.voiceInterjections
     });
 
     const violations = ruleResult.violations

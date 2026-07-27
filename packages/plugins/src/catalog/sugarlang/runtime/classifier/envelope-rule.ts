@@ -60,6 +60,7 @@ function resolveExemption(
   );
   const knownEntities = normalizeLookup(options.knownEntities ?? []);
   const questEssentialLemmas = normalizeLookup(options.questEssentialLemmas ?? []);
+  const voiceInterjections = normalizeLookup(options.voiceInterjections ?? []);
   const matchedChunk = profile.matchedChunkTokens.find(
     (entry) =>
       entry.normalizedForm.normalize("NFC").toLocaleLowerCase() === normalizedLemmaId
@@ -81,6 +82,12 @@ function resolveExemption(
   }
   if (questEssentialLemmas.has(normalizedLemmaId)) {
     return "quest-essential";
+  }
+  if (
+    voiceInterjections.has(normalizedLemmaId) ||
+    (normalizedSurfaceForm && voiceInterjections.has(normalizedSurfaceForm))
+  ) {
+    return "voice-interjection";
   }
 
   return null;

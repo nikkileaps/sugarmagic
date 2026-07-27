@@ -68,6 +68,7 @@ interface SugarlangContributionShape {
   judgeDirectives?: string[];
   regenDirectives?: string[];
   interpretLexicon?: Record<string, string[]>;
+  textConventions?: { preserveActionTags?: boolean };
 }
 const SUGARAGENT_CONTRIB_SUGARLANG_KEY = "sugaragent.contrib/sugarlang" as const;
 
@@ -456,11 +457,17 @@ export function createSugarLangTeacherMiddleware(
         constraint.targetLanguage
       );
       const langLexicon = buildInterpretLexicon(constraint.targetLanguage);
+      const npcDefId = execution.selection.npcDefinitionId ?? null;
+      const voiceSpec =
+        npcDefId && scene?.npcVoiceSpecs
+          ? (scene.npcVoiceSpecs[npcDefId] ?? null)
+          : null;
       const contrib: SugarlangContributionShape = {
         schemaVersion: 1,
         generateOverlay: constraint.generatorPromptOverlay,
         ...(judgeDirective ? { judgeDirectives: [judgeDirective], regenDirectives: [judgeDirective] } : {}),
-        ...(langLexicon ? { interpretLexicon: langLexicon } : {})
+        ...(langLexicon ? { interpretLexicon: langLexicon } : {}),
+        ...(voiceSpec?.hasGestureTags ? { textConventions: { preserveActionTags: true } } : {})
       };
       execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = contrib;
       logger.info("Teacher finalized Sugarlang guidance and constraint.", {

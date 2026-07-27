@@ -267,6 +267,77 @@ describe("applyEnvelopeRule", () => {
     expect(result.exemptionsApplied).toEqual(["prescription-introduce"]);
   });
 
+  it("exempts voice-interjection tokens from envelope enforcement", () => {
+    const ay = createLemma("ay");
+    const result = applyEnvelopeRule(
+      createProfile({
+        outOfEnvelopeLemmas: [ay],
+        ceilingExceededLemmas: [ay]
+      }),
+      "A1",
+      { voiceInterjections: new Set(["ay"]) }
+    );
+
+    expect(result.withinEnvelope).toBe(true);
+    expect(result.exemptionsApplied).toEqual(["voice-interjection"]);
+    expect(result.violations).toEqual([]);
+  });
+
+  it("exempts multiple voice-interjection tokens at once", () => {
+    const result = applyEnvelopeRule(
+      createProfile({
+        outOfEnvelopeLemmas: [
+          createLemma("ay"),
+          createLemma("orale"),
+          createLemma("andale")
+        ],
+        ceilingExceededLemmas: [
+          createLemma("ay"),
+          createLemma("orale"),
+          createLemma("andale")
+        ]
+      }),
+      "A1",
+      { voiceInterjections: new Set(["ay", "orale", "andale"]) }
+    );
+
+    expect(result.withinEnvelope).toBe(true);
+    expect(result.exemptionsApplied).toHaveLength(3);
+    expect(result.exemptionsApplied.every((k) => k === "voice-interjection")).toBe(true);
+  });
+
+  it("does not let voice-interjection bypass the coverage floor", () => {
+    const ay = createLemma("ay");
+    const result = applyEnvelopeRule(
+      createProfile({
+        coverageRatio: 0.5,
+        outOfEnvelopeLemmas: [ay],
+        ceilingExceededLemmas: [ay]
+      }),
+      "A1",
+      { voiceInterjections: new Set(["ay"]) }
+    );
+
+    expect(result.withinEnvelope).toBe(false);
+  });
+
+  it("prefers prescription-introduce over voice-interjection when both apply", () => {
+    const ay = createLemma("ay");
+    const result = applyEnvelopeRule(
+      createProfile({
+        outOfEnvelopeLemmas: [ay]
+      }),
+      "A1",
+      {
+        prescription: createPrescription(["ay"]),
+        voiceInterjections: new Set(["ay"])
+      }
+    );
+
+    expect(result.withinEnvelope).toBe(true);
+    expect(result.exemptionsApplied).toEqual(["prescription-introduce"]);
+  });
+
   it("uses deterministic exemption attribution priority", () => {
     const result = applyEnvelopeRule(
       createProfile({

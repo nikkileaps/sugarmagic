@@ -103,7 +103,8 @@ export interface EnvelopeViolation {
 export type EnvelopeExemptionKind =
   | "prescription-introduce"
   | "named-entity"
-  | "quest-essential";
+  | "quest-essential"
+  | "voice-interjection";
 
 /**
  * Options passed to the deterministic envelope rule.
@@ -114,6 +115,8 @@ export interface EnvelopeRuleOptions {
   prescription?: LexicalPrescription | null;
   knownEntities?: Set<string>;
   questEssentialLemmas?: Set<string>;
+  /** NPC-authored interjection tokens whitelisted from envelope enforcement. See Plan 083 story 083.3. */
+  voiceInterjections?: Set<string>;
 }
 
 /**

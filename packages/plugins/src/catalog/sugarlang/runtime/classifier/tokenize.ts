@@ -53,8 +53,12 @@ function classifySegment(segment: string, isWordLike: boolean): TokenKind {
   return "punct";
 }
 
+// Gesture-tag spans (*...*) are stage directions, not target-language content.
+// Strip them before segmentation so they never enter coverage, ratio, or encounter counts.
+const GESTURE_TAG_PATTERN = /\*[^*\n]+\*/g;
+
 export function tokenize(text: string, lang: string): Token[] {
-  const normalizedText = text.normalize("NFC");
+  const normalizedText = text.normalize("NFC").replace(GESTURE_TAG_PATTERN, " ");
   if (normalizedText.length === 0) {
     return [];
   }

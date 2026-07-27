@@ -273,10 +273,20 @@ export function createSugarLangVerifyMiddleware(
       const questEssentialLemmaIds = execution.annotations[
         "sugarlang.questEssentialLemmaIds"
       ] as Set<string> | undefined;
+      const npcDefinitionId = execution.selection?.npcDefinitionId ?? null;
+      const voiceSpec =
+        npcDefinitionId && scene?.npcVoiceSpecs
+          ? (scene.npcVoiceSpecs[npcDefinitionId] ?? null)
+          : null;
+      const voiceInterjections =
+        voiceSpec && voiceSpec.interjections.length > 0
+          ? new Set(voiceSpec.interjections)
+          : undefined;
       const verdict = services.classifier.check(normalizedTurn.text, learner, {
         prescription: scene ? constraint.rawPrescription : null,
         knownEntities: scene ? new Set(scene.properNouns) : new Set(),
         questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
+        voiceInterjections,
         lang: constraint.targetLanguage,
         sceneLexicon: scene ?? undefined,
         conversationId,
@@ -398,6 +408,7 @@ export function createSugarLangVerifyMiddleware(
           prescription: scene ? constraint.rawPrescription : null,
           knownEntities: scene ? new Set(scene.properNouns) : new Set(),
           questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
+          voiceInterjections,
           lang: constraint.targetLanguage,
           sceneLexicon: scene ?? undefined,
           conversationId,

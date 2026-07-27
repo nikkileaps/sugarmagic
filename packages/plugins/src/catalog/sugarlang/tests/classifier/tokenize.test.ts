@@ -64,4 +64,32 @@ describe("tokenize", () => {
 
     expect(averageDurationMs).toBeLessThan(2);
   });
+
+  it("strips gesture-tag spans before tokenization", () => {
+    const tokens = tokenize("*slaps knee* ¡Ay, qué cosa!", "es");
+    const surfaces = tokens.map((t) => t.surface);
+    expect(surfaces).not.toContain("slaps");
+    expect(surfaces).not.toContain("knee");
+    expect(surfaces).toContain("ay");
+    expect(surfaces).toContain("qué");
+    expect(surfaces).toContain("cosa");
+  });
+
+  it("strips a mid-sentence gesture tag leaving surrounding words intact", () => {
+    const tokens = tokenize("Hola *waves* amigo", "es");
+    const surfaces = tokens.map((t) => t.surface);
+    expect(surfaces).toEqual(["hola", "amigo"]);
+  });
+
+  it("returns empty when input is only a gesture tag", () => {
+    expect(tokenize("*nods slowly*", "es")).toEqual([]);
+  });
+
+  it("does not strip asterisks used as multiplication or standalone punctuation", () => {
+    const tokens = tokenize("3 * 4 es doce", "es");
+    const surfaces = tokens.map((t) => t.surface);
+    expect(surfaces).toContain("3");
+    expect(surfaces).toContain("4");
+    expect(surfaces).toContain("doce");
+  });
 });
