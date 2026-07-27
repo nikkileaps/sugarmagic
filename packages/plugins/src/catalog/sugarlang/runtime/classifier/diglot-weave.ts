@@ -98,6 +98,10 @@ function resolveSubstitution(
   }
 
   // Single-word substitution: substitute the citation form (lemmaId bare).
+  // DEFERRED (086): inflected-form substitution needs a feature-tagged inverse
+  // morphology index (lemma + features -> surface form); current data is
+  // surface->lemma only. Revisit when citation-form output reads as grammatically
+  // wrong to a learner past A2, or when a native reviewer flags weave grammar.
   for (const lemmaId of resolvedLemmaIds) {
     if (introduceSet.has(lemmaId)) {
       // Use the first resolved entry whose normalized lemmaId is in introduce.
