@@ -27,6 +27,9 @@ import { SceneDensityHistogram } from "./scene-density-histogram";
 import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
 import { LearnerCardInspector } from "./learner-card-inspector";
 import { LearnerOverrideSection } from "./learner-override-section";
+import { VariantReport } from "./variant-report";
+import { VariantsPopoverConnected } from "./variant-popover-connected";
+import { resolveStudioCompileWorkspaceId } from "./editor-support";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
@@ -213,6 +216,34 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
         label: "Learner Override",
         summary: "DEV-only: set estimated CEFR band directly and skip the placement flow. Requires a running game session.",
         render: () => createElement(LearnerOverrideSection)
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: "dialogues",
+        sectionId: "line-variants",
+        label: "Line Variants",
+        summary: "Intent fields and language variants for the selected dialogue node. Variants button opens a popover in the node inspector.",
+        render: (props) => {
+          if (!props.selectedDialogueNode || !props.updateDialogueNode) return null;
+          return createElement(VariantsPopoverConnected, {
+            node: props.selectedDialogueNode,
+            onUpdateNode: props.updateDialogueNode,
+            targetLanguage: props.targetLanguage,
+            dialogue: props.selectedDialogue ?? null,
+            workspaceId: resolveStudioCompileWorkspaceId(props.gameProjectId)
+          });
+        }
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
+        sectionId: "variant-report",
+        label: "Variant Report",
+        summary: "Flagged baked line variants that did not pass verification. Flagged variants do not ship.",
+        render: () =>
+          createElement(VariantReport, {
+            getFlaggedVariants: () => []
+          })
       }
     ],
     npcInteractionOptions: []

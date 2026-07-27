@@ -367,6 +367,8 @@ function buildHarness(
     environment?: Record<string, string>;
     assessment?: boolean;
     placementEnabled?: boolean;
+    /** Override CEFR band for testing posture-specific paths. */
+    debugBandOverride?: string;
   } = {}
 ) {
   const blackboard = createRuntimeBlackboard({
@@ -384,7 +386,8 @@ function buildHarness(
     verifyEnabled: true,
     ...(options.placementEnabled
       ? { placement: { enabled: true, openingDialogTurns: 1, closingDialogTurns: 1 } }
-      : {})
+      : {}),
+    ...(options.debugBandOverride ? { debugBandOverride: options.debugBandOverride } : {})
   });
   const logger = createSugarlangLogger({ debugLogging: false });
   const services = new SugarlangRuntimeServices({
@@ -604,28 +607,31 @@ describe("081.3 entry-path coverage", () => {
     expect(turn!.text).toBe(AUTHORED_LINE_1);
   });
 
-  it("authored-text fallback: scripted adaptation LLM failure renders the authored English unchanged", async () => {
-    // A configured gateway gives the scripted middleware a real llmClient;
-    // the global fetch stub then fails the generate call, exercising the
-    // catch-and-fall-back path in sugar-lang-scripted-middleware.ts.
+  it("scripted target-dominant posture: zero LLM calls even with gateway configured (086.4)", async () => {
+    // 086.4: the scripted middleware no longer calls the LLM at any posture.
+    // With a configured gateway and a B1 learner (target-dominant), the scripted
+    // middleware degrades to diglotWeave (no baked variant in cache).
+    // The global fetch stub fails any network call -- no call must fire.
+    // debugBandOverride:"B1" forces target-dominant posture.
     const { host, captured } = buildHarness({
-      environment: { SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: "http://localhost:8787" }
+      environment: { SUGARMAGIC_SUGARLANG_PROXY_BASE_URL: "http://localhost:8787" },
+      debugBandOverride: "B1"
     });
 
     const turn = await host.startSession(START_SITE_SELECTION());
     expect(turn).not.toBeNull();
 
-    // The adaptation was actually ATTEMPTED (not silently skipped) ...
+    // Zero /generate calls fired (the scripted middleware has no LLM path now).
     const generateCalls = fetchMock.mock.calls.filter(([input]) =>
       String(input).includes("/api/sugaragent/generate")
     );
-    expect(generateCalls.length).toBeGreaterThanOrEqual(1);
+    expect(generateCalls.length).toBe(0);
 
-    // ... the constraint was present (so the gate + teacher ran) ...
+    // The constraint was still written (teacher ran).
     expect(captured.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).toBeDefined();
 
-    // ... and the authored English text renders unchanged, with the turn
-    // intact rather than errored.
+    // The authored text passes through (weave degradation, no substitute expected
+    // with the default empty prescription -- the important invariant is zero LLM calls).
     expect(turn!.text).toBe(AUTHORED_LINE_1);
 
     // The session survives: the next authored line also plays.

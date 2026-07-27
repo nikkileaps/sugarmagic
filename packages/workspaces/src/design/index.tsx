@@ -25,6 +25,7 @@ import type {
   CharacterModelDefinition,
   DocumentDefinition,
   DialogueDefinition,
+  DialogueNodeDefinition,
   ItemDefinition,
   HUDDefinition,
   MenuDefinition,
@@ -136,6 +137,11 @@ export interface DesignProductModeViewProps {
     updateQuest: (definition: QuestDefinition) => void;
     selectedQuestNode: QuestNodeDefinition | null;
   }) => ReactNode;
+  renderDialogueInspectorSections?: (context: {
+    selectedDialogue: DialogueDefinition | null;
+    selectedDialogueNode: DialogueNodeDefinition | null;
+    updateDialogueNode: (node: DialogueNodeDefinition) => void;
+  }) => ReactNode;
 }
 
 export interface DesignProductModeViewResult {
@@ -188,7 +194,8 @@ export function useDesignProductModeView(
     onConsumeNavigationTarget,
     onNavigateToTarget,
     renderNPCInspectorSections,
-    renderQuestInspectorSections
+    renderQuestInspectorSections,
+    renderDialogueInspectorSections
   } = props;
 
   const playerView = usePlayerWorkspaceView({
@@ -260,7 +267,8 @@ export function useDesignProductModeView(
     itemDefinitions,
     npcDefinitions,
     spellDefinitions,
-    onCommand
+    onCommand,
+    renderDialogueInspectorSections
   });
 
   const questView = useQuestWorkspaceView({

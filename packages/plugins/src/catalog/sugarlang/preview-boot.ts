@@ -40,9 +40,12 @@ export async function buildSugarlangPreviewBootPayloadForSession(
   workspaceId: string,
   environment: RuntimePluginEnvironment | undefined
 ): Promise<SugarlangPreviewBootPayload | null> {
+  // Always include studioWorkspaceId regardless of targetLanguage so the
+  // preview runtime can open the variant IDB even when no env-var language is set.
+  const studioWorkspaceId = `sugarlang-studio:${session.gameProject.identity.id}`;
   const targetLanguage = resolveSugarLangTargetLanguage(environment);
   if (!targetLanguage) {
-    return null;
+    return { compiledScenes: [], studioWorkspaceId };
   }
 
   const atlas = new CefrLexAtlasProvider();
@@ -77,5 +80,6 @@ export async function buildSugarlangPreviewBootPayloadForSession(
     }
   }
 
-  return buildSugarlangPreviewBootPayload(scenes, cache, atlas, morphology);
+  const payload = await buildSugarlangPreviewBootPayload(scenes, cache, atlas, morphology);
+  return { ...payload, studioWorkspaceId };
 }

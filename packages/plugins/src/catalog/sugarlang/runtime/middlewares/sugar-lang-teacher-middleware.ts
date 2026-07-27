@@ -18,7 +18,6 @@
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
 import {
   buildGeneratorPromptOverlay,
-  buildScriptedGeneratorPromptOverlay,
   computeMinimalGreetingMode
 } from "./generator-prompt-overlay";
 import {
@@ -213,6 +212,9 @@ export function createSugarLangTeacherMiddleware(
       // The authored text IS the curriculum — we only control language mix.
       // Runs even without a prescription (prescription-less scripted dialogue
       // still needs a constraint so the scripted middleware can adapt the text).
+      // 086.4: scripted branch no longer sets generatorPromptOverlay or writes a
+      // sugaragent contribution -- the scripted middleware reads baked variants
+      // (target-dominant) or runs diglotWeave (anchored/supported), zero LLM.
       if (isScriptedMode(execution)) {
         const targetLanguage =
           execution.selection.targetLanguage ?? learner.targetLanguage;
@@ -224,14 +226,13 @@ export function createSugarLangTeacherMiddleware(
           posture === "anchored" ? 0.2
             : posture === "supported" ? 0.5
             : 0.8;
-        const overlay = buildScriptedGeneratorPromptOverlay(
-          learner.estimatedCefrBand,
-          posture,
-          ratio,
-          targetLanguage
-        );
+        // anchored/supported: "hover-only" because the weave places bare citation
+        // forms and the observe middleware delivers gloss data via dialogueHighlight.
+        // target-dominant: "none" -- the baked variant text is target-language already.
+        const glossingStrategy =
+          posture === "anchored" || posture === "supported" ? "hover-only" as const : "none" as const;
         const constraint: SugarlangConstraint = {
-          generatorPromptOverlay: overlay,
+          generatorPromptOverlay: "",
           minimalGreetingMode: false,
           targetVocab: {
             introduce: prescription?.introduce ?? [],
@@ -241,31 +242,13 @@ export function createSugarLangTeacherMiddleware(
           supportPosture: posture,
           targetLanguageRatio: ratio,
           interactionStyle: "natural_dialogue",
-          glossingStrategy: "none",
+          glossingStrategy,
           sentenceComplexityCap: "free",
           targetLanguage,
           learnerCefr: learner.estimatedCefrBand,
           rawPrescription: prescription ?? buildEmptyPrescription("scripted-mode-no-prescription")
         };
         execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
-        const scriptedJudgeDirective = buildLanguageJudgeDirective(
-          constraint.targetLanguageRatio,
-          constraint.targetLanguage
-        );
-        const scriptedLexicon = buildInterpretLexicon(constraint.targetLanguage);
-        const scriptedReminder = buildConstraintReminder(
-          constraint.targetLanguageRatio,
-          constraint.targetLanguage,
-          constraint.learnerCefr
-        );
-        const scriptedContrib: SugarlangContributionShape = {
-          schemaVersion: 1,
-          generateOverlay: constraint.generatorPromptOverlay,
-          ...(scriptedReminder ? { generateReminder: scriptedReminder } : {}),
-          ...(scriptedJudgeDirective ? { judgeDirectives: [scriptedJudgeDirective], regenDirectives: [scriptedJudgeDirective] } : {}),
-          ...(scriptedLexicon ? { interpretLexicon: scriptedLexicon } : {})
-        };
-        execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = scriptedContrib;
         logger.debug("Scripted mode: lightweight constraint built.", {
           learnerCefr: learner.estimatedCefrBand,
           posture,

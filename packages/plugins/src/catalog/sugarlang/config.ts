@@ -51,8 +51,6 @@ export interface SugarLangPluginConfig {
    *  use SUGARMAGIC_SUGARLANG_VERIFY_DISABLED=1 only to inspect raw Director +
    *  Generate behavior without the post-generation enforcement pass. */
   verifyEnabled: boolean;
-  /** Model to use for scripted dialogue adaptation. Defaults to Haiku for speed/cost. */
-  scriptedAdaptationModel: string;
   placement: SugarLangPlacementConfig;
   chunkExtraction: SugarLangChunkExtractionConfig;
   /** Dev-only: when set, skip placement and boot the learner at this CEFR band.
@@ -137,10 +135,6 @@ export function normalizeSugarLangPluginConfig(
     verifyEnabled:
       config?.verifyEnabled !== false &&
       !readEnvBoolean(_environment, SUGARLANG_VERIFY_DISABLED_ENV),
-    scriptedAdaptationModel:
-      typeof config?.scriptedAdaptationModel === "string" && config.scriptedAdaptationModel.trim()
-        ? config.scriptedAdaptationModel.trim()
-        : "claude-haiku-4-5-20251001",
     chunkExtraction: {
       enabled:
         typeof chunkConfig?.enabled === "boolean"

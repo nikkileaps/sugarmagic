@@ -7,12 +7,14 @@
  *   - EnvelopeClassifierOptions
  *   - EnvelopeClassifierCheckOptions
  *   - EnvelopeClassifier
+ *   - computeVoiceRetentionScore (re-exported from verify-middleware; bake code imports from here, not the middleware)
  *
  * Relationships:
  *   - Depends on learner-profile, atlas, morphology, coverage, and envelope-rule types.
  *   - Will be consumed by the verify middleware once Epic 10 lands.
  *
  * Implements: Proposal 001 §2. Envelope Classifier
+ *             Plan 086 story 086.3 -- computeVoiceRetentionScore re-export
  *
  * Status: active
  */
@@ -42,6 +44,37 @@ import {
   type TelemetrySink
 } from "../telemetry/telemetry";
 import { computeLanguageRatioVerdict } from "./language-ratio";
+
+/**
+ * Returns [0,1]: fraction of the voice spec's markers (interjections, gesture tags)
+ * present in the candidate text. Returns 1 when spec is null (neutral -- no preference).
+ *
+ * Copied here (not re-exported) to avoid a circular dependency:
+ *   auto-simplify -> envelope-classifier -> verify-middleware -> auto-simplify
+ * Bake-time code imports from this classifier facade instead of the middleware.
+ *
+ * Implements: Plan 086 story 086.3
+ */
+export function computeVoiceRetentionScore(
+  text: string,
+  voiceSpec: import("../types").VoiceChannelSpec | null | undefined
+): number {
+  if (!voiceSpec) return 1;
+  let checks = 0;
+  let retained = 0;
+  if (voiceSpec.interjections.length > 0) {
+    checks++;
+    const lowerText = text.normalize("NFC").toLocaleLowerCase();
+    if (voiceSpec.interjections.some((inj) => lowerText.includes(inj))) {
+      retained++;
+    }
+  }
+  if (voiceSpec.hasGestureTags) {
+    checks++;
+    if (/\*[^*\n]+\*/u.test(text)) retained++;
+  }
+  return checks === 0 ? 1 : retained / checks;
+}
 
 export interface EnvelopeClassifierOptions {
   rule?: EnvelopeRule;

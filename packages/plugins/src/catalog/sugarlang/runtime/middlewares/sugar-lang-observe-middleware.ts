@@ -397,7 +397,12 @@ export function createSugarLangObserveMiddleware(
       // 085.3: Build chunk matcher from the hand-curated function inventory so dynamic
       // NPC greetings are detected even when the phrase never appears in authored scene text.
       if (!chunkMatcherCache.has(learner.targetLanguage)) {
-        const inventoryChunks = getAllInventoryChunks(learner.targetLanguage);
+        let inventoryChunks: import("../contracts/function-inventory").InventoryChunk[] = [];
+        try {
+          inventoryChunks = getAllInventoryChunks(learner.targetLanguage);
+        } catch {
+          // Missing inventory for this language -- chunk detection skipped.
+        }
         chunkMatcherCache.set(
           learner.targetLanguage,
           inventoryChunks.length > 0

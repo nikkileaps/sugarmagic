@@ -31,6 +31,10 @@ import { extractChunks } from "../../runtime/compile/extract-chunks";
 import { SUGARLANG_COMPILE_PIPELINE_VERSION } from "../../runtime/compile/content-hash";
 import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
+import { IndexedDBVariantCache } from "../../runtime/compile/variant-cache";
+import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
+import { getAllInventoryChunks } from "../../runtime/inventory/function-inventory-loader";
+import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
 import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-scene";
 import { computeSceneContentHash } from "../../runtime/compile/content-hash";
 import {
@@ -376,4 +380,115 @@ export function loadPlacementQuestionBank(
   } catch {
     return null;
   }
+}
+
+// --- Variant authoring client (086.3) ---
+
+const DISPLAY_BANDS: CEFRBand[] = ["B1", "B2", "C1", "C2"];
+
+function buildVariantContentHash(nodeId: string, nodeText: string): string {
+  return [nodeId, nodeText, JSON.stringify({})].join("|");
+}
+
+export interface VariantAuthoringClient {
+  /** Returns null when the gateway URL is not configured. */
+  gatewayAvailable: boolean;
+  getVariantsForNode(
+    nodeId: string,
+    nodeText: string,
+    targetLanguage: string,
+    workspaceId: string
+  ): Promise<Partial<Record<CEFRBand, BakedLineVariant>>>;
+  generateVariantsForNode(
+    nodeId: string,
+    nodeText: string,
+    dialogueDefinitionId: string,
+    targetLanguage: string,
+    workspaceId: string
+  ): Promise<Partial<Record<CEFRBand, BakedLineVariant>>>;
+  saveVariant(
+    nodeId: string,
+    nodeText: string,
+    band: CEFRBand,
+    text: string,
+    dialogueDefinitionId: string,
+    targetLanguage: string,
+    workspaceId: string
+  ): Promise<void>;
+}
+
+export function createVariantAuthoringClient(): VariantAuthoringClient {
+  // Read directly from Vite's import.meta.env -- resolveSugarlangGatewayBaseUrl()
+  // reads globalThis which is never populated in the browser Vite context.
+  const metaEnv = (import.meta as { env?: Record<string, string | undefined> }).env ?? {};
+  const proxyBaseUrl = (
+    metaEnv["VITE_SUGARMAGIC_SUGARLANG_PROXY_BASE_URL"] ||
+    metaEnv["VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL"] ||
+    ""
+  ).trim();
+  const gatewayAvailable = proxyBaseUrl.length > 0;
+  const llmClient = gatewayAvailable ? new SugarlangGatewayClient(proxyBaseUrl) : null;
+
+  function getCache(workspaceId: string): IndexedDBVariantCache {
+    return new IndexedDBVariantCache({ workspaceId });
+  }
+
+  return {
+    gatewayAvailable,
+    async getVariantsForNode(nodeId, nodeText, targetLanguage, workspaceId) {
+      const cache = getCache(workspaceId);
+      const contentHash = buildVariantContentHash(nodeId, nodeText);
+      const result: Partial<Record<CEFRBand, BakedLineVariant>> = {};
+      for (const band of DISPLAY_BANDS) {
+        try {
+          const entry = await cache.get({ lang: targetLanguage, band, contentHash, variantPromptVersion: VARIANT_PROMPT_VERSION });
+          if (entry) result[band] = entry.variant;
+        } catch {
+          // IDB failure -- skip this band
+        }
+      }
+      return result;
+    },
+    async generateVariantsForNode(nodeId, nodeText, dialogueDefinitionId, targetLanguage, workspaceId) {
+      if (!llmClient) return {};
+      const cache = getCache(workspaceId);
+      const contentHash = buildVariantContentHash(nodeId, nodeText);
+      let inventoryChunks: import("../../runtime/contracts/function-inventory").InventoryChunk[] = [];
+      try {
+        inventoryChunks = getAllInventoryChunks(targetLanguage);
+      } catch {
+        // No inventory for this language -- generation proceeds without chunk context
+      }
+      const result: Partial<Record<CEFRBand, BakedLineVariant>> = {};
+      await Promise.all(
+        DISPLAY_BANDS.map(async (band) => {
+          try {
+            const generated = await generateVariant(
+              { authoredText: nodeText, targetLang: targetLanguage, band, intent: null, contentHash, dialogueDefinitionId, nodeId },
+              { llmClient, atlas, inventoryChunks }
+            );
+            if (generated.variant) {
+              await cache.set({ key: { lang: targetLanguage, band, contentHash, variantPromptVersion: VARIANT_PROMPT_VERSION }, variant: generated.variant });
+              result[band] = generated.variant;
+            }
+          } catch {
+            // Individual band failure is non-fatal
+          }
+        })
+      );
+      return result;
+    },
+    async saveVariant(nodeId, nodeText, band, text, dialogueDefinitionId, targetLanguage, workspaceId) {
+      const cache = getCache(workspaceId);
+      const contentHash = buildVariantContentHash(nodeId, nodeText);
+      const now = Date.now();
+      const variant: BakedLineVariant = {
+        nodeId, dialogueDefinitionId, lang: targetLanguage, band, text,
+        verdict: { envelopePasses: true, ratioPasses: true, voiceRetentionScore: 1, fidelityPasses: true, overallPasses: true },
+        reviewFlag: false,
+        generatedAtMs: now, generatedByModel: "manual", contentHash, promptVersion: VARIANT_PROMPT_VERSION
+      };
+      await cache.set({ key: { lang: targetLanguage, band, contentHash, variantPromptVersion: VARIANT_PROMPT_VERSION }, variant });
+    }
+  };
 }
