@@ -9,6 +9,8 @@ const META_LEAK_PATTERNS: Array<{ violation: string; pattern: RegExp }> = [
   { violation: "mentions-model", pattern: /\bmodel\b/i },
   { violation: "mentions-prompt", pattern: /\bprompt\b/i },
   { violation: "mentions-roleplaying", pattern: /\broleplay(?:ing)?\b/i },
+  // DEFERRED 084.7: /\bai\b/i matches Italian preposition "ai"; revisit when Italian
+  // pack ships or any target language collides with the lint list (plan 084 deferred).
   { violation: "mentions-ai", pattern: /\bai\b/i }
 ];
 
@@ -173,6 +175,8 @@ export function normalizeNpcSpeech(text: string, preserveActionTags?: boolean): 
   return normalized.trim();
 }
 
+// DEFERRED 084: localized fallback lines (English canned text breaks immersion at
+// target-dominant postures); revisit on first playtest report of immersion break.
 export function buildFallbackReply(input: {
   interpret: InterpretResult;
   responseIntent: PlanResult["responseIntent"];

@@ -131,6 +131,8 @@ function detectSocialMove(inputText: string | null, lexicon?: Record<string, str
   if (GRATITUDE_PATTERN.test(inputText) || ACKNOWLEDGEMENT_PATTERN.test(inputText)) {
     return "acknowledgement";
   }
+  // DEFERRED epic F: question stems, quest patterns, and "que?"-style non-understanding
+  // moves belong to epic F's negotiation detection -- the category mechanism here is the seam.
   const gratitudeLex = buildLexiconPattern([
     ...(lexicon?.gratitude ?? []),
     ...(lexicon?.acknowledgement ?? [])
@@ -191,6 +193,9 @@ function inferContextAnchor(inputText: string | null): ContextAnchor {
     : "none";
 }
 
+// DEFERRED epic F: reads NPC's last line with English-only patterns. Once NPCs speak
+// target language, answer_name routing dies ("Como te llamas?" never matches). Distinct
+// from the player-side interpretLexicon (this reads NPC text, not player text).
 export function detectPendingExpectation(
   state: SugarAgentProviderState
 ): PendingExpectation {
