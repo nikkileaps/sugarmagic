@@ -36,6 +36,10 @@ import type { SugarlangCompileCache } from "./sugarlang-compile-cache";
 import type { SugarlangIntentCache, LineIntentCacheEntry } from "./intent-cache";
 import type { ExtractIntentResult } from "./extract-intent";
 import type { DialogueDefinition } from "@sugarmagic/domain";
+import type { CEFRBand } from "../contracts/learner-profile";
+import type { SugarlangVariantCache } from "./variant-cache";
+import type { GenerateVariantInput, GenerateVariantResult } from "./generate-variant";
+import type { BakedLineVariant } from "../contracts/baked-variant";
 
 export interface SugarlangAuthoringChunkPipelineOptions {
   cache: SugarlangChunkCache;
@@ -68,6 +72,18 @@ export interface SugarlangAuthoringIntentPipelineOptions {
   telemetry?: TelemetrySink;
 }
 
+export interface SugarlangAuthoringVariantPipelineOptions {
+  cache: SugarlangVariantCache;
+  generateVariant: (input: GenerateVariantInput) => Promise<GenerateVariantResult>;
+  promptVersion: string;
+  /** Which bands to bake; default ["B1","B2","C1","C2"] */
+  bands?: CEFRBand[];
+  /** Which languages to bake for */
+  languages: string[];
+  debounceMs?: number;
+  onVariantBaked?: (variant: BakedLineVariant) => void;
+}
+
 export interface SugarlangAuthoringCompileSchedulerOptions {
   getScenes: () => SceneAuthoringContext[];
   getDialogues?: () => DialogueDefinition[];
@@ -77,30 +93,39 @@ export interface SugarlangAuthoringCompileSchedulerOptions {
   debounceMs?: number;
   chunkPipeline?: SugarlangAuthoringChunkPipelineOptions;
   intentPipeline?: SugarlangAuthoringIntentPipelineOptions;
+  variantPipeline?: SugarlangAuthoringVariantPipelineOptions;
   onLog?: (message: string, detail?: Record<string, unknown>) => void;
 }
+
+const DEFAULT_VARIANT_BANDS: CEFRBand[] = ["B1", "B2", "C1", "C2"];
 
 export class SugarlangAuthoringCompileScheduler {
   private readonly pendingSceneIds = new Set<string>();
   private readonly pendingChunkSceneIds = new Set<string>();
   private readonly pendingIntentDialogueIds = new Set<string>();
+  private readonly pendingVariantDialogueIds = new Set<string>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private chunkTimer: ReturnType<typeof setTimeout> | null = null;
   private intentTimer: ReturnType<typeof setTimeout> | null = null;
+  private variantTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly debounceMs: number;
   private readonly chunkDebounceMs: number;
   private readonly intentDebounceMs: number;
+  private readonly variantDebounceMs: number;
   private readonly onLog?: SugarlangAuthoringCompileSchedulerOptions["onLog"];
   private readonly chunkPipeline: SugarlangAuthoringChunkPipelineOptions | null;
   private readonly intentPipeline: SugarlangAuthoringIntentPipelineOptions | null;
+  private readonly variantPipeline: SugarlangAuthoringVariantPipelineOptions | null;
   private readonly telemetry: TelemetrySink;
 
   constructor(private readonly options: SugarlangAuthoringCompileSchedulerOptions) {
     this.debounceMs = options.debounceMs ?? 250;
     this.chunkPipeline = options.chunkPipeline ?? null;
     this.intentPipeline = options.intentPipeline ?? null;
+    this.variantPipeline = options.variantPipeline ?? null;
     this.chunkDebounceMs = this.chunkPipeline?.debounceMs ?? 5000;
     this.intentDebounceMs = this.intentPipeline?.debounceMs ?? 5000;
+    this.variantDebounceMs = this.variantPipeline?.debounceMs ?? 10000;
     this.onLog = options.onLog;
     this.telemetry = this.chunkPipeline?.telemetry ?? createNoOpTelemetrySink();
   }
@@ -123,6 +148,12 @@ export class SugarlangAuthoringCompileScheduler {
       for (const dialogue of this.options.getDialogues()) {
         this.pendingIntentDialogueIds.add(dialogue.definitionId);
       }
+    }
+    if (this.variantPipeline && this.options.getDialogues) {
+      for (const dialogue of this.options.getDialogues()) {
+        this.pendingVariantDialogueIds.add(dialogue.definitionId);
+      }
+      this.armVariantTimer();
     }
   }
 
@@ -162,6 +193,20 @@ export class SugarlangAuthoringCompileScheduler {
     this.intentTimer = setTimeout(() => {
       void this.flushIntents();
     }, this.intentDebounceMs);
+  }
+
+  private armVariantTimer(): void {
+    if (!this.variantPipeline || this.pendingVariantDialogueIds.size === 0) {
+      return;
+    }
+
+    if (this.variantTimer) {
+      clearTimeout(this.variantTimer);
+    }
+
+    this.variantTimer = setTimeout(() => {
+      void this.flushVariants();
+    }, this.variantDebounceMs);
   }
 
   private getRequestedScenes(requestedSceneIds: string[]): SceneAuthoringContext[] {
@@ -225,6 +270,9 @@ export class SugarlangAuthoringCompileScheduler {
 
     this.armChunkTimer();
     this.armIntentTimer();
+    // Variant pipeline arms when dialogues are explicitly scheduled (via rebuildAll or
+    // scheduleDialogue). Flush here only arms if pendingVariantDialogueIds is non-empty.
+    this.armVariantTimer();
     return compiled;
   }
 
@@ -418,6 +466,99 @@ export class SugarlangAuthoringCompileScheduler {
     }
   }
 
+  async flushVariants(): Promise<void> {
+    if (!this.variantPipeline || !this.options.getDialogues) {
+      return;
+    }
+
+    if (this.variantTimer) {
+      clearTimeout(this.variantTimer);
+      this.variantTimer = null;
+    }
+
+    const requestedIds = [...this.pendingVariantDialogueIds].sort((left, right) =>
+      left.localeCompare(right)
+    );
+    this.pendingVariantDialogueIds.clear();
+
+    const allDialogues = this.options.getDialogues();
+    const requestedSet = new Set(requestedIds);
+    const dialogues = allDialogues
+      .filter((d) => requestedSet.has(d.definitionId))
+      .sort((left, right) => left.definitionId.localeCompare(right.definitionId));
+
+    const bands = this.variantPipeline.bands ?? DEFAULT_VARIANT_BANDS;
+    const languages = this.variantPipeline.languages;
+
+    for (const dialogue of dialogues) {
+      for (const node of dialogue.nodes) {
+        const contentHash = [
+          node.nodeId,
+          node.text,
+          JSON.stringify(node.intent ?? {})
+        ].join("|");
+
+        for (const lang of languages) {
+          for (const band of bands) {
+            const cacheKey = {
+              lang,
+              band,
+              contentHash,
+              variantPromptVersion: this.variantPipeline.promptVersion
+            };
+
+            const cached = await this.variantPipeline.cache.get(cacheKey);
+            if (cached) {
+              this.onLog?.("variant-cache-hit", {
+                dialogueDefinitionId: dialogue.definitionId,
+                nodeId: node.nodeId,
+                lang,
+                band
+              });
+              continue;
+            }
+
+            const result = await this.variantPipeline.generateVariant({
+              authoredText: node.text,
+              targetLang: lang,
+              band,
+              intent: null,
+              contentHash,
+              dialogueDefinitionId: dialogue.definitionId,
+              nodeId: node.nodeId
+            });
+
+            if (!result.variant) {
+              this.onLog?.("variant-generation-failed", {
+                dialogueDefinitionId: dialogue.definitionId,
+                nodeId: node.nodeId,
+                lang,
+                band,
+                reason: result.failure?.message
+              });
+              continue;
+            }
+
+            await this.variantPipeline.cache.set({
+              key: cacheKey,
+              variant: result.variant
+            });
+
+            this.variantPipeline.onVariantBaked?.(result.variant);
+
+            this.onLog?.("variant-baked", {
+              dialogueDefinitionId: dialogue.definitionId,
+              nodeId: node.nodeId,
+              lang,
+              band,
+              reviewFlag: result.variant.reviewFlag
+            });
+          }
+        }
+      }
+    }
+  }
+
   start(): void {
     this.onLog?.("scheduler-started");
   }
@@ -435,9 +576,14 @@ export class SugarlangAuthoringCompileScheduler {
       clearTimeout(this.intentTimer);
       this.intentTimer = null;
     }
+    if (this.variantTimer) {
+      clearTimeout(this.variantTimer);
+      this.variantTimer = null;
+    }
     this.pendingSceneIds.clear();
     this.pendingChunkSceneIds.clear();
     this.pendingIntentDialogueIds.clear();
+    this.pendingVariantDialogueIds.clear();
     this.onLog?.("scheduler-stopped");
   }
 }

@@ -28,6 +28,7 @@ import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
 import { LearnerCardInspector } from "./learner-card-inspector";
 import { LearnerOverrideSection } from "./learner-override-section";
 import { VariantsPopover } from "./variants-popover";
+import { VariantReport } from "./variant-report";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
@@ -229,6 +230,17 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
             targetLanguage: props.targetLanguage
           });
         }
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
+        sectionId: "variant-report",
+        label: "Variant Report",
+        summary: "Flagged baked line variants that did not pass verification. Flagged variants do not ship.",
+        render: () =>
+          createElement(VariantReport, {
+            getFlaggedVariants: () => []
+          })
       }
     ],
     npcInteractionOptions: []

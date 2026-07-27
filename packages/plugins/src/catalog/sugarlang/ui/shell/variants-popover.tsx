@@ -2,7 +2,7 @@
  * packages/plugins/src/catalog/sugarlang/ui/shell/variants-popover.tsx
  *
  * Purpose: Renders the Variants button and popover for editing line-intent fields
- *          on the selected dialogue node.
+ *          and viewing baked band variants for the selected dialogue node.
  *
  * Exports:
  *   - VariantsPopover
@@ -13,31 +13,43 @@
  *   - Receives the selected node + updateNode callback from the dialogue inspector seam.
  *
  * Implements: Epic 086 Story 086.1 -- line-intent model / Variants popover (intent fields)
+ *             Epic 086 Story 086.3 -- band variant fields + generate button
  *
  * Status: active
  */
 
 import { useState, type ReactElement } from "react";
 import {
+  Badge,
   Button,
   Group,
+  Loader,
   Popover,
+  Skeleton,
   Stack,
   Text,
   TextInput,
   Textarea
 } from "@mantine/core";
 import type { DialogueNodeDefinition } from "@sugarmagic/domain";
+import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
+import type { CEFRBand } from "../../runtime/contracts/learner-profile";
+
+const DISPLAY_BANDS: CEFRBand[] = ["B1", "B2", "C1", "C2"];
 
 export interface VariantsPopoverProps {
   node: DialogueNodeDefinition;
   onUpdateNode: (node: DialogueNodeDefinition) => void;
   targetLanguage: string;
+  bandVariants?: Partial<Record<CEFRBand, BakedLineVariant>>;
+  onGenerate?: () => Promise<void>;
+  onUpdateVariant?: (band: CEFRBand, text: string) => void;
 }
 
 export function VariantsPopover(props: VariantsPopoverProps): ReactElement {
-  const { node, onUpdateNode, targetLanguage } = props;
+  const { node, onUpdateNode, targetLanguage, bandVariants, onGenerate, onUpdateVariant } = props;
   const [opened, setOpened] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   const intent = node.intent ?? {};
 
@@ -75,11 +87,21 @@ export function VariantsPopover(props: VariantsPopoverProps): ReactElement {
     });
   }
 
+  async function handleGenerate(): Promise<void> {
+    if (!onGenerate || generating) return;
+    setGenerating(true);
+    try {
+      await onGenerate();
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
     <Popover
       opened={opened}
       onChange={setOpened}
-      width={420}
+      width={460}
       position="bottom-start"
       withArrow
       shadow="md"
@@ -95,15 +117,26 @@ export function VariantsPopover(props: VariantsPopoverProps): ReactElement {
       </Popover.Target>
 
       <Popover.Dropdown>
-        <Group align="flex-start" gap="md" wrap="nowrap">
-          <Stack gap="xs" style={{ minWidth: 60 }}>
-            <Text size="xs" fw={600} tt="uppercase" c="dimmed">
-              Lang
-            </Text>
-            <Text size="xs">{targetLanguage || "en"}</Text>
-          </Stack>
+        <Stack gap="md">
+          <Group justify="space-between" align="center">
+            <Group gap="xs" align="center">
+              <Text size="xs" fw={600} tt="uppercase" c="dimmed">
+                Lang
+              </Text>
+              <Text size="xs">{targetLanguage || "en"}</Text>
+            </Group>
+            <Button
+              size="xs"
+              variant="light"
+              onClick={() => void handleGenerate()}
+              disabled={generating || !onGenerate}
+              leftSection={generating ? <Loader size={10} /> : undefined}
+            >
+              {generating ? "Generating..." : "Generate"}
+            </Button>
+          </Group>
 
-          <Stack gap="sm" style={{ flex: 1 }}>
+          <Stack gap="sm">
             <Text size="xs" fw={600} tt="uppercase" c="dimmed">
               Intent
             </Text>
@@ -137,7 +170,47 @@ export function VariantsPopover(props: VariantsPopoverProps): ReactElement {
               }
             />
           </Stack>
-        </Group>
+
+          <Stack gap="sm">
+            <Text size="xs" fw={600} tt="uppercase" c="dimmed">
+              Band Variants
+            </Text>
+            {DISPLAY_BANDS.map((band) => {
+              const variant = bandVariants?.[band];
+              return (
+                <Stack key={band} gap={4}>
+                  <Group gap="xs" align="center">
+                    <Text size="xs" fw={500}>
+                      {band} Variant
+                    </Text>
+                    {variant?.reviewFlag && (
+                      <Badge size="xs" color="red">
+                        Flagged
+                      </Badge>
+                    )}
+                  </Group>
+                  {generating ? (
+                    <Skeleton height={52} radius="sm" />
+                  ) : (
+                    <Textarea
+                      size="xs"
+                      minRows={2}
+                      autosize
+                      placeholder={`Generated ${band} variant will appear here`}
+                      defaultValue={variant?.text ?? ""}
+                      onBlur={(event) => {
+                        const value = event.currentTarget.value.trim();
+                        if (value && onUpdateVariant) {
+                          onUpdateVariant(band, value);
+                        }
+                      }}
+                    />
+                  )}
+                </Stack>
+              );
+            })}
+          </Stack>
+        </Stack>
       </Popover.Dropdown>
     </Popover>
   );
