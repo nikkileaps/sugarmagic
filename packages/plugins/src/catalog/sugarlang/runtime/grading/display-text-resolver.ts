@@ -65,6 +65,17 @@ function isWeaveBand(band: CEFRBand): boolean {
   return band === "A1" || band === "A2";
 }
 
+/**
+ * How many of the budgeter's scored survivors the weave may draw from.
+ *
+ * Not a teaching budget -- these are candidates for SUBSTITUTION in one piece
+ * of text, and only the ones that actually appear get used. Too small and the
+ * pool misses the text entirely (the bug this constant exists to fix); too
+ * large and an anchored A1 paragraph comes back mostly Spanish, since
+ * diglotWeave swaps every match and has no ratio control of its own.
+ */
+const WEAVE_POOL_SIZE = 20;
+
 /** What the host passes in. Mirrors runtime-core's `DisplayTextRequest`. */
 export interface DisplayTextResolveRequest {
   subjectKind: string;
@@ -203,9 +214,31 @@ async function weaveText(
     // No inventory for this language -- weave proceeds without chunk swaps.
   }
 
+  // WEAVE FROM THE ELIGIBLE POOL, NOT THE TEACHING SLATE.
+  //
+  // `prescription.introduce` is the top `levelCap` (3-5) words the budgeter
+  // wants to TEACH next across the whole scene. The weave asks a different
+  // question: which band-appropriate words happen to appear in THIS text? Those
+  // rarely intersect -- measured on a real scene, `introduce` was
+  // [estación, área, vuestro] while the item's prose was about travellers,
+  // heads and flying, so every substitution missed and the item rendered as
+  // plain English.
+  //
+  // `rationale.priorityScores` is the full envelope-survivor set (~49 there),
+  // already band-filtered and quest-essential-filtered by the budgeter, ordered
+  // by score. Drawing from it is what makes a weave actually land.
+  //
+  // Capped because diglotWeave substitutes EVERY match it finds and has no
+  // ratio control: an uncapped pool turns an anchored A1 paragraph mostly
+  // Spanish, which is the opposite of the posture. Top-N by score keeps the
+  // best-scoring words while holding substitutions to a handful per paragraph.
+  const pool = (prescription.rationale?.priorityScores ?? [])
+    .slice(0, WEAVE_POOL_SIZE)
+    .map((score) => score.lemmaRef);
+
   const result = diglotWeave(
     text,
-    prescription.introduce,
+    pool.length > 0 ? pool : prescription.introduce,
     inventoryChunks,
     inputs.atlas,
     targetLang,

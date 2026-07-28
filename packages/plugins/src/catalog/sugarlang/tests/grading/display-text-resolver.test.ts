@@ -162,7 +162,10 @@ describe("A1/A2 weave path", () => {
   // The bug this exists to fix: a beginner saw plain English on every item
   // forever, because the resolver only ever looked up baked variants and none
   // are baked below B1.
-  const weaveInputs = (introduce: Array<{ lemmaId: string; lang: string }>) => async () => ({
+  const weaveInputs = (
+    introduce: Array<{ lemmaId: string; lang: string }>,
+    priorityScores: Array<{ lemmaId: string; lang: string }> = introduce
+  ) => async () => ({
     learner: {} as never,
     sceneLexicon: {} as never,
     atlas: {
@@ -172,7 +175,11 @@ describe("A1/A2 weave path", () => {
           : [],
       getGloss: () => "book"
     } as never,
-    prescribe: async () => ({ introduce }) as never,
+    prescribe: async () =>
+      ({
+        introduce,
+        rationale: { priorityScores: priorityScores.map((lemmaRef) => ({ lemmaRef })) }
+      }) as never,
     supportLanguage: "en"
   });
 
@@ -204,6 +211,27 @@ describe("A1/A2 weave path", () => {
       getLearnerBand: async () => "A2",
       getWeaveInputs: weaveInputs([{ lemmaId: "libro", lang: "es" }])
     })({ ...request, text: "An old book." });
+    expect(text).toContain("libro");
+  });
+
+  it("weaves from the eligible pool even when the teaching slate misses the text", async () => {
+    // THE bug. `introduce` is the top few words to TEACH next across the whole
+    // scene; it almost never intersects one specific paragraph. Measured on a
+    // real scene: introduce was [estación, área, vuestro] while the item prose
+    // was about travellers and flying, so every substitution missed and the
+    // item rendered as plain English. The weave must draw from the wider
+    // envelope-survivor pool.
+    const text = await resolver({
+      getLearnerBand: async () => "A1",
+      getWeaveInputs: weaveInputs(
+        [{ lemmaId: "estación", lang: "es" }],
+        [
+          { lemmaId: "estación", lang: "es" },
+          { lemmaId: "libro", lang: "es" }
+        ]
+      )
+    })({ ...request, text: "An old book." });
+
     expect(text).toContain("libro");
   });
 
