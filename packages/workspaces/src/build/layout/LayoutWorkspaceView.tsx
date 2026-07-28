@@ -432,6 +432,10 @@ export function useLayoutWorkspaceView(
     viewportStore,
     (state) => state.showNavMesh
   );
+  const showGrid = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showGrid
+  );
   // Plan 068.4 -- mask paint mode chrome. Non-null while a painted
   // layer is armed; the mask-paint overlay owns the strokes, this
   // view owns the toolbar.
@@ -2382,6 +2386,13 @@ export function useLayoutWorkspaceView(
               active: showNavMesh,
               onToggle: () =>
                 viewportStore.getState().setShowNavMesh(!showNavMesh)
+            },
+            {
+              id: "show-grid",
+              icon: "▦",
+              label: `${showGrid ? "Hide" : "Show"} grid`,
+              active: showGrid,
+              onToggle: () => viewportStore.getState().setShowGrid(!showGrid)
             }
           ]}
         />

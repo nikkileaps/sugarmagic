@@ -141,6 +141,9 @@ export interface ViewportState {
   showColliders: boolean;
   /** Plan 069.8 — show the baked navmesh walkable surface in the viewport. */
   showNavMesh: boolean;
+  /** Show the landscape ground grid. Defaults ON — it is an authoring aid, so
+   *  the toggle exists to get a clean camera-framed shot, not to opt in. */
+  showGrid: boolean;
   cameraQuaternion: [number, number, number, number];
   sketchSettings: LandscapeSketchSettings;
   /** Non-null while the Layout scatter brush tool is active. */
@@ -171,6 +174,7 @@ export interface ViewportActions {
   toggleFolderHidden: (folderId: string) => void;
   setShowColliders: (showColliders: boolean) => void;
   setShowNavMesh: (showNavMesh: boolean) => void;
+  setShowGrid: (showGrid: boolean) => void;
   setCameraQuaternion: (
     quaternion: [number, number, number, number]
   ) => void;
@@ -243,6 +247,7 @@ export function createViewportStore() {
     hiddenFolderIds: [],
     showColliders: false,
     showNavMesh: false,
+    showGrid: true,
     cameraQuaternion: [0, 0, 0, 1],
     sketchSettings: DEFAULT_SKETCH_SETTINGS,
     scatterBrushSettings: null,
@@ -331,6 +336,9 @@ export function createViewportStore() {
     },
     setShowNavMesh(showNavMesh) {
       set({ showNavMesh });
+    },
+    setShowGrid(showGrid) {
+      set({ showGrid });
     },
     setCameraQuaternion(quaternion) {
       set({ cameraQuaternion: quaternion });

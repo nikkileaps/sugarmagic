@@ -489,25 +489,34 @@ export function createAuthoringViewport(
     orthographicCamera.updateProjectionMatrix();
   }
 
-  function syncLandscapeGrid(landscape: RegionLandscapeState | null | undefined) {
+  function syncLandscapeGrid(
+    landscape: RegionLandscapeState | null | undefined,
+    showGrid: boolean
+  ) {
     const nextSpec = resolveLandscapeGridSpec(landscape);
     if (
-      nextSpec.size === currentGridSpec.size &&
-      nextSpec.divisions === currentGridSpec.divisions
+      nextSpec.size !== currentGridSpec.size ||
+      nextSpec.divisions !== currentGridSpec.divisions
     ) {
-      return;
+      scene.remove(grid);
+      disposeGrid(grid);
+      grid = createLandscapeGrid(nextSpec);
+      scene.add(grid);
+      currentGridSpec = nextSpec;
     }
 
-    scene.remove(grid);
-    disposeGrid(grid);
-    grid = createLandscapeGrid(nextSpec);
-    scene.add(grid);
-    currentGridSpec = nextSpec;
+    // Applied AFTER the rebuild, and outside it: a resized landscape swaps in a
+    // fresh GridHelper that would otherwise come back visible and pop the grid
+    // into a shot the author had deliberately cleared.
+    grid.visible = showGrid;
   }
 
   function applyProjection(projection: ViewportProjection) {
     currentAssetSources = projection.assetSources;
     void syncNavMeshViz(projection);
+    // Set before the no-region guard so the toggle still responds on an empty
+    // scene; syncLandscapeGrid re-applies it after any rebuild below.
+    grid.visible = projection.showGrid;
 
     if (!projection.region || !projection.contentLibrary) {
       clearColliderWireframes();
@@ -523,7 +532,7 @@ export function createAuthoringViewport(
       contentLibrary,
       projection.assetSources
     );
-    syncLandscapeGrid(landscape);
+    syncLandscapeGrid(landscape, projection.showGrid);
 
     const resolvedObjects = resolveSceneObjects(region, {
       contentLibrary,

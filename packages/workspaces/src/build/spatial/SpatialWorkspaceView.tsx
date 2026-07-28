@@ -204,6 +204,10 @@ export function useSpatialWorkspaceView(
     viewportStore,
     (state) => state.showNavMesh
   );
+  const showGrid = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showGrid
+  );
   const hiddenVolumeIds = useVanillaStoreSelector(
     viewportStore,
     (state) => state.hiddenVolumeIds
@@ -849,6 +853,13 @@ export function useSpatialWorkspaceView(
               active: showNavMesh,
               onToggle: () =>
                 viewportStore.getState().setShowNavMesh(!showNavMesh)
+            },
+            {
+              id: "show-grid",
+              label: `${showGrid ? "Hide" : "Show"} grid`,
+              icon: "▦",
+              active: showGrid,
+              onToggle: () => viewportStore.getState().setShowGrid(!showGrid)
             }
           ]}
         />
