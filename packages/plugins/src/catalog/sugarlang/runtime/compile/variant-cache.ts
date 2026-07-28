@@ -23,6 +23,7 @@
 
 import type { CEFRBand } from "../contracts/learner-profile";
 import type { BakedLineVariant } from "../contracts/baked-variant";
+import type { GradedTextSource } from "../contracts/graded-text";
 
 export interface VariantCacheKey {
   lang: string;
@@ -38,8 +39,9 @@ export interface VariantCacheEntry {
 }
 
 export interface VariantCacheEntryMeta extends VariantCacheKey {
-  nodeId: string;
-  dialogueDefinitionId: string;
+  /** What authored text this record came from. Report/dump metadata only --
+   *  the cache never keys or branches on it. */
+  source: GradedTextSource;
   estimatedBytes: number;
   accessOrdinal: number;
 }
@@ -163,8 +165,7 @@ export class MemoryVariantCache implements SugarlangVariantCache {
     return [...this.records.values()]
       .map((record) => ({
         ...record.entry.key,
-        nodeId: record.entry.variant.nodeId,
-        dialogueDefinitionId: record.entry.variant.dialogueDefinitionId,
+        source: record.entry.variant.source,
         estimatedBytes: record.estimatedBytes,
         accessOrdinal: record.accessOrdinal
       }))
@@ -325,8 +326,7 @@ export class IndexedDBVariantCache implements SugarlangVariantCache {
     const record: IndexedDbVariantRecord & { storageKey: string } = {
       storageKey,
       ...entry.key,
-      nodeId: entry.variant.nodeId,
-      dialogueDefinitionId: entry.variant.dialogueDefinitionId,
+      source: entry.variant.source,
       workspaceId: this.workspaceId,
       estimatedBytes: estimateBytes(entry),
       accessOrdinal: ++this.accessCounter,
@@ -369,8 +369,7 @@ export class IndexedDBVariantCache implements SugarlangVariantCache {
     return (await this.getAllRecords())
       .map((record) => ({
         ...record.entry.key,
-        nodeId: record.entry.variant.nodeId,
-        dialogueDefinitionId: record.entry.variant.dialogueDefinitionId,
+        source: record.entry.variant.source,
         estimatedBytes: record.estimatedBytes,
         accessOrdinal: record.accessOrdinal
       }))

@@ -519,7 +519,8 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       const contentHash = buildVariantContentHash(nodeId, nodeText);
       const now = Date.now();
       const variant: BakedLineVariant = {
-        nodeId, dialogueDefinitionId, lang: targetLanguage, band, text,
+        source: { kind: "dialogue-node", dialogueDefinitionId, nodeId },
+        lang: targetLanguage, band, text,
         verdict: { envelopePasses: true, ratioPasses: true, voiceRetentionScore: 1, fidelityPasses: true, overallPasses: true },
         reviewFlag: false,
         generatedAtMs: now, generatedByModel: "manual", contentHash, promptVersion: VARIANT_PROMPT_VERSION
