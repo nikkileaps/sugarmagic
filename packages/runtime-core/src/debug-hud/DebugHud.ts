@@ -496,6 +496,13 @@ function injectStyles(documentRef: Document) {
     .sm-debug-hud__panel {
       width: 260px;
       min-height: 160px;
+      /* Out of flow so the closed panel does not reserve its min-height
+         underneath the toggle and push it up off the corner. The closed state
+         uses visibility:hidden (to keep the fade transition), which still
+         takes layout space -- that is what floated the button mid-screen. */
+      position: absolute;
+      left: 0;
+      bottom: calc(100% + 10px);
       padding: 10px;
       border-radius: 16px;
       border: 1px solid rgba(236, 72, 153, 0.2);
