@@ -7,6 +7,7 @@ import {
   createScriptedDialogueConversationProvider,
   type ConversationHost,
   type ConversationActionProposal,
+  type ConversationKind,
   type ConversationMiddleware,
   type ConversationPlayerInput,
   type ConversationProvider,
@@ -33,6 +34,12 @@ export interface DialoguePresenter {
   showPending: (options?: {
     speakerLabel?: string | null;
     inputPlaceholder?: string | null;
+    /**
+     * Which presentation to open. Passed at pending time (not just on the
+     * first turn) so the correct box appears immediately instead of the
+     * pending state flashing in the wrong one.
+     */
+    conversationKind?: ConversationKind;
     onCancel?: () => void;
   }) => void;
   showTurn: (
@@ -179,6 +186,7 @@ export class DialogueManager {
     this.presenter.show();
     this.presenter.showPending({
       speakerLabel: selection.npcDisplayName ?? null,
+      conversationKind: selection.conversationKind,
       onCancel: () => this.end("cancelled")
     });
     this.onDialogueStart?.();

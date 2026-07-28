@@ -31,7 +31,12 @@ import type {
   QuestFormDefinition
 } from "../conversation";
 import { isQuestFormDefinition } from "../conversation";
-import { findTermMatches, readDialogueHighlight, readTeachLine } from "./highlight";
+import { readTeachLine } from "./highlight";
+import { createTurnTextElement } from "./turn-text";
+import {
+  createScriptedDialogueBox,
+  type ScriptedDialogueBox
+} from "./ScriptedDialogueBox";
 
 
 export interface RuntimeDialoguePanel extends DialoguePresenter {
@@ -124,6 +129,16 @@ export function createRuntimeDialoguePanel(
   container.appendChild(panel);
   parentContainer.appendChild(container);
 
+  // Scripted dialogue gets its own presentation (small bottom-center box).
+  // This object owns BOTH: the action-registry ids and the
+  // `activeOverlayMenuKey` flag are single-owner (the registry throws on
+  // duplicate ids), so the two presentations cannot each register their own.
+  const scriptedBox: ScriptedDialogueBox = createScriptedDialogueBox(
+    parentContainer,
+    { onTermHover: onTermHover ?? undefined }
+  );
+  let scriptedActive = false;
+
   let currentChoices: ConversationTurnEnvelope["choices"] = [];
   let currentInputMode: ConversationTurnEnvelope["inputMode"] = "advance";
   let currentInputPlaceholder = "";
@@ -192,96 +207,11 @@ export function createRuntimeDialoguePanel(
       entry.appendChild(speakerElement);
     }
 
-    const textElement = document.createElement("div");
-    textElement.className = "sm-dialogue-entry-text";
-
-    const turnHighlight = readDialogueHighlight(turn.annotations);
-    if (turnHighlight && turnHighlight.focusTerms.length > 0) {
-      const matches = findTermMatches(
-        turn.text,
-        turnHighlight.focusTerms,
-        turnHighlight.celebrateTerms,
-        turnHighlight.introduceTerms
-      );
-      if (matches.length > 0) {
-        let cursor = 0;
-        for (const match of matches) {
-          if (match.start > cursor) {
-            textElement.appendChild(
-              document.createTextNode(turn.text.slice(cursor, match.start))
-            );
-          }
-          const wrapper = document.createElement("span");
-          const vocabKind = match.introduce
-            ? "sm-dialogue-focus-term-introduce"
-            : "sm-dialogue-focus-term-reinforce";
-          wrapper.className = match.celebrate
-            ? `sm-dialogue-focus-term ${vocabKind} sm-dialogue-focus-term-celebrate`
-            : `sm-dialogue-focus-term ${vocabKind}`;
-
-          if (onTermHover) {
-            let hoverTimer: ReturnType<typeof setTimeout> | null = null;
-            let hoverStartMs = 0;
-            wrapper.addEventListener("mouseenter", () => {
-              hoverStartMs = Date.now();
-              hoverTimer = setTimeout(() => {
-                onTermHover({
-                  term: match.term.toLowerCase(),
-                  dwellMs: Date.now() - hoverStartMs
-                });
-              }, 300);
-            });
-            wrapper.addEventListener("mouseleave", () => {
-              if (hoverTimer) {
-                clearTimeout(hoverTimer);
-                hoverTimer = null;
-              }
-            });
-          }
-
-          const termText = document.createElement("span");
-          termText.className = "sm-dialogue-focus-term-text";
-          termText.textContent = match.term;
-          wrapper.appendChild(termText);
-
-          const gloss = turnHighlight.glosses?.[match.term.toLowerCase()];
-          if (gloss) {
-            const tooltip = document.createElement("span");
-            tooltip.className = "sm-dialogue-focus-tooltip";
-            tooltip.textContent = gloss;
-            tooltip.setAttribute("aria-hidden", "true");
-            wrapper.appendChild(tooltip);
-          }
-
-          if (match.celebrate) {
-            const burst = document.createElement("span");
-            burst.className = "sm-dialogue-focus-burst";
-            const halo = document.createElement("span");
-            halo.className = "sm-dialogue-focus-burst-halo";
-            const star = document.createElement("span");
-            star.className = "sm-dialogue-focus-burst-star";
-            star.textContent = "\u2605";
-            burst.appendChild(halo);
-            burst.appendChild(star);
-            wrapper.appendChild(burst);
-          }
-
-          textElement.appendChild(wrapper);
-          cursor = match.end;
-        }
-        if (cursor < turn.text.length) {
-          textElement.appendChild(
-            document.createTextNode(turn.text.slice(cursor))
-          );
-        }
-      } else {
-        textElement.textContent = turn.text;
-      }
-    } else {
-      textElement.textContent = turn.text;
-    }
-
-    entry.appendChild(textElement);
+    // Shared with the scripted box so both presentations render identical
+    // language enrichment (focus terms, glosses, bursts, hover telemetry).
+    entry.appendChild(
+      createTurnTextElement(turn, { onTermHover: onTermHover ?? undefined })
+    );
     return entry;
   }
 
@@ -474,7 +404,10 @@ export function createRuntimeDialoguePanel(
   // keyboard shortcuts are guarded below to avoid conflicting.
   const unregisterActions: Array<() => void> = [];
   function isVisible() {
-    return container.classList.contains("visible");
+    return (
+      container.classList.contains("visible") ||
+      scriptedBox.element.classList.contains("visible")
+    );
   }
   if (actionRegistry) {
     unregisterActions.push(
@@ -496,6 +429,13 @@ export function createRuntimeDialoguePanel(
         key: "Enter",
         handler: (event) => {
           if (!isVisible()) return;
+          if (scriptedActive) {
+            // Scripted lines advance on Enter unless choices are showing.
+            if (scriptedBox.getChoiceIds().length > 1) return;
+            event.preventDefault();
+            scriptedBox.submitAdvance();
+            return;
+          }
           // Free-text mode owns Enter via its own input element.
           // quest_form mode defers to the React overlay.
           if (currentInputMode === "free_text") return;
@@ -516,6 +456,13 @@ export function createRuntimeDialoguePanel(
           key: String(digit),
           handler: (event) => {
             if (!isVisible()) return;
+            if (scriptedActive) {
+              const ids = scriptedBox.getChoiceIds();
+              if (choiceIndex >= ids.length) return;
+              event.preventDefault();
+              scriptedBox.submitChoice(ids[choiceIndex]!);
+              return;
+            }
             if (currentInputMode === "free_text") return;
             if (currentInputMode === "quest_form") return;
             if (choiceIndex >= currentChoices.length) return;
@@ -543,6 +490,8 @@ export function createRuntimeDialoguePanel(
       uiStateStore?.setState({ activeOverlayMenuKey: "dialogue" });
     },
     hide() {
+      scriptedBox.hide();
+      scriptedActive = false;
       container.classList.remove("visible");
       activeContainer.innerHTML = "";
       actionsContainer.innerHTML = "";
@@ -561,6 +510,7 @@ export function createRuntimeDialoguePanel(
       }
     },
     clearHistory() {
+      scriptedBox.hide();
       historyContainer.innerHTML = "";
       activeContainer.innerHTML = "";
       actionsContainer.innerHTML = "";
@@ -571,15 +521,37 @@ export function createRuntimeDialoguePanel(
     },
     showPending(options) {
       pendingSpeakerLabel = options?.speakerLabel ?? null;
+      onCancel = options?.onCancel ?? null;
+      // Decide the presentation up front so the pending state does not flash
+      // in the wrong box before the first turn arrives.
+      scriptedActive = options?.conversationKind === "scripted-dialogue";
+      if (scriptedActive) {
+        container.classList.remove("visible");
+        scriptedBox.show();
+        scriptedBox.showPending(pendingSpeakerLabel);
+        return;
+      }
+      scriptedBox.hide();
       graduateActive();
       stopCurrent();
-      onCancel = options?.onCancel ?? null;
       activeContainer.innerHTML = "";
       activeContainer.appendChild(createPendingEntry(pendingSpeakerLabel));
       container.classList.add("visible");
       scrollToBottom();
     },
     showTurn(turn, handleTurnInput, handleCancel) {
+      // conversationKind is stable for the session; inputMode is NOT a valid
+      // switch (an agent's closing turn reports "advance", which would snap a
+      // chat into the scripted box and drop its visible history).
+      scriptedActive = turn.conversationKind === "scripted-dialogue";
+      if (scriptedActive) {
+        onCancel = handleCancel ?? null;
+        container.classList.remove("visible");
+        scriptedBox.show();
+        scriptedBox.showTurn(turn, handleTurnInput);
+        return;
+      }
+      scriptedBox.hide();
       if (activeContainsPendingEntry()) {
         activeContainer.innerHTML = "";
       } else {
@@ -621,6 +593,7 @@ export function createRuntimeDialoguePanel(
     dispose() {
       for (const unregister of unregisterActions) unregister();
       stopCurrent();
+      scriptedBox.dispose();
       parentContainer.removeChild(container);
     }
   };
@@ -639,6 +612,145 @@ function injectStyles() {
       opacity: 0;
       transition: opacity 0.2s ease-out;
       z-index: 20;
+    }
+
+    /* ---- Scripted presentation: small bottom-center box ---- */
+
+    .sm-dialogue-box-container {
+      position: absolute;
+      left: 50%;
+      /* Clears the HUD icon row that sits along the bottom edge. */
+      bottom: 108px;
+      transform: translateX(-50%) translateY(6px);
+      width: min(680px, calc(100vw - 64px));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.18s ease-out, transform 0.18s ease-out;
+      z-index: 20;
+    }
+
+    .sm-dialogue-box-container.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      pointer-events: auto;
+    }
+
+    /* Speaker rides ABOVE the box as a pill, so the box itself stays short. */
+    .sm-dialogue-box-speaker {
+      position: relative;
+      z-index: 1;
+      margin-bottom: -10px;
+      padding: 4px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: linear-gradient(180deg, rgba(36, 34, 56, 0.98), rgba(26, 24, 42, 0.98));
+      color: #85c1e9;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+    }
+
+    .sm-dialogue-box-speaker.is-empty {
+      display: none;
+    }
+
+    .sm-dialogue-box {
+      position: relative;
+      width: 100%;
+      min-height: 84px;
+      padding: 18px 46px 16px 22px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: linear-gradient(180deg, rgba(24, 24, 37, 0.94), rgba(17, 17, 27, 0.96));
+      box-shadow: 0 18px 54px rgba(0, 0, 0, 0.38);
+      backdrop-filter: blur(20px);
+      /* NOT overflow:hidden -- unlike the chat panel, this box is short and
+         hover glosses open upward, so clipping would swallow them. */
+    }
+
+    .sm-dialogue-box .sm-dialogue-entry-text {
+      color: rgba(240, 232, 223, 0.9);
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .sm-dialogue-box-enrichment:empty {
+      display: none;
+    }
+
+    .sm-dialogue-box-choices:empty {
+      display: none;
+    }
+
+    .sm-dialogue-box-choices {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .sm-dialogue-box-choice {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+      color: rgba(240, 232, 223, 0.92);
+      font-size: 15px;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.15s ease-out, border-color 0.15s ease-out;
+    }
+
+    .sm-dialogue-box-choice:hover {
+      background: rgba(137, 180, 250, 0.12);
+      border-color: rgba(137, 180, 250, 0.35);
+    }
+
+    .sm-dialogue-box-choice .choice-number {
+      color: rgba(249, 226, 175, 0.9);
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+    }
+
+    /* Advance chevron, bottom-right, pulsing only when a press would advance. */
+    .sm-dialogue-box-advance {
+      position: absolute;
+      right: 18px;
+      bottom: 12px;
+      color: rgba(240, 232, 223, 0.35);
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.15s ease-out;
+    }
+
+    .sm-dialogue-box-advance.is-ready {
+      opacity: 1;
+      animation: sm-dialogue-box-advance-pulse 1.6s ease-in-out infinite;
+    }
+
+    @keyframes sm-dialogue-box-advance-pulse {
+      0%, 100% { opacity: 0.35; transform: translateX(0); }
+      50% { opacity: 0.85; transform: translateX(2px); }
+    }
+
+    /* Referenced by both presentations since 085.5 but never defined. */
+    .sm-dialogue-teach-line {
+      margin: 10px 0 0;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border-left: 2px solid rgba(249, 226, 175, 0.5);
+      background: rgba(249, 226, 175, 0.07);
+      color: rgba(240, 232, 223, 0.78);
+      font-size: 13px;
+      line-height: 1.5;
     }
 
     .sm-dialogue-panel-container.visible {
