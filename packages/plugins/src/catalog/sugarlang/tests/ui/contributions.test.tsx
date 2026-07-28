@@ -41,6 +41,7 @@ describe("sugarlang shell contributions", () => {
       "learner-card-inspector",
       "learner-override",
       "line-variants",
+      "item-view-variants",
       "variant-report"
     ]);
   });
