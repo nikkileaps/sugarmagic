@@ -39,6 +39,7 @@ export const SUGARAGENT_CONTRIB_PREFIX = "sugaragent.contrib/" as const;
  *   regenDirectives   -- 084.3
  *   textConventions   -- 084.4
  *   interpretLexicon  -- 084.5
+ *   retrieveBiasTerms -- 087.6 (teachable-biased retrieval)
  */
 export interface SugaragentContribution {
   schemaVersion: 1;
@@ -61,6 +62,13 @@ export interface SugaragentContribution {
    * Categories must match the intent groups in interpretation.ts; unknown categories ignored.
    */
   interpretLexicon?: Record<string, string[]>;
+  /**
+   * Lemma ids the outer-loop scheduler wants the retrieval query to be biased toward.
+   * Consumed by RetrieveStage to append "Vocabulary in focus: ..." to the search query.
+   * Concatenated across contributors (same semantics as judgeDirectives).
+   * Published by sugarlang when the schedule has active (non-fluency) lemma teachables.
+   */
+  retrieveBiasTerms?: string[];
 }
 
 /** Merged view of all contributions for a given turn. */
@@ -75,6 +83,8 @@ export interface MergedContributions {
   preserveActionTags: boolean;
   /** Union of surface forms per category. */
   interpretLexicon: Record<string, string[]>;
+  /** Lemma ids to bias the retrieval query toward; concatenated across contributors. */
+  retrieveBiasTerms: string[];
 }
 
 const EMPTY: MergedContributions = {
@@ -83,7 +93,8 @@ const EMPTY: MergedContributions = {
   judgeDirectives: [],
   regenDirectives: [],
   preserveActionTags: false,
-  interpretLexicon: {}
+  interpretLexicon: {},
+  retrieveBiasTerms: []
 };
 
 function isValidContribution(raw: unknown): raw is SugaragentContribution {
@@ -102,6 +113,7 @@ function isValidContribution(raw: unknown): raw is SugaragentContribution {
     obj.interpretLexicon !== undefined &&
     (typeof obj.interpretLexicon !== "object" || obj.interpretLexicon === null)
   ) return false;
+  if (obj.retrieveBiasTerms !== undefined && !Array.isArray(obj.retrieveBiasTerms)) return false;
   return true;
 }
 
@@ -138,6 +150,7 @@ export function collectContributions(
   const regenDirectives: string[] = [];
   let preserveActionTags = false;
   const interpretLexicon: Record<string, string[]> = {};
+  const retrieveBiasTerms: string[] = [];
 
   for (const { contrib } of entries) {
     if (contrib.generateOverlay) overlayParts.push(contrib.generateOverlay);
@@ -156,6 +169,7 @@ export function collectContributions(
         }
       }
     }
+    if (contrib.retrieveBiasTerms?.length) retrieveBiasTerms.push(...contrib.retrieveBiasTerms);
   }
 
   return {
@@ -164,6 +178,7 @@ export function collectContributions(
     judgeDirectives,
     regenDirectives,
     preserveActionTags,
-    interpretLexicon
+    interpretLexicon,
+    retrieveBiasTerms
   };
 }

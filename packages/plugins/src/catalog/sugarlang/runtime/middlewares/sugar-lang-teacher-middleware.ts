@@ -48,6 +48,7 @@ import {
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
   SUGARLANG_PRESCRIPTION_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
+  SUGARLANG_SCHEDULE_ANNOTATION,
   extractCharacterVoiceReminder,
   buildEmptyPrescription,
   getSugarlangConversationId,
@@ -59,6 +60,7 @@ import {
   shouldRunSugarlangForExecution,
   type SugarlangLoggerLike
 } from "./shared";
+import type { TeachSchedule } from "../scheduler/teach-schedule";
 
 // Local structural type matching SugaragentContribution (sugaragent owns the
 // full interface; we mirror only the fields we write -- no import needed).
@@ -70,6 +72,7 @@ interface SugarlangContributionShape {
   regenDirectives?: string[];
   interpretLexicon?: Record<string, string[]>;
   textConventions?: { preserveActionTags?: boolean };
+  retrieveBiasTerms?: string[];
 }
 const SUGARAGENT_CONTRIB_SUGARLANG_KEY = "sugaragent.contrib/sugarlang" as const;
 
@@ -261,6 +264,9 @@ export function createSugarLangTeacherMiddleware(
       if (!prescription) {
         return execution;
       }
+      const schedule = execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] as
+        | TeachSchedule
+        | undefined;
       const prePlacementOpeningLine = execution.annotations[
         SUGARLANG_PREPLACEMENT_LINE_ANNOTATION
       ] as SugarlangConstraint["prePlacementOpeningLine"] | undefined;
@@ -285,6 +291,25 @@ export function createSugarLangTeacherMiddleware(
       const teacherQuestEssentialLemmas = questObjectiveInFocus
         ? annotatedQuestEssentialLemmas
         : [];
+      const pendingProvisional = (
+        execution.annotations[SUGARLANG_PENDING_PROVISIONAL_ANNOTATION] as
+          | Array<{
+              lemmaRef: { lemmaId: string; lang: string };
+              evidenceAmount: number;
+              turnsPending: number;
+            }>
+          | undefined
+      ) ?? [];
+      const probeFloorState = (
+        execution.annotations[SUGARLANG_PROBE_FLOOR_ANNOTATION] as
+          | ProbeFloorState
+          | undefined
+      ) ?? {
+        turnsSinceLastProbe: 0,
+        totalPendingLemmas: 0,
+        softFloorReached: false,
+        hardFloorReached: false
+      };
 
       if (prePlacementOpeningLine) {
         directive = createPrePlacementDirective();
@@ -300,6 +325,70 @@ export function createSugarLangTeacherMiddleware(
           }),
           logger
         );
+      } else if (schedule && !schedule.isColdStart) {
+        // 087.6: schedule-driven realization. The outer loop has already determined
+        // what to teach; derive the directive deterministically without an LLM call.
+        // Directive lifetime is maxTurns=1 (free to recompute every turn since this
+        // path is deterministic and cheap). Fall through to the LLM path below when
+        // no schedule is present (cold-start or first-session) -- that path amortizes
+        // the LLM call over 3 turns.
+        const targetLanguage = execution.selection.targetLanguage ?? learner.targetLanguage;
+        const posture =
+          learner.estimatedCefrBand === "A1" ? "anchored" as const
+            : learner.estimatedCefrBand === "A2" ? "supported" as const
+            : "target-dominant" as const;
+        const ratio =
+          posture === "anchored" ? 0.2
+            : posture === "supported" ? 0.5
+            : 0.8;
+        const glossingStrategy =
+          posture === "target-dominant" ? "none" as const : "hover-only" as const;
+        const probeTrigger =
+          probeFloorState.hardFloorReached ||
+          (probeFloorState.softFloorReached && pendingProvisional.length >= 5);
+        directive = {
+          targetVocab: {
+            introduce: prescription.introduce,
+            reinforce: prescription.reinforce,
+            avoid: prescription.avoid
+          },
+          supportPosture: posture,
+          targetLanguageRatio: ratio,
+          interactionStyle: "natural_dialogue",
+          glossingStrategy,
+          sentenceComplexityCap: "free",
+          comprehensionCheck: {
+            trigger: probeTrigger,
+            probeStyle: probeTrigger ? "recall" : "none",
+            targetLemmas: probeTrigger
+              ? pendingProvisional.slice(0, 2).map((p) => p.lemmaRef)
+              : [],
+            ...(probeTrigger
+              ? {
+                  triggerReason: probeFloorState.hardFloorReached
+                    ? ("hard-floor-turns" as const)
+                    : ("soft-floor" as const)
+                }
+              : {})
+          },
+          directiveLifetime: { maxTurns: 1, invalidateOn: [] },
+          citedSignals: ["schedule-driven"],
+          rationale: `Schedule-driven: ${schedule.teachables.length} teachable(s) paced by outer loop.`,
+          confidenceBand: "high",
+          isFallbackDirective: false
+        };
+        logger.debug("Schedule-driven directive built without teacher LLM.", {
+          conversationId,
+          sessionId,
+          turnId: traceTurnId,
+          sceneId: currentSceneId,
+          targetLanguage,
+          posture,
+          ratio,
+          scheduleTeachableCount: schedule.teachables.length,
+          introduceCount: prescription.introduce.length,
+          probeTrigger
+        });
       } else {
         if (!scene) {
           logger.warn("Skipping Sugarlang teacher middleware - no scene id.");
@@ -326,23 +415,8 @@ export function createSugarLangTeacherMiddleware(
             supportLanguage: execution.selection.supportLanguage ?? learner.supportLanguage
           },
           calibrationActive: false,
-          pendingProvisionalLemmas:
-            (execution.annotations[SUGARLANG_PENDING_PROVISIONAL_ANNOTATION] as
-              | Array<{
-                  lemmaRef: { lemmaId: string; lang: string };
-                  evidenceAmount: number;
-                  turnsPending: number;
-                }>
-              | undefined) ?? [],
-          probeFloorState:
-            (execution.annotations[SUGARLANG_PROBE_FLOOR_ANNOTATION] as
-              | ProbeFloorState
-              | undefined) ?? {
-              turnsSinceLastProbe: 0,
-              totalPendingLemmas: 0,
-              softFloorReached: false,
-              hardFloorReached: false
-            },
+          pendingProvisionalLemmas: pendingProvisional,
+          probeFloorState,
           activeQuestEssentialLemmas: teacherQuestEssentialLemmas,
           selectionMetadata: execution.selection.metadata
         });
@@ -466,13 +540,26 @@ export function createSugarLangTeacherMiddleware(
         constraint.targetLanguage,
         constraint.learnerCefr
       );
+      // 087.6: when the schedule drives the directive, publish the top scheduled
+      // lemma ids as retrieveBiasTerms so sugaragent's RetrieveStage can bias the
+      // vector-store query toward topics that exercise what the learner needs to
+      // practice. Fluency items (well-known lemmas recycled for ease) are excluded;
+      // only active teach targets are relevant for retrieval bias.
+      const scheduledBiasTerms: string[] =
+        schedule && !schedule.isColdStart
+          ? schedule.teachables
+              .filter((t) => t.kind === "lemma" && t.teachReason !== "fluency")
+              .slice(0, 3)
+              .map((t) => t.id)
+          : [];
       const contrib: SugarlangContributionShape = {
         schemaVersion: 1,
         generateOverlay: constraint.generatorPromptOverlay,
         ...(constraintReminder ? { generateReminder: constraintReminder } : {}),
         ...(judgeDirective ? { judgeDirectives: [judgeDirective], regenDirectives: [judgeDirective] } : {}),
         ...(langLexicon ? { interpretLexicon: langLexicon } : {}),
-        ...(voiceSpec?.hasGestureTags ? { textConventions: { preserveActionTags: true } } : {})
+        ...(voiceSpec?.hasGestureTags ? { textConventions: { preserveActionTags: true } } : {}),
+        ...(scheduledBiasTerms.length > 0 ? { retrieveBiasTerms: scheduledBiasTerms } : {})
       };
       execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = contrib;
       logger.info("Teacher finalized Sugarlang guidance and constraint.", {

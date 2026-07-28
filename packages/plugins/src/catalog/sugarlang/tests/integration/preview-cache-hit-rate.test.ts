@@ -230,14 +230,16 @@ describe("preview directive cache hit rate golden", () => {
       supportLanguage: "en"
     });
 
-    // Turns 1 and 2: cache hits (same conversationId "npc-orrin", directive still live).
+    // Turns 1 and 2: 087.6 -- schedule-driven (greeting observed a lemma card so
+    // isColdStart=false). teacher.invoke() is bypassed; directive cache not consulted.
+    // Zero cache hits; still only the one greeting invocation.
     await host.submitInput({ kind: "advance" });
     await host.submitInput({ kind: "advance" });
 
     const phase1Resolved = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
     const phase1Hits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
     expect(phase1Resolved.length).toBe(1);
-    expect(phase1Hits.length).toBe(2);
+    expect(phase1Hits.length).toBe(0);
 
     // Fire a quest stage change -- DirectiveCache subscribes to the blackboard and
     // invalidates all cached directives on QUEST_ACTIVE_STAGE_FACT changes.
@@ -253,14 +255,16 @@ describe("preview directive cache hit rate golden", () => {
       updatedAtMs: 1000
     });
 
-    // Turn 3: cache miss after invalidation -- exactly one new teacher invocation.
+    // Turn 3: schedule-driven -- the cache invalidation has no effect since the
+    // schedule-driven path never consults the directive cache. Still one total
+    // invocation (the greeting); still zero cache hits.
     await host.submitInput({ kind: "advance" });
 
     const phase2Resolved = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
     const phase2Hits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
 
-    // Total across the full run: 2 invocations, 2 hits.
-    expect(phase2Resolved.length).toBe(2);
-    expect(phase2Hits.length).toBe(2);
+    // Total across the full run: 1 invocation (greeting only), 0 hits.
+    expect(phase2Resolved.length).toBe(1);
+    expect(phase2Hits.length).toBe(0);
   });
 });

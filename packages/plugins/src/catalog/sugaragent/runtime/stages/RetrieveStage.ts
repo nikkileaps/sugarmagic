@@ -7,6 +7,7 @@ import {
 import { createDiagnostics } from "./diagnostics";
 import { normalizeRetrievedEvidenceText, summarizeEvidence } from "./helpers";
 import { recordRetrievalSnapshot } from "./retrieval-debug";
+import { collectContributions } from "../contributions";
 import type {
   InterpretResult,
   RetrievalScoreEntry,
@@ -226,6 +227,14 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
       input.execution,
       activeQuestDisplayName
     );
+    // 087.6: bias the retrieval query toward vocabulary the outer-loop scheduler
+    // wants the learner to practice. sugarlang writes retrieveBiasTerms to the
+    // contribution bus when the schedule has active (non-fluency) lemma teachables.
+    const { retrieveBiasTerms } = collectContributions(input.execution.annotations);
+    const effectiveSearchQuery =
+      retrieveBiasTerms.length > 0
+        ? `${searchQuery}\nVocabulary in focus: ${retrieveBiasTerms.join(", ")}`
+        : searchQuery;
 
     const floor = context.config.loreRelevanceFloor;
     let droppedByFloor = 0;
@@ -276,7 +285,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           const requested = Math.min(8, context.config.maxLoreResults + 3);
           const broad = await this.vectorStoreProvider.searchLore({
             vectorStoreId: "",
-            query: searchQuery,
+            query: effectiveSearchQuery,
             maxResults: requested,
             filters: undefined
           });
@@ -307,7 +316,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
             this.vectorStoreProvider!.searchLore({
               // Empty vectorStoreId → gateway defaults it server-side.
               vectorStoreId: "",
-              query: searchQuery,
+              query: effectiveSearchQuery,
               maxResults: filters ? primaryMaxResults : context.config.maxLoreResults,
               filters
             });
@@ -331,7 +340,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           if (shouldPinNpcLore && npcLorePageId) {
             const npcLoreEvidence = await this.vectorStoreProvider.searchLore({
               vectorStoreId: "",
-              query: searchQuery,
+              query: effectiveSearchQuery,
               maxResults: 1,
               filters: {
                 type: "eq",
