@@ -1919,6 +1919,11 @@ export function createRuntimeGameplaySessionController(
   ): Promise<void> {
     const resolvers =
       pluginManager?.getContributions("displayText.resolver") ?? [];
+    console.info("[sugarlang:itemview]", {
+      itemDefinitionId: definition.definitionId,
+      resolverCount: resolvers.length,
+      hasPluginManager: Boolean(pluginManager)
+    });
     if (resolvers.length === 0) {
       itemViewUi.show(definition, quantity);
       return;

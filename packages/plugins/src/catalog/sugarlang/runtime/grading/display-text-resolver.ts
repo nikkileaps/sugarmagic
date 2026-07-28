@@ -39,11 +39,10 @@
  * policy, a second report and a second thing to invalidate.
  */
 
-import type { CEFRBand, LearnerProfile } from "../contracts/learner-profile";
+import type { CEFRBand } from "../contracts/learner-profile";
 import type { GradedTextSource } from "../contracts/graded-text";
 import type { SugarlangVariantCache } from "../compile/variant-cache";
-import type { LexicalPrescription } from "../contracts/lexical-prescription";
-import type { CompiledSceneLexicon, LexicalAtlasProvider } from "../types";
+import type { LexicalAtlasProvider } from "../types";
 import { buildItemViewContentHash } from "./sources/item-view-source";
 import { diglotWeave } from "../classifier/diglot-weave";
 import { getAllInventoryChunks } from "../inventory/function-inventory-loader";
@@ -65,16 +64,54 @@ function isWeaveBand(band: CEFRBand): boolean {
   return band === "A1" || band === "A2";
 }
 
+const BAND_ORDER: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
+
 /**
- * How many of the budgeter's scored survivors the weave may draw from.
- *
- * Not a teaching budget -- these are candidates for SUBSTITUTION in one piece
- * of text, and only the ones that actually appear get used. Too small and the
- * pool misses the text entirely (the bug this constant exists to fix); too
- * large and an anchored A1 paragraph comes back mostly Spanish, since
- * diglotWeave swaps every match and has no ratio control of its own.
+ * Every band at or below the learner's, so the pool is "all the vocabulary this
+ * level admits" rather than a ranked shortlist.
  */
-const WEAVE_POOL_SIZE = 20;
+function bandsUpTo(band: CEFRBand): CEFRBand[] {
+  const index = BAND_ORDER.indexOf(band);
+  return index < 0 ? [band] : BAND_ORDER.slice(0, index + 1);
+}
+
+/*
+ * WHY ITEM TEXT DOES NOT GO THROUGH THE BUDGETER (nikki, 2026-07-28)
+ *
+ * This is a GAMEPLAY DECISION, not an oversight, and not a shortcut taken for
+ * implementation convenience. Read this before "fixing" it.
+ *
+ * The budgeter answers a PACING question: given this scene and this learner,
+ * what few words should we teach next, and how many. That is the right question
+ * for a conversation, where turns arrive in sequence and the learner is being
+ * walked somewhere.
+ *
+ * An item the player chose to examine is a different moment. They stopped, they
+ * opened it, they are reading. There is no pacing budget to protect -- the
+ * player is browsing, not being led -- and the interesting thing is how much of
+ * the level's vocabulary this object can surface. So the pool here is EVERY
+ * lemma at or below the learner's band, and dense substitution is a feature: a
+ * wordy item should read as a wordy item in the target language.
+ *
+ * The mechanical reason it could not have worked the old way is worth keeping
+ * too. Candidates used to come from the budgeter's top-N slate for the whole
+ * SCENE, which almost never intersects one specific paragraph -- measured on a
+ * real scene the slate was [estación, área, vuestro] while the item prose was
+ * about travellers, heads and flying. Every substitution missed and items
+ * rendered as plain English every single time.
+ *
+ * WHAT THIS STILL DOES NOT DO: it matches only words LITERALLY present in the
+ * text. What a text is ABOUT but never says -- the Finnick/cheese case -- needs
+ * Plan 090's situation/concept layer. This is the deterministic half only.
+ *
+ * REVISIT AFTER 090, AS A DECISION RATHER THAN A CLEANUP. Once 090 can say
+ * "here is what is worth teaching at this moment", reconsider whether item text
+ * should consult it -- and whether dense substitution still reads well once
+ * concepts are being chosen deliberately. Depending on how 090 lands, the
+ * answer may legitimately remain "items ignore the budgeter". Do not assume
+ * this is scaffolding to be deleted; it is a position to re-evaluate.
+ * See docs/plans/090-concept-opportunity-scanner-epic.md.
+ */
 
 /** What the host passes in. Mirrors runtime-core's `DisplayTextRequest`. */
 export interface DisplayTextResolveRequest {
@@ -86,14 +123,9 @@ export interface DisplayTextResolveRequest {
 
 /** Everything the A1/A2 weave path needs, resolved lazily. */
 export interface WeaveInputs {
-  learner: LearnerProfile;
-  sceneLexicon: CompiledSceneLexicon;
   atlas: LexicalAtlasProvider;
-  prescribe: (input: {
-    learner: LearnerProfile;
-    sceneLexicon: CompiledSceneLexicon;
-    conversationState: Record<string, unknown>;
-  }) => Promise<LexicalPrescription>;
+  /** Learner's band -- the pool is every lemma at or below it. */
+  band: CEFRBand;
   supportLanguage: string;
 }
 
@@ -148,9 +180,16 @@ export function createDisplayTextResolver(deps: DisplayTextResolverDeps) {
       if (!mapped) return request.text;
 
       const lang = deps.getTargetLanguage();
-      if (!lang) return request.text;
-
       const band = await deps.getLearnerBand();
+      console.info("[sugarlang:resolve]", {
+        subjectKind: request.subjectKind,
+        field: request.field,
+        lang,
+        band,
+        hasWeaveInputsDep: Boolean(deps.getWeaveInputs),
+        hasVariantCache: Boolean(deps.getVariantCache())
+      });
+      if (!lang) return request.text;
       if (!band) return request.text;
 
       // A1/A2 splice target words into the authored English rather than reading
@@ -197,15 +236,18 @@ async function weaveText(
   targetLang: string,
   deps: DisplayTextResolverDeps
 ): Promise<string | null> {
-  if (!deps.getWeaveInputs) return null;
+  if (!deps.getWeaveInputs) {
+    console.warn("[sugarlang:weave] no getWeaveInputs wired");
+    return null;
+  }
   const inputs = await deps.getWeaveInputs();
-  if (!inputs) return null;
-
-  const prescription = await inputs.prescribe({
-    learner: inputs.learner,
-    sceneLexicon: inputs.sceneLexicon,
-    conversationState: { nowMs: Date.now() }
-  });
+  if (!inputs) {
+    console.warn(
+      "[sugarlang:weave] getWeaveInputs returned null " +
+        "(no active region, no ambient services, or scene lexicon unavailable)"
+    );
+    return null;
+  }
 
   let inventoryChunks: ReturnType<typeof getAllInventoryChunks> = [];
   try {
@@ -214,36 +256,26 @@ async function weaveText(
     // No inventory for this language -- weave proceeds without chunk swaps.
   }
 
-  // WEAVE FROM THE ELIGIBLE POOL, NOT THE TEACHING SLATE.
-  //
-  // `prescription.introduce` is the top `levelCap` (3-5) words the budgeter
-  // wants to TEACH next across the whole scene. The weave asks a different
-  // question: which band-appropriate words happen to appear in THIS text? Those
-  // rarely intersect -- measured on a real scene, `introduce` was
-  // [estación, área, vuestro] while the item's prose was about travellers,
-  // heads and flying, so every substitution missed and the item rendered as
-  // plain English.
-  //
-  // `rationale.priorityScores` is the full envelope-survivor set (~49 there),
-  // already band-filtered and quest-essential-filtered by the budgeter, ordered
-  // by score. Drawing from it is what makes a weave actually land.
-  //
-  // Capped because diglotWeave substitutes EVERY match it finds and has no
-  // ratio control: an uncapped pool turns an anchored A1 paragraph mostly
-  // Spanish, which is the opposite of the posture. Top-N by score keeps the
-  // best-scoring words while holding substitutions to a handful per paragraph.
-  const pool = (prescription.rationale?.priorityScores ?? [])
-    .slice(0, WEAVE_POOL_SIZE)
-    .map((score) => score.lemmaRef);
+  // Every lemma the learner's level admits, as the substitution pool.
+  const pool = bandsUpTo(inputs.band).flatMap((band) =>
+    inputs.atlas.listLemmasAtBand(band, targetLang)
+  );
 
   const result = diglotWeave(
     text,
-    pool.length > 0 ? pool : prescription.introduce,
+    pool,
     inventoryChunks,
     inputs.atlas,
     targetLang,
     inputs.supportLanguage
   );
+  console.info("[sugarlang:weave]", {
+    band: inputs.band,
+    poolSize: pool.length,
+    substitutions: result.weavedForms.map((form) => form.targetForm),
+    textSample: text.slice(0, 60)
+  });
+
   // No substitution is not a failure -- it means nothing prescribed appears in
   // this text. Returning null keeps the authored English rather than the
   // identical string the weave just handed back.

@@ -82,11 +82,7 @@ import {
 import { OuterLoopScheduler } from "./scheduler/outer-loop-scheduler";
 import type { SugarlangLoggerLike } from "./logger";
 export type { SugarlangLoggerLike } from "./logger";
-import type {
-  CEFRBand,
-  CompiledSceneLexicon,
-  LearnerProfile
-} from "./types";
+import type { CEFRBand } from "./types";
 import {
   LEARNER_PROFILE_FACT,
   SUGARLANG_LEARNER_STATE_WRITER,
@@ -356,35 +352,15 @@ export class SugarlangRuntimeServices {
    * resolver falls back to authored English.
    */
   async getWeaveInputs(): Promise<{
-    learner: LearnerProfile;
-    sceneLexicon: CompiledSceneLexicon;
     atlas: CefrLexAtlasProvider;
-    prescribe: SugarlangExecutionServices["budgeter"]["prescribe"];
+    band: CEFRBand;
     supportLanguage: string;
   } | null> {
-    const sceneId = this.boundContext?.activeRegion?.identity.id ?? null;
-    if (!sceneId) return null;
+    const band = await this.getLearnerBand();
+    if (!band) return null;
     const services = await this.getAmbientServices();
     if (!services) return null;
-    try {
-      const [learner, sceneLexicon] = await Promise.all([
-        services.learnerStore.getCurrentProfile(),
-        services.sceneLexiconStore.ensure(sceneId)
-      ]);
-      return {
-        // Honour a pinned debug band here too, or weaving would use the real
-        // profile band while the rest of the resolver used the pin.
-        learner: this._debugPinnedBand
-          ? { ...learner, estimatedCefrBand: this._debugPinnedBand }
-          : learner,
-        sceneLexicon,
-        atlas: services.atlas,
-        prescribe: services.budgeter.prescribe.bind(services.budgeter),
-        supportLanguage: "en"
-      };
-    } catch {
-      return null;
-    }
+    return { atlas: services.atlas, band, supportLanguage: "en" };
   }
 
   async applyDebugBandOverride(band: CEFRBand, pin: boolean): Promise<void> {
