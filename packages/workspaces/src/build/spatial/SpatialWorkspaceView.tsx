@@ -208,6 +208,10 @@ export function useSpatialWorkspaceView(
     viewportStore,
     (state) => state.showGrid
   );
+  const showViewportOverlays = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showViewportOverlays
+  );
   const hiddenVolumeIds = useVanillaStoreSelector(
     viewportStore,
     (state) => state.hiddenVolumeIds
@@ -827,7 +831,7 @@ export function useSpatialWorkspaceView(
         )}
       </Inspector>
     ) : null,
-    viewportOverlay: region ? (
+    viewportOverlay: region && showViewportOverlays ? (
       <>
         <ViewportToolbar
           items={spatialTools}

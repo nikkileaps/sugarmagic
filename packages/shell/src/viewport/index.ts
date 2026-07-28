@@ -144,6 +144,13 @@ export interface ViewportState {
   /** Show the landscape ground grid. Defaults ON — it is an authoring aid, so
    *  the toggle exists to get a clean camera-framed shot, not to opt in. */
   showGrid: boolean;
+  /** Show the in-viewport chrome: tool rail, tool options, the view toggle bar
+   *  and the orientation gizmo. Defaults ON. Turning it off gives a clean
+   *  camera-framed view for composition checks and capture.
+   *
+   *  Deliberately NOT persisted: reopening Studio to an invisible toolbar with
+   *  no memory of why is a terrible first five minutes. */
+  showViewportOverlays: boolean;
   cameraQuaternion: [number, number, number, number];
   sketchSettings: LandscapeSketchSettings;
   /** Non-null while the Layout scatter brush tool is active. */
@@ -175,6 +182,7 @@ export interface ViewportActions {
   setShowColliders: (showColliders: boolean) => void;
   setShowNavMesh: (showNavMesh: boolean) => void;
   setShowGrid: (showGrid: boolean) => void;
+  setShowViewportOverlays: (showViewportOverlays: boolean) => void;
   setCameraQuaternion: (
     quaternion: [number, number, number, number]
   ) => void;
@@ -248,6 +256,7 @@ export function createViewportStore() {
     showColliders: false,
     showNavMesh: false,
     showGrid: true,
+    showViewportOverlays: true,
     cameraQuaternion: [0, 0, 0, 1],
     sketchSettings: DEFAULT_SKETCH_SETTINGS,
     scatterBrushSettings: null,
@@ -339,6 +348,9 @@ export function createViewportStore() {
     },
     setShowGrid(showGrid) {
       set({ showGrid });
+    },
+    setShowViewportOverlays(showViewportOverlays) {
+      set({ showViewportOverlays });
     },
     setCameraQuaternion(quaternion) {
       set({ cameraQuaternion: quaternion });
