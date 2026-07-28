@@ -11,7 +11,8 @@
     "attribute:render": "node driver/attribute-render.mjs",
     "capture": "node driver/auto-capture.mjs",
     "probe:mask": "node driver/mask-probe.mjs",
-    "probe:sky": "node driver/sky-probe.mjs"
+    "probe:sky": "node driver/sky-probe.mjs",
+    "probe:postprocess": "node driver/postprocess-probe.mjs"
   },
   "dependencies": {
     "@sugarmagic/render-web": "workspace:*",

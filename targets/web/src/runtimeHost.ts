@@ -1896,6 +1896,23 @@ export function createWebRuntimeHost(
       smQuestDebug;
     (ownerWindow as unknown as { __smsetflag?: typeof smSetFlag }).__smsetflag =
       smSetFlag;
+    // Post-process diagnostics. Every failure mode in that stack is silent --
+    // a fallen-back render graph, a dropped binding, and a throwing shader all
+    // look identical to "my settings do nothing" -- so expose what actually
+    // got applied rather than requiring a console autopsy.
+    (
+      ownerWindow as unknown as { __smPostProcessDiag?: () => unknown }
+    ).__smPostProcessDiag = () => {
+      if (!renderView) return { error: "no render view mounted" };
+      return {
+        hasRenderer: Boolean(renderView.renderer),
+        hasRenderPipeline: Boolean(renderView.renderPipeline),
+        baseOutputNodePresent: Boolean(
+          renderView.renderPipeline?.getBaseOutputNode()
+        ),
+        report: renderView.lastPostProcessReport
+      };
+    };
     currentAssetSources = state.assetSources;
     webAudioAdapter = new WebAudioAdapter({
       ownerWindow,

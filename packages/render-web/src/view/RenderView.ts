@@ -10,7 +10,10 @@
 import * as THREE from "three";
 import { WebGPURenderer } from "three/webgpu";
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core";
-import { applyPostProcessStack } from "../environment/applyPostProcessStack";
+import {
+  applyPostProcessStack,
+  type PostProcessStackReport
+} from "../environment/applyPostProcessStack";
 import { createEnvironmentSceneController, type EnvironmentSceneController } from "../environment/EnvironmentSceneController";
 import { createLandscapeSceneController, type LandscapeSceneController } from "../landscape";
 import { createRuntimeRenderPipeline, type RuntimeRenderPipeline } from "../render/RuntimeRenderPipeline";
@@ -29,6 +32,12 @@ export interface RenderViewOptions {
 export interface RenderView {
   readonly renderer: WebGPURenderer | null;
   readonly renderPipeline: RuntimeRenderPipeline | null;
+  /**
+   * Result of the most recent post-process stack application, or null if the
+   * environment has not been applied yet. Diagnostic surface: every way this
+   * stack can fail is otherwise invisible.
+   */
+  readonly lastPostProcessReport: PostProcessStackReport | null;
   readonly shaderRuntime: ShaderRuntime;
   readonly assetResolver: AuthoredAssetResolver;
   readonly environmentController: EnvironmentSceneController;
@@ -72,6 +81,8 @@ export function createRenderView(options: RenderViewOptions): RenderView {
     () => engine.shaderRuntime
   );
 
+  let lastPostProcessReport: PostProcessStackReport | null = null;
+
   const frameListeners = new Set<() => void>();
   const textureUpdatedListeners = new Set<() => void>();
   let activeCamera = options.camera;
@@ -107,13 +118,31 @@ export function createRenderView(options: RenderViewOptions): RenderView {
     }
 
     environmentController.applyResolved(state.resolved.definition);
-    renderPipeline.applyEnvironment(state.resolved.definition);
-    applyPostProcessStack({
+    // These warnings were previously discarded. "render-pipeline-fallback"
+    // means post-processing is silently dead for the whole session, which is
+    // otherwise indistinguishable from "my shader settings do nothing".
+    const environmentWarnings = renderPipeline.applyEnvironment(
+      state.resolved.definition
+    );
+    for (const warning of environmentWarnings) {
+      logger.warn(`RenderView environment warning: ${warning.message}`, {
+        code: warning.code
+      });
+    }
+    const postProcessReport = applyPostProcessStack({
       shaderRuntime: engine.shaderRuntime,
       renderPipeline,
       contentLibrary: state.contentLibrary,
       chain: state.resolved.effectivePostProcessChain
     });
+    if (!postProcessReport.pipelineActive && postProcessReport.chainLength > 0) {
+      logger.warn(
+        "RenderView post-process stack is inert: the render graph has no base " +
+          "output node, so every authored post-process shader is a no-op.",
+        { chainLength: postProcessReport.chainLength }
+      );
+    }
+    lastPostProcessReport = postProcessReport;
     markSceneMaterialsDirty();
     appliedEnvironmentVersion = state.version;
   }
@@ -193,6 +222,9 @@ export function createRenderView(options: RenderViewOptions): RenderView {
     },
     get renderPipeline() {
       return renderPipeline;
+    },
+    get lastPostProcessReport() {
+      return lastPostProcessReport;
     },
     get shaderRuntime() {
       return engine.shaderRuntime;
