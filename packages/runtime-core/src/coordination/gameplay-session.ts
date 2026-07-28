@@ -107,7 +107,6 @@ import { resolveWorldFlagWriteValue, evaluateRegionQuestBinding } from "../regio
 import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
-  createRuntimeQuestTracker,
   type QuestTrackerView,
   QuestManager,
   QuestSystem
@@ -527,7 +526,6 @@ export function createRuntimeGameplaySessionController(
           }
         : undefined
   });
-  const questTracker = createRuntimeQuestTracker(root);
   const questJournal = createRuntimeQuestJournal(root, {
     actionRegistry: options.actionRegistry
   });
@@ -1023,7 +1021,11 @@ export function createRuntimeGameplaySessionController(
   }
 
   function syncQuestUi() {
-    questTracker.update(questManager.getTrackedQuest());
+    // The always-on corner quest panel was removed: quest-start / stage-advance /
+    // objective-complete already surface as toasts (QuestNotification), and the
+    // persistent tracker is planned as a bottom-bar HUD element (a UINode in
+    // HUDDefinition, alongside inventory/caster/home) rather than this
+    // hardcoded imperative widget. The journal remains the full quest view.
     questJournal.update(questManager.getJournalData());
   }
 
@@ -2352,7 +2354,6 @@ export function createRuntimeGameplaySessionController(
       inspectableInteractableEntities.clear();
       questDialogueCoordinator.reset();
       dialogueManager.dispose();
-      questTracker.dispose();
       questJournal.dispose();
       spellMenuUi.dispose();
       questNotificationCenter.dispose();
