@@ -226,6 +226,7 @@ export class SugarlangRuntimeServices {
   private _debugPinnedBand: CEFRBand | null = null;
   /** WorkspaceId the Studio used when baking variants; wired from boot payload in manifest init. */
   private studioWorkspaceId: string | null = null;
+  private _standaloneVariantCache: SugarlangVariantCache | undefined;
 
   constructor(options: SugarlangRuntimeServicesOptions) {
     this.config = options.config;
@@ -277,6 +278,9 @@ export class SugarlangRuntimeServices {
   }
 
   wireStudioVariantCache(workspaceId: string): void {
+    if (this.studioWorkspaceId !== workspaceId) {
+      this._standaloneVariantCache = undefined;
+    }
     this.studioWorkspaceId = workspaceId;
   }
 
@@ -301,24 +305,38 @@ export class SugarlangRuntimeServices {
   }
 
   /**
-   * Variant cache for the active execution, if there is one.
+   * Variant cache for graded-text lookups outside a conversation.
    *
-   * Undefined before a conversation has ever bound (no execution services yet)
-   * and in a published game with no studio workspace id. The display-text
-   * resolver treats both as "no graded text available" and returns authored
-   * English, which is correct in both cases.
+   * Built from `studioWorkspaceId` ALONE and memoized. It must NOT hang off
+   * execution services: those are created per CONVERSATION, so reading the
+   * cache through them meant an item view could only show graded text after
+   * the player had already talked to somebody -- open the book first and you
+   * got English with no indication why.
+   *
+   * Undefined only in a published game with no studio workspace, where nothing
+   * has been graded anyway.
    */
   getVariantCache(): SugarlangVariantCache | undefined {
-    return this.getFirstExecutionServices()?.variantCache;
+    if (!this.studioWorkspaceId) return undefined;
+    this._standaloneVariantCache ??= new IndexedDBVariantCache({
+      workspaceId: this.studioWorkspaceId
+    });
+    return this._standaloneVariantCache;
   }
 
-  /** The learner's current band, or null before a learner profile exists. */
+  /**
+   * The learner's current band, or null when there is no learner yet.
+   *
+   * A PINNED debug band wins and is answered without execution services --
+   * pinning a band then opening an item before any conversation used to return
+   * null here, so the override silently did not apply outside dialogue.
+   */
   async getLearnerBand(): Promise<CEFRBand | null> {
+    if (this._debugPinnedBand) return this._debugPinnedBand;
     const services = this.getFirstExecutionServices();
     if (!services) return null;
     try {
-      const profile = await services.learnerStore.getCurrentProfile();
-      return this._debugPinnedBand ?? profile.estimatedCefrBand;
+      return (await services.learnerStore.getCurrentProfile()).estimatedCefrBand;
     } catch {
       return null;
     }
