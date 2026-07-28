@@ -4715,19 +4715,43 @@ export function createDefaultFogTintPostProcessShaderGraph(
     definitionKind: "shader",
     displayName: options.displayName ?? "Fog Tint",
     targetKind: "post-process",
-    // Bumped to 2: graph structure changed to support height-falloff fog
-    // attenuation. Saved projects pinned to revision 1 will be upgraded by
-    // mergeBuiltInShaderDefinitions, which now replaces older built-ins.
-    revision: 2,
+    // Bumped to 3: added the sky gate (see below). Saved projects pinned to an
+    // older revision are upgraded by mergeBuiltInShaderDefinitions, which
+    // replaces built-ins wholesale by `builtInKey`.
+    revision: 3,
     // Graph shape:
     //   distance fog: mask_dist = 1 - exp(-sceneDepth * density)
     //   height atten: heightAtten = exp(-max(0, worldY) * heightFalloff)
-    //   final mask:   mask = mask_dist * heightAtten
+    //   sky gate:     skyGate   = 1 - smoothstep(SKY_NEAR, SKY_FAR, sceneDepth)
+    //   final mask:   mask      = mask_dist * heightAtten * skyGate
     //   output:       mix(sceneColor, fogColor, mask)
+    //
     // worldY = 0 is treated as fog base. Fragments above y=0 get attenuated
     // by heightFalloff; fragments at or below y=0 get the full distance fog.
     // heightFalloff of 0 disables height attenuation (heightAtten = 1, giving
-    // uniform distance fog — the previous behavior).
+    // uniform distance fog).
+    //
+    // THE SKY GATE, and why it exists. This is a post-process keyed on the
+    // depth buffer, and the sky dome draws with `depthWrite = false`
+    // (skyMaterial.ts) — so sky pixels keep the CLEARED depth, which
+    // linearizes to cameraFar (1000 everywhere in this codebase). Without a
+    // gate the sky is by far the farthest thing on screen and therefore eats
+    // the most fog: at density 0.001 the sky took `1 - exp(-1000 * 0.001)` =
+    // 63% fog tint while scene geometry 30 units out took 3%. That reads as
+    // "the fog washed out my sky and did nothing to my scene" — exactly
+    // backwards from atmospheric perspective, and no combination of density
+    // and heightFalloff can fix it, because the sky is ~30x farther than
+    // anything else in the frame.
+    //
+    // The band is deliberately TIGHT and sits right against the far plane
+    // (940 -> 992 against cameraFar 1000), so geometry gets full atmospheric
+    // fog all the way out to ~940 units and only true sky is excluded. A wider
+    // band (the first attempt used 700 -> 985) visibly robbed haze from distant
+    // geometry: probe deltas fell from 74 at 550 units to 37 at 800, i.e. the
+    // farthest mountains hazed LESS than nearer ones, which reads as wrong. Thresholds are hardcoded for the same reason
+    // materialize/effect.ts hardcodes its own sky test: the TSL `cameraFar`
+    // uniform has been observed to bind unreliably inside the post-process
+    // pass, and a collapsed threshold would silently disable fog everywhere.
     nodes: [
       { nodeId: "scene-color", nodeType: "input.scene-color", position: { x: 48, y: 176 }, settings: {} },
       { nodeId: "scene-depth", nodeType: "input.scene-depth", position: { x: 48, y: 48 }, settings: {} },
@@ -4748,6 +4772,12 @@ export function createDefaultFogTintPostProcessShaderGraph(
       { nodeId: "negate-height", nodeType: "math.multiply", position: { x: 912, y: 560 }, settings: {} },
       { nodeId: "height-atten", nodeType: "math.exp", position: { x: 1120, y: 560 }, settings: {} },
       { nodeId: "combined-mask", nodeType: "math.multiply", position: { x: 1320, y: 368 }, settings: {} },
+      // Sky gate: full fog out to SKY_NEAR, fading to none by SKY_FAR.
+      createFloatConstantNode("sky-near", 940, { x: 288, y: 816 }),
+      createFloatConstantNode("sky-far", 992, { x: 288, y: 896 }),
+      { nodeId: "sky-fade", nodeType: "math.smoothstep", position: { x: 720, y: 856 }, settings: {} },
+      { nodeId: "sky-gate", nodeType: "math.subtract", position: { x: 1120, y: 856 }, settings: {} },
+      { nodeId: "masked-by-sky", nodeType: "math.multiply", position: { x: 1420, y: 560 }, settings: {} },
       { nodeId: "mix", nodeType: "math.lerp", position: { x: 1560, y: 176 }, settings: {} },
       { nodeId: "output", nodeType: "output.post-process", position: { x: 1780, y: 176 }, settings: {} }
     ],
@@ -4773,10 +4803,19 @@ export function createDefaultFogTintPostProcessShaderGraph(
       // Combine distance + height into final mask
       createShaderEdge("edge-combine-a", "one-minus-exp", "value", "combined-mask", "a"),
       createShaderEdge("edge-combine-b", "height-atten", "value", "combined-mask", "b"),
-      // Mix scene with fog color by combined mask
+      // Sky gate chain: skyGate = 1 - smoothstep(skyNear, skyFar, sceneDepth)
+      createShaderEdge("edge-sky-near-edge0", "sky-near", "value", "sky-fade", "edge0"),
+      createShaderEdge("edge-sky-far-edge1", "sky-far", "value", "sky-fade", "edge1"),
+      createShaderEdge("edge-depth-sky-fade-x", "scene-depth", "value", "sky-fade", "x"),
+      createShaderEdge("edge-one-sky-gate-a", "one", "value", "sky-gate", "a"),
+      createShaderEdge("edge-sky-fade-sky-gate-b", "sky-fade", "value", "sky-gate", "b"),
+      // Apply the gate to the combined distance+height mask
+      createShaderEdge("edge-masked-by-sky-a", "combined-mask", "value", "masked-by-sky", "a"),
+      createShaderEdge("edge-masked-by-sky-b", "sky-gate", "value", "masked-by-sky", "b"),
+      // Mix scene with fog color by the gated mask
       createShaderEdge("edge-scene-mix", "scene-color", "value", "mix", "a"),
       createShaderEdge("edge-color-mix", "color", "value", "mix", "b"),
-      createShaderEdge("edge-mask-mix", "combined-mask", "value", "mix", "alpha"),
+      createShaderEdge("edge-mask-mix", "masked-by-sky", "value", "mix", "alpha"),
       createShaderEdge("edge-mix-output", "mix", "value", "output", "color")
     ],
     parameters: [
