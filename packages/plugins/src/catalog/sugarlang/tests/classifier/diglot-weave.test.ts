@@ -140,8 +140,9 @@ describe("diglotWeave", () => {
       "en"
     );
 
-    // The substitution is bare -- no asterisks.
-    expect(result.text).toContain("hola");
+    // The substitution is bare -- no asterisks. Sentence-initial, so it
+    // carries sentence case rather than the bare lowercase citation form.
+    expect(result.text).toContain("Hola");
     expect(result.text).not.toContain("*");
     expect(result.weavedForms).toHaveLength(1);
     expect(result.weavedForms[0]!.targetForm).toBe("hola");
@@ -163,7 +164,7 @@ describe("diglotWeave", () => {
     );
 
     // The chunk surface form is substituted, not just the bare lemma.
-    expect(result.text).toContain("buenos dias");
+    expect(result.text).toContain("Buenos dias");
     expect(result.text).not.toContain("*");
     expect(result.weavedForms).toHaveLength(1);
     expect(result.weavedForms[0]!.targetForm).toBe("buenos dias");
@@ -184,7 +185,7 @@ describe("diglotWeave", () => {
       "en"
     );
 
-    expect(result.text).toContain("hola");
+    expect(result.text).toContain("Hola");
     // "station" must remain in English because "estacion" is not introduced.
     expect(result.text).toContain("station");
     expect(result.text).not.toContain("estacion");
@@ -240,7 +241,7 @@ describe("diglotWeave", () => {
       "en"
     );
 
-    expect(result.text).toContain("hola");
+    expect(result.text).toContain("Hola");
     expect(result.text).toContain("adios");
     expect(result.weavedForms).toHaveLength(2);
   });
@@ -331,5 +332,71 @@ describe("applyMixedTextEnvelopePredicate", () => {
 
     expect(result.passes).toBe(true);
     expect(result.exemptionsApplied).toContain("prescription-introduce");
+  });
+});
+
+describe("diglotWeave -- proper nouns and titles are protected", () => {
+  const atlas = makeMockAtlas({
+    station: [makeAtlasEntry("estación", "station")]
+  });
+  const introduce: Array<{ lemmaId: string; lang: string }> = [
+    { lemmaId: "estación", lang: "es" }
+  ];
+
+  it("does not substitute inside a capitalised multi-word title", () => {
+    // The shipped bug: "Station Manager" is a fixed title ("Jefe de Estación"
+    // in Spanish), so swapping one constituent produces a hybrid.
+    const result = diglotWeave(
+      "I'm Horace Pennyfeather, Station Manager. If you need anything just hollar.",
+      introduce,
+      [],
+      atlas,
+      "es",
+      "en"
+    );
+    expect(result.text).toContain("Station Manager");
+    expect(result.text).not.toContain("estación");
+    expect(result.weavedForms).toEqual([]);
+  });
+
+  it("still substitutes the same word when it is ordinary lowercase prose", () => {
+    const result = diglotWeave(
+      "The station is closed today.",
+      introduce,
+      [],
+      atlas,
+      "es",
+      "en"
+    );
+    expect(result.text).toContain("estación");
+    expect(result.weavedForms).toHaveLength(1);
+  });
+
+  it("substitutes a sentence-initial capital and preserves its casing", () => {
+    const result = diglotWeave(
+      "Station closes at dusk.",
+      introduce,
+      [],
+      atlas,
+      "es",
+      "en"
+    );
+    // Sentence case carries no proper-noun signal, so it is still woven --
+    // but it must not come back lowercase mid-sentence-start.
+    expect(result.text).toContain("Estación");
+    expect(result.text).not.toMatch(/^estación/);
+  });
+
+  it("protects only the title occurrence when a word appears both ways", () => {
+    const result = diglotWeave(
+      "The station is near. Ask the Station Manager.",
+      introduce,
+      [],
+      atlas,
+      "es",
+      "en"
+    );
+    expect(result.text).toContain("estación is near");
+    expect(result.text).toContain("Station Manager");
   });
 });

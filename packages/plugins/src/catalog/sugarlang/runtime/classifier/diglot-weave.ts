@@ -118,6 +118,46 @@ function resolveSubstitution(
 }
 
 /**
+ * True when the token at [start,end) is capitalised in the ORIGINAL text but is
+ * not the first word of a sentence.
+ *
+ * In English a mid-sentence capital nearly always marks a proper noun, place,
+ * or a multi-word title ("Station Manager", "Wordlark Hollow"). Those must not
+ * be substituted word-by-word: a title is a fixed unit in the target language
+ * too ("Jefe de Estacion"), so swapping one constituent produces a hybrid no
+ * native speaker would say. Sentence-initial capitals carry no such signal --
+ * they are just sentence case -- so they stay eligible.
+ */
+function isMidSentenceCapitalised(
+  authoredText: string,
+  start: number,
+  end: number
+): boolean {
+  const original = authoredText.slice(start, end);
+  const first = original[0];
+  if (!first || first !== first.toLocaleUpperCase() || first === first.toLocaleLowerCase()) {
+    return false;
+  }
+  for (let i = start - 1; i >= 0; i -= 1) {
+    const ch = authoredText[i]!;
+    if (ch === " " || ch === "\n" || ch === "\t" || ch === '"' || ch === "'") continue;
+    // First non-space char before the token: sentence punctuation means this
+    // capital is sentence case, anything else means it is mid-sentence.
+    return !(ch === "." || ch === "!" || ch === "?" || ch === ":" || ch === ";");
+  }
+  return false; // reached start of text -> sentence-initial
+}
+
+/** Mirrors the original token's leading capital onto the substituted form. */
+function matchLeadingCase(original: string, replacement: string): string {
+  const first = original[0];
+  if (!first || first !== first.toLocaleUpperCase() || first === first.toLocaleLowerCase()) {
+    return replacement;
+  }
+  return replacement.charAt(0).toLocaleUpperCase() + replacement.slice(1);
+}
+
+/**
  * Weaves target-language citation forms into authored English text by
  * substituting English words that resolve to prescription-introduced lemmas.
  *
@@ -166,18 +206,34 @@ export function diglotWeave(
 
     // Record a replacement at each occurrence of this word token in the text.
     // We need to re-scan tokens for the same word to handle repeated occurrences.
+    // Protection is evaluated PER OCCURRENCE: the same word can be part of a
+    // title in one place ("Station Manager") and ordinary in another ("the
+    // station is closed"), and only the latter should be woven.
+    let substitutedAnyOccurrence = false;
     for (const t of tokens) {
       if (t.kind !== "word" || t.surface !== word) continue;
-      if (!replacements.has(t.start)) {
-        replacements.set(t.start, { targetForm: sub.targetForm, end: t.end, lemmaId: sub.lemmaId });
-      }
+      if (replacements.has(t.start)) continue;
+      if (isMidSentenceCapitalised(authoredText, t.start, t.end)) continue;
+      replacements.set(t.start, {
+        targetForm: matchLeadingCase(
+          authoredText.slice(t.start, t.end),
+          sub.targetForm
+        ),
+        end: t.end,
+        lemmaId: sub.lemmaId
+      });
+      substitutedAnyOccurrence = true;
     }
 
-    weavedForms.push({
-      targetForm: sub.targetForm,
-      lemmaId: sub.lemmaId,
-      englishGloss: word
-    });
+    // Only report a weaved form when one actually landed, otherwise the gloss
+    // UI would offer a hover for a word still shown in English.
+    if (substitutedAnyOccurrence) {
+      weavedForms.push({
+        targetForm: sub.targetForm,
+        lemmaId: sub.lemmaId,
+        englishGloss: word
+      });
+    }
   }
 
   if (replacements.size === 0) {
