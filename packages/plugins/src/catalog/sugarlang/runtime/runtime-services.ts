@@ -332,8 +332,24 @@ export class SugarlangRuntimeServices {
    * null here, so the override silently did not apply outside dialogue.
    */
   async getLearnerBand(): Promise<CEFRBand | null> {
+    // Runtime pin (Learner Override panel) wins.
     if (this._debugPinnedBand) return this._debugPinnedBand;
-    const services = this.getFirstExecutionServices();
+
+    // Then the AUTHORED band override from plugin settings. This is a separate
+    // mechanism from the runtime pin and is the one an author actually reaches
+    // for -- it is applied at conversation start via a synthetic placement
+    // event, so before any conversation it exists only in config. Missing it
+    // meant an author who had pinned themselves to A1 in settings, then opened
+    // an item, got a null band and plain English with no explanation.
+    const configured = this.config.debugBandOverride;
+    if (configured) return configured as CEFRBand;
+
+    // Otherwise the real profile -- via AMBIENT services, not execution
+    // services, so this answers outside a conversation. Reading it from
+    // execution services meant the band was null until the player had talked to
+    // somebody, which is exactly the item-view case.
+    const services =
+      this.getFirstExecutionServices() ?? (await this.getAmbientServices());
     if (!services) return null;
     try {
       return (await services.learnerStore.getCurrentProfile()).estimatedCefrBand;
