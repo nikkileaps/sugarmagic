@@ -180,16 +180,9 @@ export function createDisplayTextResolver(deps: DisplayTextResolverDeps) {
       if (!mapped) return request.text;
 
       const lang = deps.getTargetLanguage();
-      const band = await deps.getLearnerBand();
-      console.info("[sugarlang:resolve]", {
-        subjectKind: request.subjectKind,
-        field: request.field,
-        lang,
-        band,
-        hasWeaveInputsDep: Boolean(deps.getWeaveInputs),
-        hasVariantCache: Boolean(deps.getVariantCache())
-      });
       if (!lang) return request.text;
+
+      const band = await deps.getLearnerBand();
       if (!band) return request.text;
 
       // A1/A2 splice target words into the authored English rather than reading
@@ -236,18 +229,9 @@ async function weaveText(
   targetLang: string,
   deps: DisplayTextResolverDeps
 ): Promise<string | null> {
-  if (!deps.getWeaveInputs) {
-    console.warn("[sugarlang:weave] no getWeaveInputs wired");
-    return null;
-  }
+  if (!deps.getWeaveInputs) return null;
   const inputs = await deps.getWeaveInputs();
-  if (!inputs) {
-    console.warn(
-      "[sugarlang:weave] getWeaveInputs returned null " +
-        "(no active region, no ambient services, or scene lexicon unavailable)"
-    );
-    return null;
-  }
+  if (!inputs) return null;
 
   let inventoryChunks: ReturnType<typeof getAllInventoryChunks> = [];
   try {
@@ -269,13 +253,6 @@ async function weaveText(
     targetLang,
     inputs.supportLanguage
   );
-  console.info("[sugarlang:weave]", {
-    band: inputs.band,
-    poolSize: pool.length,
-    substitutions: result.weavedForms.map((form) => form.targetForm),
-    textSample: text.slice(0, 60)
-  });
-
   // No substitution is not a failure -- it means nothing prescribed appears in
   // this text. Returning null keeps the authored English rather than the
   // identical string the weave just handed back.
