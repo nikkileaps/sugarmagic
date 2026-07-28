@@ -260,6 +260,27 @@ export class SugarlangRuntimeServices {
       dialogueDefinitions: context.dialogueDefinitions ?? [],
       questDefinitions: context.questDefinitions ?? []
     };
+
+    // Seed the band pin from config HERE, at bind, rather than waiting for a
+    // conversation.
+    //
+    // `_debugPinnedBand` is the single source of truth for "what band is this
+    // learner", and `config.debugBandOverride` is one of two things that can
+    // set it (the Learner Override panel is the other). Seeding it lazily --
+    // which is what `resolveForLanguages` used to do, and still does for the
+    // placement event -- meant the pin stayed null until the player talked to
+    // somebody. Any surface that asked before then, like an item view, got a
+    // null band and silently fell back to English.
+    //
+    // The matching PlacementCompletionEvent still fires from
+    // `resolveForLanguages`, because applying it needs the learner state
+    // reducer, which is per-language. Only the pin moves here.
+    if (
+      (import.meta as { env?: { DEV?: boolean } }).env?.DEV &&
+      this.config.debugBandOverride
+    ) {
+      this._debugPinnedBand = this.config.debugBandOverride as CEFRBand;
+    }
   }
 
   seedPreviewLexicons(payload: unknown): void {
@@ -332,17 +353,12 @@ export class SugarlangRuntimeServices {
    * null here, so the override silently did not apply outside dialogue.
    */
   async getLearnerBand(): Promise<CEFRBand | null> {
-    // Runtime pin (Learner Override panel) wins.
+    // The pin is the single source of truth for a debug band override. It is
+    // seeded from `config.debugBandOverride` at bind and by the Learner
+    // Override panel at runtime -- this method deliberately does NOT read the
+    // config itself, or the same setting would be consulted in two places and
+    // could disagree with itself.
     if (this._debugPinnedBand) return this._debugPinnedBand;
-
-    // Then the AUTHORED band override from plugin settings. This is a separate
-    // mechanism from the runtime pin and is the one an author actually reaches
-    // for -- it is applied at conversation start via a synthetic placement
-    // event, so before any conversation it exists only in config. Missing it
-    // meant an author who had pinned themselves to A1 in settings, then opened
-    // an item, got a null band and plain English with no explanation.
-    const configured = this.config.debugBandOverride;
-    if (configured) return configured as CEFRBand;
 
     // Otherwise the real profile -- via AMBIENT services, not execution
     // services, so this answers outside a conversation. Reading it from
@@ -631,7 +647,8 @@ export class SugarlangRuntimeServices {
         lemmasSeededFromFreeText: []
       };
       await learnerStateReducer.apply(overrideEvent);
-      this._debugPinnedBand = this.config.debugBandOverride as CEFRBand;
+      // The pin itself is already set at bind (see bindRuntime) -- only the
+      // placement event needs the reducer, which is why it stays here.
     }
 
     return services;
