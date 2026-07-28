@@ -1,20 +1,79 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/compile/extract-chunks.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/compile/MultiWordExpressionExtractor.ts
  *
- * Purpose: Runs the LLM-backed lexical chunk extractor over scene-authored text.
+ * WHAT A MULTI-WORD EXPRESSION IS
+ *   A multi-word expression (MWE) is a sequence of words a fluent speaker
+ *   retrieves from memory AS ONE ITEM rather than assembling from grammar.
+ *   It is a STORAGE unit, not a syntactic one -- which is why MWEs share no
+ *   common grammatical shape:
+ *     "buenos dias"        noun phrase        (pragmatic routine)
+ *     "mucho gusto"        adverb + noun      (pragmatic routine)
+ *     "tomar una decision" verb + object      (collocation)
+ *     "estar en las nubes" clause             (idiom)
+ *   The literature calls these formulaic sequences (Wray) or lexical chunks
+ *   (Lewis); "multi-word expression" is the computational-linguistics name and
+ *   the one used here because it says what it is without implying syntax.
+ *
+ * WHY THEY MATTER PEDAGOGICALLY
+ *   Fluency comes from holding a stock of these, not from composing every
+ *   utterance from rules. They also carry pragmatic appropriateness that
+ *   word-by-word composition destroys ("mucho gusto" is not "much pleasure").
+ *   Hence each MWE is graded by CEFR band AS A COMMUNICATIVE UNIT, not by its
+ *   hardest constituent lemma: "buenos dias" is A1 to USE even for a learner
+ *   who could not parse it, because it is learned whole and never decomposed.
+ *
+ * WHAT THIS MODULE DOES -- AND DELIBERATELY DOES NOT
+ *   DOES:     spots MWEs that appear VERBATIM in authored scene text. The
+ *             prompt forbids inventing anything not present. Surface-bound and
+ *             extractive: "what multi-word units are literally sitting here?"
+ *   DOES NOT: infer what the scene is ABOUT. A bio reading "cheesemonger"
+ *             yields no MWE here, and never will -- inferring the concept
+ *             `cheese` from it is a different job with a different output
+ *             shape (single notion, not a phrase). Do not grow this module in
+ *             that direction; it is a separate extractor.
+ *
+ * PATTERNS USED, AND WHY
+ *   - Dependency injection via constructor (mirrors LexicalBudgeter): the
+ *     atlas, LLM client, telemetry sink and clock are injected so the class is
+ *     unit-testable against fakes with no network and no real clock.
+ *   - Strategy-ish prompt/parse split: `buildMultiWordExpressionPrompt` is
+ *     exported and pure, so prompt shape can be asserted without invoking a
+ *     model, and the prompt can be versioned independently of the caller.
+ *   - Schema-validated boundary (Ajv): model output is untrusted input. It is
+ *     validated against MWE_SCHEMA before anything downstream sees it.
+ *   - Fail-soft: any model or validation failure returns a result carrying a
+ *     `failure` and an empty list rather than throwing, so a compile degrades
+ *     to no-MWEs instead of breaking authoring. The PUBLISH path chooses to
+ *     treat that failure as fatal; that decision lives at the call site.
+ *
+ * HOW TO USE
+ *     const extractor = new MultiWordExpressionExtractor({
+ *       atlas, llmClient, telemetry
+ *     });
+ *     const result = await extractor.extract({
+ *       sceneText: collectSceneText(scene),
+ *       lang: scene.targetLanguage,
+ *       sceneId: scene.sceneId,
+ *       contentHash
+ *     });
+ *   Callers own caching and scheduling -- this class is stateless per call.
+ *   `SugarlangAuthoringCompileScheduler` owns debounce and cache-hit skip;
+ *   `MultiWordExpressionCache` (still named chunk-cache) owns persistence.
+ *
+ * NAMING NOTE
+ *   The OUTPUT type is still `LexicalChunk`, and learner cards persist a
+ *   `chunk:` lemmaId prefix. Those names are load-bearing across 43 files and
+ *   in saved player data, so they are deliberately NOT renamed here. This
+ *   module's own vocabulary is MWE; the wire type keeps its older name.
  *
  * Exports:
- *   - EXTRACTOR_PROMPT_VERSION
- *   - EXTRACT_CHUNKS_PROMPT_TEMPLATE
- *   - extractor prompt/build types and helpers
- *   - extractChunks
- *   - extractChunks
+ *   - MultiWordExpressionExtractor (class)
+ *   - MWE_EXTRACTOR_PROMPT_VERSION
+ *   - MWE_EXTRACTION_PROMPT_TEMPLATE
+ *   - buildMultiWordExpressionPrompt
+ *   - MultiWordExpressionExtractionInput / ...Result
  *
- * Relationships:
- *   - Depends on scene traversal text blobs, lexical chunk contracts, and telemetry.
- *   - Is consumed by the chunk cache, authoring scheduler, and publish pipeline.
- *
- * Implements: Proposal 001 §Lexical Chunk Awareness
+ * Implements: Proposal 001 §Lexical Chunk Awareness; Plan 085 (functions as chunks)
  *
  * Status: active
  */
@@ -37,7 +96,7 @@ const ajv = new Ajv({
   removeAdditional: false
 });
 
-const CHUNK_SCHEMA = {
+const MWE_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["chunks"],
@@ -72,11 +131,11 @@ const CHUNK_SCHEMA = {
   }
 } as const;
 
-const validateChunkPayload = ajv.compile(CHUNK_SCHEMA);
+const validateChunkPayload = ajv.compile(MWE_SCHEMA);
 
-export const EXTRACTOR_PROMPT_VERSION = "1";
-export const DEFAULT_CHUNK_EXTRACTOR_MODEL = "claude-sonnet-4-6";
-export const EXTRACT_CHUNKS_PROMPT_TEMPLATE = [
+export const MWE_EXTRACTOR_PROMPT_VERSION = "1";
+export const DEFAULT_MWE_EXTRACTOR_MODEL = "claude-sonnet-4-6";
+export const MWE_EXTRACTION_PROMPT_TEMPLATE = [
   "You are annotating scene-authored language-learning metadata.",
   "Return JSON only.",
   "Identify multi-word idioms, fixed collocations, and formulaic chunks that appear verbatim in the provided scene text.",
@@ -98,7 +157,7 @@ interface ExtractedChunkPayload {
   chunks: ExtractedChunkSchema[];
 }
 
-export interface ExtractChunksInput {
+export interface MultiWordExpressionExtractionInput {
   sceneText: TextBlob[];
   lang: string;
   atlas: LexicalAtlasProvider;
@@ -112,7 +171,7 @@ export interface ExtractChunksInput {
   now?: () => number;
 }
 
-export interface ExtractChunksResult {
+export interface MultiWordExpressionExtractionResult {
   chunks: LexicalChunk[];
   tokenCost: {
     input: number;
@@ -156,19 +215,19 @@ function buildSceneTextDump(sceneText: TextBlob[]): string {
     .join("\n\n---\n\n");
 }
 
-export function buildExtractChunksPrompt(
+export function buildMultiWordExpressionPrompt(
   sceneText: TextBlob[],
   lang: string,
   atlas: LexicalAtlasProvider,
-  promptVersion = EXTRACTOR_PROMPT_VERSION
+  promptVersion = MWE_EXTRACTOR_PROMPT_VERSION
 ): { system: string; user: string } {
-  const system = EXTRACT_CHUNKS_PROMPT_TEMPLATE.join("\n");
+  const system = MWE_EXTRACTION_PROMPT_TEMPLATE.join("\n");
   const user = [
     `promptVersion: ${promptVersion}`,
     `targetLanguage: ${lang}`,
     `atlasVersion: ${atlas.getAtlasVersion(lang)}`,
     "Output schema:",
-    JSON.stringify(CHUNK_SCHEMA),
+    JSON.stringify(MWE_SCHEMA),
     "",
     "Scene text:",
     buildSceneTextDump(sceneText)
@@ -274,15 +333,15 @@ function sanitizeChunk(
 // sugarlang must not import from sugaragent. All LLM calls go through
 // SugarlangLLMClient (the gateway). See runtime/llm/gateway-client.ts.
 
-export async function extractChunks(
-  input: ExtractChunksInput
-): Promise<ExtractChunksResult> {
+async function runExtraction(
+  input: MultiWordExpressionExtractionInput
+): Promise<MultiWordExpressionExtractionResult> {
   const telemetry = input.telemetry ?? createNoOpTelemetrySink();
   const now = input.now ?? (() => Date.now());
-  const promptVersion = input.promptVersion ?? EXTRACTOR_PROMPT_VERSION;
-  const model = input.model ?? DEFAULT_CHUNK_EXTRACTOR_MODEL;
+  const promptVersion = input.promptVersion ?? MWE_EXTRACTOR_PROMPT_VERSION;
+  const model = input.model ?? DEFAULT_MWE_EXTRACTOR_MODEL;
   const maxTokens = input.maxTokens ?? 900;
-  const prompt = buildExtractChunksPrompt(
+  const prompt = buildMultiWordExpressionPrompt(
     input.sceneText,
     input.lang,
     input.atlas,
@@ -410,5 +469,52 @@ export async function extractChunks(
       model: model,
       failure
     };
+  }
+}
+
+/**
+ * Constructor-injected dependencies. Everything here is a collaborator the
+ * tests replace with a fake: no network, no real clock, no global telemetry.
+ */
+export interface MultiWordExpressionExtractorDeps {
+  atlas: LexicalAtlasProvider;
+  llmClient: SugarlangLLMClient;
+  telemetry?: TelemetrySink;
+  /** Injected clock; defaults to Date.now. Kept injectable so latency
+   *  assertions are deterministic. */
+  now?: () => number;
+}
+
+/** Per-call inputs: what to read, and the cache identity to report. */
+export interface MultiWordExpressionExtractRequest {
+  sceneText: TextBlob[];
+  lang: string;
+  promptVersion?: string;
+  model?: string;
+  maxTokens?: number;
+  sceneId?: string;
+  contentHash?: string;
+}
+
+/**
+ * Spots multi-word expressions that appear VERBATIM in authored scene text.
+ * See the module header for what an MWE is, why it is graded as a unit, and
+ * what this deliberately does not do.
+ *
+ * Stateless per call -- caching and scheduling belong to the caller.
+ */
+export class MultiWordExpressionExtractor {
+  constructor(private readonly deps: MultiWordExpressionExtractorDeps) {}
+
+  async extract(
+    request: MultiWordExpressionExtractRequest
+  ): Promise<MultiWordExpressionExtractionResult> {
+    return runExtraction({
+      ...request,
+      atlas: this.deps.atlas,
+      llmClient: this.deps.llmClient,
+      ...(this.deps.telemetry ? { telemetry: this.deps.telemetry } : {}),
+      ...(this.deps.now ? { now: this.deps.now } : {})
+    });
   }
 }

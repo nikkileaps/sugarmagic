@@ -28,7 +28,7 @@ import { compareCefrBands } from "../../runtime/classifier/cefr-band-utils";
 import { MorphologyLoader } from "../../runtime/classifier/morphology-loader";
 import { IndexedDBChunkCache } from "../../runtime/compile/chunk-cache";
 import { IndexedDBCompileCache } from "../../runtime/compile/cache-indexeddb";
-import { extractChunks } from "../../runtime/compile/extract-chunks";
+import { MultiWordExpressionExtractor } from "../../runtime/compile/MultiWordExpressionExtractor";
 import { SUGARLANG_COMPILE_PIPELINE_VERSION } from "../../runtime/compile/content-hash";
 import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
@@ -347,11 +347,12 @@ export async function rebuildSugarlangCompileCache(
             cache: new IndexedDBChunkCache({ workspaceId }),
             extractSceneChunks: async (scene, contentHash) => {
               const blobs = collectSceneText(scene);
-              return extractChunks({
+              return new MultiWordExpressionExtractor({
+                atlas,
+                llmClient: gatewayClient
+              }).extract({
                 sceneText: blobs,
                 lang: scene.targetLanguage,
-                atlas,
-                llmClient: gatewayClient,
                 promptVersion: SUGARLANG_COMPILE_PIPELINE_VERSION,
                 sceneId: scene.sceneId,
                 contentHash

@@ -31,7 +31,7 @@ import {
 import { compileSugarlangScene } from "./compile-sugarlang-scene";
 import { collectSceneText, type SceneAuthoringContext } from "./scene-traversal";
 import type { SugarlangChunkCache } from "./chunk-cache";
-import type { ExtractChunksResult } from "./extract-chunks";
+import type { MultiWordExpressionExtractionResult } from "./MultiWordExpressionExtractor";
 import type { SugarlangCompileCache } from "./sugarlang-compile-cache";
 import type { SugarlangIntentCache, LineIntentCacheEntry } from "./intent-cache";
 import { buildIntentContentHash } from "./intent-cache";
@@ -47,7 +47,7 @@ export interface SugarlangAuthoringChunkPipelineOptions {
   extractSceneChunks: (
     scene: SceneAuthoringContext,
     contentHash: string
-  ) => Promise<ExtractChunksResult>;
+  ) => Promise<MultiWordExpressionExtractionResult>;
   promptVersion: string;
   debounceMs?: number;
   telemetry?: TelemetrySink;

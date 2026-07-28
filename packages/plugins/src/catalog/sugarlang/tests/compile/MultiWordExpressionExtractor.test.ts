@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/compile/extract-chunks.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/compile/MultiWordExpressionExtractor.test.ts
  *
  * Purpose: Verifies the lexical chunk extractor prompt, parsing, and failure behavior.
  *
@@ -7,7 +7,7 @@
  *   - none
  *
  * Relationships:
- *   - Exercises ../../runtime/compile/extract-chunks with mocked LLM clients and telemetry.
+ *   - Exercises ../../runtime/compile/MultiWordExpressionExtractor with mocked LLM clients and telemetry.
  *   - Uses stable TextBlob fixtures so reviewers can inspect the exact prompt contract.
  *
  * Implements: Proposal 001 §Lexical Chunk Awareness / Epic 14 Story 14.1
@@ -17,10 +17,10 @@
 
 import { describe, expect, it, vi } from "vitest";
 import {
-  EXTRACTOR_PROMPT_VERSION,
-  buildExtractChunksPrompt,
-  extractChunks
-} from "../../runtime/compile/extract-chunks";
+  MWE_EXTRACTOR_PROMPT_VERSION,
+  buildMultiWordExpressionPrompt,
+  MultiWordExpressionExtractor
+} from "../../runtime/compile/MultiWordExpressionExtractor";
 import type { SugarlangLLMClient } from "../../runtime/llm/types";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import type { TextBlob } from "../../runtime/compile/scene-traversal";
@@ -52,18 +52,14 @@ function createMockClient(text: string): SugarlangLLMClient {
   };
 }
 
-describe("extractChunks", () => {
+describe("MultiWordExpressionExtractor", () => {
   it("extracts lexical chunks from a valid structured response", async () => {
     const atlas = createTestAtlasProvider("es", [
       { lemmaId: "vez", cefrPriorBand: "B2" },
       { lemmaId: "cuando", cefrPriorBand: "A1" }
     ]);
     const telemetry = new MemoryTelemetrySink();
-    const result = await extractChunks({
-      sceneId: "scene-1",
-      contentHash: "hash-1",
-      sceneText: createSceneText(),
-      lang: "es",
+    const result = await new MultiWordExpressionExtractor({
       atlas,
       telemetry,
       llmClient: createMockClient(
@@ -79,6 +75,11 @@ describe("extractChunks", () => {
           ]
         })
       )
+    }).extract({
+      sceneId: "scene-1",
+      contentHash: "hash-1",
+      sceneText: createSceneText(),
+      lang: "es"
     });
 
     expect(result.failure).toBeUndefined();
@@ -89,7 +90,7 @@ describe("extractChunks", () => {
         cefrBand: "A2",
         constituentLemmas: ["vez", "cuando"],
         extractedByModel: "claude-sonnet-4-6",
-        extractorPromptVersion: EXTRACTOR_PROMPT_VERSION
+        extractorPromptVersion: MWE_EXTRACTOR_PROMPT_VERSION
       })
     ]);
 
@@ -104,9 +105,7 @@ describe("extractChunks", () => {
 
   it("repairs JSON wrapped in markdown fences", async () => {
     const atlas = createTestAtlasProvider("es", []);
-    const result = await extractChunks({
-      sceneText: createSceneText(),
-      lang: "es",
+    const result = await new MultiWordExpressionExtractor({
       atlas,
       llmClient: createMockClient(
         [
@@ -125,6 +124,9 @@ describe("extractChunks", () => {
           "```"
         ].join("\n")
       )
+    }).extract({
+      sceneText: createSceneText(),
+      lang: "es"
     });
 
     expect(result.failure).toBeUndefined();
@@ -140,14 +142,15 @@ describe("extractChunks", () => {
       })
     };
 
-    const result = await extractChunks({
-      sceneId: "scene-1",
-      contentHash: "hash-1",
-      sceneText: createSceneText(),
-      lang: "es",
+    const result = await new MultiWordExpressionExtractor({
       atlas,
       telemetry,
       llmClient
+    }).extract({
+      sceneId: "scene-1",
+      contentHash: "hash-1",
+      sceneText: createSceneText(),
+      lang: "es"
     });
 
     expect(result.chunks).toEqual([]);
@@ -169,9 +172,9 @@ describe("extractChunks", () => {
 
   it("exports a stable prompt template", () => {
     const atlas = createTestAtlasProvider("es", []);
-    const prompt = buildExtractChunksPrompt(createSceneText(), "es", atlas);
+    const prompt = buildMultiWordExpressionPrompt(createSceneText(), "es", atlas);
 
-    expect(EXTRACTOR_PROMPT_VERSION).toBe("1");
+    expect(MWE_EXTRACTOR_PROMPT_VERSION).toBe("1");
     expect(prompt).toMatchInlineSnapshot(`
       {
         "system": "You are annotating scene-authored language-learning metadata.
