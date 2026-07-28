@@ -10,11 +10,13 @@
     "measure:live": "node driver/measure-live.mjs",
     "attribute:render": "node driver/attribute-render.mjs",
     "capture": "node driver/auto-capture.mjs",
-    "probe:mask": "node driver/mask-probe.mjs"
+    "probe:mask": "node driver/mask-probe.mjs",
+    "probe:sky": "node driver/sky-probe.mjs"
   },
   "dependencies": {
     "@sugarmagic/render-web": "workspace:*",
-    "three": "^0.183.2"
+    "three": "^0.183.2",
+    "@sugarmagic/domain": "workspace:*"
   },
   "devDependencies": {
     "playwright-core": "^1.61.1",

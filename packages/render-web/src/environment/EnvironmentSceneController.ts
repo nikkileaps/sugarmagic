@@ -358,6 +358,21 @@ export function createEnvironmentSceneController(
         buildSkyMaterial(definition)
       );
       skyMesh.name = "environment-sky";
+      // Draw before everything else. The material has depthWrite off, so
+      // without an explicit order the dome can sort against opaque geometry.
+      skyMesh.renderOrder = -1000;
+      // The dome is finite (radius 250) and would otherwise sit at the world
+      // origin, so walking far enough from spawn puts the camera outside it
+      // and the sky vanishes. Riding the camera keeps it infinitely distant
+      // in practice. Done here rather than via a host frame hook so every
+      // surface that renders a scene (Studio viewport, runtime, previews)
+      // gets it without extra wiring.
+      skyMesh.onBeforeRender = (_renderer, _scene, camera) => {
+        if (!skyMesh) return;
+        skyMesh.position.copy(camera.position);
+        // matrixWorld for this frame was already computed before this hook.
+        skyMesh.updateMatrixWorld(true);
+      };
       scene.add(skyMesh);
     }
   }

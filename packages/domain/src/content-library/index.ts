@@ -545,6 +545,16 @@ export interface SkySettings {
   mode: SkyMode;
   topColor: number;
   bottomColor: number;
+  /**
+   * Optional third gradient stop between bottom and top. Off by default so
+   * existing two-stop skies render unchanged; a sunset band (violet zenith ->
+   * pink midband -> warm horizon) needs it, since two stops cannot express a
+   * hue that is neither endpoint.
+   */
+  gradientMidEnabled: boolean;
+  gradientMidColor: number;
+  /** Height of the mid stop along the gradient, 0 = horizon, 1 = zenith. */
+  gradientMidPosition: number;
   horizonBlend: number;
   gradientExponent: number;
   saturation: number;
@@ -561,6 +571,28 @@ export interface SkySettings {
   cloudScale: number;
   cloudSpeed: number;
   cloudDirectionDegrees: number;
+  /** Lit colour of the cloud band; the sky gradient shows through elsewhere. */
+  cloudColor: number;
+  /**
+   * Cloud deck BELOW the horizon, seen from above -- the floating-island
+   * "sea of cloud" read. Distinct from `clouds*`, which is the band overhead:
+   * different projection (a plane under the camera rather than over it),
+   * different density, and usually near-opaque because it stands in for the
+   * ground. Without it, looking down off a cliff shows the flat underside of
+   * the sky gradient.
+   */
+  undercastEnabled: boolean;
+  /** Sunlit tops of the deck. */
+  undercastColor: number;
+  /**
+   * Troughs between the tops. The deck is a near-continuous surface, so its
+   * depth comes from this shadow/lit contrast rather than from gaps showing
+   * sky -- with both tones equal it reads as flat paint.
+   */
+  undercastShadowColor: number;
+  undercastCoverage: number;
+  undercastScale: number;
+  undercastOpacity: number;
 }
 
 export interface EnvironmentDefinition {
@@ -1153,6 +1185,9 @@ export const DEFAULT_SKY_SETTINGS: SkySettings = {
   mode: "gradient",
   topColor: 0x404040,
   bottomColor: 0x2a2a2a,
+  gradientMidEnabled: false,
+  gradientMidColor: 0x8a7fb5,
+  gradientMidPosition: 0.35,
   horizonBlend: 0.5,
   gradientExponent: 1.5,
   saturation: 1.0,
@@ -1164,23 +1199,75 @@ export const DEFAULT_SKY_SETTINGS: SkySettings = {
   riftSwirlStrength: 1.5,
   cloudsEnabled: false,
   cloudCoverage: 0.48,
-  cloudSoftness: 0.12,
+  // 0.22 rather than a tighter value: the noise gradient is steep, so a narrow
+  // smoothstep window gives hard cut-out edges instead of wisps (verified in
+  // the sky probe).
+  cloudSoftness: 0.22,
   cloudOpacity: 0.55,
   cloudScale: 2.2,
   cloudSpeed: 0.25,
-  cloudDirectionDegrees: 18
+  cloudDirectionDegrees: 18,
+  cloudColor: 0xfff2e0,
+  undercastEnabled: false,
+  undercastColor: 0xffe8cc,
+  undercastShadowColor: 0xc98fa8,
+  // Denser and more opaque than the overhead band: a cloud sea reads as a
+  // surface, and it is what hides the underside of the dome.
+  undercastCoverage: 0.62,
+  undercastScale: 1.6,
+  undercastOpacity: 0.95
 };
 
+/**
+ * Per-preset sky gradient. Presets that read as a single hue ramp only need
+ * the two endpoints; sunset skies need the mid stop, because the pink band
+ * between a violet zenith and a warm horizon is not on the line between them.
+ */
 export const SKY_PRESET_COLORS: Record<
   LightingPreset,
-  { topColor: number; bottomColor: number }
+  {
+    topColor: number;
+    bottomColor: number;
+    gradientMidEnabled?: boolean;
+    gradientMidColor?: number;
+    gradientMidPosition?: number;
+  }
 > = {
   default: { topColor: 0x404040, bottomColor: 0x2a2a2a },
   noon: { topColor: 0x4a90d9, bottomColor: 0x87ceeb },
   late_afternoon: { topColor: 0x53b5ec, bottomColor: 0xbfe1ee },
-  golden_hour: { topColor: 0xe67e22, bottomColor: 0xffd4a3 },
+  golden_hour: {
+    topColor: 0x6e5a9e,
+    bottomColor: 0xffdca8,
+    gradientMidEnabled: true,
+    gradientMidColor: 0xe8a5b8,
+    gradientMidPosition: 0.35
+  },
   night: { topColor: 0x0a0a1a, bottomColor: 0x1a1428 }
 };
+
+/**
+ * Sky fields a preset contributes, with the mid stop explicitly cleared when
+ * the preset does not define one -- otherwise switching from golden hour to
+ * noon would strand a pink band in a daylight sky.
+ */
+function skyGradientForPreset(preset: LightingPreset): {
+  topColor: number;
+  bottomColor: number;
+  gradientMidEnabled: boolean;
+  gradientMidColor: number;
+  gradientMidPosition: number;
+} {
+  const colors = SKY_PRESET_COLORS[preset];
+  return {
+    topColor: colors.topColor,
+    bottomColor: colors.bottomColor,
+    gradientMidEnabled: colors.gradientMidEnabled ?? false,
+    gradientMidColor: colors.gradientMidColor ?? DEFAULT_SKY_SETTINGS.gradientMidColor,
+    gradientMidPosition:
+      colors.gradientMidPosition ?? DEFAULT_SKY_SETTINGS.gradientMidPosition
+  };
+}
 
 export const LIGHTING_PRESET_TEMPLATES: Record<
   LightingPreset,
@@ -1267,21 +1354,25 @@ export const LIGHTING_PRESET_TEMPLATES: Record<
     preset: "golden_hour",
     sun: {
       azimuthDeg: 235,
-      elevationDeg: 25,
-      color: 0xffe0b5,
-      intensity: 0.9,
+      // Golden hour is a LOW sun -- at 25 degrees the light reads as plain
+      // afternoon, with short shadows and no raking across terrain.
+      elevationDeg: 8,
+      color: 0xffc98a,
+      intensity: 1.05,
       shadows: { ...DEFAULT_SUN_SHADOWS }
     },
+    // Cool counter-light from the opposite side, standing in for skylight off
+    // the violet half of the gradient; it keeps shadowed faces from going muddy.
     rim: {
       azimuthDeg: 55,
       elevationDeg: 18,
-      color: 0x8888cc,
-      intensity: 0.15
+      color: 0x9a8fd0,
+      intensity: 0.22
     },
     ambient: {
       mode: "sky-driven",
-      color: 0xffb88c,
-      intensity: 0.5
+      color: 0xffc79e,
+      intensity: 0.45
     }
   },
   night: {
@@ -1694,7 +1785,6 @@ export function applyLightingPresetTemplate(
   preset: LightingPreset,
   projectId: string
 ): EnvironmentDefinition {
-  const skyColors = SKY_PRESET_COLORS[preset];
   return synchronizeEnvironmentDefinition(
     {
       ...definition,
@@ -1708,8 +1798,7 @@ export function applyLightingPresetTemplate(
         },
         sky: {
           ...definition.atmosphere.sky,
-          topColor: skyColors.topColor,
-          bottomColor: skyColors.bottomColor
+          ...skyGradientForPreset(preset)
         }
       }
     },
@@ -1744,8 +1833,7 @@ export function createDefaultEnvironmentDefinition(
       ssao: { ...DEFAULT_SSAO_SETTINGS },
       sky: {
         ...DEFAULT_SKY_SETTINGS,
-        topColor: SKY_PRESET_COLORS[preset].topColor,
-        bottomColor: SKY_PRESET_COLORS[preset].bottomColor
+        ...skyGradientForPreset(preset)
       }
     },
     backdrop: {

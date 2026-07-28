@@ -107,6 +107,9 @@ describe("environment contract", () => {
       mode: "gradient",
       topColor: 0x6699cc,
       bottomColor: 0xffcc88,
+      gradientMidEnabled: false,
+      gradientMidColor: 0x8a7fb5,
+      gradientMidPosition: 0.35,
       horizonBlend: 0.5,
       gradientExponent: 1.5,
       saturation: 1,
@@ -122,7 +125,14 @@ describe("environment contract", () => {
       cloudOpacity: 0,
       cloudScale: 1,
       cloudSpeed: 0,
-      cloudDirectionDegrees: 0
+      cloudDirectionDegrees: 0,
+      cloudColor: 0xfff2e0,
+      undercastEnabled: false,
+      undercastColor: 0xffe8cc,
+      undercastShadowColor: 0xc98fa8,
+      undercastCoverage: 0.62,
+      undercastScale: 1.6,
+      undercastOpacity: 0.95
     });
 
     expect(ambient.color).not.toBe(0x6699cc);

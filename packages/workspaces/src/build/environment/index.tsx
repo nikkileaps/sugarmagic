@@ -285,6 +285,17 @@ export function useEnvironmentWorkspaceView(
     onUpdateEnvironmentDefinition(updater(selectedEnvironment));
   };
 
+  /** Patch sky settings without restating the atmosphere spread per control. */
+  const updateSky = (patch: Partial<EnvironmentDefinition["atmosphere"]["sky"]>) => {
+    updateDefinition((definition) => ({
+      ...definition,
+      atmosphere: {
+        ...definition.atmosphere,
+        sky: { ...definition.atmosphere.sky, ...patch }
+      }
+    }));
+  };
+
   const postProcessBindings = selectedEnvironment
     ? selectedEnvironment.postProcessShaders
         .slice()
@@ -894,6 +905,41 @@ export function useEnvironmentWorkspaceView(
                   }
                   swatches={ENVIRONMENT_SWATCHES}
                 />
+                <Switch
+                  label="Mid Color Stop"
+                  checked={selectedEnvironment.atmosphere.sky.gradientMidEnabled}
+                  onChange={(event) =>
+                    updateSky({ gradientMidEnabled: event.currentTarget.checked })
+                  }
+                />
+                {selectedEnvironment.atmosphere.sky.gradientMidEnabled ? (
+                  <>
+                    <ColorField
+                      label="Mid Color"
+                      value={selectedEnvironment.atmosphere.sky.gradientMidColor}
+                      onChange={(value) => updateSky({ gradientMidColor: value })}
+                      swatches={ENVIRONMENT_SWATCHES}
+                    />
+                    <SliderNumberField
+                      label="Mid Height"
+                      value={selectedEnvironment.atmosphere.sky.gradientMidPosition}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      precision={2}
+                      onChange={(value) => updateSky({ gradientMidPosition: value })}
+                    />
+                  </>
+                ) : null}
+                <SliderNumberField
+                  label="Gradient Exponent"
+                  value={selectedEnvironment.atmosphere.sky.gradientExponent}
+                  min={0.1}
+                  max={4}
+                  step={0.05}
+                  precision={2}
+                  onChange={(value) => updateSky({ gradientExponent: value })}
+                />
                 <SliderNumberField
                   label="Horizon Blend"
                   value={selectedEnvironment.atmosphere.sky.horizonBlend}
@@ -934,6 +980,137 @@ export function useEnvironmentWorkspaceView(
                     }))
                   }
                 />
+              </Stack>
+            </PanelSection>
+
+            <PanelSection title="Clouds" icon="☁️">
+              <Stack gap="md">
+                <Switch
+                  label="Enable Clouds"
+                  checked={selectedEnvironment.atmosphere.sky.cloudsEnabled}
+                  onChange={(event) =>
+                    updateSky({ cloudsEnabled: event.currentTarget.checked })
+                  }
+                />
+                {selectedEnvironment.atmosphere.sky.cloudsEnabled ? (
+                  <>
+                    <ColorField
+                      label="Cloud Color"
+                      value={selectedEnvironment.atmosphere.sky.cloudColor}
+                      onChange={(value) => updateSky({ cloudColor: value })}
+                      swatches={ENVIRONMENT_SWATCHES}
+                    />
+                    <SliderNumberField
+                      label="Coverage"
+                      value={selectedEnvironment.atmosphere.sky.cloudCoverage}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      precision={2}
+                      onChange={(value) => updateSky({ cloudCoverage: value })}
+                    />
+                    <SliderNumberField
+                      label="Opacity"
+                      value={selectedEnvironment.atmosphere.sky.cloudOpacity}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      precision={2}
+                      onChange={(value) => updateSky({ cloudOpacity: value })}
+                    />
+                    <SliderNumberField
+                      label="Softness"
+                      value={selectedEnvironment.atmosphere.sky.cloudSoftness}
+                      min={0.01}
+                      max={0.5}
+                      step={0.01}
+                      precision={2}
+                      onChange={(value) => updateSky({ cloudSoftness: value })}
+                    />
+                    <SliderNumberField
+                      label="Scale"
+                      value={selectedEnvironment.atmosphere.sky.cloudScale}
+                      min={0.2}
+                      max={10}
+                      step={0.1}
+                      precision={1}
+                      onChange={(value) => updateSky({ cloudScale: value })}
+                    />
+                    <SliderNumberField
+                      label="Speed"
+                      value={selectedEnvironment.atmosphere.sky.cloudSpeed}
+                      min={0}
+                      max={2}
+                      step={0.01}
+                      precision={2}
+                      onChange={(value) => updateSky({ cloudSpeed: value })}
+                    />
+                    <SliderNumberField
+                      label="Direction"
+                      value={selectedEnvironment.atmosphere.sky.cloudDirectionDegrees}
+                      min={0}
+                      max={360}
+                      step={1}
+                      precision={0}
+                      onChange={(value) => updateSky({ cloudDirectionDegrees: value })}
+                    />
+                  </>
+                ) : null}
+              </Stack>
+            </PanelSection>
+
+            <PanelSection title="Undercast" icon="🏔️">
+              <Stack gap="md">
+                <Switch
+                  label="Enable Undercast"
+                  checked={selectedEnvironment.atmosphere.sky.undercastEnabled}
+                  onChange={(event) =>
+                    updateSky({ undercastEnabled: event.currentTarget.checked })
+                  }
+                />
+                {selectedEnvironment.atmosphere.sky.undercastEnabled ? (
+                  <>
+                    <ColorField
+                      label="Lit Color"
+                      value={selectedEnvironment.atmosphere.sky.undercastColor}
+                      onChange={(value) => updateSky({ undercastColor: value })}
+                      swatches={ENVIRONMENT_SWATCHES}
+                    />
+                    <ColorField
+                      label="Shadow Color"
+                      value={selectedEnvironment.atmosphere.sky.undercastShadowColor}
+                      onChange={(value) => updateSky({ undercastShadowColor: value })}
+                      swatches={ENVIRONMENT_SWATCHES}
+                    />
+                    <SliderNumberField
+                      label="Coverage"
+                      value={selectedEnvironment.atmosphere.sky.undercastCoverage}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      precision={2}
+                      onChange={(value) => updateSky({ undercastCoverage: value })}
+                    />
+                    <SliderNumberField
+                      label="Opacity"
+                      value={selectedEnvironment.atmosphere.sky.undercastOpacity}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      precision={2}
+                      onChange={(value) => updateSky({ undercastOpacity: value })}
+                    />
+                    <SliderNumberField
+                      label="Scale"
+                      value={selectedEnvironment.atmosphere.sky.undercastScale}
+                      min={0.2}
+                      max={10}
+                      step={0.1}
+                      precision={1}
+                      onChange={(value) => updateSky({ undercastScale: value })}
+                    />
+                  </>
+                ) : null}
               </Stack>
             </PanelSection>
 
