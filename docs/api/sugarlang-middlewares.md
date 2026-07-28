@@ -105,6 +105,38 @@ turn text in the enrichment slot (`enrichmentContainer`, CSS class
 (earliest new function wins). Chunk cards are excluded from the prescription,
 probe, and teacher-summary systems.
 
+## The Teaching Decision Model (Concept-Opportunity Gating)
+
+The teaching architecture in one sentence: **the TEACHER decides, the model
+RENDERS, the verifiers CHECK.** The teacher looks at the full context of the
+moment (the quest, the NPC being talked to, the scene, the learner's state)
+for opportunities to teach a CONCEPT -- which may surface as vocabulary, a
+communicative function, or pragmatics -- then gates each opportunity against
+what the learner already knows. The generation LLM is directed to work the
+chosen concepts into the target language; the observe loop expects the target
+forms back and converts encounters into learner evidence.
+
+The gating ladder, and where each rung lives in the machinery:
+
+| Gating question | Outcome | Machinery |
+|---|---|---|
+| Already learned it? | Skip, next opportunity | Lemma cards + FSRS review state; the budgeter excludes lemmas with `reviewCount > 0` from `introduce` (`runtime/budgeter/lexical-budgeter.ts`) |
+| Too hard, not ready? | Skip, next opportunity | Band envelope: candidates capped at learner band + 1 (`lexical-budgeter.ts`, `getBandIndex`) |
+| Brand new? | Fresh introduction | Prescription `introduce` list; scheduler `TeachReason: "introduction"` (`runtime/scheduler/teach-schedule.ts`) |
+| Seen before? | Reinforce -- an in-context opportunity can beat the schedule | Prescription `reinforce` list; scheduler `due` / `debt-service` reasons. (The "great chance even if not quite due" opportunistic case is not yet modeled.) |
+| Probably understood? | Probe for comprehension | Probe floors + `comprehensionCheck` on the directive (`runtime/middlewares/sugar-lang-teacher-middleware.ts`); observe owns probe response classification |
+
+Scope note on candidate sourcing: today the pool of teachable candidates
+comes from the compiled scene lexicon
+(`runtime/compile/compile-sugarlang-scene.ts`), which tokenizes authored text
+and resolves English words to target lemmas via the atlas gloss index
+(`resolveFromGloss`). That lexical scan is the AMBIENT layer -- it powers
+hover glosses and gives the budgeter a deterministic candidate pool -- but it
+only sees literal word matches in authored text. Concept-level opportunity
+detection (an NPC whose character is about cheese making "queso" teachable
+without the literal word "cheese" appearing in a scanned blob) is not part of
+this pipeline.
+
 ## Turn-Path Guard
 
 **File:** `packages/plugins/src/catalog/sugarlang/runtime/middlewares/shared.ts`
