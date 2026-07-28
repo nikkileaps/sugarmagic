@@ -442,16 +442,44 @@ export class SugarlangRuntimeServices {
   async resolveForExecution(
     execution: ConversationExecutionContext
   ): Promise<SugarlangExecutionServices | null> {
+    const languages = getSelectionLanguages(execution, this.environment);
+    if (!languages) {
+      return null;
+    }
+    return this.resolveForLanguages(
+      languages.targetLanguage,
+      languages.supportLanguage
+    );
+  }
+
+  /**
+   * Services for the configured language pair, with NO conversation.
+   *
+   * Everything below is built from `boundContext` (blackboard, player, content)
+   * plus a language pair -- the conversation only ever supplied the languages,
+   * and even that fell back to plugin config. So surfaces outside dialogue --
+   * item views today, spells and interactables later -- can teach with the same
+   * learner, the same cards and the same budgeter, instead of being second-class
+   * because they are not a turn.
+   *
+   * Returns null before `bindRuntime`, or with no target language configured.
+   */
+  async getAmbientServices(): Promise<SugarlangExecutionServices | null> {
+    const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
+    if (!targetLanguage) return null;
+    return this.resolveForLanguages(targetLanguage, "en");
+  }
+
+  private async resolveForLanguages(
+    targetLanguage: string,
+    supportLanguage: string
+  ): Promise<SugarlangExecutionServices | null> {
     if (!this.boundContext) {
       this.logger.warn("Sugarlang runtime services requested before binding.");
       return null;
     }
 
-    const languages = getSelectionLanguages(execution, this.environment);
-    if (!languages) {
-      return null;
-    }
-
+    const languages = { targetLanguage, supportLanguage };
     const key = `${languages.targetLanguage}:${languages.supportLanguage}`;
     const existing = this.executionServices.get(key);
     if (existing) {
