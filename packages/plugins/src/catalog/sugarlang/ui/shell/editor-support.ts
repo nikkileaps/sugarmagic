@@ -19,6 +19,7 @@
 
 import type {
   GameProject,
+  Scene,
   QuestDefinition,
   QuestNodeDefinition,
   RegionDocument
@@ -123,7 +124,8 @@ export function resolveStudioCompileWorkspaceId(gameProjectId: string | null): s
 export function createSugarlangSceneContexts(
   gameProject: GameProject | null,
   regions: RegionDocument[],
-  targetLanguage: string
+  targetLanguage: string,
+  activeScene: Scene | null
 ): Promise<SceneAuthoringContext[]> {
   if (!gameProject) {
     return Promise.resolve([]);
@@ -134,9 +136,13 @@ export function createSugarlangSceneContexts(
     ? new SugarlangGatewayLoreClient(proxyBaseUrl)
     : null;
 
+  // activeScene is load-bearing: composed npcPresences are OVERLAY-ONLY
+  // (composeRegionContents), so a null scene compiles a lexicon with zero
+  // NPC bios, NPC lore pages, or NPC-bound dialogues.
   return resolveSceneAuthoringContexts(
     [...regions].map((region) => ({
         region,
+        activeScene,
         targetLanguage,
         npcDefinitions: gameProject.npcDefinitions,
         dialogueDefinitions: gameProject.dialogueDefinitions,
@@ -152,7 +158,8 @@ export async function compileAuthoringSceneLexicon(
   gameProject: GameProject | null,
   activeRegion: RegionDocument | null,
   regions: RegionDocument[],
-  targetLanguage: string
+  targetLanguage: string,
+  activeScene: Scene | null
 ) : Promise<CompiledSceneLexicon | null> {
   if (!gameProject || !activeRegion) {
     return null;
@@ -161,7 +168,8 @@ export async function compileAuthoringSceneLexicon(
   const context = (await createSugarlangSceneContexts(
     gameProject,
     regions,
-    targetLanguage
+    targetLanguage,
+    activeScene
   )).find(
     (scene) => scene.sceneId === activeRegion.identity.id
   );
@@ -247,12 +255,14 @@ export async function readSugarlangCompileStatus(
   gameProject: GameProject | null,
   regions: RegionDocument[],
   targetLanguage: string,
+  activeScene: Scene | null,
   workspaceId: string
 ): Promise<SugarlangCompileStatusSummary> {
   const scenes = await createSugarlangSceneContexts(
     gameProject,
     regions,
-    targetLanguage
+    targetLanguage,
+    activeScene
   );
   const currentHashes = computeCurrentSceneHashes(scenes);
   const entries = await collectAuthoringCacheEntries(workspaceId);
@@ -294,6 +304,7 @@ export async function rebuildSugarlangCompileCache(
   gameProject: GameProject | null,
   regions: RegionDocument[],
   targetLanguage: string,
+  activeScene: Scene | null,
   workspaceId: string,
   onProgress?: (progress: SugarlangRebuildProgress) => void,
   options?: { chunkExtractionEnabled?: boolean }
@@ -301,7 +312,8 @@ export async function rebuildSugarlangCompileCache(
   const scenes = await createSugarlangSceneContexts(
     gameProject,
     regions,
-    targetLanguage
+    targetLanguage,
+    activeScene
   );
   const cache = new IndexedDBCompileCache({ workspaceId });
   let completedScenes = 0;
@@ -391,6 +403,7 @@ export async function rebuildSugarlangCompileCache(
     gameProject,
     regions,
     targetLanguage,
+    activeScene,
     workspaceId
   );
 }

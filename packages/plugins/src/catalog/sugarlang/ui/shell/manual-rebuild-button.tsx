@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import type { GameProject, RegionDocument } from "@sugarmagic/domain";
+import type { GameProject, RegionDocument, Scene } from "@sugarmagic/domain";
 import { PanelSection } from "@sugarmagic/ui";
 import type { ReactElement } from "react";
 import {
@@ -30,6 +30,9 @@ export interface ManualRebuildButtonProps {
   gameProjectId: string | null;
   gameProject: GameProject | null;
   regions: RegionDocument[];
+  /** Ambient Scene composed onto each region during compile -- without it
+   *  the rebuilt lexicons contain zero NPC-sourced content. */
+  activeScene?: Scene | null;
   targetLanguage: string;
   /** When false, chunk extraction is skipped during rebuild (no Claude calls
    *  for chunks). Cached chunks from prior runs are still used by the
@@ -69,6 +72,7 @@ export function ManualRebuildButton(
       props.gameProject,
       props.regions,
       props.targetLanguage,
+      props.activeScene ?? null,
       workspaceId
     ).then((nextStatus) => {
       if (!cancelled) {
@@ -79,7 +83,7 @@ export function ManualRebuildButton(
     return () => {
       cancelled = true;
     };
-  }, [props.gameProject, props.regions, props.targetLanguage, workspaceId]);
+  }, [props.gameProject, props.regions, props.targetLanguage, props.activeScene, workspaceId]);
 
   async function handleRebuild(): Promise<void> {
     setIsRunning(true);
@@ -89,6 +93,7 @@ export function ManualRebuildButton(
         props.gameProject,
         props.regions,
         props.targetLanguage,
+        props.activeScene ?? null,
         workspaceId,
         setProgress,
         { chunkExtractionEnabled: props.chunkExtractionEnabled ?? true }

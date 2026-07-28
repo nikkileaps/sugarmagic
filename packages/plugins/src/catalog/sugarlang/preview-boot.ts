@@ -16,6 +16,7 @@
  */
 
 import {
+  getActiveScene,
   getAllRegions,
   type AuthoringSession
 } from "@sugarmagic/domain";
@@ -55,9 +56,15 @@ export async function buildSugarlangPreviewBootPayloadForSession(
   const loreClient = proxyBaseUrl
     ? new SugarlangGatewayLoreClient(proxyBaseUrl)
     : null;
+  // Compose Base + the active Scene's overlay per region. NPC presences are
+  // OVERLAY-ONLY in the composed view (migrate.ts composeRegionContents), so
+  // omitting activeScene here excluded every NPC (bio, lore page, bound
+  // dialogues) from lexicon compilation -- the queso/Finnick bug (2026-07-27).
+  const activeScene = getActiveScene(session);
   const scenes = await resolveSceneAuthoringContexts(
     getAllRegions(session).map((region) => ({
       region,
+      activeScene,
       targetLanguage,
       npcDefinitions: session.gameProject.npcDefinitions,
       dialogueDefinitions: session.gameProject.dialogueDefinitions,
