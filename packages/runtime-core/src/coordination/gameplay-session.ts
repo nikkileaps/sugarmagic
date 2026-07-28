@@ -1899,6 +1899,64 @@ export function createRuntimeGameplaySessionController(
     }
     syncInteractionPrompt();
   });
+  /**
+   * Resolve the item's display text through any registered display-text
+   * resolver, then show the view.
+   *
+   * The resolution has to happen HERE rather than inside the item view because
+   * the view renders synchronously and resolvers are async (sugarlang's reads
+   * IndexedDB). With no resolver registered -- plugin disabled, uninstalled, or
+   * simply not shipped -- `resolveDisplayText` returns undefined, no override is
+   * passed, and the authored English renders. That is the whole
+   * graceful-degradation story, and it needs no branch of its own.
+   *
+   * A resolver that throws must not take the item view down with it: an item
+   * you cannot open is a far worse failure than one showing untranslated text.
+   */
+  async function showItemViewWithResolvedText(
+    definition: ItemDefinition,
+    quantity: number
+  ): Promise<void> {
+    const resolvers =
+      pluginManager?.getContributions("displayText.resolver") ?? [];
+    if (resolvers.length === 0) {
+      itemViewUi.show(definition, quantity);
+      return;
+    }
+
+    const resolveField = async (
+      field: "title" | "body",
+      authored: string
+    ): Promise<string | undefined> => {
+      if (!authored.trim()) return undefined;
+      for (const contribution of resolvers) {
+        try {
+          const resolved = await contribution.payload.resolve({
+            subjectKind: "item-view",
+            subjectId: definition.definitionId,
+            field,
+            text: authored
+          });
+          if (resolved && resolved !== authored) return resolved;
+        } catch {
+          // Fall through to the authored text.
+        }
+      }
+      return undefined;
+    };
+
+    const [title, body] = await Promise.all([
+      resolveField("title", definition.interactionView.title),
+      resolveField("body", definition.interactionView.body)
+    ]);
+
+    itemViewUi.show(
+      definition,
+      quantity,
+      title === undefined && body === undefined ? undefined : { title, body }
+    );
+  }
+
   inventoryUi.setOnInspectItem((itemDefinitionId) => {
     const definition = inventoryManager.getDefinition(itemDefinitionId);
     if (!definition) return;
@@ -1917,7 +1975,10 @@ export function createRuntimeGameplaySessionController(
       return;
     }
 
-    itemViewUi.show(definition, inventoryManager.getQuantity(itemDefinitionId));
+    void showItemViewWithResolvedText(
+      definition,
+      inventoryManager.getQuantity(itemDefinitionId)
+    );
   });
   itemViewUi.setOnOpenChange((isOpen) => {
     if (isOpen) {

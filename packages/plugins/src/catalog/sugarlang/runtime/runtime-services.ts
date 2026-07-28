@@ -300,6 +300,30 @@ export class SugarlangRuntimeServices {
     return this.executionServices.values().next().value ?? null;
   }
 
+  /**
+   * Variant cache for the active execution, if there is one.
+   *
+   * Undefined before a conversation has ever bound (no execution services yet)
+   * and in a published game with no studio workspace id. The display-text
+   * resolver treats both as "no graded text available" and returns authored
+   * English, which is correct in both cases.
+   */
+  getVariantCache(): SugarlangVariantCache | undefined {
+    return this.getFirstExecutionServices()?.variantCache;
+  }
+
+  /** The learner's current band, or null before a learner profile exists. */
+  async getLearnerBand(): Promise<CEFRBand | null> {
+    const services = this.getFirstExecutionServices();
+    if (!services) return null;
+    try {
+      const profile = await services.learnerStore.getCurrentProfile();
+      return this._debugPinnedBand ?? profile.estimatedCefrBand;
+    } catch {
+      return null;
+    }
+  }
+
   async applyDebugBandOverride(band: CEFRBand, pin: boolean): Promise<void> {
     this._debugPinnedBand = pin ? band : null;
     const services = this.getFirstExecutionServices();
