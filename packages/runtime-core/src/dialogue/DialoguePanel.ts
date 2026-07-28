@@ -482,7 +482,12 @@ export function createRuntimeDialoguePanel(
       return container;
     },
     show() {
-      container.classList.add("visible");
+      // Deliberately does NOT reveal a presentation. Which box to show is not
+      // known until showPending/showTurn supplies the conversationKind, and
+      // revealing the chat panel here flashed it before a scripted
+      // conversation swapped to the box. The manager always calls showPending
+      // immediately after show(), and both pending paths reveal their own box.
+      //
       // Story 50.5 — flip the UI state into "dialogue" mode so
       // the action registry routes Escape / Enter / 1-9 to this
       // panel and skips in-game shortcuts (inventory, journal,
@@ -524,7 +529,14 @@ export function createRuntimeDialoguePanel(
       onCancel = options?.onCancel ?? null;
       // Decide the presentation up front so the pending state does not flash
       // in the wrong box before the first turn arrives.
-      scriptedActive = options?.conversationKind === "scripted-dialogue";
+      //
+      // An ABSENT conversationKind means "carry on with whatever is showing",
+      // not "switch to chat": showPending is also called mid-conversation on
+      // every submit, and treating undefined as non-scripted flashed the chat
+      // panel between scripted lines.
+      if (options?.conversationKind) {
+        scriptedActive = options.conversationKind === "scripted-dialogue";
+      }
       if (scriptedActive) {
         container.classList.remove("visible");
         scriptedBox.show();

@@ -345,6 +345,9 @@ export class DialogueManager {
         this.conversationHost.getCurrentTurn()?.speakerLabel ??
         this.conversationHost.getCurrentTurn()?.displayName ??
         this.currentDialogueId,
+      // Keep the presentation pinned across the submit -- without this the
+      // presenter has no kind to hold on to mid-conversation.
+      conversationKind: this.conversationHost.getCurrentTurn()?.conversationKind,
       onCancel: () => this.end("cancelled")
     });
     const nextTurn = await this.conversationHost.submitInput(input);
