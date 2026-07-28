@@ -65,6 +65,19 @@ export type GradedTextSource =
       field: "description";
     };
 
+/**
+ * MIGRATION HAZARD -- do not grep-and-replace `nodeId` / `dialogueDefinitionId`
+ * across sugarlang.
+ *
+ * That exact field PAIR appears in three unrelated types:
+ *   - GradedTextSource (here)      -- moved under `source` in 2026-07
+ *   - LineIntentArtifact           -- still top-level, correctly
+ *   - LiveRenderCacheKey           -- still top-level, correctly
+ *
+ * A blind sweep rewrites all three and only the first is right. It typechecks
+ * loudly for the key, which is lucky; do it by hand and let the compiler drive.
+ */
+
 /** Stable string form, for logging, dedupe, and cache-report rows. */
 export function gradedTextSourceKey(source: GradedTextSource): string {
   switch (source.kind) {
