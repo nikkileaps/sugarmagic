@@ -133,6 +133,23 @@ Teachable-biased retrieval, mechanism named (review round 1 -- "rides the existi
 
 docs/api: teacher page rewritten (two loops, board inputs, schedule artifact, debt ledger, trigger policy); telemetry page (schedule/debt/strain/trigger events); scripted-rendering page intent-cache claims corrected (087.5 item 5). Strategy 002 epic E status. Directive-lifetime decision promoted to the middlewares page. Backlog sweep of DEFERRED SEAM comments (086.5 stub comment closes here). Naming-drift decision (review round 1): telemetry writers still emit `director.*` events (SUGARLANG_DIRECTOR_WRITER) -- decide keep-for-continuity vs rename to scheduler/teacher, record the decision.
 
+## Outstanding at PR time (mini-review 2026-07-27, triaged real -- NOT yet fixed)
+
+The pre-PR mini-review's 7 blocking findings were fixed on the branch (typecheck,
+live-render clobber, shared band envelope, empty-probe guard, debt itemKind,
+intent-fact validation, prompt-version bump). These remain open and were
+triaged REAL -- they are test-coverage and hygiene debt, not behavior blockers:
+
+- 087.5's three locked exit pins were never written: no test ever FIRES the live-render trigger, no intent-key-parity pin, no bake round-trip. The 086.5 e2e comments claiming "the stub is hardcoded false" are now stale. This is the 071.8 executed-vs-locked shape -- highest-value gap to close.
+- Observe-middleware debt creation/paydown and ledger reset have no tests (087.2 exits); IndexedDBEncounterDebtLedger has zero coverage while production uses it, and the wiring is inside per-item `catch {}` blocks, so a permanently-throwing ledger passes the suite.
+- 087.1's "schedule annotation readable in a fixture turn" exit unmet: no context-middleware test writes/asserts it, and board assembly is in a silent catch -- a broken scheduler is invisible.
+- 087.4 strain estimate (record-probe-outcome, computeProbeFailRate, fatigue v2) untested; session resume zeroes probeCount/probeFailCount one turn after restore, contradicting the "persisted fatigueScore captures prior strain" comment.
+- Ledger encounter arrays grow unbounded: paydown is recorded per token occurrence per turn with no dedupe and no stop once a debt is paid.
+- Scheduled function-chunk injection is starved whenever the budgeter fills its own introduce budget (cap = newItemsAllowed - introduce.length, which is 0 in content-rich scenes) -- the scheduler's ranked picks lose to unranked scene lemmas. Same family as the prescription stall; 090.4 owns the fix.
+- Docs drift: learner-state.md still documents `retryRate` / `SESSION_FATIGUE_RETRY_WEIGHT`; session-signals.ts's own header lists removed exports; the three new scheduler/debt telemetry events are absent from the telemetry page.
+- Dead code kept: `produced-incorrect` observation kind (no producers, no reducer consumer, still in the contract + grade table); `sceneComprehensionRate`'s documented null return is unreachable; `dayIndex` is never null (getWorldDay defaults to 1) so `dayAxisDegraded` telemetry always reports false.
+- Two posture/ratio tables still exist: the shared band-envelope table now serves the fallback policy + schedule-driven realizer, but the scripted middleware keeps its pre-existing 0.2/0.5/0.8 copy (folding it in is a behavior change to shipped 086 rendering -- code comment at band-envelope.ts names the trigger).
+
 ## Deferred / out of scope (with revisit triggers)
 
 - Negotiation-move policy in the scheduler's "whether to check" slot: epic F fills it (code comment at the slot).
