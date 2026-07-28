@@ -18,7 +18,20 @@
  */
 
 export interface SugarlangLLMRequest {
+  /**
+   * Back-compat / tooling escape hatch only. The gateway resolves the model
+   * SERVER-SIDE from `purpose` (Plan 073.2); production callers send `purpose`
+   * and leave this unset so model choice stays a deploy-time decision.
+   */
   model?: string;
+  /**
+   * Gateway-side model routing category. "teacher" resolves from
+   * SUGARMAGIC_SUGARLANG_TEACHER_MODEL (sugarlang's own
+   * `gatewayRuntimeConfigKeys` entry). Omitted => the gateway falls through to
+   * the sugaragent DIALOGUE model, which is almost never what a sugarlang
+   * caller wants — say what the call is for.
+   */
+  purpose?: "teacher";
   systemPrompt: string;
   userPrompt: string;
   maxTokens?: number;

@@ -86,8 +86,26 @@ telemetry for:
 - request id
 - parse mode (`validated` or `repaired`)
 
-The default model is `claude-sonnet-4-6`, but the constructor allows an
-override for cheaper runs such as Haiku.
+### Model selection
+
+The model is resolved **server-side** by the gateway, from the `purpose` the
+client sends (Plan 073.2). `createGatewayTeacherClient` sends
+`purpose: "teacher"`, which the gateway maps to
+`SUGARMAGIC_SUGARLANG_TEACHER_MODEL`, defaulting to `claude-sonnet-4-6`.
+
+Sugarlang declares that env var in its own `gatewayRuntimeConfigKeys`
+(`catalog/sugarlang/manifest.ts`), surfaced in Studio as the "Teacher Model"
+setting. It is deliberately sugarlang's own key rather than a
+`SUGARMAGIC_SUGARAGENT_*` one, so sugarlang's model choice does not depend on
+sugaragent's config.
+
+`ClaudeTeacherPolicy` sends **no model id** by default — `options.model` exists
+as a tooling/test escape hatch and is omitted from the request when unset.
+There is intentionally no client-side default constant: the previous
+`DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6"` was never forwarded over the
+wire, so the Teacher silently ran on the sugaragent *dialogue* model while the
+constant read like configuration. Telemetry records `model: null` when the
+gateway resolved it.
 
 ## Fallback Policy
 

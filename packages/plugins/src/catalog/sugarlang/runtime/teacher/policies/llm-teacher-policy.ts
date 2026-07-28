@@ -33,7 +33,12 @@ import {
   type TelemetrySink
 } from "../../telemetry/telemetry";
 
-const DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6";
+// NO DEFAULT MODEL ON PURPOSE (2026-07-28). This used to be
+// `DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6"`, which was inert: the gateway
+// client never forwarded it, so the Teacher silently ran on the sugaragent
+// DIALOGUE model. The model is now resolved server-side from
+// `purpose: "teacher"` -> SUGARMAGIC_SUGARLANG_TEACHER_MODEL. A local constant
+// here would just re-create a lie that reads as configuration.
 const DEFAULT_MAX_TOKENS = 900;
 
 export interface DirectorClaudeClientResult {
@@ -46,7 +51,8 @@ export interface DirectorClaudeClientResult {
 }
 
 export interface DirectorClaudeClientRequest {
-  model: string;
+  /** null => the gateway resolves the model from `purpose: "teacher"`. */
+  model: string | null;
   systemPrompt: string;
   userPrompt: string;
   maxTokens: number;
@@ -63,6 +69,9 @@ export interface ClaudeTeacherPolicyOptions {
   client: DirectorClaudeClient;
   telemetry?: TelemetrySink;
   logger?: TeacherPolicyLogger;
+  /** Escape hatch for tooling/tests. Leave unset in production: the gateway
+   *  resolves the model from `purpose: "teacher"` so model choice is a
+   *  deploy-time decision, not a client-side one (Plan 073.2). */
   model?: string;
   maxTokens?: number;
   now?: () => number;
@@ -105,7 +114,10 @@ export function createGatewayTeacherClient(
   return {
     async generateStructuredDirective(request): Promise<DirectorClaudeClientResult> {
       const response = await gateway.generate({
-        model: request.model,
+        // Server-side model routing. Without this the gateway falls through to
+        // the sugaragent dialogue model — which is exactly the bug this fixes.
+        purpose: "teacher",
+        ...(request.model === null ? {} : { model: request.model }),
         systemPrompt: request.systemPrompt,
         userPrompt: request.userPrompt,
         maxTokens: request.maxTokens
@@ -123,7 +135,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
   private readonly client: DirectorClaudeClient;
   private readonly telemetry: TelemetrySink;
   private readonly logger: TeacherPolicyLogger;
-  private readonly model: string;
+  private readonly model: string | null;
   private readonly maxTokens: number;
   private readonly now: () => number;
 
@@ -131,7 +143,8 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     this.client = options.client;
     this.telemetry = options.telemetry ?? createNoOpTelemetrySink();
     this.logger = options.logger ?? NO_OP_LOGGER;
-    this.model = options.model ?? DEFAULT_DIRECTOR_MODEL;
+    // null unless a caller explicitly overrides; the gateway picks otherwise.
+    this.model = options.model ?? null;
     this.maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
     this.now = options.now ?? (() => Date.now());
   }

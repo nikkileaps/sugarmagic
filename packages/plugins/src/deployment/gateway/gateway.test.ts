@@ -327,6 +327,75 @@ describe("handleSugarAgentGenerate", () => {
     }
   });
 
+  it("090 — purpose:\"teacher\" resolves from the SUGARLANG env var, not the sugaragent dialogue model", async () => {
+    // Regression: the Teacher had no purpose, so it silently ran on the cheap
+    // sugaragent dialogue model while `DEFAULT_DIRECTOR_MODEL` sat inert in
+    // sugarlang. Nothing caught it because nothing asserted the routing.
+    process.env["SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL"] = "dialogue-model-x";
+    process.env["SUGARMAGIC_SUGARLANG_TEACHER_MODEL"] = "teacher-model-z";
+    try {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+        headers: { get: () => "req" }
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      await handleSugarAgentGenerate(
+        makeReq({
+          method: "POST",
+          url: "/api/sugaragent/generate",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ purpose: "teacher", systemPrompt: "s", userPrompt: "u" })
+        }),
+        makeRes()
+      );
+
+      const teacherBody = JSON.parse(
+        (mockFetch.mock.calls[0] as [string, RequestInit])[1].body as string
+      ) as { model: string };
+      expect(teacherBody.model).toBe("teacher-model-z");
+      expect(teacherBody.model).not.toBe("dialogue-model-x");
+    } finally {
+      delete process.env["SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL"];
+      delete process.env["SUGARMAGIC_SUGARLANG_TEACHER_MODEL"];
+    }
+  });
+
+  it("090 — an unset teacher env var falls back to a reasoning model, never the dialogue model", async () => {
+    process.env["SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL"] = "dialogue-model-x";
+    delete process.env["SUGARMAGIC_SUGARLANG_TEACHER_MODEL"];
+    try {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ content: [{ type: "text", text: "ok" }] }),
+        headers: { get: () => "req" }
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      await handleSugarAgentGenerate(
+        makeReq({
+          method: "POST",
+          url: "/api/sugaragent/generate",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ purpose: "teacher", systemPrompt: "s", userPrompt: "u" })
+        }),
+        makeRes()
+      );
+
+      const body = JSON.parse(
+        (mockFetch.mock.calls[0] as [string, RequestInit])[1].body as string
+      ) as { model: string };
+      expect(body.model).toBe("claude-sonnet-4-6");
+    } finally {
+      delete process.env["SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL"];
+    }
+  });
+
   it("072.5 — maps systemBlocks to Anthropic system content blocks with cache_control", async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,

@@ -218,6 +218,15 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       default: ""
     },
     {
+      configKey: "teacherModel",
+      label: "Teacher Model",
+      type: "text",
+      description:
+        "Anthropic model for the Teacher's pedagogical judgment call. Blank uses the gateway default (claude-sonnet-4-6). This is the most reasoning-heavy call sugarlang makes -- it decides what to teach -- so it is deliberately separate from the NPC dialogue model.",
+      placeholder: "claude-sonnet-4-6",
+      default: ""
+    },
+    {
       configKey: "debugBandOverride",
       label: "Band Override (dev)",
       type: "select",
@@ -245,6 +254,13 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       envVarName: "SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE",
       description:
         "Target language code (e.g. `es`, `fr`) the Sugarlang gateway uses to bias generation + verification. Pure config, never a credential.",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    },
+    {
+      configKey: "teacherModel",
+      envVarName: "SUGARMAGIC_SUGARLANG_TEACHER_MODEL",
+      description:
+        "Anthropic model the gateway uses for sugarlang's Teacher judgment call, resolved server-side from purpose:\"teacher\". Sugarlang owns this key rather than borrowing a SUGARMAGIC_SUGARAGENT_* one, so sugarlang's model choice does not depend on sugaragent's config (AGENTS.md one-way dependencies). Unset => gateway default claude-sonnet-4-6.",
       nonSecretAttestation: "safe-to-expose-publicly"
     }
   ],

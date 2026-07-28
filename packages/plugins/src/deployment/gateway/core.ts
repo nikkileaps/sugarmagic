@@ -813,23 +813,34 @@ export async function handleSugarAgentGenerate(
 
   const body = await readJsonBody(req);
   // Plan 073.2 — model selection stays SERVER-SIDE. The browser sends a
-  // `purpose` category ("dialogue" | "summary"), never a model id, so model
-  // choice is a deploy-time env decision the player can't see or tamper with.
-  // "summary" (the cheap end-of-conversation memory pass) resolves from its
-  // own env var so it can differ from the dialogue model. An explicit
-  // `body.model` is still honored for back-compat / tooling, but the runtime
-  // no longer sends one.
+  // `purpose` category, never a model id, so model choice is a deploy-time env
+  // decision the player can't see or tamper with. An explicit `body.model` is
+  // still honored for back-compat / tooling, but the runtime no longer sends one.
+  //
+  // This route is a GENERIC Claude proxy, not a sugaragent-private one:
+  // sugarlang posts here too. Each purpose therefore resolves from the env var
+  // owned by the PLUGIN that makes the call, declared in that plugin's own
+  // `gatewayRuntimeConfigKeys` — which is why "teacher" reads a
+  // SUGARMAGIC_SUGARLANG_* name while the sugaragent purposes read
+  // SUGARMAGIC_SUGARAGENT_*. Adding a purpose here means adding it there too,
+  // or it silently falls through to the dialogue model.
   const purpose =
     typeof body["purpose"] === "string" ? body["purpose"].trim() : "";
-  const model =
-    purpose === "summary"
-      ? resolveEnv("SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL", "claude-haiku-4-5")
-      : purpose === "regen"
-        ? resolveEnv(
-            "SUGARMAGIC_SUGARAGENT_REGEN_MODEL",
-            resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5")
-          )
-        : resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5");
+  const dialogueModel = (): string =>
+    resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5");
+  // Table, not a ternary chain — a fourth purpose made the nesting unreadable.
+  // Each entry is (env var, fallback). Unknown purpose => dialogue.
+  const PURPOSE_MODELS: Record<string, () => string> = {
+    // sugaragent: the cheap end-of-conversation memory pass.
+    summary: () => resolveEnv("SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL", "claude-haiku-4-5"),
+    // sugaragent: regenerating a reply that failed the judge.
+    regen: () => resolveEnv("SUGARMAGIC_SUGARAGENT_REGEN_MODEL", dialogueModel()),
+    // sugarlang: the Teacher's pedagogical judgment call. Deliberately its own
+    // env var — this is the most reasoning-heavy call in the product and must
+    // not silently ride the cheap dialogue model (which it did until 2026-07-28).
+    teacher: () => resolveEnv("SUGARMAGIC_SUGARLANG_TEACHER_MODEL", "claude-sonnet-4-6")
+  };
+  const model = (PURPOSE_MODELS[purpose] ?? dialogueModel)();
   // The ground-truth record of which model each call used — grep it in
   // `docker compose logs` to verify a model config change actually landed.
   logInfo("sugaragent.generate", { purpose: purpose || "dialogue", model });

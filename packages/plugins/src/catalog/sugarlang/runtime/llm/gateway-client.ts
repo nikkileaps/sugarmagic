@@ -42,6 +42,7 @@ export class SugarlangGatewayClient implements SugarlangLLMClient {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         model: request.model,
+        purpose: request.purpose,
         systemPrompt: request.systemPrompt,
         userPrompt: request.userPrompt,
         maxTokens: request.maxTokens
