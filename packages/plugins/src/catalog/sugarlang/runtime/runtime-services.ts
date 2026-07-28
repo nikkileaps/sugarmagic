@@ -82,7 +82,11 @@ import {
 import { OuterLoopScheduler } from "./scheduler/outer-loop-scheduler";
 import type { SugarlangLoggerLike } from "./logger";
 export type { SugarlangLoggerLike } from "./logger";
-import type { CEFRBand } from "./types";
+import type {
+  CEFRBand,
+  CompiledSceneLexicon,
+  LearnerProfile
+} from "./types";
 import {
   LEARNER_PROFILE_FACT,
   SUGARLANG_LEARNER_STATE_WRITER,
@@ -337,6 +341,47 @@ export class SugarlangRuntimeServices {
     if (!services) return null;
     try {
       return (await services.learnerStore.getCurrentProfile()).estimatedCefrBand;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Inputs for the A1/A2 display-text weave, outside any conversation.
+   *
+   * Uses AMBIENT services and the ACTIVE scene's compiled lexicon, so an item
+   * description weaves the same words the dialogue budgeter is teaching rather
+   * than forming a second opinion. Returns null when anything is missing --
+   * before bind, with no target language, or with no active scene -- and the
+   * resolver falls back to authored English.
+   */
+  async getWeaveInputs(): Promise<{
+    learner: LearnerProfile;
+    sceneLexicon: CompiledSceneLexicon;
+    atlas: CefrLexAtlasProvider;
+    prescribe: SugarlangExecutionServices["budgeter"]["prescribe"];
+    supportLanguage: string;
+  } | null> {
+    const sceneId = this.boundContext?.activeRegion?.identity.id ?? null;
+    if (!sceneId) return null;
+    const services = await this.getAmbientServices();
+    if (!services) return null;
+    try {
+      const [learner, sceneLexicon] = await Promise.all([
+        services.learnerStore.getCurrentProfile(),
+        services.sceneLexiconStore.ensure(sceneId)
+      ]);
+      return {
+        // Honour a pinned debug band here too, or weaving would use the real
+        // profile band while the rest of the resolver used the pin.
+        learner: this._debugPinnedBand
+          ? { ...learner, estimatedCefrBand: this._debugPinnedBand }
+          : learner,
+        sceneLexicon,
+        atlas: services.atlas,
+        prescribe: services.budgeter.prescribe.bind(services.budgeter),
+        supportLanguage: "en"
+      };
     } catch {
       return null;
     }

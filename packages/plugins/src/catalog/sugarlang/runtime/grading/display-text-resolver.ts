@@ -39,10 +39,31 @@
  * policy, a second report and a second thing to invalidate.
  */
 
-import type { CEFRBand } from "../contracts/learner-profile";
+import type { CEFRBand, LearnerProfile } from "../contracts/learner-profile";
 import type { GradedTextSource } from "../contracts/graded-text";
 import type { SugarlangVariantCache } from "../compile/variant-cache";
+import type { LexicalPrescription } from "../contracts/lexical-prescription";
+import type { CompiledSceneLexicon, LexicalAtlasProvider } from "../types";
 import { buildItemViewContentHash } from "./sources/item-view-source";
+import { diglotWeave } from "../classifier/diglot-weave";
+import { getAllInventoryChunks } from "../inventory/function-inventory-loader";
+
+/**
+ * Which bands weave instead of reading a baked variant.
+ *
+ * MIRRORS the scripted dialogue split exactly (sugar-lang-teacher-middleware:
+ * A1 -> anchored, A2 -> supported, else target-dominant). It has to: item text
+ * and dialogue are graded by the same pipeline for the same learner, so if they
+ * split at different bands you get a Spanish paragraph on an item and woven
+ * English on the line right after it.
+ *
+ * Variants are deliberately not baked below B1 -- a full target-language
+ * paragraph is unreadable to a beginner, which is the whole reason the weave
+ * exists.
+ */
+function isWeaveBand(band: CEFRBand): boolean {
+  return band === "A1" || band === "A2";
+}
 
 /** What the host passes in. Mirrors runtime-core's `DisplayTextRequest`. */
 export interface DisplayTextResolveRequest {
@@ -52,12 +73,31 @@ export interface DisplayTextResolveRequest {
   text: string;
 }
 
+/** Everything the A1/A2 weave path needs, resolved lazily. */
+export interface WeaveInputs {
+  learner: LearnerProfile;
+  sceneLexicon: CompiledSceneLexicon;
+  atlas: LexicalAtlasProvider;
+  prescribe: (input: {
+    learner: LearnerProfile;
+    sceneLexicon: CompiledSceneLexicon;
+    conversationState: Record<string, unknown>;
+  }) => Promise<LexicalPrescription>;
+  supportLanguage: string;
+}
+
 export interface DisplayTextResolverDeps {
-  /** Null when there is no learner yet, or no studio workspace to cache in. */
+  /** Undefined with no studio workspace. Only the B1+ path needs it. */
   getVariantCache: () => SugarlangVariantCache | undefined;
   getTargetLanguage: () => string | null;
   getLearnerBand: () => Promise<CEFRBand | null>;
   promptVersion: string;
+  /**
+   * Resolves the weave inputs, or null when they are unavailable (no learner,
+   * no scene lexicon yet). Omitting it disables weaving entirely; the resolver
+   * still answers, with authored text.
+   */
+  getWeaveInputs?: () => Promise<WeaveInputs | null>;
 }
 
 /**
@@ -96,12 +136,22 @@ export function createDisplayTextResolver(deps: DisplayTextResolverDeps) {
       const mapped = toGradedTextSource(request);
       if (!mapped) return request.text;
 
-      const cache = deps.getVariantCache();
       const lang = deps.getTargetLanguage();
-      if (!cache || !lang) return request.text;
+      if (!lang) return request.text;
 
       const band = await deps.getLearnerBand();
       if (!band) return request.text;
+
+      // A1/A2 splice target words into the authored English rather than reading
+      // a baked variant -- there are none below B1, by design. Without this
+      // branch a beginner sees plain English on every item forever, which is
+      // exactly the bug this fixes.
+      if (isWeaveBand(band)) {
+        return (await weaveText(request.text, lang, deps)) ?? request.text;
+      }
+
+      const cache = deps.getVariantCache();
+      if (!cache) return request.text;
 
       const entry = await cache.get({
         lang,
@@ -121,4 +171,48 @@ export function createDisplayTextResolver(deps: DisplayTextResolverDeps) {
       return request.text;
     }
   };
+}
+
+/**
+ * Splice target-language citation forms into authored English, using the SAME
+ * budgeter prescription the dialogue weave uses -- so an item teaches the same
+ * words the conversation is teaching, rather than a second opinion.
+ *
+ * Returns null whenever anything is missing or nothing was substituted, and the
+ * caller falls back to the authored text. Total, like the rest of the resolver.
+ */
+async function weaveText(
+  text: string,
+  targetLang: string,
+  deps: DisplayTextResolverDeps
+): Promise<string | null> {
+  if (!deps.getWeaveInputs) return null;
+  const inputs = await deps.getWeaveInputs();
+  if (!inputs) return null;
+
+  const prescription = await inputs.prescribe({
+    learner: inputs.learner,
+    sceneLexicon: inputs.sceneLexicon,
+    conversationState: { nowMs: Date.now() }
+  });
+
+  let inventoryChunks: ReturnType<typeof getAllInventoryChunks> = [];
+  try {
+    inventoryChunks = getAllInventoryChunks(targetLang);
+  } catch {
+    // No inventory for this language -- weave proceeds without chunk swaps.
+  }
+
+  const result = diglotWeave(
+    text,
+    prescription.introduce,
+    inventoryChunks,
+    inputs.atlas,
+    targetLang,
+    inputs.supportLanguage
+  );
+  // No substitution is not a failure -- it means nothing prescribed appears in
+  // this text. Returning null keeps the authored English rather than the
+  // identical string the weave just handed back.
+  return result.weavedForms.length > 0 ? result.text : null;
 }

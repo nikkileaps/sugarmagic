@@ -44,7 +44,7 @@ function record(overrides: Partial<GradedTextRecord> = {}): GradedTextRecord {
   return {
     source: { kind: "item-view", itemDefinitionId: "item-book", field: "body" },
     lang: "es",
-    band: "A2",
+    band: "B1",
     text: GRADED,
     verdict: {
       envelopePasses: true,
@@ -72,11 +72,12 @@ function cacheReturning(variant: GradedTextRecord | null): SugarlangVariantCache
   };
 }
 
+/** B1 is a VARIANT band. A1/A2 take the weave path -- see the weave describe. */
 function resolver(over: Partial<Parameters<typeof createDisplayTextResolver>[0]> = {}) {
   return createDisplayTextResolver({
     getVariantCache: () => cacheReturning(record()),
     getTargetLanguage: () => "es",
-    getLearnerBand: async () => "A2",
+    getLearnerBand: async () => "B1",
     promptVersion: PROMPT_VERSION,
     ...over
   });
@@ -154,6 +155,84 @@ describe("display text resolver", () => {
 
   it("stays inert for unknown fields of a kind it does grade", async () => {
     expect(await resolver()({ ...request, field: "consumeLabel" })).toBe(AUTHORED);
+  });
+});
+
+describe("A1/A2 weave path", () => {
+  // The bug this exists to fix: a beginner saw plain English on every item
+  // forever, because the resolver only ever looked up baked variants and none
+  // are baked below B1.
+  const weaveInputs = (introduce: Array<{ lemmaId: string; lang: string }>) => async () => ({
+    learner: {} as never,
+    sceneLexicon: {} as never,
+    atlas: {
+      resolveFromGloss: (gloss: string) =>
+        gloss === "book"
+          ? [{ lemmaId: "libro", lang: "es", cefrPriorBand: "A1", partsOfSpeech: ["noun"] }]
+          : [],
+      getGloss: () => "book"
+    } as never,
+    prescribe: async () => ({ introduce }) as never,
+    supportLanguage: "en"
+  });
+
+  it("weaves prescribed words into authored English at A1", async () => {
+    const text = await resolver({
+      getLearnerBand: async () => "A1",
+      getWeaveInputs: weaveInputs([{ lemmaId: "libro", lang: "es" }])
+    })({ ...request, text: "An old book." });
+
+    expect(text).toContain("libro");
+    expect(text).not.toBe("An old book.");
+  });
+
+  it("does not read the variant cache at A1", async () => {
+    // Variants below B1 do not exist; looking would be a guaranteed miss and
+    // would mask the weave never running.
+    const cache = cacheReturning(record());
+    await resolver({
+      getLearnerBand: async () => "A1",
+      getVariantCache: () => cache,
+      getWeaveInputs: weaveInputs([{ lemmaId: "libro", lang: "es" }])
+    })({ ...request, text: "An old book." });
+
+    expect(cache.get).not.toHaveBeenCalled();
+  });
+
+  it("weaves at A2 as well", async () => {
+    const text = await resolver({
+      getLearnerBand: async () => "A2",
+      getWeaveInputs: weaveInputs([{ lemmaId: "libro", lang: "es" }])
+    })({ ...request, text: "An old book." });
+    expect(text).toContain("libro");
+  });
+
+  it("returns authored text when nothing prescribed appears in the text", async () => {
+    const text = await resolver({
+      getLearnerBand: async () => "A1",
+      getWeaveInputs: weaveInputs([{ lemmaId: "queso", lang: "es" }])
+    })({ ...request, text: "An old book." });
+    expect(text).toBe("An old book.");
+  });
+
+  it("returns authored text when weave inputs are unavailable", async () => {
+    const text = await resolver({
+      getLearnerBand: async () => "A1",
+      getWeaveInputs: async () => null
+    })({ ...request, text: "An old book." });
+    expect(text).toBe("An old book.");
+  });
+
+  it("returns authored text when no weave inputs are wired at all", async () => {
+    const text = await resolver({ getLearnerBand: async () => "A1" })({
+      ...request,
+      text: "An old book."
+    });
+    expect(text).toBe("An old book.");
+  });
+
+  it("still uses baked variants at B1", async () => {
+    expect(await resolver({ getLearnerBand: async () => "B1" })(request)).toBe(GRADED);
   });
 });
 
