@@ -22,8 +22,10 @@ import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_DIRECTIVE_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
-  SUGARLANG_PRESCRIPTION_ANNOTATION
+  SUGARLANG_PRESCRIPTION_ANNOTATION,
+  SUGARLANG_SCHEDULE_ANNOTATION
 } from "../../runtime/middlewares/shared";
+import type { TeachSchedule } from "../../runtime/scheduler/teach-schedule";
 import {
   createEmptyPrescription,
   createServicesStub,
@@ -350,5 +352,210 @@ describe("SugarLangTeacherMiddleware", () => {
         ]
       })
     );
+  });
+});
+
+// 087.6: schedule-driven realization -- teacher skipped when schedule is present.
+const SUGARAGENT_CONTRIB_SUGARLANG_KEY = "sugaragent.contrib/sugarlang";
+
+function makeSchedule(overrides: Partial<TeachSchedule> = {}): TeachSchedule {
+  return {
+    teachables: [
+      { id: "comer", kind: "lemma", priority: 0.9, teachReason: "due", affinityNpcIds: [] },
+      { id: "hablar", kind: "lemma", priority: 0.7, teachReason: "introduction", affinityNpcIds: [] }
+    ],
+    isColdStart: false,
+    sceneId: "scene-1",
+    conversationId: "conv-1",
+    sceneComprehensionRate: 0.65,
+    stretchAllowanceActive: false,
+    strainSuppressed: false,
+    ...overrides
+  };
+}
+
+function makeScheduleServices(invokeTeacher: ReturnType<typeof vi.fn>) {
+  return {
+    resolveForExecution: () => ({
+      learnerStore: {
+        getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+      },
+      sceneLexiconStore: {
+        ensure: vi.fn().mockResolvedValue({
+          sceneId: "scene-1",
+          contentHash: "hash",
+          pipelineVersion: "v1",
+          atlasVersion: "v1",
+          profile: "runtime-preview",
+          lemmas: {},
+          properNouns: [],
+          anchors: [],
+          questEssentialLemmas: []
+        })
+      },
+      teacher: { invoke: invokeTeacher }
+    })
+  };
+}
+
+describe("SugarLangTeacherMiddleware -- 087.6 schedule-driven realization", () => {
+  it("builds a constraint from the schedule without invoking the teacher LLM", async () => {
+    const invokeTeacher = vi.fn();
+    const services = createServicesStub(makeScheduleServices(invokeTeacher));
+    const middleware = createSugarLangTeacherMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = {
+      ...createEmptyPrescription(),
+      introduce: [{ lemmaId: "comer", lang: "es" }],
+      reinforce: [],
+      avoid: []
+    };
+    execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule();
+
+    await middleware.prepare?.(execution);
+
+    expect(invokeTeacher).not.toHaveBeenCalled();
+    expect(execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).toMatchObject({
+      targetVocab: {
+        introduce: [{ lemmaId: "comer", lang: "es" }],
+        reinforce: [],
+        avoid: []
+      },
+      // Envelope values come from the shared band-envelope table (A2 ->
+      // supported -> 0.65, two-clause), NOT an inlined copy. If this test ever
+      // needs different numbers than FallbackTeacherPolicy produces for the
+      // same posture, the tables have diverged again.
+      supportPosture: "supported",
+      targetLanguageRatio: 0.65,
+      interactionStyle: "natural_dialogue",
+      sentenceComplexityCap: "two-clause"
+    });
+  });
+
+  it("schedule-driven directive has maxTurns=1 (recomputed every turn)", async () => {
+    const invokeTeacher = vi.fn();
+    const services = createServicesStub(makeScheduleServices(invokeTeacher));
+    const middleware = createSugarLangTeacherMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
+    execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule();
+
+    await middleware.prepare?.(execution);
+
+    const directive = execution.annotations[SUGARLANG_DIRECTIVE_ANNOTATION] as { directiveLifetime: { maxTurns: number } };
+    expect(directive.directiveLifetime.maxTurns).toBe(1);
+  });
+
+  it("publishes retrieveBiasTerms in the sugarlang contribution when schedule has active lemmas", async () => {
+    const invokeTeacher = vi.fn();
+    const services = createServicesStub(makeScheduleServices(invokeTeacher));
+    const middleware = createSugarLangTeacherMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
+    execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule();
+
+    await middleware.prepare?.(execution);
+
+    const contrib = execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] as { retrieveBiasTerms?: string[] };
+    expect(contrib.retrieveBiasTerms).toEqual(["comer", "hablar"]);
+  });
+
+  it("does not publish retrieveBiasTerms when no schedule is present (zero-contribution invariant)", async () => {
+    const invokeTeacher = vi.fn().mockResolvedValue({
+      targetVocab: { introduce: [], reinforce: [], avoid: [] },
+      supportPosture: "anchored",
+      targetLanguageRatio: 0.2,
+      interactionStyle: "listening_first",
+      glossingStrategy: "none",
+      sentenceComplexityCap: "single-clause",
+      comprehensionCheck: { trigger: false, probeStyle: "none", targetLemmas: [] },
+      directiveLifetime: { maxTurns: 3, invalidateOn: [] },
+      citedSignals: ["test"],
+      rationale: "test",
+      confidenceBand: "high",
+      isFallbackDirective: false
+    });
+    const services = createServicesStub(makeScheduleServices(invokeTeacher));
+    const middleware = createSugarLangTeacherMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
+    // No schedule annotation.
+
+    await middleware.prepare?.(execution);
+
+    const contrib = execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] as { retrieveBiasTerms?: string[] };
+    expect(contrib.retrieveBiasTerms).toBeUndefined();
+  });
+
+  it("falls back to teacher LLM when no schedule annotation is present", async () => {
+    const invokeTeacher = vi.fn().mockResolvedValue({
+      targetVocab: { introduce: [], reinforce: [], avoid: [] },
+      supportPosture: "anchored",
+      targetLanguageRatio: 0.2,
+      interactionStyle: "listening_first",
+      glossingStrategy: "none",
+      sentenceComplexityCap: "single-clause",
+      comprehensionCheck: { trigger: false, probeStyle: "none", targetLemmas: [] },
+      directiveLifetime: { maxTurns: 3, invalidateOn: [] },
+      citedSignals: ["fallback"],
+      rationale: "fallback",
+      confidenceBand: "medium",
+      isFallbackDirective: true
+    });
+    const services = createServicesStub(makeScheduleServices(invokeTeacher));
+    const middleware = createSugarLangTeacherMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
+    // No SUGARLANG_SCHEDULE_ANNOTATION.
+
+    await middleware.prepare?.(execution);
+
+    expect(invokeTeacher).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to teacher LLM when schedule is a cold start (no cards yet)", async () => {
+    const invokeTeacher = vi.fn().mockResolvedValue({
+      targetVocab: { introduce: [], reinforce: [], avoid: [] },
+      supportPosture: "anchored",
+      targetLanguageRatio: 0.2,
+      interactionStyle: "listening_first",
+      glossingStrategy: "none",
+      sentenceComplexityCap: "single-clause",
+      comprehensionCheck: { trigger: false, probeStyle: "none", targetLemmas: [] },
+      directiveLifetime: { maxTurns: 3, invalidateOn: [] },
+      citedSignals: ["fallback"],
+      rationale: "fallback",
+      confidenceBand: "medium",
+      isFallbackDirective: true
+    });
+    const services = createServicesStub(makeScheduleServices(invokeTeacher));
+    const middleware = createSugarLangTeacherMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
+    execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule({ isColdStart: true });
+
+    await middleware.prepare?.(execution);
+
+    expect(invokeTeacher).toHaveBeenCalledTimes(1);
+  });
+
+  it("excludes fluency teachables from retrieveBiasTerms", async () => {
+    const invokeTeacher = vi.fn();
+    const services = createServicesStub(makeScheduleServices(invokeTeacher));
+    const middleware = createSugarLangTeacherMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
+    execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule({
+      teachables: [
+        { id: "comer", kind: "lemma", priority: 0.9, teachReason: "due", affinityNpcIds: [] },
+        { id: "agua", kind: "lemma", priority: 0.5, teachReason: "fluency", affinityNpcIds: [] }
+      ]
+    });
+
+    await middleware.prepare?.(execution);
+
+    const contrib = execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] as { retrieveBiasTerms?: string[] };
+    expect(contrib.retrieveBiasTerms).toEqual(["comer"]);
+    expect(contrib.retrieveBiasTerms).not.toContain("agua");
   });
 });

@@ -23,7 +23,8 @@ const EMPTY_MERGED: MergedContributions = {
   judgeDirectives: [],
   regenDirectives: [],
   preserveActionTags: false,
-  interpretLexicon: {}
+  interpretLexicon: {},
+  retrieveBiasTerms: []
 };
 
 describe("collectContributions -- zero contributions", () => {
@@ -156,6 +157,42 @@ describe("collectContributions -- multiple contributors, merge order", () => {
     const result = collectContributions(annotations);
     expect(result.interpretLexicon["farewell"]).toEqual(["adios", "au revoir"]);
     expect(result.interpretLexicon["greeting"]).toEqual(["bonjour"]);
+  });
+});
+
+describe("collectContributions -- retrieveBiasTerms (087.6)", () => {
+  it("returns retrieveBiasTerms from a single contribution", () => {
+    const annotations: Record<string, unknown> = {
+      "sugaragent.contrib/sugarlang": {
+        schemaVersion: 1,
+        retrieveBiasTerms: ["comer", "hablar"]
+      }
+    };
+    expect(collectContributions(annotations).retrieveBiasTerms).toEqual(["comer", "hablar"]);
+  });
+
+  it("concatenates retrieveBiasTerms across contributors in pluginId sort order", () => {
+    const annotations: Record<string, unknown> = {
+      "sugaragent.contrib/z-plugin": { schemaVersion: 1, retrieveBiasTerms: ["pan"] },
+      "sugaragent.contrib/a-plugin": { schemaVersion: 1, retrieveBiasTerms: ["agua", "leche"] }
+    };
+    expect(collectContributions(annotations).retrieveBiasTerms).toEqual(["agua", "leche", "pan"]);
+  });
+
+  it("returns empty array when no contribution sets retrieveBiasTerms", () => {
+    const annotations: Record<string, unknown> = {
+      "sugaragent.contrib/sugarlang": { schemaVersion: 1, generateOverlay: "some overlay" }
+    };
+    expect(collectContributions(annotations).retrieveBiasTerms).toEqual([]);
+  });
+
+  it("drops a contribution where retrieveBiasTerms is not an array", () => {
+    const logger = { warn: vi.fn() };
+    const annotations: Record<string, unknown> = {
+      "sugaragent.contrib/bad": { schemaVersion: 1, retrieveBiasTerms: "not-an-array" }
+    };
+    expect(collectContributions(annotations, logger)).toEqual(EMPTY_MERGED);
+    expect(logger.warn).toHaveBeenCalledOnce();
   });
 });
 

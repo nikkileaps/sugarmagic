@@ -2924,6 +2924,7 @@ export function App() {
           pluginConfigurations,
           regions: regionDocuments,
           activeRegion: layoutRegion,
+          activeScene: session ? getActiveScene(session) : null,
           targetLanguage: sugarlangTargetLanguage,
           onCommand: dispatchCommand
         }
@@ -3001,6 +3002,7 @@ export function App() {
           pluginConfigurations,
           regions: regionDocuments,
           activeRegion,
+          activeScene: session ? getActiveScene(session) : null,
           targetLanguage: sugarlangTargetLanguage,
           onCommand: dispatchCommand,
           selectedNPC,
@@ -3023,6 +3025,7 @@ export function App() {
           pluginConfigurations,
           regions: regionDocuments,
           activeRegion,
+          activeScene: session ? getActiveScene(session) : null,
           targetLanguage: sugarlangTargetLanguage,
           onCommand: dispatchCommand,
           selectedQuest,
@@ -3046,6 +3049,7 @@ export function App() {
           pluginConfigurations,
           regions: regionDocuments,
           activeRegion,
+          activeScene: session ? getActiveScene(session) : null,
           targetLanguage: sugarlangTargetLanguage,
           onCommand: dispatchCommand,
           selectedDialogue,
@@ -3192,6 +3196,7 @@ export function App() {
             pluginConfigurations,
             regions: regionDocuments,
             activeRegion,
+            activeScene: session ? getActiveScene(session) : null,
             targetLanguage: sugarlangTargetLanguage,
             onCommand: dispatchCommand
           })}
@@ -3207,6 +3212,7 @@ export function App() {
     pluginShellContributions.designSections,
     regionDocuments,
     renderablePluginWorkspaceItems,
+    session?.activeSceneId,
     session?.gameProject,
     sugarlangTargetLanguage
   ]);

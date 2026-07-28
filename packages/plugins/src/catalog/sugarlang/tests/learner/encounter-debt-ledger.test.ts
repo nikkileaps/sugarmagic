@@ -1,0 +1,194 @@
+/**
+ * packages/plugins/src/catalog/sugarlang/tests/learner/encounter-debt-ledger.test.ts
+ *
+ * Purpose: Pins the encounter-debt ledger's debt creation, paydown, diversity counting,
+ *   and active-debt surfacing. Also pins the static-day degradation (dayIndex null).
+ *
+ * Exports:
+ *   - none
+ *
+ * Relationships:
+ *   - Exercises ../../runtime/learner/encounter-debt-ledger.
+ *
+ * Implements: Plan 087 story 087.2
+ *
+ * Status: active
+ */
+
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  MemoryEncounterDebtLedger,
+  TARGET_DEBT_ENCOUNTERS,
+  countDiverseEncounters
+} from "../../runtime/learner/encounter-debt-ledger";
+import type { EncounterEntry } from "../../runtime/learner/encounter-debt-ledger";
+
+function entry(
+  npcDefinitionId: string | null,
+  sceneId: string | null,
+  dayIndex: number | null
+): EncounterEntry {
+  return { npcDefinitionId, sceneId, dayIndex };
+}
+
+describe("countDiverseEncounters", () => {
+  it("returns 0 for empty list", () => {
+    expect(countDiverseEncounters([])).toBe(0);
+  });
+
+  it("counts distinct (npc, scene, day) triplets", () => {
+    const encounters: EncounterEntry[] = [
+      entry("npc-a", "scene-1", 1),
+      entry("npc-a", "scene-1", 1), // duplicate -- same slot
+      entry("npc-b", "scene-1", 1), // new npc
+      entry("npc-a", "scene-2", 1), // new scene
+      entry("npc-a", "scene-1", 2)  // new day
+    ];
+    expect(countDiverseEncounters(encounters)).toBe(4);
+  });
+
+  it("treats null dayIndex as its own slot key (static-day degradation)", () => {
+    const encounters: EncounterEntry[] = [
+      entry("npc-a", "scene-1", null),
+      entry("npc-a", "scene-1", null), // same slot
+      entry("npc-b", "scene-1", null)  // different npc -> new slot
+    ];
+    expect(countDiverseEncounters(encounters)).toBe(2);
+  });
+
+  it("null npc and null scene each form their own dimension", () => {
+    const encounters: EncounterEntry[] = [
+      entry(null, null, 1),
+      entry(null, "scene-1", 1), // same null-npc, different scene
+      entry("npc-a", null, 1)   // different npc, null scene
+    ];
+    expect(countDiverseEncounters(encounters)).toBe(3);
+  });
+});
+
+describe("MemoryEncounterDebtLedger", () => {
+  let ledger: MemoryEncounterDebtLedger;
+
+  beforeEach(() => {
+    ledger = new MemoryEncounterDebtLedger();
+  });
+
+  describe("createDebt", () => {
+    it("creates a new debt record with no encounters", async () => {
+      await ledger.createDebt("hola", "lemma", 1);
+      const debt = await ledger.getDebt("hola");
+      expect(debt).toBeDefined();
+      expect(debt!.itemId).toBe("hola");
+      expect(debt!.itemKind).toBe("lemma");
+      expect(debt!.createdDayIndex).toBe(1);
+      expect(debt!.encounters).toHaveLength(0);
+      expect(debt!.targetEncounters).toBe(TARGET_DEBT_ENCOUNTERS);
+    });
+
+    it("is idempotent -- second createDebt for same itemId is a no-op", async () => {
+      await ledger.createDebt("hola", "lemma", 1);
+      await ledger.createDebt("hola", "lemma", 2); // should not overwrite
+      const debt = await ledger.getDebt("hola");
+      expect(debt!.createdDayIndex).toBe(1); // original value preserved
+    });
+
+    it("accepts null createdDayIndex (static-day degradation)", async () => {
+      await ledger.createDebt("fn-greet", "function", null);
+      const debt = await ledger.getDebt("fn-greet");
+      expect(debt!.createdDayIndex).toBeNull();
+    });
+  });
+
+  describe("recordEncounter", () => {
+    it("appends an encounter to an existing debt", async () => {
+      await ledger.createDebt("hola", "lemma", 1);
+      await ledger.recordEncounter("hola", entry("npc-a", "market", 1));
+      const debt = await ledger.getDebt("hola");
+      expect(debt!.encounters).toHaveLength(1);
+    });
+
+    it("is a no-op when no debt exists for itemId", async () => {
+      await ledger.recordEncounter("unknown", entry("npc-a", "market", 1));
+      expect(await ledger.getDebt("unknown")).toBeUndefined();
+    });
+
+    it("accumulates multiple encounters across different diversity slots", async () => {
+      await ledger.createDebt("hola", "lemma", 1);
+      await ledger.recordEncounter("hola", entry("npc-a", "market", 1));
+      await ledger.recordEncounter("hola", entry("npc-b", "market", 1));
+      await ledger.recordEncounter("hola", entry("npc-a", "plaza", 1));
+      const debt = await ledger.getDebt("hola");
+      expect(debt!.encounters).toHaveLength(3);
+      expect(countDiverseEncounters(debt!.encounters)).toBe(3);
+    });
+
+    it("duplicate encounters (same triplet) increment encounters but not diversity count", async () => {
+      await ledger.createDebt("hola", "lemma", 1);
+      await ledger.recordEncounter("hola", entry("npc-a", "market", 1));
+      await ledger.recordEncounter("hola", entry("npc-a", "market", 1));
+      const debt = await ledger.getDebt("hola");
+      expect(debt!.encounters).toHaveLength(2);
+      expect(countDiverseEncounters(debt!.encounters)).toBe(1);
+    });
+  });
+
+  describe("getActiveDebts", () => {
+    it("returns empty map when no debts exist", async () => {
+      expect((await ledger.getActiveDebts()).size).toBe(0);
+    });
+
+    it("includes newly created debts (0 encounters < target)", async () => {
+      await ledger.createDebt("hola", "lemma", 1);
+      const active = await ledger.getActiveDebts();
+      expect(active.has("hola")).toBe(true);
+      expect(active.get("hola")!.diverseEncounterCount).toBe(0);
+      expect(active.get("hola")!.targetEncounters).toBe(TARGET_DEBT_ENCOUNTERS);
+    });
+
+    it("excludes fully-paid debts (diverseEncounterCount >= targetEncounters)", async () => {
+      await ledger.createDebt("adios", "lemma", 1);
+      // Pay it down to exactly TARGET_DEBT_ENCOUNTERS diverse slots.
+      for (let i = 0; i < TARGET_DEBT_ENCOUNTERS; i++) {
+        await ledger.recordEncounter("adios", entry(`npc-${i}`, "scene-1", 1));
+      }
+      const active = await ledger.getActiveDebts();
+      expect(active.has("adios")).toBe(false);
+    });
+
+    it("returns partial-debt status correctly", async () => {
+      await ledger.createDebt("hola", "lemma", 1);
+      await ledger.recordEncounter("hola", entry("npc-a", "scene-1", 1));
+      await ledger.recordEncounter("hola", entry("npc-b", "scene-1", 1));
+      const active = await ledger.getActiveDebts();
+      expect(active.get("hola")!.diverseEncounterCount).toBe(2);
+    });
+
+    it("static-day degradation: diverse counting uses npc x scene only when dayIndex null", async () => {
+      await ledger.createDebt("hola", "lemma", null);
+      // Same npc, same scene, but "different" in wall time -- should be ONE slot
+      await ledger.recordEncounter("hola", entry("npc-a", "market", null));
+      await ledger.recordEncounter("hola", entry("npc-a", "market", null));
+      const active = await ledger.getActiveDebts();
+      expect(active.get("hola")!.diverseEncounterCount).toBe(1);
+    });
+  });
+
+  describe("listDebts", () => {
+    it("returns all debts ordered by itemId", async () => {
+      await ledger.createDebt("zebra", "lemma", 1);
+      await ledger.createDebt("apple", "lemma", 1);
+      await ledger.createDebt("mango", "lemma", 1);
+      const list = await ledger.listDebts();
+      expect(list.map((r) => r.itemId)).toEqual(["apple", "mango", "zebra"]);
+    });
+
+    it("returns immutable copies (mutation does not affect stored state)", async () => {
+      await ledger.createDebt("hola", "lemma", 1);
+      const list = await ledger.listDebts();
+      list[0].encounters.push(entry("npc-x", "scene-x", 1));
+      const list2 = await ledger.listDebts();
+      expect(list2[0].encounters).toHaveLength(0);
+    });
+  });
+});
+

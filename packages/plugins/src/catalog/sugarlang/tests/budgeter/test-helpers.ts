@@ -76,7 +76,7 @@ export function createBudgeterLearner(
       turns: 10,
       avgResponseLatencyMs: 1000,
       hoverRate: 0.1,
-      retryRate: 0.05,
+      probeFailRate: 0.05,
       fatigueScore: 0.1
     },
     sessionHistory: [],

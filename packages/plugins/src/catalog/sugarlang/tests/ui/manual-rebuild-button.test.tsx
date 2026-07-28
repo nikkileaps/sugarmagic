@@ -81,6 +81,7 @@ describe("Sugarlang compile rebuild helpers", () => {
       gameProject,
       [region],
       "es",
+      null,
       workspaceId
     );
     const progress: number[] = [];
@@ -89,6 +90,7 @@ describe("Sugarlang compile rebuild helpers", () => {
       gameProject,
       [region],
       "es",
+      null,
       workspaceId,
       (next) => {
         progress.push(next.completedScenes);

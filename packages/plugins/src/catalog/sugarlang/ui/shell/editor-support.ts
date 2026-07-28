@@ -19,6 +19,7 @@
 
 import type {
   GameProject,
+  Scene,
   QuestDefinition,
   QuestNodeDefinition,
   RegionDocument
@@ -32,6 +33,8 @@ import { SUGARLANG_COMPILE_PIPELINE_VERSION } from "../../runtime/compile/conten
 import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
 import { IndexedDBVariantCache } from "../../runtime/compile/variant-cache";
+import { IndexedDBIntentCache } from "../../runtime/compile/intent-cache";
+import { extractIntent, INTENT_EXTRACTOR_PROMPT_VERSION } from "../../runtime/compile/extract-intent";
 import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 import { getAllInventoryChunks } from "../../runtime/inventory/function-inventory-loader";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
@@ -121,7 +124,8 @@ export function resolveStudioCompileWorkspaceId(gameProjectId: string | null): s
 export function createSugarlangSceneContexts(
   gameProject: GameProject | null,
   regions: RegionDocument[],
-  targetLanguage: string
+  targetLanguage: string,
+  activeScene: Scene | null
 ): Promise<SceneAuthoringContext[]> {
   if (!gameProject) {
     return Promise.resolve([]);
@@ -132,9 +136,13 @@ export function createSugarlangSceneContexts(
     ? new SugarlangGatewayLoreClient(proxyBaseUrl)
     : null;
 
+  // activeScene is load-bearing: composed npcPresences are OVERLAY-ONLY
+  // (composeRegionContents), so a null scene compiles a lexicon with zero
+  // NPC bios, NPC lore pages, or NPC-bound dialogues.
   return resolveSceneAuthoringContexts(
     [...regions].map((region) => ({
         region,
+        activeScene,
         targetLanguage,
         npcDefinitions: gameProject.npcDefinitions,
         dialogueDefinitions: gameProject.dialogueDefinitions,
@@ -150,7 +158,8 @@ export async function compileAuthoringSceneLexicon(
   gameProject: GameProject | null,
   activeRegion: RegionDocument | null,
   regions: RegionDocument[],
-  targetLanguage: string
+  targetLanguage: string,
+  activeScene: Scene | null
 ) : Promise<CompiledSceneLexicon | null> {
   if (!gameProject || !activeRegion) {
     return null;
@@ -159,7 +168,8 @@ export async function compileAuthoringSceneLexicon(
   const context = (await createSugarlangSceneContexts(
     gameProject,
     regions,
-    targetLanguage
+    targetLanguage,
+    activeScene
   )).find(
     (scene) => scene.sceneId === activeRegion.identity.id
   );
@@ -245,12 +255,14 @@ export async function readSugarlangCompileStatus(
   gameProject: GameProject | null,
   regions: RegionDocument[],
   targetLanguage: string,
+  activeScene: Scene | null,
   workspaceId: string
 ): Promise<SugarlangCompileStatusSummary> {
   const scenes = await createSugarlangSceneContexts(
     gameProject,
     regions,
-    targetLanguage
+    targetLanguage,
+    activeScene
   );
   const currentHashes = computeCurrentSceneHashes(scenes);
   const entries = await collectAuthoringCacheEntries(workspaceId);
@@ -292,6 +304,7 @@ export async function rebuildSugarlangCompileCache(
   gameProject: GameProject | null,
   regions: RegionDocument[],
   targetLanguage: string,
+  activeScene: Scene | null,
   workspaceId: string,
   onProgress?: (progress: SugarlangRebuildProgress) => void,
   options?: { chunkExtractionEnabled?: boolean }
@@ -299,7 +312,8 @@ export async function rebuildSugarlangCompileCache(
   const scenes = await createSugarlangSceneContexts(
     gameProject,
     regions,
-    targetLanguage
+    targetLanguage,
+    activeScene
   );
   const cache = new IndexedDBCompileCache({ workspaceId });
   let completedScenes = 0;
@@ -319,8 +333,10 @@ export async function rebuildSugarlangCompileCache(
     ? new SugarlangGatewayClient(proxyBaseUrl)
     : null;
 
+  const dialogueDefinitions = gameProject?.dialogueDefinitions ?? [];
   const scheduler = new SugarlangAuthoringCompileScheduler({
     getScenes: () => scenes,
+    getDialogues: () => dialogueDefinitions,
     atlas,
     morphology,
     cache,
@@ -344,6 +360,24 @@ export async function rebuildSugarlangCompileCache(
             promptVersion: SUGARLANG_COMPILE_PIPELINE_VERSION
           }
         : undefined,
+    intentPipeline: gatewayClient
+      ? {
+          cache: new IndexedDBIntentCache({ workspaceId }),
+          extractNodeIntent: async (dialogueDefinitionId, node, contentHash) => {
+            return extractIntent({
+              nodeId: node.nodeId,
+              nodeText: node.text,
+              authoredIntent: node.intent,
+              targetLanguage,
+              contentHash,
+              dialogueDefinitionId,
+              llmClient: gatewayClient,
+              promptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+            });
+          },
+          promptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+        }
+      : undefined,
     onLog(message, detail) {
       if (message !== "compiled-scene") {
         return;
@@ -362,12 +396,14 @@ export async function rebuildSugarlangCompileCache(
   scheduler.rebuildAll();
   await scheduler.flush();
   await scheduler.flushChunks();
+  await scheduler.flushIntents();
   scheduler.stop();
 
   return readSugarlangCompileStatus(
     gameProject,
     regions,
     targetLanguage,
+    activeScene,
     workspaceId
   );
 }

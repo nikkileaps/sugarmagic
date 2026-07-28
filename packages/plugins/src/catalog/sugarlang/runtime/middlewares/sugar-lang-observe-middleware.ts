@@ -16,6 +16,7 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
+import { getWorldDay } from "@sugarmagic/runtime-core";
 import {
   createNoOpTelemetrySink,
   createTelemetryEvent,
@@ -29,6 +30,7 @@ import {
   getFunctionForChunk as getInventoryFunctionForChunk,
   getAllInventoryChunks
 } from "../inventory/function-inventory-loader";
+import { countDiverseEncounters } from "../learner/encounter-debt-ledger";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
@@ -316,6 +318,17 @@ export function createSugarLangObserveMiddleware(
           });
         }
 
+        // 087.4: Record the probe outcome in the session accumulator so it feeds fatigueScore.
+        // All-passed = good signal; anything else (full-fail or mixed) = strain signal.
+        try {
+          await services.learnerStateReducer.apply({
+            type: "record-probe-outcome",
+            passed: passed.length === storedCheck.targetLemmas.length
+          });
+        } catch {
+          // Non-fatal: strain signal missing for this probe, scheduling degrades gracefully.
+        }
+
         if (passed.length === storedCheck.targetLemmas.length) {
           await emitTelemetry(
             telemetry,
@@ -546,6 +559,11 @@ export function createSugarLangObserveMiddleware(
       }
 
       const turnLemmas = collectLemmasFromText(normalizedTurn.text, learner.targetLanguage);
+      // 087.2: world-day and NPC context for debt paydown signals.
+      const blackboardForDebt = deps.services.getBlackboard();
+      const debtDayIndex = blackboardForDebt ? getWorldDay(blackboardForDebt) : null;
+      const debtNpcId = execution.selection.npcDefinitionId ?? null;
+
       for (const introduce of constraint.targetVocab.introduce) {
         if (!turnLemmas.some((entry) => entry.lemmaId === introduce.lemmaId)) {
           continue;
@@ -563,6 +581,76 @@ export function createSugarLangObserveMiddleware(
           type: "observation",
           observationEvent
         });
+
+        // 087.2: Create lemma-level debt on first introduction.
+        // The learner snapshot pre-dates this turn, so absence from lemmaCards = new card.
+        if (!(introduce.lemmaId in learner.lemmaCards)) {
+          try {
+            await services.ledgerStore.createDebt(introduce.lemmaId, "lemma", debtDayIndex);
+            const debt = await services.ledgerStore.getDebt(introduce.lemmaId);
+            if (debt) {
+              void emitTelemetry(
+                telemetry,
+                createTelemetryEvent("debt.created", {
+                  timestamp: observedAtMs,
+                  conversationId,
+                  sessionId,
+                  turnId: traceTurnId,
+                  itemId: introduce.lemmaId,
+                  itemKind: "lemma",
+                  createdDayIndex: debtDayIndex,
+                  targetEncounters: debt.targetEncounters
+                })
+              );
+            }
+          } catch {
+            // Debt ledger failure is non-fatal.
+          }
+        }
+      }
+
+      // 087.2: Paydown signals for reinforce/card-holding lemmas in NPC turn text.
+      // Lemmas already in the card store (reviewCount > 0) sit in the REINFORCE list
+      // and produce no FSRS observation here. We call the ledger directly -- bypassing
+      // the reducer -- to avoid distorting FSRS grades while still recording diverse
+      // encounter paydown for the outer-loop debt tracker.
+      const isNpcTurn = !isPlayerSpokenTurn(normalizedTurn, deps.services.getPlayerDefinitionId());
+      if (isNpcTurn) {
+        const introduceIds = new Set(constraint.targetVocab.introduce.map((l) => l.lemmaId));
+        for (const { lemmaId } of turnLemmas) {
+          if (!lemmaId) continue;
+          // Skip introduce-list lemmas (handled above) and chunk: pseudo-ids.
+          if (introduceIds.has(lemmaId) || lemmaId.startsWith("chunk:")) continue;
+          // Only reinforce lemmas -- ones with an existing card in the snapshot.
+          if (!(lemmaId in learner.lemmaCards)) continue;
+          try {
+            const entry = { npcDefinitionId: debtNpcId, sceneId, dayIndex: debtDayIndex };
+            await services.ledgerStore.recordEncounter(lemmaId, entry);
+            const debt = await services.ledgerStore.getDebt(lemmaId);
+            if (debt) {
+              const diverseCount = countDiverseEncounters(debt.encounters);
+              void emitTelemetry(
+                telemetry,
+                createTelemetryEvent("debt.encounter", {
+                  timestamp: observedAtMs,
+                  conversationId,
+                  sessionId,
+                  turnId: traceTurnId,
+                  itemId: lemmaId,
+                  itemKind: "lemma",
+                  npcDefinitionId: debtNpcId,
+                  sceneId,
+                  dayIndex: debtDayIndex,
+                  diverseEncounterCountAfter: diverseCount,
+                  targetEncounters: debt.targetEncounters,
+                  debtPaid: diverseCount >= debt.targetEncounters
+                })
+              );
+            }
+          } catch {
+            // Debt ledger failure is non-fatal.
+          }
+        }
       }
 
       // 085.3: Chunk observations on the turn text.
@@ -618,26 +706,81 @@ export function createSugarLangObserveMiddleware(
           });
 
           // 085.5: First-teach beat -- write teach-record and annotate the turn once.
-          if (isNewCard && !teachLineWritten) {
-            const fnEntry = getInventoryFunctionForChunk(
-              match.chunk.chunkId,
-              learner.targetLanguage
-            );
-            if (fnEntry) {
-              const alreadyTaught = await services.teachRecordStore.has(fnEntry.functionId);
-              if (!alreadyTaught) {
-                await services.teachRecordStore.write({
-                  functionId: fnEntry.functionId,
-                  taughtAtMs: observedAtMs,
-                  realizingChunkId: match.chunk.chunkId
-                });
-                normalizedTurn.annotations!["sugarlang.teachLine"] = {
-                  label: fnEntry.displayName,
-                  text: `"${match.surfaceMatched}" is a ${fnEntry.displayName.toLowerCase()}.`
-                };
-                teachLineWritten = true;
-                teachLineSurface = match.surfaceMatched;
+          // 087.2: Also create function-level debt at introduction and record encounter paydown
+          //   for every NPC chunk match (not just first-teach).
+          const fnEntry = getInventoryFunctionForChunk(
+            match.chunk.chunkId,
+            learner.targetLanguage
+          );
+          if (isNewCard && !teachLineWritten && fnEntry) {
+            const alreadyTaught = await services.teachRecordStore.has(fnEntry.functionId);
+            if (!alreadyTaught) {
+              await services.teachRecordStore.write({
+                functionId: fnEntry.functionId,
+                taughtAtMs: observedAtMs,
+                realizingChunkId: match.chunk.chunkId
+              });
+              normalizedTurn.annotations!["sugarlang.teachLine"] = {
+                label: fnEntry.displayName,
+                text: `"${match.surfaceMatched}" is a ${fnEntry.displayName.toLowerCase()}.`
+              };
+              teachLineWritten = true;
+              teachLineSurface = match.surfaceMatched;
+
+              // 087.2: Create function-level debt at introduction.
+              try {
+                await services.ledgerStore.createDebt(fnEntry.functionId, "function", debtDayIndex);
+                const debt = await services.ledgerStore.getDebt(fnEntry.functionId);
+                if (debt) {
+                  void emitTelemetry(
+                    telemetry,
+                    createTelemetryEvent("debt.created", {
+                      timestamp: observedAtMs,
+                      conversationId,
+                      sessionId,
+                      turnId: traceTurnId,
+                      itemId: fnEntry.functionId,
+                      itemKind: "function",
+                      createdDayIndex: debtDayIndex,
+                      targetEncounters: debt.targetEncounters
+                    })
+                  );
+                }
+              } catch {
+                // Debt ledger failure is non-fatal.
               }
+            }
+          }
+
+          // 087.2: Record encounter paydown for all NPC chunk matches (not just first-teach).
+          // Chunks that aren't associated with a function are skipped.
+          if (!isPlayerTurn && fnEntry) {
+            try {
+              const entry = { npcDefinitionId: debtNpcId, sceneId, dayIndex: debtDayIndex };
+              await services.ledgerStore.recordEncounter(fnEntry.functionId, entry);
+              const debt = await services.ledgerStore.getDebt(fnEntry.functionId);
+              if (debt) {
+                const diverseCount = countDiverseEncounters(debt.encounters);
+                void emitTelemetry(
+                  telemetry,
+                  createTelemetryEvent("debt.encounter", {
+                    timestamp: observedAtMs,
+                    conversationId,
+                    sessionId,
+                    turnId: traceTurnId,
+                    itemId: fnEntry.functionId,
+                    itemKind: "function",
+                    npcDefinitionId: debtNpcId,
+                    sceneId,
+                    dayIndex: debtDayIndex,
+                    diverseEncounterCountAfter: diverseCount,
+                    targetEncounters: debt.targetEncounters,
+                    debtPaid: diverseCount >= debt.targetEncounters
+                  })
+                );
+              }
+            } catch {
+              // Debt ledger failure is non-fatal.
             }
           }
         }

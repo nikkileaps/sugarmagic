@@ -63,7 +63,7 @@ export function createTestLearnerProfile(
       turns: 2,
       avgResponseLatencyMs: 500,
       hoverRate: 0,
-      retryRate: 0,
+      probeFailRate: 0,
       fatigueScore: 0
     },
     sessionHistory: [],

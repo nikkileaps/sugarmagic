@@ -86,6 +86,7 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
             gameProject: props.gameProject,
             regions: props.regions,
             activeRegion: props.activeRegion,
+            activeScene: props.activeScene ?? null,
             targetLanguage: props.targetLanguage
           })
       },
@@ -170,6 +171,7 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
             gameProjectId: props.gameProjectId,
             gameProject: props.gameProject,
             regions: props.regions,
+            activeScene: props.activeScene ?? null,
             targetLanguage: props.targetLanguage,
             chunkExtractionEnabled: sugarlangChunkExtractionEnabled
           })

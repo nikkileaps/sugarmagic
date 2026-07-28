@@ -45,7 +45,8 @@ import {
   isInPostPlacementCalibration
 } from "./calibration-window";
 import {
-  computeFatigueScore
+  computeFatigueScore,
+  computeProbeFailRate
 } from "./session-signals";
 import {
   createEmptyLearnerProfile,
@@ -121,6 +122,16 @@ export interface DecayProvisionalEvidenceEvent {
   decayedAtMs: number;
 }
 
+/**
+ * 087.4: Records a comprehension probe outcome into the session accumulator so that
+ * probe failures feed the rolling strain estimate (probeFailRate in fatigueScore).
+ */
+export interface RecordProbeOutcomeEvent {
+  type: "record-probe-outcome";
+  /** True = all target lemmas passed. False = at least one failed (full-fail or mixed). */
+  passed: boolean;
+}
+
 export type ReducerEvent =
   | ReducerObservationEvent
   | PlacementCompletionEvent
@@ -129,7 +140,8 @@ export type ReducerEvent =
   | SelfReportEvent
   | CommitProvisionalEvidenceEvent
   | DiscardProvisionalEvidenceEvent
-  | DecayProvisionalEvidenceEvent;
+  | DecayProvisionalEvidenceEvent
+  | RecordProbeOutcomeEvent;
 
 export interface LearnerStateReducerOptions {
   profileId: LearnerId;
@@ -152,7 +164,10 @@ interface SessionAccumulator {
   turns: number;
   lemmasSeen: number;
   hoverCount: number;
-  retryCount: number;
+  /** 087.4: number of probes where at least one lemma failed (replaces retryCount). */
+  probeFailCount: number;
+  /** 087.4: total probes attempted this session (denominator for probeFailRate). */
+  probeCount: number;
   totalResponseLatencyMs: number;
   latencySamples: number;
   lastObservedAtMs: number | null;
@@ -166,7 +181,8 @@ function createSessionAccumulator(profile: LearnerProfile): SessionAccumulator {
       turns: 0,
       lemmasSeen: 0,
       hoverCount: 0,
-      retryCount: 0,
+      probeFailCount: 0,
+      probeCount: 0,
       totalResponseLatencyMs: 0,
       latencySamples: 0,
       lastObservedAtMs: null
@@ -178,7 +194,10 @@ function createSessionAccumulator(profile: LearnerProfile): SessionAccumulator {
     turns: currentSession.turns,
     lemmasSeen: currentSession.turns,
     hoverCount: currentSession.hoverRate * currentSession.turns,
-    retryCount: currentSession.retryRate * currentSession.turns,
+    // probeFailCount / probeCount cannot be reconstructed without probeCount.
+    // Start fresh on session resume; the persisted fatigueScore captures prior strain.
+    probeFailCount: 0,
+    probeCount: 0,
     totalResponseLatencyMs: currentSession.avgResponseLatencyMs * currentSession.turns,
     latencySamples: currentSession.turns,
     lastObservedAtMs: null
@@ -252,7 +271,7 @@ export class LearnerStateReducer {
           turns: 0,
           avgResponseLatencyMs: 0,
           hoverRate: 0,
-          retryRate: 0,
+          probeFailRate: 0,
           fatigueScore: 0
         };
         this.sessionAccumulators.set(event.sessionId, createSessionAccumulator(profile));
@@ -378,6 +397,26 @@ export class LearnerStateReducer {
           ...(await this.decayProvisionalEvidence(profile, event))
         );
         break;
+      case "record-probe-outcome": {
+        // 087.4: fold probe outcomes into the session accumulator so they feed fatigueScore.
+        const currentSession = profile.currentSession;
+        if (currentSession) {
+          const accumulator =
+            this.sessionAccumulators.get(currentSession.sessionId) ??
+            createSessionAccumulator(profile);
+          accumulator.probeCount += 1;
+          if (!event.passed) {
+            accumulator.probeFailCount += 1;
+          }
+          this.sessionAccumulators.set(currentSession.sessionId, accumulator);
+          currentSession.probeFailRate = computeProbeFailRate(
+            accumulator.probeFailCount,
+            accumulator.probeCount
+          );
+          currentSession.fatigueScore = computeFatigueScore(currentSession);
+        }
+        break;
+      }
     }
 
     await saveLearnerProfile({
@@ -411,7 +450,7 @@ export class LearnerStateReducer {
         turns: 0,
         avgResponseLatencyMs: 0,
         hoverRate: 0,
-        retryRate: 0,
+        probeFailRate: 0,
         fatigueScore: 0
       };
     profile.currentSession = currentSession;
@@ -436,9 +475,8 @@ export class LearnerStateReducer {
     ) {
       accumulator.hoverCount += 1;
     }
-    if (observationEvent.observation.kind === "produced-incorrect") {
-      accumulator.retryCount += 1;
-    }
+    // produced-incorrect has no producers repo-wide (087.4 decision: retryRate dropped).
+    // Probe outcomes are fed via record-probe-outcome events instead.
 
     const existingCard = profile.lemmaCards[observationEvent.lemma.lemmaId];
     const seededCard =
@@ -548,8 +586,10 @@ export class LearnerStateReducer {
 
     currentSession.hoverRate =
       accumulator.lemmasSeen > 0 ? accumulator.hoverCount / accumulator.lemmasSeen : 0;
-    currentSession.retryRate =
-      accumulator.turns > 0 ? accumulator.retryCount / accumulator.turns : 0;
+    currentSession.probeFailRate = computeProbeFailRate(
+      accumulator.probeFailCount,
+      accumulator.probeCount
+    );
     currentSession.avgResponseLatencyMs =
       accumulator.latencySamples > 0
         ? accumulator.totalResponseLatencyMs / accumulator.latencySamples

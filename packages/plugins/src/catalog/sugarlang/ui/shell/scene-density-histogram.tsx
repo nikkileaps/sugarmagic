@@ -15,7 +15,7 @@
  * Status: active
  */
 
-import type { GameProject, RegionDocument } from "@sugarmagic/domain";
+import type { GameProject, RegionDocument, Scene } from "@sugarmagic/domain";
 import { PanelSection } from "@sugarmagic/ui";
 import { useEffect, useState, type ReactElement } from "react";
 import type { CEFRBand } from "../../runtime/types";
@@ -29,6 +29,9 @@ export interface SceneDensityHistogramProps {
   gameProject: GameProject | null;
   regions: RegionDocument[];
   activeRegion: RegionDocument | null;
+  /** Ambient Scene whose overlay composes onto the region -- without it the
+   *  compiled density has zero NPC-sourced lemmas. */
+  activeScene?: Scene | null;
   targetLanguage: string;
   lexicon?: CompiledSceneLexicon | null;
 }
@@ -56,7 +59,8 @@ export function SceneDensityHistogram(
       props.gameProject,
       props.activeRegion,
       props.regions,
-      props.targetLanguage
+      props.targetLanguage,
+      props.activeScene ?? null
     ).then((nextLexicon) => {
       if (!cancelled) {
         setComputedLexicon(nextLexicon);
@@ -68,6 +72,7 @@ export function SceneDensityHistogram(
     };
   }, [
     props.activeRegion,
+    props.activeScene,
     props.gameProject,
     props.lexicon,
     props.regions,

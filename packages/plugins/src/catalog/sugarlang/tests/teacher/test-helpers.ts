@@ -121,7 +121,7 @@ export function createTeacherContext(
       turns: 4,
       avgResponseLatencyMs: 900,
       hoverRate: 0.2,
-      retryRate: 0.05,
+      probeFailRate: 0.05,
       fatigueScore: 0.15
     },
     lemmaCards: {

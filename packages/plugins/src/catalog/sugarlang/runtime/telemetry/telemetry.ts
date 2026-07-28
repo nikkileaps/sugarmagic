@@ -649,6 +649,54 @@ export type TelemetryEvent =
         settledConfidence: number;
         sessionTurn: number;
       }
+    >
+  | TelemetryEventOf<
+      "scheduler.computed",
+      {
+        sceneId: string | null;
+        teachableCount: number;
+        isColdStart: boolean;
+        learnerBand: string;
+        fatigueScore: number;
+        dueItemCount: number;
+        debtServiceCount: number;
+        introductionCount: number;
+        affinityCount: number;
+        stretchCount: number;
+        topTeachableId: string | null;
+        topTeachableReason: string | null;
+        /** True when the world-day axis was unavailable and diversity degrades to npc x scene. */
+        dayAxisDegraded: boolean;
+        /** 087.3: Estimated fraction of scene lemmas currently known by the learner. */
+        sceneComprehensionRate: number | null;
+        /** 087.3: True when stretch allowance gate was triggered this turn. */
+        stretchAllowanceActive: boolean;
+        /** 087.4: True when fatigueScore >= STRAIN_SUPPRESS_THRESHOLD; introductions suppressed. */
+        strainSuppressed: boolean;
+      }
+    >
+  | TelemetryEventOf<
+      "debt.created",
+      {
+        itemId: string;
+        itemKind: "lemma" | "function";
+        createdDayIndex: number | null;
+        targetEncounters: number;
+      }
+    >
+  | TelemetryEventOf<
+      "debt.encounter",
+      {
+        itemId: string;
+        itemKind: "lemma" | "function";
+        npcDefinitionId: string | null;
+        sceneId: string | null;
+        dayIndex: number | null;
+        diverseEncounterCountAfter: number;
+        targetEncounters: number;
+        /** True when diverseEncounterCountAfter >= targetEncounters. */
+        debtPaid: boolean;
+      }
     >;
 
 export type TelemetryEventKind = TelemetryEvent["kind"];

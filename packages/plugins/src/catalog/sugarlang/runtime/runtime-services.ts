@@ -35,8 +35,8 @@ import type {
 import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
 import { IndexedDBVariantCache, type SugarlangVariantCache } from "./compile/variant-cache";
-import type { SugarlangIntentCache } from "./compile/intent-cache";
-import type { LiveRenderCache } from "./compile/live-render-cache";
+import { IndexedDBIntentCache, type SugarlangIntentCache } from "./compile/intent-cache";
+import { LiveRenderCache } from "./compile/live-render-cache";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
 import type { SugarlangLLMClient } from "./llm/types";
 import { LexicalBudgeter } from "./budgeter/lexical-budgeter";
@@ -60,6 +60,10 @@ import {
   type TeachRecordStore
 } from "./learner/teach-record-store";
 import {
+  createEncounterDebtLedger,
+  type EncounterDebtLedger
+} from "./learner/encounter-debt-ledger";
+import {
   resetSugarlangLearnerDatabases,
   type SugarlangLearnerDataResetResult
 } from "./learner/reset-learner-data";
@@ -75,6 +79,7 @@ import {
   createNoOpTelemetrySink,
   type TelemetrySink
 } from "./telemetry/telemetry";
+import { OuterLoopScheduler } from "./scheduler/outer-loop-scheduler";
 import type { SugarlangLoggerLike } from "./logger";
 export type { SugarlangLoggerLike } from "./logger";
 import type { CEFRBand } from "./types";
@@ -103,7 +108,13 @@ export interface SugarlangExecutionServices {
   learnerStateReducer: LearnerStateReducer;
   cardStore: CardStore;
   teachRecordStore: TeachRecordStore;
+  /** 087.2: encounter-debt ledger -- tracks diverse re-encounter debt per introduced item. */
+  ledgerStore: EncounterDebtLedger;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
+  /** 087.5: authored dialogue definitions -- the scripted middleware resolves a
+   *  node's hand-authored intent from here so the runtime intent-cache key
+   *  matches the bake-time key (key parity). */
+  dialogueDefinitions: DialogueDefinition[];
   teacher: SugarLangTeacher;
   llmClient: SugarlangLLMClient | null;
   /** 086.4: optional variant cache injected by callers at bake time. */
@@ -112,6 +123,8 @@ export interface SugarlangExecutionServices {
   intentCache?: SugarlangIntentCache;
   /** 086.5: optional live-render cache (in-memory only; no persistence needed). */
   liveRenderCache?: LiveRenderCache;
+  /** 087.1: outer-loop scheduler -- computes the cross-session teach schedule. */
+  outerLoopScheduler: OuterLoopScheduler;
 }
 
 export interface SugarlangDebugState {
@@ -335,7 +348,8 @@ export class SugarlangRuntimeServices {
     const resetResult = await resetSugarlangLearnerDatabases({
       closeables: Array.from(this.executionServices.values()).flatMap((entry) => [
         entry.cardStore,
-        entry.teachRecordStore
+        entry.teachRecordStore,
+        entry.ledgerStore
       ])
     });
     const services = this.getFirstExecutionServices();
@@ -361,6 +375,10 @@ export class SugarlangRuntimeServices {
     }
     this.executionServices.clear();
     return resetResult;
+  }
+
+  getDialogueDefinitions(): import("@sugarmagic/domain").DialogueDefinition[] {
+    return this.boundContext?.dialogueDefinitions ?? [];
   }
 
   getPlayerDefinitionId(): string | null {
@@ -461,21 +479,32 @@ export class SugarlangRuntimeServices {
     });
 
     const teachRecordStore = createTeachRecordStore(learnerId);
+    const ledgerStore = createEncounterDebtLedger(learnerId);
     const variantCache: SugarlangVariantCache | undefined = this.studioWorkspaceId
       ? new IndexedDBVariantCache({ workspaceId: this.studioWorkspaceId })
       : undefined;
+    const intentCache: SugarlangIntentCache | undefined = this.studioWorkspaceId
+      ? new IndexedDBIntentCache({ workspaceId: this.studioWorkspaceId })
+      : undefined;
+    const liveRenderCache = new LiveRenderCache();
+    const outerLoopScheduler = new OuterLoopScheduler({ telemetry: this.telemetry });
 
     const services: SugarlangExecutionServices = {
       ...languageBundle,
       profileId: learnerId,
       playerEntityId: this.boundContext.playerDefinition.definitionId,
+      dialogueDefinitions: this.boundContext.dialogueDefinitions,
       learnerStore,
       learnerStateReducer,
       cardStore,
       teachRecordStore,
+      ledgerStore,
       teacher,
       llmClient: this.gatewayClient,
-      variantCache
+      variantCache,
+      intentCache,
+      liveRenderCache,
+      outerLoopScheduler
     };
     this.executionServices.set(key, services);
 

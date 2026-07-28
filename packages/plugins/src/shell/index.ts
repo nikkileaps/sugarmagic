@@ -26,6 +26,7 @@ import type {
   QuestDefinition,
   QuestNodeDefinition,
   RegionDocument,
+  Scene,
   SemanticCommand
 } from "@sugarmagic/domain";
 import type { ReactNode } from "react";
@@ -81,6 +82,10 @@ export interface PluginDesignSectionRenderProps {
   pluginConfigurations: PluginConfigurationRecord[];
   regions: RegionDocument[];
   activeRegion: RegionDocument | null;
+  /** The author's ambient Scene (Plan 058 pattern) — sections that read
+   *  region contents must compose Base + this Scene's overlay, never base
+   *  alone. Null only when the project has no Scenes. */
+  activeScene?: Scene | null;
   targetLanguage: string;
   onCommand: (command: SemanticCommand) => void;
   selectedNPC?: NPCDefinition | null;

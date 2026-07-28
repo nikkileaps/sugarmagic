@@ -21,7 +21,23 @@
  */
 
 export type { LineIntentCacheKey } from "../contracts/line-intent";
+import type { DialogueLineIntent } from "@sugarmagic/domain";
 import type { LineIntentArtifact, LineIntentCacheKey } from "../contracts/line-intent";
+
+/**
+ * Shared content-hash builder for intent cache keys.
+ * Both the bake pipeline (compile-scheduler.ts) and the runtime (scripted-middleware.ts)
+ * must use this function so their keys match when a hand-authored intent field is present.
+ * The variant key uses JSON.stringify({}) on both sides deliberately -- do NOT use this
+ * function for variant cache keys.
+ */
+export function buildIntentContentHash(
+  nodeId: string,
+  text: string,
+  intent?: DialogueLineIntent
+): string {
+  return [nodeId, text, JSON.stringify(intent ?? {})].join("|");
+}
 
 export interface LineIntentCacheEntry {
   key: LineIntentCacheKey;

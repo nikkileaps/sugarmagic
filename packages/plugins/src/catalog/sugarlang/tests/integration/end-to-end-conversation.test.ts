@@ -504,14 +504,16 @@ describe("end-to-end conversation golden", () => {
     // Turn 1: advance (fires a new directive -- cache miss).
     await host.submitInput({ kind: "advance" });
 
-    // Turn 2: advance (same conversationId "npc-orrin" -- cache hit).
+    // Turn 2: advance -- schedule-driven (isColdStart=false after greeting observed a
+    // lemma card), so teacher.invoke() is never called and the directive cache is not
+    // consulted. No cache hits; still only one teacher invocation (from the greeting).
     await host.submitInput({ kind: "advance" });
 
     const cacheHits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
     const newDirectives = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
 
     expect(newDirectives.length).toBe(1);
-    expect(cacheHits.length).toBeGreaterThanOrEqual(1);
+    expect(cacheHits.length).toBe(0);
   });
 
   it("verify pass: NPC text within the envelope passes through verify unchanged", async () => {
@@ -611,6 +613,8 @@ describe("end-to-end conversation golden", () => {
     const repairs = await telemetry.query({ eventKinds: ["verify.repair-triggered"] });
     expect(repairs.length).toBeGreaterThan(0);
     const repairEvent = repairs[0] as unknown as { violations: string[] };
+    // Both the fallback policy and the 087.6 schedule-driven realizer read the
+    // shared band-envelope table, so target-dominant is 85% on either path.
     expect(repairEvent.violations.some((v) => v.includes("85%") && v.includes("Spanish"))).toBe(true);
   });
 

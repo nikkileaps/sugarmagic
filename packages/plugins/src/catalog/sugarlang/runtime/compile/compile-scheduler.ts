@@ -34,6 +34,7 @@ import type { SugarlangChunkCache } from "./chunk-cache";
 import type { ExtractChunksResult } from "./extract-chunks";
 import type { SugarlangCompileCache } from "./sugarlang-compile-cache";
 import type { SugarlangIntentCache, LineIntentCacheEntry } from "./intent-cache";
+import { buildIntentContentHash } from "./intent-cache";
 import type { ExtractIntentResult } from "./extract-intent";
 import type { DialogueDefinition } from "@sugarmagic/domain";
 import type { CEFRBand } from "../contracts/learner-profile";
@@ -411,11 +412,7 @@ export class SugarlangAuthoringCompileScheduler {
 
     for (const dialogue of dialogues) {
       for (const node of dialogue.nodes) {
-        const contentHash = [
-          node.nodeId,
-          node.text,
-          JSON.stringify(node.intent ?? {})
-        ].join("|");
+        const contentHash = buildIntentContentHash(node.nodeId, node.text, node.intent);
 
         const cacheKey = {
           contentHash,

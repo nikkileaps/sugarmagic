@@ -6,7 +6,7 @@ The scripted-mode rendering pipeline adapts authored English NPC dialogue to
 the learner's current level without unconditional LLM calls. The rendering
 ladder has three tiers that compose: deterministic weave (always runs),
 baked variants (compiled assets for deep-end learners), and directed live
-render (dormant until the teacher outer loop wires the trigger). Every tier
+render (wired in 087.5). Every tier
 verifies output before it reaches the player; every tier degrades to the one
 below it on any failure.
 
@@ -110,21 +110,20 @@ boot payload, `variantCache` is undefined and the middleware degrades silently.
 On a cache miss at runtime, the middleware degrades to the diglot weave (Tier
 A1) so the turn always completes.
 
-### Tier C: Directed live render (dormant; trigger wired in epic E)
+### Tier C: Directed live render (wired in 087.5)
 
-The live-render path is present in the middleware but the trigger is hardcoded
-`false`:
+The live-render trigger is deterministic: a scheduled due teachable whose id
+appears in the line's `mustConveyFacts` AND `!schedule.strainSuppressed`. When
+triggered, the middleware calls the LLM with the due word as the introduce
+target, verifies with three deterministic gates (no LLM fidelity judge at
+runtime), and caches the result in `LiveRenderCache`. On any verify failure
+the baked variant plays instead. Gateway down = baked variant plays, no
+visible failure.
 
-```typescript
-const liveRenderTriggered = false; // stub -- epic E replaces this
-```
-
-When wired, the trigger fires when the teacher's outer loop decides the current
-line is a teaching moment that the baked variant cannot serve (learner is due
-on a concept; the scene context makes this the right moment). The middleware
-calls the LLM, verifies with three deterministic gates (no LLM fidelity judge
-at runtime), and caches the result in `LiveRenderCache`. On any verify failure
-the baked variant plays instead.
+The trigger reads the `sugarlang.schedule` annotation (written by the context
+middleware) and the intent artifact from `intentCache` (baked by the compile
+pipeline on dialogue save). Both must be present for the trigger to fire;
+absence of either degrades gracefully to the baked variant.
 
 `LiveRenderCache` is in-memory only (Map-backed), keyed by:
 
@@ -153,11 +152,19 @@ interface LineIntentFields {
 }
 ```
 
-At bake time, `extractIntent` (compile-scheduler intent pipeline) extracts a
-structured `LineIntentArtifact` from the authored English text and the authored
-intent fields, stored in the intent cache. Runtime code reads the intent cache
-to populate `constraint.targetVocab.introduce` from `mustConveyFacts` when a
-baked variant is used.
+At bake time, `extractIntent` (compile-scheduler intent pipeline, wired in
+`rebuildSugarlangCompileCache` in 087.5) extracts a structured
+`LineIntentArtifact` from the authored English text and the authored intent
+fields, stored in `IndexedDBIntentCache`. Runtime reads the intent cache to
+populate `constraint.targetVocab.introduce` from `mustConveyFacts` when a
+baked variant is used, and to match against due teachables for the live-render
+trigger.
+
+The intent content hash is computed by `buildIntentContentHash(nodeId, text,
+intent?)` (intent-cache.ts), shared between the bake pipeline and the runtime.
+Do not use `buildVariantContentHash` for intent keys -- that function uses
+`JSON.stringify({})` on both sides deliberately (intent does not factor into
+variant cache hits).
 
 ```typescript
 interface LineIntentArtifact {
