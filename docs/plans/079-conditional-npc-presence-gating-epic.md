@@ -210,17 +210,50 @@ this epic wires it to a third consumer and makes the spawn dynamic.
   filter cannot do). No action needed on 057 for this epic; it stays as the live item
   seam and is untouched.
 
-- **D6 -- Studio authoring: new editor on the presence inspector, field-shape
-  referenced from the volume UI.** The NPC presence inspector to EXTEND lives in
-  `LayoutWorkspaceView.tsx:1895-1916` (today Type / Scope / Spawn-Position only).
-  The field-shape REFERENCE (a quest-binding condition editor) is the containment-volume
-  panel in `SpatialWorkspaceView.tsx:657-718` -- but that panel hand-builds the binding
-  inline and exposes ONLY the world-flag clause, so this is net-new UI (quest + stage +
-  flag inputs), not a port. The #418 ask is explicitly "stage + world-flag activation,"
-  so the presence editor exposes quest + quest-stage + world-flag from the start. It
-  writes through the new `SetNPCPresenceCondition` command (D2), the presence analog of
-  the volume-update path. (Note the two inspectors are in different workspaces --
-  presence authoring is in Layout, volume authoring in Spatial; do not conflate.)
+- **D6 -- Studio authoring: NPC picker on the QUEST STAGE inspector (revised
+  post-delivery).** ORIGINAL D6 (presence inspector in Layout) was built in 079.4 and
+  rejected -- presence gating is quest logic and belongs in the quest editor. REVISED:
+  add an "NPCs visible in this stage" picker to the quest stage inspector in
+  `QuestWorkspaceView.tsx:1341-1431` (where Stage Name, Next Stage, Start Stage, and
+  Linked Behavior Tasks already live). Key architectural facts:
+  - `QuestWorkspaceViewProps` (line 85) already carries `regions: RegionDocument[]`
+    (line 89) and `onCommand` (line 97) -- no new prop threading needed. All region
+    NPC presences are available inside the component.
+  - Checking a presence dispatches `SetNPCPresenceCondition` (D2) with
+    `{ questDefinitionId: selectedQuest.identity.id, questStageId: selectedStage.stageId,
+    worldFlagEquals: null }` targeting `{ aggregateKind: "region-document",
+    aggregateId: region.identity.id }` (the owning region, found by scanning `regions`
+    for the presence). Unchecking dispatches `SetNPCPresenceCondition` with
+    `condition: null`.
+  - Derived read: a presence is "checked" iff
+    `presence.condition?.questDefinitionId === selectedQuest.identity.id &&
+    presence.condition?.questStageId === selectedStage.stageId`.
+  - Display label: `presence.placementLabel ?? npcDef.displayName` (see D7). Two
+    presences with the same NPC definition are disambiguated by `placementLabel`; the
+    picker also shows the region name as a secondary line when presences span multiple
+    regions.
+  - Parallel to "Linked Behavior Tasks" (read-only derived list in the same inspector),
+    but interactive (checkboxes drive commands). Write through the SAME `onCommand`
+    seam. The NPC picker sections by region when the author's presences span more than
+    one region.
+  - 079.4's "Show when" section on the Layout NPC inspector is REMOVED as part of the
+    new 079.7 story (replaced by the quest-stage picker). A `placementLabel` editor
+    is added to the Layout NPC inspector instead (lets authors name placements for
+    disambiguation in the picker).
+
+- **D7 -- `placementLabel` on `RegionNPCPresence` for picker disambiguation.** When
+  two presences share the same `npcDefinitionId` (e.g. "Finnick at dock" and "Finnick
+  at market"), the quest stage picker would show duplicate NPC names without a
+  distinguishing label. Add `placementLabel: string | null` to `RegionNPCPresence`
+  (default `null`). The picker displays `presence.placementLabel ?? npcDef.displayName`
+  with region name as a secondary disambiguator when the same NPC name appears twice in
+  one region. A `SetNPCPresenceLabel` command (mirrors `SetNPCPresenceCondition` shape;
+  payload `{ presenceId, label: string | null }`) lets the Layout inspector set it.
+  A label editor (plain text input) is added to the Layout NPC presence inspector where
+  the "Show when" section used to be. Existing presences load with `placementLabel: null`
+  (normalized, like `condition`). The spawn-position fallback ("Finnick (10, 0)") is
+  used in the picker only when two presences in the same region share a name AND neither
+  has a `placementLabel` -- rare edge case, no bespoke UI needed.
 
 ## Stories (EXECUTION ORDER)
 
@@ -288,31 +321,69 @@ flag, and `visible === true` with a ticking idle after, no reload hitch on trans
 a null-condition NPC renders as today. (Verification via the existing preview/perf
 harness where feasible; otherwise a runtime-host unit around the visibility seam.)
 
-### 079.4 Studio: condition authoring on the NPC presence inspector (D6)
+### 079.4 Studio: condition authoring on the NPC presence inspector (D6) -- SUPERSEDED
 
-Add a condition editor to the NPC presence inspector in `LayoutWorkspaceView.tsx:1895-1916`
-(where Type / Scope / Spawn-Position are edited today). Author quest, quest-stage, and
-world-flag (the full compound the #418 ask names), referencing the field shape from the
-containment-volume condition panel (`SpatialWorkspaceView.tsx:657-718`) -- net-new
-inputs, not a port (that panel exposes only the flag clause; see D6). Writing a
-condition dispatches the new `SetNPCPresenceCondition` command (079.1); clearing it
-writes `condition: null`. Copy is minimal per house norm: label + self-documenting
-controls, at most one helper line. Exit: authoring a condition in Studio, saving, and
-confirming the region document carries the populated binding; clearing it returns the
-presence to always-present.
+SHIPPED and REJECTED. The "Show when" section (quest + stage + flag inputs) on the NPC
+inspector in `LayoutWorkspaceView.tsx` was built but rejected by nikki post-delivery --
+quest logic belongs in the quest editor, not the presence inspector. REPLACED by 079.6
++ 079.7. The 079.4 commit is on the branch; the "Show when" section is removed in 079.7.
 
-### 079.5 Wrap: docs + tests + deferred triggers
+### 079.6 Domain: `placementLabel` + `SetNPCPresenceLabel` command (D7)
+
+Add `placementLabel: string | null` to `RegionNPCPresence` in
+`packages/domain/src/region-authoring/index.ts` (alongside `condition`). Normalize it
+in `createRegionNPCPresence` (default `null`). Patch `createNPCPresenceFromCommand`
+(executor.ts) to set `placementLabel: null` explicitly (same fix pattern as `condition`
+in 079.1). Add `SetNPCPresenceLabel` command: type + payload `{ presenceId, label:
+string | null }` + union registration in `commands/index.ts`, executor
+`applySetNPCPresenceLabel` that maps overlay presences and replaces the matching
+presence's `placementLabel` (mirrors `applySetNPCPresenceCondition`). Export from
+`authoring-session/index.ts`. Handle (de)serialization so existing regions load with
+`placementLabel: null`. Exit: unit test -- factory default null, SetNPCPresenceLabel
+round-trip (set and clear), missing presenceId no-op, legacy presence loads as null.
+
+### 079.7 Studio UI: quest stage NPC picker + label editor (D6 revised, D7)
+
+Two changes in one story (both small; same test surface):
+
+**A -- Remove "Show when" from Layout NPC inspector** (`LayoutWorkspaceView.tsx`):
+Delete the `handleSetNPCPresenceCondition` callback and the "Show when" inspector
+section. Replace with a `placementLabel` text input ("Placement label" or similar)
+that dispatches `SetNPCPresenceLabel` on change. This makes the Layout inspector
+authoring-local: position + label only, no cross-resource quest binding.
+
+**B -- NPC picker on quest stage inspector** (`QuestWorkspaceView.tsx:1341-1431`,
+inside the `selectedQuest && selectedStage && !selectedNode` block, after the Linked
+Behavior Tasks section): Add an "NPCs visible in this stage" section. Derive the picker
+list from `regions` (already in props at line 89): collect all `npcPresences` across
+all regions, pair each with its owning region and the matching `NPCDefinition` from
+`npcDefinitions` (already in props at line 95). Display label:
+`presence.placementLabel ?? npcDef.displayName`; secondary line: region display name.
+A presence is checked iff `presence.condition?.questDefinitionId ===
+selectedQuest.identity.id && presence.condition?.questStageId ===
+selectedStage.stageId`. Checking dispatches `SetNPCPresenceCondition` (condition with
+current quest+stage IDs, `worldFlagEquals: null`) targeting the owning region aggregate.
+Unchecking dispatches `SetNPCPresenceCondition` with `condition: null`. Section is
+hidden when no regions have any NPC presences. Copy: "NPCs visible in this stage" label,
+no helper text (self-explanatory checkbox list). Exit: author an NPC in Layout, give it
+a label, open its quest stage in Design > Quests, check it -- region document carries the
+populated binding; uncheck -- binding clears to null.
+
+### 079.5 Wrap: docs + tests + deferred triggers (PARTIALLY DONE; re-run after 079.7)
 
 Update `docs/api` (the region-authoring / NPC presence doc, and
 `sugaragent-npcs.md`'s "World Events" authoring-pattern section which today points
 authors at behavior-task gating as the only presence tool -- add conditional presence
 as the direct option). Document the choice: behavior-task gating (present-but-neutral)
-vs. presence gating (physically absent), and when to use each. File the deferred
-consolidation (upgrade the merged item filter path to the same dynamic reconciler so
-items can also appear/disappear mid-region) and the
-NPC-pathfinding-into-a-closed-conditional-gate caveat (from the 069 navmesh research)
-as backlog tasks with revisit triggers. Exit: docs updated, `pnpm test` green, deferred
-tasks filed.
+vs. presence gating (physically absent), and when to use each. Also document
+`placementLabel` in the region-authoring API doc. File the deferred consolidation
+(upgrade the merged item filter path to the same dynamic reconciler so items can also
+appear/disappear mid-region) and the NPC-pathfinding-into-a-closed-conditional-gate
+caveat (from the 069 navmesh research) as backlog tasks with revisit triggers. Exit:
+docs updated, `pnpm test` green, deferred tasks filed.
+NOTE: a partial 079.5 pass was committed before 079.4 was rejected. After 079.6+079.7
+ship, re-run this story to add `placementLabel` to the API docs and update authoring
+guidance to reference the quest stage picker (not the NPC inspector).
 
 ## Verification recipe (nikki)
 
