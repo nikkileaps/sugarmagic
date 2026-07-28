@@ -421,10 +421,14 @@ describe("SugarLangTeacherMiddleware -- 087.6 schedule-driven realization", () =
         reinforce: [],
         avoid: []
       },
+      // Envelope values come from the shared band-envelope table (A2 ->
+      // supported -> 0.65, two-clause), NOT an inlined copy. If this test ever
+      // needs different numbers than FallbackTeacherPolicy produces for the
+      // same posture, the tables have diverged again.
       supportPosture: "supported",
-      targetLanguageRatio: 0.5,
+      targetLanguageRatio: 0.65,
       interactionStyle: "natural_dialogue",
-      sentenceComplexityCap: "free"
+      sentenceComplexityCap: "two-clause"
     });
   });
 

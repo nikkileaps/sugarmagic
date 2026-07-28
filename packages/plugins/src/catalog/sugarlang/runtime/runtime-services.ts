@@ -111,6 +111,10 @@ export interface SugarlangExecutionServices {
   /** 087.2: encounter-debt ledger -- tracks diverse re-encounter debt per introduced item. */
   ledgerStore: EncounterDebtLedger;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
+  /** 087.5: authored dialogue definitions -- the scripted middleware resolves a
+   *  node's hand-authored intent from here so the runtime intent-cache key
+   *  matches the bake-time key (key parity). */
+  dialogueDefinitions: DialogueDefinition[];
   teacher: SugarLangTeacher;
   llmClient: SugarlangLLMClient | null;
   /** 086.4: optional variant cache injected by callers at bake time. */

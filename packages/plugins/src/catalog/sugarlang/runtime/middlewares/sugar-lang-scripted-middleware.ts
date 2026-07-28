@@ -72,6 +72,39 @@ function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
 }
 
 /**
+ * Filters intent-artifact mustConveyFacts down to entries that are real
+ * teachable references before they become LemmaRefs.
+ *
+ * The extractor prompt deliberately allows mixed output: "each entry is either a
+ * target-language lemmaId or a short English fact string." The English facts are
+ * for the fidelity gate ONLY -- mapping them verbatim into
+ * constraint.targetVocab.introduce would put fake lemmaIds ("the merchant
+ * arrives at dawn") into the weave/highlight/observe machinery, which contracts
+ * LemmaRef.lemmaId as an atlas lemmaId or a chunk: ref.
+ *
+ * Validation: atlas membership for bare ids, function-inventory membership for
+ * chunk: refs. Anything that resolves to neither is dropped here.
+ */
+function validateTeachableFacts(
+  facts: string[],
+  targetLanguage: string,
+  services: SugarlangExecutionServices
+): string[] {
+  let inventoryChunkIds: Set<string> | null = null;
+  return facts.filter((fact) => {
+    if (fact.startsWith("chunk:")) {
+      if (!inventoryChunkIds) {
+        inventoryChunkIds = new Set(
+          getAllInventoryChunks(targetLanguage).map((chunk) => chunk.chunkId)
+        );
+      }
+      return inventoryChunkIds.has(fact.slice("chunk:".length));
+    }
+    return Boolean(services.atlas.getLemma(fact, targetLanguage));
+  });
+}
+
+/**
  * Builds the contentHash for a dialogue node as the VARIANT cache expects it.
  * The variant pipeline keys on JSON.stringify({}) on both bake and runtime sides
  * deliberately -- intent is embedded in the LLM prompt, not the cache key, so
@@ -208,7 +241,11 @@ export function createSugarLangScriptedMiddleware(
               const existing = new Set(
                 constraint.targetVocab.introduce.map((l) => l.lemmaId)
               );
-              const extras: LemmaRef[] = intentEntry.artifact.mustConveyFacts
+              const extras: LemmaRef[] = validateTeachableFacts(
+                intentEntry.artifact.mustConveyFacts,
+                targetLanguage,
+                services
+              )
                 .filter((fact) => !existing.has(fact))
                 .map((fact) => ({ lemmaId: fact, lang: targetLanguage }));
               if (extras.length > 0) {
@@ -355,7 +392,11 @@ export function createSugarLangScriptedMiddleware(
         }
       }
 
-      if (services.variantCache) {
+      // Only consult the baked variant when the live render did NOT produce the
+      // line. Without the !usedVariant gate a baked-variant cache hit overwrites
+      // a successful live render -- and since baked variants exist for every node
+      // in a baked scene, that is exactly where the 087.5 trigger is meant to fire.
+      if (!usedVariant && services.variantCache) {
         try {
           const cacheKey: VariantCacheKey = {
             lang: targetLanguage,
@@ -377,15 +418,19 @@ export function createSugarLangScriptedMiddleware(
                 };
                 const intentEntry = await services.intentCache.get(intentKey);
                 if (intentEntry && intentEntry.artifact.mustConveyFacts.length > 0) {
-                  const lemmaRefs: LemmaRef[] = intentEntry.artifact.mustConveyFacts.map(
-                    (fact) => ({ lemmaId: fact, lang: targetLanguage })
-                  );
-                  constraint.targetVocab = {
-                    introduce: lemmaRefs,
-                    reinforce: constraint.targetVocab.reinforce,
-                    avoid: constraint.targetVocab.avoid
-                  };
-                  execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+                  const lemmaRefs: LemmaRef[] = validateTeachableFacts(
+                    intentEntry.artifact.mustConveyFacts,
+                    targetLanguage,
+                    services
+                  ).map((fact) => ({ lemmaId: fact, lang: targetLanguage }));
+                  if (lemmaRefs.length > 0) {
+                    constraint.targetVocab = {
+                      introduce: lemmaRefs,
+                      reinforce: constraint.targetVocab.reinforce,
+                      avoid: constraint.targetVocab.avoid
+                    };
+                    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+                  }
                 }
               } catch {
                 // Intent cache enrichment is optional -- never error the turn

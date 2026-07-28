@@ -21,17 +21,14 @@ import type {
   LemmaRef,
   PedagogicalDirective
 } from "../../types";
+import {
+  TARGET_LANGUAGE_RATIO_BY_POSTURE,
+  getSentenceComplexityCap
+} from "../band-envelope";
 
 export interface FallbackTeacherPolicyOptions {
   triggerReasonOverride?: PedagogicalDirective["comprehensionCheck"]["triggerReason"];
 }
-
-const TARGET_LANGUAGE_RATIO_BY_POSTURE = {
-  anchored: 0.3,
-  supported: 0.65,
-  "target-dominant": 0.85,
-  "target-only": 1
-} as const;
 
 function getIntroduceLevelCap(cefrBand: CEFRBand): number {
   switch (cefrBand) {
@@ -46,22 +43,6 @@ function getIntroduceLevelCap(cefrBand: CEFRBand): number {
     case "C1":
     case "C2":
       return 5;
-  }
-}
-
-function getSentenceComplexityCap(
-  cefrBand: CEFRBand
-): PedagogicalDirective["sentenceComplexityCap"] {
-  switch (cefrBand) {
-    case "A1":
-      return "single-clause";
-    case "A2":
-    case "B1":
-      return "two-clause";
-    case "B2":
-    case "C1":
-    case "C2":
-      return "free";
   }
 }
 

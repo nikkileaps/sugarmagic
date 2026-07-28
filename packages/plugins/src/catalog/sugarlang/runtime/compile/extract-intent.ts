@@ -30,7 +30,12 @@ import {
   type TelemetrySink
 } from "../telemetry/telemetry";
 
-export const INTENT_EXTRACTOR_PROMPT_VERSION = "086.1.0";
+// 087.5: mustConveyFacts now emits target-language lemmaIds (not only English
+// fact strings) when targetLanguage is supplied. Bumped so artifacts extracted
+// under the old contract miss the cache and re-extract -- a stale English-only
+// artifact can never match a schedule lemma id, silently disabling the
+// live-render trigger for that line.
+export const INTENT_EXTRACTOR_PROMPT_VERSION = "087.5.0";
 const DEFAULT_INTENT_EXTRACTOR_MODEL = "claude-sonnet-4-6";
 
 const ajv = new Ajv({

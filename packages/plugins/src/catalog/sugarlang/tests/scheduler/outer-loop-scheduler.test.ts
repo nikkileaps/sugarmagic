@@ -278,9 +278,9 @@ describe("OuterLoopScheduler", () => {
       });
       const schedule = scheduler.compute(board);
       const buyItem = schedule.teachables.find((t) => t.id === "buy");
+      const greetItem = schedule.teachables.find((t) => t.id === "greet");
       expect(buyItem?.teachReason).toBe("function-affinity");
       // buy (B1 + affinity) should beat a non-affinity A1 function
-      const greetItem = schedule.teachables.find((t) => t.id === "greet");
       expect(buyItem!.priority).toBeGreaterThan(greetItem!.priority);
     });
 
@@ -309,10 +309,11 @@ describe("OuterLoopScheduler", () => {
       });
       const schedule = scheduler.compute(board);
       const buyItem = schedule.teachables.find((t) => t.id === "buy");
-      const greetItem = schedule.teachables.find((t) => t.id === "greet");
-      // buy has scene + NPC affinity; greet has only scene affinity;
-      // both are A1 equivalent in their base priority, but buy (B1 + more affinity)
-      // should be ahead of greet (A1 + less affinity) -- verify boost applied
+      // buy has scene + NPC affinity, so the current NPC is recorded on the
+      // teachable. NOTE: this does NOT pin priority ORDER -- greet (A1) still
+      // outranks buy (B1) here because the band term dominates the affinity
+      // boost; asserting buy > greet fails today. Whether NPC affinity should
+      // outweigh band ordering is a 090.3 question (opportunity signals).
       expect(buyItem).toBeDefined();
       expect(buyItem!.affinityNpcIds).toContain("npc-market");
     });
@@ -435,7 +436,7 @@ describe("OuterLoopScheduler", () => {
         curriculum: {
           introducedFunctionIds: new Set(),
           availableFunctions: FIXTURE_FUNCTIONS,
-          activeDebts: new Map([["adios", { diverseEncounterCount: 2, targetEncounters: 10 }]])
+          activeDebts: new Map([["adios", { itemKind: "lemma" as const, diverseEncounterCount: 2, targetEncounters: 10 }]])
         }
       });
       const schedule = scheduler.compute(board);
@@ -455,7 +456,7 @@ describe("OuterLoopScheduler", () => {
         curriculum: {
           introducedFunctionIds: new Set(),
           availableFunctions: FIXTURE_FUNCTIONS,
-          activeDebts: new Map([["adios", { diverseEncounterCount: 0, targetEncounters: 10 }]])
+          activeDebts: new Map([["adios", { itemKind: "lemma" as const, diverseEncounterCount: 0, targetEncounters: 10 }]])
         }
       });
       const schedule = scheduler.compute(board);
@@ -488,8 +489,10 @@ describe("OuterLoopScheduler", () => {
         curriculum: {
           introducedFunctionIds: new Set(),
           availableFunctions: FIXTURE_FUNCTIONS,
-          // "greet" appears as active debt AND as an available function
-          activeDebts: new Map([["greet", { diverseEncounterCount: 3, targetEncounters: 10 }]])
+          // "greet" appears as active debt AND as an available function.
+          // The observe middleware creates function debts with itemKind
+          // "function" (createDebt(fnEntry.functionId, "function", ...)).
+          activeDebts: new Map([["greet", { itemKind: "function" as const, diverseEncounterCount: 3, targetEncounters: 10 }]])
         }
       });
       const schedule = scheduler.compute(board);
@@ -497,6 +500,10 @@ describe("OuterLoopScheduler", () => {
       // Only one entry -- debt wins over introduction
       expect(greetItems).toHaveLength(1);
       expect(greetItems[0].teachReason).toBe("debt-service");
+      // The debt carries its itemKind through: a function debt stays kind
+      // "function" so realizeFunctionChunksFromSchedule can expand it to chunk
+      // refs, and it never reaches lemma-only consumers as a bogus lemmaId.
+      expect(greetItems[0].kind).toBe("function");
     });
 
     it("debt telemetry includes debtServiceCount, dayAxisDegraded, and new 087.3 fields", async () => {
@@ -510,7 +517,7 @@ describe("OuterLoopScheduler", () => {
         curriculum: {
           introducedFunctionIds: new Set(),
           availableFunctions: [],
-          activeDebts: new Map([["adios", { diverseEncounterCount: 5, targetEncounters: 10 }]])
+          activeDebts: new Map([["adios", { itemKind: "lemma" as const, diverseEncounterCount: 5, targetEncounters: 10 }]])
         },
         scene: { sceneId: null, functionTags: { sceneFunctions: [], npcFunctions: {} }, dayIndex: null, sceneLemmaIds: [] }
       });

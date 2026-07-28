@@ -66,6 +66,11 @@ export interface DebtRecord {
  * Only unpaid debts appear in the board's activeDebts map.
  */
 export interface DebtStatus {
+  /** Carried from DebtRecord so the scheduler can classify the teachable
+   *  correctly -- a function debt scheduled as kind "lemma" is unrealizable
+   *  (realizeFunctionChunksFromSchedule only expands kind "function") and
+   *  leaks its functionId into lemma-only surfaces like retrieveBiasTerms. */
+  itemKind: "lemma" | "function";
   diverseEncounterCount: number;
   targetEncounters: number;
 }
@@ -158,6 +163,7 @@ export class MemoryEncounterDebtLedger implements EncounterDebtLedger {
       const diverse = countDiverseEncounters(record.encounters);
       if (diverse < record.targetEncounters) {
         result.set(record.itemId, {
+          itemKind: record.itemKind,
           diverseEncounterCount: diverse,
           targetEncounters: record.targetEncounters
         });
@@ -289,6 +295,7 @@ export class IndexedDBEncounterDebtLedger implements EncounterDebtLedger {
       const diverse = countDiverseEncounters(record.encounters);
       if (diverse < record.targetEncounters) {
         result.set(record.itemId, {
+          itemKind: record.itemKind,
           diverseEncounterCount: diverse,
           targetEncounters: record.targetEncounters
         });

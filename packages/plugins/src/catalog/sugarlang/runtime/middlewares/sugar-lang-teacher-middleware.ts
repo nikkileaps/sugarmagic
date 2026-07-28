@@ -61,6 +61,11 @@ import {
   type SugarlangLoggerLike
 } from "./shared";
 import type { TeachSchedule } from "../scheduler/teach-schedule";
+import {
+  TARGET_LANGUAGE_RATIO_BY_POSTURE,
+  getSentenceComplexityCap,
+  postureForBand
+} from "../teacher/band-envelope";
 
 // Local structural type matching SugaragentContribution (sugaragent owns the
 // full interface; we mirror only the fields we write -- no import needed).
@@ -333,19 +338,21 @@ export function createSugarLangTeacherMiddleware(
         // no schedule is present (cold-start or first-session) -- that path amortizes
         // the LLM call over 3 turns.
         const targetLanguage = execution.selection.targetLanguage ?? learner.targetLanguage;
-        const posture =
-          learner.estimatedCefrBand === "A1" ? "anchored" as const
-            : learner.estimatedCefrBand === "A2" ? "supported" as const
-            : "target-dominant" as const;
-        const ratio =
-          posture === "anchored" ? 0.2
-            : posture === "supported" ? 0.5
-            : 0.8;
+        // Envelope values come from the shared band-envelope table -- NOT inlined.
+        // A divergent copy here silently loosens the level control 083 enforces.
+        const posture = postureForBand(learner.estimatedCefrBand);
+        const ratio = TARGET_LANGUAGE_RATIO_BY_POSTURE[posture];
         const glossingStrategy =
           posture === "target-dominant" ? "none" as const : "hover-only" as const;
+        // A probe needs something to probe ABOUT: hardFloorReached can fire on the
+        // turns-since-probe clause alone (25 turns) with zero pending lemmas, which
+        // would arm the probe machinery with an empty target list -- and observe
+        // would then vacuously score it passed (0 of 0) into the strain model.
+        const probeTargets = pendingProvisional.slice(0, 2).map((p) => p.lemmaRef);
         const probeTrigger =
-          probeFloorState.hardFloorReached ||
-          (probeFloorState.softFloorReached && pendingProvisional.length >= 5);
+          probeTargets.length > 0 &&
+          (probeFloorState.hardFloorReached ||
+            (probeFloorState.softFloorReached && pendingProvisional.length >= 5));
         directive = {
           targetVocab: {
             introduce: prescription.introduce,
@@ -356,13 +363,11 @@ export function createSugarLangTeacherMiddleware(
           targetLanguageRatio: ratio,
           interactionStyle: "natural_dialogue",
           glossingStrategy,
-          sentenceComplexityCap: "free",
+          sentenceComplexityCap: getSentenceComplexityCap(learner.estimatedCefrBand),
           comprehensionCheck: {
             trigger: probeTrigger,
             probeStyle: probeTrigger ? "recall" : "none",
-            targetLemmas: probeTrigger
-              ? pendingProvisional.slice(0, 2).map((p) => p.lemmaRef)
-              : [],
+            targetLemmas: probeTrigger ? probeTargets : [],
             ...(probeTrigger
               ? {
                   triggerReason: probeFloorState.hardFloorReached

@@ -167,7 +167,10 @@ export class OuterLoopScheduler {
       const basePriority = clamp01(0.80 * (1 - debtFraction));
       candidates.push({
         id: itemId,
-        kind: "lemma",
+        // Carried from the ledger record: function debts must stay kind
+        // "function" so they remain realizable as chunk refs and never reach
+        // lemma-only consumers as a bogus lemmaId.
+        kind: status.itemKind,
         priority: basePriority,
         teachReason: "debt-service",
         affinityNpcIds: []

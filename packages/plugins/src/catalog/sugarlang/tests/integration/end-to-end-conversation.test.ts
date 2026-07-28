@@ -613,9 +613,9 @@ describe("end-to-end conversation golden", () => {
     const repairs = await telemetry.query({ eventKinds: ["verify.repair-triggered"] });
     expect(repairs.length).toBeGreaterThan(0);
     const repairEvent = repairs[0] as unknown as { violations: string[] };
-    // 087.6: schedule-driven path uses ratio=0.8 for B2 (target-dominant band),
-    // not the fallback policy's 0.85. Repair instruction references "80%".
-    expect(repairEvent.violations.some((v) => v.includes("80%") && v.includes("Spanish"))).toBe(true);
+    // Both the fallback policy and the 087.6 schedule-driven realizer read the
+    // shared band-envelope table, so target-dominant is 85% on either path.
+    expect(repairEvent.violations.some((v) => v.includes("85%") && v.includes("Spanish"))).toBe(true);
   });
 
   it("verify repair path: NPC text violating the envelope is auto-simplified (no LLM needed)", async () => {

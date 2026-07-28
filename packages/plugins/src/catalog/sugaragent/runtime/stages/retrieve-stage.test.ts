@@ -154,7 +154,7 @@ describe("RetrieveStage loreScores tagging (078.1)", () => {
     // The pin search returns an item whose page_id matches npcLorePageId.
     let callCount = 0;
     const provider: VectorStoreProvider = {
-      searchLore: vi.fn(async (req) => {
+      searchLore: vi.fn(async () => {
         callCount += 1;
         // First call = primary (location-anchored); second = pin (npc page).
         if (callCount === 1) {
@@ -381,5 +381,48 @@ describe("RetrieveStage loreRelevanceFloor (078.2)", () => {
     expect(kept.length).toBe(1);
     expect(weakDropped.length).toBe(0);
     expect(ownDropped.length).toBe(0);
+  });
+});
+
+describe("RetrieveStage retrieveBiasTerms consumption (087.6)", () => {
+  it("appends the scheduled vocabulary to the search query sent to the vector store", async () => {
+    const queries: string[] = [];
+    const provider: VectorStoreProvider = {
+      searchLore: vi.fn(async (req) => {
+        queries.push(req.query);
+        return [];
+      })
+    };
+    const stage = new RetrieveStage(provider);
+    const input = makeInput(true) as never as { execution: { annotations: Record<string, unknown> } };
+    input.execution.annotations["sugaragent.contrib/sugarlang"] = {
+      schemaVersion: 1,
+      retrieveBiasTerms: ["comer", "hablar"]
+    };
+
+    await stage.execute(input as never, makeContext() as never);
+
+    expect(queries.length).toBeGreaterThan(0);
+    for (const query of queries) {
+      expect(query).toContain("Vocabulary in focus: comer, hablar");
+    }
+  });
+
+  it("leaves the search query untouched when no contribution sets retrieveBiasTerms", async () => {
+    const queries: string[] = [];
+    const provider: VectorStoreProvider = {
+      searchLore: vi.fn(async (req) => {
+        queries.push(req.query);
+        return [];
+      })
+    };
+    const stage = new RetrieveStage(provider);
+
+    await stage.execute(makeInput(true) as never, makeContext() as never);
+
+    expect(queries.length).toBeGreaterThan(0);
+    for (const query of queries) {
+      expect(query).not.toContain("Vocabulary in focus");
+    }
   });
 });
