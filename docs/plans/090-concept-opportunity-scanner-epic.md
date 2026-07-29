@@ -1,6 +1,6 @@
 # Plan 090 -- Context Extraction + Teacher Judgment (proposed child epic I of Strategy 002)
 
-Status: DRAFT -- NOT LOCKED. epic-review has run 6 rounds (2026-07-28, -29). Rounds 1-3 audited the plan against the CODE and it held. Round 4 audited it against the DOMAIN MODEL and it did not. Round 5 audited the REWRITTEN story set and found the Teacher LLM is already off the live path for every learner with one lemma card (sugar-lang-teacher-middleware.ts:333). Round 6 audited ROUND 5's OWN NEW TEXT and found five defects in it, including two claims asserted from design shape rather than the producing line: the weave has no English lemmatization, so 090.8's exit fixture could never have passed; and the "unify the band+1 predicates" instruction would have caused a regression, because those are three different predicates. All applied. Round 7 pending -- the gate has not converged and the trend is that each round's NEW text is where the next round's findings are.
+Status: DRAFT -- NOT LOCKED. epic-review has run 7 rounds (2026-07-28, -29). Rounds 1-3 audited against the CODE and it held. Round 4 audited against the DOMAIN MODEL and it did not. Rounds 5-7 each audited the PREVIOUS round's new text and each found real defects in it -- that is the standing pattern and it has not damped yet. Round 5: the Teacher LLM is already off the live path for every learner with one lemma card (sugar-lang-teacher-middleware.ts:333). Round 6: the weave has no English lemmatization, so 090.8's exit fixture could never have passed; and "unify the band+1 predicates" would have caused a regression. Round 7: 090.8's rewritten exit PASSED TODAY (the item path already draws the whole band, display-text-resolver.ts:247-249); the two genuinely unowned authorities are sugar-lang-scripted-middleware.ts:251-257 and :426-431, not the live-render local round 6 named; and item bodies are NOT among the broken surfaces. All applied. Not locked -- see "Open at gate exit".
 
 The model this plan must satisfy: `packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`.
 
@@ -251,7 +251,7 @@ a slate in fundamentally different ways:
 |---|---|---|---|
 | anchored (A1), supported (A2), any authored text | `diglotWeave` | INTERSECTION -- you can only teach words physically present in the authored English, so selecting and substituting are one operation | **Yes.** Deterministic, before rendering. |
 | target-dominant (B1+), authored ITEM text | baked variant cache read | PRE-RENDERED at compile, keyed `{lang, band, contentHash, promptVersion}` -- **no learner in the key, so the slate does not reach it** | Only by classifying the output. |
-| target-dominant (B1+), authored DIALOGUE line, due teachable in the line's intent facts | **087.5 live render** -- runtime LLM | the renderer picks `schedule.teachables` filtered to `teachReason === "due"` and **overwrites the introduce set** | Only by classifying the output. |
+| target-dominant (B1+), authored DIALOGUE line, due teachable in the line's intent facts | **087.5 live render** -- runtime LLM | the schedule decides whether to SPEND the call and what the verifier will tolerate; it does not shape the text | Only by classifying the output. |
 | **any band, AGENT-GENERATED turn** | sugaragent, via the generator prompt overlay | PROMPT-SHAPING -- there is no authored text to intersect and no baked variant to read; the slate becomes instructions | **No.** Only knowable AFTER. |
 
 THE THIRD ROW IS THE EPIC'S OWN TARGET CELL AND AN EARLIER DRAFT OMITTED IT.
@@ -271,19 +271,45 @@ the same change that removes the pre-truncation, or the floor makes the
 agentified cell strictly worse** -- an untruncated slate straight into a prompt.
 This is the one hard ordering constraint in the epic.
 
-ROW FOUR IS A FOURTH AUTHORITY ON WHAT GETS TAUGHT, AND ROUND 5 MISSED IT.
-Round 6 finding, confirmed at `sugar-lang-scripted-middleware.ts:295-393`. The
-087.5 live-render path fires when `nodeId && schedule && !schedule.strainSuppressed
-&& services.intentCache` and a due teachable matches the line's intent facts
-(:304-309). It then does two things this epic cannot ignore:
+ROW FOUR SPENDS AN UNBUDGETED PER-LINE LLM CALL. `sugar-lang-scripted-middleware.ts:295-393`
+fires when `nodeId && schedule && !schedule.strainSuppressed && services.intentCache`
+and a due teachable matches the line's intent facts (:304-309), then calls
+`services.llmClient.generate` at `:343` on a cache miss.
 
-- `:309` sets `liveRenderIntroduce = dueMatches` -- **the renderer decides what
-  gets taught, from `schedule.teachables`, not from the slate.** That is the
-  closing invariant violated inside the renderer, and it survives every deletion
-  the "Budgeter deletion order" section schedules, because it never touches the
-  prescription. 090.4 must decide its fate along with the 087.6 branch: same
-  mechanism, same decision, and they should go together.
-- `:343` calls `services.llmClient.generate` on a cache miss.
+CORRECTION (round 7): a round-6 draft said `:309` "overwrites the introduce set"
+and that "the renderer decides what gets taught". **Both were OVERSTATED and are
+struck.** `liveRenderIntroduce` is a LOCAL (`:293 let liveRenderIntroduce =
+constraint.targetVocab.introduce`), never written back -- the only writers of
+`constraint.targetVocab` in that file are `:159`, `:252` and `:427` -- and
+`introduce` appears nowhere in the render prompt (`:345-357`). Its real effects
+are three: trigger the path, key the live-render cache, and supply the envelope
+exemption to `verifyLiveRender` (`:366`). That is the same "asserted from the
+shape of the design rather than the producing line" error this gate keeps
+catching, and I made it while writing the fix for it.
+
+The deletion recommendation survives on the LLM call alone; the authority
+argument does not.
+
+**THE REAL UNOWNED AUTHORITIES ARE TWO LINES ROUND 6 WALKED PAST**, both writing
+`constraint.targetVocab` from the intent artifact's `mustConveyFacts`, which is
+an **uncapped `string[]`** (compile/extract-intent.ts:51) gated only by an
+atlas-existence check:
+
+| Line | Path | What it does |
+|---|---|---|
+| `:251-257` | **anchored/supported -- THE FLOOR CELL** | APPENDS validated facts to `introduce`. No slate, no standing, no band envelope, no cap. |
+| `:426-431` | target-dominant baked variant | REPLACES `introduce` wholesale. |
+
+`:251-257` is the more serious: it is on the A1/A2 path this epic calls its
+floor, and it is the LAST writer before observe. `buildTargetLemmaSet`
+(sugar-lang-observe-middleware.ts:87-93) is built from `introduce` union
+`reinforce` and gates card creation at `:450-455` -- so this block decides which
+lemmas the learner gets CARDS for.
+
+Two consequences: 090.4 owns both lines (same decision as the 087.6 branch), and
+**090.8's cap must be enforced at the LAST writer of `constraint.targetVocab`,
+not the first.** Capping the Teacher's output alone does not bound what reaches
+observe.
 
 DO NOT ADD A *NEW* LLM CALL TO THE REALIZATION PATH. `GradedTextService.adapt` is
 two gateway calls (generate at graded-text-service.ts:317, fidelity judge at
@@ -295,8 +321,12 @@ The model budgets **zero** LLM per rendered line or item
 -- row four is a live per-line call. An earlier draft asserted it as an untouched
 property; it is a property this epic must either restore (delete row four) or
 consciously except (keep it, and amend the model). Say which. Recommend deleting
-row four: it is an unfired path by 087's own admission, and it is the only thing
-standing between this epic and a true zero-LLM realization layer.
+row four: it is the only thing standing between this epic and a true zero-LLM
+realization layer, and it is **production-reachable but never tested** -- 087
+turned it on (087:21, :113) and its own outstanding list records that "no test
+ever FIRES the live-render trigger" (087:143). A round-6 draft read that as
+"unfired path", which is backwards and made deletion sound safer than it is:
+deleting it is a behavior change to a live path, just an untested one.
 
 The honest consequence for row two, stated plainly because an earlier draft
 asserted both halves at once: **the slate does not shape B1+ authored item
@@ -417,12 +447,31 @@ SCOPE:
   | repair prompt, both | sugar-lang-verify-middleware.ts:161-165 | uncapped |
   | **`dialogueHighlight` focusTerms + glosses** | sugar-lang-observe-middleware.ts:913-924 | uncapped, and **PLAYER-VISIBLE** |
 
-  The last one is the regression that would have shipped: a 40-item slate puts a
-  40-term highlight bar and 40 tooltip glosses on every agent turn. The scripted
-  path is protected by accident -- `applyWeave` narrows `introduce` to the forms
-  it actually wove (scripted-middleware.ts:159-163, priority 15, before observe
-  at 90). The agent path has no such narrowing. That accident is also the design
-  hint: **realization output, not the slate, is what should feed the highlight.**
+  The last one is player-visible, but NOT in the way a round-6 draft claimed.
+  Corrected round 7: there is no "40-term highlight bar", and glosses attach only
+  to terms actually found in the turn (`findTermMatches`,
+  runtime-core/src/dialogue/highlight.ts:76-125; turn-text.ts:41-45). The real
+  risk is FALSE highlights: the matcher is a case-insensitive `\b<term>\w{0,4}\b`
+  at `MIN_TERM_LENGTH = 3` (highlight.ts:86-97), so a 40-term slate in a mixed
+  English/Spanish turn lights up English words -- `come` matches "comes", `pan`
+  matches "panel". The cap and the exit pin stand; the reason is different.
+
+  ALSO CORRECTED: a round-6 draft said the scripted path is "protected by
+  accident" because `applyWeave` narrows `introduce` to the woven forms
+  (scripted-middleware.ts:159-163, priority 15, before observe at 90 -- the
+  priorities are right, `runtime-core/src/conversation/index.ts:312-322` sorts
+  stage-then-ascending). **That protection is WRONG.** The narrowing is
+  conditional on a substitution having landed (`:149 if
+  (weaveResult.weavedForms.length > 0)`), and zero woven forms is the common A1
+  case today. Worse, `:251-257` then APPENDS uncapped intent facts in the same
+  branch, after the narrowing. There is no accidental protection.
+
+  The design hint survives both corrections and is the real conclusion:
+  **realization output, not the slate, is what should feed the highlight.** That
+  makes observe (:905-935) a READER of realization rather than a second matcher,
+  which also settles a latent disagreement -- `findTermMatches` is a fuzzy regex
+  over target forms while `diglotWeave` is an exact lookup over English glosses,
+  so the two will not agree about "which slate terms are in this text".
 
   Reports what got taught by CLASSIFYING the turn, reusing `computeCoverage` and
   the observe middleware's existing tokenization. `compile/verify-live-render.ts`
@@ -506,13 +555,23 @@ Probe 5 is blocked by something simpler than the divergence: nothing has ever
 governed the weave. An earlier draft claimed the two ratios blocked it; at A1
 neither is read, so that rationale is struck.
 
-- Exit: fixture item body using BASE-FORM English -- `cheese`, `traveler`,
-  `head`, `fly`, all A1 in the shipped es atlas -- + an A1 learner + a slate
-  containing those lemmas -> substitutions land (fails against today's code;
-  fixture injects the constraint, since nothing produces an untruncated slate
-  until 090.4). Round 6 correction: the previous fixture used `travellers` /
-  `heads` / `flying`, none of which resolve, so it could not have passed on any
-  pool.
+- Exit: **the slate must DISCRIMINATE, not merely substitute.** Fixture item body
+  containing `cheese` and `traveler` (both A1 in the shipped atlas) + an A1
+  learner + a slate of `{queso}` ONLY -> `cheese` substitutes AND `traveler`
+  does **not**. Round 7 correction, and this is the second time this one exit has
+  been wrong: the round-6 version ("base forms -> substitutions land, fails
+  against today's code") **PASSES TODAY**. The item path draws its pool from
+  `bandsUpTo(band)` -- the entire 3217-lemma A1 band
+  (display-text-resolver.ts:247-249) -- so every base form substitutes already,
+  with no slate involved. A pin that passes before the work is done falsifies
+  nothing, which is exactly the defect round 6 caught round 5 committing. The
+  discriminating form fails today, because today nothing can exclude `traveler`.
+  Fixture injects the constraint, since nothing produces an untruncated slate
+  until 090.4.
+- Pin `fly -> volar`, not `mosca`: `fly` resolves to two entries (volar A1,
+  mosca B1) and `resolveSubstitution` takes the first whose lemmaId is in the
+  pool (diglot-weave.ts:105-115). Narrowing the pool changes which one wins,
+  so this is a real regression surface.
 - **The slate is fetched by SITUATION key, with no conversation in scope** (pin --
   the item surface has no conversation).
 - Slate/text disjoint -> authored English AND a trace saying so, not "extraction
@@ -583,7 +642,12 @@ and `calibrationActive` (read at `llm-teacher-policy.ts:157` and
 `fallback-teacher-policy.ts:68`). Naming them keeps the structural pin from
 failing for the wrong reason. `scene`, `npc`, `recentTurns` and
 `activeQuestEssentialLemmas` fold INTO situation; `probeFloorState` and
-`pendingProvisionalLemmas` fold into learner.
+`pendingProvisionalLemmas` fold into learner. `selectionMetadata` (providers.ts:144)
+is the thirteenth field and it is READ -- `prompt-builder.ts:300-301` stringifies
+it into `formatGameMoment` -- so name its fate too: fold into situation, or delete
+that prompt use. Round 7 finding; the same paragraph that says "naming them keeps
+the structural pin from failing for the wrong reason" had itself left one
+unnamed. (`situation` would therefore be the fourteenth field, not the twelfth.)
 
 THE FALLBACK POLICY NEEDS REWRITING, NOT JUST REWIRING.
 `FallbackTeacherPolicy.decide` is built entirely from `context.prescription`
@@ -667,6 +731,13 @@ THE STALENESS TABLE HAS NO IMPLEMENTATION TODAY. `handleBlackboardEvent` calls
 (schema-parser.ts:341-344, :766-774) and read by nothing. Adding a digest is a
 redesign of the invalidation model. It is now on the critical path, not a cost win.
 
+090.3 OWNS THE SITUATION-KEYED SLATE STORE. Round 7 finding: 090.8 specifies the
+key and 090.4 produces the slate, but no story owned the store, so 090.3's pin
+landed two stories before any producer existed. 090.3 builds it, and **absent
+slate is a legal state** -- its pin is that the read path returns "no slate"
+LEGIBLY with no conversation in scope, not that the slate has content. Content is
+090.4's pin.
+
 MOVE THE OVERLAY TO SCENE LOAD. Round 3 proposed composing at the policy stage to
 dodge the `sugarlang.context` / `sugaragent.memory` tie at stage `context`
 priority 10. Composing at scene load sidesteps the race entirely and gives
@@ -722,19 +793,26 @@ folding it into the first would admit every band+1 function unconditionally.
 out of scope, or the next reader repeats my error.
 
 There IS a real single-enforcer problem here, and it is band ORDER, not band
-comparison: five separate CEFR order declarations exist
+comparison: **six** separate CEFR order declarations exist
 (classifier/cefr-band-utils.ts:22, learner/cefr-posterior.ts:27,
 scheduler/outer-loop-scheduler.ts:73, grading/display-text-resolver.ts:67,
-placement/placement-score-engine.ts:33), and `lexical-budgeter.ts:38-40` rolls
-its own `getBandIndex` over one of them. 090.9 is the only story that touches
-band comparison, so folding these onto `cefr-band-utils.ts` is its natural scope.
-That is a pure refactor with no behavior change -- unlike the predicates above.
+placement/placement-score-engine.ts:33, and -- found round 7 --
+ui/shell/editor-support.ts:90), and `lexical-budgeter.ts:39` imports
+`CEFR_BAND_ORDER` from `learner/cefr-posterior` rather than from
+`classifier/cefr-band-utils`, whose own header (:5) already declares it "the
+classifier's single CEFR band ordering helper". So 090.9's fold is RESTORING a
+documented invariant, not inventing one. Pure refactor, no behavior change --
+unlike the predicates above.
 
 - Exit: standing is derivable for any (learner, lemma) without invoking the
   budgeter (pin); the five values are exhaustive and total (pin); standing
   declares no threshold constant of its own, asserted by grep for `0.7` / `0.90`
-  in the new module (pin); ONE CEFR band-order declaration repo-wide, asserted by
-  grep for a second `["A1","A2",...]` literal (pin); the scheduler's stretch gate
+  in the new module (pin); ONE ORDER-DEPENDENT CEFR band declaration repo-wide --
+  scoped to literals used with `indexOf` / `slice` / comparison, explicitly
+  exempting the two validation-only literals (`config.ts:106` `VALID_DEBUG_BANDS`,
+  a Set; `compile/multi-word-expression-extractor.ts:122`, an Ajv enum), because
+  an unscoped grep pin is unsatisfiable after a correct refactor (pin, scoped
+  round 7); the scheduler's stretch gate
   still uses delta 0, asserted by a test that a band+1 function is still gated
   (pin -- the regression the round-5 draft would have caused).
 
@@ -803,10 +881,36 @@ That is: extract concepts, resolve them to lemmas, give the learner a readable
 standing, let the Teacher produce an untruncated slate from situation + learner,
 and apply that slate to a specific piece of text.
 
-090.8 is IN the floor and this is the change from every prior revision. Without
-it the epic can produce a perfect slate and still render English, which is
-precisely the observed 2026-07-28 failure on both item bodies and A1 dialogue.
-A floor that cannot show a single Spanish word to a beginner is not a floor.
+090.8 is IN the floor. Without it the epic can produce a perfect slate and still
+render English.
+
+WHICH SURFACES ACTUALLY RENDER ENGLISH -- corrected round 7, by measurement.
+An earlier draft said "both item bodies and A1 dialogue" and called it "a floor
+that cannot show a single Spanish word to a beginner". **Item bodies are not
+broken.** Measured against the shipped es atlas, the whole-band pool at
+display-text-resolver.ts:247-249 substitutes roughly 70% of tokens in a
+representative item body at A1. The 2026-07-28 fix landed and it works.
+
+The surfaces still rendering English are:
+- **A1 scripted dialogue** -- `constraint.targetVocab.introduce` is
+  `prescription?.introduce` (sugar-lang-teacher-middleware.ts:246), the scene-wide
+  top 3 (lexical-budgeter.ts:178), which almost never intersects one line.
+- **Agent turns** -- realized only through the prompt overlay, with no weave.
+
+Both are fixed by untruncated-slate + realization. That is the floor's real
+justification and it is narrower than the old one.
+
+IT ALSO CUTS THE OTHER WAY, AND THE PLAN MUST SAY SO. Replacing the whole-band
+pool with slate ∩ text is a deliberate, player-visible **density REDUCTION** on
+item views. The claim at the top of this plan -- "no observable change to
+scripted output at either lifecycle" -- does not cover item views, and this is
+that exception. It is the right trade: the whole-band pool has no POS filter, so
+it currently produces semantically wrong swaps (measured on the same fixture:
+`left -> izquierda`, the direction rather than past-of-leave; `mark -> marcar`,
+a verb for a noun; `smell -> oler`, likewise). A slate narrows to what was
+actually chosen and fixes those incidentally. Say it out loud so the density drop
+is not later filed as a regression -- and note it is the concrete answer to open
+decision D.
 
 090.5 (capacity) and 090.7 (visibility) are the ceiling.
 
@@ -866,14 +970,23 @@ needing a named owner before `prescribe()` can go:
 | `FallbackTeacherPolicy` builds its whole directive from it | fallback-teacher-policy.ts:124-127, :145-146 | 090.4 rewrites it onto situation + standing |
 | `repairDirective` filters against it AND defaults to it | schema-parser.ts:658-672, :695-698 | 090.4 |
 | scripted constraint reads it with no Teacher at all | sugar-lang-teacher-middleware.ts:246-248 | 090.8 |
-| **087.5 live render overwrites `introduce` from `schedule.teachables`** | sugar-lang-scripted-middleware.ts:304-309 | **090.4** -- same decision as the 087.6 branch (round 6; it bypasses the prescription entirely, so no amount of budgeter deletion reaches it) |
+| **087.5 live render spends an unbudgeted per-line LLM call** | sugar-lang-scripted-middleware.ts:295-393 | **090.4** -- same decision as the 087.6 branch (it bypasses the prescription entirely, so no budgeter deletion reaches it) |
+| **intent-fact enrichment APPENDS uncapped facts to `introduce` on the FLOOR path** | sugar-lang-scripted-middleware.ts:251-257 | **090.4** (round 7) -- last writer before observe, so it decides which lemmas get cards |
+| **intent-fact enrichment REPLACES `introduce` on the baked path** | sugar-lang-scripted-middleware.ts:426-431 | **090.4** (round 7) |
+| `verifyLiveRender`'s own `introduce` exemption -- a SECOND prescription-introduce exemption channel parallel to envelope-rule.ts:82-89 | sugar-lang-scripted-middleware.ts:366 | same story as job 5, or the epic breaks its own single-enforcer rule |
 
 The `avoid` LIST HAS NO OWNER EITHER. The model flags it as "a live conflation,
 not a proposed change" (domain-model-after-epic-090.md:332-343): `avoid` means
 both *too hard right now* and *deliberately withheld*, and those are different
 facts. Producer `lexical-budgeter.ts:184-186`; consumers
 `generator-prompt-overlay.ts:55`, `sugar-lang-verify-middleware.ts:161`,
-`schema-parser.ts:672`/`:698`. Under the model *too hard* is STANDING
+`schema-parser.ts:672`/`:698`, and (round 7) `fallback-teacher-policy.ts:146`
+which copies it straight into the directive, plus the emptiness gates at
+`generator-prompt-overlay.ts:108` and `prompt-builder.ts:185` and the prompt
+render at `prompt-builder.ts:327`. The two telemetry reads
+(`sugar-lang-teacher-middleware.ts:586`, sugaragent `GenerateStage.ts:586`) are
+diagnostic only -- the cross-plugin one is read-only and does NOT violate the
+seam, noted so a later reader does not flag it. Under the model *too hard* is STANDING
 (`out-of-reach`, 090.9) and *withheld* is a TEACHER decision. 090.9 owns the
 split; 090.4 owns re-sourcing the consumers. Round 6 finding -- no story named it.
 
