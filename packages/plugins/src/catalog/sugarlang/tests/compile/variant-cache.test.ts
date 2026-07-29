@@ -29,8 +29,7 @@ function createVariant(
   overrides: Partial<BakedLineVariant> = {}
 ): BakedLineVariant {
   return {
-    nodeId,
-    dialogueDefinitionId: "dialogue-1",
+    source: { kind: "dialogue-node", dialogueDefinitionId: "dialogue-1", nodeId },
     lang: "es",
     band: "B1",
     text: "Hola viajero, bienvenido.",
@@ -128,8 +127,11 @@ describe("MemoryVariantCache", () => {
     await cache.set(entry);
     const entries = await cache.listEntries();
     expect(entries).toHaveLength(1);
-    expect(entries[0]?.nodeId).toBe("node-1");
-    expect(entries[0]?.dialogueDefinitionId).toBe("dialogue-1");
+    expect(entries[0]?.source).toEqual({
+      kind: "dialogue-node",
+      dialogueDefinitionId: "dialogue-1",
+      nodeId: "node-1"
+    });
   });
 
   it("distinguishes entries by band", async () => {

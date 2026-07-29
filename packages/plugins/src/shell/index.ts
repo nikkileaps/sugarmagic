@@ -20,6 +20,7 @@
 import type {
   DialogueDefinition,
   DialogueNodeDefinition,
+  ItemDefinition,
   GameProject,
   NPCDefinition,
   PluginConfigurationRecord,
@@ -96,6 +97,7 @@ export interface PluginDesignSectionRenderProps {
   selectedDialogue?: DialogueDefinition | null;
   selectedDialogueNode?: DialogueNodeDefinition | null;
   updateDialogueNode?: (node: DialogueNodeDefinition) => void;
+  selectedItem?: ItemDefinition | null;
 }
 
 export interface PluginNPCInteractionOptionContribution {

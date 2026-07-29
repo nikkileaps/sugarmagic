@@ -19,6 +19,10 @@
 import type { ReactElement } from "react";
 import { Badge, Group, ScrollArea, Stack, Text } from "@mantine/core";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
+import {
+  describeGradedTextSource,
+  gradedTextSourceKey
+} from "../../runtime/contracts/graded-text";
 
 export interface VariantReportProps {
   getFlaggedVariants: () => BakedLineVariant[];
@@ -53,12 +57,12 @@ export function VariantReport(props: VariantReportProps): ReactElement {
         <Stack gap="sm">
           {flagged.map((variant) => {
             const gates = failedGates(variant);
-            const key = `${variant.dialogueDefinitionId}/${variant.nodeId}/${variant.lang}/${variant.band}`;
+            const key = `${gradedTextSourceKey(variant.source)}/${variant.lang}/${variant.band}`;
             return (
               <Stack key={key} gap={4} style={{ borderLeft: "2px solid var(--mantine-color-red-6)", paddingLeft: 8 }}>
                 <Group gap="xs" align="center">
                   <Text size="xs" fw={600}>
-                    {variant.dialogueDefinitionId} / {variant.nodeId}
+                    {describeGradedTextSource(variant.source)}
                   </Text>
                   <Badge size="xs" color="blue" variant="outline">
                     {variant.lang}

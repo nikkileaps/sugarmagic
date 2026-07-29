@@ -142,6 +142,9 @@ export interface DesignProductModeViewProps {
     selectedDialogueNode: DialogueNodeDefinition | null;
     updateDialogueNode: (node: DialogueNodeDefinition) => void;
   }) => ReactNode;
+  renderItemInspectorSections?: (context: {
+    selectedItem: ItemDefinition | null;
+  }) => ReactNode;
 }
 
 export interface DesignProductModeViewResult {
@@ -195,7 +198,8 @@ export function useDesignProductModeView(
     onNavigateToTarget,
     renderNPCInspectorSections,
     renderQuestInspectorSections,
-    renderDialogueInspectorSections
+    renderDialogueInspectorSections,
+    renderItemInspectorSections
   } = props;
 
   const playerView = usePlayerWorkspaceView({
@@ -239,7 +243,8 @@ export function useDesignProductModeView(
     designPreviewStore,
     onCommand,
     onImportAsset,
-    onGenerateItemThumbnail
+    onGenerateItemThumbnail,
+    renderInspectorSections: renderItemInspectorSections
   });
 
   const spellView = useSpellWorkspaceView({

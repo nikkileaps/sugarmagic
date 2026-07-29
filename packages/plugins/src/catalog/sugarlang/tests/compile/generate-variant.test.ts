@@ -94,8 +94,11 @@ describe("generateVariant", () => {
     expect(result.variant!.promptVersion).toBe(VARIANT_PROMPT_VERSION);
     expect(result.variant!.lang).toBe("es");
     expect(result.variant!.band).toBe("B1");
-    expect(result.variant!.nodeId).toBe("node-1");
-    expect(result.variant!.dialogueDefinitionId).toBe("dialogue-1");
+    expect(result.variant!.source).toEqual({
+      kind: "dialogue-node",
+      dialogueDefinitionId: "dialogue-1",
+      nodeId: "node-1"
+    });
     expect(result.variant!.contentHash).toBe("hash-abc");
   });
 
@@ -209,8 +212,11 @@ describe("compile-scheduler flushVariants", () => {
         variantPromptVersion: VARIANT_PROMPT_VERSION
       },
       variant: {
-        nodeId: node.nodeId,
-        dialogueDefinitionId: dialogue.definitionId,
+        source: {
+          kind: "dialogue-node",
+          dialogueDefinitionId: dialogue.definitionId,
+          nodeId: node.nodeId
+        },
         lang: "es",
         band: "B1",
         text: "Hola viajero.",

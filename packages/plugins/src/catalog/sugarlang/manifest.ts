@@ -28,6 +28,7 @@ import {
 import type {
   ConversationMiddlewareContribution,
   DialogueEntryDecoratorContribution,
+  DisplayTextResolverContribution,
   RuntimePluginInstance
 } from "@sugarmagic/runtime-core";
 import { normalizeSugarLangPluginConfig, resolveSugarlangProxyBaseUrl } from "./config";
@@ -56,6 +57,8 @@ import {
 import {
   SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
 } from "./runtime/learner/fact-definitions";
+import { createDisplayTextResolver } from "./runtime/grading/display-text-resolver";
+import { GRADED_TEXT_PROMPT_VERSION } from "./runtime/grading/graded-text-service";
 import { createSugarlangLogger } from "./runtime/logger";
 import { createSugarlangDialogueContribution } from "./runtime/dialogue-entry-decorator";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
@@ -123,8 +126,36 @@ export function createSugarlangPlugin(
     }
   };
 
-  const contributions: (ConversationMiddlewareContribution | DialogueEntryDecoratorContribution)[] =
-    [decoratorContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
+  // Runtime grading seam. Registering this is what lets item views (and later
+  // spells, interactables) show band-appropriate text. Its resolver is total --
+  // it returns the authored English whenever it has nothing better -- so the
+  // only effect of NOT registering it is that surfaces render authored English
+  // by a shorter path. That is the whole graceful-degradation story.
+  const displayTextContribution: DisplayTextResolverContribution = {
+    pluginId: context.configuration.pluginId,
+    contributionId: "sugarlang.display-text.resolver",
+    kind: "displayText.resolver",
+    displayName: "Sugarlang Graded Text",
+    priority: 10,
+    payload: {
+      summary:
+        "Swaps authored English for a band-appropriate graded version when one has been generated.",
+      resolve: createDisplayTextResolver({
+        getVariantCache: () => services.getVariantCache(),
+        getTargetLanguage: () => services.getTargetLanguage(),
+        getLearnerBand: () => services.getLearnerBand(),
+        promptVersion: GRADED_TEXT_PROMPT_VERSION,
+        getWeaveInputs: () => services.getWeaveInputs()
+      })
+    }
+  };
+
+  const contributions: (
+    | ConversationMiddlewareContribution
+    | DialogueEntryDecoratorContribution
+    | DisplayTextResolverContribution
+  )[] =
+    [decoratorContribution, displayTextContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
       const middleware = factory({ services, logger, telemetry });
       return {
         pluginId: context.configuration.pluginId,

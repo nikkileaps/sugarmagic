@@ -204,6 +204,14 @@ export function useSpatialWorkspaceView(
     viewportStore,
     (state) => state.showNavMesh
   );
+  const showGrid = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showGrid
+  );
+  const showViewportOverlays = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showViewportOverlays
+  );
   const hiddenVolumeIds = useVanillaStoreSelector(
     viewportStore,
     (state) => state.hiddenVolumeIds
@@ -823,7 +831,7 @@ export function useSpatialWorkspaceView(
         )}
       </Inspector>
     ) : null,
-    viewportOverlay: region ? (
+    viewportOverlay: region && showViewportOverlays ? (
       <>
         <ViewportToolbar
           items={spatialTools}
@@ -849,6 +857,13 @@ export function useSpatialWorkspaceView(
               active: showNavMesh,
               onToggle: () =>
                 viewportStore.getState().setShowNavMesh(!showNavMesh)
+            },
+            {
+              id: "show-grid",
+              label: `${showGrid ? "Hide" : "Show"} grid`,
+              icon: "▦",
+              active: showGrid,
+              onToggle: () => viewportStore.getState().setShowGrid(!showGrid)
             }
           ]}
         />

@@ -25,7 +25,8 @@ function textToHtml(value: string): string {
 
 function renderItemViewContentHtml(
   definition: ItemDefinition,
-  documentDefinitions: DocumentDefinition[]
+  documentDefinitions: DocumentDefinition[],
+  bodyOverride?: string
 ): string {
   if (definition.interactionView.kind === "readable") {
     const documentDefinition = createDocumentDefinitionFromItem(
@@ -37,7 +38,8 @@ function renderItemViewContentHtml(
     }
   }
 
-  const body = definition.interactionView.body || definition.description || "";
+  const body =
+    bodyOverride ?? (definition.interactionView.body || definition.description || "");
   return `<div class="sm-item-view-body-copy">${textToHtml(body)}</div>`;
 }
 
@@ -370,8 +372,25 @@ export function createRuntimeInventoryUI(
   };
 }
 
+/**
+ * Display text to render INSTEAD of the item's authored strings.
+ *
+ * Resolved by the caller before `show`, because rendering here is synchronous
+ * and any resolver worth having (an IndexedDB lookup, say) is not. Omit it and
+ * the authored text renders -- which is exactly what happens when no plugin
+ * supplies a resolver.
+ */
+export interface ItemViewTextOverride {
+  title?: string;
+  body?: string;
+}
+
 export interface RuntimeItemViewUI {
-  show: (definition: ItemDefinition, quantity: number) => void;
+  show: (
+    definition: ItemDefinition,
+    quantity: number,
+    textOverride?: ItemViewTextOverride
+  ) => void;
   hide: () => void;
   isOpen: () => boolean;
   setOnOpenChange: (handler: (isOpen: boolean) => void) => void;
@@ -412,6 +431,7 @@ export function createRuntimeItemViewUI(
 
   let open = false;
   let activeDefinition: ItemDefinition | null = null;
+  let activeTextOverride: ItemViewTextOverride | undefined;
   let onOpenChange: ((isOpen: boolean) => void) | null = null;
   let onConsume: ((itemDefinitionId: string) => void) | null = null;
 
@@ -428,7 +448,9 @@ export function createRuntimeItemViewUI(
       return;
     }
 
-    const title = activeDefinition.interactionView.title || activeDefinition.displayName;
+    const title =
+      activeTextOverride?.title ??
+      (activeDefinition.interactionView.title || activeDefinition.displayName);
     const kicker =
       activeDefinition.interactionView.kind === "readable"
         ? "readable document"
@@ -444,7 +466,8 @@ export function createRuntimeItemViewUI(
       </div>
       <div class="sm-item-view-body">${renderItemViewContentHtml(
         activeDefinition,
-        documentDefinitions
+        documentDefinitions,
+        activeTextOverride?.body
       )}</div>
       <div class="sm-item-view-actions"></div>
     `;
@@ -490,13 +513,15 @@ export function createRuntimeItemViewUI(
   }
 
   return {
-    show(definition, quantity) {
+    show(definition, quantity, textOverride) {
       activeDefinition = definition;
+      activeTextOverride = textOverride;
       render(quantity);
       setOpen(true);
     },
     hide() {
       activeDefinition = null;
+      activeTextOverride = undefined;
       panel.innerHTML = "";
       setOpen(false);
     },

@@ -29,6 +29,7 @@ import { LearnerCardInspector } from "./learner-card-inspector";
 import { LearnerOverrideSection } from "./learner-override-section";
 import { VariantReport } from "./variant-report";
 import { VariantsPopoverConnected } from "./variant-popover-connected";
+import { ItemViewVariantsConnected } from "./item-view-variants-connected";
 import { resolveStudioCompileWorkspaceId } from "./editor-support";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
@@ -232,6 +233,21 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
             onUpdateNode: props.updateDialogueNode,
             targetLanguage: props.targetLanguage,
             dialogue: props.selectedDialogue ?? null,
+            workspaceId: resolveStudioCompileWorkspaceId(props.gameProjectId)
+          });
+        }
+      },
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: "items",
+        sectionId: "item-view-variants",
+        label: "Language Variants",
+        summary: "Grade the selected item's Examine text into the target language at each band.",
+        render: (props) => {
+          if (!props.selectedItem) return null;
+          return createElement(ItemViewVariantsConnected, {
+            item: props.selectedItem,
+            targetLanguage: props.targetLanguage,
             workspaceId: resolveStudioCompileWorkspaceId(props.gameProjectId)
           });
         }

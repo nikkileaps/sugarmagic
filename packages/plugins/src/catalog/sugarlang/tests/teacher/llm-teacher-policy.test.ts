@@ -16,11 +16,13 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import type { DirectorClaudeClientRequest } from "../../runtime/teacher/policies/llm-teacher-policy";
 import {
   ClaudeTeacherPolicy,
   TeacherInvocationError,
   createGatewayTeacherClient
 } from "../../runtime/teacher/policies/llm-teacher-policy";
+import type { SugarlangLLMRequest } from "../../runtime/llm/types";
 import { createDirectiveFixture, createTeacherContext } from "./test-helpers";
 
 describe("createGatewayTeacherClient (090 -- server-side model routing)", () => {
@@ -28,7 +30,7 @@ describe("createGatewayTeacherClient (090 -- server-side model routing)", () => 
     // THE regression. The plumbing existed but `purpose` never reached the
     // wire, so every Teacher call silently ran on the cheap sugaragent
     // dialogue model. Assert the field on the actual request object.
-    const generate = vi.fn(async () => ({ text: "{}", requestId: null }));
+    const generate = vi.fn(async (_request: SugarlangLLMRequest) => ({ text: "{}", requestId: null }));
     await createGatewayTeacherClient({ generate }).generateStructuredDirective({
       model: null,
       systemPrompt: "s",
@@ -42,7 +44,7 @@ describe("createGatewayTeacherClient (090 -- server-side model routing)", () => 
   });
 
   it("omits `model` entirely when null so the gateway owns the choice", async () => {
-    const generate = vi.fn(async () => ({ text: "{}", requestId: null }));
+    const generate = vi.fn(async (_request: SugarlangLLMRequest) => ({ text: "{}", requestId: null }));
     await createGatewayTeacherClient({ generate }).generateStructuredDirective({
       model: null,
       systemPrompt: "s",
@@ -55,7 +57,7 @@ describe("createGatewayTeacherClient (090 -- server-side model routing)", () => 
   });
 
   it("still forwards an explicit model override for tooling", async () => {
-    const generate = vi.fn(async () => ({ text: "{}", requestId: null }));
+    const generate = vi.fn(async (_request: SugarlangLLMRequest) => ({ text: "{}", requestId: null }));
     await createGatewayTeacherClient({ generate }).generateStructuredDirective({
       model: "override-model",
       systemPrompt: "s",
@@ -73,10 +75,12 @@ describe("createGatewayTeacherClient (090 -- server-side model routing)", () => 
 
 describe("ClaudeTeacherPolicy", () => {
   it("defaults to no client-side model so the gateway resolves it (090)", async () => {
-    const generateStructuredDirective = vi.fn(async () => ({
-      text: JSON.stringify(createDirectiveFixture()),
-      requestId: null
-    }));
+    const generateStructuredDirective = vi.fn(
+      async (_request: DirectorClaudeClientRequest) => ({
+        text: JSON.stringify(createDirectiveFixture()),
+        requestId: null
+      })
+    );
     await new ClaudeTeacherPolicy({
       client: { generateStructuredDirective }
     }).invoke(createTeacherContext());

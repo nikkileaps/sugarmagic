@@ -36,6 +36,8 @@ import { IndexedDBVariantCache } from "../../runtime/compile/variant-cache";
 import { IndexedDBIntentCache } from "../../runtime/compile/intent-cache";
 import { extractIntent, INTENT_EXTRACTOR_PROMPT_VERSION } from "../../runtime/compile/extract-intent";
 import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
+import { GradedTextService } from "../../runtime/grading/graded-text-service";
+import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
 import { getAllInventoryChunks } from "../../runtime/inventory/function-inventory-loader";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
 import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-scene";
@@ -436,6 +438,28 @@ export interface VariantAuthoringClient {
     targetLanguage: string,
     workspaceId: string
   ): Promise<Partial<Record<CEFRBand, BakedLineVariant>>>;
+  /**
+   * Grade one item interaction-view field at every display band.
+   *
+   * Goes straight to GradedTextService rather than through `generateVariant`:
+   * that wrapper exists to stamp DIALOGUE identity, which an item does not
+   * have. Both paths share the grading and the cache -- only the source and the
+   * content-hash seed differ.
+   */
+  generateVariantsForItemView(
+    itemDefinitionId: string,
+    field: "title" | "body",
+    text: string,
+    targetLanguage: string,
+    workspaceId: string
+  ): Promise<Partial<Record<CEFRBand, BakedLineVariant>>>;
+  getVariantsForItemView(
+    itemDefinitionId: string,
+    field: "title" | "body",
+    text: string,
+    targetLanguage: string,
+    workspaceId: string
+  ): Promise<Partial<Record<CEFRBand, BakedLineVariant>>>;
   generateVariantsForNode(
     nodeId: string,
     nodeText: string,
@@ -515,12 +539,76 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       );
       return result;
     },
+    async getVariantsForItemView(itemDefinitionId, field, text, targetLanguage, workspaceId) {
+      const cache = getCache(workspaceId);
+      const contentHash = buildItemViewContentHash(itemDefinitionId, field, text);
+      const result: Partial<Record<CEFRBand, BakedLineVariant>> = {};
+      await Promise.all(
+        DISPLAY_BANDS.map(async (band) => {
+          const entry = await cache.get({
+            lang: targetLanguage,
+            band,
+            contentHash,
+            variantPromptVersion: VARIANT_PROMPT_VERSION
+          });
+          if (entry) result[band] = entry.variant;
+        })
+      );
+      return result;
+    },
+    async generateVariantsForItemView(itemDefinitionId, field, text, targetLanguage, workspaceId) {
+      if (!llmClient) return {};
+      const cache = getCache(workspaceId);
+      const contentHash = buildItemViewContentHash(itemDefinitionId, field, text);
+      let inventoryChunks: import("../../runtime/contracts/function-inventory").InventoryChunk[] = [];
+      try {
+        inventoryChunks = getAllInventoryChunks(targetLanguage);
+      } catch {
+        // No inventory for this language -- generation proceeds without chunk context
+      }
+      const service = new GradedTextService({ llmClient, atlas, inventoryChunks });
+      const result: Partial<Record<CEFRBand, BakedLineVariant>> = {};
+      await Promise.all(
+        DISPLAY_BANDS.map(async (band) => {
+          try {
+            const graded = await service.adapt({
+              sourceText: text,
+              targetLang: targetLanguage,
+              band,
+              guidance: { register: field === "title" ? "item name" : "item description" }
+            });
+            if (graded.text === null || graded.verdict === null) return;
+            const variant: BakedLineVariant = {
+              source: { kind: "item-view", itemDefinitionId, field },
+              lang: targetLanguage,
+              band,
+              text: graded.text,
+              verdict: graded.verdict,
+              reviewFlag: !graded.verdict.overallPasses,
+              generatedAtMs: Date.now(),
+              generatedByModel: graded.generatedByModel,
+              contentHash,
+              promptVersion: graded.promptVersion
+            };
+            await cache.set({
+              key: { lang: targetLanguage, band, contentHash, variantPromptVersion: VARIANT_PROMPT_VERSION },
+              variant
+            });
+            result[band] = variant;
+          } catch {
+            // Individual band failure is non-fatal
+          }
+        })
+      );
+      return result;
+    },
     async saveVariant(nodeId, nodeText, band, text, dialogueDefinitionId, targetLanguage, workspaceId) {
       const cache = getCache(workspaceId);
       const contentHash = buildVariantContentHash(nodeId, nodeText);
       const now = Date.now();
       const variant: BakedLineVariant = {
-        nodeId, dialogueDefinitionId, lang: targetLanguage, band, text,
+        source: { kind: "dialogue-node", dialogueDefinitionId, nodeId },
+        lang: targetLanguage, band, text,
         verdict: { envelopePasses: true, ratioPasses: true, voiceRetentionScore: 1, fidelityPasses: true, overallPasses: true },
         reviewFlag: false,
         generatedAtMs: now, generatedByModel: "manual", contentHash, promptVersion: VARIANT_PROMPT_VERSION

@@ -65,6 +65,45 @@ describe("viewport projection", () => {
     });
   });
 
+  it("carries showGrid through to the projection, defaulting ON", () => {
+    // The grid is an authoring aid that is always on until the author clears it
+    // for a camera-framed shot, so the default is the inverse of the collider /
+    // navmesh toggles. Guards the store -> projection link: a field added to the
+    // store but not the projection builder leaves the button inert with no
+    // type error anywhere.
+    const gameProject = createDefaultGameProject("Sugarmagic Test", "little-world");
+    const region = createDefaultRegion({ regionId: "glade", displayName: "Glade" });
+    const session = createAuthoringSession(gameProject, [region]);
+
+    const projectStore = createProjectStore();
+    const shellStore = createShellStore("build");
+    const viewportStore = createViewportStore();
+    const assetSourceStore = createAssetSourceStore();
+    projectStore.getState().setActive(
+      {} as FileSystemDirectoryHandle,
+      { gameRootPath: "." } as never,
+      session
+    );
+    shellStore.getState().setActiveRegionId(region.identity.id);
+
+    const project = () =>
+      selectViewportProjection(
+        projectStore.getState(),
+        shellStore.getState(),
+        viewportStore.getState(),
+        assetSourceStore.getState()
+      );
+
+    expect(project().showGrid).toBe(true);
+    expect(project().showColliders).toBe(false);
+
+    viewportStore.getState().setShowGrid(false);
+    expect(project().showGrid).toBe(false);
+
+    viewportStore.getState().setShowGrid(true);
+    expect(project().showGrid).toBe(true);
+  });
+
   it("subscribes once to the combined store bundle and emits deterministic slices", () => {
     const gameProject = createDefaultGameProject("Sugarmagic Test", "little-world");
     const session = createAuthoringSession(gameProject, [

@@ -432,6 +432,14 @@ export function useLayoutWorkspaceView(
     viewportStore,
     (state) => state.showNavMesh
   );
+  const showGrid = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showGrid
+  );
+  const showViewportOverlays = useVanillaStoreSelector(
+    viewportStore,
+    (state) => state.showViewportOverlays
+  );
   // Plan 068.4 -- mask paint mode chrome. Non-null while a painted
   // layer is armed; the mask-paint overlay owns the strokes, this
   // view owns the toolbar.
@@ -1373,61 +1381,70 @@ export function useLayoutWorkspaceView(
         title="Scene Explorer"
         icon="🏗️"
         actions={
-          <>
-            <Menu shadow="md" withinPortal position="bottom-end">
-              <Menu.Target>
-                <ActionIcon
-                  variant="subtle"
-                  size="sm"
-                  aria-label="Add scene thing"
-                >
-                  ＋
-                </ActionIcon>
-              </Menu.Target>
-              <Menu.Dropdown>
-                <Menu.Item
-                  onClick={() => {
-                    setAddAssetOpen(true);
-                    setAssetQuery("");
-                  }}
-                >
-                  Asset
-                </Menu.Item>
-                <Menu.Item
-                  onClick={handleAddPlayerToScene}
-                  disabled={!playerDefinition}
-                >
-                  Player
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() => {
-                    setAddNPCOpen(true);
-                    setNPCQuery("");
-                  }}
-                  disabled={npcDefinitions.length === 0}
-                >
-                  NPC
-                </Menu.Item>
-                <Menu.Item
-                  onClick={() => {
-                    setAddItemOpen(true);
-                    setItemQuery("");
-                  }}
-                  disabled={itemDefinitions.length === 0}
-                >
-                  Item
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-            <ActionIcon
-              variant="subtle"
-              size="sm"
-              aria-label="Add folder"
-              onClick={handleCreateFolderAtSelection}
-            >
-              📁
-            </ActionIcon>
-          </>
+          <Menu shadow="md" withinPortal position="bottom-end">
+            <Menu.Target>
+              <ActionIcon variant="subtle" size="sm" aria-label="Scene explorer menu">
+                ☰
+              </ActionIcon>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Sub>
+                <Menu.Sub.Target>
+                  <Menu.Sub.Item>Add</Menu.Sub.Item>
+                </Menu.Sub.Target>
+                <Menu.Sub.Dropdown>
+                  <Menu.Item
+                    onClick={() => {
+                      setAddAssetOpen(true);
+                      setAssetQuery("");
+                    }}
+                  >
+                    Asset
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={handleAddPlayerToScene}
+                    disabled={!playerDefinition}
+                  >
+                    Player
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={() => {
+                      setAddNPCOpen(true);
+                      setNPCQuery("");
+                    }}
+                    disabled={npcDefinitions.length === 0}
+                  >
+                    NPC
+                  </Menu.Item>
+                  <Menu.Item
+                    onClick={() => {
+                      setAddItemOpen(true);
+                      setItemQuery("");
+                    }}
+                    disabled={itemDefinitions.length === 0}
+                  >
+                    Item
+                  </Menu.Item>
+                </Menu.Sub.Dropdown>
+              </Menu.Sub>
+              <Menu.Item onClick={handleCreateFolderAtSelection}>
+                New Folder
+              </Menu.Item>
+              <Menu.Divider />
+              {/* Lives here rather than in the viewport toggle bar because that
+                  bar is one of the things it hides -- a button that removes
+                  itself leaves no way back. */}
+              <Menu.Item
+                onClick={() =>
+                  viewportStore
+                    .getState()
+                    .setShowViewportOverlays(!showViewportOverlays)
+                }
+              >
+                {showViewportOverlays ? "Hide" : "Show"} Viewport Overlays
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         }
       >
         <Stack gap="xs">
@@ -2026,7 +2043,7 @@ export function useLayoutWorkspaceView(
       </Inspector>
     ) : null,
 
-    viewportOverlay: region ? (
+    viewportOverlay: region && showViewportOverlays ? (
       <>
         <Box style={{ pointerEvents: "auto" }}>
           <ToolRail
@@ -2382,6 +2399,13 @@ export function useLayoutWorkspaceView(
               active: showNavMesh,
               onToggle: () =>
                 viewportStore.getState().setShowNavMesh(!showNavMesh)
+            },
+            {
+              id: "show-grid",
+              icon: "▦",
+              label: `${showGrid ? "Hide" : "Show"} grid`,
+              active: showGrid,
+              onToggle: () => viewportStore.getState().setShowGrid(!showGrid)
             }
           ]}
         />

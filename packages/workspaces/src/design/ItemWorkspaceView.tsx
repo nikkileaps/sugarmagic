@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   ActionIcon,
   Box,
@@ -28,6 +29,7 @@ import type {
   DesignPreviewState,
   DesignPreviewStore
 } from "@sugarmagic/shell";
+import { AssetBrowser } from "./AssetBrowser";
 import { createDefaultItemDefinition } from "@sugarmagic/domain";
 import { InlineAssetField, Inspector } from "@sugarmagic/ui";
 import type { WorkspaceViewContribution } from "../workspace-view";
@@ -49,6 +51,10 @@ export interface ItemWorkspaceViewProps {
   designPreviewStore: DesignPreviewStore;
   onCommand: (command: SemanticCommand) => void;
   onImportAsset: () => Promise<AssetDefinition | null>;
+  /** Plugin-contributed inspector sections for the selected item. */
+  renderInspectorSections?: (context: {
+    selectedItem: ItemDefinition | null;
+  }) => ReactNode;
   onGenerateItemThumbnail: (item: ItemDefinition) => Promise<string | null>;
 }
 
@@ -90,13 +96,15 @@ export function useItemWorkspaceView(
     designPreviewStore,
     onCommand,
     onImportAsset,
-    onGenerateItemThumbnail
+    onGenerateItemThumbnail,
+    renderInspectorSections
   } = props;
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(
     itemDefinitions[0]?.definitionId ?? null
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [modelBrowserOpen, setModelBrowserOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -435,13 +443,34 @@ export function useItemWorkspaceView(
             <Stack gap="xs">
               <InlineAssetField
                 label="Model"
-                value={boundItemModel?.source.relativeAssetPath ?? null}
+                value={boundItemModel?.displayName ?? null}
                 hasBoundId={Boolean(selectedItem.presentation.modelAssetDefinitionId)}
                 onImport={async () => {
                   const next = await onImportAsset();
                   return next?.definitionId ?? null;
                 }}
+                onBrowse={() => setModelBrowserOpen(true)}
                 onChange={(definitionId) =>
+                  updateItem({
+                    ...selectedItem,
+                    presentation: {
+                      ...selectedItem.presentation,
+                      modelAssetDefinitionId: definitionId
+                    }
+                  })
+                }
+              />
+              <AssetBrowser
+                opened={modelBrowserOpen}
+                assetDefinitions={assetDefinitions}
+                assetKind="model"
+                title="Choose Item Model"
+                onClose={() => setModelBrowserOpen(false)}
+                onImportNew={async () => {
+                  const next = await onImportAsset();
+                  return next?.definitionId ?? null;
+                }}
+                onSelect={(definitionId) =>
                   updateItem({
                     ...selectedItem,
                     presentation: {
@@ -638,6 +667,7 @@ export function useItemWorkspaceView(
             No item selected.
           </Text>
         )}
+        {renderInspectorSections?.({ selectedItem }) ?? null}
       </Inspector>
     ),
 
