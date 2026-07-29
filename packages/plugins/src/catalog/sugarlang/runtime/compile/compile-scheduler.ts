@@ -31,7 +31,7 @@ import {
 import { compileSugarlangScene } from "./compile-sugarlang-scene";
 import { collectSceneText, type SceneAuthoringContext } from "./scene-traversal";
 import type { SugarlangChunkCache } from "./chunk-cache";
-import type { MultiWordExpressionExtractionResult } from "./MultiWordExpressionExtractor";
+import type { MultiWordExpressionExtractionResult } from "./multi-word-expression-extractor";
 import type { SugarlangCompileCache } from "./sugarlang-compile-cache";
 import type { SugarlangIntentCache, LineIntentCacheEntry } from "./intent-cache";
 import { buildIntentContentHash } from "./intent-cache";

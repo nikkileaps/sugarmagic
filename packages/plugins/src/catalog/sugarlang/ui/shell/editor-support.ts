@@ -28,7 +28,7 @@ import { compareCefrBands } from "../../runtime/classifier/cefr-band-utils";
 import { MorphologyLoader } from "../../runtime/classifier/morphology-loader";
 import { IndexedDBChunkCache } from "../../runtime/compile/chunk-cache";
 import { IndexedDBCompileCache } from "../../runtime/compile/cache-indexeddb";
-import { MultiWordExpressionExtractor } from "../../runtime/compile/MultiWordExpressionExtractor";
+import { MultiWordExpressionExtractor } from "../../runtime/compile/multi-word-expression-extractor";
 import { SUGARLANG_COMPILE_PIPELINE_VERSION } from "../../runtime/compile/content-hash";
 import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";

@@ -7,7 +7,7 @@
  *   - none
  *
  * Relationships:
- *   - Exercises ../../runtime/compile/MultiWordExpressionExtractor with mocked LLM clients and telemetry.
+ *   - Exercises ../../runtime/compile/multi-word-expression-extractor with mocked LLM clients and telemetry.
  *   - Uses stable TextBlob fixtures so reviewers can inspect the exact prompt contract.
  *
  * Implements: Proposal 001 §Lexical Chunk Awareness / Epic 14 Story 14.1
@@ -20,7 +20,7 @@ import {
   MWE_EXTRACTOR_PROMPT_VERSION,
   buildMultiWordExpressionPrompt,
   MultiWordExpressionExtractor
-} from "../../runtime/compile/MultiWordExpressionExtractor";
+} from "../../runtime/compile/multi-word-expression-extractor";
 import type { SugarlangLLMClient } from "../../runtime/llm/types";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import type { TextBlob } from "../../runtime/compile/scene-traversal";

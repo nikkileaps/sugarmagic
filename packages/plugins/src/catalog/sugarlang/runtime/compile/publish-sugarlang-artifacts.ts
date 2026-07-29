@@ -24,7 +24,7 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import type { LexicalAtlasProvider, CompiledSceneLexicon } from "../types";
 import type { MorphologyLoader } from "../classifier/morphology-loader";
 import { compileSugarlangScene } from "./compile-sugarlang-scene";
-import type { MultiWordExpressionExtractionResult } from "./MultiWordExpressionExtractor";
+import type { MultiWordExpressionExtractionResult } from "./multi-word-expression-extractor";
 import type { SceneAuthoringContext } from "./scene-traversal";
 
 export interface SugarlangPublishedArtifact {

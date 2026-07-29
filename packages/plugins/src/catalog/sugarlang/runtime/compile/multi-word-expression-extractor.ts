@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/compile/MultiWordExpressionExtractor.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/compile/multi-word-expression-extractor.ts
  *
  * WHAT A MULTI-WORD EXPRESSION IS
  *   A multi-word expression (MWE) is a sequence of words a fluent speaker
