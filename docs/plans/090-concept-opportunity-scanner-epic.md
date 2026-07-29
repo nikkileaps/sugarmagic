@@ -561,12 +561,12 @@ docs/api: extend the middlewares doc's Teaching Decision Model (candidate sourci
 - Post-turn capture of concepts the NPC emitted unprompted (Finnick said `familia`, `tía` with nothing prescribing them): the observe middleware already tokenizes every turn and runs chunk matching, so noticing "target-language lemma with no card" is deterministic and cheap. Deliberately out of this epic to keep it one loop; revisit immediately after the floor ships, since it is the natural completion of "the verifiers CHECK" (code comment at the observe chunk matcher).
 
 
-## Open at gate exit (epic-review round 4, 2026-07-28, NOT converged)
+## Open at gate exit (epic-review round 4, 2026-07-28)
 
 Round 4 reviewed the plan against
 `packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`
-rather than against the code. Its findings are applied above. The plan is not
-Locked; these need decisions first.
+rather than against the code. Its findings are applied above. Nothing here
+blocks the floor; every remaining item is decided inside the story that owns it.
 
 Round 4 also settled several of the round-3 questions:
 
