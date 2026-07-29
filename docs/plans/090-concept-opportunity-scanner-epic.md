@@ -1,6 +1,6 @@
 # Plan 090 -- Context Extraction + Teacher Judgment (proposed child epic I of Strategy 002)
 
-Status: DRAFT -- NOT LOCKED. epic-review has run 4 rounds (2026-07-28). Rounds 1-3 audited the plan against the CODE and it held -- every citation survived. Round 4 audited it against the DOMAIN MODEL and it did not: the stories were producing better inputs to a decision the model relocates. Stories are revised accordingly. Five decisions remain (one partly settled), listed at the end -- the load-bearing one is whether the budgeter survives at all.
+Status: DRAFT -- NOT LOCKED. epic-review has run 4 rounds (2026-07-28). Rounds 1-3 audited the plan against the CODE and it held -- every citation survived. Round 4 audited it against the DOMAIN MODEL and it did not: the stories were producing better inputs to a decision the model relocates. Stories are revised accordingly. NO blocking decisions remain: the model settles whether the budgeter survives (no), what bounds the slate (the situation, not the atlas), and whether items consult it (yes). What is left is decided inside the stories that own it.
 
 The model this plan must satisfy: `packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`.
 
@@ -579,17 +579,33 @@ Round 4 also settled several of the round-3 questions:
 | 5. Is `publishSugarlangArtifacts` alive? | **Verified dead** -- no importer outside its own test. Not a design decision; a deletion. Downgraded. |
 | 6. Which "have they met" signal governs | **Still open, sharper.** Whichever wins must compose INTO situation. Note `isProbableFirstMeeting` is derived inside prompt-builder.ts:169-171 from `recentTurns` -- the prompt builder deriving a situation fact is itself a layering violation under the model. |
 
-New decisions the model raises:
+New questions the model raises -- and three of the four it already answers.
+Listing them as "open" in the first draft of this section was wrong; the model
+had settled them and this document had not caught up.
 
-**A. Does the budgeter survive this epic, and in what order does it go?**
-The deletion order above is a proposal, not a decision. This is the biggest one:
-everything else is downstream of whether `prescribe()` still exists at the end.
+**A. Does the budgeter survive? -- ANSWERED: NO.**
+The model puts `BUDGETER` in "What deliberately is not in the model" and
+reassigns all four of its jobs (sourcing -> SITUATION, eligibility -> LEARNER
+standing, ranking -> TEACHER, rationing -> LEARNER capacity). What remains "is
+not a separate boundary because it does not transform anything: it reports a
+number." `prescribe()` does not exist at the end of this epic. The deletion
+ORDER above is a sequencing detail of that decision, not a re-opening of it.
 
-**B. What bounds the slate?**
-The model says "everything relevant and in-reach here" and gives no number.
-Against an 11,000-entry atlas that is unbounded, and if "in-reach" collapses to
-the band envelope then the slate IS the band pool and realization degenerates to
-what `display-text-resolver` already does today. Needs a concrete rule.
+**B. What bounds the slate? -- ANSWERED BY CONSTRUCTION.**
+An earlier draft worried the slate was unbounded against an 11,000-entry atlas.
+That is only true if the slate is drawn FROM the atlas. It is not: it is drawn
+from the SITUATION, which names a bounded concept list, plus the scrub's
+scene-derived candidates -- both scene-sized (tens), not atlas-sized.
+
+  slate = (situation concepts + scrub candidates) ∩ in-reach
+
+That is bounded by construction, and it is why the demo shortcut in
+`display-text-resolver.ts` had to reach for the whole level lexicon: there was no
+situation layer to draw from, so the only bounded-ish set available was the band.
+
+State it explicitly in 090.4 so nobody re-derives the atlas-sized version. The
+residual tuning question -- whether "in-reach" means the band envelope or
+something tighter -- is an in-story decision, not a blocker.
 
 **C. Is the realization cap a count or a ratio?** -- PARTLY SETTLED.
 The strategy split in 090.8 answers most of this: substitution is naturally
@@ -603,13 +619,29 @@ at the same posture, so an item body and a dialogue line at A1 feel like the
 same game. Probably yes, which means the count is derived from the ratio and the
 text length, not authored independently.
 
-**D. Do items consult the slate at all?**
-`display-text-resolver.ts:107-113` argues the answer may legitimately stay "no"
--- an examined item is a browsing moment with no pacing to protect. The model
-asserts realization is uniform across "one line / one item body / one
-description". The plan is silent. These three positions cannot all hold.
+**D. Do items consult the slate? -- ANSWERED: YES.**
+The model scopes realization to "one line / one item body / one description" --
+uniform. Items are not special.
 
-**E. Non-goals now contradicts the lifecycle.**
-"NOT optimizing LLM call frequency" was written when per-call cost was the only
-concern. The model makes one-call-per-conversation a structural property, not an
-optimization. Reword or drop.
+The apparent conflict with `display-text-resolver.ts:107-113` is a stale
+framing, not a disagreement. That comment argues items should ignore the
+BUDGETER, and under the model there is no budgeter for anything to ignore --
+its reasoning (an examined item is a browsing moment with no pacing to protect)
+was about pacing, which is now one number the Learner reports rather than a
+slate the Teacher is handed. Consulting the SLATE is a different question, and
+the answer is yes.
+
+090.8 must update that comment when it lands, or it will read as a live
+objection to the thing 090.8 just built.
+
+**E. Non-goals wording.** -- APPLIED, not a decision. The non-goal now reads that
+one-call-per-conversation is a structural property of the slate/realization
+split rather than a tuning target.
+
+---
+
+**What is actually still open: one tuning question (C's residue) and the four
+round-3 carryovers (POS enum, world-flag presences, `publishSugarlangArtifacts`
+deletion, "have they met" authority).** None of them blocks the floor. The POS
+enum is decided inside 090.1; world-flag presences inside 090.3; the artifacts
+deletion is a chore; "have they met" is decided inside 090.3.
