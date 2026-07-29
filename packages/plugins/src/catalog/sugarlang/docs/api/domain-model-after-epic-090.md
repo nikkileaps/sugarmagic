@@ -143,6 +143,7 @@ erDiagram
 
     SITUATION ||--o{ CONCEPT : "names"
     CONCEPT }o--o| VOCABULARY : "resolves to, via the atlas"
+    CONCEPT }o--o| COMPETENCY : "resolves to, via the inventory"
 
     TEACHABLE ||--|| VOCABULARY : "is a"
     TEACHABLE ||--|| COMPETENCY : "is a"
@@ -181,6 +182,36 @@ The two share a shape, which is the point: **an abstract thing plus how this
 particular language performs it.** A competency is not a bigger word — it is the
 same kind of object one level up, and treating them as one kind with a
 discriminant is what makes a third subtype additive rather than a redesign.
+
+### Concept is demand; teachables are supply
+
+`CONCEPT` resolves to EITHER subtype, and the two edges above are not
+alternatives — a concept may hit both, one, or neither. Measured against the
+shipped es atlas:
+
+| concept | atlas | inventory | meaning |
+|---|---|---|---|
+| `cheese` | queso (A1) | — | a thing |
+| `greeting` | saludo (A1) | `greet` | **both — teach the word inside the act** |
+| `self introduction` | — | an act | no single word carries it |
+| unmatched | — | — | an unknown word, or a **gap in the curriculum** |
+
+So a concept carries **no kind**. Tagging it *thing* vs *act* would force
+`greeting` to pick one and discard the other resolution, losing the case that
+matters most: `hola` taught inside `greet` arrives with a reason to say it.
+
+`self introduction` is the proof that this is not tidiness. Spanish says *me
+llamo* — literally "I call myself". There is no lemma correspondence to find,
+because the two languages **encode the act differently**. The concept survives
+translation; the word does not. Asking "what is the vocabulary for
+self-introduction" is a category error, and a single-table resolver can only
+answer it wrongly or not at all.
+
+**The asymmetry that makes the two tables behave differently:** the atlas is
+near-total supply — 11,000 entries — so demand almost always finds it and the
+hard problem is SELECTION. The inventory is ten curated items, so demand usually
+finds nothing and the hard problem is COVERAGE. Same relation, opposite
+scarcity. It is why concept and competency feel alike and behave nothing alike.
 
 `EXPONENT` is the ELT term for a phrase that performs a competency. Note it is
 NOT a synonym for "chunk": a chunk is any multi-word expression (what

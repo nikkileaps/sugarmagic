@@ -360,6 +360,52 @@ stays a private road (see 090.4).
 
 ### 090.2 Concept resolution
 
+RESOLUTION HAS TWO TABLES, NOT ONE. Added 2026-07-29 (nikki). A concept is
+DEMAND -- "this is relevant here" -- and says nothing about what to teach. What
+CAN be taught is supply, and there are two suppliers:
+
+```
+concept --> the atlas                --> a vocabulary teachable
+        \-> the competency inventory --> a competency teachable
+```
+
+Measured against the shipped es atlas, all four outcomes are real:
+
+| concept | atlas | competency | meaning |
+|---|---|---|---|
+| `cheese` | queso (A1) | -- | a thing |
+| `greeting` | saludo (A1) | `greet` | **BOTH -- the case worth having** |
+| `self introduction` | -- | an act | an act with no single word |
+| unmatched | -- | -- | an unknown word, OR **a gap in the competency curriculum** |
+
+A CONCEPT THEREFORE HAS NO KIND. An earlier draft of the contract tagged
+concepts `thing` vs `act`; that forces `greeting` to pick one and discard the
+other resolution -- destroying the exact case that lets a word be taught INSIDE
+the act that uses it (`hola` within `greet`), which is the difference between a
+flashcard and speaking. Resolution tries both tables and records what came back.
+
+THE SINGLE-WORD RULE MOVES DOWN, IT DOES NOT APPLY TO CONCEPTS. Atlas resolution
+needs one word and simply MISSES on a phrase. That miss is informative, not an
+error -- it is the signal to try the competency table. So `Concept.label` is a
+short English label (usually a word), and `Concept.pos` is OPTIONAL, present only
+when the label is word-like, since POS is used by nothing but the atlas
+membership filter.
+
+ROW FOUR IS A REPORT, NOT A DROP. A concept matching neither table is either an
+unknown word or an act the curriculum cannot teach. The second is authoring
+feedback -- "content keeps calling for asking-for-directions and no competency
+supplies it" -- and it is the competency twin of the synonym-gap telemetry in
+Deferred. Emit it distinguishably; do not merge it with "no atlas resolution".
+
+THE ASYMMETRY THAT MAKES THE TWO TABLES BEHAVE DIFFERENTLY: the atlas is
+near-total supply (11,000 entries), so demand almost always finds it and the
+hard problem is SELECTION. The competency inventory is ten curated items, so
+demand usually finds nothing and the hard problem is COVERAGE. Same relation,
+opposite scarcity -- which is why concept and competency feel alike and behave
+nothing alike.
+
+---
+
 The resolver half of the old 090.2, unchanged: union-gather over primary AND
 secondary gloss, POS membership filter, rank by `frequencyRank` first, drop with
 telemetry when empty. The four pinned rows (dock/trade/boat/cheese) and the
@@ -466,9 +512,17 @@ is the lexicon. `SceneVocabularyModel`, produced by a `SceneVocabularyExtractor`
 "The architecture" above, where it is now the SceneContextExtractor's sibling rather
 than "the compiler").
 
-- Exit: concepts resolve to the four pinned lemma ids; `partsOfSpeech` always
-  contains the concept POS; empty pool drops with telemetry; the side field is
-  persisted and survives a cache-hit recompile.
+- Exit: concepts resolve to the four pinned lemma ids; when a concept carries a
+  POS, `partsOfSpeech` contains it; empty pool drops with telemetry; the side
+  field is persisted and survives a cache-hit recompile.
+- **All four resolution outcomes are distinguishable**, asserted on real atlas
+  data (integration): `cheese` -> vocabulary only; `greeting` -> vocabulary AND
+  competency; `self introduction` -> competency only, with the atlas miss NOT
+  reported as a failure; an invented act -> neither, reported as a curriculum
+  gap rather than as "no atlas resolution" (pin -- these two look identical
+  today and one of them is authoring feedback).
+- A multi-word label does not throw, does not warn, and does not reach the atlas
+  POS filter (pin -- the miss is the mechanism, not a defect).
 - `SceneLemmaInfo` is deleted, asserted by grep (pin). No band, rank or POS value
   is stored outside the atlas, asserted by grep for `cefrPriorBand:` outside
   `providers.ts` and the atlas loader (pin -- the duplication this collapses).

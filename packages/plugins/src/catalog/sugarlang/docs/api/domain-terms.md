@@ -86,9 +86,19 @@ model. Introduced by Plan 090.
 { "word": "cheese", "pos": "noun", "provenance": "npc:finnick:bio" }
 ```
 
-A concept is *what a piece of content is about*, and it is deliberately upstream
-of the atlas -- concepts are English and language-neutral until they are
-resolved to a lemma. `cheese` is a concept; `queso` is the lemma it resolves to.
+A concept is *what a piece of content is about, or does*. It is **demand**: it
+says "this is relevant here" and nothing about what to teach. Resolution then
+looks it up in two supply tables -- the atlas and the competency inventory --
+and it may hit both, one, or neither:
+
+| concept | atlas | competency |
+|---|---|---|
+| `cheese` | queso | -- |
+| `greeting` | saludo | `greet` |
+| `self introduction` | -- | an act |
+
+So a concept has no kind, and its label is not constrained to one word: a phrase
+simply misses the atlas, and that miss is the signal to try the other table.
 
 ### Dialogue blob
 
