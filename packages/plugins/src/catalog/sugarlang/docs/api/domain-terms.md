@@ -10,7 +10,7 @@ For how these fit together as a system, see [domain-model.md](./domain-model.md)
 
 ---
 
-## The core five
+## The core terms
 
 These are the ones that get confused with each other, ordered as the data
 actually flows.
@@ -48,18 +48,34 @@ knowing about: the reverse gloss index is keyed on the exact English gloss, so
 `cheese` resolves and `cheeses` does not (`resolveFromGloss`,
 `cefr-lex-atlas-provider.ts:208-215`).
 
+### Lexicon
+
+The whole word stock of a language. In this codebase that **is** the atlas --
+the interface is literally `LexicalAtlasProvider`
+(`runtime/contracts/providers.ts:152`). "Lexicon" and "atlas" name the same
+thing; atlas is the file, lexicon is the concept.
+
+The word is overloaded on two other things, so check which one is meant:
+
+| Use | What it actually is |
+|---|---|
+| `LexicalAtlasProvider` | the lexicon. The dictionary. |
+| `sceneLexicon` / `CompiledSceneLexicon` | **not** a lexicon -- one scene's slice of it. See scene vocabulary below. |
+| `interpretLexicon` | unrelated. Surface forms grouped by category, used to interpret what the *player* typed (`buildInterpretLexicon`), not to teach. |
+
 ### Scene vocabulary
 
-Which atlas lemmas one scene's authored text actually uses, plus the proper nouns
-in it. An **index into** the atlas -- a list of ids -- not a copy of it; band,
-rank and part of speech are looked up from the atlas by id.
+Which lexicon entries one scene's authored text actually uses, plus the proper
+nouns in it. An **index into** the lexicon -- a list of ids -- not a copy of it;
+band, rank and part of speech are looked up by id.
 
 Today it is `CompiledSceneLexicon` / `SceneLemmaInfo`
-(`runtime/contracts/scene-lexicon.ts`) and does store copies. Plan 090 collapses
-it and drops the "lexicon" name, because the atlas is the lexicon.
+(`runtime/contracts/scene-lexicon.ts`) and does store copies of atlas fields.
+Plan 090 collapses it to ids and renames it, because calling a scene's subset a
+"lexicon" is what made it read as a second dictionary.
 
-**Atlas vs scene vocabulary:** the atlas is the dictionary; the scene vocabulary
-is which entries this text uses.
+**Lexicon vs scene vocabulary:** the lexicon is every word in the language; the
+scene vocabulary is which of them this text uses.
 
 ### Concept
 
@@ -182,3 +198,5 @@ Worth flagging, because each has bitten:
   pipelines (chunks, intents, concepts) are not "baking".
 - **avoid** -- currently conflates *too hard right now* with *deliberately
   withheld*. See [domain-model-after-epic-090.md](./domain-model-after-epic-090.md).
+- **lexicon** -- the atlas, a scene's subset of it, or the player-input
+  `interpretLexicon`. See Lexicon above.
