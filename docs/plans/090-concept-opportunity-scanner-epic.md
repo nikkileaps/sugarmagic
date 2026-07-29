@@ -1,6 +1,8 @@
 # Plan 090 -- Context Extraction + Teacher Judgment (proposed child epic I of Strategy 002)
 
-Status: DRAFT -- NOT LOCKED. epic-review ran 3 rounds on 2026-07-28 and did NOT converge; see "Open at gate exit" at the end. The architecture is sound and the motivating case is confirmed deliverable, but six items need a decision from nikki rather than another self-applied fix.
+Status: DRAFT -- NOT LOCKED. epic-review has run 4 rounds (2026-07-28). Rounds 1-3 audited the plan against the CODE and it held -- every citation survived. Round 4 audited it against the DOMAIN MODEL and it did not: the stories were producing better inputs to a decision the model relocates. Stories are revised accordingly; five decisions remain, listed at the end.
+
+The model this plan must satisfy: `packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`.
 
 Restructured 2026-07-28 (nikki, whiteboard session). An earlier draft passed 4 review rounds, but those audited a DIFFERENT architecture: extraction was compile-only and the Teacher never read the situation, so it could only ever teach concepts an author wrote down -- which does not solve the motivating case (Finnick is an AGENT NPC). Code-level findings from those rounds are preserved inline and re-verified.
 Owner: nikki + claude
@@ -104,7 +106,7 @@ Most of the situation is COMPILE-derivable. Sorting nikki's own example: NPC tit
 
 ## Non-goals
 
-- NOT optimizing LLM call frequency. Make the teaching work first. A teacher call per conversation start is the baseline and is acceptable; the player is already waiting on the NPC's first line, so it rides an existing wait. Situation-change reuse (083's `DirectiveCache` already provides the mechanism) is a cheap win to take where it falls out naturally, not a constraint to design around. Per-TURN calls would be felt and are worth avoiding, but that is a measurement question, not an architectural one.
+- NOT optimizing LLM call frequency AS A COST EXERCISE. But note the lifecycle in 090.3 makes one-call-per-conversation a structural property rather than a tuning target -- zero calls per turn and per rendered line falls out of the slate/realization split, it is not bought. Make the teaching work first. A teacher call per conversation start is the baseline and is acceptable; the player is already waiting on the NPC's first line, so it rides an existing wait. Situation-change reuse (083's `DirectiveCache` already provides the mechanism) is a cheap win to take where it falls out naturally, not a constraint to design around. Per-TURN calls would be felt and are worth avoiding, but that is a measurement question, not an architectural one.
 - No changes to FSRS, the band envelope, or the observation grade table.
 - No authored concept-tagging UI as a requirement; a Studio review surface is read-only in this epic.
 - No replacement of the lexical scrub: it stays as the ambient/gloss layer and a candidate source. Extraction ADDS.
@@ -118,183 +120,374 @@ Most of the situation is COMPILE-derivable. Sorting nikki's own example: NPC tit
 - Facts vs judgment: the budgeter FILTERS (binding) and RANKS (advisory). It already publishes per-candidate scores for every survivor in `rationale.priorityScores`; the teacher reads those facts and reshapes the ORDER. Never ask a model to infer a fact the budgeter already computed, and never let it override a filter.
 - Strain is a CONSUME, not a build: `TeachSchedule.strainSuppressed` (teach-schedule.ts:85) is computed and written at sugar-lang-context-middleware.ts:408, BEFORE `prescribe()` at :449, and `fatigueScore` rides the learner profile (contracts/learner-profile.ts:117). Consume the boolean; never re-threshold `fatigueScore` (single enforcer).
 
-## Stories (execution order; the floor is 090.1, 090.2, 090.4, 090.6 -- see "The shippable floor")
+
+## Stories
+
+REVISED 2026-07-28 (round 4) against
+`packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`.
+
+The round 1-3 findings were about whether the plan described the code
+accurately. They did; every citation survived a line-by-line re-read. Round 4
+asked a different question -- whether the plan is aligned with the domain model
+-- and the answer was no, in one specific structural way:
+
+> **Every story produced a better INPUT to a decision. The model relocates the
+> decision.**
+
+090.2 delivered to a consumer being dissolved. 090.4 reshaped a ranking that
+stops being produced. 090.5 and 090.6 both fixed symptoms of a pre-truncation
+the model removes. And the single most valuable story had not been written.
+
+Execution order: **090.1, 090.2, 090.8, 090.4, 090.3, 090.5, 090.7.**
 
 ### 090.1 ContextExtractor + SituationModel
 
-One lifecycle-agnostic module. Define a `ContextSource` interface that authored documents AND live game state both satisfy; `ContextExtractor` takes a set of sources and returns a `SituationModel` (prose description of the situation, plus a concept list of English word + POS + provenance). The module never asks where it is in the game lifecycle.
-
-Entry points split by CAPABILITY: concept extraction over prose requires an LLM client; situation composition over already-structured facts does not. A caller holding no client can only do the latter -- cost is visible at the call site rather than hidden inside the module.
-
-This story wires the FIRST caller: the compile scheduler, projecting the EXISTING `SceneAuthoringContext` (scene-traversal.ts:76-95) into extractor sources -- presences from `regionContents`, NPC bios / roles, resolved lore pages, region + area lore, item and document lore, quest text. No new traversal of authored content: `collectSceneText` already walks all of it, and a second walk would drift. 090.3 wires the second caller with live sources.
-
-Runs as a FOURTH pipeline in `SugarlangAuthoringCompileScheduler` beside `chunkPipeline` / `intentPipeline` / `variantPipeline` (compile-scheduler.ts:45-99) -- same debounce, cache-hit skip, stale-hash discard. Cached like chunks (`chunk-cache.ts` shape, key `lang:promptVersion:contentHash`; model is NOT in the key, so prompt version must be bumped deliberately).
-
-PREREQUISITE: dialogue text carries no NPC attribution today -- `collectDialogueBlobs` sets `sourceKind: "dialogue"` and never `npcDefinitionId` (scene-traversal.ts:204-213) though the binding is in scope at `createSceneAuthoringContext` (:466-470). Fixing it is required here and independently fixes today's `w_npc` boost, which currently ignores an NPC's own authored lines.
-
-CACHE HAZARD ON THAT PREREQUISITE -- MUST BUMP THE PIPELINE VERSION (found round 1). `computeSceneContentHash` seeds on `sourceKind|sourceId|text|objectiveNodeId|questDefinitionId` (content-hash.ts:154-156); `npcDefinitionId` is NOT in the seed. So attributing dialogue blobs changes the emitted `npcSourceIds` while the content hash stays IDENTICAL -- every persisted artifact (IndexedDB compile cache, published lexicon) keeps serving the old unattributed lemmas, and the `w_npc` boost this epic leans on stays broken for all existing content. Silent, and it would present as "extraction works but ranking is wrong". Bump `SUGARLANG_COMPILE_PIPELINE_VERSION` (content-hash.ts:21, which IS in the seed at :146) to invalidate.
-
-SITUATION SOURCES -- WHAT IS ACTUALLY AUTHORED (corrected round 1; the earlier "titles/roles are authored" claim was WRONG):
-- `NPCDefinition` (domain/src/npc-definition/index.ts:38-48) has `displayName`, `description`, `interactionMode`, `lorePageId`, `metadata`, `presentation` -- and NO role or title field. "Station Master" exists only inside free prose. So role is INFERRED by the model, not projected, and must not be asserted in an exit. BUT PROJECT THE ONE FIELD THAT DOES EXIST (round 2): `RegionNPCPresence.placementLabel` (region-authoring/index.ts:105, Plan 079.6) is an authored per-placement string and is exactly where an author types "Station Master"; project it WITH provenance so the model has the authored name rather than inventing one. `NPCDefinition.metadata` is the documented extension point beside it.
-- `RegionNPCPresence` (domain/src/region-authoring/index.ts:93-105) carries `transform`, NOT `areaId`. "who is in the passenger section vs the cargo section" is a point-in-area test against `region.areas`, not a projection. Either scope that geometry explicitly or drop sub-area placement from the situation model.
-- ALSO KNOW (round 2): `composeRegionContents` takes npcPresences from the OVERLAY ONLY -- `npcPresences: [...(overlay?.npcPresences ?? [])]` (domain/src/scenes/migrate.ts:69) -- base-region presences are not merged in at all. This is the same fact behind the activeScene compose bug fixed 2026-07-27; the extractor's presence projection inherits it.
-- `RegionNPCPresence.condition` (:102, Plan 079) gates presence on quest state. `createSceneAuthoringContext` includes ALL presences unconditionally (scene-traversal.ts:459-465), so a cached compile-time SituationModel can describe an NPC who is not actually there. 090.3's overlay MUST filter through the existing single enforcer `evaluateRegionQuestBinding` (used at runtime-core/coordination/gameplay-session.ts:1253-1254, 1270) -- do not write a second presence evaluator. BUT IT FAILS CLOSED ON WORLD FLAGS (round 3): `RegionConditionContext.hasWorldFlag` is OPTIONAL (runtime-core/src/region-conditions/index.ts:27-30) and the evaluator returns false for any binding with a `worldFlagEquals` clause when no predicate is supplied -- and the plugin-visible `ConversationRuntimeContext` (runtime-core/src/conversation/index.ts:191-233) exposes `activeQuestStage` and `timeOfDay` but NO world-flag predicate. So a naive sugarlang-side call drops every flag-gated presence: an NPC who IS standing there vanishes from the situation. That is WRONG signal, which this story's own exit forbids. Either extend `ConversationRuntimeContext` with the predicate (a runtime-core change -- scope it) or explicitly scope flag-gated presences out and say so.
-
-GATEWAY: the gateway resolves the model server-side from `purpose` and ignores client model ids -- asserted by test ("073.2 -- resolves the model server-side by purpose", plugins/src/deployment/gateway/gateway.test.ts:282). `DEFAULT_MWE_EXTRACTOR_MODEL` (MultiWordExpressionExtractor.ts:137, consumed at :342 -- citation corrected round 1; the file was `extract-chunks.ts` until 2026-07-28) is dead, as is `DEFAULT_INTENT_EXTRACTOR_MODEL` (extract-intent.ts:39/:194), and their `extractorModel` telemetry field records a model that was not used. Add a `purpose` + env var for extraction; correct the chunk-side telemetry claim. SCOPE THIS HONESTLY (round 3) -- it is not one line, and it exposes something the epic had not noticed: `SugarlangLLMRequest` (runtime/llm/types.ts:20-25) has no `purpose` field and `SugarlangGatewayClient.generate` (llm/gateway-client.ts:39-47) POSTs only `{model, systemPrompt, userPrompt, maxTokens}`. The gateway resolves the model from `body["purpose"]` (deployment/gateway/core.ts:822-832) and with none present falls through to the sugaragent DIALOGUE model default. **So the Teacher LLM -- the thing 090.4 re-defaults to and stakes the epic on -- currently runs on the cheap dialogue model, and `DEFAULT_DIRECTOR_MODEL` (llm-teacher-policy.ts:36) is inert.** Adding a purpose touches: `SugarlangLLMRequest` + `SugarlangGatewayClient`; the gateway ternary; a REGENERATION of `deployment/gateway/core.compiled.ts` (or `core-compiled-freshness.test.ts` fails); two disagreeing `purpose` unions in `sugaragent/runtime/clients.ts:27` and `:62`; config/env declarations in `sugaragent/index.ts` -- meaning sugarlang's model selection is declared by SUGARAGENT's plugin config, which is an AGENTS.md one-way-dependency question this epic must answer; and `packages/testing/src/plugin-infrastructure.test.ts`. Either scope it as its own task in 090.1 or defer it explicitly and stop asserting anything about which model runs.
-
-EXTRACTOR SCHEMA: a concept is a SINGLE WORD plus its part of speech. PIN THE POS ENUM (found round 1): the schema must constrain POS to the exact string set the atlas `partsOfSpeech` field uses, and 090.2's membership test must compare against that same set. An unconstrained POS string makes the resolver's filter silently non-matching -- every concept drops, telemetry says "no atlas resolution", and it reads as a coverage problem rather than a schema mismatch. THE ENUM IS PER-LANGUAGE, NOT A FIXED TWELVE (corrected round 3 -- my round-2 amendment pinned the es set and would have shipped an es-only schema). Re-measured across BOTH shipped atlases: `es-elelex-2026-04-09` (11000 entries) emits 12 -- adjective, adverb, conjunction, determiner, interjection, noun, numeral, other, preposition, pronoun, proper-noun, verb; `it-kelly-2026-04-09` (6370 entries) emits 14 -- those twelve PLUS `abbreviation` and `formula`. An Ajv enum hard-pinned to the es twelve rejects every Italian concept tagged abbreviation or formula, which is exactly the silent total-drop failure this pin exists to prevent, relocated to the other shipped language. Either pin the UNION across shipped atlases or derive the enum per-language at schema-build time -- and make 090.2's membership test per-language to match. Decide in-story. TRAP: do NOT copy the budgeter's `FUNCTIONAL_POS` (lexical-budgeter.ts:67-70) -- it names article, auxiliary and particle, three values the atlas never emits, and an enum built from it would admit POS strings that can never match. Phrases belong in the prose description, not the concept list -- 090.2's resolver matches concepts against atlas gloss parts, and phrase concepts would leave the match predicate undefined.
-
-- Exit: a scene fixture with Finnick (bio "obsessed with cheese", no target-language words anywhere) produces a SituationModel whose CONCEPT LIST contains "cheese" with provenance back to his bio (integration). NOTE: do NOT assert the prose names "his role" -- there is no authored role field to check against, so that would assert an LLM-invented string; concepts carry provenance back to their source; cache-hit second compile makes zero gateway calls (pin); gateway-down compile degrades to today's lexicon with the situation absent, never a hard failure in authoring (pin); dialogue-blob NPC attribution pinned separately.
-
-### 090.2 Concept resolution + the delivery link
-
-Resolve concepts to target lemma ids, and get them where the budgeter can see them. This story is the single link the whole epic exists to build.
-
-RESOLVER (pure function, no LLM) -- BUT IT NEEDS A PROVIDER CONTRACT CHANGE (found round 1). `LexicalAtlasProvider` (contracts/providers.ts:152-161) exposes only `resolveFromGloss`, which is primary-gloss-only BY DESIGN (`cefr-lex-atlas-provider.ts:148-153` indexes `glossString.split(",")[0]` with a comment defending it). Union-gather over primary AND secondary requires a NEW method on that provider seam, plus the implementation and every test fake. Falsification attempt (round 2): the existing surface CAN reach secondary glosses -- `listLemmasAtBand` (:219) enumerates a band and `getGloss` (:204) returns the full comma-separated string -- but only by rebuilding, at O(atlas) per call, the exact reverse index the provider already caches. So a new method is still right; state that reason rather than "reading the JSON directly is forbidden", which is a weaker claim. CITATION NOTE: providers.ts says "ADR 010 seam" (:148-150) but repo ADR 010 is `docs/adr/010-asset-pipeline-layers.md` -- the string is inherited from sugarlang Proposal 001 and resolves to nothing. Do not cite "ADR-010" as authority for this scope; cite providers.ts and Proposal 001, or promote the boundary to a real ADR. Scope this story accordingly. UNION GATHER: (1) gather primary-gloss AND secondary-gloss matches into one pool; (2) filter by POS as a MEMBERSHIP TEST on `partsOfSpeech` (first-listed POS is not authoritative; all 11,000 es entries carry the field); (3) rank by lower `frequencyRank` FIRST, primary-gloss preference only as tie-break; (4) drop with telemetry if empty -- never guess. Match predicate: EXACT whole comma-separated gloss part, case-folded (not token-containment, which would match "shop" to `escaparate`).
-
-Rank order is load-bearing. Verified against the shipped es atlas:
-
-| concept | primary (post-POS) | secondary | primary-first | freq-first (LOCKED) |
-|---|---|---|---|---|
-| dock (POS=noun) | (empty -- `atracar` 5732 is verb) | `embarcadero` 7134 | `embarcadero` | `embarcadero` |
-| trade | `oficio` 2374 | `comercio` **1098** | `oficio` (wrong) | `comercio` |
-| boat | `barca` 2493 | `barco` **764** | `barca` (wrong) | `barco` |
-| cheese | `queso` 1350 | -- | `queso` | `queso` |
-
-All four rows re-measured against the shipped atlas in round 2 and CONFIRMED. But the `dock` row is POS-FRAGILE: with POS=verb it resolves to `atracar` under BOTH orders, so the fixture must PIN the concept's POS or the exit is not falsifiable.
-
-THE TRADE, MEASURED (numbers are from an ad-hoc 2026-07-27 script over the shipped es atlas and are NOT reproducible from a checked-in artifact -- flagged round 1). Treat the counts as INDICATIVE; only the four rows in the table above are pinned as exits. 090.2 must either commit the measurement script under the atlas package or drop the aggregate counts from the plan -- and round 3 settles it: an independent re-measure got 11359 resolvable / 2581 ambiguous / 593 differing (23.0%) against these 8198 / 2086 / 486 (23.3%). The RATIO reproduces, the absolutes do not, so the two runs disagree on what counts as "resolvable". Commit the script. Do not let a story exit assert them: 8198 resolvable (concept, POS) keys; 2086 ambiguous; 486 resolve differently under frequency-first (23% of ambiguous), splitting roughly 40% better / 25% wash / 35% near-miss. Frequency-first buys learner utility (`comercio`, `barco`, `trabajo`, `gustar`, `equipaje`) at the cost of near-miss senses (`forge` -> `falsificar`; `tool` -> `instrumento`; `fog` -> `bruma`; `match` -> `partido`). `match` -> `partido` is INDUCED BY THE FREQUENCY KEY -- primary-first resolves it correctly -- not inherent polysemy. This is the right trade for a teaching system; telemetry records chosen lemma AND runners-up so 090.7 can surface it.
-
-DELIVERY -- TWO CONSTRAINTS, BOTH MANDATORY:
-- STORAGE: `conceptLemmas?: ConceptDerivedLemma[]` as an optional side field mirroring `chunks?` (contracts/scene-lexicon.ts:154), written through the scheduler like chunks (`writeChunksIntoCompileCache`, compile-scheduler.ts:221-237). Storing inside `lemmas` would make two artifacts with the same contentHash differ by whether extraction ran.
-- PROJECTION: the read-time composer PROJECTS `conceptLemmas` INTO `lemmas` as ordinary `SceneLemmaInfo` entries (band / frequencyRank / partsOfSpeech from the atlas, `npcSourceIds` from the concept's sources, `sceneWeight` from concept weight), side field retained for provenance.
-
-DEDUP WITH THE SCRUB (no owner before this; found 2026-07-28): the two layers OVERLAP by design. The scrub already yields `queso` if any authored line contains the literal word "cheese", and the extractor yields `cheese -> queso` from Finnick's bio. Both target the same key in `lemmas`. The projection must MERGE, not overwrite: union `npcSourceIds`, take the greater `sceneWeight`, and retain BOTH provenances so 090.7 can show a lemma was found twice and by which path. Last-write-wins is the dangerous default here -- dropping the scrub's `npcSourceIds` (or the concept's) silently costs the `w_npc` affinity boost, which is the exact mechanism that ranks Finnick's cheese above quest vocabulary.
-
-WHY THE CHUNKS PRECEDENT MISLEADS: chunks are consumed by a DIFFERENT consumer and never enter `lemmas`. The budgeter iterates `Object.values(input.sceneLexicon.lemmas)` (lexical-budgeter.ts:130), band-filters on `cefrPriorBand` (:157), and the w_npc boost reads `npcSourceIds` (scoring.ts:149-154). Mirror chunks literally and queso is never a candidate -- the original bug, shipped through its own fix. THE COMPOSER GOES ON THE STORE, NOT ON THE COMPILER CALL SITES (corrected round 2; my round-1 amendment enumerated eight `compileSugarlangScene` call sites and demanded the projection at each, which is both wrong and partly harmful).
-
-`SugarlangSceneLexiconStore` is ALREADY the declared single read surface -- its own header says "the single consumer-facing store abstraction for compiled scene lexicons" and "the intended downstream read surface for middleware and budgeter work" (scene-lexicon-store.ts:4, :12). The budgeter's lexicon arrives through exactly ONE line: `sceneLexicon = await services.sceneLexiconStore.ensure(sceneId)` (sugar-lang-context-middleware.ts:353). Project inside `get` / `ensure` and there is one enforcer, per AGENTS.md, instead of eight. TWO UNSCOPED CONSEQUENCES (round 3). (a) Projection needs band / frequencyRank / partsOfSpeech from the atlas, but `DefaultSugarlangSceneLexiconStore`'s constructor takes only a `RuntimeCompileScheduler` (scene-lexicon-store.ts:39). The store must gain an atlas dependency -- feasible (`atlas` is in scope at runtime-services.ts:580) but it is a constructor/interface change this story must name, and it couples the declared single read surface to the atlas. (b) `ensure` returns the memoized object (:77-80), so specify PROJECT-ONCE-AT-INSERT, not per-call, or every turn re-projects the whole lexicon. Project at `get`/`ensure`, NOT at `seed`.
-
-Why the call-site list was the wrong seam: of the eight sites, `compile-scheduler.ts:297` and `:343` use only `.contentHash` (:303, :348) -- hash-only staleness probes where projection is meaningless; and `:252` WRITES its result to the cache (`cache.set(lexicon)`, :258), where projecting would push concept lemmas into stored `lemmas` and violate this story's own STORAGE constraint. CORRECTION (round 3) to how I justified that: `extractSugarlangPreviewBootLexicons` (preview-boot.ts:63) does NOT bypass the store -- its output flows through `seedSugarlangRuntimeCompileCache` and `services.seedPreviewLexicons` to `sceneLexiconStore.seed(...)` (manifest.ts:153-155, runtime-services.ts:589). It is an INGEST path into the store, so the conclusion holds, but only because projection sits at `get`/`ensure` rather than at `seed`. And `loadPublishedSugarlangLexiconArtifact` (publish-sugarlang-artifacts.ts:130) is DEAD -- neither it nor `publishSugarlangArtifacts` (:74) has any importer outside its own file and test. Derive this story's exits from READ paths, not call sites. (Still worth knowing: there ARE two distinct `preview-boot.ts` files -- always qualify the path.) `mergeChunks` (scene-lexicon-store.ts:25-30, :59-74) is the SHAPE precedent on this same interface and has no production caller.
-
-STALE-SITUATION WINDOW (found round 1): extraction is async and lands AFTER `compileSugarlangScene` returns, so between an authoring edit and pipeline completion the NEW content hash has a lexicon with no `conceptLemmas` while the PREVIOUS hash still has a populated one. Concepts must follow the scheduler's existing stale-hash discard rule for chunks, and the gap must degrade to scan-only rather than fall back to the prior hash's concepts -- serving those would teach vocabulary for content the author just deleted, and it would present as "extraction is wrong" rather than "extraction has not run yet". Pin BOTH directions: never-extracted -> scan-only + "extraction pending"; previously-extracted-then-edited -> scan-only, NOT the prior situation.
-
-PUBLISH POSTURE: authoring compile is fail-soft; PUBLISH THROWS on extraction failure and attaches `conceptLemmas` inline, matching chunks (publish-sugarlang-artifacts.ts:93-106). A published game silently missing its concept layer teaches the wrong vocabulary with no author present to notice. CAVEAT (round 3): that framing is currently SPECULATIVE -- the publish module has no production importer, and the shipped game reads the plugin boot payload rather than the `.lexicon.json.gz`. Keep the throw for symmetry if you like, but this must NOT be the exit that proves a published game gets concepts. Decide first whether `publishSugarlangArtifacts` is alive at all.
-
-- Exit: the composed lexicon's `lemmas` map contains queso with `npcSourceIds` including the fixture NPC AND `prescribe()` surfaces it in `rationale.priorityScores` (pin -- THE delivery link; a test asserting only that `conceptLemmas` is populated would pass while the epic fails). PIN AGAINST `priorityScores`, NOT `introduce` (round 3): `introduce` is the top-`levelCap` slice and 090.6 exists precisely because those slots are held by incumbents, so an `introduce` assertion here fails for reasons 090.6 owns and gets mis-diagnosed as a delivery failure. 090.6 owns the introduce assertion; dock -> `embarcadero` and trade -> `comercio` (pin -- the ids the locked rank order produces, which primary-first gets wrong); resolved lemma's `partsOfSpeech` always CONTAINS the concept POS (pin -- note 37 entries are tagged both noun and verb, so `hope` -> `esperar` is legal; a stricter "never a verb" pin is NOT deliverable); empty pool drops with telemetry (pin); a lemma found by BOTH the scrub and the extractor appears ONCE with unioned npcSourceIds, the greater sceneWeight, and both provenances retained (pin -- last-write-wins here silently costs the w_npc boost); first-ever preview of never-extracted content degrades to scan-only and surfaces "extraction pending", never a silent empty (pin).
-
-### 090.3 ContextExtractor: the runtime overlay + situation-change detection
-
-The thin dynamic film. COMPOSE AT THE POLICY STAGE, NOT THE CONTEXT STAGE (round 3). `sugarlang.context` and `sugaragent.memory` are BOTH `stage: "context", priority: 10` (sugar-lang-context-middleware.ts:163-164; memory-middleware.ts:131-132) and `getContributions` breaks ties by registration order (runtime-core/src/plugins/index.ts:403). Annotations reset each turn and are republished inside `prepare`, so if sugarlang runs first the memory annotation is simply ABSENT -- indistinguishable from "middleware disabled", and this story's met/unmet exit would pass while the feature never sees the signal. Composing at the policy stage (`sugarlang.teacher`, priority 30) is the cheap fix: the context stage has provably completed by then. Do not rely on unpinned ordering.
-
-`ContextExtractor.overlay(situationModel, runtimeState)` -- zero LLM, pure reads: has the player met each present NPC (encounter state), current quest stage, time of day (`WORLD_TIME_OF_DAY_FACT` / `runtimeContext.timeOfDay` already exist), and what has been said so far this conversation.
-
-Also owns SITUATION-CHANGE DETECTION -- EXTEND `DirectiveCache`, do not build a parallel construct (found round 1). It already subscribes to the blackboard and invalidates on `QUEST_ACTIVE_STAGE_FACT` and `ENTITY_LOCATION_FACT` (teacher/directive-cache.ts:139-147) -- two of the four key components. Add the present-NPC set and `WORLD_TIME_OF_DAY_FACT` to it and derive the key digest there. SCOPE HONESTLY (round 2): `DirectiveCache` has NO key today -- `handleBlackboardEvent` calls `invalidateAll` on any quest/location event (:139-147), comparing nothing, and the directive's own `directiveLifetime.invalidateOn` is written and normalized but never consumed anywhere. Adding a digest is a redesign of the invalidation model, not a field addition. AND `get()` already expires on TURNS -- `turnsConsumed >= lifetime.maxTurns` (:78-81), default `maxTurns: 3` (schema-parser.ts:517) -- so this story must state the digest-vs-maxTurns PRECEDENCE explicitly. Note `get()` mutates `turnsConsumed` as a side effect of a read (:83-92), and the 087.6 deterministic path bypasses the cache entirely (builds inline at :356-384 with `maxTurns: 1`). A second situation-invalidation mechanism would be a second enforcer of one decision. Its primary job is CORRECTNESS: when the quest advances or an NPC leaves mid-conversation, the teacher's directive is stale and must be re-judged. Reusing the directive while the key is unchanged is a cost win that falls out of the same mechanism, but it is not the reason the key exists.
-
-TWO COMPETING ANSWERS TO "HAVE THEY MET" -- NAME THE AUTHORITY (round 3). `prompt-builder.ts:169-171` already derives `isProbableFirstMeeting` from `recentTurns.length === 0` and renders it at :233-244; this story adds a second answer from the sugaragent memory annotation, and they disagree (recentTurns is prompt-context only and resets; metCount persists). Note also sugar-lang-teacher-middleware.ts:522-525 records a deliberate 073.4 decision NOT to read metCount in sugarlang -- reversing it for a different purpose is defensible, but say so and say which signal governs.
-
-NPC memory salience is CUT: structured topic salience lives in sugaragent (`NpcMemoryRecord.salientFacts` etc., free English text) and sugarlang must not import it. The only memory published across the seam is `{metCount, firstMeeting, hasMemory}` -- which is exactly the "have they met" fact this story needs, so the useful part is already available. Deferred below.
-
-- Exit: the composed situation reflects met/unmet correctly on first meeting and on return (integration); a quest-stage advance changes the situation key and invalidates the cached directive within one turn (integration); an unchanged situation reuses the cached directive rather than re-judging (pin -- correctness: the directive must not silently change under a stable situation; the call saving is a side benefit); absent sources degrade to NO signal, and are distinguished from WRONG signal (pin -- CAUSE CORRECTED round 2). The disabled cases are already safe: both the 073.5 master switch and the `isAgentSelection` gate return BEFORE the annotation is written (memory-middleware.ts:134-135, write at :139), so a disabled middleware yields an ABSENT annotation, which is unambiguous. The genuinely ambiguous path is middleware ENABLED and agent-selected but the store unresolvable (:88) or `store.load` throwing (:94): `metCount: record?.metCount ?? 0` (:108) then produces `firstMeeting: true, hasMemory: false`, byte-identical to a real first meeting. Write the pin against THAT path -- a test that disables the middleware and asserts metCount 0 exercises a path that never emits it and is vacuous; no sugaragent import appears in sugarlang (pin -- guards the boundary).
-
-### 090.4 Teacher judgment: feed the situation, re-default the LLM path
-
-The pedagogical call. The teacher receives the composed situation (prose + concepts) ALONGSIDE the learner facts it already gets, and decides what to teach and how: which concepts, in what order, as introduce / reinforce / probe.
-
-WHAT ALREADY EXISTS: `SugarLangTeacher` + `ClaudeTeacherPolicy` + `DirectiveCache` shipped in 083. `TeacherContext` today carries learner, scene lexicon, prescription, npc, recentTurns, probe floors -- but NO situation. This story adds the situation to that context and makes the LLM path the default again.
-
-DIRECT TENSION WITH 087.6 (stated plainly): 087.6 added a schedule-driven path that BYPASSES the teacher LLM entirely whenever a schedule exists, for cost and determinism. This story flips the default: LLM judgment on situation change, deterministic realization otherwise. The 087.6 path becomes the FALLBACK -- gateway down, situation unchanged, or strain-suppressed -- not the primary. That is a deliberate reversal of a decision made 2026-07-27, justified because the bypass was chosen when the teacher had nothing worth reading.
-
-FACTS VS JUDGMENT -- DECIDED. The rule is: **the budgeter's FILTERING is binding; its RANKING is advisory.**
-
-- BINDING (the teacher may not violate): the band envelope (never above learner band + 1, lexical-budgeter.ts:157), the `avoid` list and quest-essential exclusions, and the effective budget from 090.5. These are facts about the learner and the content, not opinions.
-- ADVISORY: the ORDER. `introduce` stops being "the answer" and becomes "the default recommendation". The teacher may prefer a lower-scored candidate when the situation justifies it -- which is the entire point, since the scoring function cannot see that the learner is standing in front of a cheesemonger.
-
-THERE IS NO ENFORCEMENT POINT TODAY -- and my round-1 amendment named the wrong file (corrected round 2; the earlier text called `repairDirective` "the enforcement point", which is false).
-
-What is actually true. `repairDirective` (teacher/schema-parser.ts:648-700) has exactly ONE production caller, `policies/llm-teacher-policy.ts:254`, reached only when `parseResult.error.code === "schema_validation_failed"` (:236). On the VALIDATED path the policy returns `parseResult.directive` untouched (:234-235) and the middleware copies `targetVocab: directive.targetVocab` straight through (sugar-lang-teacher-middleware.ts:433). `enforceDirectiveRequirements` (schema-parser.ts:526-590), the only other gate, checks glossing strategy and the probe hard floor and never reads `targetVocab`. So `repairDirective`'s `introduceAllowed` filter is a REPAIR-PATH behavior, not a constraint on the teacher.
-
-Three corrections follow:
-
-1. The ADVISORY half is already passable. A schema-valid directive naming a below-top-N lemma flows through unfiltered today. That pin does NOT require the change I described.
-2. The BINDING half is the part that does not exist, and it cannot be delivered by editing `repairDirective` -- that function is off the happy path. This story must ADD a post-invoke enforcer, and the seam is `SugarLangTeacher.invoke` -- NOT `ClaudeTeacherPolicy` (corrected round 3; "validated and repaired" named only that policy's two internal outcomes and missed two live directive sources). `invoke` is the one funnel all THREE sources pass through: the DirectiveCache hit returns at sugar-lang-teacher.ts:92 before any policy runs; the LLM policy returns at :99; `FallbackTeacherPolicy` returns at :105. The cache path is the load-bearing miss -- `get()` replays a directive for up to `maxTurns` turns while a FRESH prescription is computed every turn (sugar-lang-context-middleware.ts:449), so once 090.5 makes `newItemsAllowed` dynamic a directive enforced at turn N against a cap of 3 is replayed at N+2 under a clamped cap of 1 with nothing re-checking. Enforce on all three returns. Checks: band envelope, `avoid`, quest-essential exclusions, and a clamp against `prescription.budget.newItemsAllowed` (lexical-budgeter.ts:207). That number already exists and equals `levelCap` today; 090.5 later makes it dynamic. No new quantity, and NO ordering dependency on 090.5. NAME THE WINNER (AGENTS.md single enforcer): a THIRD cap on this quantity already exists -- `FallbackTeacherPolicy` clamps to `getIntroduceLevelCap` (fallback-teacher-policy.ts:33-47, applied :124-127), which is 1 at A1 versus `newItemsAllowed` = `levelCap` = 3 (lexical-budgeter.ts:207, :48-61). This story must state which cap governs rather than adding a third silently.
-3. THE ADVISORY HALF NEEDS A PROMPT CHANGE THIS EPIC HAD NOT NAMED: `formatPrescription` (teacher/prompt-builder.ts:322-334) renders only introduce / reinforce / avoid / anchor / `newItemsAllowed` / `rationale.summary`. `priorityScores` never enters the prompt. The model cannot prefer a lower-ranked candidate it was never shown, whatever the filter permits. Rendering the wider scored pool into the prompt is the real work of the advisory half; `prompt-builder.ts` is in this story's scope. THREE THINGS ROUND 3 ADDED. (i) `formatPrescription` is not the only text to change: `DIRECTOR_HARD_CONSTRAINTS_PROMPT` (:97-104) says "Only output targetVocab lemmas that already appear in the prescription" and "introduce output should contain only 1-2 items from the prescription", and the rubric at :66 says "The prescription lists the vocabulary pool" -- rendering a wider pool under the same heading without editing those leaves the model an ambiguous drawable set. That block is cache-marked (`DIRECTOR_CACHE_MARKERS` :138-147), so editing it invalidates the prompt cache; note the cost, do not let it block. (ii) CAP THE LIST: every other prompt list has an explicit constant (`MAX_DUE_LEMMAS 8`, `MAX_RECENT_TURNS 4`, `MAX_SCENE_LEMMAS 6`, `MAX_STRUGGLING_LEMMAS 4`, `MAX_RECENTLY_ACTIVE 6`, :44-48) while `priorityScores` is the ENTIRE envelope-survivor set -- in the content-rich scene 090.6 exists for, that is the whole in-band lexicon. Add a constant or ship a prompt-size bug. (iii) THE ADVISORY EXIT CANNOT FALSIFY THIS WORK: 090.4's exits use a mock gateway, so a scripted directive naming a below-top-N lemma passes whether or not `priorityScores` was ever rendered. Add a separate prompt-content assertion (the rendered pool appears in the user prompt, capped) or the prompt half ships unverified.
-
-WHEN A WIDENED ALLOW-SET IS STILL NEEDED (the repair path), intersect it correctly. `priorityScores` IS the envelope-survivor set (lexical-budgeter.ts:197 publishes `survivorScores` verbatim; survivors are band-filtered at :156-158 and quest-essential/functional-filtered at :130-134), so the envelope and `avoid` do ride along. But `priorityScores` is NOT reviewCount-filtered, while `introduce` is `reviewCount === 0` (:176-179) and `reinforce` is `reviewCount > 0` (:181-184). Widening to raw `priorityScores` would admit already-reviewed lemmas into `introduce`, which feeds `getDefaultGlossingStrategy` (schema-parser.ts:493) and the function-chunk cap (sugar-lang-context-middleware.ts:485), and contradicts the shipped ladder row "Already learned it? -> Skip". Widen to `priorityScores` INTERSECT `{reviewCount === 0}`, and add never-seen to the BINDING list above.
-
-THE FACT CHANNEL ALREADY EXISTS -- this is not new plumbing. `LexicalRationale` (contracts/lexical-prescription.ts:72-83) already carries `priorityScores: LexicalPriorityScore[]` for EVERY survivor, each with `lemmaRef`, `score`, per-term `components` (due / new / anchor / prodgap / lapse) and `reasons`, plus `candidateSetSize`, `envelopeSurvivorCount`, `droppedByEnvelope`, `questEssentialExclusionLemmaIds` and `levelCap`. The budgeter already scores the whole in-band set and publishes the ranking; it merely ALSO slices the top N into `introduce`, and today the teacher reads only that slice. The advisory data is already riding along unread.
-
-This story adds to each score entry: whether the learner holds a card and its `reviewCount`, and (after 090.2) the candidate's provenance -- concept-derived vs scan-derived, and via which NPC. Those are the facts the situational judgment needs.
-
-PRECEDENT, IN THE CONTRACT'S OWN WORDS: `LexicalPrescription`'s doc comment reads "Raw Budgeter output that the Director reshapes but does not replace" (lexical-prescription.ts:85-86; "Director" is the former name of the Teacher). The architecture always intended reshape-not-replace; the code simply never reshaped, it consumed a pre-sliced list. This story honors the stated contract rather than changing the budgeter's role.
-
-LADDER RUNGS: docs/api/sugarlang-middlewares.md marks ONE rung unmodeled (opportunistic reinforce); the probe rung is modeled (floors + `comprehensionCheck`). Expressing "reinforce ahead of due" and "probe this now" requires extending two closed unions -- `TeachReason` (teach-schedule.ts:31) and `ProbeTriggerReason` (pedagogy.ts:71-76) -- plus a telemetry taxonomy row. Not "no new fields".
-
-FIRING RULE OWNED HERE: an opportunity may only promote a probe candidate INTO the existing floor-gated slot (middlewares/shared.ts soft/hard floors); it never fires a probe the floors would block. 088 may supersede this later; that is a one-way upgrade, not a dependency.
-
-- Exit: given a situation naming a cheese NPC and an A1 learner with no history, the teacher's directive introduces the cheese concept (integration, mock gateway); the directive is reused UP TO `maxTurns` turns while the situation key is unchanged, and is re-judged IMMEDIATELY when the key changes (pin -- jointly with 090.3; corrected round 2: the unqualified "reused across turns until the situation key changes" is false against `turnsConsumed >= maxTurns`, directive-cache.ts:78-81); gateway down falls back to `FallbackTeacherPolicy` with no error surfaced to the player (pin -- CORRECTED round 3: the earlier "falls back to the deterministic 087.6 path" is unimplementable. `SugarLangTeacher.invoke` CATCHES `TeacherInvocationError` and returns a `FallbackTeacherPolicy` directive (sugar-lang-teacher.ts:100-108); it never rethrows, so the middleware cannot observe gateway-down. And the 087.6 builder is an `else if (schedule && !schedule.isColdStart)` branch chosen at sugar-lang-teacher-middleware.ts:333 BEFORE any teacher call. Routing gateway-down to 087.6 instead would require restructuring that fallback wiring -- out of scope; pin the reachable behavior); strain-suppressed turns never opportunistically reinforce (pin); the new TeachReason / ProbeTriggerReason variants appear in telemetry with a docs/api row (pin); the teacher never selects a lemma outside the band envelope, from `avoid`, or beyond the effective budget (pin -- the BINDING half; judgment reshapes order, never filtering); the teacher CAN select a candidate ranked below the budgeter's top-N when the situation justifies it (pin -- the ADVISORY half, and the pin that proves `introduce` is no longer the answer); `priorityScores` entries carry reviewCount and provenance so the judgment has its facts (pin).
-
-### 090.5 Effective-cap accounting: strain consume + depth ramp + function reserve
-
-Three mechanisms on ONE quantity -- the effective introduce cap. Pure accounting.
-
-(a) DEPTH RAMP: the band cap (A1: 3 ... B2+: 6, lexical-budgeter.ts:48-61) is the opening posture, earning +1 every few turns of the SAME conversation to a bounded ceiling. The budgeter reads SESSION turns today (`resolveCurrentSessionTurn`); the ramp needs per-CONVERSATION depth, so conversationState grows a counter. Ramp constants must be CHOSEN in-story before the exit is writable.
-
-(b) FUNCTION-CHUNK RESERVE: scope 087 assigned here. The injection cap is `newItemsAllowed - introduce.length` (sugar-lang-context-middleware.ts:483-490); since the budgeter fills `introduce` to exactly `levelCap` in content-rich scenes, that cap is 0 every turn and scheduled function teachables are never realized. Reserve BEFORE the budgeter fills, not subtract after.
-
-(c) STRAIN CONSUME: read `schedule.strainSuppressed`; never re-derive suppression from `fatigueScore`.
-
-CLOCK MISMATCH (decide in-story): the ramp is per-conversation while `fatigueScore` is per-session and rises with session turns (session-signals.ts:92-102; suppression fires at `fatigueScore >= STRAIN_SUPPRESS_THRESHOLD = 0.70` (outer-loop-scheduler.ts:62, applied :107) -- NOT "~35 turns", which was wrong by ~3x (round 2). The turn term is only `0.30 * (turns / 50)` (:98-101), so turns alone reach 0.70 near 117; real suppression is driven by hoverRate / probeFailRate / latency. The tension is real but far less imminent than the earlier number implied. FIX THE SOURCE COMMENT: outer-loop-scheduler.ts:59 still reads "At 0.70 the learner needs (e.g.) 35 turns + heavy hovering" -- that comment is what produced the 3x error in the first place, and leaving it means a future reader re-derives it). A conversation-depth ramp widens the cap exactly as session fatigue climbs.
-
-TYPE THE HANDSHAKE (round 2): `LexicalPrescriptionInput.conversationState` is `Record<string, unknown>` (runtime/contracts/lexical-prescription.ts:107), so "export a counter on it" is convention, not contract -- 090.6 would have nothing to typecheck against. This story must give `conversationState` a declared shape (or a typed accessor) or the 090.5/090.6 handshake is unenforceable.
-
-- Exit: this story EXPORTS the per-conversation counter as a TYPED field for 090.6 (pin); depth raises the effective cap on the chosen schedule and never past the ceiling (unit); a scheduled function chunk is realized in a content-rich scene where `introduce` is full (integration -- fails against today's code); `schedule.strainSuppressed === true` clamps the cap regardless of depth (pin); the budgeter derives SUPPRESSION from the boolean and never re-derives it from `fatigueScore`, though reading `fatigueScore` as a graded ramp ceiling is allowed (pin); `budget.newItemsAllowed` reports the effective cap (pin).
-
-### 090.6 Stall rotation
-
-`introduce` is the top-`levelCap` survivors with `reviewCount === 0` (lexical-budgeter.ts:176-179), and `reviewCount` increments ONLY when `receptiveGrade !== null` (fsrs-adapter.ts:156, increment :174) while the `encountered` observation returns `receptiveGrade: null` (budgeter/observations.ts:91-96). So a word the NPC SAYS EVERY TURN never leaves `introduce`; only a hover, production, or probe frees the slot. Scores are static for never-seen candidates (`lastProducedAtMs: null`, initial productive strength -> decay terms are no-ops, fsrs-adapter.ts:213-214, 288-296).
-
-A word prescribed N consecutive turns that remains UNGRADED yields its slot, with a decaying penalty rather than a ban. Keys on `reviewCount === 0` -- the budgeter's own filter -- NOT on exposure.
-
-TRACK EXPOSURE ALONGSIDE GRADEDNESS: `reviewCount === 0` cannot distinguish "the NPC said it every turn and the learner ignored it" from "the realizer never rendered it". Only the first deserves a penalty; the `encountered` observation tells them apart.
-
-CYCLING VS GRADUATION (decide in-story): nothing here graduates an exposed-but-uninteracted word, so a rotated word's penalty decays and it returns indefinitely. Decide whether repeated rotation eventually demotes to reinforce-only.
-
-PERSISTENCE: per-conversation counters are ephemeral by default. If they must survive a session they ship as a `SaveParticipant<TSlice>` with no wall-clock values persisted. `pendingProvisional` / `turnsPending` is the tracking precedent.
-
-- Exit: this story consumes 090.5's exported counter and does not define its own (pin); a word prescribed N turns and still `reviewCount === 0` rotates out and a new word enters EVEN WHEN the NPC said it every turn (integration -- the direct Finnick pin); a word the realizer NEVER rendered is not penalised (pin); rotated words return after decay (unit); the cycling decision is pinned whichever way it goes.
-
-### 090.7 Visibility: Studio situation panel + preview concept trace
-
-STUDIO: per-scene view of the SituationModel -- the prose description, the concept list, what each concept resolved to, what was dropped and why. Host on `ui/shell/sugarlang-turn-inspector.tsx` (already telemetry-backed; `PanelSection` is the component (:19, :123), `RationaleTrace` is a TYPE rendered as `<pre>{renderJson(...)}</pre>` (:26, :189-211)); reconcile placement with the InspectorToolbar backlog. Telemetry rollup: concept-derived vs scan-derived share of introductions; teacher-judged vs deterministic-fallback share of directives.
-
-PREVIEW CONCEPT TRACE: each NPC dialogue entry gets a small icon; hovering shows what the teacher was teaching with THIS response -- concept -> resolved lemma -> gating outcome -> source, plus whether the directive came from LLM judgment or the deterministic fallback.
-
-DATA SPINE: the teacher writes `execution.annotations`; the panel reads `turn.annotations` -- distinct objects with no copy step. The 085.5 precedent writes from the OBSERVE middleware at finalize: `normalizedTurn.annotations!["sugarlang.teachLine"]` (sugar-lang-observe-middleware.ts:723), read via `readTeachLine` (dialogue/highlight.ts:55) at DialoguePanel.ts:585 and ScriptedDialogueBox.ts:130. So: teacher computes -> observe copies onto the turn -> reader beside `readTeachLine` -> BOTH presentations render it. `turn-text.ts` is NOT an alternative (it composes text + highlight spans only).
-
-HUD STATE: no seam exists -- `hudOpen` is a function-local (DebugHud.ts:116) and `RuntimeDebugHud` exports only `update` / `dispose` (:53-56). This story adds one. The HUD is NOT hidden during dialogue; `.sm-debug-hud--dialogue-active` sets only `pointer-events: none` (:472-474).
-
-Dev/preview only, gated on `adapter.boot.hostKind === "studio"` (targets/web/src/runtimeHost.ts:2794) -- DialoguePanel ships to published web and cannot be excluded by build.
-
-- Exit: the fixture scene's Studio panel shows the situation prose, cheese -> queso, and any drops with reasons; the trace annotation survives teacher -> observe -> `turn.annotations` (pin); with the HUD open, a turn introducing queso shows the icon and hover reveals "cheese -> queso (introduce, concept-derived, LLM-judged)" (integration); the icon renders in BOTH the chat panel and the scripted box (pin -- separate presentations since 2026-07-28); HUD closed = no icon (pin); non-studio hostKind renders no icon (behavior pin).
+Unchanged from round 3 except for one addition. Re-read the round-3 text for
+the cache hazard, the POS enum, the presence-condition trap and the gateway
+scoping -- all still stand.
+
+ADDITION -- MUST-COMPREHEND FLAGS. A concept carries an optional
+must-comprehend flag alongside its POS and provenance. This is where
+quest-essential vocabulary lives under the new model: not as its own channel
+into the Teacher, but as a property of a concept the Situation already carries.
+Without it 090.4 has nowhere to read the obligation from and quest-essential
+stays a private road (see 090.4).
+
+### 090.2 Concept resolution
+
+The resolver half of the old 090.2, unchanged: union-gather over primary AND
+secondary gloss, POS membership filter, rank by `frequencyRank` first, drop with
+telemetry when empty. The four pinned rows (dock/trade/boat/cheese) and the
+provider-contract change all stand.
+
+DELIVERY IS NO LONGER THIS STORY'S JOB. The old text called projection into
+`sceneLexicon.lemmas` "the single link the whole epic exists to build". It is
+not, and round 4 falsified it:
+
+- Every reader of `sceneLexicon.lemmas` was enumerated. The budgeter's candidate
+  sourcing (lexical-budgeter.ts:130) is the only one that needs membership;
+  the rest are the scheduler board (context-middleware.ts:400), the prompt's
+  capped scene snapshot (prompt-builder.ts:247), a gloss lookup (:354) and debug
+  logs. **Nothing downstream of the Directive requires it** -- `applyWeave`
+  reads `constraint.targetVocab.introduce`, and the observe middleware gates on
+  `targetLemmaSet` union existing cards (sugar-lang-observe-middleware.ts:450-454).
+- So a Teacher handed `queso` via the Situation, naming it in `targetVocab`,
+  reaches both the weave and the observe loop with no projection at all.
+- The actual blocker is one prompt line:
+  `"Only output targetVocab lemmas that already appear in the prescription."`
+  (prompt-builder.ts:99). That sentence, not a missing projection, is what stops
+  the motivating case.
+
+The projection as previously specced also cost an atlas dependency bolted onto
+the declared single read surface (scene-lexicon-store.ts:39 takes only a
+scheduler) plus the whole dedup/merge apparatus, which existed solely to
+preserve the `w_npc` boost (scoring.ts:149-154) -- a RANKING mechanism the model
+gives to the Teacher.
+
+KEEP the storage side: `conceptLemmas?` as a side field written through the
+scheduler like chunks. It is the compile artifact. Drop the read-time projection
+into `lemmas` unless the budgeter-deletion order (below) proves it is needed as
+a transition scaffold.
+
+- Exit: concepts resolve to the four pinned lemma ids; `partsOfSpeech` always
+  contains the concept POS; empty pool drops with telemetry; the side field is
+  persisted and survives a cache-hit recompile.
+
+### 090.8 Realization -- NEW, and the most valuable story here
+
+**Given one piece of authored text, which of the slate's items does it teach.**
+
+This story did not exist, and it is where the bug the epic exists to fix
+actually lives. Two divergent implementations of it are already in the codebase:
+
+| Call site | Pool it uses |
+|---|---|
+| `sugar-lang-scripted-middleware.ts:134` | `constraint.targetVocab.introduce` -- the slate, **pre-truncated to `levelCap`** (3 at A1) |
+| `grading/display-text-resolver.ts:247` | `atlas.listLemmasAtBand(...)` for every band at or below -- **the whole lexicon, no slate, no teacher** |
+
+Both call the same primitive. `diglotWeave(text, pool, chunks, atlas, target,
+support)` (diglot-weave.ts:170-177) **already is the intersection** -- it
+substitutes only tokens present in the text (:191-237). The algorithm exists and
+is shared. What does not exist is a single owner of the POOL question. That
+absence is the realization boundary.
+
+`display-text-resolver.ts:78-114` is the workaround written because there was no
+such seam; its own diagnosis at :96-101 is this finding stated in advance, and
+:107-113 schedules the revisit. **This story is what lands on that comment.**
+
+SCOPE:
+
+- One pure `realize(slate, standing, text, posture)`. Zero LLM. Per narrative
+  unit. Total in the same sense as `createDisplayTextResolver` -- absent inputs
+  yield authored text, never a throw.
+- It owns the POOL (slate ∩ text), the PER-TEXT CAP, and the band split.
+- Consume `GradedTextUnit` (grading/graded-text-source.ts). The repo already has
+  the narrative-unit abstraction with a documented Strategy + discriminated-union
+  design. Do not invent a second notion of "a piece of text".
+- Wrap `diglotWeave`; do not rewrite it.
+
+THE CAP HAS NO HOME TODAY, AND THAT IS THE REAL GAP.
+`TARGET_LANGUAGE_RATIO_BY_POSTURE` exists (teacher/band-envelope.ts:36-41) but
+`computeLanguageRatioVerdict` is only ever a VERIFIER on generated text
+(graded-text-service.ts:404, verify-live-render.ts:108,
+envelope-classifier.ts:236). It has never governed the weave. So "the cap applies
+at realization, per text, per posture" currently has no implementation anywhere
+-- which is exactly why display-text-resolver had to argue that dense
+substitution is a feature: the system cannot presently express any other answer.
+This story gives the ratio table its second role, as a governor.
+
+DUPLICATE ENFORCER TO FOLD IN: `display-text-resolver.ts:63-65` defines
+`isWeaveBand` with a comment saying it "MIRRORS the scripted dialogue split
+exactly" -- while `postureForBand` (band-envelope.ts:65-71) already returns
+anchored/supported/target-dominant for exactly that input. A copied constant, in
+a file that exists *because* an 087.6 review caught this same divergence once
+already. Delete `isWeaveBand`; derive from `postureForBand`.
+
+- Exit: fixture item body about travellers/heads/flying + A1 learner + a slate
+  containing those lemmas -> substitutions land (integration -- fails against
+  today's code); the inverse -> authored English AND a trace saying
+  "slate/text disjoint", not "extraction failed" (pin -- the failure mode must be
+  legible, which is what cost hours on 2026-07-28); posture ratio governs
+  density, so an anchored A1 paragraph does not come back mostly target-language
+  (pin -- no implementation exists today); one band-split enforcer, asserted by
+  grep (pin).
+
+### 090.4 Teacher judgment: two doors in, a slate out
+
+WHAT THE TEACHER PRODUCES CHANGES. Not a per-turn answer -- a **slate**: what
+this learner should be working on in this situation. Stable until the situation
+key moves or standing changes materially. 090.8 applies it per text.
+
+THE SLATE MUST NOT BE PRE-TRUNCATED. It is a working set, not a teaching quota.
+A slate cut to the top N almost never intersects a specific paragraph, which is
+the mechanism behind both the item-description bug and the A1 dialogue bug. The
+cap belongs at realization.
+
+TWO DOORS, NOT ELEVEN. `TeacherContext` (contracts/providers.ts:128-146) carries
+learner, scene, prescription, npc, recentTurns, lang, calibrationActive,
+pendingProvisionalLemmas, probeFloorState, activeQuestEssentialLemmas,
+selectionMetadata. Adding `situation` as a twelfth field is the shape the model
+forbids. Target: `{ situation, learner, lang, telemetry }`. `scene`, `npc`,
+`recentTurns` and `activeQuestEssentialLemmas` fold INTO situation;
+`probeFloorState` and `pendingProvisionalLemmas` fold into learner.
+
+QUEST-ESSENTIAL STOPS BEING A CHANNEL. It is currently both a TeacherContext
+field (providers.ts:144) and a `prescribe()` input (lexical-prescription.ts:108).
+Under the model it is a must-comprehend flag on a Situation concept (090.1), and
+its ENFORCEMENT stays where it already is -- `enforceDirectiveRequirements`
+(schema-parser.ts:526-590) and the strip in `repairDirective`. Judgment about
+relevance is the Teacher's; enforcement of the obligation is a check on the way
+out, not an arrow in.
+
+THE BINDING HALF GETS SIMPLER, NOT RELOCATED. Band envelope and out-of-reach
+become STANDING facts (090.9), so they never enter the eligible set and need no
+post-hoc enforcer against a budgeter output. The three-returns enforcer designed
+in round 3 was a correct fix to a machine being deleted; carry over only the
+prompt work.
+
+CARRY OVER FROM ROUND 3, still valid: `formatPrescription` (prompt-builder.ts:
+322-334) never renders the wider pool; `DIRECTOR_HARD_CONSTRAINTS_PROMPT` (:97-104)
+contradicts any widening and is cache-marked; any rendered list needs an explicit
+cap constant like its neighbours (:44-48); and a mock-gateway exit cannot falsify
+prompt content, so assert the prompt text directly.
+
+- Exit: the Teacher's slate contains the cheese concept for an A1 learner with no
+  history, given a situation naming a cheese NPC (integration, mock gateway); the
+  slate is NOT truncated to a band cap (pin -- the regression that produces both
+  known bugs); TeacherContext has two content doors, asserted structurally (pin);
+  a quest-essential lemma reaches the Teacher only via situation, asserted by the
+  absence of a separate field (pin); gateway down falls back to
+  `FallbackTeacherPolicy` with nothing surfaced to the player (pin --
+  `SugarLangTeacher.invoke` catches `TeacherInvocationError` at :100-108 and never
+  rethrows, so the 087.6 path is unreachable from here).
+
+### 090.3 Runtime overlay + situation lifecycle
+
+Overlay content unchanged: met/unmet, quest stage, time of day, turns so far.
+The round-3 findings all stand -- `evaluateRegionQuestBinding` fails closed on
+world flags, and the met/unmet ambiguity is the store-failure path, not the
+disabled path.
+
+REFRAMED AS LIFECYCLE. The model's table says when each thing runs; this story
+owns making that true:
+
+| Moment | Produces | LLM |
+|---|---|---|
+| compile | concepts + prose, cached by content hash | yes, per content change |
+| scene load | situation overlay | no |
+| NPC proximity | optional pre-warm of situation and slate | hidden behind footsteps |
+| conversation start / situation change | the slate | yes, once |
+| per turn | nothing | **no** |
+| per narrative unit | realization | **no** |
+
+TURNS ARE NOT AN INVALIDATION AXIS. `DirectiveCache.get()` expires on
+`turnsConsumed >= lifetime.maxTurns` (directive-cache.ts:78-81), default 3
+(schema-parser.ts:517), incremented as a side effect of a read (:83-92). Steady
+state today is one teacher call every 3-4 turns, and 090.4's old exit ratified
+that. Under the model the situation key is the only axis; `maxTurns` becomes a
+long safety net or goes. The round-3 "digest-vs-maxTurns precedence" question is
+settled by this, not still open.
+
+THE STALENESS TABLE HAS NO IMPLEMENTATION TODAY. `handleBlackboardEvent` calls
+`invalidateAll` on any quest/location event, comparing nothing (:139-147), and
+`directiveLifetime.invalidateOn` is parsed and normalized
+(schema-parser.ts:341-344, :766-774) and read by nothing. Adding a digest is a
+redesign of the invalidation model. It is now on the critical path, not a cost win.
+
+MOVE THE OVERLAY TO SCENE LOAD. Round 3 proposed composing at the policy stage to
+dodge the `sugarlang.context` / `sugaragent.memory` tie at stage `context`
+priority 10. Composing at scene load sidesteps the race entirely and gives
+pre-warming somewhere to hang.
+
+- Exit: met/unmet correct on first meeting and on return (integration); a
+  quest-stage advance moves the situation key and re-slates within one turn
+  (integration); an unchanged situation across five turns produces ZERO teacher
+  calls (pin -- the lifecycle claim, and it fails against today's maxTurns
+  behaviour); store-failure met/unmet is distinguishable from a real first
+  meeting (pin); no sugaragent import in sugarlang (pin).
+
+### 090.9 Standing -- NEW, small, unblocks 090.4
+
+Extract STANDING as a named fact on the learner: for a given lemma,
+*unseen · learning · due · known · out-of-reach*. It is implicit today, spread
+across the band-envelope filter (lexical-budgeter.ts:157), the reviewCount split
+(:177, :181) and the FSRS adapter. 090.4's simplification depends on it existing
+as a thing the Teacher can read.
+
+- Exit: standing is derivable for any (learner, lemma) without invoking the
+  budgeter (pin); the five values are exhaustive and total (pin).
+
+### 090.5 Learner capacity
+
+Rehomed from "effective cap accounting". This is how LEARNER answers *how many
+new items can this person take right now* -- fatigue, session depth,
+conversation depth, against the band allowance. Not a budget the Teacher is
+handed; a number the Learner reports, applied at realization.
+
+- (a) DEPTH RAMP: per-conversation counter. The round-3 finding stands --
+  `conversationState` is `Record<string, unknown>` (lexical-prescription.ts:107),
+  so "export a counter on it" is convention, not contract. Type it.
+- (c) STRAIN CONSUME: read `schedule.strainSuppressed`; never re-derive from
+  `fatigueScore`. NOTE the round-3 correction: suppression fires at
+  `fatigueScore >= 0.70` (outer-loop-scheduler.ts:62), and the turn term is only
+  `0.30 * (turns/50)` (session-signals.ts:98-101), so turns alone reach it near
+  117, not 35. The stale source comment at outer-loop-scheduler.ts:59 still says
+  35 and should be fixed here.
+- (b) FUNCTION-CHUNK RESERVE: **probably dissolves.** The injection cap is
+  `newItemsAllowed - introduce.length` (context-middleware.ts:483-490), zero
+  whenever the budgeter fills `introduce` to `levelCap` -- the same
+  pre-truncation as the old 090.6. Stop pre-truncating and the starving
+  arithmetic goes away. Marked probable rather than certain because function
+  teachables come from the scheduler, not the lexicon, so a non-truncated slate
+  does not automatically admit them. Decide in-story; do not build the reserve
+  before checking whether it still starves.
+
+### 090.6 Stall rotation -- DELETED
+
+Verified dissolution. `introduce` is survivors filtered `reviewCount === 0` then
+`.slice(0, levelCap)` (lexical-budgeter.ts:176-179); `reviewCount` increments
+only when `receptiveGrade !== null` (fsrs-adapter.ts:173-174) while the
+`encountered` observation returns null (observations.ts:91-96). Words stalled
+because there were fixed slots to stall in. Remove the pre-truncation and there
+are none.
+
+This deletion invalidates the old shippable-floor argument, which justified
+including 090.6 on the premise that "the first `levelCap` score winners hold the
+introduce slots permanently". That premise is gone. Floor re-derived below.
+
+### 090.7 Visibility
+
+Plumbing unchanged -- the annotation spine (observe writes, reader beside
+`readTeachLine`, both presentations render), the HUD state seam, hostKind gating.
+
+RETARGET THE TRACE. Its spec is slate-shaped only. It must show BOTH the slate
+and the realization, or the exact bug class this epic exists for stays
+invisible: "the slate was right and nothing in this text matched it" and "the
+slate was wrong" look identical from the outside, and telling them apart by hand
+is what cost hours on 2026-07-28.
+
+- Exit: the trace distinguishes slate from realization; a turn where slate and
+  text are disjoint says so explicitly (pin).
 
 ## The shippable floor
 
-090.1 + 090.2 + 090.4 gets a situation to the teacher and a judged directive out. But 090.6 is required for it to be OBSERVABLE: in a content-rich scene the first `levelCap` score winners hold the introduce slots permanently, so a widened pool changes nothing visible until slots can turn over. Floor = 090.1, 090.2, 090.4, 090.5(a), 090.6, in that order.
+RE-DERIVED round 4. The old floor (090.1, 090.2, 090.4, 090.5a, 090.6) rested on
+a premise the model removes -- that introduce slots are permanently held, so
+nothing is visible until they turn over. With no pre-truncation there are no
+slots, and 090.6 is deleted.
 
-The 090.5 placement has now been wrong in two directions; here is the settled reasoning. Round 1 put 090.5 BEFORE 090.4 on the theory that widening the allow-set removed the only budget cap -- round 2 falsified that (the widened allow-set lives on the repair path, and 090.4 clamps against the already-existing `prescription.budget.newItemsAllowed`). Round 2 then moved 090.5 wholesale to the ceiling and did not re-check 090.6, whose FIRST exit reads "consumes 090.5's exported counter and does not define its own" -- so the floor as written could not execute. Settled: 090.4 has NO dependency on 090.5, but 090.6 DOES, on part (a) only. Split the story: **090.5(a) -- the per-conversation depth counter plus the TYPED `conversationState` handshake -- is in the floor, immediately before 090.6.** 090.5(b) function-chunk reserve and 090.5(c) strain consume stay in the ceiling. Note 090.4's directive-reuse exit is written "jointly with 090.3", so the FLOOR ships that exit in its degenerate form (situation key over compile-derived components only) and 090.3 completes it -- 090.4 must not be blocked on 090.3. 090.3 (runtime overlay), 090.5 (effective-cap accounting) and 090.7 (visibility) are the ceiling.
+**Floor = 090.1 + 090.2 + 090.9 + 090.4 + 090.8.**
+
+That is: extract concepts, resolve them to lemmas, give the learner a readable
+standing, let the Teacher produce an untruncated slate from situation + learner,
+and apply that slate to a specific piece of text.
+
+090.8 is IN the floor and this is the change from every prior revision. Without
+it the epic can produce a perfect slate and still render English, which is
+precisely the observed 2026-07-28 failure on both item bodies and A1 dialogue.
+A floor that cannot show a single Spanish word to a beginner is not a floor.
+
+090.3 (lifecycle), 090.5 (capacity) and 090.7 (visibility) are the ceiling.
+Note 090.3 becomes load-bearing sooner than its position suggests: without a
+situation key the slate has no staleness rule, so it is the first ceiling story.
+
+## Budgeter deletion order
+
+The model dissolves the budgeter; the plan treated it as the consumer. No story
+owned the transition, so it is named here.
+
+The budgeter is four jobs (sourcing, eligibility, ranking, rationing). They leave
+in this order:
+
+1. **Eligibility -> LEARNER** (090.9). Standing becomes readable without the
+   budgeter.
+2. **Ranking -> TEACHER** (090.4). The slate is produced from situation +
+   standing, not from `priorityScores`.
+3. **Sourcing -> SITUATION** (090.2 + 090.4). Concepts reach the Teacher through
+   the situation, not through `lemmas` membership.
+4. **Rationing -> LEARNER capacity** (090.5), applied at realization (090.8).
+
+`prescribe()` is then unreferenced and the module is deleted. Until step 2 lands
+the old path must keep working, so the side field from 090.2 may need the
+read-time projection as a transition scaffold -- decide when 090.4 lands, and
+delete it in the same change that deletes `prescribe()`.
+
+DO NOT leave both paths alive past the floor. Two systems answering "what should
+be taught" is the condition that produced every bug in this epic.
 
 ## Verification recipe (nikki)
 
+Revised round 4: probe 6 dropped with 090.6, and probes for realization and for
+call frequency added -- both are things that were untestable before and are the
+two properties most likely to regress.
+
 1. `pnpm test` green, `pnpm lint` clean.
-2. Situation probe: compile a scene with Horace, Finnick, Pennygale at the dock -- the Studio panel shows a situation description naming them and their roles, and a concept list including cheese, cargo, travel, greeting.
-3. Finnick probe: fresh A1 learner, no history, talk to the cheese NPC -- queso is taught within the first turns, glossed on first use, carded on encounter. No Spanish anywhere in his authored content.
-4. Stability probe: keep talking without changing scene, NPCs, quest stage, or time -- the teaching directive stays consistent turn to turn (telemetry also shows the call being reused rather than repeated).
-5. Situation-change probe: advance the quest stage mid-conversation -- one new teacher call, and the directive changes.
-6. Stall probe: keep talking 8-10 turns -- new introductions keep arriving as the cap ramps, and a prescribed word the NPC HAS been saying but you never hover or use rotates out after a few turns. A word the NPC never said is deliberately NOT rotated.
-7. Restraint probe: high-strain session -- no opportunistic additions, depth ramp clamped.
-8. Offline probe: kill the gateway -- conversations still work on the deterministic fallback; nothing surfaces to the player.
-9. Concept-trace probe: debug HUD on -- every NPC turn shows the trace icon; hover reveals the concepts, their outcomes, and whether the directive was LLM-judged.
+2. **Situation probe** -- compile a scene with Horace, Finnick and Pennygale at
+   the dock. The Studio panel shows a situation description naming them and a
+   concept list including cheese, cargo, travel, greeting.
+3. **Finnick probe** -- fresh A1 learner, no history, talk to the cheese NPC.
+   `queso` is taught within the first turns, glossed on first use, carded on
+   encounter. No Spanish anywhere in his authored content.
+4. **Realization probe (NEW)** -- open an item whose Examine body is about
+   something the slate covers: target words appear woven into the English. Then
+   open one it does not cover: authored English, and the trace says
+   "slate/text disjoint". Those two outcomes must be distinguishable without
+   reading code.
+5. **Density probe (NEW)** -- at A1, a paragraph-length item body comes back
+   mostly English with a few target words, not mostly target language. This is
+   the posture ratio governing realization, which has no implementation today.
+6. **Call-frequency probe (NEW)** -- talk for ten turns without changing scene,
+   NPCs, quest stage or time. Telemetry shows exactly ONE teacher call. Today it
+   shows three or four, because the directive cache expires on turn count.
+7. **Situation-change probe** -- advance the quest stage mid-conversation. One
+   new teacher call, and the slate changes.
+8. **Restraint probe** -- high-strain session: fewer new items, depth ramp
+   clamped.
+9. **Offline probe** -- kill the gateway. Conversations still work on the
+   deterministic fallback; nothing surfaces to the player.
+10. **Trace probe** -- debug HUD on. Every NPC turn shows the trace icon; hover
+    reveals the slate, what realization selected from it, and whether the slate
+    was LLM-judged or a fallback.
 
 ## Epic wrap
 
@@ -310,15 +503,49 @@ docs/api: extend the middlewares doc's Teaching Decision Model (candidate sourci
 - Cross-NPC concept graphs: revisit if single-scene extraction proves out.
 - Post-turn capture of concepts the NPC emitted unprompted (Finnick said `familia`, `tía` with nothing prescribing them): the observe middleware already tokenizes every turn and runs chunk matching, so noticing "target-language lemma with no card" is deterministic and cheap. Deliberately out of this epic to keep it one loop; revisit immediately after the floor ships, since it is the natural completion of "the verifiers CHECK" (code comment at the observe chunk matcher).
 
-## Open at gate exit (epic-review 3 rounds, 2026-07-28, NOT converged)
 
-Every round-3 finding above is applied. These are the ones that need a DECISION rather than an edit, and the epic should not be Locked until they are settled:
+## Open at gate exit (epic-review round 4, 2026-07-28, NOT converged)
 
-1. ~~**Gateway `purpose` for the Teacher**~~ -- **RESOLVED 2026-07-28, shipped ahead of the epic.** The gateway now routes `purpose: "teacher"` to `SUGARMAGIC_SUGARLANG_TEACHER_MODEL` (default claude-sonnet-4-6) via a `PURPOSE_MODELS` table in deployment/gateway/core.ts; `createGatewayTeacherClient` sends the purpose; the inert `DEFAULT_DIRECTOR_MODEL` is deleted. The one-way-dependency worry did not materialize: sugarlang already had its OWN `gatewayRuntimeConfigKeys` block, so the key is `SUGARMAGIC_SUGARLANG_*` and no sugaragent config is involved. Also fixed a live bug found on the way: `GatewayGenerateRequest.purpose` was missing `"regen"`, which was suppressing a real typecheck error. 090.1 no longer owns this.
-2. **POS enum: union vs per-language** (090.1/090.2). es emits 12, it emits 14. Pick one.
-3. **Which introduce cap governs** (090.4). `newItemsAllowed` (3 at A1) vs `FallbackTeacherPolicy`'s `getIntroduceLevelCap` (1 at A1) vs the new enforcer. Single-enforcer rule says name a winner.
-4. **World-flag-gated presences** (090.3). Extend `ConversationRuntimeContext` with a flag predicate (runtime-core change) or scope flag-gated presences out.
-5. **Is `publishSugarlangArtifacts` alive?** (090.2). It has no production importer. Decide before building publish-side behavior on it.
-6. **Which "have they met" signal is authoritative** (090.3) -- `isProbableFirstMeeting` from recentTurns, or sugaragent's persisted metCount, reversing a deliberate 073.4 decision.
+Round 4 reviewed the plan against
+`packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`
+rather than against the code. Its findings are applied above. The plan is not
+Locked; these need decisions first.
 
-Meta-note for whoever picks this up: across six review rounds, every round found an error in the PREVIOUS round's fix, and the diagnosed cause was consistent -- reasoning from a cited line without walking the caller graph around it. Round 3's citation hygiene was clean; the errors were all graph-shaped (moved 090.5 without re-checking 090.6; named an enforcer without walking three returns; pinned an enum against one of two atlases). Walk the graph.
+Round 4 also settled several of the round-3 questions:
+
+| Round-3 decision | Now |
+|---|---|
+| 1. Gateway `purpose` for the Teacher | **RESOLVED and shipped.** `PURPOSE_MODELS` (deployment/gateway/core.ts:833-843) routes `teacher` -> `SUGARMAGIC_SUGARLANG_TEACHER_MODEL`, default claude-sonnet-4-6; `DEFAULT_DIRECTOR_MODEL` deleted. Struck. |
+| 2. POS enum: union vs per-language | **Still open.** es emits 12, it emits 14 (adds abbreviation, formula). Unaffected by the model. |
+| 3. Which introduce cap governs | **Settled by the model.** Both pre-truncation caps (`newItemsAllowed`=3, `getIntroduceLevelCap`=1 at A1) are deleted; capacity is one number the Learner reports, applied at realization. |
+| 4. World-flag-gated presences | **Still open, higher stakes.** `evaluateRegionQuestBinding` fails closed without a flag predicate, and Situation is now one of only TWO Teacher inputs -- a wrongly dropped presence has no other channel to compensate. Raised in priority. |
+| 5. Is `publishSugarlangArtifacts` alive? | **Verified dead** -- no importer outside its own test. Not a design decision; a deletion. Downgraded. |
+| 6. Which "have they met" signal governs | **Still open, sharper.** Whichever wins must compose INTO situation. Note `isProbableFirstMeeting` is derived inside prompt-builder.ts:169-171 from `recentTurns` -- the prompt builder deriving a situation fact is itself a layering violation under the model. |
+
+New decisions the model raises:
+
+**A. Does the budgeter survive this epic, and in what order does it go?**
+The deletion order above is a proposal, not a decision. This is the biggest one:
+everything else is downstream of whether `prescribe()` still exists at the end.
+
+**B. What bounds the slate?**
+The model says "everything relevant and in-reach here" and gives no number.
+Against an 11,000-entry atlas that is unbounded, and if "in-reach" collapses to
+the band envelope then the slate IS the band pool and realization degenerates to
+what `display-text-resolver` already does today. Needs a concrete rule.
+
+**C. Is the realization cap a count or a ratio?**
+`newItemsAllowed` is a count; `TARGET_LANGUAGE_RATIO_BY_POSTURE` is a ratio.
+They are not interconvertible per text -- six substitutions is dense in one
+sentence and sparse in a paragraph. Pick one, or say which governs where.
+
+**D. Do items consult the slate at all?**
+`display-text-resolver.ts:107-113` argues the answer may legitimately stay "no"
+-- an examined item is a browsing moment with no pacing to protect. The model
+asserts realization is uniform across "one line / one item body / one
+description". The plan is silent. These three positions cannot all hold.
+
+**E. Non-goals now contradicts the lifecycle.**
+"NOT optimizing LLM call frequency" was written when per-call cost was the only
+concern. The model makes one-call-per-conversation a structural property, not an
+optimization. Reword or drop.
