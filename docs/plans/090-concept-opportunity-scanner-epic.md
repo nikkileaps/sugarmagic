@@ -169,16 +169,136 @@ means the epic ships with two authorities alive.
 
 ### 090.1 ContextExtractor + SituationModel
 
-Unchanged from round 3 except for one addition. Re-read the round-3 text for
-the cache hazard, the POS enum, the presence-condition trap and the gateway
-scoping -- all still stand.
+WHAT IT BUILDS. One lifecycle-agnostic module. A `ContextSource` interface that
+authored documents AND live game state both satisfy; `ContextExtractor` takes a
+set of sources and returns a `SituationModel` -- a prose description of the
+situation plus a concept list of English word + POS + provenance. The module
+never asks where it is in the game lifecycle.
 
-ADDITION -- MUST-COMPREHEND FLAGS. A concept carries an optional
+Entry points split by CAPABILITY: concept extraction over prose needs an LLM
+client; situation composition over already-structured facts does not. A caller
+holding no client can only do the latter, so cost is visible at the call site
+rather than hidden in the module.
+
+This story wires the FIRST caller: the compile scheduler, projecting the EXISTING
+`SceneAuthoringContext` (scene-traversal.ts:76-95) into extractor sources --
+presences from `regionContents`, NPC bios/roles, resolved lore pages, region and
+area lore, item and document lore, quest text. No new traversal: `collectSceneText`
+already walks all of it and a second walk would drift. 090.3 wires live sources.
+
+Runs as a FOURTH pipeline in `SugarlangAuthoringCompileScheduler` beside
+`chunkPipeline` / `intentPipeline` / `variantPipeline` (compile-scheduler.ts:45-99)
+-- same debounce, cache-hit skip, stale-hash discard. Cached like chunks
+(`chunk-cache.ts` shape, key `lang:promptVersion:contentHash`; model is NOT in the
+key, so prompt version must be bumped deliberately).
+
+PREREQUISITE: dialogue text carries no NPC attribution today.
+`collectDialogueBlobs` sets `sourceKind: "dialogue"` and never `npcDefinitionId`
+(scene-traversal.ts:204-213), though the binding is in scope at
+`createSceneAuthoringContext` (:466-470). Fixing it is required here, and it
+independently fixes today's `w_npc` boost, which currently ignores an NPC's own
+authored lines.
+
+CACHE HAZARD ON THAT PREREQUISITE -- MUST BUMP THE PIPELINE VERSION.
+`computeSceneContentHash` seeds on `sourceKind|sourceId|text|objectiveNodeId|questDefinitionId`
+(content-hash.ts:154-156); `npcDefinitionId` is NOT in the seed. So attributing
+dialogue blobs changes the emitted `npcSourceIds` while the content hash stays
+IDENTICAL -- every persisted artifact (IndexedDB compile cache, published
+lexicon) keeps serving the old unattributed lemmas, and the `w_npc` boost stays
+broken for all existing content. Silent, and it presents as "extraction works but
+ranking is wrong". Bump `SUGARLANG_COMPILE_PIPELINE_VERSION` (content-hash.ts:21,
+which IS in the seed at :146).
+
+SITUATION SOURCES -- WHAT IS ACTUALLY AUTHORED:
+- `NPCDefinition` (domain/src/npc-definition/index.ts:38-48) has `displayName`,
+  `description`, `interactionMode`, `lorePageId`, `metadata`, `presentation` --
+  and NO role or title field. "Station Master" exists only inside free prose, so
+  role is INFERRED by the model, not projected, and must not be asserted in an
+  exit. BUT PROJECT THE ONE FIELD THAT DOES EXIST: `RegionNPCPresence.placementLabel`
+  (region-authoring/index.ts:105, Plan 079.6) is an authored per-placement string
+  and is exactly where an author types "Station Master". Project it WITH
+  provenance. `NPCDefinition.metadata` is the documented extension point beside it.
+- `RegionNPCPresence` (domain/src/region-authoring/index.ts:93-105) carries
+  `transform`, NOT `areaId`. "who is in the passenger section vs the cargo
+  section" is a point-in-area test against `region.areas`, not a projection.
+  Either scope that geometry explicitly or drop sub-area placement.
+- `composeRegionContents` takes npcPresences from the OVERLAY ONLY --
+  `npcPresences: [...(overlay?.npcPresences ?? [])]` (domain/src/scenes/migrate.ts:69).
+  Base-region presences are not merged. Same fact behind the activeScene compose
+  bug fixed 2026-07-27; the presence projection inherits it.
+- `RegionNPCPresence.condition` (:102, Plan 079) gates presence on quest state.
+  `createSceneAuthoringContext` includes ALL presences unconditionally
+  (scene-traversal.ts:459-465), so a cached compile-time SituationModel can
+  describe an NPC who is not there. 090.3's overlay MUST filter through the
+  existing single enforcer `evaluateRegionQuestBinding`
+  (runtime-core/coordination/gameplay-session.ts:1253-1254, 1270) -- do not write
+  a second presence evaluator. **BUT IT FAILS CLOSED ON WORLD FLAGS:**
+  `RegionConditionContext.hasWorldFlag` is OPTIONAL
+  (runtime-core/src/region-conditions/index.ts:27-30) and the evaluator returns
+  false for any binding with a `worldFlagEquals` clause when no predicate is
+  supplied -- and the plugin-visible `ConversationRuntimeContext`
+  (runtime-core/src/conversation/index.ts:191-233) exposes `activeQuestStage` and
+  `timeOfDay` but NO world-flag predicate. A naive sugarlang-side call drops every
+  flag-gated presence: an NPC who IS standing there vanishes. That is WRONG
+  signal, which this story's exit forbids. Either extend
+  `ConversationRuntimeContext` with the predicate (a runtime-core change -- scope
+  it) or explicitly scope flag-gated presences out and say so.
+
+GATEWAY -- MOSTLY SHIPPED ALREADY (verified 2026-07-29, this is much smaller than
+round 3 described). The plumbing round 3 scoped as a multi-file change is done:
+`SugarlangLLMRequest.purpose` exists (llm/types.ts), `SugarlangGatewayClient.generate`
+POSTs it (llm/gateway-client.ts:43), `PURPOSE_MODELS` routes it
+(deployment/gateway/core.ts:833-843), and `DEFAULT_DIRECTOR_MODEL` is deleted.
+What remains here is small:
+- Add an `extraction` purpose + env var to `PURPOSE_MODELS` for this pipeline.
+- Delete `DEFAULT_MWE_EXTRACTOR_MODEL` (multi-word-expression-extractor.ts:137,
+  consumed :342) and `DEFAULT_INTENT_EXTRACTOR_MODEL` (extract-intent.ts:39,
+  consumed :194). Both are inert -- the gateway ignores client model ids
+  ("073.2 -- resolves the model server-side by purpose",
+  deployment/gateway/gateway.test.ts:282) -- and their `extractorModel` telemetry
+  field records a model that was not used. Fix that telemetry claim.
+- Regenerate `deployment/gateway/core.compiled.ts` or
+  `core-compiled-freshness.test.ts` fails.
+
+EXTRACTOR SCHEMA: a concept is a SINGLE WORD plus its part of speech. PIN THE POS
+ENUM -- the schema must constrain POS to the exact string set the atlas
+`partsOfSpeech` field uses, and 090.2's membership test must compare against that
+same set. An unconstrained POS string makes the resolver's filter silently
+non-matching: every concept drops, telemetry says "no atlas resolution", and it
+reads as a coverage problem rather than a schema mismatch. **THE ENUM IS
+PER-LANGUAGE, NOT A FIXED TWELVE.** Measured across both shipped atlases:
+`es-elelex-2026-04-09` (11000 entries) emits 12 -- adjective, adverb, conjunction,
+determiner, interjection, noun, numeral, other, preposition, pronoun, proper-noun,
+verb; `it-kelly-2026-04-09` (6370 entries) emits 14 -- those plus `abbreviation`
+and `formula`. An Ajv enum hard-pinned to the es twelve rejects every Italian
+concept tagged abbreviation or formula: the same silent total-drop failure,
+relocated to the other shipped language. Either pin the UNION across shipped
+atlases or derive the enum per-language at schema-build time, and make 090.2's
+membership test per-language to match. Decide in-story. TRAP: do NOT copy the
+budgeter's `FUNCTIONAL_POS` (lexical-budgeter.ts:67-70) -- it names article,
+auxiliary and particle, three values the atlas never emits. Phrases belong in the
+prose description, not the concept list; 090.2's resolver matches concepts against
+atlas gloss parts and phrase concepts leave the match predicate undefined.
+
+ADDITION (round 4) -- MUST-COMPREHEND FLAGS. A concept carries an optional
 must-comprehend flag alongside its POS and provenance. This is where
 quest-essential vocabulary lives under the new model: not as its own channel
 into the Teacher, but as a property of a concept the Situation already carries.
 Without it 090.4 has nowhere to read the obligation from and quest-essential
 stays a private road (see 090.4).
+
+- Exit: a scene fixture with Finnick (bio "obsessed with cheese", no
+  target-language words anywhere) produces a SituationModel whose CONCEPT LIST
+  contains "cheese" with provenance back to his bio (integration). Do NOT assert
+  the prose names "his role" -- there is no authored role field, so that would
+  assert an LLM-invented string.
+- A cache-hit second compile makes zero gateway calls (pin).
+- Gateway-down compile degrades to today's lexicon with the situation absent,
+  never a hard failure in authoring (pin).
+- Dialogue blobs carry `npcDefinitionId`, and `SUGARLANG_COMPILE_PIPELINE_VERSION`
+  was bumped in the same change (pin -- the silent cache hazard above).
+- Every concept's POS is a member of the target language's atlas POS set (pin --
+  the silent total-drop failure).
 
 ### 090.2 Concept resolution
 
