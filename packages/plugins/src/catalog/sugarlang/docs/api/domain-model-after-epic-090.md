@@ -31,7 +31,7 @@ erDiagram
     CONCEPT_LEMMA ||--o{ SCENE_LEXICON : "is projected into"
     CONCEPT ||--|| CONCEPT_LEMMA : "becomes"
 
-    TEACHER ||--o| SITUATION : "READS (new)"
+    SITUATION ||--o{ TEACHER : "is judged by (the new edge)"
     SITUATION ||--|| SITUATION_KEY : "is fingerprinted by"
     SITUATION_KEY ||--o{ DIRECTIVE : "invalidates"
 ```
@@ -50,47 +50,103 @@ erDiagram
 
 ## The Teacher, after 090
 
+The Teacher has **two primary inputs**: a `SITUATION` and a `LEARNER`. Nothing
+else is handed to it directly. Everything the old model passed in piecemeal —
+who is speaking, what this scene contains, which lemmas the quest needs — is a
+CONTEXT SOURCE, and it is the ContextExtractor's job to turn those into a
+Situation.
+
 ```mermaid
 erDiagram
-    LEARNER ||--o{ DIRECTIVE : "is taught by"
-    PRESCRIPTION ||--o{ DIRECTIVE : "constrains (FILTERS bind)"
-    PRIORITY_SCORES ||--o{ DIRECTIVE : "advises (ORDER is reshapeable)"
-    SITUATION ||--o{ DIRECTIVE : "situates"
-    SCENE_LEXICON ||--o{ DIRECTIVE : "informs"
-    NPC ||--o{ DIRECTIVE : "colours"
-    QUEST_ESSENTIAL_LEMMA ||--o{ DIRECTIVE : "obliges"
-    PROBE_FLOOR ||--o{ DIRECTIVE : "forces a check on"
+    NPC ||--o{ CONTEXT_SOURCE : "is"
+    SCENE ||--o{ CONTEXT_SOURCE : "is"
+    QUEST ||--o{ CONTEXT_SOURCE : "is"
+    ITEM ||--o{ CONTEXT_SOURCE : "is"
+    LORE ||--o{ CONTEXT_SOURCE : "is"
+    RUNTIME_FACTS ||--o{ CONTEXT_SOURCE : "is"
+
+    CONTEXT_EXTRACTOR ||--o{ SITUATION : "extracts"
+    CONTEXT_SOURCE ||--o{ CONTEXT_EXTRACTOR : "is read by"
+
+    SITUATION ||--o{ TEACHER : "is judged by"
+    LEARNER ||--o{ TEACHER : "is judged by"
 
     TEACHER ||--o{ DIRECTIVE : "decides"
     TEACHER ||--o{ LADDER_RUNG : "chooses"
-    LADDER_RUNG ||--o{ LEMMA : "introduces, reinforces or probes"
+    LADDER_RUNG }o--|| LEMMA : "acts on"
+    TEACHER }o--o{ BUDGETER : "consults"
 
     DIRECTIVE ||--|| POSTURE : "sets"
-    DIRECTIVE ||--o{ LEMMA : "targets"
+    DIRECTIVE ||--o{ LADDER_RUNG : "carries"
     DIRECTIVE ||--o| COMPREHENSION_CHECK : "may fire"
-    DIRECTIVE_CACHE ||--o{ DIRECTIVE : "reuses until the key moves"
-    SITUATION_KEY ||--|| DIRECTIVE_CACHE : "keys"
     DIRECTIVE ||--|| CONSTRAINT : "is merged into"
+
+    SITUATION ||--|| SITUATION_KEY : "is fingerprinted by"
+    SITUATION_KEY ||--|| DIRECTIVE_CACHE : "keys"
+    DIRECTIVE_CACHE ||--o{ DIRECTIVE : "reuses until the key moves"
 ```
+
+### The two inputs are facades
+
+Both are composites. That is the point — the Teacher should not be handed seven
+things when two will do.
+
+| Input | Composed of |
+|---|---|
+| `SITUATION` | prose description, concepts (+ provenance), who is present, what this place is, quest stage, time of day, what has been said so far |
+| `LEARNER` | band, lemma cards, encounter debts, comprehension rate, fatigue, probe-floor state |
 
 ### The one relationship that matters
 
-`SITUATION ||--o{ DIRECTIVE : "situates"` is the whole epic. Today the Teacher
-can see who is speaking and what was just said; it cannot see what this place
-is, who else is present, or what a character is *about*. Adding that edge is
-what lets a cheese-obsessed NPC teach `queso` instead of quest vocabulary.
+`SITUATION ||--o{ TEACHER` is the whole epic. Today the Teacher gets an NPC name
+and the last few turns; it cannot see what this place *is*, who else is present,
+or what a character is *about*. Routing those through the extractor is what lets
+a cheese-obsessed NPC teach `queso` instead of quest vocabulary.
+
+### What the Budgeter is, in this picture
+
+A **tool**, not an input. The Teacher consults it for facts — what is in band,
+what is due, what is too hard, what the quest cannot proceed without. It reads
+the raw `SCENE_LEXICON` directly to compute those, because eligibility is
+arithmetic over the lexicon and does not route through the extractor.
+
+So the accurate rule is not "the extractor is the only thing that reads
+sources". It is:
+
+> The ContextExtractor is the only producer of **context for the Teacher**.
+> Other machinery still reads raw content to compute **facts**.
+
+That keeps the Teacher's inputs to two without pretending the Budgeter reads the
+world through a straw.
 
 ### Facts versus judgment
 
-090 splits the Budgeter's output into two edges that behave differently:
+The Budgeter answers the Teacher in two registers, and they behave differently:
 
-| Edge | Binding? | Meaning |
+| What it supplies | Binding? | Meaning |
 |---|---|---|
-| `PRESCRIPTION` -> `DIRECTIVE` | **Binding** | Band envelope, `avoid`, quest-essential exclusions, effective budget. The Teacher may not violate these. |
-| `PRIORITY_SCORES` -> `DIRECTIVE` | **Advisory** | The ranking. `introduce` stops being "the answer" and becomes "the default recommendation" — the Teacher may prefer a lower-scored candidate when the situation justifies it. |
+| **Filters** | **Binding** | Band envelope, `avoid`, quest-essential exclusions, effective budget. The Teacher may not violate these, and a separate enforcer checks the returned Directive against them. |
+| **Ranking** | **Advisory** | `introduce` stops being "the answer" and becomes "the default recommendation" — the Teacher may prefer a lower-scored candidate when the situation justifies it. |
 
 That distinction is the point. The scoring function cannot see that the learner
 is standing in front of a cheesemonger; the Teacher can.
+
+Note this is *why* the Budgeter is a tool rather than an input. An input would
+imply the Teacher simply receives a slate and renders it — which is exactly the
+behaviour 090 is trying to end.
+
+### Quest-essential vocabulary, specifically
+
+It appears twice, deliberately, and the two are not the same thing:
+
+- **as context** — quest stage and objectives are a CONTEXT_SOURCE, so the
+  Situation carries what the quest is currently about and the Teacher can reason
+  with it.
+- **as a filter** — "do not let a quest-essential lemma leak into `targetVocab`,
+  and force glossing when one is present" stays a binding rule enforced against
+  the returned Directive.
+
+Judgment about relevance is the Teacher's; enforcement of the obligation is not.
 
 ---
 
