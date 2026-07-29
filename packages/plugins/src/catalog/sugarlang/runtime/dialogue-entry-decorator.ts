@@ -22,7 +22,7 @@ import {
   findTermMatches,
   readDialogueHighlight
 } from "@sugarmagic/runtime-core";
-import { PLAYER_SPEAKER, PLAYER_VO_SPEAKER } from "@sugarmagic/domain";
+import { isPlayerSpeaker, resolveDialogueSpeaker } from "@sugarmagic/domain";
 
 export interface PendingHover {
   lemmaId: string;
@@ -71,9 +71,9 @@ export function createSugarlangDialogueContribution(): {
         .targetLanguage as string;
     }
 
-    const isPlayer =
-      turn.speakerId === PLAYER_SPEAKER.speakerId ||
-      turn.speakerId === PLAYER_VO_SPEAKER.speakerId;
+    const isPlayer = isPlayerSpeaker(
+      resolveDialogueSpeaker(turn.speakerId, null)
+    );
 
     if (isPlayer && currentFocusTerms.length > 0) {
       const matches = findTermMatches(turn.text, currentFocusTerms, []);

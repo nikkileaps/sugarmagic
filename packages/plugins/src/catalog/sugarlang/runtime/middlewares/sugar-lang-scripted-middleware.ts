@@ -27,11 +27,7 @@
  */
 
 import type { ConversationMiddleware, ConversationTurnEnvelope } from "@sugarmagic/runtime-core";
-import {
-  PLAYER_VO_SPEAKER,
-  NARRATOR_SPEAKER,
-  EXCERPT_SPEAKER
-} from "@sugarmagic/domain";
+import { resolveDialogueSpeaker } from "@sugarmagic/domain";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices, SugarlangExecutionServices } from "../runtime-services";
 import { diglotWeave } from "../classifier/diglot-weave";
@@ -62,13 +58,28 @@ export interface SugarLangScriptedMiddlewareDeps {
   logger?: SugarlangLoggerLike;
 }
 
-/** Speakers that should NOT be adapted -- narration and voice-over stay as-is. */
+/**
+ * Speakers that should NOT be adapted -- narration and voice-over stay as-is.
+ *
+ * NOTE the deliberate asymmetry: `player` is ADAPTABLE here while `player-vo`
+ * is not. Player choice text is authored dialogue the learner reads and so gets
+ * woven; voice-over, narration and excerpts are authorial voice and stay in the
+ * support language. This is the one place in the repo that partitions built-in
+ * speakers this way -- it is not an oversight, so do not "align" it with the
+ * player/player-vo split used by `isPlayerSpokenTurn` and friends.
+ */
 function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
-  return (
-    speakerId === PLAYER_VO_SPEAKER.speakerId ||
-    speakerId === NARRATOR_SPEAKER.speakerId ||
-    speakerId === EXCERPT_SPEAKER.speakerId
-  );
+  const speaker = resolveDialogueSpeaker(speakerId, null);
+  if (!speaker) return false;
+  switch (speaker.kind) {
+    case "player-vo":
+    case "narrator":
+    case "excerpt":
+      return true;
+    case "player":
+    case "npc":
+      return false;
+  }
 }
 
 /**

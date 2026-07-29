@@ -16,11 +16,7 @@
  * Status: active
  */
 
-import {
-  EXCERPT_SPEAKER,
-  PLAYER_SPEAKER,
-  PLAYER_VO_SPEAKER
-} from "@sugarmagic/domain";
+import { PLAYER_SPEAKER, resolveDialogueSpeaker } from "@sugarmagic/domain";
 import {
   type DialoguePresenter
 } from "./DialogueManager";
@@ -179,10 +175,23 @@ export function createRuntimeDialoguePanel(
   }
 
   function getSpeakerClass(speakerId: string | undefined): string | null {
-    if (speakerId === PLAYER_SPEAKER.speakerId) return "player";
-    if (speakerId === PLAYER_VO_SPEAKER.speakerId) return "player-vo";
-    if (speakerId === EXCERPT_SPEAKER.speakerId) return "excerpt";
-    return null;
+    const speaker = resolveDialogueSpeaker(speakerId, null);
+    if (!speaker) return null;
+    switch (speaker.kind) {
+      case "player":
+        return "player";
+      case "player-vo":
+        return "player-vo";
+      case "excerpt":
+        return "excerpt";
+      // Narrator deliberately has no modifier class: narration renders with the
+      // default entry styling. Called out explicitly because the previous
+      // if-chain simply fell through, which read as an omission rather than a
+      // decision. NPC lines likewise use the default.
+      case "narrator":
+      case "npc":
+        return null;
+    }
   }
 
   function createEntry(turn: ConversationTurnEnvelope): HTMLDivElement {

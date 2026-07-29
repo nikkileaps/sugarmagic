@@ -29,7 +29,11 @@ import type {
   RegionDocument,
   Scene
 } from "@sugarmagic/domain";
-import { composeRegionContents } from "@sugarmagic/domain";
+import {
+  composeRegionContents,
+  resolveDialogueSpeaker,
+  speakerNpcDefinitionId
+} from "@sugarmagic/domain";
 import type { SourceLocation } from "../types";
 
 export type TextBlobSourceKind =
@@ -193,6 +197,7 @@ function collectDialogueBlobs(context: SceneAuthoringContext): TextBlob[] {
   for (const dialogue of [...context.dialogues].sort((left, right) =>
     compareStrings(left.definitionId, right.definitionId)
   )) {
+    const boundNpcId = dialogue.interactionBinding.npcDefinitionId;
     for (const node of [...dialogue.nodes].sort((left, right) =>
       compareStrings(left.nodeId, right.nodeId)
     )) {
@@ -200,6 +205,13 @@ function collectDialogueBlobs(context: SceneAuthoringContext): TextBlob[] {
       if (!text) {
         continue;
       }
+
+      // Attribution is per NODE, not per dialogue: a dialogue also contains
+      // player choices, narration and excerpts, and crediting the bound NPC
+      // with those would inflate the w_npc boost with words they never speak.
+      const npcDefinitionId = speakerNpcDefinitionId(
+        resolveDialogueSpeaker(node.speakerId, boundNpcId)
+      );
 
       blobs.push({
         sourceKind: "dialogue",
@@ -209,7 +221,8 @@ function collectDialogueBlobs(context: SceneAuthoringContext): TextBlob[] {
           text
         ),
         text,
-        weight: TEXT_BLOB_WEIGHTS.dialogue
+        weight: TEXT_BLOB_WEIGHTS.dialogue,
+        ...(npcDefinitionId ? { npcDefinitionId } : {})
       });
     }
   }

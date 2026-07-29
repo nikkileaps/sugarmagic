@@ -24,7 +24,7 @@ import type {
   ConversationPlayerInput,
   ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
-import { PLAYER_SPEAKER, PLAYER_VO_SPEAKER } from "@sugarmagic/domain";
+import { isPlayerSpeaker, resolveDialogueSpeaker } from "@sugarmagic/domain";
 import type {
   ActiveQuestEssentialLemma,
   TeacherContext,
@@ -141,10 +141,11 @@ export function isPlayerSpokenTurn(
     return false;
   }
 
+  // playerDefinitionId is a RUNTIME-supplied id (the player's own definition),
+  // not an authored built-in, so it stays a separate check.
   return (
     speakerId === playerDefinitionId ||
-    speakerId === PLAYER_SPEAKER.speakerId ||
-    speakerId === PLAYER_VO_SPEAKER.speakerId
+    isPlayerSpeaker(resolveDialogueSpeaker(speakerId, null))
   );
 }
 

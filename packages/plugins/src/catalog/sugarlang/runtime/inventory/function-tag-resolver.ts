@@ -29,20 +29,15 @@
  */
 
 import type { DialogueDefinition } from "@sugarmagic/domain";
-import { PLAYER_SPEAKER, PLAYER_VO_SPEAKER } from "@sugarmagic/domain";
+import { isPlayerSpeaker, resolveDialogueSpeaker } from "@sugarmagic/domain";
 import type { FunctionInventory } from "../contracts/function-inventory";
 import type { LexicalChunk } from "../types";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
 import { tokenize } from "../classifier/tokenize";
 
-const PLAYER_SPEAKER_IDS = new Set([
-  PLAYER_SPEAKER.speakerId,
-  PLAYER_VO_SPEAKER.speakerId
-]);
-
 function isPlayerSpeakerId(speakerId: string | undefined): boolean {
   if (speakerId === undefined) return false;
-  return PLAYER_SPEAKER_IDS.has(speakerId);
+  return isPlayerSpeaker(resolveDialogueSpeaker(speakerId, null));
 }
 
 export interface FunctionTagResult {
