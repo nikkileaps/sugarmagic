@@ -5,6 +5,7 @@ from skeleton to implementation.
 
 | File                           | Scope                                                                                   | Populated By            | Status            |
 | ------------------------------ | --------------------------------------------------------------------------------------- | ----------------------- | ----------------- |
+| `domain-terms.md`              | Glossary: atlas / lemma / lexicon / concept / blob and the rest of the domain nouns.    | Epic 090                | Updated in Epic 090 |
 | `budgeter.md`                  | Public Budgeter inputs, outputs, scoring hooks, and rationale surfaces.                 | Epic 3, Epic 8          | Updated in Epic 3 |
 | `classifier.md`                | Public Envelope Classifier interfaces, deterministic pipeline, and repair entry points. | Epic 3, Epic 5          | Updated in Epic 3 |
 | `teacher.md`                   | Teacher output contract, prompt boundary, schema parsing, and fallback policy seams.    | Epic 3, Epic 9          | Updated in Epic 3 |
