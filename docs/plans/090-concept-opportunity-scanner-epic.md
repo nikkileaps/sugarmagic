@@ -82,16 +82,16 @@ same object and ask different questions about it:
 ```
 SceneAuthoringContext
    |
-   +--> VocabularyExtractor -> SceneVocabularyModel   WHAT WORDS ARE IN THIS TEXT
-   |    (deterministic, sync)                          lemmaIds, properNouns,
-   |                                                   questEssentialLemmaIds
+   +--> SceneVocabularyExtractor -> SceneVocabularyModel    WHAT WORDS ARE IN THIS TEXT
+   |    (deterministic, sync)                               lemmaIds, properNouns,
+   |                                                        questEssentialLemmaIds
    |
-   +--> ContextExtractor    -> SituationModel         WHAT IS THIS CONTENT ABOUT
-        (LLM, async)                                   prose, concepts (English + POS),
-                                                       provenance
+   +--> SceneContextExtractor    -> SceneContextModel       WHAT THIS CONTENT IS ABOUT
+        (LLM, async)                                        prose, concepts (English + POS),
+                                                            provenance
 ```
 
-`VocabularyExtractor` is not new code -- it is `compileSugarlangScene` named for
+`SceneVocabularyExtractor` is not new code -- it is `compileSugarlangScene` named for
 what it does, and 090.2 collapses its output to the shape above. Calling it "the
 scene lexicon compiler" is what made it read as a mysterious duplicate of the
 atlas; it is an extractor, and its sibling extracts meaning from the same input.
@@ -105,11 +105,31 @@ yielded `queso`.
 
 The asymmetry is real and fine: extraction of meaning needs a gateway, extraction
 of vocabulary does not. That is the same capability split 090.1 draws inside the
-ContextExtractor's own entry points.
+SceneContextExtractor's own entry points.
+
+SCENE CONTEXT IS NOT THE SITUATION, AND THE NAMES NOW SAY SO. An earlier draft
+called the extractor's output a `SituationModel`, which blurred a real
+distinction: the extractor's output is COMPILE-TIME and SCENE-SCOPED, while the
+SITUATION the Teacher consumes is that overlaid with facts only the runtime
+knows.
+
+```
+SceneContextModel        compile, cached on content hash
+  + met/unmet, quest stage, time of day, who is ACTUALLY present
+  ---------------------------------------------------------------
+= SITUATION              what the Teacher is handed (090.3 composes it)
+```
+
+Both halves matter and neither is sufficient. The scene half is why a cached
+model can describe an NPC who is not standing there (see 090.1's presence-condition
+trap); the runtime half is what makes the same scene teach differently on a
+second visit. `SITUATION` stays the domain word -- it is a boundary in
+[domain-model-after-epic-090.md](../../packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md)
+-- and `SceneContextModel` is the artifact that feeds it.
 
 ---
 
-`ContextExtractor` is ONE lifecycle-agnostic module. It takes context sources and returns a `SituationModel`. It does not know or care whether it is called from the compile scheduler or from a live conversation -- that is the caller's concern, exactly as `compileSugarlangScene(scene, atlas, morphology, profile)` is a pure function whose caching and debounce belong to `SugarlangAuthoringCompileScheduler`.
+`SceneContextExtractor` is ONE lifecycle-agnostic module. It takes context sources and returns a `SceneContextModel`. It does not know or care whether it is called from the compile scheduler or from a live conversation -- that is the caller's concern, exactly as `compileSugarlangScene(scene, atlas, morphology, profile)` is a pure function whose caching and debounce belong to `SugarlangAuthoringCompileScheduler`.
 
 IT IS A SIBLING OF THE COMPILER, NOT A DEPENDENCY OF IT. `compileSugarlangScene` must NOT call the extractor: it is pure and synchronous and its output feeds `computeSceneContentHash`, while extraction is an async gateway call. Wiring it in would force the compiler async, make it require a gateway, break hash determinism, and break all eight of its direct callers (enumerated under 090.2 DELIVERY, where round 2 also establishes that the READ paths -- not the call sites -- are the seam that matters). This is exactly why chunks and intents are separate pipelines writing side fields post-hoc. It is also a SIBLING of the MultiWordExpressionExtractor, not an extension of it: that one is surface-bound (spots multi-word expressions appearing VERBATIM in authored text, prompt forbids inventing), this one is inferential (what the scene is ABOUT, usually a word appearing nowhere). Different linguistic objects, different consumers, no overlap -- MWEs are multi-word by definition, concepts are single-word by schema.
 
@@ -118,11 +138,11 @@ NO SECOND TRAVERSAL OF AUTHORED CONTENT. The extractor consumes the SAME `SceneA
 ```
   SceneAuthoringContext        <- built ONCE by createSceneAuthoringContext
         |
-        +--> VocabularyExtractor      -> SceneVocabularyModel  (pure, sync)
+        +--> SceneVocabularyExtractor      -> SceneVocabularyModel  (pure, sync)
         |    (compileSugarlangScene, renamed + collapsed in 090.2)
         +--> MultiWordExpressionExtractor -> MWEs (LexicalChunk[])  (LLM, async)
         +--> extractIntent()          -> intent artifacts      (LLM, async)
-        +--> ContextExtractor         -> SituationModel        (LLM, async)  <- new
+        +--> SceneContextExtractor         -> SceneContextModel        (LLM, async)  <- new
                                           - prose description
                                           - concept list (English + POS)
                                           - provenance per concept
@@ -133,8 +153,8 @@ CALLERS decide which sources they hold and when they call:
   (4th pipeline beside    -> (authored projection)  -> reused until authoring
    chunk/intent/variant)                                changes
 
-  conversation start /       cached model + live       composed situation
-  situation change        -> runtime sources:
+  conversation start /       SceneContextModel +       SITUATION
+  situation change        -> live runtime sources:      (the composed thing)
                              met/unmet, quest stage,
                              time of day, turns so far
                                     |
@@ -205,11 +225,11 @@ Round 7 wrap: 090.10 (delete the prescriber) is NEW and sits immediately after
 090.4 -- it is the closing edge of the deletion order, and putting it any later
 means the epic ships with two authorities alive.
 
-### 090.1 ContextExtractor + SituationModel
+### 090.1 SceneContextExtractor + SceneContextModel
 
 WHAT IT BUILDS. One lifecycle-agnostic module. A `ContextSource` interface that
-authored documents AND live game state both satisfy; `ContextExtractor` takes a
-set of sources and returns a `SituationModel` -- a prose description of the
+authored documents AND live game state both satisfy; `SceneContextExtractor` takes a
+set of sources and returns a `SceneContextModel` -- a prose description of the
 situation plus a concept list of English word + POS + provenance. The module
 never asks where it is in the game lifecycle.
 
@@ -266,7 +286,7 @@ SITUATION SOURCES -- WHAT IS ACTUALLY AUTHORED:
   bug fixed 2026-07-27; the presence projection inherits it.
 - `RegionNPCPresence.condition` (:102, Plan 079) gates presence on quest state.
   `createSceneAuthoringContext` includes ALL presences unconditionally
-  (scene-traversal.ts:459-465), so a cached compile-time SituationModel can
+  (scene-traversal.ts:459-465), so a cached compile-time SceneContextModel can
   describe an NPC who is not there. 090.3's overlay MUST filter through the
   existing single enforcer `evaluateRegionQuestBinding`
   (runtime-core/coordination/gameplay-session.ts:1253-1254, 1270) -- do not write
@@ -326,7 +346,7 @@ Without it 090.4 has nowhere to read the obligation from and quest-essential
 stays a private road (see 090.4).
 
 - Exit: a scene fixture with Finnick (bio "obsessed with cheese", no
-  target-language words anywhere) produces a SituationModel whose CONCEPT LIST
+  target-language words anywhere) produces a SceneContextModel whose CONCEPT LIST
   contains "cheese" with provenance back to his bio (integration). Do NOT assert
   the prose names "his role" -- there is no authored role field, so that would
   assert an LLM-invented string.
@@ -442,8 +462,8 @@ need precisely that and nothing more --
 verifier's `knownEntities` (verify-middleware.ts:334,479) wants the names.
 
 RENAME IT. "Lexicon" promises a dictionary and this will not be one -- the ATLAS
-is the lexicon. `SceneVocabularyModel`, produced by a `VocabularyExtractor` (see
-"The architecture" above, where it is now the ContextExtractor's sibling rather
+is the lexicon. `SceneVocabularyModel`, produced by a `SceneVocabularyExtractor` (see
+"The architecture" above, where it is now the SceneContextExtractor's sibling rather
 than "the compiler").
 
 - Exit: concepts resolve to the four pinned lemma ids; `partsOfSpeech` always
@@ -1333,7 +1353,7 @@ two properties most likely to regress.
 
 ## Epic wrap
 
-docs/api: extend the middlewares doc's Teaching Decision Model (candidate sourcing gains the situation layer; the one rung marked unmodeled is now modeled); a NEW compile page for the SituationModel artifact + cache (none exists today); telemetry page rows for the new events and TeachReason / ProbeTriggerReason variants, plus a `SERVER_BOUND_PII_FIELDS` check on any payload carrying situation prose or player text. Correct 087's teacher page for the re-defaulted LLM path. Strategy 002: add child epic I status. Backlog sweep of DEFERRED SEAM comments.
+docs/api: extend the middlewares doc's Teaching Decision Model (candidate sourcing gains the situation layer; the one rung marked unmodeled is now modeled); a NEW compile page for the SceneContextModel + SceneVocabularyModel artifacts + caches (none exists today), naming the two extractors as siblings; telemetry page rows for the new events and TeachReason / ProbeTriggerReason variants, plus a `SERVER_BOUND_PII_FIELDS` check on any payload carrying situation prose or player text. Correct 087's teacher page for the re-defaulted LLM path. Strategy 002: add child epic I status. Backlog sweep of DEFERRED SEAM comments.
 
 ## Deferred / out of scope (with revisit triggers)
 
