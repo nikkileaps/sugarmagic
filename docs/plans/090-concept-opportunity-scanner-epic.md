@@ -16,7 +16,7 @@ Related:
 - Strategy 002 -- proposed new child epic; the missing INPUT to epic E (Plan 087, teacher outer loop)
 - Plan 087 (epic E) -- HARD dep, SHIPPED: `OuterLoopScheduler` + `SchedulerBoardView` + `LexicalBudgeter` are the gating and pacing half. This epic feeds them the thing they have never had: the SITUATION. 087 also explicitly assigns the function-chunk starvation fix here (087 "Outstanding at PR time")
 - Plan 083 -- SHIPPED: `SugarLangTeacher` / `ClaudeTeacherPolicy` / `DirectiveCache`. The teacher LLM this epic re-feeds ALREADY EXISTS; 087.6 currently bypasses it (see 090.4)
-- Plan 086 (epic C) -- SHIPPED: `MultiWordExpressionExtractor` (renamed from `extract-chunks` 2026-07-28) and `extract-intent` are the compile-pipeline precedent (gateway + Ajv + content-hash cache + fail-soft). NOTE: "bake" in this codebase means something narrower -- 086's scripted VARIANT baking (`BakedLineVariant`, `generateVariant`). This epic is COMPILE-time work, a fourth pipeline beside chunk/intent/variant. Do not call it baking.
+- Plan 086 (epic C) -- SHIPPED: `MultiWordExpressionExtractor` (renamed from `extract-chunks` 2026-07-28) and `LineIntentExtractor` (was `extract-intent`, 2026-07-29) are the precedent for this shape: gateway + Ajv boundary + content-hash cache + fail-soft. NOTE the vocabulary here, since three words got used loosely and each meant something narrower than it sounded. **bake** = 086's scripted VARIANT generation (`BakedLineVariant`, `generateVariant`) and nothing else. **compile** promised something automatic that does not exist -- there is no on-save and no debounce, only an explicit Rebuild plus a lazy per-scene path -- so this epic says **build**. This epic adds a build pass beside chunks and intent; do not call it baking, and do not call it compiling.
 - Plan 085 (epic B) -- SHIPPED: function inventory; concepts can resolve to functions, not only lemmas
 - Plan 088 (epic F) -- NOT a dependency: 088 is Status DRAFT and its 088.3 defers probe-firing back to 087's slot, so any "088 decides" dependency is circular. 090.4 owns its own firing rule
 - Plan 074 (world clock) -- CONFIRMED available: `getWorldDay` is already read at sugar-lang-context-middleware.ts:399 and `runtimeContext.timeOfDay` exists
@@ -244,11 +244,39 @@ presences from `regionContents`, NPC bios/roles, resolved lore pages, region and
 area lore, item and document lore, quest text. No new traversal: `collectSceneText`
 already walks all of it and a second walk would drift. 090.3 wires live sources.
 
-Runs as a FOURTH pipeline in `SugarlangAuthoringCompileScheduler` beside
-`chunkPipeline` / `intentPipeline` / `variantPipeline` (compile-scheduler.ts:45-99)
--- same debounce, cache-hit skip, stale-hash discard. Cached like chunks
-(`chunk-cache.ts` shape, key `lang:promptVersion:contentHash`; model is NOT in the
-key, so prompt version must be bumped deliberately).
+RUNS AS PART OF THE BUILD. Corrected 2026-07-29 -- the earlier text here said
+"a FOURTH pipeline ... same debounce, cache-hit skip, stale-hash discard", and
+three of those four claims were false:
+
+- **"Fourth" is now third.** `variantPipeline` was deleted 2026-07-29: it was
+  never constructed outside tests, and the real bake path is the popover's
+  `generateVariantsForNode`. So bulk variant baking never existed.
+- **There is no debounce.** `notifySceneChanged` and `scheduleDialogue` have ZERO
+  callers repo-wide. The only triggers are the manual Rebuild button
+  (`manual-rebuild-button.tsx:92` -> `rebuildSugarlangCompileCache`, which sets
+  `debounceMs: 0` and flushes synchronously) and lazy per-scene compile
+  (`scene-lexicon-store.ts:82` -> `ensureScene`). Not on save, not on a timer.
+- **"Compile" oversells it.** The word promises something automatic. What exists
+  is a BUILD: an explicit action the author takes. Say build.
+
+So: wire the extractor into `rebuildSugarlangCompileCache` alongside the chunk
+and intent passes, and into `ensureScene` for the lazy path. Cache-hit skip and
+stale-hash discard are real and do apply; debounce is not something to inherit.
+
+CACHE KEY IS `{contentHash, supportLanguage, promptVersion}` -- NOT the target
+language, and this is the one place not to copy the chunk pipeline. Concepts are
+English words, so the same scene compiled for Spanish and for Italian yields
+IDENTICAL concepts and must share one cache entry. Copying `lang:...` would
+re-extract and re-bill the same scene once per target language. Only resolution
+(090.2) is target-specific. Model is NOT in the key, so a prompt change requires
+a deliberate version bump -- `SCENE_CONTEXT_PROMPT_VERSION`.
+
+Note this pass is the one place prompt-version keying is unambiguously CORRECT:
+concepts are pure model output with no author edit path, so invalidating them on
+a prompt change loses nothing. That is not true one file over -- the variant
+cache is keyed the same way and orphans hand-edited variants (docs/backlog/007).
+Do not generalize the pattern; it is right here for a reason that does not
+transfer.
 
 PREREQUISITE: dialogue text carries no NPC attribution today.
 `collectDialogueBlobs` sets `sourceKind: "dialogue"` and never `npcDefinitionId`
