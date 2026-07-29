@@ -70,7 +70,44 @@ Three consequences that the story set depends on:
 
 So this epic changes BEHAVIOR in exactly one cell -- runtime x agentified. It still WRITES code in the compile column (090.1's fourth pipeline), because the situation the runtime cell consumes is mostly compile-derived; that pipeline is new work, not a behavior change to the bake/variant cell, which it does not touch. Precise claim: no observable change to scripted output at either lifecycle. Sharpened round 1 -- the earlier "changes exactly one cell" read as "only one file region moves", which is false.
 
-## The architecture (whiteboard, 2026-07-28)
+## The architecture (whiteboard, 2026-07-28; extractor symmetry added 2026-07-29)
+
+TWO EXTRACTORS OVER ONE SOURCE. This is the framing the rest of the section
+should be read through, and it is nikki's, not an earlier draft's. `SCENE` means
+one narrative Scene's reachable authored content -- region + composed
+`regionContents`, npcs, dialogues, quests, items, lorePages -- assembled once by
+`createSceneAuthoringContext` (scene-traversal.ts:452). Both extractors take that
+same object and ask different questions about it:
+
+```
+SceneAuthoringContext
+   |
+   +--> VocabularyExtractor -> SceneVocabularyModel   WHAT WORDS ARE IN THIS TEXT
+   |    (deterministic, sync)                          lemmaIds, properNouns,
+   |                                                   questEssentialLemmaIds
+   |
+   +--> ContextExtractor    -> SituationModel         WHAT IS THIS CONTENT ABOUT
+        (LLM, async)                                   prose, concepts (English + POS),
+                                                       provenance
+```
+
+`VocabularyExtractor` is not new code -- it is `compileSugarlangScene` named for
+what it does, and 090.2 collapses its output to the shape above. Calling it "the
+scene lexicon compiler" is what made it read as a mysterious duplicate of the
+atlas; it is an extractor, and its sibling extracts meaning from the same input.
+
+The pairing is the point: **text facts and meaning facts are siblings, not
+parent and child.** Neither derives from the other, neither is an input to the
+other, and both are compile artifacts keyed on the same content hash. Conflating
+them is what produced the motivating bug -- the text path cannot see what content
+is ABOUT, so a cheese-obsessed NPC whose lines are generated at runtime never
+yielded `queso`.
+
+The asymmetry is real and fine: extraction of meaning needs a gateway, extraction
+of vocabulary does not. That is the same capability split 090.1 draws inside the
+ContextExtractor's own entry points.
+
+---
 
 `ContextExtractor` is ONE lifecycle-agnostic module. It takes context sources and returns a `SituationModel`. It does not know or care whether it is called from the compile scheduler or from a live conversation -- that is the caller's concern, exactly as `compileSugarlangScene(scene, atlas, morphology, profile)` is a pure function whose caching and debounce belong to `SugarlangAuthoringCompileScheduler`.
 
@@ -81,7 +118,8 @@ NO SECOND TRAVERSAL OF AUTHORED CONTENT. The extractor consumes the SAME `SceneA
 ```
   SceneAuthoringContext        <- built ONCE by createSceneAuthoringContext
         |
-        +--> compileSugarlangScene()  -> CompiledSceneLexicon  (pure, sync)
+        +--> VocabularyExtractor      -> SceneVocabularyModel  (pure, sync)
+        |    (compileSugarlangScene, renamed + collapsed in 090.2)
         +--> MultiWordExpressionExtractor -> MWEs (LexicalChunk[])  (LLM, async)
         +--> extractIntent()          -> intent artifacts      (LLM, async)
         +--> ContextExtractor         -> SituationModel        (LLM, async)  <- new
@@ -360,9 +398,62 @@ scheduler like chunks. It is the compile artifact. Drop the read-time projection
 into `lemmas` unless the budgeter-deletion order (below) proves it is needed as
 a transition scaffold.
 
+COLLAPSE THE ARTIFACT. `CompiledSceneLexicon` is a record map shadowing the
+atlas, and once the budgeter goes it is almost entirely dead weight.
+`SceneLemmaInfo` (scene-lexicon.ts:72-86) has seven fields:
+
+| Field | Fate |
+|---|---|
+| `lemmaId` | survives |
+| `cefrPriorBand` | **verbatim atlas copy** -- delete, look up by id |
+| `frequencyRank` | **verbatim atlas copy** -- delete |
+| `partsOfSpeech` | **verbatim atlas copy** -- delete |
+| `isQuestCritical` | survives |
+| `sceneWeight` | budgeter ranking only (scoring.ts:149-154) -- dies with it |
+| `npcSourceIds` | budgeter ranking only -- dies with it |
+
+Two of seven survive. Three are duplicates of data the atlas already owns, which
+is the "one source of truth" rule in AGENTS.md broken in the small, and it is why
+this artifact reads as a confusing shadow copy of the dictionary. Same for
+`anchors` (only consumers are lexical-budgeter.ts:188 and scoring.ts:159).
+
+Target shape -- an INDEX INTO the atlas, not a subset OF it:
+
+```ts
+SceneVocabularyModel {          // was CompiledSceneLexicon
+  sceneId, contentHash, pipelineVersion, atlasVersion, profile  // cache keys, unchanged
+  lemmaIds: string[]                    // was lemmas: Record<string, SceneLemmaInfo>
+  properNouns: string[]
+  questEssentialLemmaIds: string[]
+  conceptLemmas?: ...                   // this story's side field
+  sources?, diagnostics?                // authoring surfaces, unchanged
+}
+```
+
+Delete `SceneLemmaInfo`, `anchors`, `sceneWeight`, `npcSourceIds`. Every field
+read that survives (band for the Studio density histogram, `cefrPriorBand` at
+prompt-builder.ts:354) repoints to an atlas lookup by id.
+
+WHAT IS LEFT IS EXACTLY WHAT A DICTIONARY CANNOT ANSWER: which words are in this
+scene, which names are in it, which are quest-critical. Both surviving consumers
+need precisely that and nothing more --
+`estimateSceneComprehensionRate(lemmaCards, sceneLemmaIds)`
+(comprehension-rate.ts:57-65) wants a ratio over "words in this scene", and the
+verifier's `knownEntities` (verify-middleware.ts:334,479) wants the names.
+
+RENAME IT. "Lexicon" promises a dictionary and this will not be one -- the ATLAS
+is the lexicon. `SceneVocabularyModel`, produced by a `VocabularyExtractor` (see
+"The architecture" above, where it is now the ContextExtractor's sibling rather
+than "the compiler").
+
 - Exit: concepts resolve to the four pinned lemma ids; `partsOfSpeech` always
   contains the concept POS; empty pool drops with telemetry; the side field is
   persisted and survives a cache-hit recompile.
+- `SceneLemmaInfo` is deleted, asserted by grep (pin). No band, rank or POS value
+  is stored outside the atlas, asserted by grep for `cefrPriorBand:` outside
+  `providers.ts` and the atlas loader (pin -- the duplication this collapses).
+- The Studio density histogram still renders, reading bands from the atlas
+  (integration -- the one surviving consumer of the deleted fields).
 
 ### 090.8 Realization -- NEW, and the most valuable story here
 
