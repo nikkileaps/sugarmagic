@@ -48,22 +48,18 @@ knowing about: the reverse gloss index is keyed on the exact English gloss, so
 `cheese` resolves and `cheeses` does not (`resolveFromGloss`,
 `cefr-lex-atlas-provider.ts:208-215`).
 
-### Lexicon (`sceneLexicon`)
+### Scene vocabulary
 
-The slice of the atlas that one scene is *about*, computed at compile time by
-tokenizing authored text and matching English words against atlas glosses.
-Type: `SceneLemmaInfo` (`runtime/contracts/scene-lexicon.ts:72-86`).
+Which atlas lemmas one scene's authored text actually uses, plus the proper nouns
+in it. An **index into** the atlas -- a list of ids -- not a copy of it; band,
+rank and part of speech are looked up from the atlas by id.
 
-Same identity fields as an atlas lemma, plus scene-derived ones:
+Today it is `CompiledSceneLexicon` / `SceneLemmaInfo`
+(`runtime/contracts/scene-lexicon.ts`) and does store copies. Plan 090 collapses
+it and drops the "lexicon" name, because the atlas is the lexicon.
 
-| Field | Meaning |
-|---|---|
-| `sceneWeight` | accumulated relevance -- how often, and in how heavy a source |
-| `npcSourceIds` | which NPCs' lore/bio contributed to that weight |
-| `isQuestCritical` | the lemma is required to understand a quest |
-
-**Atlas vs lexicon** is the distinction to hold: the atlas is the dictionary; the
-lexicon is "which dictionary entries this scene is about."
+**Atlas vs scene vocabulary:** the atlas is the dictionary; the scene vocabulary
+is which entries this text uses.
 
 ### Concept
 
@@ -103,19 +99,18 @@ table (`TEXT_BLOB_WEIGHTS`, `scene-traversal.ts:95-103`):
 | `item-label` | 0.7 |
 | `region-label` | 0.4 |
 
-### Why the distinction between these five matters
+### Why the distinction matters
 
-Two different paths produce teachable vocabulary, and they have different
-reach:
+Two paths read the same authored content and ask different questions:
 
 ```
-blob -> lexicon -> candidates      needs the literal English word in authored text
-prose -> concept -> lemma          infers what the content is ABOUT
+blobs -> scene vocabulary     what words are IN this text
+prose -> concepts -> lemmas   what this content is ABOUT
 ```
 
 Only the first exists in shipped code, and it is why a cheese-obsessed NPC never
-taught `queso`: his lines are generated at runtime, so "cheese" was never in a
-blob, so `queso` never entered the lexicon. Plan 090 adds the second path.
+taught `queso`: his lines are generated at runtime, so "cheese" was never in
+authored text for the scan to find. Plan 090 adds the second.
 
 ---
 

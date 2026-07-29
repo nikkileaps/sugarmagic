@@ -17,7 +17,9 @@ single boundary that distills them.
 ```mermaid
 erDiagram
     CONTEXT_SOURCE ||--o{ CONTEXT_EXTRACTOR : "is read by"
+    CONTEXT_SOURCE ||--o{ VOCABULARY_EXTRACTOR : "is read by"
     CONTEXT_EXTRACTOR ||--|| SITUATION : "extracts"
+    VOCABULARY_EXTRACTOR ||--|| SCENE_VOCABULARY : "extracts"
 
     SITUATION ||--o{ TEACHER : "relevance"
     LEARNER ||--o{ TEACHER : "standing"
@@ -25,6 +27,8 @@ erDiagram
     TEACHER ||--o{ DIRECTIVE : "decides"
     DIRECTIVE ||--o{ TURN : "shapes"
     VERIFIER ||--o{ TURN : "checks"
+    SCENE_VOCABULARY ||--o{ VERIFIER : "authored names"
+    SCENE_VOCABULARY ||--o{ LEARNER : "comprehension scope"
     TURN ||--o{ OBSERVATION : "yields"
     OBSERVATION ||--o{ LEARNER : "updates"
 ```
@@ -32,6 +36,28 @@ erDiagram
 That last edge closes the loop: what the learner did with a turn becomes the
 state the next decision reads. `LEARNER` is both an input to the Teacher and the
 thing observations write back to.
+
+### Two extractors, one source
+
+The same content sources are read twice, for different questions, and the
+answers go to different places:
+
+| | Question | Determinism | Feeds |
+|---|---|---|---|
+| `CONTEXT_EXTRACTOR` | what is this content **about**? | inferred, model call | `TEACHER` |
+| `VOCABULARY_EXTRACTOR` | what words are literally **in** it? | deterministic scan | `VERIFIER`, `LEARNER` |
+
+They are **siblings** — neither derives from the other, neither is an input to
+the other. That separation is the correction this model exists to make. A single
+text-scanning path cannot see what content is about, which is why a
+cheese-obsessed NPC whose lines are generated at runtime never yielded `queso`:
+the word appeared in no authored text, so nothing could nominate it.
+
+Note `SCENE_VOCABULARY` never reaches the `TEACHER`. It carries authored proper
+nouns (so the verifier does not count a character's name as out-of-envelope
+vocabulary) and the set of words in scope for the learner's comprehension
+estimate. Neither is a teaching decision, and routing them through the Teacher
+would be the same conflation in a new direction.
 
 ### Two kinds of box
 
@@ -44,6 +70,7 @@ the difference matters when reading the arrows:
 | System | Its one question |
 |---|---|
 | `CONTEXT_EXTRACTOR` | what is going on here? |
+| `VOCABULARY_EXTRACTOR` | what words are in this text? |
 | `LEARNER` | what does this person know, and what can they take? |
 | `TEACHER` | what should be taught, and how? |
 | `VERIFIER` | was it said correctly? |
@@ -55,7 +82,8 @@ single door for everything behind it.
 
 | Artifact | Produced by | Read by | What it hides |
 |---|---|---|---|
-| `SITUATION` | extractor | teacher | every content source — NPCs, scene, quests, items, lore, live facts |
+| `SITUATION` | context extractor | teacher | every content source — NPCs, scene, quests, items, lore, live facts |
+| `SCENE_VOCABULARY` | vocabulary extractor | verifier, learner | which words and names the authored text actually contains |
 | `DIRECTIVE` | teacher | renderer | the whole judgment: actions, posture, glossing, complexity, probe |
 | `TURN` | renderer | verifier, observer | the rendered text and its annotations |
 | `OBSERVATION` | observer | learner | what the learner did |
@@ -128,6 +156,7 @@ erDiagram
 | Boundary | Composed of |
 |---|---|
 | `SITUATION` | prose description; concepts (+ provenance, + must-comprehend flags); who is present; what this place is; quest stage; time of day; what has been said so far |
+| `SCENE_VOCABULARY` | the lemma ids this scene's text uses; authored proper nouns; quest-essential lemma ids. An INDEX into the atlas, not a copy of it — band, rank and part of speech are looked up by id, never stored twice |
 | `LEARNER` | band; standing per lemma; capacity (fatigue, session depth, conversation depth); comprehension rate |
 | `DIRECTIVE` | actions (introduce/reinforce/probe/skip per lemma); posture; glossing; complexity cap; optional comprehension check; lifetime |
 
@@ -155,6 +184,27 @@ exist. They simply do not appear at this level, because at this level nothing
 talks to them directly.
 
 ---
+
+### The Situation has a compile half and a runtime half
+
+`SITUATION` is a single boundary in this model, but it is assembled from two
+pieces with different lifetimes, and naming only the whole has caused real bugs:
+
+```
+SceneContextModel      compile-time, scene-scoped, cached on content hash
+  + who is ACTUALLY present, met/unmet, quest stage, time of day
+  ------------------------------------------------------------------
+= SITUATION            what the Teacher is handed
+```
+
+Only the composed thing is a domain boundary; `SceneContextModel` lives inside
+it as the cacheable half. The distinction matters because the compile half is
+happy to describe an NPC who is not standing there — presence conditions are
+runtime facts — so anything reading scene context as if it were the situation
+will teach about characters the player cannot see.
+
+`SCENE_VOCABULARY` is compile-only and has no runtime half; the words in a piece
+of authored text do not change when the player walks up to it.
 
 ## Lifecycle — when each thing runs
 
@@ -367,7 +417,7 @@ reconciling:
 | Story | As written | Under this model |
 |---|---|---|
 | **090.1** extractor | one lifecycle-agnostic module, compile caller first | Unchanged, and the lifecycle table above is the missing half of it. |
-| **090.2** delivery | Project concept lemmas into `sceneLexicon.lemmas` so the *budgeter* sees them | The budgeter is no longer the consumer. Concepts reach the Teacher via the Situation; the projection into `lemmas` may not be needed at all. |
+| **090.2** delivery | Project concept lemmas into `sceneLexicon.lemmas` so the *budgeter* sees them | The budgeter is no longer the consumer. Concepts reach the Teacher via the Situation; the projection is not needed. **Further (2026-07-29):** the artifact itself collapses. Of `SceneLemmaInfo`'s seven fields, three are verbatim atlas copies and two exist only for budgeter ranking — `SCENE_VOCABULARY` becomes an index into the atlas, and `sceneLexicon` is renamed, since the ATLAS is the lexicon. |
 | **090.3** runtime overlay | overlay + situation-change detection | Unchanged and now load-bearing: the situation key is what tells the slate it is stale. |
 | **090.4** judgment | "budgeter FILTERS bind, RANKING is advisory" | Collapses. There is no advisory ranking to reshape — the Teacher ranks. Add: the Teacher produces a **slate**, not a per-turn answer. |
 | **090.5** effective cap | "strain consume + depth ramp + function reserve" | Right work, wrong home. It is how `LEARNER` reports capacity — and it applies at *realization*, per text, not by pre-truncating the slate. |
