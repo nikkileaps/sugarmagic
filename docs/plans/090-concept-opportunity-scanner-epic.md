@@ -2,7 +2,7 @@
 
 Status: DRAFT -- NOT LOCKED. epic-review has run 7 rounds (2026-07-28, -29). Rounds 1-3 audited against the CODE and it held. Round 4 audited against the DOMAIN MODEL and it did not. Rounds 5-7 each audited the PREVIOUS round's new text and each found real defects in it -- that is the standing pattern and it has not damped yet. Round 5: the Teacher LLM is already off the live path for every learner with one lemma card (sugar-lang-teacher-middleware.ts:333). Round 6: the weave has no English lemmatization, so 090.8's exit fixture could never have passed; and "unify the band+1 predicates" would have caused a regression. Round 7: 090.8's rewritten exit PASSED TODAY (the item path already draws the whole band, display-text-resolver.ts:247-249); the two genuinely unowned authorities are sugar-lang-scripted-middleware.ts:251-257 and :426-431, not the live-render local round 6 named; and item bodies are NOT among the broken surfaces. All applied.
 
-Round 7 WRAP, and it is the finding no review round produced: the demolition itself was never a story. `prescribe()`'s deletion lived in a prose section with no exit line and landed in ceiling 090.5, so the floor would have shipped with the budgeter and the slate both authoritative -- the exact condition this epic exists to remove. **090.10 Delete the prescriber** is new, is in the floor, and has grep exits. The gate was auditing claims about code; the gap was a missing acceptance line, which is a different class of defect and argues the rounds had stopped paying for themselves.
+Round 7 WRAP, and it is the finding no review round produced: the demolition itself was never a story. `prescribe()`'s deletion lived in a prose section with no exit line and was sequenced last, so the epic would have shipped with the budgeter and the slate both authoritative -- the exact condition this epic exists to remove. **090.10 Delete the prescriber** is new and has grep exits. The gate was auditing claims about code; the gap was a missing acceptance line, which is a different class of defect and argues the rounds had stopped paying for themselves.
 
 Not locked. The ARCHITECTURE is stable -- seven rounds, four reviewers, zero challenges to situation -> slate -> realization or to standing-vs-action. What kept churning was the demolition inventory and the prose. 090.1 and 090.2 are untouched by every finding in rounds 5-7 and can be built now; 090.3 / 090.4 / 090.8 / 090.10 scope is explicitly provisional and will be finished by opening the files.
 
@@ -165,7 +165,7 @@ situation-keyed home before realization can read it, and 090.8 stays ahead of
 090.4 because its prompt cap must exist before 090.4 de-truncates the slate.
 Round 7 wrap: 090.10 (delete the prescriber) is NEW and sits immediately after
 090.4 -- it is the closing edge of the deletion order, and putting it any later
-means the floor ships with two authorities alive.
+means the epic ships with two authorities alive.
 
 ### 090.1 ContextExtractor + SituationModel
 
@@ -274,7 +274,7 @@ by row three and only row three.
 lemma in `targetVocab.introduce` while its immediate neighbour caps
 (`avoid.slice(0, 12)`, :55). Today the pre-truncation to 3 is what keeps it sane.
 090.4 removes that truncation. **Therefore the prompt-shaping cap must land in
-the same change that removes the pre-truncation, or the floor makes the
+the same change that removes the pre-truncation, or the epic makes the
 agentified cell strictly worse** -- an untruncated slate straight into a prompt.
 This is the one hard ordering constraint in the epic.
 
@@ -304,11 +304,11 @@ atlas-existence check:
 
 | Line | Path | What it does |
 |---|---|---|
-| `:251-257` | **anchored/supported -- THE FLOOR CELL** | APPENDS validated facts to `introduce`. No slate, no standing, no band envelope, no cap. |
+| `:251-257` | **anchored/supported -- the A1/A2 cell** | APPENDS validated facts to `introduce`. No slate, no standing, no band envelope, no cap. |
 | `:426-431` | target-dominant baked variant | REPLACES `introduce` wholesale. |
 
 `:251-257` is the more serious: it is on the A1/A2 path this epic calls its
-floor, and it is the LAST writer before observe. `buildTargetLemmaSet`
+A1/A2 path, and it is the LAST writer before observe. `buildTargetLemmaSet`
 (sugar-lang-observe-middleware.ts:87-93) is built from `introduce` union
 `reinforce` and gates card creation at `:450-455` -- so this block decides which
 lemmas the learner gets CARDS for.
@@ -370,9 +370,9 @@ weave identically, and no story owned it.
 
 Decision: **English-side normalization is OUT of 090.8's scope** -- it is a
 separate concern (an English lemmatizer or a widened gloss index) with its own
-risk surface, and folding it in would make the floor's most valuable story
+risk surface, and folding it in would make this story
 unbounded. Instead: the fixture uses BASE FORMS, and the gap goes to Deferred
-with a trigger. The floor still shows a beginner Spanish words; it shows them for
+with a trigger. The epic still shows a beginner Spanish words; it shows them for
 base-form English only.
 
 Consequences the story must honour:
@@ -384,7 +384,7 @@ Consequences the story must honour:
   gives the property that pays for it here: adding a kind is a compile error at
   every consumer. Cite that file; do not re-derive the pattern.
 - **The A1/A2 path is where the epic's bug lives** and where the deterministic
-  intersection belongs. That is the floor.
+  intersection belongs.
 - For target-dominant, "what got taught" is a CLASSIFICATION of generated text.
   Machinery for this already exists -- `computeCoverage` + the classifier facade
   -- and the observe middleware already tokenizes every turn. Do not build a
@@ -436,12 +436,12 @@ SCOPE:
 - A `realize(slate, standing, text, posture)` seam with TWO strategies behind
   it, selected by posture -- substitution for anchored/supported, generation for
   target-dominant. Not one function with a branch.
-- **The substitution strategy is the floor.** Pure, zero LLM, per narrative
+- **The substitution strategy is the core of this story.** Pure, zero LLM, per narrative
   unit, total in the same sense as `createDisplayTextResolver` -- absent inputs
   yield authored text, never a throw. It owns the POOL (slate ∩ text) and the
   per-text substitution count.
 - **The prompt-shaping strategy caps `constraint.targetVocab` ITSELF -- both
-  `introduce` AND `reinforce` -- not the overlay string.** In the floor, and in
+  `introduce` AND `reinforce` -- not the overlay string.** In
   the same change as 090.4's de-truncation. Round 6 correction: round 5 named one
   of FOUR uncapped renderings of the slate, and not the one that reaches the
   player. Capping at the constraint covers all four at once, which is why it is
@@ -492,7 +492,7 @@ SCOPE:
   item views deliberately run before any conversation exists
   (`runtime-services.ts:392-402`). This story's own exit and probe 4 are both item
   bodies, so without this they cannot pass. Key the slate on the SITUATION, and
-  state the key in the exit. Round 5 finding -- the floor as previously written
+  state the key in the exit. Round 5 finding -- the plan as previously written
   could not satisfy its own acceptance test.
 - **Posture on the item path comes from the BAND, not the Directive.** Round 6
   caught a contradiction round 5 introduced: the bullet above says the slate
@@ -705,13 +705,13 @@ prompt content, so assert the prompt text directly.
   `SugarLangTeacher.invoke` catches `TeacherInvocationError` at :100-108 and never
   rethrows, so the 087.6 path is unreachable from here).
 
-### 090.10 Delete the prescriber -- NEW (round 7 wrap), IN THE FLOOR
+### 090.10 Delete the prescriber -- NEW (round 7 wrap)
 
 **Why this is a story and not a cleanup.** Every prior revision described the
 demolition in the "Budgeter deletion order" prose below and assigned its pieces
 to other stories' tables. Nothing owned the deletion itself, so no exit anywhere
 asserted that `prescribe()` was gone -- and the deletion landed with 090.5, which
-is ceiling. That meant the FLOOR shipped with the budgeter and the slate both
+was sequenced last. That meant the epic shipped with the budgeter and the slate both
 authoritative, which the epic's own closing invariant forbids. Seven review
 rounds did not catch this, because they were auditing claims about code and this
 gap was a missing acceptance line. It is now a story with falsifiable exits.
@@ -928,9 +928,9 @@ only when `receptiveGrade !== null` (fsrs-adapter.ts:173-174) while the
 because there were fixed slots to stall in. Remove the pre-truncation and there
 are none.
 
-This deletion invalidates the old shippable-floor argument, which justified
-including 090.6 on the premise that "the first `levelCap` score winners hold the
-introduce slots permanently". That premise is gone. Floor re-derived below.
+This deletion invalidates the old argument for
+including 090.6, which rested on the premise that "the first `levelCap` score winners hold the
+introduce slots permanently". That premise is gone.
 
 ### 090.7 Visibility
 
@@ -946,25 +946,31 @@ is what cost hours on 2026-07-28.
 - Exit: the trace distinguishes slate from realization; a turn where slate and
   text are disjoint says so explicitly (pin).
 
-## The shippable floor
+## Ordering constraints
 
-RE-DERIVED round 4. The old floor (090.1, 090.2, 090.4, 090.5a, 090.6) rested on
-a premise the model removes -- that introduce slots are permanently held, so
-nothing is visible until they turn over. With no pre-truncation there are no
-slots, and 090.6 is deleted.
+The epic ships. Every story ships as written, in the order given at the top:
+**090.1, 090.2, 090.9, 090.3, 090.8, 090.4, 090.10, 090.5, 090.7.** Scope calls
+are nikki's; this section records only the DEPENDENCIES, which are technical
+facts, not opinions about what matters.
 
-**Floor = 090.1 + 090.2 + 090.9 + 090.4 + 090.8.**
+Three are hard:
 
-That is: extract concepts, resolve them to lemmas, give the learner a readable
-standing, let the Teacher produce an untruncated slate from situation + learner,
-and apply that slate to a specific piece of text.
+1. **090.3 before 090.8.** The slate needs a situation-keyed home before
+   realization can read it. `DirectiveCache` keys on `conversationId`
+   (directive-cache.ts:70) while item views deliberately render before any
+   conversation exists (runtime-services.ts:392-402), so 090.8's exits cannot
+   pass without 090.3's store.
+2. **090.8 before or with 090.4.** 090.4 removes the pre-truncation;
+   `generator-prompt-overlay.ts:53-54` renders `targetVocab` uncapped into the
+   agent prompt. Ship the cap first or the agent path gets an untruncated slate
+   straight into a prompt.
+3. **090.10 after 090.4.** Every owner named in "Budgeter deletion order" must
+   have landed before the module can go.
 
-090.8 is IN the floor. Without it the epic can produce a perfect slate and still
-render English.
+The rest of the sequence is preference, not constraint.
 
-WHICH SURFACES ACTUALLY RENDER ENGLISH -- corrected round 7, by measurement.
-An earlier draft said "both item bodies and A1 dialogue" and called it "a floor
-that cannot show a single Spanish word to a beginner". **Item bodies are not
+WHICH SURFACES ACTUALLY RENDER ENGLISH -- corrected round 7, by measurement,
+because three revisions of this plan named the wrong ones. **Item bodies are not
 broken.** Measured against the shipped es atlas, the whole-band pool at
 display-text-resolver.ts:247-249 substitutes roughly 70% of tokens in a
 representative item body at A1. The 2026-07-28 fix landed and it works.
@@ -975,8 +981,8 @@ The surfaces still rendering English are:
   top 3 (lexical-budgeter.ts:178), which almost never intersects one line.
 - **Agent turns** -- realized only through the prompt overlay, with no weave.
 
-Both are fixed by untruncated-slate + realization. That is the floor's real
-justification and it is narrower than the old one.
+Both are fixed by untruncated-slate + realization. That is what this epic is
+actually for.
 
 IT ALSO CUTS THE OTHER WAY, AND THE PLAN MUST SAY SO. Replacing the whole-band
 pool with slate ∩ text is a deliberate, player-visible **density REDUCTION** on
@@ -989,30 +995,6 @@ a verb for a noun; `smell -> oler`, likewise). A slate narrows to what was
 actually chosen and fixes those incidentally. Say it out loud so the density drop
 is not later filed as a regression -- and note it is the concrete answer to open
 decision D.
-
-090.5 (capacity) and 090.7 (visibility) are the ceiling.
-
-**090.3 MOVES INTO THE FLOOR** (round 5). The slate has to live somewhere, and
-the only key that works is the SITUATION key -- `DirectiveCache` keys on
-`conversationId` (`directive-cache.ts:70`) while item views deliberately render
-before any conversation exists (`runtime-services.ts:392-402`). 090.8's own exit
-and probe 4 are item bodies, so a floor without 090.3 cannot pass its own
-acceptance tests. Round 4 called 090.3 "the first ceiling story" for the
-staleness rule; round 5 found a harder reason it is not ceiling at all.
-
-**Floor, corrected: 090.1 + 090.2 + 090.9 + 090.3 + 090.8 + 090.4 + 090.10.**
-
-090.10 IS IN THE FLOOR AND THAT IS THE ROUND-7-WRAP CHANGE. Every prior floor
-ended at 090.4 and left `prescribe()` alive, with the deletion attached to 090.5
-(ceiling). A floor that leaves two systems answering "what should be taught" is
-not a floor -- it is the exact condition this epic exists to remove, shipped
-under the epic's own name. The deletion is now a story with greps for exits.
-
-Ordering inside the floor is not free. 090.8's prompt-shaping cap must land
-before or with 090.4's de-truncation (`generator-prompt-overlay.ts:54` is
-uncapped); 090.4 must resolve the 087.6 schedule bypass or nothing in it is
-observable; and 090.10 runs last, because every owner in the deletion order must
-have landed before the module can go.
 
 ## Budgeter deletion order
 
@@ -1056,7 +1038,7 @@ needing a named owner before `prescribe()` can go:
 | `repairDirective` filters against it AND defaults to it | schema-parser.ts:658-672, :695-698 | 090.4 |
 | scripted constraint reads it with no Teacher at all | sugar-lang-teacher-middleware.ts:246-248 | 090.8 |
 | **087.5 live render spends an unbudgeted per-line LLM call** | sugar-lang-scripted-middleware.ts:295-393 | **090.4** -- same decision as the 087.6 branch (it bypasses the prescription entirely, so no budgeter deletion reaches it) |
-| **intent-fact enrichment APPENDS uncapped facts to `introduce` on the FLOOR path** | sugar-lang-scripted-middleware.ts:251-257 | **090.4** (round 7) -- last writer before observe, so it decides which lemmas get cards |
+| **intent-fact enrichment APPENDS uncapped facts to `introduce` on the anchored/supported path** | sugar-lang-scripted-middleware.ts:251-257 | **090.4** (round 7) -- last writer before observe, so it decides which lemmas get cards |
 | **intent-fact enrichment REPLACES `introduce` on the baked path** | sugar-lang-scripted-middleware.ts:426-431 | **090.4** (round 7) |
 | `verifyLiveRender`'s own `introduce` exemption -- a SECOND prescription-introduce exemption channel parallel to envelope-rule.ts:82-89 | sugar-lang-scripted-middleware.ts:366 | same story as job 5, or the epic breaks its own single-enforcer rule |
 
@@ -1084,20 +1066,20 @@ prompt one.
 
 Only after all five jobs and all three consumers have owners is `prescribe()`
 unreferenced and the module deletable. **That final step is 090.10, and it is a
-story in the floor** -- see above. Until step 2 lands the old path must keep
+story** -- see above. Until step 2 lands the old path must keep
 working, so the side field from 090.2 may need the read-time projection as a
 transition scaffold; 090.10 deletes it in the same change.
 
-DO NOT LEAVE BOTH PATHS ALIVE PAST THE FLOOR. Round 6 weakened this to "past the
-epic" because the floor as then written violated it -- nothing in
+DO NOT LEAVE BOTH PATHS ALIVE AT EPIC END. Round 6 weakened this to "past the
+epic" because the sequence as then written violated it -- nothing in
 090.1/2/9/3/4/8 removed the `prescribe()` call at
-`sugar-lang-context-middleware.ts:449`, and rationing sat in ceiling 090.5. That
+`sugar-lang-context-middleware.ts:449`, and rationing sat in 090.5. That
 was fixing the invariant to match the plan rather than the plan to match the
 invariant, and it is exactly the move this epic exists to stop. **Reverted:**
-the rule stands as written, and 090.10 is what makes the floor satisfy it.
+the rule stands as written, and 090.10 is what makes the epic satisfy it.
 
 Two systems answering "what should be taught" is the condition that produced
-every bug in this epic. The floor does not ship with two.
+every bug in this epic. This epic does not ship with two.
 
 ## Verification recipe (nikki)
 
@@ -1147,11 +1129,11 @@ docs/api: extend the middlewares doc's Teaching Decision Model (candidate sourci
 - Synonym-gap drops (~6% of plausible game concepts): a concept drops when no gloss part names it exactly though a good lemma exists under a near-synonym -- `shop` (tienda glosses "store"), `morning` (mañana glosses "tomorrow"), `net` (red glosses "network"), `pier`, `smith`. A shopkeeper NPC is the second-most-obvious Finnick case and the epic no-ops on it. Dropping is SAFE, so this is deferred, but it caps reach. Options in cost order: have the extractor emit 2-3 synonym candidates per concept and resolve the union; an English synonym table for the top ~50 game concepts; or rely on the deferred author override. Trigger: 090.7 telemetry showing real drop rate (code comment at the resolver drop path).
 - **English-side inflection on the WEAVE path (round 6, NEW and the highest-value one here).** `diglotWeave` resolves raw tokens through an exact lowercased gloss lookup (diglot-weave.ts:72 -> cefr-lex-atlas-provider.ts:210) over a tokenizer that only lowercases (tokenize.ts:77). Measured against the shipped es atlas: `traveler` -> viajero but `travellers`/`travelers`/`traveller` -> nothing; `head` -> cabeza but `heads` -> nothing; `cheese` -> queso but `cheeses` -> nothing. So authored English in natural prose substitutes far less than it appears to, and the failure is SILENT and indistinguishable from an empty slate. This is the same mechanism as the compile scrub's known gap (line 27), which the plan had filed only against the scrub. Options in cost order: an English lemmatizer in front of `resolveFromGloss`; a plural/inflection index built at atlas load; authoring guidance to use base forms. Trigger: 090.7 telemetry showing weave attempt-vs-substitution rate per item body -- if base-form-only substitution reads as sparse in playtest, this is the first thing to fix (code comment at `resolveSubstitution`, diglot-weave.ts).
 - Multiword-gloss unreachability: 973 atlas entries (91 in the top-3000) have only multiword gloss parts and cannot be reached by single-word concepts + exact match. Same trigger; a phrase-concept mode needs the match predicate redesigned.
-- Author hand-editing of extracted concepts / situation: revisit on playtest evidence of misses or over-inclusion; 090.7 is the read-only floor.
+- Author hand-editing of extracted concepts / situation: revisit on playtest evidence of misses or over-inclusion; 090.7 is the read-only starting point.
 - NPC memory salience as a signal: needs a NEW sugaragent contribution carrying STRUCTURED topic ids across the plugin seam; free-text `salientFacts` is not deterministically matchable. Pinning context-middleware ordering (both plugins sit at stage `context` priority 10, unpinned) is a prerequisite.
 - Budgeter weight rebalance: revisit with 090.7 telemetry. Note for never-seen lemmas the largest absolute term is `w_prodgap * stability` (~1.44, scoring.ts:163/173), not `w_anchor` vs `w_npc`; it is near-constant across same-band candidates, so any rebalance starts from prodgap.
 - Cross-NPC concept graphs: revisit if single-scene extraction proves out.
-- Post-turn capture of concepts the NPC emitted unprompted (Finnick said `familia`, `tía` with nothing prescribing them): the observe middleware already tokenizes every turn and runs chunk matching, so noticing "target-language lemma with no card" is deterministic and cheap. Deliberately out of this epic to keep it one loop; revisit immediately after the floor ships, since it is the natural completion of "the verifiers CHECK" (code comment at the observe chunk matcher).
+- Post-turn capture of concepts the NPC emitted unprompted (Finnick said `familia`, `tía` with nothing prescribing them): the observe middleware already tokenizes every turn and runs chunk matching, so noticing "target-language lemma with no card" is deterministic and cheap. Deliberately out of this epic to keep it one loop; revisit immediately after this epic ships, since it is the natural completion of "the verifiers CHECK" (code comment at the observe chunk matcher).
 
 
 ## Open at gate exit (epic-review round 4, 2026-07-28)
@@ -1159,7 +1141,7 @@ docs/api: extend the middlewares doc's Teaching Decision Model (candidate sourci
 Round 4 reviewed the plan against
 `packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`
 rather than against the code. Its findings are applied above. Nothing here
-blocks the floor; every remaining item is decided inside the story that owns it.
+blocks the work; every remaining item is decided inside the story that owns it.
 
 Round 4 also settled several of the round-3 questions:
 
@@ -1247,6 +1229,6 @@ split rather than a tuning target.
 
 **What is actually still open: one tuning question (C's residue) and the four
 round-3 carryovers (POS enum, world-flag presences, `publishSugarlangArtifacts`
-deletion, "have they met" authority).** None of them blocks the floor. The POS
+deletion, "have they met" authority).** None of them blocks the work. The POS
 enum is decided inside 090.1; world-flag presences inside 090.3; the artifacts
 deletion is a chore; "have they met" is decided inside 090.3.
