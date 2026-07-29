@@ -225,7 +225,7 @@ export type TelemetryEvent =
         sceneId: string;
         contentHash: string;
         lang: string;
-        extractorModel: string;
+        extractorPurpose: string;
         extractorPromptVersion: string;
       }
     >
@@ -241,7 +241,7 @@ export type TelemetryEvent =
           input: number;
           output: number;
         };
-        extractorModel: string;
+        extractorPurpose: string;
       }
     >
   | TelemetryEventOf<
@@ -254,7 +254,7 @@ export type TelemetryEvent =
           code: string;
           message: string;
         };
-        extractorModel: string;
+        extractorPurpose: string;
       }
     >
   | TelemetryEventOf<
@@ -267,6 +267,92 @@ export type TelemetryEvent =
         previousExtractorModel: string;
         newExtractorModel: string;
         changedChunks: string[];
+      }
+    >
+  // Plan 090.1 -- the scene-context pass: what authored content is ABOUT.
+  // Keyed on supportLanguage, not target: concepts are English, so the same
+  // scene shares one extraction across every target language.
+  | TelemetryEventOf<
+      "scene-context.extraction-started",
+      {
+        sceneId: string;
+        contentHash: string;
+        supportLanguage: string;
+        sourceCount: number;
+        extractorPurpose: string;
+        extractorPromptVersion: string;
+      }
+    >
+  | TelemetryEventOf<
+      "scene-context.extraction-completed",
+      {
+        sceneId: string;
+        contentHash: string;
+        supportLanguage: string;
+        conceptCount: number;
+        /**
+         * Concepts discarded because every sourceId they cited was one we never
+         * sent -- i.e. the model invented its provenance. Non-zero is a prompt
+         * or model problem, not a content problem, so it is counted separately
+         * from conceptCount rather than being silently absent.
+         */
+        droppedForBadProvenance: number;
+        latencyMs: number;
+        tokenCost: {
+          input: number;
+          output: number;
+        };
+      }
+    >
+  | TelemetryEventOf<
+      "scene-context.extraction-failed",
+      {
+        sceneId: string;
+        contentHash: string;
+        supportLanguage: string;
+        error: {
+          code: string;
+          message: string;
+        };
+      }
+    >
+  // Plan 090.1 -- line intent. Its own events rather than borrowing
+  // `chunk.extraction-*`, which it did until now: three unrelated passes sharing
+  // one event name made per-pass cost and failure rates unreadable.
+  | TelemetryEventOf<
+      "line-intent.extraction-started",
+      {
+        nodeId: string;
+        dialogueDefinitionId: string;
+        contentHash: string;
+        extractorPurpose: string;
+        extractorPromptVersion: string;
+      }
+    >
+  | TelemetryEventOf<
+      "line-intent.extraction-completed",
+      {
+        nodeId: string;
+        dialogueDefinitionId: string;
+        contentHash: string;
+        factCount: number;
+        latencyMs: number;
+        tokenCost: {
+          input: number;
+          output: number;
+        };
+      }
+    >
+  | TelemetryEventOf<
+      "line-intent.extraction-failed",
+      {
+        nodeId: string;
+        dialogueDefinitionId: string;
+        contentHash: string;
+        error: {
+          code: string;
+          message: string;
+        };
       }
     >
   | TelemetryEventOf<

@@ -89,7 +89,7 @@ describe("MultiWordExpressionExtractor", () => {
         normalizedForm: "de_vez_en_cuando",
         cefrBand: "A2",
         constituentLemmas: ["vez", "cuando"],
-        extractedByModel: "claude-sonnet-4-6",
+        extractedByModel: "gateway-resolved",
         extractorPromptVersion: MWE_EXTRACTOR_PROMPT_VERSION
       })
     ]);

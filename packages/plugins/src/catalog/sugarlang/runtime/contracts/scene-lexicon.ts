@@ -110,6 +110,12 @@ export interface LexicalChunk {
   surfaceForms: string[];
   cefrBand: CEFRBand;
   constituentLemmas: string[];
+  /**
+   * Routing record, NOT a model id. The gateway resolves the model server-side
+   * from `purpose` and its response carries no model name, so a compile-time
+   * caller cannot know which model ran -- this reads "gateway-resolved". The
+   * ground truth is the gateway's own `sugaragent.generate` log line.
+   */
   extractedByModel: string;
   extractedAtMs: number;
   extractorPromptVersion: string;

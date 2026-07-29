@@ -258,6 +258,15 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       default: ""
     },
     {
+      configKey: "extractionModel",
+      label: "Extraction Model",
+      type: "text",
+      description:
+        "Anthropic model for the compile-time extraction passes: multi-word expressions, line intent, and scene concepts. Blank uses the gateway default (claude-sonnet-4-6). These run while authoring and are cached by content hash, so the cost is per content change rather than per turn.",
+      placeholder: "claude-sonnet-4-6",
+      default: ""
+    },
+    {
       configKey: "debugBandOverride",
       label: "Band Override (dev)",
       type: "select",
@@ -292,6 +301,13 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       envVarName: "SUGARMAGIC_SUGARLANG_TEACHER_MODEL",
       description:
         "Anthropic model the gateway uses for sugarlang's Teacher judgment call, resolved server-side from purpose:\"teacher\". Sugarlang owns this key rather than borrowing a SUGARMAGIC_SUGARAGENT_* one, so sugarlang's model choice does not depend on sugaragent's config (AGENTS.md one-way dependencies). Unset => gateway default claude-sonnet-4-6.",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    },
+    {
+      configKey: "extractionModel",
+      envVarName: "SUGARMAGIC_SUGARLANG_EXTRACTION_MODEL",
+      description:
+        "Anthropic model the gateway uses for sugarlang's COMPILE-time extraction passes (multi-word expressions, line intent, scene concepts), resolved server-side from purpose:\"extraction\". These run at authoring time and are cached by content hash, so the cost is per content change rather than per turn. Unset => gateway default claude-sonnet-4-6.",
       nonSecretAttestation: "safe-to-expose-publicly"
     }
   ],

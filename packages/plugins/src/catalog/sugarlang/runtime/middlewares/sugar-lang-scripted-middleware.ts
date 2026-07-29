@@ -44,7 +44,7 @@ import {
 import type { TeachSchedule } from "../scheduler/teach-schedule";
 import type { VariantCacheKey } from "../compile/variant-cache";
 import { VARIANT_PROMPT_VERSION } from "../compile/generate-variant";
-import { INTENT_EXTRACTOR_PROMPT_VERSION } from "../compile/extract-intent";
+import { LINE_INTENT_PROMPT_VERSION } from "../compile/line-intent-extractor";
 import type { LineIntentCacheKey } from "../compile/intent-cache";
 import { buildIntentContentHash } from "../compile/intent-cache";
 import type { CEFRBand } from "../contracts/learner-profile";
@@ -245,7 +245,7 @@ export function createSugarLangScriptedMiddleware(
               : undefined;
             const intentKey: LineIntentCacheKey = {
               contentHash: buildIntentContentHash(nodeId, authoredText, nodeIntent),
-              intentPromptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+              intentPromptVersion: LINE_INTENT_PROMPT_VERSION
             };
             const intentEntry = await services.intentCache.get(intentKey);
             if (intentEntry && intentEntry.artifact.mustConveyFacts.length > 0) {
@@ -307,7 +307,7 @@ export function createSugarLangScriptedMiddleware(
         try {
           const intentKey: LineIntentCacheKey = {
             contentHash: buildIntentContentHash(nodeId, authoredText, nodeIntent),
-            intentPromptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+            intentPromptVersion: LINE_INTENT_PROMPT_VERSION
           };
           const intentEntry = await services.intentCache.get(intentKey);
           if (intentEntry && intentEntry.artifact.mustConveyFacts.length > 0) {
@@ -425,7 +425,7 @@ export function createSugarLangScriptedMiddleware(
               try {
                 const intentKey: LineIntentCacheKey = {
                   contentHash: intentContentHash,
-                  intentPromptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+                  intentPromptVersion: LINE_INTENT_PROMPT_VERSION
                 };
                 const intentEntry = await services.intentCache.get(intentKey);
                 if (intentEntry && intentEntry.artifact.mustConveyFacts.length > 0) {

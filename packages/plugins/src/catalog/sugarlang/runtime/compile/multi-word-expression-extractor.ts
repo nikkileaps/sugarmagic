@@ -81,6 +81,7 @@
 import Ajv from "ajv";
 import type { ErrorObject } from "ajv";
 import type { SugarlangLLMClient } from "../llm/types";
+import { EXTRACTION_PURPOSE } from "../llm/types";
 import type { LexicalAtlasProvider, LexicalChunk } from "../types";
 import type { TextBlob } from "./scene-traversal";
 import {
@@ -134,7 +135,6 @@ const MWE_SCHEMA = {
 const validateChunkPayload = ajv.compile(MWE_SCHEMA);
 
 export const MWE_EXTRACTOR_PROMPT_VERSION = "1";
-export const DEFAULT_MWE_EXTRACTOR_MODEL = "claude-sonnet-4-6";
 export const MWE_EXTRACTION_PROMPT_TEMPLATE = [
   "You are annotating scene-authored language-learning metadata.",
   "Return JSON only.",
@@ -339,7 +339,7 @@ async function runExtraction(
   const telemetry = input.telemetry ?? createNoOpTelemetrySink();
   const now = input.now ?? (() => Date.now());
   const promptVersion = input.promptVersion ?? MWE_EXTRACTOR_PROMPT_VERSION;
-  const model = input.model ?? DEFAULT_MWE_EXTRACTOR_MODEL;
+  const model = input.model ?? "gateway-resolved";
   const maxTokens = input.maxTokens ?? 900;
   const prompt = buildMultiWordExpressionPrompt(
     input.sceneText,
@@ -356,7 +356,7 @@ async function runExtraction(
       sceneId: input.sceneId ?? "unknown-scene",
       contentHash: input.contentHash ?? "unknown-hash",
       lang: input.lang,
-      extractorModel: model,
+      extractorPurpose: EXTRACTION_PURPOSE,
       extractorPromptVersion: promptVersion
     })
   );
@@ -364,7 +364,7 @@ async function runExtraction(
   let response: { text: string; requestId: string | null };
   try {
     response = await input.llmClient.generate({
-      model,
+      purpose: EXTRACTION_PURPOSE,
       systemPrompt: prompt.system,
       userPrompt: prompt.user,
       maxTokens
@@ -381,7 +381,7 @@ async function runExtraction(
         sceneId: input.sceneId ?? "unknown-scene",
         contentHash: input.contentHash ?? "unknown-hash",
         lang: input.lang,
-        extractorModel: model,
+        extractorPurpose: EXTRACTION_PURPOSE,
         error: failure
       })
     );
@@ -429,7 +429,7 @@ async function runExtraction(
           input: estimateTokens(prompt.system) + estimateTokens(prompt.user),
           output: estimateTokens(response.text)
         },
-        extractorModel: model
+        extractorPurpose: EXTRACTION_PURPOSE
       })
     );
 
@@ -454,7 +454,7 @@ async function runExtraction(
         sceneId: input.sceneId ?? "unknown-scene",
         contentHash: input.contentHash ?? "unknown-hash",
         lang: input.lang,
-        extractorModel: model,
+        extractorPurpose: EXTRACTION_PURPOSE,
         error: failure
       })
     );

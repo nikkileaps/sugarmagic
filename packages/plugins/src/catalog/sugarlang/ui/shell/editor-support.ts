@@ -34,7 +34,10 @@ import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
 import { IndexedDBVariantCache } from "../../runtime/compile/variant-cache";
 import { IndexedDBIntentCache } from "../../runtime/compile/intent-cache";
-import { extractIntent, INTENT_EXTRACTOR_PROMPT_VERSION } from "../../runtime/compile/extract-intent";
+import {
+  LINE_INTENT_PROMPT_VERSION,
+  LineIntentExtractor
+} from "../../runtime/compile/line-intent-extractor";
 import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 import { GradedTextService } from "../../runtime/grading/graded-text-service";
 import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
@@ -367,18 +370,18 @@ export async function rebuildSugarlangCompileCache(
       ? {
           cache: new IndexedDBIntentCache({ workspaceId }),
           extractNodeIntent: async (dialogueDefinitionId, node, contentHash) => {
-            return extractIntent({
+            return new LineIntentExtractor({
+              llmClient: gatewayClient
+            }).extract({
               nodeId: node.nodeId,
               nodeText: node.text,
               authoredIntent: node.intent,
-              targetLanguage,
               contentHash,
               dialogueDefinitionId,
-              llmClient: gatewayClient,
-              promptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+              promptVersion: LINE_INTENT_PROMPT_VERSION
             });
           },
-          promptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+          promptVersion: LINE_INTENT_PROMPT_VERSION
         }
       : undefined,
     onLog(message, detail) {

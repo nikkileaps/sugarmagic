@@ -838,7 +838,13 @@ export async function handleSugarAgentGenerate(
     // sugarlang: the Teacher's pedagogical judgment call. Deliberately its own
     // env var — this is the most reasoning-heavy call in the product and must
     // not silently ride the cheap dialogue model (which it did until 2026-07-28).
-    teacher: () => resolveEnv("SUGARMAGIC_SUGARLANG_TEACHER_MODEL", "claude-sonnet-4-6")
+    teacher: () => resolveEnv("SUGARMAGIC_SUGARLANG_TEACHER_MODEL", "claude-sonnet-4-6"),
+    // sugarlang: COMPILE-time extraction over authored content — multi-word
+    // expressions, line intent, and scene concepts. Authoring-time and cached
+    // by content hash, so it is paid once per content change rather than per
+    // turn; that budget buys a stronger model than the dialogue default.
+    extraction: () =>
+      resolveEnv("SUGARMAGIC_SUGARLANG_EXTRACTION_MODEL", "claude-sonnet-4-6")
   };
   const model = (PURPOSE_MODELS[purpose] ?? dialogueModel)();
   // The ground-truth record of which model each call used — grep it in
