@@ -92,6 +92,13 @@ function buildConstraintReminder(
   return `Language constraint: ~${pct}% ${langName}, learner at ${learnerCefr} level.`;
 }
 
+// NAMING HAZARD: this is NOT a lexicon. "Lexicon" elsewhere here means the atlas
+// -- the whole word stock of a language. This is four keyword lists (greeting /
+// farewell / gratitude / acknowledgement) of target-language surface forms, sent
+// to sugaragent so detectSocialMove can recognize a player typing "adios" when
+// its own patterns are English-only. Player INPUT recognition, not teaching.
+// Rename to socialMoveCues when the sugaragent contribution contract is next
+// touched -- docs/backlog/006-sugarlang-naming-cleanups.md has the blast radius.
 function buildInterpretLexicon(targetLanguage: string): Record<string, string[]> | undefined {
   try {
     const lexicon = buildInterpretLexiconFromInventory(targetLanguage);
