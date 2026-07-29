@@ -1,6 +1,6 @@
 # Plan 090 -- Context Extraction + Teacher Judgment (proposed child epic I of Strategy 002)
 
-Status: DRAFT -- NOT LOCKED. epic-review has run 4 rounds (2026-07-28). Rounds 1-3 audited the plan against the CODE and it held -- every citation survived. Round 4 audited it against the DOMAIN MODEL and it did not: the stories were producing better inputs to a decision the model relocates. Stories are revised accordingly; five decisions remain, listed at the end.
+Status: DRAFT -- NOT LOCKED. epic-review has run 4 rounds (2026-07-28). Rounds 1-3 audited the plan against the CODE and it held -- every citation survived. Round 4 audited it against the DOMAIN MODEL and it did not: the stories were producing better inputs to a decision the model relocates. Stories are revised accordingly. Five decisions remain (one partly settled), listed at the end -- the load-bearing one is whether the budgeter survives at all.
 
 The model this plan must satisfy: `packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`.
 
@@ -197,8 +197,54 @@ a transition scaffold.
 
 **Given one piece of authored text, which of the slate's items does it teach.**
 
-This story did not exist, and it is where the bug the epic exists to fix
-actually lives. Two divergent implementations of it are already in the codebase:
+REALIZATION IS STRATEGY-DEPENDENT. This is the correction that matters most in
+this story, and an earlier draft of it got this wrong by assuming one shape.
+
+The Teacher sets POSTURE. Posture selects a RENDERER. The two renderers realize
+a slate in fundamentally different ways:
+
+| Posture | Renderer | How the slate is realized | Is "what got taught" knowable in advance? |
+|---|---|---|---|
+| anchored (A1), supported (A2) | `diglotWeave` | INTERSECTION -- you can only teach words physically present in the authored English, so selecting and substituting are one operation | **Yes.** Deterministic, before rendering. |
+| target-dominant (B1+) | `GradedTextService` | GENERATION -- the whole line is written in the target language; the slate shapes the prompt rather than filtering a pool | **No.** Only knowable AFTER, by classifying the output. |
+
+Consequences the story must honour:
+
+- There is no single "realize" that fits both. The weave path answers the
+  question up front; the generated path answers it by observation. Model them as
+  two strategies behind one seam, not one function with a branch.
+- **The A1/A2 path is where the epic's bug lives** and where the deterministic
+  intersection belongs. That is the floor.
+- For target-dominant, "what got taught" is a CLASSIFICATION of generated text.
+  Machinery for this already exists -- `computeCoverage` + the classifier facade
+  -- and the observe middleware already tokenizes every turn. Do not build a
+  second one.
+- The per-text CAP therefore means different things per strategy: a substitution
+  count on the weave path, a ratio target in the prompt on the generated path.
+  This is open decision C, and it is now clearly two answers rather than a
+  choice between two.
+
+THE WEAVER IS A RENDERER, NOT A DECIDER. `diglotWeave` makes no judgment -- it
+tokenizes, resolves through the atlas, and substitutes what it is handed. It
+belongs to *the model RENDERS*, not *the Teacher decides*, and it should not be
+folded into the Teacher: that would pull tokenization and citation forms into a
+decision boundary.
+
+But it currently makes two decisions that are not its to make, and this story
+takes both away:
+
+1. **The pool** -- unowned, so each call site improvised. Fixed below.
+2. **The strategy choice** -- `isWeaveBand` (display-text-resolver.ts:63-65)
+   duplicates `postureForBand` (band-envelope.ts:65-71), so the renderer picks
+   its own strategy instead of reading the posture the Teacher set. The Teacher
+   decides posture; the renderer obeys it.
+
+Strip those two and what remains is a pure substitution function that cannot
+decide anything. That is the correct shape.
+
+---
+
+Two divergent implementations of the pool question are already in the codebase:
 
 | Call site | Pool it uses |
 |---|---|
@@ -217,14 +263,22 @@ such seam; its own diagnosis at :96-101 is this finding stated in advance, and
 
 SCOPE:
 
-- One pure `realize(slate, standing, text, posture)`. Zero LLM. Per narrative
-  unit. Total in the same sense as `createDisplayTextResolver` -- absent inputs
-  yield authored text, never a throw.
-- It owns the POOL (slate ∩ text), the PER-TEXT CAP, and the band split.
+- A `realize(slate, standing, text, posture)` seam with TWO strategies behind
+  it, selected by posture -- substitution for anchored/supported, generation for
+  target-dominant. Not one function with a branch.
+- **The substitution strategy is the floor.** Pure, zero LLM, per narrative
+  unit, total in the same sense as `createDisplayTextResolver` -- absent inputs
+  yield authored text, never a throw. It owns the POOL (slate ∩ text) and the
+  per-text substitution count.
+- The generation strategy delegates to `GradedTextService` and reports what got
+  taught by CLASSIFYING the output, reusing `computeCoverage` and the observe
+  middleware's existing tokenization. It is ceiling, not floor.
+- Neither strategy chooses itself. Posture comes from the Directive via
+  `postureForBand`; delete `isWeaveBand`.
 - Consume `GradedTextUnit` (grading/graded-text-source.ts). The repo already has
   the narrative-unit abstraction with a documented Strategy + discriminated-union
   design. Do not invent a second notion of "a piece of text".
-- Wrap `diglotWeave`; do not rewrite it.
+- Wrap `diglotWeave`; do not rewrite it. It is a renderer and it stays one.
 
 THE CAP HAS NO HOME TODAY, AND THAT IS THE REAL GAP.
 `TARGET_LANGUAGE_RATIO_BY_POSTURE` exists (teacher/band-envelope.ts:36-41) but
@@ -249,8 +303,11 @@ already. Delete `isWeaveBand`; derive from `postureForBand`.
   "slate/text disjoint", not "extraction failed" (pin -- the failure mode must be
   legible, which is what cost hours on 2026-07-28); posture ratio governs
   density, so an anchored A1 paragraph does not come back mostly target-language
-  (pin -- no implementation exists today); one band-split enforcer, asserted by
-  grep (pin).
+  (pin -- no implementation exists today); ONE band-split enforcer, asserted by
+  grep for `isWeaveBand` returning nothing (pin); the SAME item body at A1 and at
+  B1 takes different strategies and both report what they taught, in the same
+  trace shape (pin -- the strategy seam, and the thing an earlier draft of this
+  story assumed away).
 
 ### 090.4 Teacher judgment: two doors in, a slate out
 
@@ -534,10 +591,17 @@ Against an 11,000-entry atlas that is unbounded, and if "in-reach" collapses to
 the band envelope then the slate IS the band pool and realization degenerates to
 what `display-text-resolver` already does today. Needs a concrete rule.
 
-**C. Is the realization cap a count or a ratio?**
-`newItemsAllowed` is a count; `TARGET_LANGUAGE_RATIO_BY_POSTURE` is a ratio.
-They are not interconvertible per text -- six substitutions is dense in one
-sentence and sparse in a paragraph. Pick one, or say which governs where.
+**C. Is the realization cap a count or a ratio?** -- PARTLY SETTLED.
+The strategy split in 090.8 answers most of this: substitution is naturally
+capped by a COUNT (how many words to swap), generation by a RATIO (how much
+target language to ask the prompt for). They are not interconvertible per text
+-- six substitutions is dense in one sentence and sparse in a paragraph -- and
+that is fine, because they now govern different strategies.
+
+What remains open is narrower: whether the two must AGREE for the same learner
+at the same posture, so an item body and a dialogue line at A1 feel like the
+same game. Probably yes, which means the count is derived from the ratio and the
+text length, not authored independently.
 
 **D. Do items consult the slate at all?**
 `display-text-resolver.ts:107-113` argues the answer may legitimately stay "no"
