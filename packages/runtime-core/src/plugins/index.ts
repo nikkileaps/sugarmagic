@@ -49,6 +49,7 @@ export type RuntimePluginContributionKind =
   | "conversation.provider"
   | "conversation.middleware"
   | "dialogue.entryDecorator"
+  | "displayText.resolver"
   | "debug.hudCard"
   | "debug.entityBillboard"
   | "runtime.banner"
@@ -161,6 +162,47 @@ export interface TermHoverEvent {
   lang: string;
   dwellMs: number;
 }
+
+/**
+ * A request to swap authored display text for something better suited to the
+ * player -- today, language-graded prose from sugarlang.
+ *
+ * Deliberately content-AGNOSTIC: `subjectKind` / `subjectId` / `field` describe
+ * any authored string the runtime is about to show, so item views, spell
+ * descriptions and future interactables all use one seam. runtime-core does not
+ * know what a resolver will do with them.
+ */
+export interface DisplayTextRequest {
+  /** Content family, e.g. "item-view", "spell-view". */
+  subjectKind: string;
+  /** Definition id of the thing that owns the text. */
+  subjectId: string;
+  /** Which field of that thing, e.g. "title", "body", "description". */
+  field: string;
+  /** The AUTHORED text. Always valid to render as-is. */
+  text: string;
+}
+
+/**
+ * Optional hook for replacing authored display text at render time.
+ *
+ * WHY THIS SHAPE. The request carries the authored text and resolvers return a
+ * string, so the worst case is the text going in comes back out. With no plugin
+ * registered there is no resolver, nothing is called, and every surface renders
+ * exactly the authored English it already had. "Works with the plugin
+ * uninstalled" is therefore structural, not a fallback branch someone has to
+ * remember to write and test.
+ *
+ * Resolvers MUST be total: resolve to the authored text rather than throwing or
+ * returning empty when they have nothing. A missing translation is not an error.
+ */
+export type DisplayTextResolverContribution = RuntimePluginContributionBase<
+  "displayText.resolver",
+  {
+    summary: string;
+    resolve: (request: DisplayTextRequest) => Promise<string>;
+  }
+>;
 
 export type DialogueEntryDecoratorContribution = RuntimePluginContributionBase<
   "dialogue.entryDecorator",
@@ -284,6 +326,7 @@ export type RuntimePluginContribution =
   | ConversationProviderContribution
   | ConversationMiddlewareContribution
   | DialogueEntryDecoratorContribution
+  | DisplayTextResolverContribution
   | DebugHudCardContribution
   | DebugEntityBillboardContribution
   | RuntimeBannerContribution

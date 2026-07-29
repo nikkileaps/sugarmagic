@@ -3033,6 +3033,24 @@ export function App() {
           selectedQuestNode
         }
       ),
+    renderItemInspectorSections: ({ selectedItem }) =>
+      renderPluginSectionGroup(
+        pluginShellContributions.designSections.filter(
+          (section) => section.workspaceKind === "items"
+        ),
+        {
+          workspaceKind: "items",
+          gameProjectId: session?.gameProject.identity.id ?? null,
+          gameProject: session?.gameProject ?? null,
+          pluginConfigurations,
+          regions: regionDocuments,
+          activeRegion,
+          activeScene: session ? getActiveScene(session) : null,
+          targetLanguage: sugarlangTargetLanguage,
+          onCommand: dispatchCommand,
+          selectedItem
+        }
+      ),
     renderDialogueInspectorSections: ({
       selectedDialogue,
       selectedDialogueNode,

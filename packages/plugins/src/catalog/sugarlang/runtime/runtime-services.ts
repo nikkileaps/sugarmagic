@@ -226,6 +226,7 @@ export class SugarlangRuntimeServices {
   private _debugPinnedBand: CEFRBand | null = null;
   /** WorkspaceId the Studio used when baking variants; wired from boot payload in manifest init. */
   private studioWorkspaceId: string | null = null;
+  private _standaloneVariantCache: SugarlangVariantCache | undefined;
 
   constructor(options: SugarlangRuntimeServicesOptions) {
     this.config = options.config;
@@ -259,6 +260,27 @@ export class SugarlangRuntimeServices {
       dialogueDefinitions: context.dialogueDefinitions ?? [],
       questDefinitions: context.questDefinitions ?? []
     };
+
+    // Seed the band pin from config HERE, at bind, rather than waiting for a
+    // conversation.
+    //
+    // `_debugPinnedBand` is the single source of truth for "what band is this
+    // learner", and `config.debugBandOverride` is one of two things that can
+    // set it (the Learner Override panel is the other). Seeding it lazily --
+    // which is what `resolveForLanguages` used to do, and still does for the
+    // placement event -- meant the pin stayed null until the player talked to
+    // somebody. Any surface that asked before then, like an item view, got a
+    // null band and silently fell back to English.
+    //
+    // The matching PlacementCompletionEvent still fires from
+    // `resolveForLanguages`, because applying it needs the learner state
+    // reducer, which is per-language. Only the pin moves here.
+    if (
+      (import.meta as { env?: { DEV?: boolean } }).env?.DEV &&
+      this.config.debugBandOverride
+    ) {
+      this._debugPinnedBand = this.config.debugBandOverride as CEFRBand;
+    }
   }
 
   seedPreviewLexicons(payload: unknown): void {
@@ -277,6 +299,9 @@ export class SugarlangRuntimeServices {
   }
 
   wireStudioVariantCache(workspaceId: string): void {
+    if (this.studioWorkspaceId !== workspaceId) {
+      this._standaloneVariantCache = undefined;
+    }
     this.studioWorkspaceId = workspaceId;
   }
 
@@ -298,6 +323,82 @@ export class SugarlangRuntimeServices {
 
   private getFirstExecutionServices(): SugarlangExecutionServices | null {
     return this.executionServices.values().next().value ?? null;
+  }
+
+  /**
+   * Variant cache for graded-text lookups outside a conversation.
+   *
+   * Built from `studioWorkspaceId` ALONE and memoized. It must NOT hang off
+   * execution services: those are created per CONVERSATION, so reading the
+   * cache through them meant an item view could only show graded text after
+   * the player had already talked to somebody -- open the book first and you
+   * got English with no indication why.
+   *
+   * Undefined only in a published game with no studio workspace, where nothing
+   * has been graded anyway.
+   */
+  getVariantCache(): SugarlangVariantCache | undefined {
+    if (!this.studioWorkspaceId) return undefined;
+    this._standaloneVariantCache ??= new IndexedDBVariantCache({
+      workspaceId: this.studioWorkspaceId
+    });
+    return this._standaloneVariantCache;
+  }
+
+  /**
+   * The learner's current band, or null when there is no learner yet.
+   *
+   * A PINNED debug band wins and is answered without execution services --
+   * pinning a band then opening an item before any conversation used to return
+   * null here, so the override silently did not apply outside dialogue.
+   */
+  async getLearnerBand(): Promise<CEFRBand | null> {
+    // The pin is the single source of truth for a debug band override. It is
+    // seeded from `config.debugBandOverride` at bind and by the Learner
+    // Override panel at runtime -- this method deliberately does NOT read the
+    // config itself, or the same setting would be consulted in two places and
+    // could disagree with itself.
+    if (this._debugPinnedBand) return this._debugPinnedBand;
+
+    // Otherwise the real profile -- via AMBIENT services, not execution
+    // services, so this answers outside a conversation. Reading it from
+    // execution services meant the band was null until the player had talked to
+    // somebody, which is exactly the item-view case.
+    const services =
+      this.getFirstExecutionServices() ?? (await this.getAmbientServices());
+    if (!services) return null;
+    try {
+      return (await services.learnerStore.getCurrentProfile()).estimatedCefrBand;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Inputs for the A1/A2 display-text weave, outside any conversation.
+   *
+   * Just the atlas and the learner's band: the weave draws its pool from every
+   * lemma the band admits, so no scene lexicon and no budgeter prescription are
+   * involved (see the "WHY ITEM TEXT DOES NOT GO THROUGH THE BUDGETER" block in
+   * display-text-resolver.ts).
+   *
+   * Uses AMBIENT services so it answers before any conversation has run --
+   * resolving through execution services was what made item views render
+   * English until the player had talked to somebody.
+   *
+   * Returns null with no resolvable band or no ambient services, and the
+   * resolver falls back to authored English.
+   */
+  async getWeaveInputs(): Promise<{
+    atlas: CefrLexAtlasProvider;
+    band: CEFRBand;
+    supportLanguage: string;
+  } | null> {
+    const band = await this.getLearnerBand();
+    if (!band) return null;
+    const services = await this.getAmbientServices();
+    if (!services) return null;
+    return { atlas: services.atlas, band, supportLanguage: "en" };
   }
 
   async applyDebugBandOverride(band: CEFRBand, pin: boolean): Promise<void> {
@@ -341,6 +442,12 @@ export class SugarlangRuntimeServices {
   }
 
   async resetDebugState(): Promise<SugarlangLearnerDataResetResult> {
+    // Clear the pin, then RE-SEED it from config below. A reset wipes learner
+    // data; it is not a request to abandon an authored band override. Before
+    // the pin moved to bindRuntime this happened for free, because the next
+    // resolveForLanguages re-applied it -- bind runs once per plugin init and
+    // never again, so without this a reset silently unpinned the band and the
+    // learner drifted during observation.
     this._debugPinnedBand = null;
     // Close the live card-store connections and delete the sugarlang
     // databases through the single shared enforcer (also used by the Studio
@@ -374,6 +481,15 @@ export class SugarlangRuntimeServices {
       entry.learnerStateReducer.resetSessionAccumulators();
     }
     this.executionServices.clear();
+
+    // Re-seed the authored band override (same DEV guard as bindRuntime), so a
+    // reset returns to the configured band rather than to no band at all.
+    if (
+      (import.meta as { env?: { DEV?: boolean } }).env?.DEV &&
+      this.config.debugBandOverride
+    ) {
+      this._debugPinnedBand = this.config.debugBandOverride as CEFRBand;
+    }
     return resetResult;
   }
 
@@ -400,16 +516,44 @@ export class SugarlangRuntimeServices {
   async resolveForExecution(
     execution: ConversationExecutionContext
   ): Promise<SugarlangExecutionServices | null> {
+    const languages = getSelectionLanguages(execution, this.environment);
+    if (!languages) {
+      return null;
+    }
+    return this.resolveForLanguages(
+      languages.targetLanguage,
+      languages.supportLanguage
+    );
+  }
+
+  /**
+   * Services for the configured language pair, with NO conversation.
+   *
+   * Everything below is built from `boundContext` (blackboard, player, content)
+   * plus a language pair -- the conversation only ever supplied the languages,
+   * and even that fell back to plugin config. So surfaces outside dialogue --
+   * item views today, spells and interactables later -- can teach with the same
+   * learner, the same cards and the same budgeter, instead of being second-class
+   * because they are not a turn.
+   *
+   * Returns null before `bindRuntime`, or with no target language configured.
+   */
+  async getAmbientServices(): Promise<SugarlangExecutionServices | null> {
+    const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
+    if (!targetLanguage) return null;
+    return this.resolveForLanguages(targetLanguage, "en");
+  }
+
+  private async resolveForLanguages(
+    targetLanguage: string,
+    supportLanguage: string
+  ): Promise<SugarlangExecutionServices | null> {
     if (!this.boundContext) {
       this.logger.warn("Sugarlang runtime services requested before binding.");
       return null;
     }
 
-    const languages = getSelectionLanguages(execution, this.environment);
-    if (!languages) {
-      return null;
-    }
-
+    const languages = { targetLanguage, supportLanguage };
     const key = `${languages.targetLanguage}:${languages.supportLanguage}`;
     const existing = this.executionServices.get(key);
     if (existing) {
@@ -524,7 +668,8 @@ export class SugarlangRuntimeServices {
         lemmasSeededFromFreeText: []
       };
       await learnerStateReducer.apply(overrideEvent);
-      this._debugPinnedBand = this.config.debugBandOverride as CEFRBand;
+      // The pin itself is already set at bind (see bindRuntime) -- only the
+      // placement event needs the reducer, which is why it stays here.
     }
 
     return services;

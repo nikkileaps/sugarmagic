@@ -26,7 +26,7 @@ import {
 } from "../index";
 
 describe("sugarlang plugin registration", () => {
-  it("creates a runtime plugin instance with the four middleware contributions", () => {
+  it("registers the decorator, the display-text resolver, and the middleware chain", () => {
     const instance = createSugarlangPlugin({
       boot: createRuntimeBootModel({
         hostKind: "studio",
@@ -39,9 +39,12 @@ describe("sugarlang plugin registration", () => {
 
     expect(instance.pluginId).toBe(SUGARLANG_PLUGIN_ID);
     expect(instance.displayName).toBe(SUGARLANG_DISPLAY_NAME);
-    expect(instance.contributions).toHaveLength(6);
+    expect(instance.contributions).toHaveLength(7);
     expect(instance.contributions.map((entry) => entry.kind)).toEqual([
       "dialogue.entryDecorator",
+      // Runtime grading seam. Its absence is what makes the game plain English,
+      // so its PRESENCE here is the thing worth pinning.
+      "displayText.resolver",
       "conversation.middleware",
       "conversation.middleware",
       "conversation.middleware",
@@ -59,6 +62,6 @@ describe("sugarlang plugin registration", () => {
         workspaceKind: SUGARLANG_PLUGIN_ID
       })
     ]);
-    expect(pluginDefinition.shell?.designSections).toHaveLength(11);
+    expect(pluginDefinition.shell?.designSections).toHaveLength(12);
   });
 });

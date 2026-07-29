@@ -393,8 +393,11 @@ describe("end-to-end conversation golden", () => {
         variantPromptVersion: VARIANT_PROMPT_VERSION
       },
       variant: {
-        nodeId,
-        dialogueDefinitionId: "dialogue-orrin",
+        source: {
+          kind: "dialogue-node",
+          dialogueDefinitionId: "dialogue-orrin",
+          nodeId
+        },
         lang: "es",
         band: "B1",
         text: bakedVariantText,
@@ -766,8 +769,11 @@ describe("end-to-end conversation golden", () => {
         variantPromptVersion: VARIANT_PROMPT_VERSION
       },
       variant: {
-        nodeId,
-        dialogueDefinitionId: "dialogue-orrin",
+        source: {
+          kind: "dialogue-node",
+          dialogueDefinitionId: "dialogue-orrin",
+          nodeId
+        },
         lang: "es",
         band: "B1",
         text: bakedVariantText,

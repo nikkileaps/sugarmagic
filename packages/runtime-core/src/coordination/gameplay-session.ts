@@ -1899,6 +1899,81 @@ export function createRuntimeGameplaySessionController(
     }
     syncInteractionPrompt();
   });
+  /**
+   * Resolve the item's display text through any registered display-text
+   * resolver, then show the view.
+   *
+   * The resolution has to happen HERE rather than inside the item view because
+   * the view renders synchronously and resolvers are async (sugarlang's reads
+   * IndexedDB). With no resolver registered -- plugin disabled, uninstalled, or
+   * simply not shipped -- `resolveDisplayText` returns undefined, no override is
+   * passed, and the authored English renders. That is the whole
+   * graceful-degradation story, and it needs no branch of its own.
+   *
+   * A resolver that throws must not take the item view down with it: an item
+   * you cannot open is a far worse failure than one showing untranslated text.
+   */
+  /**
+   * Which inspect request is current. Bumped on every open and on close, so a
+   * resolution that settles late can tell it has been superseded.
+   *
+   * Resolution is genuinely slow the first time -- opening IndexedDB, and on a
+   * cold session building the whole sugarlang service graph -- so "the player
+   * moved on while we were resolving" is an ordinary case, not a rare race.
+   * Without this, inspecting A then B shows whichever RESOLVED last rather than
+   * whichever was CLICKED last, and closing mid-resolve pops the panel back
+   * open with a movement lock the player never asked for.
+   */
+  let itemViewRequestToken = 0;
+
+  async function showItemViewWithResolvedText(
+    definition: ItemDefinition,
+    quantity: number
+  ): Promise<void> {
+    const token = ++itemViewRequestToken;
+    const resolvers =
+      pluginManager?.getContributions("displayText.resolver") ?? [];
+    if (resolvers.length === 0) {
+      itemViewUi.show(definition, quantity);
+      return;
+    }
+
+    const resolveField = async (
+      field: "title" | "body",
+      authored: string
+    ): Promise<string | undefined> => {
+      if (!authored.trim()) return undefined;
+      for (const contribution of resolvers) {
+        try {
+          const resolved = await contribution.payload.resolve({
+            subjectKind: "item-view",
+            subjectId: definition.definitionId,
+            field,
+            text: authored
+          });
+          if (resolved && resolved !== authored) return resolved;
+        } catch {
+          // Fall through to the authored text.
+        }
+      }
+      return undefined;
+    };
+
+    const [title, body] = await Promise.all([
+      resolveField("title", definition.interactionView.title),
+      resolveField("body", definition.interactionView.body)
+    ]);
+
+    // Superseded by a later inspect, or the view was closed while we resolved.
+    if (token !== itemViewRequestToken) return;
+
+    itemViewUi.show(
+      definition,
+      quantity,
+      title === undefined && body === undefined ? undefined : { title, body }
+    );
+  }
+
   inventoryUi.setOnInspectItem((itemDefinitionId) => {
     const definition = inventoryManager.getDefinition(itemDefinitionId);
     if (!definition) return;
@@ -1917,13 +1992,20 @@ export function createRuntimeGameplaySessionController(
       return;
     }
 
-    itemViewUi.show(definition, inventoryManager.getQuantity(itemDefinitionId));
+    void showItemViewWithResolvedText(
+      definition,
+      inventoryManager.getQuantity(itemDefinitionId)
+    );
   });
   itemViewUi.setOnOpenChange((isOpen) => {
     if (isOpen) {
       inputManager.addMovementLock(ITEM_VIEW_LOCK_ID);
     } else {
       inputManager.removeMovementLock(ITEM_VIEW_LOCK_ID);
+      // Closing supersedes any resolution still in flight, so it cannot pop the
+      // panel back open (and re-take the movement lock) after the player
+      // dismissed it.
+      itemViewRequestToken += 1;
     }
     syncInteractionPrompt();
   });
@@ -1942,7 +2024,11 @@ export function createRuntimeGameplaySessionController(
 
     const remaining = inventoryManager.getQuantity(itemDefinitionId);
     if (remaining > 0) {
-      itemViewUi.show(definition, remaining);
+      // Through the SAME entry point, or the re-render drops the resolved text:
+      // `show`'s third argument is assigned unconditionally, so the two-arg
+      // form clears it. Consumables are a gradable kind, so the plain call made
+      // a graded stack flip back to English the moment the player used one.
+      void showItemViewWithResolvedText(definition, remaining);
     } else {
       itemViewUi.hide();
     }
