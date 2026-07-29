@@ -68,7 +68,8 @@ export function createItemViewSource(): GradedTextSourceStrategy {
         if (!GRADABLE_ITEM_VIEW_KINDS.has(item.interactionView.kind)) continue;
 
         for (const field of ["title", "body"] as const) {
-          const text = item.interactionView[field].trim();
+          const authored = item.interactionView[field];
+          const text = authored.trim();
           if (!text) continue;
 
           units.push({
@@ -78,7 +79,14 @@ export function createItemViewSource(): GradedTextSourceStrategy {
               field
             },
             sourceText: text,
-            contentHash: buildItemViewContentHash(item.definitionId, field, text),
+            // Hash the RAW authored value, not the trimmed one. Every other
+            // site seeds from the raw field: the runtime resolver passes
+            // `definition.interactionView[field]` verbatim, and so does the
+            // Studio bake. Trimming here would make a body with a trailing
+            // newline bake under one hash and be looked up under another --
+            // a permanent silent miss that reads as "grading stopped working
+            // for that item". Same rule as buildDialogueNodeContentHash.
+            contentHash: buildItemViewContentHash(item.definitionId, field, authored),
             guidance: { register: registerFor(field) },
             // Nothing extracts must-convey facts for items yet. Empty skips the
             // fidelity gate, which is correct: there is nothing to check against.

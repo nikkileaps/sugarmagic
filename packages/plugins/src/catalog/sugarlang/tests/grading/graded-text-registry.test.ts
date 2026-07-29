@@ -28,6 +28,7 @@ import {
 } from "../../runtime/grading/sources/dialogue-node-source";
 import { createItemViewSource } from "../../runtime/grading/sources/item-view-source";
 import { gradedTextSourceKey } from "../../runtime/grading/graded-text-source";
+import { toGradedTextSource } from "../../runtime/grading/display-text-resolver";
 import type { GradedTextCorpus } from "../../runtime/grading/graded-text-source";
 import type { DialogueDefinition, ItemDefinition } from "@sugarmagic/domain";
 
@@ -133,6 +134,32 @@ describe("item view source", () => {
     expect(createItemViewSource().collect(corpus({ items: [item("none")] }))).toEqual([]);
   });
 
+  it("hashes the RAW authored value so the runtime lookup can find it", () => {
+    // Cross-module invariant. The runtime resolver seeds its hash from the raw
+    // field (`definition.interactionView.body`, untrimmed), so trimming here
+    // bakes under one key and looks up under another -- a permanent silent miss
+    // that reads as "grading stopped working for that item". Nothing asserted
+    // this before, and the strategy did trim.
+    const raw = "  A leather book, its spine cracked.\n";
+    const units = createItemViewSource().collect(
+      corpus({ items: [item("examine", { body: raw })] })
+    );
+    const body = units.find(
+      (unit) => (unit.source as { field?: string }).field === "body"
+    );
+
+    expect(body?.contentHash).toBe(
+      toGradedTextSource({
+        subjectKind: "item-view",
+        subjectId: "item-book",
+        field: "body",
+        text: raw
+      })?.contentHash
+    );
+    // The prompt still receives the tidied text.
+    expect(body?.sourceText).toBe(raw.trim());
+  });
+
   it("skips empty fields", () => {
     const units = createItemViewSource().collect(
       corpus({ items: [item("examine", { body: "  " })] })
@@ -167,13 +194,28 @@ describe("GradedTextSourceRegistry", () => {
     expect(createDefaultGradedTextSourceRegistry().collectAll(corpus())).toEqual([]);
   });
 
-  it("is deterministic across runs", () => {
+  it("orders units independently of strategy registration order", () => {
+    // The previous version of this test called collectAll twice on the same
+    // object in the same process and compared the results -- which cannot
+    // differ, so it passed even with the sort deleted. Assert the actual
+    // contract: output order comes from the sort, not from which strategy
+    // happens to run first.
     const input = corpus({ dialogues: [dialogue()], items: [item("examine")] });
-    const first = createDefaultGradedTextSourceRegistry().collectAll(input);
-    const second = createDefaultGradedTextSourceRegistry().collectAll(input);
-    expect(first.map((unit) => unit.contentHash)).toEqual(
-      second.map((unit) => unit.contentHash)
+
+    const itemsFirst = new GradedTextSourceRegistry()
+      .register(createItemViewSource())
+      .register(createDialogueNodeSource())
+      .collectAll(input);
+    const dialoguesFirst = new GradedTextSourceRegistry()
+      .register(createDialogueNodeSource())
+      .register(createItemViewSource())
+      .collectAll(input);
+
+    expect(itemsFirst.map((unit) => unit.contentHash)).toEqual(
+      dialoguesFirst.map((unit) => unit.contentHash)
     );
+    const hashes = itemsFirst.map((unit) => unit.contentHash);
+    expect(hashes).toEqual([...hashes].sort());
   });
 
   it("rejects double registration instead of silently replacing", () => {

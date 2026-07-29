@@ -377,10 +377,16 @@ export class SugarlangRuntimeServices {
   /**
    * Inputs for the A1/A2 display-text weave, outside any conversation.
    *
-   * Uses AMBIENT services and the ACTIVE scene's compiled lexicon, so an item
-   * description weaves the same words the dialogue budgeter is teaching rather
-   * than forming a second opinion. Returns null when anything is missing --
-   * before bind, with no target language, or with no active scene -- and the
+   * Just the atlas and the learner's band: the weave draws its pool from every
+   * lemma the band admits, so no scene lexicon and no budgeter prescription are
+   * involved (see the "WHY ITEM TEXT DOES NOT GO THROUGH THE BUDGETER" block in
+   * display-text-resolver.ts).
+   *
+   * Uses AMBIENT services so it answers before any conversation has run --
+   * resolving through execution services was what made item views render
+   * English until the player had talked to somebody.
+   *
+   * Returns null with no resolvable band or no ambient services, and the
    * resolver falls back to authored English.
    */
   async getWeaveInputs(): Promise<{
@@ -436,6 +442,12 @@ export class SugarlangRuntimeServices {
   }
 
   async resetDebugState(): Promise<SugarlangLearnerDataResetResult> {
+    // Clear the pin, then RE-SEED it from config below. A reset wipes learner
+    // data; it is not a request to abandon an authored band override. Before
+    // the pin moved to bindRuntime this happened for free, because the next
+    // resolveForLanguages re-applied it -- bind runs once per plugin init and
+    // never again, so without this a reset silently unpinned the band and the
+    // learner drifted during observation.
     this._debugPinnedBand = null;
     // Close the live card-store connections and delete the sugarlang
     // databases through the single shared enforcer (also used by the Studio
@@ -469,6 +481,15 @@ export class SugarlangRuntimeServices {
       entry.learnerStateReducer.resetSessionAccumulators();
     }
     this.executionServices.clear();
+
+    // Re-seed the authored band override (same DEV guard as bindRuntime), so a
+    // reset returns to the configured band rather than to no band at all.
+    if (
+      (import.meta as { env?: { DEV?: boolean } }).env?.DEV &&
+      this.config.debugBandOverride
+    ) {
+      this._debugPinnedBand = this.config.debugBandOverride as CEFRBand;
+    }
     return resetResult;
   }
 

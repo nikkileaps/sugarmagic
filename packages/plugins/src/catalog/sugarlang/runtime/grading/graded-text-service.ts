@@ -143,6 +143,9 @@ const DEFAULT_POSTURE: SupportPosture = "target-dominant";
 const DEFAULT_DIRECTED_RATIO = 0.8;
 const DEFAULT_MAX_TOKENS = 300;
 
+/** Process-wide default so morphology data is validated and parsed once. */
+const SHARED_MORPHOLOGY = new MorphologyLoader();
+
 const ajv = new Ajv({ allErrors: true, strict: false });
 
 const FIDELITY_SCHEMA = {
@@ -295,7 +298,12 @@ export class GradedTextService {
     this.llmClient = deps.llmClient;
     this.atlas = deps.atlas;
     this.inventoryChunks = deps.inventoryChunks;
-    this.morphology = deps.morphology ?? new MorphologyLoader();
+    // Shared by default. MorphologyLoader caches per INSTANCE, so a fresh one
+    // per service re-runs assertValidMorphologyData over ~29k form entries --
+    // once per variant generated, and generateVariantsForNode fans out over
+    // four bands at once. It used to be module-level in generate-variant.ts;
+    // keep that.
+    this.morphology = deps.morphology ?? SHARED_MORPHOLOGY;
   }
 
   async adapt(request: GradedTextRequest): Promise<GradedTextResult> {

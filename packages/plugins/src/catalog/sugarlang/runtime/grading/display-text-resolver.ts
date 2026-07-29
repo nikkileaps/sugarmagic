@@ -217,9 +217,12 @@ export function createDisplayTextResolver(deps: DisplayTextResolverDeps) {
 }
 
 /**
- * Splice target-language citation forms into authored English, using the SAME
- * budgeter prescription the dialogue weave uses -- so an item teaches the same
- * words the conversation is teaching, rather than a second opinion.
+ * Splice target-language citation forms into authored English.
+ *
+ * The substitution pool is every lemma at or below the learner's band, straight
+ * from the atlas. The budgeter is deliberately NOT consulted -- see the
+ * "WHY ITEM TEXT DOES NOT GO THROUGH THE BUDGETER" block at the top of this
+ * file for the reasoning and the 090 revisit.
  *
  * Returns null whenever anything is missing or nothing was substituted, and the
  * caller falls back to the authored text. Total, like the rest of the resolver.
