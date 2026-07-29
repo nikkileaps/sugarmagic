@@ -23,7 +23,7 @@
  *
  *   due              FSRS retrievability below the due floor (learner is overdue).
  *   debt-service     Introduced item with fewer than TARGET_DEBT_ENCOUNTERS diverse re-encounters.
- *   introduction     Function or lemma not yet formally introduced; band ordering places it here.
+ *   introduction     Competency or lemma not yet formally introduced; band ordering places it here.
  *   function-affinity Unintroduced function present in the current scene's authored content.
  *   stretch          Above-band (band+1) function scheduled deliberately when scene comprehension
  *                    is high enough (>= STRETCH_COMPREHENSION_FLOOR) to support it safely.
@@ -33,15 +33,15 @@ export type TeachReason = "due" | "debt-service" | "introduction" | "function-af
 export interface ScheduledTeachable {
   /**
    * For lemma items:    atlas lemmaId (e.g. "comer").
-   * For function items: functionId from the inventory (e.g. "greet.formal").
+   * For function items: competencyId from the inventory (e.g. "greet.formal").
    *
    * 087.3 maps function items to their constituent chunk: refs when building the
    * prescription. Do NOT treat function-kind ids as lemmaIds upstream of that
    * expansion -- the prescriptions expect lemmaIds or chunk:{id} refs only.
    */
   id: string;
-  /** Whether this item is a lexical lemma or a communicative function. */
-  kind: "lemma" | "function";
+  /** Whether this item is a lexical lemma or a competency. */
+  kind: "vocabulary" | "competency";
   /** Normalized priority in [0, 1]; higher = teach sooner. Descending in the schedule. */
   priority: number;
   /** Why this item is scheduled (telemetry / explainability). */

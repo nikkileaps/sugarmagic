@@ -29,7 +29,7 @@ import {
 } from "../../runtime/compile/compile-scheduler";
 import type { SugarlangLLMClient, SugarlangLLMRequest } from "../../runtime/llm/types";
 import type { LexicalAtlasProvider, CEFRBand } from "../../runtime/types";
-import type { InventoryChunk } from "../../runtime/contracts/function-inventory";
+import type { InventoryChunk } from "../../runtime/contracts/competency-inventory";
 import {
   createTestAtlasProvider,
   createTestMorphologyLoader,

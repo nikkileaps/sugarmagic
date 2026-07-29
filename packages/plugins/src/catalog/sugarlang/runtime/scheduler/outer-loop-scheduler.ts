@@ -10,8 +10,8 @@
  *
  * 087.1 floor:
  *   1. Due items:   lemma cards with retrievability < DUE_RETRIEVABILITY_FLOOR.
- *   2. Unintroduced functions: ordered by CEFR band (A1 highest priority).
- *   3. Scene affinity boost: unintroduced functions present in the scene get a bump;
+ *   2. Unintroduced competencies: ordered by CEFR band (A1 highest priority).
+ *   3. Scene affinity boost: unintroduced competencies present in the scene get a bump;
  *      the current NPC having authored lines for the function gets an extra bump.
  *
  * 087.2 extends:
@@ -96,11 +96,11 @@ export class OuterLoopScheduler {
     const { learner, curriculum, scene, conversationId, npcDefinitionId, targetLanguage } = board;
     const now = Date.now();
 
-    // Cold start: no card history AND no introduced functions means the learner
+    // Cold start: no card history AND no introduced competencies means the learner
     // has not started yet. Return empty schedule so rendering behavior is unchanged.
     const isColdStart =
       Object.keys(learner.lemmaCards).length === 0 &&
-      curriculum.introducedFunctionIds.size === 0;
+      curriculum.introducedCompetencyIds.size === 0;
 
     const dayAxisDegraded = scene.dayIndex === null;
     const sceneComprehensionRate = estimateSceneComprehensionRate(learner.lemmaCards, scene.sceneLemmaIds);
@@ -150,7 +150,7 @@ export class OuterLoopScheduler {
       if (card.retrievability < DUE_RETRIEVABILITY_FLOOR) {
         candidates.push({
           id: card.lemmaId,
-          kind: "lemma",
+          kind: "vocabulary",
           priority: clamp01(1.0 - card.retrievability),
           teachReason: "due",
           affinityNpcIds: []
@@ -177,19 +177,19 @@ export class OuterLoopScheduler {
       });
     }
 
-    // --- 3. Unintroduced functions, band ordering as the floor ---
+    // --- 3. Unintroduced competencies, band ordering as the floor ---
     // Skipped entirely in strain-suppressed mode (087.4). When strain is high the
     // scheduler surfaces fluency items (section 4) instead of new introductions.
     //
-    // Above-band (band+1) functions are gated behind the stretch allowance:
+    // Above-band (band+1) competencies are gated behind the stretch allowance:
     // only one is included per turn, only when scene comprehension >= STRETCH_COMPREHENSION_FLOOR,
     // and only when the function has scene affinity.
     const learnerBandIdx = bandIndex(learner.cefrBand);
     let stretchCandidateAdded = false;
 
-    if (!strainSuppressed) for (const fn of curriculum.availableFunctions) {
-      if (curriculum.introducedFunctionIds.has(fn.functionId)) continue;
-      if (curriculum.activeDebts.has(fn.functionId)) continue;
+    if (!strainSuppressed) for (const fn of curriculum.availableCompetencies) {
+      if (curriculum.introducedCompetencyIds.has(fn.competencyId)) continue;
+      if (curriculum.activeDebts.has(fn.competencyId)) continue;
 
       const fnBandIdx = bandIndex(fn.band);
       const isAboveBand = fnBandIdx > learnerBandIdx;
@@ -199,7 +199,7 @@ export class OuterLoopScheduler {
       if (isAboveBand) {
         if (stretchCandidateAdded) continue;
         if (sceneComprehensionRate < STRETCH_COMPREHENSION_FLOOR) continue;
-        if (!scene.functionTags.sceneFunctions.includes(fn.functionId)) continue;
+        if (!scene.competencyTags.sceneCompetencies.includes(fn.competencyId)) continue;
       }
 
       // familiarityBoost (087.3): fraction of constituent chunks already in card store × 0.05.
@@ -213,18 +213,18 @@ export class OuterLoopScheduler {
 
       let affinityBoost = 0;
       const affinityNpcIds: string[] = [];
-      const isInScene = scene.functionTags.sceneFunctions.includes(fn.functionId);
+      const isInScene = scene.competencyTags.sceneCompetencies.includes(fn.competencyId);
 
       if (isInScene) {
         affinityBoost += 0.15;
-        for (const [npcId, npcFns] of Object.entries(scene.functionTags.npcFunctions)) {
-          if (npcFns.includes(fn.functionId)) {
+        for (const [npcId, npcFns] of Object.entries(scene.competencyTags.npcCompetencies)) {
+          if (npcFns.includes(fn.competencyId)) {
             affinityNpcIds.push(npcId);
           }
         }
         if (
           npcDefinitionId &&
-          scene.functionTags.npcFunctions[npcDefinitionId]?.includes(fn.functionId)
+          scene.competencyTags.npcCompetencies[npcDefinitionId]?.includes(fn.competencyId)
         ) {
           affinityBoost += 0.10;
         }
@@ -239,8 +239,8 @@ export class OuterLoopScheduler {
       if (isAboveBand) stretchCandidateAdded = true;
 
       candidates.push({
-        id: fn.functionId,
-        kind: "function",
+        id: fn.competencyId,
+        kind: "competency",
         priority: clamp01(basePriority + affinityBoost + familiarityBoost),
         teachReason,
         affinityNpcIds
@@ -263,7 +263,7 @@ export class OuterLoopScheduler {
         if (card.retrievability < FLUENCY_RETRIEVABILITY_FLOOR) continue;
         candidates.push({
           id: lemmaId,
-          kind: "lemma",
+          kind: "vocabulary",
           priority: card.retrievability * 0.20, // low band: below due/debt but present
           teachReason: "fluency",
           affinityNpcIds: []

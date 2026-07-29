@@ -23,7 +23,7 @@
  */
 
 import type { LexicalAtlasProvider } from "../types";
-import type { InventoryChunk } from "../contracts/function-inventory";
+import type { InventoryChunk } from "../contracts/competency-inventory";
 import { tokenize } from "./tokenize";
 
 export interface WeavedForm {

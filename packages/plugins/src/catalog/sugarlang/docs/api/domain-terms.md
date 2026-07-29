@@ -176,7 +176,7 @@ A third (conjugation) is anticipated, not built. Both subtypes share a shape: a
 language-neutral thing plus how this language performs it.
 
 In code the umbrella is `ScheduledTeachable` (`runtime/scheduler/teach-schedule.ts`),
-whose `kind` is still `"lemma" | "function"` -- see Competency below.
+whose `kind` is `"vocabulary" | "competency"`.
 
 ### Competency
 
@@ -191,11 +191,9 @@ authored text; an exponent is specifically a phrase that performs *this* act.
 
 A competency is language-neutral; only its exponents are per-language.
 
-**The code still says `function`** -- `FunctionEntry`, `functionId`,
-`function-inventory.json`, `kind: "function"`. That name collides with the
-programming sense on every read and is scheduled for rename after Plan 090
-ships (the rename is a data migration, not just a code change). New code uses
-`competency`; do not half-rename existing identifiers in passing.
+Named `function` until 2026-07-29, after CEFR's "functional syllabus". Renamed
+because it collided with the programming sense on every read; `Competency`,
+`competencyId`, `competency-inventory.json`, `kind: "competency"` throughout now.
 
 ### Diglot weave
 

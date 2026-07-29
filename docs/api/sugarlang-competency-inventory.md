@@ -13,29 +13,29 @@ fills for social-move detection.
 
 | Role | Path |
 |------|------|
-| JSON schema | `packages/plugins/src/catalog/sugarlang/data/schemas/function-inventory.schema.json` |
-| Spanish seed data | `packages/plugins/src/catalog/sugarlang/data/languages/es/function-inventory.json` |
-| TypeScript contracts | `packages/plugins/src/catalog/sugarlang/runtime/contracts/function-inventory.ts` |
-| Runtime loader | `packages/plugins/src/catalog/sugarlang/runtime/inventory/function-inventory-loader.ts` |
-| Tests | `packages/plugins/src/catalog/sugarlang/tests/data/function-inventory.test.ts` |
+| JSON schema | `packages/plugins/src/catalog/sugarlang/data/schemas/competency-inventory.schema.json` |
+| Spanish seed data | `packages/plugins/src/catalog/sugarlang/data/languages/es/competency-inventory.json` |
+| TypeScript contracts | `packages/plugins/src/catalog/sugarlang/runtime/contracts/competency-inventory.ts` |
+| Runtime loader | `packages/plugins/src/catalog/sugarlang/runtime/inventory/competency-inventory-loader.ts` |
+| Tests | `packages/plugins/src/catalog/sugarlang/tests/data/competency-inventory.test.ts` |
 
 ## Data Shape
 
-The JSON root (`FunctionInventory`):
+The JSON root (`CompetencyInventory`):
 
 ```typescript
-interface FunctionInventory {
+interface CompetencyInventory {
   schemaVersion: "1";
   lang: string;               // BCP-47, e.g. "es"
-  functions: FunctionEntry[];
+  functions: Competency[];
 }
 ```
 
-Each `FunctionEntry`:
+Each `Competency`:
 
 ```typescript
-interface FunctionEntry {
-  functionId: string;         // stable slug, e.g. "greet"
+interface Competency {
+  competencyId: string;         // stable slug, e.g. "greet"
   displayName: string;        // human label for Studio
   cefrDescriptor: string;     // CEFR can-do descriptor
   band: CEFRBand;             // "A1".."C2" -- lowest band the function targets
@@ -60,11 +60,11 @@ interface InventoryChunk {
 
 ## Loader API
 
-Import from `runtime/inventory/function-inventory-loader`:
+Import from `runtime/inventory/competency-inventory-loader`:
 
 ```typescript
 // Load the full inventory for a language (throws if missing).
-loadFunctionInventory(lang: string): FunctionInventory
+loadCompetencyInventory(lang: string): CompetencyInventory
 
 // All InventoryChunk objects across all functions (used by observe middleware).
 getAllInventoryChunks(lang: string): InventoryChunk[]
@@ -73,11 +73,11 @@ getAllInventoryChunks(lang: string): InventoryChunk[]
 buildInterpretLexiconFromInventory(lang: string): Record<string, string[]>
 
 // Class form -- inject a different data map in tests.
-class FunctionInventoryLoader {
+class CompetencyInventoryLoader {
   constructor(dataByLang?: Partial<Record<string, unknown>>)
-  load(lang: string): FunctionInventory
-  getFunctions(lang: string): FunctionEntry[]
-  getChunks(functionId: string, lang: string): InventoryChunk[]
+  load(lang: string): CompetencyInventory
+  getFunctions(lang: string): Competency[]
+  getChunks(competencyId: string, lang: string): InventoryChunk[]
   getAllChunks(lang: string): InventoryChunk[]
   buildInterpretLexicon(lang: string): Record<string, string[]>
 }
@@ -108,8 +108,8 @@ The scene-extraction pipeline uses the same underscore-lowercased convention.
 
 ## Adding a New Language
 
-1. Create `data/languages/{lang}/function-inventory.json` matching the schema.
-2. Import it in `function-inventory-loader.ts` and add to `DEFAULT_INVENTORY_DATA`.
+1. Create `data/languages/{lang}/competency-inventory.json` matching the schema.
+2. Import it in `competency-inventory-loader.ts` and add to `DEFAULT_INVENTORY_DATA`.
 3. Add schema-validation + loader tests mirroring the `es` suite.
 4. Add `interpretLexiconCategory` entries only if `detectSocialMove` is
    live for that language (currently `es` only).

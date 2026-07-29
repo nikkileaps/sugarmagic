@@ -1,18 +1,18 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/inventory/function-inventory-loader.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/inventory/competency-inventory-loader.ts
  *
- * Purpose: Loads the hand-curated function inventory JSON data and exposes lookup helpers.
+ * Purpose: Loads the hand-curated competency inventory JSON data and exposes lookup helpers.
  *
  * Exports:
- *   - FunctionInventoryLoader
- *   - loadFunctionInventory
+ *   - CompetencyInventoryLoader
+ *   - loadCompetencyInventory
  *   - getAllInventoryChunks
  *   - buildInterpretLexiconFromInventory
  *
  * Relationships:
- *   - Depends on data/languages/{lang}/function-inventory.json.
- *   - Contracts defined in runtime/contracts/function-inventory.ts.
- *   - Consumed by: sugar-lang-observe-middleware (085.3), function-tag-resolver (085.4),
+ *   - Depends on data/languages/{lang}/competency-inventory.json.
+ *   - Contracts defined in runtime/contracts/competency-inventory.ts.
+ *   - Consumed by: sugar-lang-observe-middleware (085.3), competency-tag-resolver (085.4),
  *     teach-record store (085.5), sugar-lang-teacher-middleware (085.6).
  *
  * Implements: Plan 085 story 085.2
@@ -20,54 +20,54 @@
  * Status: active
  */
 
-import esInventoryData from "../../data/languages/es/function-inventory.json";
+import esInventoryData from "../../data/languages/es/competency-inventory.json";
 import type {
-  FunctionInventory,
-  FunctionEntry,
+  CompetencyInventory,
+  Competency,
   InventoryChunk
-} from "../contracts/function-inventory";
-import { INTERPRET_LEXICON_CATEGORIES as CATEGORIES } from "../contracts/function-inventory";
+} from "../contracts/competency-inventory";
+import { INTERPRET_LEXICON_CATEGORIES as CATEGORIES } from "../contracts/competency-inventory";
 
 function assertValidInventory(
   data: unknown,
   lang: string
-): asserts data is FunctionInventory {
+): asserts data is CompetencyInventory {
   if (typeof data !== "object" || data === null) {
     throw new Error(
-      `Invalid function inventory for "${lang}": expected object root.`
+      `Invalid competency inventory for "${lang}": expected object root.`
     );
   }
   const record = data as Record<string, unknown>;
   if (record.schemaVersion !== "1") {
     throw new Error(
-      `Invalid function inventory for "${lang}": unsupported schemaVersion "${record.schemaVersion}".`
+      `Invalid competency inventory for "${lang}": unsupported schemaVersion "${record.schemaVersion}".`
     );
   }
   if (record.lang !== lang) {
     throw new Error(
-      `Invalid function inventory for "${lang}": lang mismatch ("${record.lang}").`
+      `Invalid competency inventory for "${lang}": lang mismatch ("${record.lang}").`
     );
   }
-  if (!Array.isArray(record.functions) || record.functions.length === 0) {
+  if (!Array.isArray(record.competencies) || record.competencies.length === 0) {
     throw new Error(
-      `Invalid function inventory for "${lang}": missing or empty functions array.`
+      `Invalid competency inventory for "${lang}": missing or empty functions array.`
     );
   }
-  for (const fn of record.functions as unknown[]) {
+  for (const fn of record.competencies as unknown[]) {
     if (typeof fn !== "object" || fn === null) {
       throw new Error(
-        `Invalid function inventory for "${lang}": function entry is not an object.`
+        `Invalid competency inventory for "${lang}": function entry is not an object.`
       );
     }
     const entry = fn as Record<string, unknown>;
-    if (typeof entry.functionId !== "string" || entry.functionId.length === 0) {
+    if (typeof entry.competencyId !== "string" || entry.competencyId.length === 0) {
       throw new Error(
-        `Invalid function inventory for "${lang}": function entry missing functionId.`
+        `Invalid competency inventory for "${lang}": function entry missing competencyId.`
       );
     }
     if (typeof entry.chunks !== "object" || entry.chunks === null) {
       throw new Error(
-        `Invalid function inventory for "${lang}": function "${entry.functionId}" missing chunks map.`
+        `Invalid competency inventory for "${lang}": function "${entry.competencyId}" missing chunks map.`
       );
     }
   }
@@ -77,8 +77,8 @@ const DEFAULT_INVENTORY_DATA: Partial<Record<string, unknown>> = {
   es: esInventoryData
 };
 
-export class FunctionInventoryLoader {
-  private readonly cache = new Map<string, FunctionInventory>();
+export class CompetencyInventoryLoader {
+  private readonly cache = new Map<string, CompetencyInventory>();
 
   constructor(
     private readonly dataByLang: Partial<
@@ -86,28 +86,28 @@ export class FunctionInventoryLoader {
     > = DEFAULT_INVENTORY_DATA
   ) {}
 
-  load(lang: string): FunctionInventory {
+  load(lang: string): CompetencyInventory {
     const cached = this.cache.get(lang);
     if (cached) return cached;
 
     const data = this.dataByLang[lang];
     if (!data) {
-      throw new Error(`Missing sugarlang function inventory for "${lang}".`);
+      throw new Error(`Missing sugarlang competency inventory for "${lang}".`);
     }
     assertValidInventory(data, lang);
     this.cache.set(lang, data);
     return data;
   }
 
-  /** All FunctionEntry objects for a language, in declaration order. */
-  getFunctions(lang: string): FunctionEntry[] {
-    return this.load(lang).functions;
+  /** All Competency objects for a language, in declaration order. */
+  getCompetencies(lang: string): Competency[] {
+    return this.load(lang).competencies;
   }
 
-  /** Chunks registered under a specific functionId for a language. */
-  getChunks(functionId: string, lang: string): InventoryChunk[] {
-    const fn = this.load(lang).functions.find(
-      (f) => f.functionId === functionId
+  /** Chunks registered under a specific competencyId for a language. */
+  getChunks(competencyId: string, lang: string): InventoryChunk[] {
+    const fn = this.load(lang).competencies.find(
+      (f) => f.competencyId === competencyId
     );
     return fn?.chunks[lang] ?? [];
   }
@@ -117,19 +117,19 @@ export class FunctionInventoryLoader {
    * Used by the observe middleware to seed the chunk detection pass.
    */
   getAllChunks(lang: string): InventoryChunk[] {
-    return this.load(lang).functions.flatMap((fn) => fn.chunks[lang] ?? []);
+    return this.load(lang).competencies.flatMap((fn) => fn.chunks[lang] ?? []);
   }
 
   /**
-   * Returns the FunctionEntry that owns the given chunkId for a language,
+   * Returns the Competency that owns the given chunkId for a language,
    * or undefined if the chunk is not in the inventory.
    * Used by the observe middleware to find the function for a first-teach event.
    */
-  getFunctionForChunk(
+  getCompetencyForChunk(
     chunkId: string,
     lang: string
-  ): import("../contracts/function-inventory").FunctionEntry | undefined {
-    return this.load(lang).functions.find((fn) =>
+  ): import("../contracts/competency-inventory").Competency | undefined {
+    return this.load(lang).competencies.find((fn) =>
       (fn.chunks[lang] ?? []).some((c) => c.chunkId === chunkId)
     );
   }
@@ -146,7 +146,7 @@ export class FunctionInventoryLoader {
       result[category] = [];
     }
 
-    for (const fn of this.load(lang).functions) {
+    for (const fn of this.load(lang).competencies) {
       if (!fn.interpretLexiconCategory) continue;
       const category = fn.interpretLexiconCategory;
       const chunks = fn.chunks[lang] ?? [];
@@ -163,9 +163,9 @@ export class FunctionInventoryLoader {
   }
 }
 
-const defaultLoader = new FunctionInventoryLoader();
+const defaultLoader = new CompetencyInventoryLoader();
 
-export function loadFunctionInventory(lang: string): FunctionInventory {
+export function loadCompetencyInventory(lang: string): CompetencyInventory {
   return defaultLoader.load(lang);
 }
 
@@ -179,12 +179,12 @@ export function buildInterpretLexiconFromInventory(
   return defaultLoader.buildInterpretLexicon(lang);
 }
 
-export function getFunctionForChunk(
+export function getCompetencyForChunk(
   chunkId: string,
   lang: string
-): import("../contracts/function-inventory").FunctionEntry | undefined {
+): import("../contracts/competency-inventory").Competency | undefined {
   try {
-    return defaultLoader.getFunctionForChunk(chunkId, lang);
+    return defaultLoader.getCompetencyForChunk(chunkId, lang);
   } catch {
     // Missing inventory for language -- not a fatal error at observation time.
     return undefined;

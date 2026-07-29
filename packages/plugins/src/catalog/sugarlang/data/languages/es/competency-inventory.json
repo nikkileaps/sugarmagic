@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1",
   "lang": "es",
-  "functions": [
+  "competencies": [
     {
-      "functionId": "meta-language",
+      "competencyId": "meta-language",
       "displayName": "Meta-language",
       "cefrDescriptor": "Can ask for clarification and slowing down in the target language.",
       "band": "A1",
@@ -43,7 +43,7 @@
       }
     },
     {
-      "functionId": "greet",
+      "competencyId": "greet",
       "displayName": "Greet",
       "cefrDescriptor": "Can greet people in a simple way.",
       "band": "A1",
@@ -89,7 +89,7 @@
       }
     },
     {
-      "functionId": "thank",
+      "competencyId": "thank",
       "displayName": "Thank",
       "cefrDescriptor": "Can thank someone simply.",
       "band": "A1",
@@ -121,7 +121,7 @@
       }
     },
     {
-      "functionId": "acknowledge",
+      "competencyId": "acknowledge",
       "displayName": "Acknowledge",
       "cefrDescriptor": "Can signal understanding or agreement with simple expressions.",
       "band": "A1",
@@ -188,7 +188,7 @@
       }
     },
     {
-      "functionId": "farewell",
+      "competencyId": "farewell",
       "displayName": "Farewell",
       "cefrDescriptor": "Can take leave of someone with a simple expression.",
       "band": "A1",
@@ -241,7 +241,7 @@
       }
     },
     {
-      "functionId": "request",
+      "competencyId": "request",
       "displayName": "Request",
       "cefrDescriptor": "Can make a simple request or ask for something.",
       "band": "A1",
@@ -265,7 +265,7 @@
       }
     },
     {
-      "functionId": "ask-what",
+      "competencyId": "ask-what",
       "displayName": "Ask what something is",
       "cefrDescriptor": "Can ask what something is called or what it means.",
       "band": "A1",
@@ -282,7 +282,7 @@
       }
     },
     {
-      "functionId": "ask-where",
+      "competencyId": "ask-where",
       "displayName": "Ask where something is",
       "cefrDescriptor": "Can ask where a place or person is.",
       "band": "A1",
@@ -299,7 +299,7 @@
       }
     },
     {
-      "functionId": "buy",
+      "competencyId": "buy",
       "displayName": "Buy / transact",
       "cefrDescriptor": "Can handle simple transactions and ask prices.",
       "band": "A2",
@@ -323,7 +323,7 @@
       }
     },
     {
-      "functionId": "refuse-politely",
+      "competencyId": "refuse-politely",
       "displayName": "Refuse politely",
       "cefrDescriptor": "Can decline something politely.",
       "band": "A1",

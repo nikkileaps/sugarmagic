@@ -24,7 +24,7 @@
 import type { CEFRBand } from "../contracts/learner-profile";
 import type { SupportPosture } from "../contracts/pedagogy";
 import type { VariantVerdict } from "../contracts/baked-variant";
-import type { InventoryChunk } from "../contracts/function-inventory";
+import type { InventoryChunk } from "../contracts/competency-inventory";
 import type { LexicalAtlasProvider } from "../types";
 import { applyMixedTextEnvelopePredicate } from "../classifier/envelope-rule";
 import { computeLanguageRatioVerdict } from "../classifier/language-ratio";

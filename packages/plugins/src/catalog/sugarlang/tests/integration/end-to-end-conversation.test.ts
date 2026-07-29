@@ -850,7 +850,7 @@ describe("end-to-end conversation golden", () => {
       "../../runtime/providers/impls/cefr-lex-atlas-provider"
     );
     const { getAllInventoryChunks } = await import(
-      "../../runtime/inventory/function-inventory-loader"
+      "../../runtime/inventory/competency-inventory-loader"
     );
 
     const atlas = new CefrLexAtlasProvider();

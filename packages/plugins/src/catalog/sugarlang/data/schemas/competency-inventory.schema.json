@@ -1,11 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://sugarmagic.dev/sugarlang/schemas/function-inventory.schema.json",
+  "$id": "https://sugarmagic.dev/sugarlang/schemas/competency-inventory.schema.json",
   "title": "Sugarlang Function Inventory",
-  "description": "Hand-curated communicative function inventory keyed to CEFR can-do descriptors.",
+  "description": "Hand-curated communicative competency inventory keyed to CEFR can-do descriptors.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "lang", "functions"],
+  "required": ["schemaVersion", "lang", "competencies"],
   "properties": {
     "schemaVersion": {
       "type": "string",
@@ -15,9 +15,9 @@
       "type": "string",
       "minLength": 2
     },
-    "functions": {
+    "competencies": {
       "type": "array",
-      "items": { "$ref": "#/$defs/functionEntry" }
+      "items": { "$ref": "#/$defs/competency" }
     }
   },
   "$defs": {
@@ -44,12 +44,12 @@
         }
       }
     },
-    "functionEntry": {
+    "competency": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["functionId", "displayName", "cefrDescriptor", "band", "chunks"],
+      "required": ["competencyId", "displayName", "cefrDescriptor", "band", "chunks"],
       "properties": {
-        "functionId": { "type": "string", "minLength": 1 },
+        "competencyId": { "type": "string", "minLength": 1 },
         "displayName": { "type": "string", "minLength": 1 },
         "cefrDescriptor": { "type": "string", "minLength": 1 },
         "band": { "$ref": "#/$defs/cefrBand" },

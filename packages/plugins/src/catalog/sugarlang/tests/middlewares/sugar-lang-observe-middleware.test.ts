@@ -306,7 +306,7 @@ describe("SugarLangObserveMiddleware", () => {
   });
 
   it("085.3: detects inventory chunks even when scene.chunks is absent", async () => {
-    // Chunk detection uses the hand-curated function inventory, not scene.chunks.
+    // Chunk detection uses the hand-curated competency inventory, not scene.chunks.
     // An NPC greeting is detected regardless of what the authoring pipeline extracted.
     const apply = vi.fn().mockResolvedValue(undefined);
     const services = createServicesStub({
@@ -361,7 +361,7 @@ describe("SugarLangObserveMiddleware", () => {
     // Teach-record should have been written for the "greet" function.
     expect(writeRecord).toHaveBeenCalledWith(
       expect.objectContaining({
-        functionId: "greet",
+        competencyId: "greet",
         realizingChunkId: "buenos_dias"
       })
     );

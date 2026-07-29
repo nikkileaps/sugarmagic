@@ -1,18 +1,18 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/contracts/function-inventory.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/contracts/competency-inventory.ts
  *
- * Purpose: Declares the hand-curated function inventory types used by the curriculum spine.
+ * Purpose: Declares the hand-curated competency inventory types used by the curriculum spine.
  *
  * Exports:
  *   - INTERPRET_LEXICON_CATEGORIES
  *   - InterpretLexiconCategory
  *   - InventoryChunk
- *   - FunctionEntry
- *   - FunctionInventory
+ *   - Competency
+ *   - CompetencyInventory
  *
  * Relationships:
- *   - Consumed by function-inventory-loader, function-tag-resolver, and teacher middleware.
- *   - The inventory data lives in data/languages/{lang}/function-inventory.json.
+ *   - Consumed by competency-inventory-loader, competency-tag-resolver, and teacher middleware.
+ *   - The inventory data lives in data/languages/{lang}/competency-inventory.json.
  *   - InventoryChunk mirrors LexicalChunk minus extraction metadata; the join field is normalizedForm.
  *
  * Implements: Plan 085 story 085.2
@@ -33,7 +33,7 @@ export const INTERPRET_LEXICON_CATEGORIES = [
 export type InterpretLexiconCategory = (typeof INTERPRET_LEXICON_CATEGORIES)[number];
 
 /**
- * A hand-curated formulaic sequence that realizes a communicative function.
+ * A hand-curated formulaic sequence that realizes a competency.
  * Mirrors LexicalChunk but without LLM extraction metadata.
  * Join key to scene-extracted chunks: normalizedForm.
  */
@@ -48,10 +48,10 @@ export interface InventoryChunk {
 }
 
 /**
- * One communicative function entry in the hand-curated inventory.
+ * One competency entry in the hand-curated inventory.
  */
-export interface FunctionEntry {
-  functionId: string;
+export interface Competency {
+  competencyId: string;
   displayName: string;
   /** CEFR can-do descriptor (human-readable, not machine-actionable). */
   cefrDescriptor: string;
@@ -80,10 +80,10 @@ export interface FunctionEntry {
 }
 
 /**
- * The full hand-curated function inventory for one language.
+ * The full hand-curated competency inventory for one language.
  */
-export interface FunctionInventory {
+export interface CompetencyInventory {
   schemaVersion: "1";
   lang: string;
-  functions: FunctionEntry[];
+  competencies: Competency[];
 }

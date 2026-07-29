@@ -238,8 +238,8 @@ export function LearnerCardInspector(): ReactElement {
                   }}
                 >
                   {profile.teachRecords.map((r) => (
-                    <div key={r.functionId}>
-                      {r.functionId} via {r.realizingChunkId}
+                    <div key={r.competencyId}>
+                      {r.competencyId} via {r.realizingChunkId}
                     </div>
                   ))}
                 </div>

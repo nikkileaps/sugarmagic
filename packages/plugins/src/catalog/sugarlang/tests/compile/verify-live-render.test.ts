@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 import { verifyLiveRender, type VerifyLiveRenderInput } from "../../runtime/compile/verify-live-render";
-import type { InventoryChunk } from "../../runtime/contracts/function-inventory";
+import type { InventoryChunk } from "../../runtime/contracts/competency-inventory";
 import { createTestAtlasProvider } from "./test-helpers";
 
 // Atlas with Spanish A1/B1 vocabulary sufficient for a basic check.

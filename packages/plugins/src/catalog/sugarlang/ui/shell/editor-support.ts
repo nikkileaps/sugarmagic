@@ -38,7 +38,7 @@ import { extractIntent, INTENT_EXTRACTOR_PROMPT_VERSION } from "../../runtime/co
 import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 import { GradedTextService } from "../../runtime/grading/graded-text-service";
 import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
-import { getAllInventoryChunks } from "../../runtime/inventory/function-inventory-loader";
+import { getAllInventoryChunks } from "../../runtime/inventory/competency-inventory-loader";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
 import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-scene";
 import { computeSceneContentHash } from "../../runtime/compile/content-hash";
@@ -514,7 +514,7 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       if (!llmClient) return {};
       const cache = getCache(workspaceId);
       const contentHash = buildVariantContentHash(nodeId, nodeText);
-      let inventoryChunks: import("../../runtime/contracts/function-inventory").InventoryChunk[] = [];
+      let inventoryChunks: import("../../runtime/contracts/competency-inventory").InventoryChunk[] = [];
       try {
         inventoryChunks = getAllInventoryChunks(targetLanguage);
       } catch {
@@ -560,7 +560,7 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       if (!llmClient) return {};
       const cache = getCache(workspaceId);
       const contentHash = buildItemViewContentHash(itemDefinitionId, field, text);
-      let inventoryChunks: import("../../runtime/contracts/function-inventory").InventoryChunk[] = [];
+      let inventoryChunks: import("../../runtime/contracts/competency-inventory").InventoryChunk[] = [];
       try {
         inventoryChunks = getAllInventoryChunks(targetLanguage);
       } catch {

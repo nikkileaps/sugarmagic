@@ -105,7 +105,7 @@ export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 
 export const DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK = `PRAGMATIC FEEDBACK RULES:
 
-When a player uses or attempts a communicative function the NPC has modeled
+When a player uses or attempts a competency the NPC has modeled
 (greetings, farewells, expressions of gratitude, acknowledgements, requests):
 
 - Correct use: respond with natural in-fiction warmth -- a smile, a matching

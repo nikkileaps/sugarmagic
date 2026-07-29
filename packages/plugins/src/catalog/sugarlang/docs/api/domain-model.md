@@ -149,7 +149,7 @@ word.
 | `LEARNER`, `LEMMA_CARD`, `SESSION` | `contracts/learner-profile.ts` |
 | `LEMMA`, `LEXICAL_ATLAS` | `contracts/providers.ts`, atlas data |
 | `SCENE_LEXICON`, `QUEST_ESSENTIAL_LEMMA` | `contracts/scene-lexicon.ts` |
-| `FUNCTION`, `CHUNK`, `FUNCTION_INVENTORY` | `contracts/function-inventory.ts` |
+| `FUNCTION`, `CHUNK`, `FUNCTION_INVENTORY` | `contracts/competency-inventory.ts` |
 | `PRESCRIPTION`, `RATIONALE` | `contracts/lexical-prescription.ts` |
 | `SCHEDULE`, `TEACHABLE` | `scheduler/teach-schedule.ts` |
 | `BOARD_VIEW` | `scheduler/scheduler-board-view.ts` |

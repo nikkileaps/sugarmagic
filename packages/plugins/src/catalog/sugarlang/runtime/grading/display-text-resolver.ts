@@ -45,7 +45,7 @@ import type { SugarlangVariantCache } from "../compile/variant-cache";
 import type { LexicalAtlasProvider } from "../types";
 import { buildItemViewContentHash } from "./sources/item-view-source";
 import { diglotWeave } from "../classifier/diglot-weave";
-import { getAllInventoryChunks } from "../inventory/function-inventory-loader";
+import { getAllInventoryChunks } from "../inventory/competency-inventory-loader";
 
 /**
  * Which bands weave instead of reading a baked variant.

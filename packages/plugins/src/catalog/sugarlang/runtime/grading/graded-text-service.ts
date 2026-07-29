@@ -118,7 +118,7 @@ import type { VariantVerdict } from "../contracts/baked-variant";
 import type { SupportPosture } from "../contracts/pedagogy";
 import type { SugarlangLLMClient } from "../llm/types";
 import type { LexicalAtlasProvider } from "../types";
-import type { InventoryChunk } from "../contracts/function-inventory";
+import type { InventoryChunk } from "../contracts/competency-inventory";
 import { applyMixedTextEnvelopePredicate } from "../classifier/envelope-rule";
 import { computeLanguageRatioVerdict } from "../classifier/language-ratio";
 import { computeVoiceRetentionScore } from "../classifier/envelope-classifier";

@@ -42,7 +42,7 @@ import type { LineIntentArtifact } from "../contracts/line-intent";
 import type { BakedLineVariant } from "../contracts/baked-variant";
 import type { SugarlangLLMClient } from "../llm/types";
 import type { LexicalAtlasProvider } from "../types";
-import type { InventoryChunk } from "../contracts/function-inventory";
+import type { InventoryChunk } from "../contracts/competency-inventory";
 import {
   GRADED_TEXT_PROMPT_VERSION,
   GradedTextService,

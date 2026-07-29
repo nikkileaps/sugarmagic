@@ -361,8 +361,8 @@ const SUGARAGENT_CONTRIB_SUGARLANG_KEY = "sugaragent.contrib/sugarlang";
 function makeSchedule(overrides: Partial<TeachSchedule> = {}): TeachSchedule {
   return {
     teachables: [
-      { id: "comer", kind: "lemma", priority: 0.9, teachReason: "due", affinityNpcIds: [] },
-      { id: "hablar", kind: "lemma", priority: 0.7, teachReason: "introduction", affinityNpcIds: [] }
+      { id: "comer", kind: "vocabulary", priority: 0.9, teachReason: "due", affinityNpcIds: [] },
+      { id: "hablar", kind: "vocabulary", priority: 0.7, teachReason: "introduction", affinityNpcIds: [] }
     ],
     isColdStart: false,
     sceneId: "scene-1",
@@ -547,8 +547,8 @@ describe("SugarLangTeacherMiddleware -- 087.6 schedule-driven realization", () =
     execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
     execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule({
       teachables: [
-        { id: "comer", kind: "lemma", priority: 0.9, teachReason: "due", affinityNpcIds: [] },
-        { id: "agua", kind: "lemma", priority: 0.5, teachReason: "fluency", affinityNpcIds: [] }
+        { id: "comer", kind: "vocabulary", priority: 0.9, teachReason: "due", affinityNpcIds: [] },
+        { id: "agua", kind: "vocabulary", priority: 0.5, teachReason: "fluency", affinityNpcIds: [] }
       ]
     });
 

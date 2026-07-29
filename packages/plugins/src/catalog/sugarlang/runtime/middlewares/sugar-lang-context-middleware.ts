@@ -62,12 +62,12 @@ import {
   type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
-import { loadFunctionInventory } from "../inventory/function-inventory-loader";
-import { resolveFunctionTags } from "../inventory/function-tag-resolver";
+import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
+import { resolveCompetencyTags } from "../inventory/competency-tag-resolver";
 import type { SchedulerBoardView } from "../scheduler/scheduler-board-view";
 import type { TeachSchedule } from "../scheduler/teach-schedule";
-import { realizeFunctionChunksFromSchedule } from "../scheduler/function-chunk-realizer";
-import type { FunctionEntry } from "../contracts/function-inventory";
+import { realizeCompetencyChunksFromSchedule } from "../scheduler/competency-chunk-realizer";
+import type { Competency } from "../contracts/competency-inventory";
 import { getWorldDay } from "@sugarmagic/runtime-core";
 
 export interface SugarLangContextMiddlewareDeps {
@@ -362,22 +362,22 @@ export function createSugarLangContextMiddleware(
       // 087.1: outer-loop schedule. Computed from the scene lexicon + learner state
       // that are already in hand. Fail-safe: any error means no annotation, which
       // preserves today's rendering behavior exactly.
-      // availableFunctions is declared here so it's accessible for the post-prescribe
+      // availableCompetencies is declared here so it's accessible for the post-prescribe
       // function-chunk realization step (087.3).
-      let availableFunctions: FunctionEntry[] = [];
+      let availableCompetencies: Competency[] = [];
       try {
-        let functionTags = { sceneFunctions: [] as string[], npcFunctions: {} as Record<string, string[]> };
+        let competencyTags = { sceneCompetencies: [] as string[], npcCompetencies: {} as Record<string, string[]> };
         try {
-          const inventory = loadFunctionInventory(targetLanguage);
+          const inventory = loadCompetencyInventory(targetLanguage);
           const dialogues = deps.services.getDialogueDefinitions();
-          functionTags = resolveFunctionTags(sceneLexicon?.chunks, inventory, targetLanguage, dialogues);
+          competencyTags = resolveCompetencyTags(sceneLexicon?.chunks, inventory, targetLanguage, dialogues);
         } catch {
           // Inventory not available for this language or tags failed; schedule degrades.
         }
         const teachRecords = await services.teachRecordStore.list();
         const activeDebts = await services.ledgerStore.getActiveDebts();
         try {
-          availableFunctions = loadFunctionInventory(targetLanguage).functions;
+          availableCompetencies = loadCompetencyInventory(targetLanguage).competencies;
         } catch {
           // No inventory for this language.
         }
@@ -389,13 +389,13 @@ export function createSugarLangContextMiddleware(
             fatigueScore: learner.currentSession?.fatigueScore ?? 0
           },
           curriculum: {
-            introducedFunctionIds: new Set(teachRecords.map((r) => r.functionId)),
-            availableFunctions,
+            introducedCompetencyIds: new Set(teachRecords.map((r) => r.competencyId)),
+            availableCompetencies,
             activeDebts
           },
           scene: {
             sceneId,
-            functionTags,
+            competencyTags,
             dayIndex: blackboard ? getWorldDay(blackboard) : null,
             sceneLemmaIds: Object.keys(sceneLexicon?.lemmas ?? {}).filter(
               (id) => !id.startsWith("chunk:")
@@ -471,20 +471,20 @@ export function createSugarLangContextMiddleware(
       // The schedule may have picked a function teachable; realize its chunk: refs here
       // so the scripted middleware can use them. Capped at remaining newItemsAllowed budget.
       const schedule = execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] as TeachSchedule | undefined;
-      if (schedule && availableFunctions.length > 0) {
+      if (schedule && availableCompetencies.length > 0) {
         try {
-          const functionChunkRefs = realizeFunctionChunksFromSchedule(
+          const competencyChunkRefs = realizeCompetencyChunksFromSchedule(
             schedule,
             targetLanguage,
             refreshedLearner.lemmaCards,
-            availableFunctions
+            availableCompetencies
           );
-          if (functionChunkRefs.length > 0) {
+          if (competencyChunkRefs.length > 0) {
             const cap = Math.max(
               0,
               prescription.budget.newItemsAllowed - prescription.introduce.length
             );
-            const toInject = functionChunkRefs.slice(0, cap);
+            const toInject = competencyChunkRefs.slice(0, cap);
             if (toInject.length > 0) {
               prescription.introduce = [...prescription.introduce, ...toInject];
             }

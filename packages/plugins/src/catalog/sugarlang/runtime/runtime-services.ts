@@ -139,7 +139,7 @@ export interface SugarlangDebugState {
   lemmaCards: import("./contracts/learner-profile").LemmaCard[];
   /** 085.3: chunk cards (lemmaId starts with "chunk:") in the learner store. */
   chunkCards: import("./contracts/learner-profile").LemmaCard[];
-  /** 085.5: teach records written for realized communicative functions. */
+  /** 085.5: teach records written for realized competencies. */
   teachRecords: import("./learner/teach-record-store").TeachRecord[];
 }
 

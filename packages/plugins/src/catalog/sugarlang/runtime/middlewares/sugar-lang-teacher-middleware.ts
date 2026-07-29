@@ -36,7 +36,7 @@ import type {
 } from "../types";
 import { createSugarlangLogger } from "../logger";
 import { languageDisplayName } from "../language-names";
-import { buildInterpretLexiconFromInventory } from "../inventory/function-inventory-loader";
+import { buildInterpretLexiconFromInventory } from "../inventory/competency-inventory-loader";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_COMPREHENSION_IN_FLIGHT_ANNOTATION,
@@ -560,7 +560,7 @@ export function createSugarLangTeacherMiddleware(
       const scheduledBiasTerms: string[] =
         schedule && !schedule.isColdStart
           ? schedule.teachables
-              .filter((t) => t.kind === "lemma" && t.teachReason !== "fluency")
+              .filter((t) => t.kind === "vocabulary" && t.teachReason !== "fluency")
               .slice(0, 3)
               .map((t) => t.id)
           : [];

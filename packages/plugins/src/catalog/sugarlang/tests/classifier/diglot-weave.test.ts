@@ -19,7 +19,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { LexicalAtlasProvider, AtlasLemmaEntry } from "../../runtime/types";
-import type { InventoryChunk } from "../../runtime/contracts/function-inventory";
+import type { InventoryChunk } from "../../runtime/contracts/competency-inventory";
 import { diglotWeave } from "../../runtime/classifier/diglot-weave";
 import {
   applyMixedTextEnvelopePredicate,

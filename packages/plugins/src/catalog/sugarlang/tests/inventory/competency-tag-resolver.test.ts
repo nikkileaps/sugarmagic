@@ -1,15 +1,15 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/inventory/function-tag-resolver.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/inventory/competency-tag-resolver.test.ts
  *
- * Purpose: Pins the function tag resolver's join logic, per-NPC attribution,
+ * Purpose: Pins the competency tag resolver's join logic, per-NPC attribution,
  *   derive-at-read contract, and player-speaker exclusion.
  *
  * Exports:
  *   - none
  *
  * Relationships:
- *   - Exercises ../../runtime/inventory/function-tag-resolver.
- *   - Depends on es function inventory for realistic fixture data.
+ *   - Exercises ../../runtime/inventory/competency-tag-resolver.
+ *   - Depends on es competency inventory for realistic fixture data.
  *
  * Implements: Plan 085 story 085.4
  *
@@ -19,17 +19,17 @@
 import { PLAYER_SPEAKER } from "@sugarmagic/domain";
 import { describe, expect, it } from "vitest";
 import type { DialogueDefinition } from "@sugarmagic/domain";
-import type { FunctionInventory } from "../../runtime/contracts/function-inventory";
+import type { CompetencyInventory } from "../../runtime/contracts/competency-inventory";
 import type { LexicalChunk } from "../../runtime/types";
-import { resolveFunctionTags } from "../../runtime/inventory/function-tag-resolver";
+import { resolveCompetencyTags } from "../../runtime/inventory/competency-tag-resolver";
 
 // Minimal inventory with three functions and one chunk each.
-const FIXTURE_INVENTORY: FunctionInventory = {
+const FIXTURE_INVENTORY: CompetencyInventory = {
   schemaVersion: "1",
   lang: "es",
-  functions: [
+  competencies: [
     {
-      functionId: "greet",
+      competencyId: "greet",
       displayName: "Greet",
       cefrDescriptor: "Can greet.",
       band: "A1",
@@ -46,7 +46,7 @@ const FIXTURE_INVENTORY: FunctionInventory = {
       }
     },
     {
-      functionId: "thank",
+      competencyId: "thank",
       displayName: "Thank",
       cefrDescriptor: "Can thank.",
       band: "A1",
@@ -63,7 +63,7 @@ const FIXTURE_INVENTORY: FunctionInventory = {
       }
     },
     {
-      functionId: "farewell",
+      competencyId: "farewell",
       displayName: "Farewell",
       cefrDescriptor: "Can say goodbye.",
       band: "A1",
@@ -117,37 +117,37 @@ function makeDialogue(
   };
 }
 
-describe("resolveFunctionTags", () => {
+describe("resolveCompetencyTags", () => {
   it("returns empty tags when scene has no chunks", () => {
-    const result = resolveFunctionTags(undefined, FIXTURE_INVENTORY, "es");
-    expect(result.sceneFunctions).toEqual([]);
-    expect(result.npcFunctions).toEqual({});
+    const result = resolveCompetencyTags(undefined, FIXTURE_INVENTORY, "es");
+    expect(result.sceneCompetencies).toEqual([]);
+    expect(result.npcCompetencies).toEqual({});
   });
 
   it("returns empty tags when scene chunk list is empty", () => {
-    const result = resolveFunctionTags([], FIXTURE_INVENTORY, "es");
-    expect(result.sceneFunctions).toEqual([]);
-    expect(result.npcFunctions).toEqual({});
+    const result = resolveCompetencyTags([], FIXTURE_INVENTORY, "es");
+    expect(result.sceneCompetencies).toEqual([]);
+    expect(result.npcCompetencies).toEqual({});
   });
 
   it("scene tags: detects greet when buenos_dias chunk is in the scene", () => {
     const sceneChunks = makeSceneChunks(["buenos_dias"]);
-    const result = resolveFunctionTags(sceneChunks, FIXTURE_INVENTORY, "es");
-    expect(result.sceneFunctions).toContain("greet");
-    expect(result.sceneFunctions).not.toContain("thank");
-    expect(result.sceneFunctions).not.toContain("farewell");
+    const result = resolveCompetencyTags(sceneChunks, FIXTURE_INVENTORY, "es");
+    expect(result.sceneCompetencies).toContain("greet");
+    expect(result.sceneCompetencies).not.toContain("thank");
+    expect(result.sceneCompetencies).not.toContain("farewell");
   });
 
   it("scene tags: detects multiple functions when multiple chunks present", () => {
     const sceneChunks = makeSceneChunks(["buenos_dias", "gracias", "hasta_luego"]);
-    const result = resolveFunctionTags(sceneChunks, FIXTURE_INVENTORY, "es");
-    expect(result.sceneFunctions).toEqual(["farewell", "greet", "thank"]);
+    const result = resolveCompetencyTags(sceneChunks, FIXTURE_INVENTORY, "es");
+    expect(result.sceneCompetencies).toEqual(["farewell", "greet", "thank"]);
   });
 
   it("scene tags: ignores scene chunks that have no inventory match", () => {
     const sceneChunks = makeSceneChunks(["buenos_dias", "unknown_chunk"]);
-    const result = resolveFunctionTags(sceneChunks, FIXTURE_INVENTORY, "es");
-    expect(result.sceneFunctions).toEqual(["greet"]);
+    const result = resolveCompetencyTags(sceneChunks, FIXTURE_INVENTORY, "es");
+    expect(result.sceneCompetencies).toEqual(["greet"]);
   });
 
   it("npc tags: attributes chunk to correct NPC from interactionBinding", () => {
@@ -155,8 +155,8 @@ describe("resolveFunctionTags", () => {
     const dialogues = [
       makeDialogue("npc-orrin", [{ text: "Buenos dias viajero!" }])
     ];
-    const result = resolveFunctionTags(sceneChunks, FIXTURE_INVENTORY, "es", dialogues);
-    expect(result.npcFunctions["npc-orrin"]).toContain("greet");
+    const result = resolveCompetencyTags(sceneChunks, FIXTURE_INVENTORY, "es", dialogues);
+    expect(result.npcCompetencies["npc-orrin"]).toContain("greet");
   });
 
   it("npc tags: skips player-spoken nodes for NPC attribution", () => {
@@ -167,12 +167,12 @@ describe("resolveFunctionTags", () => {
         { text: "Gracias.", speakerId: PLAYER_SPEAKER.speakerId } // player line -- NOT attributed to NPC
       ])
     ];
-    const result = resolveFunctionTags(sceneChunks, FIXTURE_INVENTORY, "es", dialogues);
+    const result = resolveCompetencyTags(sceneChunks, FIXTURE_INVENTORY, "es", dialogues);
     // NPC only gets greet (from "Buenos dias!"), not thank (from player's "Gracias")
-    expect(result.npcFunctions["npc-orrin"]).toContain("greet");
-    expect(result.npcFunctions["npc-orrin"]).not.toContain("thank");
+    expect(result.npcCompetencies["npc-orrin"]).toContain("greet");
+    expect(result.npcCompetencies["npc-orrin"]).not.toContain("thank");
     // Scene still sees both chunks
-    expect(result.sceneFunctions).toContain("greet");
+    expect(result.sceneCompetencies).toContain("greet");
   });
 
   it("npc tags: undefined speakerId defaults to the bound NPC", () => {
@@ -182,17 +182,17 @@ describe("resolveFunctionTags", () => {
         { text: "Hasta luego amigo." /* speakerId: undefined */ }
       ])
     ];
-    const result = resolveFunctionTags(sceneChunks, FIXTURE_INVENTORY, "es", dialogues);
-    expect(result.npcFunctions["npc-mira"]).toContain("farewell");
+    const result = resolveCompetencyTags(sceneChunks, FIXTURE_INVENTORY, "es", dialogues);
+    expect(result.npcCompetencies["npc-mira"]).toContain("farewell");
   });
 
-  it("npc tags: unbound dialogue (null npcDefinitionId) does not appear in npcFunctions", () => {
+  it("npc tags: unbound dialogue (null npcDefinitionId) does not appear in npcCompetencies", () => {
     const sceneChunks = makeSceneChunks(["buenos_dias"]);
     const dialogues = [
       makeDialogue(null, [{ text: "Buenos dias." }])
     ];
-    const result = resolveFunctionTags(sceneChunks, FIXTURE_INVENTORY, "es", dialogues);
-    expect(Object.keys(result.npcFunctions)).toHaveLength(0);
+    const result = resolveCompetencyTags(sceneChunks, FIXTURE_INVENTORY, "es", dialogues);
+    expect(Object.keys(result.npcCompetencies)).toHaveLength(0);
   });
 
   it("npc tags: two NPCs in the same scene get separate function lists", () => {
@@ -201,9 +201,9 @@ describe("resolveFunctionTags", () => {
       makeDialogue("npc-orrin", [{ text: "Buenos dias amigo!" }]),
       makeDialogue("npc-mira", [{ text: "Hasta luego." }])
     ];
-    const result = resolveFunctionTags(sceneChunks, FIXTURE_INVENTORY, "es", dialogues);
-    expect(result.npcFunctions["npc-orrin"]).toEqual(["greet"]);
-    expect(result.npcFunctions["npc-mira"]).toEqual(["farewell"]);
+    const result = resolveCompetencyTags(sceneChunks, FIXTURE_INVENTORY, "es", dialogues);
+    expect(result.npcCompetencies["npc-orrin"]).toEqual(["greet"]);
+    expect(result.npcCompetencies["npc-mira"]).toEqual(["farewell"]);
   });
 
   it("085.4 derive-at-read: inventory edit changes resolver output without a scene recompile", () => {
@@ -211,16 +211,16 @@ describe("resolveFunctionTags", () => {
     const sceneChunks = makeSceneChunks(["buenos_dias", "apenas_dias"]);
 
     // Original inventory: no "apenas_dias" chunk.
-    const before = resolveFunctionTags(sceneChunks, FIXTURE_INVENTORY, "es");
-    expect(before.sceneFunctions).toEqual(["greet"]);
+    const before = resolveCompetencyTags(sceneChunks, FIXTURE_INVENTORY, "es");
+    expect(before.sceneCompetencies).toEqual(["greet"]);
 
     // "Inventory edit": add a new function with apenas_dias.
-    const editedInventory: FunctionInventory = {
+    const editedInventory: CompetencyInventory = {
       ...FIXTURE_INVENTORY,
-      functions: [
-        ...FIXTURE_INVENTORY.functions,
+      competencies: [
+        ...FIXTURE_INVENTORY.competencies,
         {
-          functionId: "greet-colloquial",
+          competencyId: "greet-colloquial",
           displayName: "Greet (colloquial)",
           cefrDescriptor: "Can greet informally.",
           band: "A2",
@@ -240,7 +240,7 @@ describe("resolveFunctionTags", () => {
     };
 
     // No scene recompile: same sceneChunks, new inventory.
-    const after = resolveFunctionTags(sceneChunks, editedInventory, "es");
-    expect(after.sceneFunctions).toEqual(["greet", "greet-colloquial"]);
+    const after = resolveCompetencyTags(sceneChunks, editedInventory, "es");
+    expect(after.sceneCompetencies).toEqual(["greet", "greet-colloquial"]);
   });
 });

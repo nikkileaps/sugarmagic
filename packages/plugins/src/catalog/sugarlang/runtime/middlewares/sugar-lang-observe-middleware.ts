@@ -27,9 +27,9 @@ import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
 import {
-  getFunctionForChunk as getInventoryFunctionForChunk,
+  getCompetencyForChunk as getInventoryCompetencyForChunk,
   getAllInventoryChunks
-} from "../inventory/function-inventory-loader";
+} from "../inventory/competency-inventory-loader";
 import { countDiverseEncounters } from "../learner/encounter-debt-ledger";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
@@ -407,10 +407,10 @@ export function createSugarLangObserveMiddleware(
         return normalizedTurn;
       }
 
-      // 085.3: Build chunk matcher from the hand-curated function inventory so dynamic
+      // 085.3: Build chunk matcher from the hand-curated competency inventory so dynamic
       // NPC greetings are detected even when the phrase never appears in authored scene text.
       if (!chunkMatcherCache.has(learner.targetLanguage)) {
-        let inventoryChunks: import("../contracts/function-inventory").InventoryChunk[] = [];
+        let inventoryChunks: import("../contracts/competency-inventory").InventoryChunk[] = [];
         try {
           inventoryChunks = getAllInventoryChunks(learner.targetLanguage);
         } catch {
@@ -586,7 +586,7 @@ export function createSugarLangObserveMiddleware(
         // The learner snapshot pre-dates this turn, so absence from lemmaCards = new card.
         if (!(introduce.lemmaId in learner.lemmaCards)) {
           try {
-            await services.ledgerStore.createDebt(introduce.lemmaId, "lemma", debtDayIndex);
+            await services.ledgerStore.createDebt(introduce.lemmaId, "vocabulary", debtDayIndex);
             const debt = await services.ledgerStore.getDebt(introduce.lemmaId);
             if (debt) {
               void emitTelemetry(
@@ -597,7 +597,7 @@ export function createSugarLangObserveMiddleware(
                   sessionId,
                   turnId: traceTurnId,
                   itemId: introduce.lemmaId,
-                  itemKind: "lemma",
+                  itemKind: "vocabulary",
                   createdDayIndex: debtDayIndex,
                   targetEncounters: debt.targetEncounters
                 })
@@ -637,7 +637,7 @@ export function createSugarLangObserveMiddleware(
                   sessionId,
                   turnId: traceTurnId,
                   itemId: lemmaId,
-                  itemKind: "lemma",
+                  itemKind: "vocabulary",
                   npcDefinitionId: debtNpcId,
                   sceneId,
                   dayIndex: debtDayIndex,
@@ -708,15 +708,15 @@ export function createSugarLangObserveMiddleware(
           // 085.5: First-teach beat -- write teach-record and annotate the turn once.
           // 087.2: Also create function-level debt at introduction and record encounter paydown
           //   for every NPC chunk match (not just first-teach).
-          const fnEntry = getInventoryFunctionForChunk(
+          const fnEntry = getInventoryCompetencyForChunk(
             match.chunk.chunkId,
             learner.targetLanguage
           );
           if (isNewCard && !teachLineWritten && fnEntry) {
-            const alreadyTaught = await services.teachRecordStore.has(fnEntry.functionId);
+            const alreadyTaught = await services.teachRecordStore.has(fnEntry.competencyId);
             if (!alreadyTaught) {
               await services.teachRecordStore.write({
-                functionId: fnEntry.functionId,
+                competencyId: fnEntry.competencyId,
                 taughtAtMs: observedAtMs,
                 realizingChunkId: match.chunk.chunkId
               });
@@ -729,8 +729,8 @@ export function createSugarLangObserveMiddleware(
 
               // 087.2: Create function-level debt at introduction.
               try {
-                await services.ledgerStore.createDebt(fnEntry.functionId, "function", debtDayIndex);
-                const debt = await services.ledgerStore.getDebt(fnEntry.functionId);
+                await services.ledgerStore.createDebt(fnEntry.competencyId, "competency", debtDayIndex);
+                const debt = await services.ledgerStore.getDebt(fnEntry.competencyId);
                 if (debt) {
                   void emitTelemetry(
                     telemetry,
@@ -739,8 +739,8 @@ export function createSugarLangObserveMiddleware(
                       conversationId,
                       sessionId,
                       turnId: traceTurnId,
-                      itemId: fnEntry.functionId,
-                      itemKind: "function",
+                      itemId: fnEntry.competencyId,
+                      itemKind: "competency",
                       createdDayIndex: debtDayIndex,
                       targetEncounters: debt.targetEncounters
                     })
@@ -757,8 +757,8 @@ export function createSugarLangObserveMiddleware(
           if (!isPlayerTurn && fnEntry) {
             try {
               const entry = { npcDefinitionId: debtNpcId, sceneId, dayIndex: debtDayIndex };
-              await services.ledgerStore.recordEncounter(fnEntry.functionId, entry);
-              const debt = await services.ledgerStore.getDebt(fnEntry.functionId);
+              await services.ledgerStore.recordEncounter(fnEntry.competencyId, entry);
+              const debt = await services.ledgerStore.getDebt(fnEntry.competencyId);
               if (debt) {
                 const diverseCount = countDiverseEncounters(debt.encounters);
                 void emitTelemetry(
@@ -768,8 +768,8 @@ export function createSugarLangObserveMiddleware(
                     conversationId,
                     sessionId,
                     turnId: traceTurnId,
-                    itemId: fnEntry.functionId,
-                    itemKind: "function",
+                    itemId: fnEntry.competencyId,
+                    itemKind: "competency",
                     npcDefinitionId: debtNpcId,
                     sceneId,
                     dayIndex: debtDayIndex,

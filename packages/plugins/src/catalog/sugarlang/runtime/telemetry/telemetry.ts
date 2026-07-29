@@ -679,7 +679,7 @@ export type TelemetryEvent =
       "debt.created",
       {
         itemId: string;
-        itemKind: "lemma" | "function";
+        itemKind: "vocabulary" | "competency";
         createdDayIndex: number | null;
         targetEncounters: number;
       }
@@ -688,7 +688,7 @@ export type TelemetryEvent =
       "debt.encounter",
       {
         itemId: string;
-        itemKind: "lemma" | "function";
+        itemKind: "vocabulary" | "competency";
         npcDefinitionId: string | null;
         sceneId: string | null;
         dayIndex: number | null;

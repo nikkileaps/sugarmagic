@@ -1,16 +1,16 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/inventory/function-tag-resolver.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/inventory/competency-tag-resolver.ts
  *
- * Purpose: Derives scene and per-NPC communicative function tags at READ TIME from
- *   the function inventory and scene lexicon chunks. Tags are NEVER stored in the
+ * Purpose: Derives scene and per-NPC competency tags at READ TIME from
+ *   the competency inventory and scene lexicon chunks. Tags are NEVER stored in the
  *   compiled artifact so they automatically reflect inventory edits without recompile.
  *
  * Exports:
- *   - FunctionTagResult
- *   - resolveFunctionTags
+ *   - CompetencyTagResult
+ *   - resolveCompetencyTags
  *
  * Relationships:
- *   - Depends on function-inventory-loader for inventory data.
+ *   - Depends on competency-inventory-loader for inventory data.
  *   - Depends on createChunkMatcher for the chunk-to-function join over NPC text.
  *   - Consumes CompiledSceneLexicon.chunks (optional -- returns empty tags if absent).
  *   - Consumes DialogueDefinition for NPC attribution (optional arg).
@@ -30,7 +30,7 @@
 
 import type { DialogueDefinition } from "@sugarmagic/domain";
 import { isPlayerSpeaker, resolveDialogueSpeaker } from "@sugarmagic/domain";
-import type { FunctionInventory } from "../contracts/function-inventory";
+import type { CompetencyInventory } from "../contracts/competency-inventory";
 import type { LexicalChunk } from "../types";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
 import { tokenize } from "../classifier/tokenize";
@@ -40,14 +40,14 @@ function isPlayerSpeakerId(speakerId: string | undefined): boolean {
   return isPlayerSpeaker(resolveDialogueSpeaker(speakerId, null));
 }
 
-export interface FunctionTagResult {
-  /** FunctionIds whose realizing chunks appear in this scene's lexicon. */
-  sceneFunctions: string[];
+export interface CompetencyTagResult {
+  /** CompetencyIds whose realizing chunks appear in this scene's lexicon. */
+  sceneCompetencies: string[];
   /**
-   * Per-NPC map of functionIds the NPC can realize via its authored dialogue.
+   * Per-NPC map of competencyIds the NPC can realize via its authored dialogue.
    * Keyed by npcDefinitionId. Only includes NPCs with at least one tagged function.
    */
-  npcFunctions: Record<string, string[]>;
+  npcCompetencies: Record<string, string[]>;
 }
 
 /**
@@ -55,44 +55,44 @@ export interface FunctionTagResult {
  *
  * @param sceneChunks   The chunk layer from CompiledSceneLexicon (may be undefined
  *                      if chunk extraction has not run; returns empty tags in that case).
- * @param inventory     The loaded FunctionInventory for the scene's target language.
+ * @param inventory     The loaded CompetencyInventory for the scene's target language.
  * @param lang          BCP-47 language key matching the inventory's chunk keys.
  * @param dialogues     Optional dialogue definitions for per-NPC attribution.
  */
-export function resolveFunctionTags(
+export function resolveCompetencyTags(
   sceneChunks: LexicalChunk[] | undefined,
-  inventory: FunctionInventory,
+  inventory: CompetencyInventory,
   lang: string,
   dialogues?: DialogueDefinition[]
-): FunctionTagResult {
+): CompetencyTagResult {
   if (!sceneChunks || sceneChunks.length === 0) {
-    return { sceneFunctions: [], npcFunctions: {} };
+    return { sceneCompetencies: [], npcCompetencies: {} };
   }
 
-  // Build a normalizedForm -> functionId lookup from the inventory (for this lang).
-  const chunkNormToFunctionId = new Map<string, string>();
-  for (const fn of inventory.functions) {
+  // Build a normalizedForm -> competencyId lookup from the inventory (for this lang).
+  const chunkNormToCompetencyId = new Map<string, string>();
+  for (const fn of inventory.competencies) {
     for (const chunk of fn.chunks[lang] ?? []) {
       // First-write wins (a chunk may theoretically appear in multiple functions,
       // but the inventory uniqueness constraint prevents this in practice).
-      if (!chunkNormToFunctionId.has(chunk.normalizedForm)) {
-        chunkNormToFunctionId.set(chunk.normalizedForm, fn.functionId);
+      if (!chunkNormToCompetencyId.has(chunk.normalizedForm)) {
+        chunkNormToCompetencyId.set(chunk.normalizedForm, fn.competencyId);
       }
     }
   }
 
   // --- Scene tags: set-intersection of inventory normalizedForms vs sceneChunks ---
   const sceneChunkNormForms = new Set(sceneChunks.map((c) => c.normalizedForm));
-  const sceneFunctionSet = new Set<string>();
-  for (const [normForm, functionId] of chunkNormToFunctionId) {
+  const sceneCompetencySet = new Set<string>();
+  for (const [normForm, competencyId] of chunkNormToCompetencyId) {
     if (sceneChunkNormForms.has(normForm)) {
-      sceneFunctionSet.add(functionId);
+      sceneCompetencySet.add(competencyId);
     }
   }
-  const sceneFunctions = [...sceneFunctionSet].sort();
+  const sceneCompetencies = [...sceneCompetencySet].sort();
 
   // --- NPC tags: chunk matcher over per-NPC dialogue nodes ---
-  const npcFunctionMap = new Map<string, Set<string>>();
+  const npcCompetencyMap = new Map<string, Set<string>>();
 
   if (dialogues && dialogues.length > 0) {
     const chunkMatcher = createChunkMatcher(sceneChunks, lang);
@@ -112,20 +112,20 @@ export function resolveFunctionTags(
         const matches = chunkMatcher.match(tokens, node.text);
 
         for (const match of matches) {
-          const functionId = chunkNormToFunctionId.get(match.chunk.normalizedForm);
-          if (!functionId) continue;
-          const set = npcFunctionMap.get(npcId) ?? new Set();
-          set.add(functionId);
-          npcFunctionMap.set(npcId, set);
+          const competencyId = chunkNormToCompetencyId.get(match.chunk.normalizedForm);
+          if (!competencyId) continue;
+          const set = npcCompetencyMap.get(npcId) ?? new Set();
+          set.add(competencyId);
+          npcCompetencyMap.set(npcId, set);
         }
       }
     }
   }
 
-  const npcFunctions: Record<string, string[]> = {};
-  for (const [npcId, functionSet] of npcFunctionMap) {
-    npcFunctions[npcId] = [...functionSet].sort();
+  const npcCompetencies: Record<string, string[]> = {};
+  for (const [npcId, competencySet] of npcCompetencyMap) {
+    npcCompetencies[npcId] = [...competencySet].sort();
   }
 
-  return { sceneFunctions, npcFunctions };
+  return { sceneCompetencies, npcCompetencies };
 }

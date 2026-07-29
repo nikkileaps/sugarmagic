@@ -31,7 +31,7 @@ import { resolveDialogueSpeaker } from "@sugarmagic/domain";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices, SugarlangExecutionServices } from "../runtime-services";
 import { diglotWeave } from "../classifier/diglot-weave";
-import { getAllInventoryChunks } from "../inventory/function-inventory-loader";
+import { getAllInventoryChunks } from "../inventory/competency-inventory-loader";
 import { createSugarlangLogger } from "../logger";
 import type { SugarlangLoggerLike } from "./shared";
 import {
@@ -93,7 +93,7 @@ function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
  * arrives at dawn") into the weave/highlight/observe machinery, which contracts
  * LemmaRef.lemmaId as an atlas lemmaId or a chunk: ref.
  *
- * Validation: atlas membership for bare ids, function-inventory membership for
+ * Validation: atlas membership for bare ids, competency-inventory membership for
  * chunk: refs. Anything that resolves to neither is dropped here.
  */
 function validateTeachableFacts(
@@ -143,7 +143,7 @@ function applyWeave(
   posture: string
 ): void {
   const prescriptionIntroduce = constraint.targetVocab.introduce;
-  let inventoryChunks: import("../contracts/function-inventory").InventoryChunk[] = [];
+  let inventoryChunks: import("../contracts/competency-inventory").InventoryChunk[] = [];
   try {
     inventoryChunks = getAllInventoryChunks(targetLanguage);
   } catch {

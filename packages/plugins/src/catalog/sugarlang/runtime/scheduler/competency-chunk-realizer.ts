@@ -1,11 +1,11 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/scheduler/function-chunk-realizer.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/scheduler/competency-chunk-realizer.ts
  *
  * Purpose: Realizes scheduled FUNCTION teachables as `chunk:{id}` LemmaRefs for
  *   injection into the budgeter's prescription introduce list.
  *
  * Contract (pinned 087.3):
- *   - A scheduled function (kind="function") is realized as ALL of its chunks for
+ *   - A scheduled competency (kind="competency") is realized as ALL of its chunks for
  *     the target language via the `chunk:{chunkId}` pseudo-lemma convention.
  *   - Chunks already in the learner's card store (already encountered) are excluded;
  *     they are not re-introduced.
@@ -16,15 +16,15 @@
  *     the levelCap ceiling from `prescription.budget.newItemsAllowed`).
  *
  * Decision pinned here (087.3): hand-authored prerequisite edges are NOT added to
- *   the function inventory schema (FunctionEntry has no `prerequisites` field and
+ *   the competency inventory schema (Competency has no `prerequisites` field and
  *   there is no authored prerequisite data). Band ordering (A1 > A2 > B1 ...) is
  *   sufficient as the ordering floor. Revisit when authored prerequisite data exists.
  *
  * Exports:
- *   - realizeFunctionChunksFromSchedule
+ *   - realizeCompetencyChunksFromSchedule
  *
  * Relationships:
- *   - Reads FunctionEntry from the function inventory (function-inventory-loader.ts).
+ *   - Reads Competency from the competency inventory (competency-inventory-loader.ts).
  *   - Consumes TeachSchedule (teach-schedule.ts) to find function teachables.
  *   - Called by sugar-lang-context-middleware.ts after budgeter.prescribe().
  *
@@ -35,7 +35,7 @@
 
 import type { LemmaRef } from "../contracts/lexical-prescription";
 import type { TeachSchedule } from "./teach-schedule";
-import type { FunctionEntry } from "../contracts/function-inventory";
+import type { Competency } from "../contracts/competency-inventory";
 import type { LemmaCard } from "../types";
 
 /**
@@ -44,31 +44,31 @@ import type { LemmaCard } from "../types";
  *
  * Only function-kind teachables are realized. Chunks already in the learner's
  * card store are excluded (already encountered, no re-introduction needed).
- * The result is ordered: functions appear in schedule priority order, chunks
+ * The result is ordered: competencies appear in schedule priority order, chunks
  * within a function in inventory declaration order.
  *
- * maxFunctions caps how many top-ranked functions are realized per turn
+ * maxCompetencies caps how many top-ranked competencies are realized per turn
  * (default: 2 -- prevents one turn from spending the entire introduce budget
  * on a single multi-chunk function).
  */
-export function realizeFunctionChunksFromSchedule(
+export function realizeCompetencyChunksFromSchedule(
   schedule: TeachSchedule,
   targetLanguage: string,
   lemmaCards: Record<string, LemmaCard>,
-  availableFunctions: FunctionEntry[],
-  maxFunctions: number = 2
+  availableCompetencies: Competency[],
+  maxCompetencies: number = 2
 ): LemmaRef[] {
-  const functionMap = new Map<string, FunctionEntry>(
-    availableFunctions.map((fn) => [fn.functionId, fn])
+  const competencyMap = new Map<string, Competency>(
+    availableCompetencies.map((fn) => [fn.competencyId, fn])
   );
 
-  const functionTeachables = schedule.teachables
-    .filter((t) => t.kind === "function")
-    .slice(0, maxFunctions);
+  const competencyTeachables = schedule.teachables
+    .filter((t) => t.kind === "competency")
+    .slice(0, maxCompetencies);
 
   const result: LemmaRef[] = [];
-  for (const teachable of functionTeachables) {
-    const fnEntry = functionMap.get(teachable.id);
+  for (const teachable of competencyTeachables) {
+    const fnEntry = competencyMap.get(teachable.id);
     if (!fnEntry) continue;
     const chunks = fnEntry.chunks[targetLanguage] ?? [];
     for (const chunk of chunks) {
