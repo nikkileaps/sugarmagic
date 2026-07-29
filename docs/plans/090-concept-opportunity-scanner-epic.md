@@ -870,6 +870,38 @@ prompt-shaping cap exists, because `generator-prompt-overlay.ts:54` renders
 `targetVocab.introduce` uncapped into the agent prompt. Ship the cap first or in
 the same change. Round 5 finding.
 
+THE SLATE CARRIES TEACHABLES, NOT LEMMA REFS. Added 2026-07-29 (nikki). The
+Teacher can teach two kinds of thing and has only ever been handed one:
+
+| Teachable | Language-neutral part | Realized as |
+|---|---|---|
+| `vocabulary` | a CONCEPT (`cheese`) | a lemma (`queso`) |
+| `competency` | a descriptor (*"Can ask where a place or person is"*) | exponents (`donde esta`) |
+
+The abstraction already exists in code -- `ScheduledTeachable.kind` is
+`"lemma" | "function"` (scheduler/teach-schedule.ts) since 087 -- but it stops at
+the scheduler. The Teacher's world is `LemmaRef`, so
+`sugar-lang-teacher-middleware.ts:563` filters `kind === "lemma"` and drops
+competency teachables on the floor.
+
+Competencies reach teaching by a side door: `realizeFunctionChunksFromSchedule`
+expands them into `chunk:` refs and `sugar-lang-context-middleware.ts:476-494`
+injects those into `prescription.introduce`. **That is the road 090.10 deletes.**
+So this is not cosmetic: a slate of lemma refs plus a deleted prescriber equals
+no competency teaching at all, silently.
+
+Make the slate a list of teachables with a discriminant. Then `introduce
+ask-where` is expressible directly, the side door closes, and the third subtype
+(conjugation) is additive rather than a redesign.
+
+NAMING, decided 2026-07-29: "function" is out -- it collides with the
+programming sense on every read. The domain term is **competency**, with
+**exponent** for the phrases that perform it (ELT's own word; note an exponent
+is NOT a synonym for chunk -- a chunk is any multi-word expression, an exponent
+is specifically a phrase that performs THIS act). `Competency`, not
+`CompetencyEntry`; `CompetencyInventory` for the container. This is a data
+migration, not just a rename -- see the deferred entry below.
+
 TWO DOORS, NOT ELEVEN. `TeacherContext` (contracts/providers.ts:128-146) carries
 learner, scene, prescription, npc, recentTurns, lang, calibrationActive,
 pendingProvisionalLemmas, probeFloorState, activeQuestEssentialLemmas,
@@ -992,6 +1024,14 @@ only after every owner named there has landed:
 - Delete the transition scaffold from 090.2 (the read-time projection) in this
   same change, per the deletion order's own instruction.
 
+BLOCKED ON THE TEACHABLE SLATE (2026-07-29). `prescription.introduce` is not
+only the vocabulary channel -- it is also the ONLY road competencies travel.
+`realizeFunctionChunksFromSchedule` expands a scheduled competency into `chunk:`
+refs and `sugar-lang-context-middleware.ts:476-494` injects them there. Delete
+`prescribe()` before 090.4's slate can carry teachables and competency teaching
+stops, with **no test failing and nothing in the logs** -- the greps below would
+all pass. This story does not start until the slate carries teachables.
+
 - Exit (all greps, all falsifiable, all fail today):
   - `prescribe(` returns no hits outside git history (pin).
   - `DIRECTOR_HARD_CONSTRAINTS_PROMPT` contains neither "already appear in the
@@ -1006,6 +1046,10 @@ only after every owner named there has landed:
     the directive, with no authored English "cheese" anywhere in the scene
     (integration -- the motivating case, and the single test that proves the
     whole chain above is broken rather than merely rerouted).
+  - **A scheduled competency still reaches the directive after `prescribe()` is
+    gone** (integration -- the pin that catches the silent loss above; without
+    it every other exit here passes on a system that stopped teaching
+    competencies).
 
 ### 090.3 Runtime overlay + situation lifecycle
 
@@ -1141,14 +1185,21 @@ handed; a number the Learner reports, applied at realization.
   `0.30 * (turns/50)` (session-signals.ts:98-101), so turns alone reach it near
   117, not 35. The stale source comment at outer-loop-scheduler.ts:59 still says
   35 and should be fixed here.
-- (b) FUNCTION-CHUNK RESERVE: **probably dissolves.** The injection cap is
-  `newItemsAllowed - introduce.length` (context-middleware.ts:483-490), zero
-  whenever the budgeter fills `introduce` to `levelCap` -- the same
-  pre-truncation as the old 090.6. Stop pre-truncating and the starving
-  arithmetic goes away. Marked probable rather than certain because function
-  teachables come from the scheduler, not the lexicon, so a non-truncated slate
-  does not automatically admit them. Decide in-story; do not build the reserve
-  before checking whether it still starves.
+- (b) COMPETENCY RESERVE (was "function-chunk reserve"): **dissolves, but not
+  for the reason first written.** The old note said the injection cap
+  (`newItemsAllowed - introduce.length`, context-middleware.ts:483-490) starves
+  to zero whenever the budgeter fills `introduce` to `levelCap`, so removing the
+  pre-truncation fixes it. True as far as it goes, and it misses the larger
+  point found 2026-07-29: **there is no injection at all after 090.10**, because
+  the injection target is `prescription.introduce`. A reserve computed against a
+  budget that no longer exists cannot be the answer. Once the slate carries
+  teachables (090.4), a competency is simply an item on it and needs no reserve,
+  no injection and no cap arithmetic. Build nothing here.
+- (c) CAPACITY COUNTS TEACHABLES, AND A COMPETENCY IS NOT ONE WORD. `ask-where`
+  costs the learner more than a single lemma -- it is a phrase with constituent
+  lemmas. Decide in-story whether capacity counts a competency as one item or by
+  its exponents' weight; do not assume one-item just because the slate is a
+  list. This is the one genuinely new question the teachable split raises here.
 
 ### 090.6 Stall rotation -- DELETED
 
@@ -1359,6 +1410,7 @@ docs/api: extend the middlewares doc's Teaching Decision Model (candidate sourci
 
 - Synonym-gap drops (~6% of plausible game concepts): a concept drops when no gloss part names it exactly though a good lemma exists under a near-synonym -- `shop` (tienda glosses "store"), `morning` (mañana glosses "tomorrow"), `net` (red glosses "network"), `pier`, `smith`. A shopkeeper NPC is the second-most-obvious Finnick case and the epic no-ops on it. Dropping is SAFE, so this is deferred, but it caps reach. Options in cost order: have the extractor emit 2-3 synonym candidates per concept and resolve the union; an English synonym table for the top ~50 game concepts; or rely on the deferred author override. Trigger: 090.7 telemetry showing real drop rate (code comment at the resolver drop path).
 - **English-side inflection on the WEAVE path (round 6, NEW and the highest-value one here).** `diglotWeave` resolves raw tokens through an exact lowercased gloss lookup (diglot-weave.ts:72 -> cefr-lex-atlas-provider.ts:210) over a tokenizer that only lowercases (tokenize.ts:77). Measured against the shipped es atlas: `traveler` -> viajero but `travellers`/`travelers`/`traveller` -> nothing; `head` -> cabeza but `heads` -> nothing; `cheese` -> queso but `cheeses` -> nothing. So authored English in natural prose substitutes far less than it appears to, and the failure is SILENT and indistinguishable from an empty slate. This is the same mechanism as the compile scrub's known gap (line 27), which the plan had filed only against the scrub. Options in cost order: an English lemmatizer in front of `resolveFromGloss`; a plural/inflection index built at atlas load; authoring guidance to use base forms. Trigger: 090.7 telemetry showing weave attempt-vs-substitution rate per item body -- if base-form-only substitution reads as sparse in playtest, this is the first thing to fix (code comment at `resolveSubstitution`, diglot-weave.ts).
+- **`function` -> `competency` rename (decided 2026-07-29, deferred as a separate change).** The domain word is settled -- competency, with `exponent` for the phrases that realize it -- and 090.4 models the slate in those terms. The RENAME is deliberately not bundled into 090: it is a data migration, not a code rename. `function-inventory.schema.json` declares the shape, `data/languages/es/function-inventory.json` carries 10 entries, and the field `interpretLexiconCategory` sits inside them (itself already queued for renaming, docs/backlog/006). Doing it inside 090 would put a schema + data migration in the middle of the diff that changes what the Teacher decides, making both unreviewable. Trigger: after 090 ships. Until then, new code uses `competency` in NEW names and leaves existing `function*` identifiers alone -- a half-rename is worse than either end state, so do not opportunistically rename call sites while passing through.
 - Multiword-gloss unreachability: 973 atlas entries (91 in the top-3000) have only multiword gloss parts and cannot be reached by single-word concepts + exact match. Same trigger; a phrase-concept mode needs the match predicate redesigned.
 - Author hand-editing of extracted concepts / situation: revisit on playtest evidence of misses or over-inclusion; 090.7 is the read-only starting point.
 - NPC memory salience as a signal: needs a NEW sugaragent contribution carrying STRUCTURED topic ids across the plugin seam; free-text `salientFacts` is not deterministically matchable. Pinning context-middleware ordering (both plugins sit at stage `context` priority 10, unpinned) is a prerequisite.

@@ -164,12 +164,38 @@ The learner's memory record for one lemma -- review count, stability,
 retrievability. Drives what is due for review. Lives on the learner profile as
 `lemmaCards`.
 
-### Function / chunk
+### Teachable
 
-A **function** is a communicative move ("greeting", "asking price") rather than
-a word; see [sugarlang-function-inventory](../../../../../../docs/api/sugarlang-function-inventory.md).
-A **chunk** is a multi-word expression treated as one teachable unit
-(`MultiWordExpressionExtractor`).
+Anything the Teacher can teach. Two subtypes today:
+
+- **vocabulary** -- one word. `cheese` -> `queso`.
+- **competency** -- one thing the learner can do. *"Can ask where a place or
+  person is"* -> `donde esta`.
+
+A third (conjugation) is anticipated, not built. Both subtypes share a shape: a
+language-neutral thing plus how this language performs it.
+
+In code the umbrella is `ScheduledTeachable` (`runtime/scheduler/teach-schedule.ts`),
+whose `kind` is still `"lemma" | "function"` -- see Competency below.
+
+### Competency
+
+One communicative act the learner can perform, with a CEFR descriptor and a
+band. Ten in Spanish: `greet`, `thank`, `request`, `ask-where`, `buy`,
+`refuse-politely`, and so on.
+
+The phrases that perform it are its **exponents** (`"donde esta"`,
+`"donde está"`). Note an exponent is NOT the same as a **chunk**: a chunk is any
+multi-word expression, which is what `MultiWordExpressionExtractor` finds in
+authored text; an exponent is specifically a phrase that performs *this* act.
+
+A competency is language-neutral; only its exponents are per-language.
+
+**The code still says `function`** -- `FunctionEntry`, `functionId`,
+`function-inventory.json`, `kind: "function"`. That name collides with the
+programming sense on every read and is scheduled for rename after Plan 090
+ships (the rename is a data migration, not just a code change). New code uses
+`competency`; do not half-rename existing identifiers in passing.
 
 ### Diglot weave
 

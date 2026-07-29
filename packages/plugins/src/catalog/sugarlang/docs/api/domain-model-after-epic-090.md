@@ -142,13 +142,18 @@ erDiagram
     RUNTIME_FACTS ||--o{ CONTEXT_SOURCE : "is"
 
     SITUATION ||--o{ CONCEPT : "names"
-    CONCEPT }o--o| LEMMA : "resolves to, via the atlas"
+    CONCEPT }o--o| VOCABULARY : "resolves to, via the atlas"
+
+    TEACHABLE ||--|| VOCABULARY : "is a"
+    TEACHABLE ||--|| COMPETENCY : "is a"
+    VOCABULARY }o--|| LEMMA : "is one"
+    COMPETENCY ||--o{ EXPONENT : "is realized by"
 
     LEARNER ||--o{ STANDING : "holds"
-    STANDING }o--|| LEMMA : "is about"
+    STANDING }o--|| TEACHABLE : "is about"
 
     DIRECTIVE ||--o{ ACTION : "carries"
-    ACTION }o--|| LEMMA : "acts on"
+    ACTION }o--|| TEACHABLE : "acts on"
     DIRECTIVE ||--|| POSTURE : "sets"
     DIRECTIVE ||--o| COMPREHENSION_CHECK : "may fire"
 ```
@@ -157,8 +162,56 @@ erDiagram
 |---|---|
 | `SITUATION` | prose description; concepts (+ provenance, + must-comprehend flags); who is present; what this place is; quest stage; time of day; what has been said so far |
 | `SCENE_VOCABULARY` | the lemma ids this scene's text uses; authored proper nouns; quest-essential lemma ids. An INDEX into the atlas, not a copy of it — band, rank and part of speech are looked up by id, never stored twice |
-| `LEARNER` | band; standing per lemma; capacity (fatigue, session depth, conversation depth); comprehension rate |
-| `DIRECTIVE` | actions (introduce/reinforce/probe/skip per lemma); posture; glossing; complexity cap; optional comprehension check; lifetime |
+| `TEACHABLE` | anything the Teacher can teach. Today two subtypes, see below |
+
+### Teachable: what the Teacher can teach
+
+An earlier draft of this model was lemma-shaped throughout — standing was about
+a lemma, an action acted on a lemma. That is wrong, and the code already knew
+it: `ScheduledTeachable` (scheduler/teach-schedule.ts) has carried
+`kind: "lemma" | "function"` since Plan 087.
+
+| Subtype | Is | Language-neutral part | Realized as |
+|---|---|---|---|
+| `VOCABULARY` | one word | the CONCEPT (`cheese`) | a LEMMA (`queso`) |
+| `COMPETENCY` | one thing the learner can DO | the descriptor (*"Can ask where a place or person is"*) | EXPONENTS (`donde esta`) |
+| *conjugation* | — | not yet built; named so the axis is visible |
+
+The two share a shape, which is the point: **an abstract thing plus how this
+particular language performs it.** A competency is not a bigger word — it is the
+same kind of object one level up, and treating them as one kind with a
+discriminant is what makes a third subtype additive rather than a redesign.
+
+`EXPONENT` is the ELT term for a phrase that performs a competency. Note it is
+NOT a synonym for "chunk": a chunk is any multi-word expression (what
+`MultiWordExpressionExtractor` finds in authored text), while an exponent is
+specifically a phrase that performs *this* act. The code currently calls
+exponents `chunks`, which is one of the conflations this model is separating.
+
+### Competency has no road to the Teacher
+
+Stated plainly because it breaks a planned deletion. Competencies reach teaching
+today only by being **flattened into the vocabulary path**:
+
+```
+outer-loop-scheduler   -> ScheduledTeachable { kind: "function" }
+realizeFunctionChunks  -> chunk: lemma refs
+context-middleware     -> INJECTED into prescription.introduce
+```
+
+Two consequences:
+
+1. The Teacher never sees a competency as such. The teacher middleware filters
+   `kind === "lemma"` when building bias terms; competency teachables are
+   dropped there.
+2. The injection target is `prescription.introduce`. **Deleting the prescriber
+   deletes competency teaching**, silently, unless the slate carries teachables
+   rather than lemma refs.
+
+Under this model the fix is not a new injection point. It is that `DIRECTIVE`
+carries ACTIONs on TEACHABLEs, so a competency needs no side door.
+| `LEARNER` | band; standing per teachable; capacity (fatigue, session depth, conversation depth); comprehension rate |
+| `DIRECTIVE` | actions (introduce/reinforce/probe/skip per teachable); posture; glossing; complexity cap; optional comprehension check; lifetime |
 
 ### What deliberately is not in the model
 
@@ -340,6 +393,12 @@ and why every consumer that wanted *eligible words* got *the top five instead*.
 | **STANDING** | `LEARNER` | unseen · learning · due · known · out-of-reach | a FACT. `f(FSRS card, band envelope)` |
 | **ACTION** | `TEACHER` | introduce · reinforce · probe · skip | a DECISION |
 
+Both are about a TEACHABLE, not a lemma. A competency has a standing for the
+same reason a word does — the learner has met it or not, is due on it or not,
+and it is in reach or above their band. `introducedFunctionIds` on the
+curriculum is that fact today, kept in a separate place under a separate name
+because competency was never modelled as a teachable.
+
 The Teacher's whole procedure is the gating ladder over those two axes:
 
 | standing \ relevance | relevant here | not relevant |
@@ -423,6 +482,7 @@ reconciling:
 | **090.5** effective cap | "strain consume + depth ramp + function reserve" | Right work, wrong home. It is how `LEARNER` reports capacity — and it applies at *realization*, per text, not by pre-truncating the slate. |
 | **090.6** stall rotation | rotate words stuck in `introduce` | Largely dissolves. Words stalled because `introduce` was a capped computed state; a slate that is not pre-truncated has nowhere to stall. |
 | **new** | — | **Realization** is missing from the epic entirely: the per-text intersection step. It is where today's item-description bug actually lives. |
+| **new (2026-07-29)** | — | **The slate must carry TEACHABLEs, not lemma refs.** Competency reaches teaching only by being flattened into `prescription.introduce`, so deleting the prescriber deletes competency teaching. Affects 090.4 (what the slate is made of), 090.5 (capacity counts teachables, and a competency is not one word) and 090.10 (the deletion is unsafe until the slate can carry one). |
 
 Two observations from the lifecycle work:
 
