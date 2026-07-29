@@ -1,6 +1,6 @@
 # Plan 090 -- Context Extraction + Teacher Judgment (proposed child epic I of Strategy 002)
 
-Status: DRAFT -- NOT LOCKED. epic-review has run 4 rounds (2026-07-28). Rounds 1-3 audited the plan against the CODE and it held -- every citation survived. Round 4 audited it against the DOMAIN MODEL and it did not: the stories were producing better inputs to a decision the model relocates. Stories are revised accordingly. NO blocking decisions remain: the model settles whether the budgeter survives (no), what bounds the slate (the situation, not the atlas), and whether items consult it (yes). What is left is decided inside the stories that own it.
+Status: DRAFT -- NOT LOCKED. epic-review has run 5 rounds (2026-07-28, -29). Rounds 1-3 audited the plan against the CODE and it held. Round 4 audited it against the DOMAIN MODEL and it did not: the stories were producing better inputs to a decision the model relocates. Round 5 audited the REWRITTEN story set against the code -- rounds 1-3's approval did not transfer -- and found seven blocking gaps, all in new material, all confirmed at the producing line. The largest: the Teacher LLM is already off the live path for every learner with one lemma card (sugar-lang-teacher-middleware.ts:333), so 090.4 was unverifiable as written. All applied. Round 6 pending.
 
 The model this plan must satisfy: `packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`.
 
@@ -37,7 +37,24 @@ Compile-vs-runtime and scripted-vs-agentified are TWO INDEPENDENT AXES. Conflati
 |  | scripted | agentified |
 |---|---|---|
 | **compile** | bake line variants (086) + extract line intent. **NO Teacher** -- `generateVariant` takes `authoredText, targetLang, band, intent, contentHash, dialogueDefinitionId, nodeId` and nothing teacher-shaped | nothing to bake; the line does not exist yet |
-| **runtime** | teacher middleware runs but SHORT-CIRCUITS: band -> posture/ratio inline, `teacher.invoke()` is never called (sugar-lang-teacher-middleware.ts:226) | teacher middleware runs AND invokes the Teacher. **THIS CELL IS THE EPIC'S TARGET** |
+| **runtime** | teacher middleware runs but SHORT-CIRCUITS: band -> posture/ratio inline, `teacher.invoke()` is never called (sugar-lang-teacher-middleware.ts:226) | teacher middleware runs and invokes the Teacher **only on a cold-start learner** -- see below. **THIS CELL IS THE EPIC'S TARGET** |
+
+**THE TEACHER LLM IS ALREADY OFF THE LIVE PATH, AND NO EARLIER ROUND CAUGHT IT.**
+Round 5 finding, verified at the producing line. `sugar-lang-teacher-middleware.ts:333`
+reads `} else if (schedule && !schedule.isColdStart) {` and builds the directive
+deterministically from `prescription.introduce` (:356-361), never reaching
+`services.teacher.invoke` (:402). And `isColdStart` is false as soon as the
+learner has **one** lemma card or one introduced function
+(outer-loop-scheduler.ts:101-103).
+
+So in steady state -- every learner past their first taught word -- the Teacher
+LLM does not run at all, for scripted OR agentified NPCs. The prescription IS
+the directive. That is not a tuning detail; it is the reason the teaching feels
+generic, and it means **090.4's exit is unreachable until this branch is dealt
+with**. 090.4 now owns that decision explicitly.
+
+An earlier draft of this row asserted the agentified cell "invokes the Teacher".
+That was OVERSTATED and it propagated: probe 6 was baselined against it.
 
 Three consequences that the story set depends on:
 
@@ -138,7 +155,10 @@ asked a different question -- whether the plan is aligned with the domain model
 stops being produced. 090.5 and 090.6 both fixed symptoms of a pre-truncation
 the model removes. And the single most valuable story had not been written.
 
-Execution order: **090.1, 090.2, 090.8, 090.4, 090.3, 090.5, 090.7.**
+Execution order: **090.1, 090.2, 090.9, 090.3, 090.8, 090.4, 090.5, 090.7.**
+Revised round 5: 090.3 moves ahead of 090.8 because the slate needs a
+situation-keyed home before realization can read it, and 090.8 stays ahead of
+090.4 because its prompt cap must exist before 090.4 de-truncates the slate.
 
 ### 090.1 ContextExtractor + SituationModel
 
@@ -160,6 +180,21 @@ secondary gloss, POS membership filter, rank by `frequencyRank` first, drop with
 telemetry when empty. The four pinned rows (dock/trade/boat/cheese) and the
 provider-contract change all stand.
 
+DO NOT WIDEN `resolveFromGloss` TO GET THE SECONDARY GLOSSES. Round 5 finding.
+The primary-gloss-only restriction is a deliberate, documented guard
+(cefr-lex-atlas-provider.ts:148-153):
+
+> "Only index the PRIMARY (first) gloss word for reverse lookup. Secondary
+> glosses after the comma are for tooltip display, not for compiling English
+> authored content to target-language lemmas. This prevents 'claim' -> afirmar
+> when afirmar's gloss is 'affirm, claim'."
+
+`resolveFromGloss` is shared by the compile scrub
+(`compile-sugarlang-scene.ts:297`) and the weave (`diglot-weave.ts:72`), so
+widening it silently changes both. Concept resolution is a SEPARATE pass over
+atlas entries with its own index; the guard on the shared reverse lookup stays.
+Pin it: `claim -> afirmar` must still be absent from the scrub after this story.
+
 DELIVERY IS NO LONGER THIS STORY'S JOB. The old text called projection into
 `sceneLexicon.lemmas` "the single link the whole epic exists to build". It is
 not, and round 4 falsified it:
@@ -167,16 +202,25 @@ not, and round 4 falsified it:
 - Every reader of `sceneLexicon.lemmas` was enumerated. The budgeter's candidate
   sourcing (lexical-budgeter.ts:130) is the only one that needs membership;
   the rest are the scheduler board (context-middleware.ts:400), the prompt's
-  capped scene snapshot (prompt-builder.ts:247), a gloss lookup (:354) and debug
+  capped scene snapshot (prompt-builder.ts:247), a gloss lookup (:354), two
+  Studio read-only surfaces (ui/shell/scene-density-histogram.tsx:90,
+  ui/shell/editor-support.ts:188,194 -- missed by the round-4 enumeration, found
+  round 5; they will under-report if concepts live only in a side field, which
+  090.7 must account for) and debug
   logs. **Nothing downstream of the Directive requires it** -- `applyWeave`
   reads `constraint.targetVocab.introduce`, and the observe middleware gates on
   `targetLemmaSet` union existing cards (sugar-lang-observe-middleware.ts:450-454).
 - So a Teacher handed `queso` via the Situation, naming it in `targetVocab`,
   reaches both the weave and the observe loop with no projection at all.
-- The actual blocker is one prompt line:
+- The blocker is one prompt line:
   `"Only output targetVocab lemmas that already appear in the prescription."`
   (prompt-builder.ts:99). That sentence, not a missing projection, is what stops
-  the motivating case.
+  the motivating case **on the validated path**. Round 5 correction: calling it
+  "the actual blocker" was OVERSTATED, because the REPAIRED path
+  (`llm-teacher-policy.ts:267`) enforces the same membership in code --
+  `repairDirective` filters against `getPrescriptionSet(...)` and defaults back
+  to the prescription's own lists (schema-parser.ts:658-672, :695-698). Both must
+  go; 090.4 owns the second.
 
 The projection as previously specced also cost an atlas dependency bolted onto
 the declared single read surface (scene-lexicon-store.ts:39 takes only a
@@ -203,16 +247,47 @@ this story, and an earlier draft of it got this wrong by assuming one shape.
 The Teacher sets POSTURE. Posture selects a RENDERER. The two renderers realize
 a slate in fundamentally different ways:
 
-| Posture | Renderer | How the slate is realized | Is "what got taught" knowable in advance? |
+| Posture / surface | Renderer | How the slate is realized | Is "what got taught" knowable in advance? |
 |---|---|---|---|
-| anchored (A1), supported (A2) | `diglotWeave` | INTERSECTION -- you can only teach words physically present in the authored English, so selecting and substituting are one operation | **Yes.** Deterministic, before rendering. |
-| target-dominant (B1+) | `GradedTextService` | GENERATION -- the whole line is written in the target language; the slate shapes the prompt rather than filtering a pool | **No.** Only knowable AFTER, by classifying the output. |
+| anchored (A1), supported (A2), any authored text | `diglotWeave` | INTERSECTION -- you can only teach words physically present in the authored English, so selecting and substituting are one operation | **Yes.** Deterministic, before rendering. |
+| target-dominant (B1+), authored text | baked variant cache read | PRE-RENDERED at compile, keyed `{lang, band, contentHash, promptVersion}` -- **no learner in the key, so the slate does not reach it** | Only by classifying the output. |
+| **any band, AGENT-GENERATED turn** | sugaragent, via the generator prompt overlay | PROMPT-SHAPING -- there is no authored text to intersect and no baked variant to read; the slate becomes instructions | **No.** Only knowable AFTER. |
+
+THE THIRD ROW IS THE EPIC'S OWN TARGET CELL AND AN EARLIER DRAFT OMITTED IT.
+Round 5 finding. `diglotWeave` is gated on scripted mode
+(`sugar-lang-scripted-middleware.ts:189` -> `shared.ts:132`), and
+`GradedTextService` has no agent-turn call site. An agent turn is realized in
+exactly one place: `constraint.generatorPromptOverlay`
+(`sugar-lang-teacher-middleware.ts:521`), built by `buildGeneratorPromptOverlay`.
+Finnick is an agent NPC, so the motivating case of this entire epic is realized
+by row three and only row three.
+
+**That line is currently UNCAPPED.** `generator-prompt-overlay.ts:54` emits every
+lemma in `targetVocab.introduce` while its immediate neighbour caps
+(`avoid.slice(0, 12)`, :55). Today the pre-truncation to 3 is what keeps it sane.
+090.4 removes that truncation. **Therefore the prompt-shaping cap must land in
+the same change that removes the pre-truncation, or the floor makes the
+agentified cell strictly worse** -- an untruncated slate straight into a prompt.
+This is the one hard ordering constraint in the epic.
+
+DO NOT PUT AN LLM CALL ON THE B1+ REALIZATION PATH. `GradedTextService.adapt` is
+two gateway calls (generate at graded-text-service.ts:317, fidelity judge at
+:457). The model budgets **zero** per rendered line or item
+(domain-model-after-epic-090.md:210). Row two is a cache read
+(display-text-resolver.ts:196-212) and it stays one. The honest consequence,
+stated plainly because an earlier draft asserted both halves at once: **the slate
+does not shape B1+ authored text.** The variant was baked without a learner. For
+that row, classification-after-the-fact is the only slate-relevant output there
+is. Do not "fix" this by calling `adapt` at runtime.
 
 Consequences the story must honour:
 
-- There is no single "realize" that fits both. The weave path answers the
-  question up front; the generated path answers it by observation. Model them as
-  two strategies behind one seam, not one function with a branch.
+- There is no single "realize" that fits all three. The weave path answers the
+  question up front; the other two answer it by observation. Model them as
+  strategies behind one seam, not one function with a branch. The discriminated
+  union in `graded-text-source.ts:26-52` already argues this exact design and
+  gives the property that pays for it here: adding a kind is a compile error at
+  every consumer. Cite that file; do not re-derive the pattern.
 - **The A1/A2 path is where the epic's bug lives** and where the deterministic
   intersection belongs. That is the floor.
 - For target-dominant, "what got taught" is a CLASSIFICATION of generated text.
@@ -270,10 +345,20 @@ SCOPE:
   unit, total in the same sense as `createDisplayTextResolver` -- absent inputs
   yield authored text, never a throw. It owns the POOL (slate ∩ text) and the
   per-text substitution count.
-- The generation strategy delegates to `GradedTextService` and reports what got
-  taught by CLASSIFYING the output, reusing `computeCoverage` and the observe
-  middleware's existing tokenization. It is ceiling, not floor.
-- Neither strategy chooses itself. Posture comes from the Directive via
+- **The prompt-shaping strategy caps `targetVocab.introduce` before it reaches
+  `buildGeneratorPromptOverlay`.** In the floor, and in the same change as
+  090.4's de-truncation. Reports what got taught by CLASSIFYING the turn, reusing
+  `computeCoverage` and the observe middleware's existing tokenization.
+- The cache-read strategy is unchanged behaviour, named here only so the seam is
+  total. It classifies its output; it does not consult the slate.
+- **The slate needs a home that is not a conversation.** `DirectiveCache` is keyed
+  on `conversationId` (`sugar-lang-teacher.ts:60`, `directive-cache.ts:70`) and
+  item views deliberately run before any conversation exists
+  (`runtime-services.ts:392-402`). This story's own exit and probe 4 are both item
+  bodies, so without this they cannot pass. Key the slate on the SITUATION, and
+  state the key in the exit. Round 5 finding -- the floor as previously written
+  could not satisfy its own acceptance test.
+- No strategy chooses itself. Posture comes from the Directive via
   `postureForBand`; delete `isWeaveBand`.
 - Consume `GradedTextUnit` (grading/graded-text-source.ts). The repo already has
   the narrative-unit abstraction with a documented Strategy + discriminated-union
@@ -290,24 +375,43 @@ at realization, per text, per posture" currently has no implementation anywhere
 substitution is a feature: the system cannot presently express any other answer.
 This story gives the ratio table its second role, as a governor.
 
-DUPLICATE ENFORCER TO FOLD IN: `display-text-resolver.ts:63-65` defines
-`isWeaveBand` with a comment saying it "MIRRORS the scripted dialogue split
-exactly" -- while `postureForBand` (band-envelope.ts:65-71) already returns
-anchored/supported/target-dominant for exactly that input. A copied constant, in
-a file that exists *because* an 087.6 review caught this same divergence once
-already. Delete `isWeaveBand`; derive from `postureForBand`.
+THREE DUPLICATE ENFORCERS TO FOLD IN -- not two. An earlier draft named only the
+first. Round 5 found the third, and it DIVERGES:
+
+| Where | Band split | Ratio table |
+|---|---|---|
+| `band-envelope.ts:65-71` / `:36-41` | `postureForBand` -- the source of truth | 0.3 / 0.65 / 0.85 |
+| `display-text-resolver.ts:63-65` | `isWeaveBand`, copied | (none) |
+| `sugar-lang-teacher-middleware.ts:229-232` | inlined ternary | **:233-236 -- 0.2 / 0.5 / 0.8** |
+
+The third is a *behavioural* divergence, not just a copy: an A1 scripted line is
+rendered at 0.2 while everything else in the repo says 0.3.
+`band-envelope.ts:29-35` is the deferred-trigger comment that scheduled exactly
+this cleanup -- "revisit when scripted rendering next changes, and delete its
+inline table then." **090.8 is that change.**
+
+The comment names the WRONG FILE (it says `sugar-lang-scripted-middleware.ts`;
+the table is in `sugar-lang-teacher-middleware.ts`). Fix the pointer in the same
+change, or the next reader greps the wrong file and concludes it is already done.
+
+This also un-blocks probe 5: "posture ratio governs density" cannot be falsified
+while A1 has two possible ratios depending on which path built the constraint.
 
 - Exit: fixture item body about travellers/heads/flying + A1 learner + a slate
   containing those lemmas -> substitutions land (integration -- fails against
-  today's code); the inverse -> authored English AND a trace saying
-  "slate/text disjoint", not "extraction failed" (pin -- the failure mode must be
-  legible, which is what cost hours on 2026-07-28); posture ratio governs
-  density, so an anchored A1 paragraph does not come back mostly target-language
-  (pin -- no implementation exists today); ONE band-split enforcer, asserted by
-  grep for `isWeaveBand` returning nothing (pin); the SAME item body at A1 and at
-  B1 takes different strategies and both report what they taught, in the same
-  trace shape (pin -- the strategy seam, and the thing an earlier draft of this
-  story assumed away).
+  today's code); **the slate is fetched by SITUATION key, with no conversation in
+  scope** (pin -- the item surface has no conversation, see above); the inverse ->
+  authored English AND a trace saying "slate/text disjoint", not "extraction
+  failed" (pin -- the failure mode must be legible, which is what cost hours on
+  2026-07-28); posture ratio governs density, so an anchored A1 paragraph does
+  not come back mostly target-language (pin -- no implementation exists today);
+  ONE band split AND ONE ratio table, asserted by grep for `isWeaveBand` and for
+  a second `0.2`/`0.5`/`0.8` triple, both returning nothing (pin); **an
+  agent-generated turn with a 40-item slate produces a capped overlay line**
+  (integration -- fails today, `generator-prompt-overlay.ts:54` is uncapped); the
+  SAME item body at A1 and at B1 takes different strategies and both report what
+  they taught, in the same trace shape (pin -- the strategy seam, and the thing
+  an earlier draft of this story assumed away).
 
 ### 090.4 Teacher judgment: two doors in, a slate out
 
@@ -315,18 +419,58 @@ WHAT THE TEACHER PRODUCES CHANGES. Not a per-turn answer -- a **slate**: what
 this learner should be working on in this situation. Stable until the situation
 key moves or standing changes materially. 090.8 applies it per text.
 
+FIRST, PUT THE TEACHER BACK ON THE PATH. This story cannot be verified at all
+until the 087.6 schedule-driven branch is resolved, because that branch bypasses
+`services.teacher.invoke` for every learner with one lemma card
+(`sugar-lang-teacher-middleware.ts:333`, `outer-loop-scheduler.ts:101-103` -- see
+the grid section). Two options, and 090.4 must pick one and say so:
+
+- **Delete the branch.** The directive comes from the slate, and the outer loop's
+  pacing arrives as LEARNER capacity (090.5) instead of as a competing directive
+  builder. This is the model-aligned answer.
+- **Gate it on slate absence** as a fail-soft, the way the pre-placement bypass
+  above it is gated.
+
+What it must NOT do is stay as-is, because as-is it is a second system answering
+"what should be taught" -- the exact condition the epic's closing invariant
+forbids. Recommend deletion; the branch exists only because the Teacher was
+expensive per turn, and the slate makes it once per situation.
+
 THE SLATE MUST NOT BE PRE-TRUNCATED. It is a working set, not a teaching quota.
 A slate cut to the top N almost never intersects a specific paragraph, which is
 the mechanism behind both the item-description bug and the A1 dialogue bug. The
 cap belongs at realization.
 
+**ORDERING CONSTRAINT, HARD.** De-truncating here is only safe once 090.8's
+prompt-shaping cap exists, because `generator-prompt-overlay.ts:54` renders
+`targetVocab.introduce` uncapped into the agent prompt. Ship the cap first or in
+the same change. Round 5 finding.
+
 TWO DOORS, NOT ELEVEN. `TeacherContext` (contracts/providers.ts:128-146) carries
 learner, scene, prescription, npc, recentTurns, lang, calibrationActive,
 pendingProvisionalLemmas, probeFloorState, activeQuestEssentialLemmas,
 selectionMetadata. Adding `situation` as a twelfth field is the shape the model
-forbids. Target: `{ situation, learner, lang, telemetry }`. `scene`, `npc`,
-`recentTurns` and `activeQuestEssentialLemmas` fold INTO situation;
-`probeFloorState` and `pendingProvisionalLemmas` fold into learner.
+forbids. Target: `{ situation, learner, lang, telemetry }` plus two permitted
+NON-CONTENT fields -- `conversationId` (the cache key, `directive-cache.ts:70`)
+and `calibrationActive` (read at `llm-teacher-policy.ts:157` and
+`fallback-teacher-policy.ts:68`). Naming them keeps the structural pin from
+failing for the wrong reason. `scene`, `npc`, `recentTurns` and
+`activeQuestEssentialLemmas` fold INTO situation; `probeFloorState` and
+`pendingProvisionalLemmas` fold into learner.
+
+THE FALLBACK POLICY NEEDS REWRITING, NOT JUST REWIRING.
+`FallbackTeacherPolicy.decide` is built entirely from `context.prescription`
+(fallback-teacher-policy.ts:124-127, :145-146). Removing `prescription` from
+`TeacherContext` breaks it, and its exit below depends on it working. Re-source
+it from situation + standing in this story.
+
+`repairDirective` IS A SECOND PRESCRIPTION-MEMBERSHIP ENFORCER. It filters
+`targetVocab` against `getPrescriptionSet(...)` (schema-parser.ts:658-672) and
+DEFAULTS to the prescription's own lists when the filter empties (:695-698). So
+the round-3 claim carried into 090.2 -- "the actual blocker is one prompt line" --
+is **OVERSTATED**: true on the validated path, false on the repaired path
+(`llm-teacher-policy.ts:267`). Widening the pool without touching this function
+means any directive that needs repair silently snaps back to the old pool.
 
 QUEST-ESSENTIAL STOPS BEING A CHANNEL. It is currently both a TeacherContext
 field (providers.ts:144) and a `prescribe()` input (lexical-prescription.ts:108).
@@ -349,9 +493,14 @@ cap constant like its neighbours (:44-48); and a mock-gateway exit cannot falsif
 prompt content, so assert the prompt text directly.
 
 - Exit: the Teacher's slate contains the cheese concept for an A1 learner with no
-  history, given a situation naming a cheese NPC (integration, mock gateway); the
-  slate is NOT truncated to a band cap (pin -- the regression that produces both
-  known bugs); TeacherContext has two content doors, asserted structurally (pin);
+  history, given a situation naming a cheese NPC (integration, mock gateway);
+  **the same holds for a learner WITH lemma-card history** (integration -- fails
+  today, the schedule branch bypasses the Teacher entirely; this is the pin that
+  proves the 087.6 branch was actually resolved); the slate is NOT truncated to a
+  band cap (pin -- the regression that produces both known bugs); TeacherContext
+  has two content doors plus the two named non-content fields, asserted
+  structurally (pin); a repaired directive does not snap back to a prescription
+  pool (pin -- schema-parser.ts:695-698);
   a quest-essential lemma reaches the Teacher only via situation, asserted by the
   absence of a separate field (pin); gateway down falls back to
   `FallbackTeacherPolicy` with nothing surfaced to the player (pin --
@@ -411,8 +560,23 @@ across the band-envelope filter (lexical-budgeter.ts:157), the reviewCount split
 (:177, :181) and the FSRS adapter. 090.4's simplification depends on it existing
 as a thing the Teacher can read.
 
+BIND TO THE EXISTING CONSTANTS; DO NOT RE-DECLARE THEM. Round 5 finding -- an
+exhaustiveness pin cannot catch a duplicated threshold, so name the sources:
+
+| Standing | Existing source |
+|---|---|
+| `due` | `DUE_RETRIEVABILITY_FLOOR = 0.7` (outer-loop-scheduler.ts:52) |
+| `known` | `FLUENCY_RETRIEVABILITY_FLOOR = 0.90` (outer-loop-scheduler.ts:68) |
+| `unseen` / `learning` | `reviewCount === 0` (lexical-budgeter.ts:177, :181) |
+| `out-of-reach` | band+1, which has **three** implementations today -- lexical-budgeter.ts:157, outer-loop-scheduler.ts:195, and the envelope rule's ceiling |
+
+The band+1 predicate is the one that matters: standing is where it becomes a
+single function, and this story is the only place in the epic that can do it.
+
 - Exit: standing is derivable for any (learner, lemma) without invoking the
-  budgeter (pin); the five values are exhaustive and total (pin).
+  budgeter (pin); the five values are exhaustive and total (pin); standing
+  declares no threshold constant of its own, asserted by grep for `0.7` / `0.90`
+  / a second band+1 comparison in the new module (pin).
 
 ### 090.5 Learner capacity
 
@@ -484,17 +648,31 @@ it the epic can produce a perfect slate and still render English, which is
 precisely the observed 2026-07-28 failure on both item bodies and A1 dialogue.
 A floor that cannot show a single Spanish word to a beginner is not a floor.
 
-090.3 (lifecycle), 090.5 (capacity) and 090.7 (visibility) are the ceiling.
-Note 090.3 becomes load-bearing sooner than its position suggests: without a
-situation key the slate has no staleness rule, so it is the first ceiling story.
+090.5 (capacity) and 090.7 (visibility) are the ceiling.
+
+**090.3 MOVES INTO THE FLOOR** (round 5). The slate has to live somewhere, and
+the only key that works is the SITUATION key -- `DirectiveCache` keys on
+`conversationId` (`directive-cache.ts:70`) while item views deliberately render
+before any conversation exists (`runtime-services.ts:392-402`). 090.8's own exit
+and probe 4 are item bodies, so a floor without 090.3 cannot pass its own
+acceptance tests. Round 4 called 090.3 "the first ceiling story" for the
+staleness rule; round 5 found a harder reason it is not ceiling at all.
+
+**Floor, corrected: 090.1 + 090.2 + 090.9 + 090.3 + 090.4 + 090.8.**
+
+Ordering inside the floor is not free. 090.8's prompt-shaping cap must land
+before or with 090.4's de-truncation (`generator-prompt-overlay.ts:54` is
+uncapped), and 090.4 must resolve the 087.6 schedule bypass or nothing in it is
+observable.
 
 ## Budgeter deletion order
 
 The model dissolves the budgeter; the plan treated it as the consumer. No story
 owned the transition, so it is named here.
 
-The budgeter is four jobs (sourcing, eligibility, ranking, rationing). They leave
-in this order:
+The budgeter is **five** jobs, not four. An earlier draft named four; round 5
+found the fifth by grepping the prescription's consumers rather than reasoning
+from the model. They leave in this order:
 
 1. **Eligibility -> LEARNER** (090.9). Standing becomes readable without the
    budgeter.
@@ -503,14 +681,39 @@ in this order:
 3. **Sourcing -> SITUATION** (090.2 + 090.4). Concepts reach the Teacher through
    the situation, not through `lemmas` membership.
 4. **Rationing -> LEARNER capacity** (090.5), applied at realization (090.8).
+5. **Verifier exemption -> DIRECTIVE `targetVocab`** (090.4). This is the one
+   that was missed, and it is a SAFETY job, not a pacing one:
+   `sugar-lang-verify-middleware.ts:333,478` passes `constraint.rawPrescription`
+   into the classifier, and `classifier/envelope-rule.ts:71-88` turns it into the
+   `"prescription-introduce"` exemption. Delete the budgeter without an owner and
+   **every word the Teacher just chose to introduce starts counting as an
+   envelope violation**, driving the repair loop against the teaching. Re-source
+   the exemption from the directive's own `targetVocab.introduce`.
 
-`prescribe()` is then unreferenced and the module is deleted. Until step 2 lands
-the old path must keep working, so the side field from 090.2 may need the
-read-time projection as a transition scaffold -- decide when 090.4 lands, and
-delete it in the same change that deletes `prescribe()`.
+Three more consumers exist that are not "jobs" but still block the delete, each
+needing a named owner before `prescribe()` can go:
 
-DO NOT leave both paths alive past the floor. Two systems answering "what should
-be taught" is the condition that produced every bug in this epic.
+| Consumer | Producing line | Owner |
+|---|---|---|
+| `FallbackTeacherPolicy` builds its whole directive from it | fallback-teacher-policy.ts:124-127, :145-146 | 090.4 rewrites it onto situation + standing |
+| `repairDirective` filters against it AND defaults to it | schema-parser.ts:658-672, :695-698 | 090.4 |
+| scripted constraint reads it with no Teacher at all | sugar-lang-teacher-middleware.ts:246-248 | 090.8, when the scripted path takes its posture from the Directive |
+
+Only after all five jobs and all three consumers have owners is `prescribe()`
+unreferenced and the module deletable. Until step 2 lands the old path must keep
+working, so the side field from 090.2 may need the read-time projection as a
+transition scaffold -- decide when 090.4 lands, and delete it in the same change
+that deletes `prescribe()`.
+
+DO NOT leave both paths alive past the EPIC. An earlier draft said "past the
+floor", which the floor itself violates -- nothing in 090.1/2/9/3/4/8 removes the
+`prescribe()` call at `sugar-lang-context-middleware.ts:449`, and rationing is
+explicitly 090.5. During the floor, the interim is guarded by ONE rule: the
+prescription may remain as an INPUT to nothing but the exemption and the
+fallback, and must not build a directive. 090.4's schedule-bypass resolution is
+what enforces that. Two systems answering "what should be taught" is the
+condition that produced every bug in this epic; one system with a deprecated
+input is not that.
 
 ## Verification recipe (nikki)
 
@@ -534,8 +737,13 @@ two properties most likely to regress.
    mostly English with a few target words, not mostly target language. This is
    the posture ratio governing realization, which has no implementation today.
 6. **Call-frequency probe (NEW)** -- talk for ten turns without changing scene,
-   NPCs, quest stage or time. Telemetry shows exactly ONE teacher call. Today it
-   shows three or four, because the directive cache expires on turn count.
+   NPCs, quest stage or time. Telemetry shows exactly ONE teacher call.
+   BASELINE CORRECTED round 5: an earlier draft said "today it shows three or
+   four, because the directive cache expires on turn count." For any learner
+   with one lemma card it shows **zero** -- the 087.6 schedule branch bypasses
+   the Teacher entirely (sugar-lang-teacher-middleware.ts:333). Run this probe on
+   BOTH a fresh learner and one with history; before 090.4 they give 3-4 and 0,
+   after it they must both give 1. The with-history run is the real test.
 7. **Situation-change probe** -- advance the quest stage mid-conversation. One
    new teacher call, and the slate changes.
 8. **Restraint probe** -- high-strain session: fewer new items, depth ramp
@@ -583,13 +791,25 @@ New questions the model raises -- and three of the four it already answers.
 Listing them as "open" in the first draft of this section was wrong; the model
 had settled them and this document had not caught up.
 
-**A. Does the budgeter survive? -- ANSWERED: NO.**
-The model puts `BUDGETER` in "What deliberately is not in the model" and
-reassigns all four of its jobs (sourcing -> SITUATION, eligibility -> LEARNER
-standing, ranking -> TEACHER, rationing -> LEARNER capacity). What remains "is
-not a separate boundary because it does not transform anything: it reports a
-number." `prescribe()` does not exist at the end of this epic. The deletion
-ORDER above is a sequencing detail of that decision, not a re-opening of it.
+**A. Does the budgeter survive? -- PARTLY ANSWERED. Corrected round 5.**
+The model settles that the budgeter is **not a domain boundary**: it is in "What
+deliberately is not in the model" and its jobs reassign. It does NOT settle that
+the module is deleted, and the same section says so in as many words
+(domain-model-after-epic-090.md:152-156):
+
+> "Cut here means **cut from the domain model** -- not cut from the codebase.
+> FSRS, the band envelope and the pacing rules are all real code that continues
+> to exist. They simply do not appear at this level, because at this level
+> nothing talks to them directly."
+
+An earlier draft of this section read that as authorization to delete
+`prescribe()` and stamped it ANSWERED. That was my error, and it is the same
+error twice: attributing a plan decision to the model to avoid making it.
+
+The decision, made here: **`prescribe()` goes, but it is this plan's call, not
+the model's**, and it is contingent on the five-jobs-plus-three-consumers sweep
+in "Budgeter deletion order" above. If any of those eight lacks an owner when
+090.5 lands, the module stays and the plan says why.
 
 **B. What bounds the slate? -- ANSWERED BY CONSTRUCTION.**
 An earlier draft worried the slate was unbounded against an 11,000-entry atlas.
