@@ -1,6 +1,10 @@
 # Plan 090 -- Context Extraction + Teacher Judgment (proposed child epic I of Strategy 002)
 
-Status: DRAFT -- NOT LOCKED. epic-review has run 7 rounds (2026-07-28, -29). Rounds 1-3 audited against the CODE and it held. Round 4 audited against the DOMAIN MODEL and it did not. Rounds 5-7 each audited the PREVIOUS round's new text and each found real defects in it -- that is the standing pattern and it has not damped yet. Round 5: the Teacher LLM is already off the live path for every learner with one lemma card (sugar-lang-teacher-middleware.ts:333). Round 6: the weave has no English lemmatization, so 090.8's exit fixture could never have passed; and "unify the band+1 predicates" would have caused a regression. Round 7: 090.8's rewritten exit PASSED TODAY (the item path already draws the whole band, display-text-resolver.ts:247-249); the two genuinely unowned authorities are sugar-lang-scripted-middleware.ts:251-257 and :426-431, not the live-render local round 6 named; and item bodies are NOT among the broken surfaces. All applied. Not locked -- see "Open at gate exit".
+Status: DRAFT -- NOT LOCKED. epic-review has run 7 rounds (2026-07-28, -29). Rounds 1-3 audited against the CODE and it held. Round 4 audited against the DOMAIN MODEL and it did not. Rounds 5-7 each audited the PREVIOUS round's new text and each found real defects in it -- that is the standing pattern and it has not damped yet. Round 5: the Teacher LLM is already off the live path for every learner with one lemma card (sugar-lang-teacher-middleware.ts:333). Round 6: the weave has no English lemmatization, so 090.8's exit fixture could never have passed; and "unify the band+1 predicates" would have caused a regression. Round 7: 090.8's rewritten exit PASSED TODAY (the item path already draws the whole band, display-text-resolver.ts:247-249); the two genuinely unowned authorities are sugar-lang-scripted-middleware.ts:251-257 and :426-431, not the live-render local round 6 named; and item bodies are NOT among the broken surfaces. All applied.
+
+Round 7 WRAP, and it is the finding no review round produced: the demolition itself was never a story. `prescribe()`'s deletion lived in a prose section with no exit line and landed in ceiling 090.5, so the floor would have shipped with the budgeter and the slate both authoritative -- the exact condition this epic exists to remove. **090.10 Delete the prescriber** is new, is in the floor, and has grep exits. The gate was auditing claims about code; the gap was a missing acceptance line, which is a different class of defect and argues the rounds had stopped paying for themselves.
+
+Not locked. The ARCHITECTURE is stable -- seven rounds, four reviewers, zero challenges to situation -> slate -> realization or to standing-vs-action. What kept churning was the demolition inventory and the prose. 090.1 and 090.2 are untouched by every finding in rounds 5-7 and can be built now; 090.3 / 090.4 / 090.8 / 090.10 scope is explicitly provisional and will be finished by opening the files.
 
 The model this plan must satisfy: `packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`.
 
@@ -155,10 +159,13 @@ asked a different question -- whether the plan is aligned with the domain model
 stops being produced. 090.5 and 090.6 both fixed symptoms of a pre-truncation
 the model removes. And the single most valuable story had not been written.
 
-Execution order: **090.1, 090.2, 090.9, 090.3, 090.8, 090.4, 090.5, 090.7.**
+Execution order: **090.1, 090.2, 090.9, 090.3, 090.8, 090.4, 090.10, 090.5, 090.7.**
 Revised round 5: 090.3 moves ahead of 090.8 because the slate needs a
 situation-keyed home before realization can read it, and 090.8 stays ahead of
 090.4 because its prompt cap must exist before 090.4 de-truncates the slate.
+Round 7 wrap: 090.10 (delete the prescriber) is NEW and sits immediately after
+090.4 -- it is the closing edge of the deletion order, and putting it any later
+means the floor ships with two authorities alive.
 
 ### 090.1 ContextExtractor + SituationModel
 
@@ -698,6 +705,77 @@ prompt content, so assert the prompt text directly.
   `SugarLangTeacher.invoke` catches `TeacherInvocationError` at :100-108 and never
   rethrows, so the 087.6 path is unreachable from here).
 
+### 090.10 Delete the prescriber -- NEW (round 7 wrap), IN THE FLOOR
+
+**Why this is a story and not a cleanup.** Every prior revision described the
+demolition in the "Budgeter deletion order" prose below and assigned its pieces
+to other stories' tables. Nothing owned the deletion itself, so no exit anywhere
+asserted that `prescribe()` was gone -- and the deletion landed with 090.5, which
+is ceiling. That meant the FLOOR shipped with the budgeter and the slate both
+authoritative, which the epic's own closing invariant forbids. Seven review
+rounds did not catch this, because they were auditing claims about code and this
+gap was a missing acceptance line. It is now a story with falsifiable exits.
+
+THE PRESCRIPTION IS NOT AN INPUT TO THE TEACHER. IT IS THE DECIDER.
+State it plainly here because it is the thing that makes this story load-bearing
+rather than tidy-up. Four mechanisms keep the Teacher from overriding it:
+
+1. Steady state, the Teacher does not run at all -- `teacher-middleware.ts:333`
+   copies `prescription.introduce/reinforce/avoid` into the directive.
+2. Scripted mode, likewise -- `:246-248`.
+3. Cold start, when the Teacher DOES run, it is fenced by
+   `DIRECTOR_HARD_CONSTRAINTS_PROMPT` (prompt-builder.ts:99-101): *"Only output
+   targetVocab lemmas that already appear in the prescription. Never invent new
+   target vocabulary. Your targetVocab.introduce output should contain only 1-2
+   items from the prescription."*
+4. If the output needs repair it snaps back -- `repairDirective` filters against
+   the prescription set and defaults to it (schema-parser.ts:658-672, :695-698).
+
+So the Teacher's entire freedom today is picking 1-2 items from the 3 a lexical
+scan already chose. **That chain is the motivating bug, end to end:** Finnick is
+an agent NPC, so his lines do not exist at compile time; the scrub needs the
+literal English word to map "cheese" -> `queso`; it is not in authored text; so
+`queso` never enters `sceneLexicon.lemmas` (the sole candidate source,
+lexical-budgeter.ts:130), never enters the prescription -- and constraint 1 above
+then FORBIDS the Teacher from naming it. The Teacher did not fail to think of
+cheese. It was structurally prohibited from saying it.
+
+DELETING `prescribe()` IS THE EASY HALF. The fence and the repair default must go
+in the SAME change, or the Teacher gets a real slate and is still instructed not
+to use it -- a state strictly worse than today, because it looks fixed.
+
+SCOPE -- this story is the closing edge of the deletion order below, and it runs
+only after every owner named there has landed:
+
+- Delete `prescribe()` and `LexicalBudgeter`; remove the call at
+  `sugar-lang-context-middleware.ts:449`.
+- Strip the fence: the three prescription sentences in
+  `DIRECTOR_HARD_CONSTRAINTS_PROMPT` (prompt-builder.ts:99-101). Note the prompt
+  is cache-marked, so the directive cache must be invalidated on prompt version
+  change or cold-start learners read stale directives.
+- Remove `rawPrescription` from `SugarlangConstraint`; the envelope exemption
+  reads `directive.targetVocab.introduce` (job 5 in the deletion order).
+- Delete the two remaining pre-truncation caps -- `getLevelCap`
+  (lexical-budgeter.ts:48-61) and `getIntroduceLevelCap`
+  (fallback-teacher-policy.ts:33-45) -- with the module.
+- Delete the transition scaffold from 090.2 (the read-time projection) in this
+  same change, per the deletion order's own instruction.
+
+- Exit (all greps, all falsifiable, all fail today):
+  - `prescribe(` returns no hits outside git history (pin).
+  - `DIRECTOR_HARD_CONSTRAINTS_PROMPT` contains neither "already appear in the
+    prescription" nor "items from the prescription", asserted against the prompt
+    STRING, not through a mock gateway -- a mock cannot falsify prompt content
+    (pin, carried from round 3).
+  - `rawPrescription` returns no hits (pin).
+  - `constraint.targetVocab` has exactly ONE writer in
+    `sugar-lang-scripted-middleware.ts`, down from three (pin -- :159 survives,
+    :251-257 and :426-431 are resolved by 090.4).
+  - A cold-start A1 learner in a situation naming a cheese NPC gets `queso` in
+    the directive, with no authored English "cheese" anywhere in the scene
+    (integration -- the motivating case, and the single test that proves the
+    whole chain above is broken rather than merely rerouted).
+
 ### 090.3 Runtime overlay + situation lifecycle
 
 Overlay content unchanged: met/unmet, quest stage, time of day, turns so far.
@@ -922,12 +1000,19 @@ and probe 4 are item bodies, so a floor without 090.3 cannot pass its own
 acceptance tests. Round 4 called 090.3 "the first ceiling story" for the
 staleness rule; round 5 found a harder reason it is not ceiling at all.
 
-**Floor, corrected: 090.1 + 090.2 + 090.9 + 090.3 + 090.4 + 090.8.**
+**Floor, corrected: 090.1 + 090.2 + 090.9 + 090.3 + 090.8 + 090.4 + 090.10.**
+
+090.10 IS IN THE FLOOR AND THAT IS THE ROUND-7-WRAP CHANGE. Every prior floor
+ended at 090.4 and left `prescribe()` alive, with the deletion attached to 090.5
+(ceiling). A floor that leaves two systems answering "what should be taught" is
+not a floor -- it is the exact condition this epic exists to remove, shipped
+under the epic's own name. The deletion is now a story with greps for exits.
 
 Ordering inside the floor is not free. 090.8's prompt-shaping cap must land
 before or with 090.4's de-truncation (`generator-prompt-overlay.ts:54` is
-uncapped), and 090.4 must resolve the 087.6 schedule bypass or nothing in it is
-observable.
+uncapped); 090.4 must resolve the 087.6 schedule bypass or nothing in it is
+observable; and 090.10 runs last, because every owner in the deletion order must
+have landed before the module can go.
 
 ## Budgeter deletion order
 
@@ -998,20 +1083,21 @@ round-4 table named two. All three go with the pre-truncation; 090.4 owns the
 prompt one.
 
 Only after all five jobs and all three consumers have owners is `prescribe()`
-unreferenced and the module deletable. Until step 2 lands the old path must keep
+unreferenced and the module deletable. **That final step is 090.10, and it is a
+story in the floor** -- see above. Until step 2 lands the old path must keep
 working, so the side field from 090.2 may need the read-time projection as a
-transition scaffold -- decide when 090.4 lands, and delete it in the same change
-that deletes `prescribe()`.
+transition scaffold; 090.10 deletes it in the same change.
 
-DO NOT leave both paths alive past the EPIC. An earlier draft said "past the
-floor", which the floor itself violates -- nothing in 090.1/2/9/3/4/8 removes the
-`prescribe()` call at `sugar-lang-context-middleware.ts:449`, and rationing is
-explicitly 090.5. During the floor, the interim is guarded by ONE rule: the
-prescription may remain as an INPUT to nothing but the exemption and the
-fallback, and must not build a directive. 090.4's schedule-bypass resolution is
-what enforces that. Two systems answering "what should be taught" is the
-condition that produced every bug in this epic; one system with a deprecated
-input is not that.
+DO NOT LEAVE BOTH PATHS ALIVE PAST THE FLOOR. Round 6 weakened this to "past the
+epic" because the floor as then written violated it -- nothing in
+090.1/2/9/3/4/8 removed the `prescribe()` call at
+`sugar-lang-context-middleware.ts:449`, and rationing sat in ceiling 090.5. That
+was fixing the invariant to match the plan rather than the plan to match the
+invariant, and it is exactly the move this epic exists to stop. **Reverted:**
+the rule stands as written, and 090.10 is what makes the floor satisfy it.
+
+Two systems answering "what should be taught" is the condition that produced
+every bug in this epic. The floor does not ship with two.
 
 ## Verification recipe (nikki)
 
