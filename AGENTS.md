@@ -1,8 +1,6 @@
 # Sugarmagic Instructions
 
-Sugarmagic is the clean successor to Sugarbuilder and Sugarengine for region authoring and runtime playback.
-
-This repo exists to replace a split architecture that created repeated parity bugs, duplicated behavior, and wasted time.
+Sugarmagic strives to be an all in one game creation studio for FoxLeapMoon. Specifically narrative focused games. It is not meant to make multiplayer games or combat games.
 
 ## Mission
 
