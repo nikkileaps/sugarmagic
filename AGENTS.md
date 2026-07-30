@@ -27,16 +27,13 @@ If a proposed change weakens one of these, stop and rethink it.
 
 ## Product Direction
 
-- Sugarmagic is the host product.
-- Sugarbuilder is legacy and migration-only.
-- Sugarengine is an input to Sugarmagic, not a sibling product to preserve forever.
-- The goal is not coexistence. The goal is consolidation.
-- The goal is not compatibility at all costs. The goal is a clean long-term home.
+- Sugarmagic Studio is the main product.
+- Plugins are installed independently and should specify their dependency on other plugins or be able to operate independently.
+
 
 ## Hard Architecture Rules
 
 - Runtime-visible behavior must be implemented once.
-- Editor tooling may sit on top of runtime systems.
 - Runtime systems must not depend on editor UI code.
 - Do not maintain separate editor-render and runtime-render behavior for the same authored content.
 - Do not preserve old code paths “for safety” unless explicitly required and approved.
@@ -44,57 +41,16 @@ If a proposed change weakens one of these, stop and rethink it.
 - Prefer deletion over coexistence.
 - Prefer explicit domain modules over cross-cutting convenience code.
 
-## Migration Bias
-
-This repo is a migration project as much as a product project.
-
-That means:
-
-- every migrated capability must land in a clear permanent home
-- every migration should identify what old code or old concept it makes obsolete
-- every major port should reduce duplication, not move duplication around
-- no “temporary bridge” unless it has a clear removal condition
-
-When migrating from Sugarbuilder or Sugarengine, always state:
-
-- what is being kept
-- what is being rewritten
-- what is being deleted
-- what becomes the new source of truth
 
 ## Source of Truth Rules
 
-For each important concept, there must be one authoritative owner.
-
-Examples:
-
-- region document
-- placed asset
-- landscape document
-- environment document
-- material graph document
-- region workspace state
+For each important concept, there must be one authoritative owner. This concept with an authoratitive owner should be in the Domain.
 
 Do not allow multiple persisted models to overlap in meaning.
 
 Editor-only state is allowed.
 Duplicate authored-scene truth is not.
 
-## Single Enforcer Rules
-
-Each core behavior must have one implementation.
-
-Examples:
-
-- one region loader
-- one renderer path
-- one landscape runtime
-- one material graph compiler/runtime
-- one sky/cloud system
-- one environment application path
-- one save/load path for authored regions
-
-If two systems appear to enforce the same behavior, that is a bug, not flexibility.
 
 ## Rendering Rules
 
@@ -107,7 +63,6 @@ If two systems appear to enforce the same behavior, that is a bug, not flexibili
 
 ## UI / UX Rules
 
-- Adopt Sugarengine-style shell discipline.
 - Do not paste Sugarbuilder wholesale into Sugarmagic.
 - Preserve strong workflows from Sugarbuilder, but re-home them intentionally.
 - Prefer mode-based editing over giant overloaded screens.
