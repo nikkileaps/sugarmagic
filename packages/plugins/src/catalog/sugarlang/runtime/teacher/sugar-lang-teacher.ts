@@ -57,7 +57,10 @@ export class SugarLangTeacher {
       ...context,
       calibrationActive
     };
-    const cached = this.cache.get(effectiveContext.conversationId);
+    const cached = this.cache.get(
+      effectiveContext.conversationId,
+      effectiveContext.situationKey
+    );
     if (cached) {
       await emitTelemetry(
         this.telemetry,
@@ -107,7 +110,11 @@ export class SugarLangTeacher {
       });
     }
 
-    this.cache.set(effectiveContext.conversationId, directive);
+    this.cache.set(effectiveContext.conversationId, directive, {
+      ...(effectiveContext.situationKey === undefined
+        ? {}
+        : { situationKey: effectiveContext.situationKey })
+    });
     await emitTelemetry(
       this.telemetry,
       createTelemetryEvent("director.invocation-resolved", {

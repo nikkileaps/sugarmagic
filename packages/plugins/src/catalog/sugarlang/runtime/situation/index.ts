@@ -23,5 +23,6 @@
 export type { Situation, SituationRuntimeFacts } from "./situation";
 export { composeSituation } from "./compose";
 export type { ComposeSituationInput } from "./compose";
+export { situationKey } from "./situation-key";
 export { factValue, isAvailable, runtimeFact, unavailable } from "./runtime-fact";
 export type { RuntimeFact } from "./runtime-fact";

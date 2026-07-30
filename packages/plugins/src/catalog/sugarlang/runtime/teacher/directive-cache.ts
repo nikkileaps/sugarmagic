@@ -35,6 +35,7 @@ import {
 
 export type InvalidationReason =
   | "max_turns_exceeded"
+  | "situation_change"
   | "quest_stage_change"
   | "location_change"
   | "player_code_switch"
@@ -66,18 +67,64 @@ export class DirectiveCache {
     this.unsubscribe?.();
   }
 
-  get(conversationId: string): PedagogicalDirective | null {
-    const scope = createActiveDirectiveFactScope(conversationId);
-    const envelope = this.blackboard.getFact(ACTIVE_DIRECTIVE_FACT, scope);
+  /**
+   * Reads the live directive WITHOUT ageing it.
+   *
+   * 090.3b split this out of `get`. `turnsConsumed` used to be incremented
+   * inside the read, so merely LOOKING at the directive spent a turn the player
+   * never took -- fine while exactly one caller existed, a trap the moment a
+   * debug readout or an inspector wanted to display it. Anything that is not
+   * taking a turn must call this.
+   */
+  peek(conversationId: string, situationKeyNow?: string): PedagogicalDirective | null {
+    const envelope = this.blackboard.getFact(
+      ACTIVE_DIRECTIVE_FACT,
+      createActiveDirectiveFactScope(conversationId)
+    );
     if (!envelope) {
       this.cachedConversationIds.delete(conversationId);
       return null;
     }
 
     const current = envelope.value;
+
+    // The situation is the real axis: a decision made for a different situation
+    // is wrong now, however few turns it has consumed.
+    if (
+      situationKeyNow !== undefined &&
+      current.situationKey !== undefined &&
+      current.situationKey !== situationKeyNow
+    ) {
+      this.invalidate(conversationId, "situation_change");
+      return null;
+    }
+
+    // maxTurns survives as a BACKSTOP, not as the policy. If the situation key
+    // is subtly wrong and never moves, the Teacher silently stops running and
+    // the player gets one directive forever -- no test fails, nothing logs. This
+    // bounds that. It is deliberately long; see the lifetime default.
     if (current.turnsConsumed >= current.lifetime.maxTurns) {
       this.invalidate(conversationId, "max_turns_exceeded");
       return null;
+    }
+
+    this.cachedConversationIds.add(conversationId);
+    return current.directive;
+  }
+
+  /**
+   * Reads the directive AND spends a turn on it. For the turn path only.
+   */
+  get(conversationId: string, situationKeyNow?: string): PedagogicalDirective | null {
+    const directive = this.peek(conversationId, situationKeyNow);
+    if (!directive) {
+      return null;
+    }
+
+    const scope = createActiveDirectiveFactScope(conversationId);
+    const envelope = this.blackboard.getFact(ACTIVE_DIRECTIVE_FACT, scope);
+    if (!envelope) {
+      return directive;
     }
 
     this.blackboard.setFact({
@@ -85,17 +132,21 @@ export class DirectiveCache {
       scope,
       sourceSystem: SUGARLANG_DIRECTOR_WRITER,
       value: {
-        ...current,
-        turnsConsumed: current.turnsConsumed + 1
+        ...envelope.value,
+        turnsConsumed: envelope.value.turnsConsumed + 1
       },
       updatedAtMs: this.now()
     });
-    this.cachedConversationIds.add(conversationId);
 
-    return current.directive;
+    return directive;
   }
 
-  set(conversationId: string, directive: PedagogicalDirective, now = this.now()): void {
+  set(
+    conversationId: string,
+    directive: PedagogicalDirective,
+    options: { situationKey?: string; now?: number } = {}
+  ): void {
+    const now = options.now ?? this.now();
     this.blackboard.setFact({
       definition: ACTIVE_DIRECTIVE_FACT,
       scope: createActiveDirectiveFactScope(conversationId),
@@ -104,7 +155,10 @@ export class DirectiveCache {
         directive,
         issuedAtMs: now,
         lifetime: directive.directiveLifetime,
-        turnsConsumed: 0
+        turnsConsumed: 0,
+        ...(options.situationKey === undefined
+          ? {}
+          : { situationKey: options.situationKey })
       },
       updatedAtMs: now
     });
@@ -136,13 +190,27 @@ export class DirectiveCache {
     }
   }
 
+  /**
+   * 090.3b: these events no longer invalidate anything by themselves.
+   *
+   * They used to call `invalidateAll`, dropping EVERY conversation's directive
+   * on ANY quest-stage or location event, comparing nothing -- so it
+   * over-invalidated (an unrelated quest advancing elsewhere retired a perfectly
+   * good decision) while also under-covering, since only these two facts were
+   * watched and nothing re-slated on a time-of-day change.
+   *
+   * The situation key subsumes both: it contains scene, quest, stage, objective
+   * nodes and time of day, and is compared per conversation at read time. A
+   * subscription is kept only so the cache still learns when the blackboard
+   * moves; deciding is `peek`'s job now.
+   */
   private handleBlackboardEvent(event: BlackboardChangeEvent): void {
-    if (event.key === QUEST_ACTIVE_STAGE_FACT.key) {
-      this.invalidateAll("quest_stage_change");
+    if (
+      event.key !== QUEST_ACTIVE_STAGE_FACT.key &&
+      event.key !== ENTITY_LOCATION_FACT.key
+    ) {
       return;
     }
-    if (event.key === ENTITY_LOCATION_FACT.key) {
-      this.invalidateAll("location_change");
-    }
+    // Intentionally no invalidation here.
   }
 }

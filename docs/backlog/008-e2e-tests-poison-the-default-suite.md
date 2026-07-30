@@ -37,6 +37,28 @@ one was not flaky and not broken -- `sugardeploy-update-blocklist` shipped in
 `sugardeploy/host/middleware.ts:3511` without being added to the expected list.
 The assertion caught a real omission, which is what it is for.
 
+## A second source, found 2026-07-30
+
+With the e2e test excluded, the suite still fails about 1 run in 3 -- but on
+different tests, and for a different reason. Two of them assert WALL-CLOCK
+duration:
+
+- `classifier/tokenize.test.ts > stays within the performance budget on a
+  500-token string` -- times `iterations` of tokenize with `performance.now()`
+- `learner/persistence.test.ts > pages card save/load work for large profiles
+  and stay fast`
+
+Both pass in isolation in milliseconds. They fail when the full suite runs them
+alongside everything else, because a wall-clock budget measures whatever else the
+machine is doing. Six consecutive full runs: four clean, two failed, a different
+one each time.
+
+A performance assertion in a parallel unit-test suite is a coin flip with extra
+steps. Options: move them behind the same opt-in flag as the e2e tests; run them
+single-threaded; assert on operation COUNT or complexity rather than duration; or
+delete them and do perf work in the perf harness, which is where a real
+measurement belongs.
+
 ## What to look into
 
 - **Should the e2e test run anywhere at all?** Right now it runs only when

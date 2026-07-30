@@ -140,6 +140,15 @@ export interface TeacherContext {
    * by `lemmaId` and `lang.targetLanguage`.
    */
   atlas: LexicalAtlasProvider;
+  /**
+   * 090.3b: identity of the situation this decision is being made FOR.
+   *
+   * The directive cache compares it and retires a decision made for a different
+   * situation. Optional while the producer lands in 090.3d -- absent means the
+   * cached decision cannot be checked, which the cache treats as unverifiable
+   * rather than as valid.
+   */
+  situationKey?: string;
   prescription: LexicalPrescription;
   npc: TeacherNpcContext;
   recentTurns: TeacherRecentTurn[];

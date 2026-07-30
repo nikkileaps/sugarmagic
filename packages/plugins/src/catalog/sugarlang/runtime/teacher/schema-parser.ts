@@ -512,9 +512,22 @@ function getDefaultSentenceComplexityCap(
   }
 }
 
+/**
+ * 090.3b raised `maxTurns` from 3 to 20, because it stopped being the policy.
+ *
+ * At 3 it WAS the invalidation policy -- the Teacher re-ran every 3-4 turns
+ * regardless of whether anything had changed. The situation key governs that
+ * now, so a short countdown would just reintroduce the churn the key removes.
+ *
+ * It survives as a BACKSTOP for one specific failure: if the key is subtly
+ * wrong and never moves, the Teacher silently stops running and the player
+ * receives one directive forever, with no test failing and nothing logged. 20
+ * bounds that without re-creating turn-based re-slating. Once the key is proven
+ * in play this can go to zero meaning "never", or go entirely.
+ */
 function getDefaultDirectiveLifetime(): DirectiveLifetime {
   return {
-    maxTurns: 3,
+    maxTurns: 20,
     invalidateOn: ["quest_stage_change", "location_change"]
   };
 }
