@@ -34,10 +34,14 @@ describe("buildTeacherPrompt", () => {
     expect(prompt.user).toContain("RELATIONSHIP STATE:");
     expect(prompt.user).toContain("SCENE SNAPSHOT:");
     expect(prompt.user).toContain("RECENT DIALOGUE:");
-    expect(prompt.user).toContain("LEXICAL PRESCRIPTION:");
+    expect(prompt.user).toContain("SITUATION:");
     expect(prompt.user).toContain("PENDING PROVISIONAL EVIDENCE:");
     expect(prompt.user).toContain("TURN-SHAPING HINTS:");
     expect(prompt.user).not.toContain("QUEST-ESSENTIAL LEMMAS");
+    // 090.4: the budgeter's shortlist is no longer shown to the Teacher. It was
+    // not binding after the fence came out, and a block carrying a "budget" and
+    // a "rationale" anchors the model whatever the instructions say.
+    expect(prompt.user).not.toContain("LEXICAL PRESCRIPTION:");
   });
 
   it("keeps the prompt within the expected token budget envelope", () => {

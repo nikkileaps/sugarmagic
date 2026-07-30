@@ -96,24 +96,9 @@ function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
  * Validation: atlas membership for bare ids, competency-inventory membership for
  * chunk: refs. Anything that resolves to neither is dropped here.
  */
-function validateTeachableFacts(
-  facts: string[],
-  targetLanguage: string,
-  services: SugarlangExecutionServices
-): string[] {
-  let inventoryChunkIds: Set<string> | null = null;
-  return facts.filter((fact) => {
-    if (fact.startsWith("chunk:")) {
-      if (!inventoryChunkIds) {
-        inventoryChunkIds = new Set(
-          getAllInventoryChunks(targetLanguage).map((chunk) => chunk.chunkId)
-        );
-      }
-      return inventoryChunkIds.has(fact.slice("chunk:".length));
-    }
-    return Boolean(services.atlas.getLemma(fact, targetLanguage));
-  });
-}
+// 090.4: `validateTeachableFacts` deleted with its two callers. It filtered
+// intent facts against the atlas as if they were lemma ids; since 090.1 they are
+// propositions, so it filtered everything out.
 
 /**
  * Builds the contentHash for a dialogue node as the VARIANT cache expects it.
@@ -160,9 +145,26 @@ function applyWeave(
 
   if (markResult.markedForms.length > 0) {
     normalizedTurn.text = markResult.text;
-    // Replace the introduce list with only the woven forms so the observe
-    // middleware highlights exactly what was substituted. (086.4: gloss-scan
-    // lineIntroduce deleted; weave forms + intent artifact are the signal.)
+    // THIS IS THE LAST WRITER OF `constraint.targetVocab` BESIDES THE TEACHER,
+    // and unlike the two 090.4 deleted it is NOT a second decision -- it is a
+    // REPORT. It narrows introduce to the forms that were actually placed in
+    // this text, so observe highlights and cards what the learner really saw
+    // rather than what was merely intended.
+    //
+    // But it is reporting through the intent channel, which is why it looks like
+    // a writer. Under the model these are two different facts:
+    //
+    //   targetVocab      what the Teacher DECIDED to teach  (intent)
+    //   realized forms   what this text ACTUALLY teaches    (realization)
+    //
+    // Conflating them means the Teacher's decision is unrecoverable after
+    // rendering, and it is why the narrowing has to be conditional on
+    // `markedForms.length > 0` -- overwriting with an empty list would erase the
+    // intent entirely on the common A1 turn where nothing was placed.
+    //
+    // REVISIT with 090.11: realization output gets its own field, observe reads
+    // THAT for card creation, and `targetVocab` stops being rewritten at render
+    // time. Then the Teacher is the only writer, full stop.
     const wovenLemmaRefs: LemmaRef[] = markResult.markedForms.map((wf) => ({
       lemmaId: wf.lemmaId,
       lang: targetLanguage
@@ -232,46 +234,23 @@ export function createSugarLangScriptedMiddleware(
           constraint.supportPosture
         );
 
-        // Optional enrichment: supplement introduce list from intent artifact
-        // teachables if the intent cache has an entry for this node.
-        const nodeId = String(normalizedTurn.metadata?.nodeId ?? "");
-        if (nodeId && services.intentCache) {
-          try {
-            const dialogueDefId = execution.selection.dialogueDefinitionId ?? "";
-            const nodeIntent = dialogueDefId
-              ? services.dialogueDefinitions
-                  .find((d) => d.definitionId === dialogueDefId)
-                  ?.nodes.find((n) => n.nodeId === nodeId)?.intent
-              : undefined;
-            const intentKey: LineIntentCacheKey = {
-              contentHash: buildIntentContentHash(nodeId, authoredText, nodeIntent),
-              intentPromptVersion: LINE_INTENT_PROMPT_VERSION
-            };
-            const intentEntry = await services.intentCache.get(intentKey);
-            if (intentEntry && intentEntry.artifact.mustConveyFacts.length > 0) {
-              const existing = new Set(
-                constraint.targetVocab.introduce.map((l) => l.lemmaId)
-              );
-              const extras: LemmaRef[] = validateTeachableFacts(
-                intentEntry.artifact.mustConveyFacts,
-                targetLanguage,
-                services
-              )
-                .filter((fact) => !existing.has(fact))
-                .map((fact) => ({ lemmaId: fact, lang: targetLanguage }));
-              if (extras.length > 0) {
-                constraint.targetVocab = {
-                  introduce: [...constraint.targetVocab.introduce, ...extras],
-                  reinforce: constraint.targetVocab.reinforce,
-                  avoid: constraint.targetVocab.avoid
-                };
-                execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
-              }
-            }
-          } catch {
-            // Intent cache is optional enrichment -- never error the turn
-          }
-        }
+        // 090.4 DELETED AN UNOWNED WRITER OF constraint.targetVocab HERE.
+        //
+        // It appended the line's intent `mustConveyFacts` to
+        // `targetVocab.introduce` -- uncapped, with no slate, no learning
+        // status and no band envelope. It was the LAST writer before observe,
+        // and `buildTargetLemmaSet` (observe-middleware.ts:87-93) gates card
+        // creation on introduce union reinforce -- so this block decided which
+        // lemmas entered the learner's permanent record, without the Teacher
+        // ever seeing them.
+        //
+        // It was also ALREADY INERT and nobody noticed. 090.1 changed
+        // `mustConveyFacts` to hold PROPOSITIONS ("the luggage is missing"),
+        // with the extraction prompt explicitly forbidding vocabulary -- while
+        // this code kept feeding each fact to `atlas.getLemma()` as a lemma id.
+        // A proposition is never a lemma id, so the filter dropped everything.
+        // The intent cache keys on LINE_INTENT_PROMPT_VERSION ("090.1.0"), so
+        // pre-090.1 artifacts are unreachable and it cannot come back to life.
 
         return normalizedTurn;
       }
@@ -328,33 +307,14 @@ export function createSugarLangScriptedMiddleware(
             normalizedTurn.text = cached.variant.text;
             usedVariant = true;
 
-            // Populate introduce from intent artifact teachables when available.
-            if (services.intentCache) {
-              try {
-                const intentKey: LineIntentCacheKey = {
-                  contentHash: intentContentHash,
-                  intentPromptVersion: LINE_INTENT_PROMPT_VERSION
-                };
-                const intentEntry = await services.intentCache.get(intentKey);
-                if (intentEntry && intentEntry.artifact.mustConveyFacts.length > 0) {
-                  const lemmaRefs: LemmaRef[] = validateTeachableFacts(
-                    intentEntry.artifact.mustConveyFacts,
-                    targetLanguage,
-                    services
-                  ).map((fact) => ({ lemmaId: fact, lang: targetLanguage }));
-                  if (lemmaRefs.length > 0) {
-                    constraint.targetVocab = {
-                      introduce: lemmaRefs,
-                      reinforce: constraint.targetVocab.reinforce,
-                      avoid: constraint.targetVocab.avoid
-                    };
-                    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
-                  }
-                }
-              } catch {
-                // Intent cache enrichment is optional -- never error the turn
-              }
-            }
+            // 090.4 DELETED THE SECOND UNOWNED WRITER HERE.
+            //
+            // It REPLACED `targetVocab.introduce` wholesale from the line's
+            // intent facts on the baked-variant path -- same broken premise as
+            // its twin above: `mustConveyFacts` holds propositions since 090.1,
+            // not lemma ids, so it produced nothing. Deleted rather than fixed,
+            // because what a line teaches is the Teacher's decision and this
+            // was a third party overwriting it.
 
             logger.debug("Scripted line: baked variant used (target-dominant, zero LLM).", {
               authoredText,

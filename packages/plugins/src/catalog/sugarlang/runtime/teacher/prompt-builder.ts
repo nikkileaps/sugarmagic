@@ -126,7 +126,7 @@ Return valid JSON with:
  */
 export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 
-- Choose targetVocab from what this situation makes teachable. You are not limited to the prescription.
+- Choose targetVocab from what this situation makes teachable.
 - Only use lemmas that exist in the target language; never invent words.
 - Your targetVocab.introduce output should contain only 1-2 items that fit this turn naturally. Do not force several items into one turn.
 - If a hard probe floor is active, you must trigger a comprehension check this turn.
@@ -528,7 +528,6 @@ export function buildTeacherPrompt(context: TeacherContext): DirectorPrompt {
     npcContext: formatNpcContext(context),
     gameMoment: formatGameMoment(context),
     recentDialogue: formatRecentDialogue(context),
-    prescription: formatPrescription(context),
     pendingProvisional: formatPendingProvisional(context),
     turnShapingHints: formatTurnShapingHints(context)
   });

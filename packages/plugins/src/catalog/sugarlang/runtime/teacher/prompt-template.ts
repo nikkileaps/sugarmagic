@@ -39,7 +39,12 @@ export const DIRECTOR_USER_TEMPLATE = [
   "{{npcContext}}",
   "{{gameMoment}}",
   "{{recentDialogue}}",
-  "{{prescription}}",
+  // 090.4: `{{prescription}}` removed. The Teacher is no longer bound by the
+  // budgeter's shortlist, and showing it a block containing a "budget" and a
+  // "rationale" while telling it "you are not limited to this" is the weakest
+  // possible instruction -- the block reads as authoritative and anchors the
+  // model regardless of the disclaimer. What the scene affords now arrives as
+  // the situation; what is teachable arrives as resolved teachables.
   "{{pendingProvisional}}",
   "{{turnShapingHints}}"
 ].join("\n\n");
