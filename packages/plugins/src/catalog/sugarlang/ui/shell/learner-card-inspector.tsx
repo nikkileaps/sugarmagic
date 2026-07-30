@@ -24,10 +24,10 @@
 
 import { useState, useEffect, useCallback, type ReactElement } from "react";
 import { PanelSection } from "@sugarmagic/ui";
-import { CARD_STORE_DB_NAME_PREFIX } from "../../runtime/learner/card-store";
-import { TEACH_RECORD_DB_NAME_PREFIX } from "../../runtime/learner/teach-record-store";
-import type { LemmaCard } from "../../runtime/contracts/learner-profile";
-import type { TeachRecord } from "../../runtime/learner/teach-record-store";
+import { CARD_STORE_DB_NAME_PREFIX } from "../../runtime/learner";
+import { TEACH_RECORD_DB_NAME_PREFIX } from "../../runtime/learner";
+import type { LemmaCard } from "../../runtime/learner";
+import type { TeachRecord } from "../../runtime/learner";
 
 const LEMMA_CARDS_STORE = "lemma-cards";
 const TEACH_RECORDS_STORE = "teach-records";

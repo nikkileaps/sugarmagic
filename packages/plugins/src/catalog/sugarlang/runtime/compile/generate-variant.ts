@@ -37,7 +37,7 @@
  * dialogue module.
  */
 
-import type { CEFRBand } from "../contracts/learner-profile";
+import type { CEFRBand } from "../cefr";
 import type { LineIntentArtifact } from "../contracts/line-intent";
 import type { BakedLineVariant } from "../contracts/baked-variant";
 import type { SugarlangLLMClient } from "../llm/types";

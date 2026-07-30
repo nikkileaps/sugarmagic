@@ -20,7 +20,7 @@
  * Status: active
  */
 
-import type { CEFRBand } from "./learner-profile";
+import type { CEFRBand } from "../cefr";
 
 /** Four interpretLexicon categories consumed by interpretation.ts's detectSocialMove. */
 export const INTERPRET_LEXICON_CATEGORIES = [

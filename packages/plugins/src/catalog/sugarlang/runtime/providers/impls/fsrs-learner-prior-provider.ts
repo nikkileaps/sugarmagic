@@ -25,7 +25,7 @@ import type {
 import {
   createUniformCefrPosterior,
   seedCefrPosteriorFromSelfReport
-} from "../../learner/cefr-posterior";
+} from "../../learner";
 import { seedCardFromAtlas } from "../../budgeter/fsrs-adapter";
 
 export class FsrsLearnerPriorProvider implements LearnerPriorProvider {

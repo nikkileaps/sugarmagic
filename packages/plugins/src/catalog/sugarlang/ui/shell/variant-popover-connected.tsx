@@ -21,7 +21,7 @@
 import { useState, useEffect, useRef, type ReactElement } from "react";
 import type { DialogueDefinition, DialogueNodeDefinition } from "@sugarmagic/domain";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
-import type { CEFRBand } from "../../runtime/contracts/learner-profile";
+import type { CEFRBand } from "../../runtime/cefr";
 import { VariantsPopover } from "./variants-popover";
 import { createVariantAuthoringClient } from "./editor-support";
 

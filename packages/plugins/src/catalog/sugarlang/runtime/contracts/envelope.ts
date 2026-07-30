@@ -23,7 +23,7 @@
  * Status: active
  */
 
-import type { CEFRBand } from "./learner-profile";
+import type { CEFRBand } from "../cefr";
 import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
 import type { ChunkSpec } from "../classifier/chunk-matcher";
 import type { SupportPosture } from "./pedagogy";

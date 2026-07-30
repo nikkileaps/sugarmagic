@@ -33,7 +33,7 @@ import {
 } from "@mantine/core";
 import type { DialogueNodeDefinition } from "@sugarmagic/domain";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
-import type { CEFRBand } from "../../runtime/contracts/learner-profile";
+import type { CEFRBand } from "../../runtime/cefr";
 
 const DISPLAY_BANDS: CEFRBand[] = ["B1", "B2", "C1", "C2"];
 

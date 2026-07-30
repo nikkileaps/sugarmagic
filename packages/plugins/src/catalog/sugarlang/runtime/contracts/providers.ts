@@ -27,8 +27,9 @@
  */
 
 import type { PedagogicalDirective } from "./pedagogy";
-import type { CEFRBand, LearnerProfile, LemmaCard } from "./learner-profile";
-import type { CefrPosterior } from "./learner-profile";
+import type { CEFRBand } from "../cefr";
+import type { LearnerProfile, LemmaCard } from "../learner";
+import type { CefrPosterior } from "../learner";
 import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
 import type { CompiledSceneLexicon } from "./scene-lexicon";
 

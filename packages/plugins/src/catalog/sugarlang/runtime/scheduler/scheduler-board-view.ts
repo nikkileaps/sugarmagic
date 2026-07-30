@@ -27,7 +27,7 @@
 
 import type { LemmaCard } from "../types";
 import type { Competency } from "../contracts/competency-inventory";
-import type { DebtStatus } from "../learner/encounter-debt-ledger";
+import type { DebtStatus } from "../learner";
 
 export interface SchedulerLearnerView {
   cefrBand: string;

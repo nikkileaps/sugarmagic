@@ -30,7 +30,7 @@ import {
   getCompetencyForChunk as getInventoryCompetencyForChunk,
   getAllInventoryChunks
 } from "../inventory/competency-inventory-loader";
-import { countDiverseEncounters } from "../learner/encounter-debt-ledger";
+import { countDiverseEncounters } from "../learner";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";

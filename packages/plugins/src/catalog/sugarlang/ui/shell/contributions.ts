@@ -17,7 +17,7 @@
 
 import type { PluginShellContributionDefinition } from "../../../../shell";
 import { createElement } from "react";
-import { resetSugarlangLearnerDatabases } from "../../runtime/learner/reset-learner-data";
+import { resetSugarlangLearnerDatabases } from "../../runtime/learner";
 import { ComprehensionCheckMonitor } from "./comprehension-check-monitor";
 import { LanguageConfigSection } from "./language-config-section";
 import { ManualRebuildButton } from "./manual-rebuild-button";

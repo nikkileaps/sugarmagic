@@ -43,8 +43,8 @@
  * Status: active
  */
 
-import type { CEFRBand } from "../contracts/learner-profile";
-import { bandIndex } from "../contracts/learner-profile";
+import type { CEFRBand } from "../cefr";
+import { bandIndex } from "../cefr";
 import type { LemmaCard } from "../types";
 
 /**

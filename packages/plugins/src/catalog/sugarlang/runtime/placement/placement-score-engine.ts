@@ -24,7 +24,7 @@ import type {
   PlacementQuestionnaireResponse,
   PlacementScoreResult
 } from "../types";
-import { CEFR_BAND_ORDER as CEFR_BANDS_ASCENDING } from "../contracts/learner-profile";
+import { CEFR_BAND_ORDER as CEFR_BANDS_ASCENDING } from "../learner";
 import { MorphologyLoader } from "../classifier/morphology-loader";
 import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";

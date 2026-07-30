@@ -39,8 +39,8 @@
  * policy, a second report and a second thing to invalidate.
  */
 
-import type { CEFRBand } from "../contracts/learner-profile";
-import { CEFR_BAND_ORDER as BAND_ORDER } from "../contracts/learner-profile";
+import type { CEFRBand } from "../cefr";
+import { CEFR_BAND_ORDER as BAND_ORDER } from "../learner";
 import type { GradedTextSource } from "../contracts/graded-text";
 import type { SugarlangVariantCache } from "../compile/variant-cache";
 import type { LexicalAtlasProvider } from "../types";

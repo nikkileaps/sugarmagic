@@ -19,7 +19,7 @@
  * Status: active
  */
 
-import type { LearnerProfile } from "./learner-profile";
+import type { LearnerProfile } from "../learner";
 import type {
   CompiledSceneLexicon,
   QuestEssentialLemma

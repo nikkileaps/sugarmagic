@@ -31,7 +31,7 @@ import {
   ACTIVE_DIRECTIVE_FACT,
   SUGARLANG_DIRECTOR_WRITER,
   createActiveDirectiveFactScope
-} from "../learner/fact-definitions";
+} from "../learner";
 
 export type InvalidationReason =
   | "max_turns_exceeded"

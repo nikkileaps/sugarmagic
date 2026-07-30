@@ -59,7 +59,7 @@ import {
 } from "./runtime/compile/runtime-cache-state";
 import {
   SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
-} from "./runtime/learner/fact-definitions";
+} from "./runtime/learner";
 import { createDisplayTextResolver } from "./runtime/grading/display-text-resolver";
 import { GRADED_TEXT_PROMPT_VERSION } from "./runtime/grading/graded-text-service";
 import { createSugarlangLogger } from "./runtime/logger";

@@ -27,7 +27,7 @@ import type {
   SourceLocation,
   VoiceChannelSpec
 } from "../types";
-import { compareCefrBands, isBandAbove } from "../classifier/cefr-band-utils";
+import { compareCefrBands, isBandAbove } from "../cefr";
 import { lemmatize } from "../classifier/lemmatize";
 import { MorphologyLoader } from "../classifier/morphology-loader";
 import { tokenize } from "../classifier/tokenize";

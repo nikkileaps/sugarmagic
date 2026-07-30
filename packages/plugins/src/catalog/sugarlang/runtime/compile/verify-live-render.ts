@@ -21,7 +21,7 @@
  * Status: active
  */
 
-import type { CEFRBand } from "../contracts/learner-profile";
+import type { CEFRBand } from "../cefr";
 import type { SupportPosture } from "../contracts/pedagogy";
 import type { VariantVerdict } from "../contracts/baked-variant";
 import type { InventoryChunk } from "../contracts/competency-inventory";
@@ -34,7 +34,7 @@ import { computeCoverage } from "../classifier/coverage";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
 import { tokenize } from "../classifier/tokenize";
 import { MorphologyLoader } from "../classifier/morphology-loader";
-import type { LearnerId } from "../contracts/learner-profile";
+import type { LearnerId } from "../learner";
 
 const morphologyLoader = new MorphologyLoader();
 

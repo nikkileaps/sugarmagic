@@ -24,8 +24,8 @@ import type {
   QuestNodeDefinition,
   RegionDocument
 } from "@sugarmagic/domain";
-import { compareCefrBands } from "../../runtime/classifier/cefr-band-utils";
-import { CEFR_BAND_ORDER as SCENE_BANDS } from "../../runtime/contracts/learner-profile";
+import { compareCefrBands } from "../../runtime/cefr";
+import { CEFR_BAND_ORDER as SCENE_BANDS } from "../../runtime/learner";
 import { MorphologyLoader } from "../../runtime/classifier/morphology-loader";
 import { IndexedDBChunkCache } from "../../runtime/compile/chunk-cache";
 import { IndexedDBCompileCache } from "../../runtime/compile/cache-indexeddb";

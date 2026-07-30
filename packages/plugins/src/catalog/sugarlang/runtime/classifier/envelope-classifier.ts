@@ -34,7 +34,7 @@ import { MorphologyLoader } from "./morphology-loader";
 import { CefrLexAtlasProvider } from "../providers/impls/cefr-lex-atlas-provider";
 import { computeCoverage } from "./coverage";
 import { applyEnvelopeRule } from "./envelope-rule";
-import { compareCefrBands } from "./cefr-band-utils";
+import { compareCefrBands } from "../cefr";
 import { createChunkMatcher, type ChunkMatcher } from "./chunk-matcher";
 import { tokenize } from "./tokenize";
 import {

@@ -113,7 +113,8 @@
  */
 
 import Ajv from "ajv";
-import type { CEFRBand, LearnerId } from "../contracts/learner-profile";
+import type { CEFRBand } from "../cefr";
+import type { LearnerId } from "../learner";
 import type { VariantVerdict } from "../contracts/baked-variant";
 import type { SupportPosture } from "../contracts/pedagogy";
 import type { SugarlangLLMClient } from "../llm/types";

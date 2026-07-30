@@ -47,7 +47,7 @@ import { VARIANT_PROMPT_VERSION } from "../compile/generate-variant";
 import { LINE_INTENT_PROMPT_VERSION } from "../compile/line-intent-extractor";
 import type { LineIntentCacheKey } from "../compile/intent-cache";
 import { buildIntentContentHash } from "../compile/intent-cache";
-import type { CEFRBand } from "../contracts/learner-profile";
+import type { CEFRBand } from "../cefr";
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
 import type { LiveRenderCacheKey } from "../compile/live-render-cache";
 import { buildTeachablesKey } from "../compile/live-render-cache";

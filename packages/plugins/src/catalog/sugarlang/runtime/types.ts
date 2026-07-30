@@ -16,7 +16,26 @@
  */
 
 export * from "./contracts/pedagogy";
-export * from "./contracts/learner-profile";
+// 090.9: the learner owns its own types and exposes them from its module entry;
+// the CEFR band scale is its own module because words and text have bands too.
+export * from "./cefr";
+export type {
+  CefrPosterior,
+  CefrPosteriorBandWeight,
+  CurrentSessionSignals,
+  LearnerAssessment,
+  LearnerId,
+  LearnerProfile,
+  LemmaCard,
+  LearningStatus,
+  SessionRecord
+} from "./learner";
+export {
+  INITIAL_PRODUCTIVE_STRENGTH,
+  INITIAL_PROVISIONAL_EVIDENCE,
+  PROVISIONAL_EVIDENCE_DECAY_TURN_THRESHOLD,
+  PROVISIONAL_EVIDENCE_MAX
+} from "./learner";
 export * from "./contracts/lexical-prescription";
 export * from "./contracts/envelope";
 export * from "./contracts/scene-lexicon";

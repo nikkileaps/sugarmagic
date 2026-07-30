@@ -18,7 +18,7 @@
 
 import type { LearnerProfile, LemmaRef } from "../types";
 import { CefrLexAtlasProvider } from "../providers/impls/cefr-lex-atlas-provider";
-import { compareCefrBands } from "./cefr-band-utils";
+import { compareCefrBands } from "../cefr";
 import { EnvelopeClassifier } from "./envelope-classifier";
 import { lemmatize } from "./lemmatize";
 import { MorphologyLoader } from "./morphology-loader";

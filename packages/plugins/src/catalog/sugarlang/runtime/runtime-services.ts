@@ -56,20 +56,18 @@ import {
 import { DirectiveCache } from "./teacher/directive-cache";
 import { FallbackTeacherPolicy } from "./teacher/policies/fallback-teacher-policy";
 import { SugarLangTeacher } from "./teacher/sugar-lang-teacher";
-import { IndexedDBCardStore, MemoryCardStore, type CardStore } from "./learner/card-store";
 import {
-  createTeachRecordStore,
-  type TeachRecordStore
-} from "./learner/teach-record-store";
-import {
+  IndexedDBCardStore,
+  LearnerStateReducer,
+  MemoryCardStore,
   createEncounterDebtLedger,
-  type EncounterDebtLedger
-} from "./learner/encounter-debt-ledger";
-import {
+  createTeachRecordStore,
   resetSugarlangLearnerDatabases,
-  type SugarlangLearnerDataResetResult
-} from "./learner/reset-learner-data";
-import { LearnerStateReducer } from "./learner/learner-state-reducer";
+  type CardStore,
+  type EncounterDebtLedger,
+  type SugarlangLearnerDataResetResult,
+  type TeachRecordStore
+} from "./learner";
 import {
   PlacementQuestionnaireLoader
 } from "./placement/placement-questionnaire-loader";
@@ -92,10 +90,10 @@ import {
   SUGARLANG_PLACEMENT_WRITER,
   createLearnerProfileFactScope,
   createSugarlangPlacementStatusScope,
-  getSugarlangPlacementStatus
-} from "./learner/fact-definitions";
-import { isInPostPlacementCalibration } from "./learner/calibration-window";
-import type { PlacementCompletionEvent } from "./learner/learner-state-reducer";
+  getSugarlangPlacementStatus,
+  isInPostPlacementCalibration,
+  type PlacementCompletionEvent
+} from "./learner";
 
 export interface SugarlangExecutionServices {
   profileId: string;
@@ -138,11 +136,11 @@ export interface SugarlangDebugState {
   pinned: boolean;
   pinnedBand: CEFRBand | null;
   /** 085.3: lemma cards in the learner store (excludes chunk cards). */
-  lemmaCards: import("./contracts/learner-profile").LemmaCard[];
+  lemmaCards: import("./learner").LemmaCard[];
   /** 085.3: chunk cards (lemmaId starts with "chunk:") in the learner store. */
-  chunkCards: import("./contracts/learner-profile").LemmaCard[];
+  chunkCards: import("./learner").LemmaCard[];
   /** 085.5: teach records written for realized competencies. */
-  teachRecords: import("./learner/teach-record-store").TeachRecord[];
+  teachRecords: import("./learner").TeachRecord[];
 }
 
 export interface SugarlangRuntimeServicesOptions {

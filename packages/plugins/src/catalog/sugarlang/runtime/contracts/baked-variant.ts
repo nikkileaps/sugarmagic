@@ -33,7 +33,7 @@
  * read.
  */
 
-import type { CEFRBand } from "./learner-profile";
+import type { CEFRBand } from "../cefr";
 import type { GradedTextRecord } from "./graded-text";
 
 export type {

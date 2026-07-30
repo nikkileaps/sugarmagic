@@ -21,7 +21,7 @@
  * Status: active
  */
 
-import type { CEFRBand } from "../contracts/learner-profile";
+import type { CEFRBand } from "../cefr";
 import type { BakedLineVariant } from "../contracts/baked-variant";
 import type { GradedTextSource } from "../contracts/graded-text";
 

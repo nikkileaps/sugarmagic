@@ -47,7 +47,7 @@ import {
 import type { SchedulerBoardView } from "./scheduler-board-view";
 import type { ScheduledTeachable, TeachReason, TeachSchedule } from "./teach-schedule";
 import { estimateSceneComprehensionRate, STRETCH_COMPREHENSION_FLOOR } from "./comprehension-rate";
-import { CEFR_BAND_ORDER } from "../contracts/learner-profile";
+import { CEFR_BAND_ORDER } from "../learner";
 
 /**
  * 090.9: `DUE_RETRIEVABILITY_FLOOR` and `FLUENCY_RETRIEVABILITY_FLOOR` moved to
@@ -58,11 +58,11 @@ import { CEFR_BAND_ORDER } from "../contracts/learner-profile";
 export {
   DUE_RETRIEVABILITY_FLOOR,
   FLUENCY_RETRIEVABILITY_FLOOR
-} from "../learner/learning-status";
+} from "../learner";
 import {
   DUE_RETRIEVABILITY_FLOOR,
   FLUENCY_RETRIEVABILITY_FLOOR
-} from "../learner/learning-status";
+} from "../learner";
 
 /**
  * 087.4: When fatigueScore reaches this threshold, the scheduler enters strain-suppressed

@@ -26,7 +26,7 @@ import type {
   LexicalPrescriptionInput,
   SceneLemmaInfo
 } from "../types";
-import { CEFR_BAND_ORDER } from "../learner/cefr-posterior";
+import { CEFR_BAND_ORDER } from "../cefr";
 import { seedCardFromAtlas } from "./fsrs-adapter";
 import { buildLexicalRationale } from "./rationale";
 import { scoreBatch, type LemmaScore } from "./scoring";

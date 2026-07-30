@@ -22,7 +22,7 @@ import {
   SUGARLANG_PLACEMENT_WRITER,
   createSugarlangPlacementStatusScope,
   getSugarlangPlacementStatus
-} from "../learner/fact-definitions";
+} from "../learner";
 import {
   createNoOpTelemetrySink,
   createTelemetryEvent,

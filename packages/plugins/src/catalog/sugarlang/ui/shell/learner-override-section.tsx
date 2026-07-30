@@ -22,7 +22,7 @@ import { PanelSection } from "@sugarmagic/ui";
 import type { SugarlangDebugState } from "../../runtime/runtime-services";
 // 090.9: a seventh copy of the band order, rendering the picker in order.
 // Folded into the canonical declaration so a band change reaches the UI too.
-import { CEFR_BAND_ORDER as BANDS } from "../../runtime/contracts/learner-profile";
+import { CEFR_BAND_ORDER as BANDS } from "../../runtime/learner";
 
 
 

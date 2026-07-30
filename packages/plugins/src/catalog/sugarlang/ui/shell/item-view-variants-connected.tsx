@@ -27,7 +27,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge, Button, Group, Stack, Text } from "@mantine/core";
 import type { ItemDefinition } from "@sugarmagic/domain";
-import type { CEFRBand } from "../../runtime/contracts/learner-profile";
+import type { CEFRBand } from "../../runtime/cefr";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
 import { createVariantAuthoringClient } from "./editor-support";
 

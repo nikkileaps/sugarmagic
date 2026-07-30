@@ -24,7 +24,7 @@
  * Status: active
  */
 
-import type { CEFRBand } from "./learner-profile";
+import type { CEFRBand } from "../cefr";
 import type { LemmaRef } from "./lexical-prescription";
 
 /**

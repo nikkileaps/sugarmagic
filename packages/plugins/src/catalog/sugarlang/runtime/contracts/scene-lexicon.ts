@@ -23,7 +23,7 @@
  */
 
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
-import type { CEFRBand } from "./learner-profile";
+import type { CEFRBand } from "../cefr";
 
 /**
  * Canonical cache-key shape for compiled scene lexicons.

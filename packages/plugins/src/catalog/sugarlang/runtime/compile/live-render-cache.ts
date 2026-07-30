@@ -15,7 +15,7 @@
  * Status: active
  */
 
-import type { CEFRBand } from "../contracts/learner-profile";
+import type { CEFRBand } from "../cefr";
 import type { SupportPosture } from "../contracts/pedagogy";
 import type { VariantVerdict } from "../contracts/baked-variant";
 

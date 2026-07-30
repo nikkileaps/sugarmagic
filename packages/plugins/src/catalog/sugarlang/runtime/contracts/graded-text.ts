@@ -32,7 +32,7 @@
  * paying for.
  */
 
-import type { CEFRBand } from "./learner-profile";
+import type { CEFRBand } from "../cefr";
 
 /**
  * What kind of authored text a graded record came from.
