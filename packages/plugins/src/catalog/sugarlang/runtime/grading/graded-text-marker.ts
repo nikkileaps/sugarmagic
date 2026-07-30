@@ -27,18 +27,36 @@
  * at runtime and only the MARKING half survives.
  *
  * IT IS DEMOTED BUT NOT YET REDUCED, AND THAT IS THE NEXT STEP.
- *   The target contract is presentation ONLY: hand it finished text plus what
- *   that text teaches, and it finds those terms and marks them for display.
- *   Nothing more.
  *
- *   Today it still substitutes -- takes English, resolves through the atlas,
- *   swaps in target forms -- which is rendering, not presentation. It cannot
- *   stop while it is the thing PRODUCING the target-language text at A1/A2.
+ * THE TARGET CONTRACT: DIRECTIVE IN, MARKED-UP TEXT OUT.
+ *   It runs AFTER the Teacher. It reads the Directive -- what the Teacher chose
+ *   to teach -- walks the text the Teacher settled on, finds those terms, and
+ *   resolves each one's English for the mouseover.
+ *
+ *   It still uses the atlas, and that is fine, because the DIRECTION is what
+ *   separates the two jobs:
+ *
+ *     substitution (rendering)     resolveFromGloss: english -> target, rewrite
+ *     glossing (presentation)      getGloss:         target -> english, display
+ *
+ *   Only the first rewrites text. A lookup in service of display is presentation.
+ *
+ * TWO MISSES, TWO DIFFERENT ANSWERS -- neither of them silence:
+ *   - The term is NOT IN THE TEXT. The Directive says teach `queso`; there is no
+ *     `queso`. Nothing to mark, and that is a realization mismatch worth
+ *     REPORTING: what the Teacher decided and what the text says have drifted.
+ *   - The term is there but HAS NO GLOSS. Mark it anyway, as a glossless term --
+ *     visibly a taught word, just without a hover.
+ *
+ * TODAY IT STILL SUBSTITUTES -- takes English, resolves through the atlas, swaps
+ * in target forms -- which is rendering. It cannot stop while it is the thing
+ * PRODUCING the target-language text at A1/A2.
  *
  *   REVISIT TRIGGER: when 090.11 lands build-time realization for anchored and
  *   supported, the text arrives already realized. Delete `resolveSubstitution`
- *   and the rewrite loop then; keep the term-finding and the reporting. The exit
- *   to hold it to: the returned string is character-identical to the input.
+ *   and the rewrite loop then; keep the term-finding, add the gloss lookup and
+ *   the two miss reports. The exit to hold it to: the returned string is
+ *   character-identical to the input.
  *
  * Exports:
  *   - MarkedForm, GradedTextMarkResult

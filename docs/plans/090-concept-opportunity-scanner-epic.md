@@ -1244,15 +1244,34 @@ decide posture today", and I repeated it. That is true for scripted lines and
 false for agent turns, and the unqualified version made this look like a design
 change rather than a hole.
 
-**2. THE MARKER BECOMES PRESENTATION-ONLY.** nikki: *"the GradedTextMarker does
-presentation, it gets handed the information to mark up the words for the
-presentation to then display. THAT IS IT."*
+**2. THE MARKER BECOMES PRESENTATION-ONLY: DIRECTIVE IN, MARKED-UP TEXT OUT.**
 
-090.8 demoted it -- it chooses nothing -- but did not reduce it. `markGradedText`
-still SUBSTITUTES: takes English, resolves words through the atlas, swaps in
-target forms. That is rendering, not presentation. It cannot stop until the text
-arrives already realized, which is this story. After that its whole contract is:
-given finished text and what it teaches, find those terms and mark them.
+It runs AFTER the Teacher and consumes the Directive. It reads what the Teacher
+chose to teach, walks the text the Teacher settled on, finds those terms, and
+resolves each one's English for the mouseover.
+
+It still touches the atlas, and that is correct -- the DIRECTION is what
+separates the jobs:
+
+| Job | Call | Direction | Rewrites? |
+|---|---|---|---|
+| substitution (rendering) | `resolveFromGloss` | english -> target | yes |
+| glossing (presentation) | `getGloss` | target -> english | no |
+
+"Presentation-only" does not mean "no lookups"; it means no rewriting.
+
+TWO MISSES, TWO ANSWERS, NEITHER SILENT (nikki, 2026-07-30):
+
+- **Term not in the text.** The Directive says teach `queso` and there is no
+  `queso`. Nothing to mark, and it is a realization MISMATCH worth reporting --
+  what the Teacher decided and what the text says have drifted apart.
+- **Term present, no gloss.** Mark it anyway as a glossless term: visibly a
+  taught word, without a hover.
+
+090.8 demoted the marker -- it chooses nothing -- but did not reduce it.
+`markGradedText` still substitutes, because at A1/A2 it is the thing PRODUCING
+the target-language text. It cannot stop until the text arrives already realized,
+which is this story.
 
 SCOPE:
 
@@ -1267,10 +1286,16 @@ SCOPE:
 - Exit: `postureForBand` returns no hits outside git history; every consumer
   reads `directive.supportPosture` (pin -- posture is a decision, and a
   derivation sitting beside it is a second answer waiting to disagree).
-- `markGradedText` performs no substitution: it neither calls `resolveFromGloss`
-  nor rewrites text, asserted by handing it text and confirming the returned
-  string is character-identical to the input (pin -- the presentation-only
-  contract, and the assertion that cannot pass while it still swaps words).
+- `markGradedText` performs no substitution, asserted by handing it text and
+  confirming the returned string is CHARACTER-IDENTICAL to the input (pin -- the
+  assertion that cannot pass while it still swaps words). It may still call
+  `getGloss`; glossing is presentation. It must not call `resolveFromGloss`,
+  which is the rewriting direction.
+- A taught term with no available gloss is still marked, as a glossless term
+  (pin -- absent gloss must not read as "not taught").
+- A Directive naming a teachable that does not appear in the text produces a
+  reported MISMATCH, not silence (pin -- this is the signal that realization and
+  the text have drifted, and the whole point of realization is that they do not).
 - An A1 line renders from a baked variant, and the render path makes zero gateway
   calls (pin -- asserted by call count, per 090.8).
 - Build produces A1 and A2 variants for a fixture scene (integration).
