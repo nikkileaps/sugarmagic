@@ -36,6 +36,7 @@ import {
 export type InvalidationReason =
   | "max_turns_exceeded"
   | "situation_change"
+  | "learner_change"
   | "quest_stage_change"
   | "location_change"
   | "player_code_switch"
@@ -76,7 +77,10 @@ export class DirectiveCache {
    * debug readout or an inspector wanted to display it. Anything that is not
    * taking a turn must call this.
    */
-  peek(conversationId: string, situationKeyNow?: string): PedagogicalDirective | null {
+  peek(
+    conversationId: string,
+    keysNow?: { situationKey?: string; learnerKey?: string }
+  ): PedagogicalDirective | null {
     const envelope = this.blackboard.getFact(
       ACTIVE_DIRECTIVE_FACT,
       createActiveDirectiveFactScope(conversationId)
@@ -88,14 +92,32 @@ export class DirectiveCache {
 
     const current = envelope.value;
 
-    // The situation is the real axis: a decision made for a different situation
-    // is wrong now, however few turns it has consumed.
+    // TWO AXES, CHECKED SEPARATELY (090.4).
+    //
+    // A decision is valid while the WORLD it was made for still holds AND the
+    // LEARNER it was made for still holds. Those change for entirely unrelated
+    // reasons -- a quest advances, or a word finally lands -- and merging them
+    // into one key would make "the player learned something" indistinguishable
+    // from "the player walked somewhere".
     if (
-      situationKeyNow !== undefined &&
+      keysNow?.situationKey !== undefined &&
       current.situationKey !== undefined &&
-      current.situationKey !== situationKeyNow
+      current.situationKey !== keysNow.situationKey
     ) {
       this.invalidate(conversationId, "situation_change");
+      return null;
+    }
+
+    // The learner half. This is what closes the loop that already ran end to
+    // end and had nobody listening: produce a word -> observe -> FSRS -> the
+    // item's LearningStatus flips -> this key moves -> re-slate against what
+    // they now know.
+    if (
+      keysNow?.learnerKey !== undefined &&
+      current.learnerKey !== undefined &&
+      current.learnerKey !== keysNow.learnerKey
+    ) {
+      this.invalidate(conversationId, "learner_change");
       return null;
     }
 
@@ -115,8 +137,11 @@ export class DirectiveCache {
   /**
    * Reads the directive AND spends a turn on it. For the turn path only.
    */
-  get(conversationId: string, situationKeyNow?: string): PedagogicalDirective | null {
-    const directive = this.peek(conversationId, situationKeyNow);
+  get(
+    conversationId: string,
+    keysNow?: { situationKey?: string; learnerKey?: string }
+  ): PedagogicalDirective | null {
+    const directive = this.peek(conversationId, keysNow);
     if (!directive) {
       return null;
     }
@@ -144,7 +169,7 @@ export class DirectiveCache {
   set(
     conversationId: string,
     directive: PedagogicalDirective,
-    options: { situationKey?: string; now?: number } = {}
+    options: { situationKey?: string; learnerKey?: string; now?: number } = {}
   ): void {
     const now = options.now ?? this.now();
     this.blackboard.setFact({
@@ -158,7 +183,10 @@ export class DirectiveCache {
         turnsConsumed: 0,
         ...(options.situationKey === undefined
           ? {}
-          : { situationKey: options.situationKey })
+          : { situationKey: options.situationKey }),
+        ...(options.learnerKey === undefined
+          ? {}
+          : { learnerKey: options.learnerKey })
       },
       updatedAtMs: now
     });

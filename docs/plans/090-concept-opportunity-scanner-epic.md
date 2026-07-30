@@ -4,7 +4,7 @@ Status: DRAFT -- NOT LOCKED. epic-review has run 7 rounds (2026-07-28, -29). Rou
 
 Round 7 WRAP, and it is the finding no review round produced: the demolition itself was never a story. `prescribe()`'s deletion lived in a prose section with no exit line and was sequenced last, so the epic would have shipped with the budgeter and the slate both authoritative -- the exact condition this epic exists to remove. **090.10 Delete the prescriber** is new and has grep exits. The gate was auditing claims about code; the gap was a missing acceptance line, which is a different class of defect and argues the rounds had stopped paying for themselves.
 
-Not locked. The ARCHITECTURE is stable -- seven rounds, four reviewers, zero challenges to situation -> slate -> realization or to standing-vs-action. What kept churning was the demolition inventory and the prose. 090.1 and 090.2 are untouched by every finding in rounds 5-7 and can be built now; 090.3 / 090.4 / 090.8 / 090.10 scope is explicitly provisional and will be finished by opening the files.
+Not locked. The ARCHITECTURE is stable -- seven rounds, four reviewers, zero challenges to situation -> slate -> realization or to learning-status-vs-action. What kept churning was the demolition inventory and the prose. 090.1 and 090.2 are untouched by every finding in rounds 5-7 and can be built now; 090.3 / 090.4 / 090.8 / 090.10 scope is explicitly provisional and will be finished by opening the files.
 
 The model this plan must satisfy: `packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md`.
 
@@ -821,7 +821,7 @@ atlas-existence check:
 
 | Line | Path | What it does |
 |---|---|---|
-| `:251-257` | **anchored/supported -- the A1/A2 cell** | APPENDS validated facts to `introduce`. No slate, no standing, no band envelope, no cap. |
+| `:251-257` | **anchored/supported -- the A1/A2 cell** | APPENDS validated facts to `introduce`. No slate, no learning status, no band envelope, no cap. |
 | `:426-431` | target-dominant baked variant | REPLACES `introduce` wholesale. |
 
 `:251-257` is the more serious: it is on the A1/A2 path this epic calls its
@@ -1359,7 +1359,7 @@ SCOPE:
 
 WHAT THE TEACHER PRODUCES CHANGES. Not a per-turn answer -- a **slate**: what
 this learner should be working on in this situation. Stable until the situation
-key moves or standing changes materially. 090.8 applies it per text.
+key moves or the learner key moves. 090.8 applies it per text.
 
 FIRST, PUT THE TEACHER BACK ON THE PATH. This story cannot be verified at all
 until the 087.6 schedule-driven branch is resolved, because that branch bypasses
@@ -1456,7 +1456,7 @@ THE FALLBACK POLICY NEEDS REWRITING, NOT JUST REWIRING.
 `FallbackTeacherPolicy.decide` is built entirely from `context.prescription`
 (fallback-teacher-policy.ts:124-127, :145-146). Removing `prescription` from
 `TeacherContext` breaks it, and its exit below depends on it working. Re-source
-it from situation + standing in this story.
+it from situation + LearningStatus in this story.
 
 `repairDirective` IS A SECOND PRESCRIPTION-MEMBERSHIP ENFORCER. It filters
 `targetVocab` against `getPrescriptionSet(...)` (schema-parser.ts:658-672) and
@@ -1745,7 +1745,7 @@ as a thing the Teacher can read.
 BIND TO THE EXISTING CONSTANTS; DO NOT RE-DECLARE THEM. Round 5 finding -- an
 exhaustiveness pin cannot catch a duplicated threshold, so name the sources:
 
-| Standing | Existing source |
+| LearningStatus | Existing source |
 |---|---|
 | `due` | `DUE_RETRIEVABILITY_FLOOR = 0.7` (outer-loop-scheduler.ts:52) |
 | `known` | `FLUENCY_RETRIEVABILITY_FLOOR = 0.90` (outer-loop-scheduler.ts:68) |
@@ -1800,8 +1800,8 @@ reach. The two retrievability floors DID move into `runtime/learner/`, off
 `outer-loop-scheduler`, because they define learner facts and only lived in the
 scheduler because 087 needed them first.
 
-- Exit: standing is derivable for any (learner, lemma) without invoking the
-  budgeter (pin); the five values are exhaustive and total (pin); standing
+- Exit: LearningStatus is derivable for any (learner, lemma) without invoking
+  the budgeter (pin); the five values are exhaustive and total (pin); it
   declares no threshold constant of its own, asserted by grep for `0.7` / `0.90`
   in the new module (pin); ONE ORDER-DEPENDENT CEFR band declaration repo-wide --
   scoped to literals used with `indexOf` / `slice` / comparison, explicitly
@@ -1943,10 +1943,10 @@ The budgeter is **five** jobs, not four. An earlier draft named four; round 5
 found the fifth by grepping the prescription's consumers rather than reasoning
 from the model. They leave in this order:
 
-1. **Eligibility -> LEARNER** (090.9). Standing becomes readable without the
+1. **Eligibility -> LEARNER** (090.9). LearningStatus becomes readable without the
    budgeter.
 2. **Ranking -> TEACHER** (090.4). The slate is produced from situation +
-   standing, not from `priorityScores`.
+   LearningStatus, not from `priorityScores`.
 3. **Sourcing -> SITUATION** (090.2 + 090.4). Concepts reach the Teacher through
    the situation, not through `lemmas` membership.
 4. **Rationing -> LEARNER capacity** (090.5), applied at realization (090.8).
@@ -1972,7 +1972,7 @@ needing a named owner before `prescribe()` can go:
 
 | Consumer | Producing line | Owner |
 |---|---|---|
-| `FallbackTeacherPolicy` builds its whole directive from it | fallback-teacher-policy.ts:124-127, :145-146 | 090.4 rewrites it onto situation + standing |
+| `FallbackTeacherPolicy` builds its whole directive from it | fallback-teacher-policy.ts:124-127, :145-146 | 090.4 rewrites it onto situation + LearningStatus |
 | `repairDirective` filters against it AND defaults to it | schema-parser.ts:658-672, :695-698 | 090.4 |
 | scripted constraint reads it with no Teacher at all | sugar-lang-teacher-middleware.ts:246-248 | 090.8 |
 | **087.5 live render spends an unbudgeted per-line LLM call** | sugar-lang-scripted-middleware.ts:295-393 | **090.4** -- same decision as the 087.6 branch (it bypasses the prescription entirely, so no budgeter deletion reaches it) |

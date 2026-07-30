@@ -15,6 +15,7 @@
  */
 
 import { traceTeacherDirective } from "./teacher-trace";
+import { learnerKey } from "../learner";
 import { isInPostPlacementCalibration } from "./calibration-mode";
 import { DirectiveCache } from "./directive-cache";
 import { FallbackTeacherPolicy } from "./policies/fallback-teacher-policy";
@@ -58,10 +59,16 @@ export class SugarLangTeacher {
       ...context,
       calibrationActive
     };
-    const cached = this.cache.get(
-      effectiveContext.conversationId,
-      effectiveContext.situationKey
-    );
+    // 090.4: the learner key is computed HERE rather than carried on the
+    // context, because it must reflect the learner as of THIS turn -- the whole
+    // point is catching a change that happened since the last decision.
+    const keysNow = {
+      ...(effectiveContext.situationKey === undefined
+        ? {}
+        : { situationKey: effectiveContext.situationKey }),
+      learnerKey: learnerKey(effectiveContext.learner)
+    };
+    const cached = this.cache.get(effectiveContext.conversationId, keysNow);
     if (cached) {
       await emitTelemetry(
         this.telemetry,
@@ -121,11 +128,7 @@ export class SugarLangTeacher {
       });
     }
 
-    this.cache.set(effectiveContext.conversationId, directive, {
-      ...(effectiveContext.situationKey === undefined
-        ? {}
-        : { situationKey: effectiveContext.situationKey })
-    });
+    this.cache.set(effectiveContext.conversationId, directive, keysNow);
     await emitTelemetry(
       this.telemetry,
       createTelemetryEvent("director.invocation-resolved", {

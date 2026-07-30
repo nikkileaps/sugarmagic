@@ -30,6 +30,20 @@ import { languageDisplayName } from "../language-names";
  * lookup, the competency still appears by id rather than vanishing. Silent
  * omission here is precisely how competency teaching disappeared before.
  */
+/**
+ * 090.4: THE PROMPT-SHAPING CAP.
+ *
+ * The slate is a working set for a whole situation and may hold several items;
+ * a single NPC line cannot carry them all, and handing a generator a long list
+ * of words to "use naturally" produces a sentence that is a list.
+ *
+ * So the cap lives HERE, at the point where the slate becomes an instruction,
+ * rather than on what the Teacher may choose. `avoid` already capped at 12; its
+ * neighbours did not, which is the asymmetry this fixes.
+ */
+const MAX_PROMPT_INTRODUCE = 2;
+const MAX_PROMPT_REINFORCE = 4;
+
 function listTeachables(
   refs: TeachableRef[],
   describeCompetency?: (ref: CompetencyRef) => string
@@ -70,8 +84,8 @@ export function buildGeneratorPromptOverlay(
 ): string {
   const lines = [
     formatTargetLanguageGuidance(constraint),
-    `Reinforce vocabulary (weave naturally into your reply, not their English translations): ${listTeachables(constraint.targetVocab.reinforce, describeCompetency) || "(none)"}.`,
-    `Introduce vocabulary (try to use naturally this turn, not their English translations): ${listTeachables(constraint.targetVocab.introduce, describeCompetency) || "(none)"}. Do not substitute their English equivalents. These words do NOT need to be about you or your current activity. You can mention them in passing, as an observation, a rumor, a memory, a question, or just ambient scene description. Do not invent actions or goals for yourself to justify using these words.`,
+    `Reinforce vocabulary (weave naturally into your reply, not their English translations): ${listTeachables(constraint.targetVocab.reinforce.slice(0, MAX_PROMPT_REINFORCE), describeCompetency) || "(none)"}.`,
+    `Introduce vocabulary (try to use naturally this turn, not their English translations): ${listTeachables(constraint.targetVocab.introduce.slice(0, MAX_PROMPT_INTRODUCE), describeCompetency) || "(none)"}. Do not substitute their English equivalents. These words do NOT need to be about you or your current activity. You can mention them in passing, as an observation, a rumor, a memory, a question, or just ambient scene description. Do not invent actions or goals for yourself to justify using these words.`,
     `Forbidden vocabulary (use simpler synonyms): ${listTeachables(constraint.targetVocab.avoid.slice(0, 12), describeCompetency) || "(none)"}.`,
     `CEFR envelope: learner is ${constraint.learnerCefr}; keep >=95% of lemmas at or below ${constraint.learnerCefr}+1 band.`,
     `Support posture: ${constraint.supportPosture}. Target-language ratio: ${constraint.targetLanguageRatio}. Sentence complexity: ${constraint.sentenceComplexityCap}.`,

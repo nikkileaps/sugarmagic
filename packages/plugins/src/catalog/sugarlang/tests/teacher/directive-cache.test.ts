@@ -65,12 +65,10 @@ describe("DirectiveCache", () => {
     // situation is WRONG, not merely old, so it goes however few turns it has
     // consumed.
     const { cache } = createCache();
-    cache.set("conversation-1", createDirectiveFixture(), {
-      situationKey: "scene:dock|quest:q1/stage-1"
-    });
+    cache.set("conversation-1", createDirectiveFixture(), { situationKey: "scene:dock|quest:q1/stage-1" });
 
-    expect(cache.get("conversation-1", "scene:dock|quest:q1/stage-1")).not.toBeNull();
-    expect(cache.get("conversation-1", "scene:dock|quest:q1/stage-2")).toBeNull();
+    expect(cache.get("conversation-1", { situationKey: "scene:dock|quest:q1/stage-1" })).not.toBeNull();
+    expect(cache.get("conversation-1", { situationKey: "scene:dock|quest:q1/stage-2" })).toBeNull();
   });
 
   it("keeps a directive across turns while the situation is unchanged", () => {
@@ -81,10 +79,10 @@ describe("DirectiveCache", () => {
     const key = "scene:dock|quest:q1/stage-1";
     cache.set("conversation-1", createDirectiveFixture(), { situationKey: key });
 
-    expect(cache.peek("conversation-1", key)).not.toBeNull();
-    expect(cache.peek("conversation-1", key)).not.toBeNull();
-    expect(cache.peek("conversation-1", key)).not.toBeNull();
-    expect(cache.peek("conversation-1", key)).not.toBeNull();
+    expect(cache.peek("conversation-1", { situationKey: key })).not.toBeNull();
+    expect(cache.peek("conversation-1", { situationKey: key })).not.toBeNull();
+    expect(cache.peek("conversation-1", { situationKey: key })).not.toBeNull();
+    expect(cache.peek("conversation-1", { situationKey: key })).not.toBeNull();
   });
 
   it("a quest-stage blackboard event alone no longer retires anything", () => {
@@ -107,7 +105,7 @@ describe("DirectiveCache", () => {
       }
     });
 
-    expect(cache.peek("conversation-1", key)).not.toBeNull();
+    expect(cache.peek("conversation-1", { situationKey: key })).not.toBeNull();
   });
 
   it("an unverifiable directive is not treated as matching", () => {
@@ -116,10 +114,10 @@ describe("DirectiveCache", () => {
     const { cache } = createCache();
     cache.set("conversation-1", createDirectiveFixture());
 
-    expect(cache.get("conversation-1", "any-key")).not.toBeNull();
-    expect(cache.get("conversation-1", "any-key")).not.toBeNull();
-    expect(cache.get("conversation-1", "any-key")).not.toBeNull();
-    expect(cache.get("conversation-1", "any-key")).toBeNull();
+    expect(cache.get("conversation-1", { situationKey: "any-key" })).not.toBeNull();
+    expect(cache.get("conversation-1", { situationKey: "any-key" })).not.toBeNull();
+    expect(cache.get("conversation-1", { situationKey: "any-key" })).not.toBeNull();
+    expect(cache.get("conversation-1", { situationKey: "any-key" })).toBeNull();
   });
 
   it("peek reads without spending a turn; get spends one", () => {
@@ -138,6 +136,44 @@ describe("DirectiveCache", () => {
     cache.get("conversation-1");
     cache.get("conversation-1");
     expect(cache.get("conversation-1")).toBeNull();
+  });
+
+  it("retires a directive when the LEARNER changes, independently of the situation", () => {
+    // 090.4, and the whole point of two keys. The world is identical -- same
+    // scene, same quest, same hour -- but the learner produced a word and its
+    // LearningStatus flipped. That is a reason to re-decide, and with a single
+    // merged key it would have been indistinguishable from the player walking
+    // somewhere.
+    const { cache } = createCache();
+    const situationKey = "scene:dock|quest:q1/stage-1";
+    cache.set("conversation-1", createDirectiveFixture(), {
+      situationKey,
+      learnerKey: "before-queso-landed"
+    });
+
+    expect(
+      cache.peek("conversation-1", { situationKey, learnerKey: "before-queso-landed" })
+    ).not.toBeNull();
+    expect(
+      cache.peek("conversation-1", { situationKey, learnerKey: "after-queso-landed" })
+    ).toBeNull();
+  });
+
+  it("keeps the two axes separate -- a learner change does not need a situation change", () => {
+    // Pin against the shortcut of folding learner state into the situation key.
+    // If someone ever merges them, this test still passes with situationKey
+    // alone moving -- so it asserts the situation key is UNCHANGED while the
+    // directive retires.
+    const { cache } = createCache();
+    const situationKey = "scene:dock|quest:q1/stage-1";
+    cache.set("conversation-1", createDirectiveFixture(), {
+      situationKey,
+      learnerKey: "k1"
+    });
+
+    const retired = cache.peek("conversation-1", { situationKey, learnerKey: "k2" });
+
+    expect(retired).toBeNull();
   });
 
   it("supports manual invalidation", () => {
@@ -174,8 +210,8 @@ describe("DirectiveCache", () => {
       }
     });
 
-    expect(cache.peek("conversation-1", key)).not.toBeNull();
+    expect(cache.peek("conversation-1", { situationKey: key })).not.toBeNull();
     // ...but a key naming the new scene does retire it.
-    expect(cache.peek("conversation-1", "scene:platform|quest:q1/stage-1")).toBeNull();
+    expect(cache.peek("conversation-1", { situationKey: "scene:platform|quest:q1/stage-1" })).toBeNull();
   });
 });

@@ -39,6 +39,7 @@ import type {
 import { createSugarlangLogger } from "../logger";
 import { languageDisplayName } from "../language-names";
 import { buildInterpretLexiconFromInventory } from "../inventory/competency-inventory-loader";
+import { createCompetencyDescriber } from "../inventory/describe-competency";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_COMPREHENSION_IN_FLIGHT_ANNOTATION,
@@ -505,7 +506,12 @@ export function createSugarLangTeacherMiddleware(
         ...(prePlacementOpeningLine ? { prePlacementOpeningLine } : {})
       };
 
-      constraint.generatorPromptOverlay = buildGeneratorPromptOverlay(constraint);
+      // 090.4: the describer was an unwired parameter until now, so every
+      // competency reached the NPC as a bare id it could not act on.
+      constraint.generatorPromptOverlay = buildGeneratorPromptOverlay(
+        constraint,
+        createCompetencyDescriber(constraint.targetLanguage)
+      );
       // Plan 073.4 — minimalGreetingMode is a PEDAGOGICAL brevity signal only
       // (short opening for a conservative beginner). First-meeting vs
       // repeat-visit semantics belong to SugarAgent's memory mechanic, not

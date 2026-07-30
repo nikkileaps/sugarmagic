@@ -57,6 +57,15 @@ const MAX_RECENT_TURNS = 4;
 const MAX_SCENE_LEMMAS = 6;
 const MAX_STRUGGLING_LEMMAS = 4;
 const MAX_RECENTLY_ACTIVE = 6;
+/**
+ * How many introduce items the Teacher may put on a slate.
+ *
+ * A situation-scoped working set, not a per-turn quota -- see the note above
+ * DIRECTOR_HARD_CONSTRAINTS_PROMPT. Six is small enough to stay coherent and
+ * large enough that a conversation is not locked to whatever fit its opening
+ * line.
+ */
+const MAX_SLATE_INTRODUCE = 6;
 
 export interface DirectorPrompt {
   system: string;
@@ -66,16 +75,17 @@ export interface DirectorPrompt {
 
 export const DIRECTOR_SYSTEM_ROLE_PROMPT = `You are the Sugarlang Teacher.
 
-Your job is to choose the pedagogical shape of exactly one upcoming NPC turn.
-You do not write the line itself. You return a JSON directive that the Generator
-will follow.`;
+Your job is to decide what this learner should be working on in this situation.
+You do not write any line yourself. You return a JSON directive that the
+Generator follows across the turns this situation lasts -- so choose a working
+set that suits the moment, not a single sentence.`;
 
 export const DIRECTOR_PEDAGOGICAL_RUBRIC_PROMPT = `PEDAGOGICAL RUBRIC:
 
 - Preserve the illusion of normal in-character conversation.
 - Prefer the language and length of natural response that fits the moment in the conversation and situation.
-- The situation tells you what this moment is about. You do NOT need to teach everything it affords in a single turn. Pick 1-2 introduce items that fit naturally here; the rest keep.
-- The words you choose should feel organic, not forced. If a word doesn't fit the moment, leave it for the next turn.
+- The situation tells you what this moment is about. Choose the items it genuinely affords; the Generator picks which of them fit each individual turn.
+- What you choose should feel organic, not forced. If something does not belong in this situation at all, leave it out.
 - If nothing fits this moment, do NOT force teaching. A brief greeting or short social response is acceptable.
 - Reinforcement words can surface more naturally than new introductions.
 - For low-confidence learners, keep sentence structure simple, but still try to include what you chose to teach.`;
@@ -152,18 +162,29 @@ ${RATIO_GUIDANCE_LINES}
  * cheese-obsessed character. It did not fail to think of it. It was not allowed
  * to say it.
  *
- * The count cap SURVIVES and is deliberate. De-truncation (letting the slate
- * itself grow past the budgeter's top-3) is a separate change ordered behind
- * 090.8's prompt-shaping cap, because `generator-prompt-overlay.ts` renders
- * `targetVocab.introduce` uncapped into the agent prompt. Removing the
- * membership fence widens WHAT the Teacher may choose; it must not also widen
- * HOW MANY, or an unbounded list goes straight into a prompt.
+ * THE COUNT INSTRUCTION WAS WRONG AFTER 090.3b AND IT TOOK A PLAYTHROUGH TO SEE.
+ *
+ * It used to read "1-2 items that fit THIS TURN". That was right while the
+ * Teacher ran every turn. Once the situation key became the invalidation axis
+ * and `maxTurns` went 3 -> 20, ONE directive governs an entire conversation --
+ * so "1-2 items for this turn" silently became "1-2 items for the whole
+ * conversation", chosen before the learner had said anything.
+ *
+ * Observed: turn 1 was an opening greeting, the Teacher reasonably picked a
+ * greeting competency, and cheese was then locked out for the rest of the
+ * conversation. That is the pre-truncation the epic exists to remove,
+ * reintroduced by changing the lifecycle without changing the instruction that
+ * assumed the old one.
+ *
+ * A slate is a WORKING SET. The cap that matters is not on what the Teacher may
+ * choose but on what reaches the agent prompt at once -- which is enforced in
+ * `generator-prompt-overlay.ts`, not here.
  */
 export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 
 - Choose targetVocab from what this situation makes teachable.
 - Only use lemmas that exist in the target language; never invent words.
-- Your targetVocab.introduce output should contain only 1-2 items that fit this turn naturally. Do not force several items into one turn.
+- You are choosing a WORKING SET for this whole situation, not a single turn. Pick up to ${MAX_SLATE_INTRODUCE} introduce items that this situation genuinely affords. The NPC will use whichever fit each turn; you do not need to make them all fit one line.
 - If a hard probe floor is active, you must trigger a comprehension check this turn.
 - Target lemmas for comprehension checks must come from the pending provisional list.
 - Keep citedSignals short and factual.`;

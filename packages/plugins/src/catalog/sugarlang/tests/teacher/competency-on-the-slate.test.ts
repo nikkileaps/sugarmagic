@@ -28,6 +28,7 @@
 import { describe, expect, it } from "vitest";
 import { parseDirective, repairDirective } from "../../runtime/teacher/schema-parser";
 import { buildGeneratorPromptOverlay } from "../../runtime/middlewares/generator-prompt-overlay";
+import { createCompetencyDescriber } from "../../runtime/inventory/describe-competency";
 import {
   competencyRefs,
   vocabularyRefs,
@@ -106,6 +107,58 @@ describe("a competency can be taught", () => {
     const overlay = buildGeneratorPromptOverlay(constraintWith([ASK_WHERE, QUESO]));
 
     expect(overlay).toContain("queso");
+    expect(overlay).toContain("ask-where");
+  });
+
+  it("the REAL describer turns an id into something an NPC can perform", () => {
+    // Found in play: the overlay's describer parameter was never passed, so a
+    // competency reached the generator as `greeting-informal` -- an id it cannot
+    // act on. The NPC said "hola" because it would have anyway, and nothing was
+    // taught. The seam existed and was unconnected, which is worse than absent
+    // because it looked finished.
+    //
+    // Against the SHIPPED inventory, not a fixture: the claim is about what the
+    // real curriculum can describe.
+    const describe = createCompetencyDescriber("es");
+    const overlay = buildGeneratorPromptOverlay(
+      constraintWith([{ kind: "competency", competencyId: "greet", lang: "es" }]),
+      describe
+    );
+
+    expect(overlay).toContain("Can greet people in a simple way");
+    expect(overlay).toContain("hola");
+    expect(overlay).not.toContain("Introduce vocabulary (try to use naturally this turn, not their English translations): greet.");
+  });
+
+  it("caps how much of the slate reaches one NPC turn", () => {
+    // The slate is a working set for a whole situation; a single line cannot
+    // carry it. Uncapped, the generator receives a list of words to "use
+    // naturally" and writes a sentence that is a list.
+    //
+    // The cap belongs here rather than on what the Teacher may choose -- the
+    // Teacher's job is deciding what the situation affords, not rationing it.
+    const six: TeachableRef[] = ["queso", "barca", "oficio", "saludo", "maleta", "billete"].map(
+      (lemmaId) => ({ kind: "vocabulary" as const, lemmaId, lang: "es" })
+    );
+    const overlay = buildGeneratorPromptOverlay(constraintWith(six));
+
+    const introduceLine = overlay
+      .split("\n")
+      .find((line) => line.startsWith("Introduce vocabulary"));
+    const named = six.filter((ref) =>
+      introduceLine?.includes(ref.kind === "vocabulary" ? ref.lemmaId : "")
+    );
+
+    expect(named).toHaveLength(2);
+  });
+
+  it("degrades to the id rather than dropping the competency", () => {
+    // A missing inventory must leave an unhelpful id in the prompt, never remove
+    // the competency -- those look the same in the output and mean opposite
+    // things.
+    const describe = createCompetencyDescriber("xx-not-a-language");
+    const overlay = buildGeneratorPromptOverlay(constraintWith([ASK_WHERE]), describe);
+
     expect(overlay).toContain("ask-where");
   });
 

@@ -77,6 +77,14 @@ export interface ActiveDirectiveFactValue {
    * applies.
    */
   situationKey?: string;
+  /**
+   * 090.4: what the learner knew when this was decided.
+   *
+   * SEPARATE from situationKey on purpose -- the world and the person change for
+   * unrelated reasons, and collapsing them into one key would mean a quest
+   * advancing looked the same as a word being learned.
+   */
+  learnerKey?: string;
 }
 
 export const DEFAULT_SUGARLANG_PLACEMENT_STATUS: SugarlangPlacementStatus = {

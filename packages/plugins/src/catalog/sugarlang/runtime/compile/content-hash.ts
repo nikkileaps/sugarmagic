@@ -36,7 +36,11 @@ function rightRotate(value: number, amount: number): number {
   return (value >>> amount) | (value << (32 - amount));
 }
 
-function sha256Hex(input: string): string {
+/**
+ * Exported 090.4 so the learner key can reuse it. A second hash implementation
+ * for the same job is the duplication this epic keeps deleting.
+ */
+export function sha256Hex(input: string): string {
   const encoder = new TextEncoder();
   const bytes = Array.from(encoder.encode(input));
   const bitLength = bytes.length * 8;

@@ -59,6 +59,7 @@ export {
   updatePosterior
 } from "./cefr-posterior";
 
+export { learnerKey } from "./learner-key";
 export {
   DUE_RETRIEVABILITY_FLOOR,
   FLUENCY_RETRIEVABILITY_FLOOR,
