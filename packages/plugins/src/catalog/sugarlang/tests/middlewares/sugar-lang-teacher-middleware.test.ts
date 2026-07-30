@@ -84,6 +84,47 @@ describe("SugarLangTeacherMiddleware", () => {
     });
   });
 
+  it("gives an A1 scripted line 30% target language, from the shared table", async () => {
+    // 090.8b. This is the pin that was missing: the scripted branch carried its
+    // own 0.2/0.5/0.8 table for months, disagreeing with band-envelope's
+    // 0.3/0.65/0.85, and NO test noticed when the fold changed it -- because the
+    // only 0.2s in this file are mock teacher RETURN values, which assert
+    // nothing about what the scripted branch produces.
+    //
+    // Asserting the constraint the middleware writes, not the table it reads:
+    // a test on the table would have passed throughout the divergence.
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi
+            .fn()
+            .mockResolvedValue(createTestLearnerProfile({ estimatedCefrBand: "A1" }))
+        },
+        teacher: { invoke: vi.fn() }
+      })
+    });
+    const middleware = createSugarLangTeacherMiddleware({
+      services: services as never
+    });
+    const execution = createTestExecution({
+      selection: {
+        conversationKind: "scripted-dialogue",
+        npcDefinitionId: "npc-1",
+        npcDisplayName: "Marisol",
+        targetLanguage: "es",
+        supportLanguage: "en",
+        metadata: {}
+      }
+    });
+
+    await middleware.prepare?.(execution);
+
+    expect(execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).toMatchObject({
+      supportPosture: "anchored",
+      targetLanguageRatio: 0.3
+    });
+  });
+
   it("non-scripted mode without a prescription returns without writing a constraint", async () => {
     const invokeTeacher = vi.fn();
     const services = createServicesStub({

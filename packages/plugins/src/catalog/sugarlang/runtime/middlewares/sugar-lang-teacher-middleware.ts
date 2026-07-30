@@ -234,14 +234,16 @@ export function createSugarLangTeacherMiddleware(
       if (isScriptedMode(execution)) {
         const targetLanguage =
           execution.selection.targetLanguage ?? learner.targetLanguage;
-        const posture =
-          learner.estimatedCefrBand === "A1" ? "anchored" as const
-            : learner.estimatedCefrBand === "A2" ? "supported" as const
-            : "target-dominant" as const;
-        const ratio =
-          posture === "anchored" ? 0.2
-            : posture === "supported" ? 0.5
-            : 0.8;
+        // 090.8b: was an inlined band ternary plus its own 0.2/0.5/0.8 table --
+        // a second answer to "how much target language at this band", living
+        // alongside band-envelope's 0.3/0.65/0.85. Both were real and they
+        // disagreed. 087.6 recorded the divergence and deferred the fold until
+        // "scripted rendering next changes"; this is that change.
+        //
+        // PLAYER-VISIBLE: A1 scripted lines move from 20% to 30% target
+        // language. nikki's call, 2026-07-30.
+        const posture = postureForBand(learner.estimatedCefrBand);
+        const ratio = TARGET_LANGUAGE_RATIO_BY_POSTURE[posture];
         // anchored/supported: "hover-only" because the weave places bare citation
         // forms and the observe middleware delivers gloss data via dialogueHighlight.
         // target-dominant: "none" -- the baked variant text is target-language already.

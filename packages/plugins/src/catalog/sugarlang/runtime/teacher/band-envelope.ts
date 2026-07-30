@@ -27,11 +27,18 @@ import type { CEFRBand, PedagogicalDirective } from "../types";
 /**
  * Directed target-language share per posture. One table, repo-wide.
  *
- * NOTE (087.6): the scripted middleware still carries its own pre-existing
- * 0.2/0.5/0.8 table (sugar-lang-scripted-middleware.ts, shipped in 086) for the
- * weave/baked-variant path. Folding that path onto this table is a behavior
- * change to shipped scripted rendering and is deliberately NOT done here --
- * revisit when scripted rendering next changes, and delete its inline table then.
+ * FOLDED 2026-07-30 (Plan 090.8b). 087.6 recorded a second, divergent table --
+ * 0.2/0.5/0.8 -- and deferred merging it until "scripted rendering next
+ * changes". 090.8 is that change, so the trigger fired and the inline table is
+ * gone. This is now the only target-language ratio in the codebase.
+ *
+ * The 087.6 note said that table lived in the scripted middleware; it was
+ * actually in the TEACHER middleware, which is where it was deleted from. The
+ * scripted middleware only ever read the resulting `constraint.targetLanguageRatio`.
+ *
+ * PLAYER-VISIBLE CONSEQUENCE of the fold: A1 scripted lines went from 20% to 30%
+ * target language. nikki's call. If beginner dialogue suddenly reads as denser,
+ * this is why -- it is intended, not a regression.
  */
 export const TARGET_LANGUAGE_RATIO_BY_POSTURE = {
   anchored: 0.3,
