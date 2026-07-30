@@ -70,7 +70,32 @@ export interface CoverageProfile {
  * Whether measured target-language ratio meets the directed target.
  * "skipped" means the denominator was below the minimum-denominator guard.
  */
-export type RatioConformance = "conformant" | "under-ratio" | "skipped";
+/**
+ * 090.4 ADDED `over-ratio`, AND ITS ABSENCE WAS A REAL BUG.
+ *
+ * The type had only `under-ratio`, so "far too much target language" was not an
+ * expressible verdict -- anything at or above the floor was `conformant`,
+ * including a reply that was 90% Spanish against a directed 0.3.
+ *
+ * That made sense when it was written: the failure everyone was chasing was
+ * English-only output, so the verifier was built to catch too LITTLE. Observed
+ * in play: an A1 learner got a full-Spanish, multi-clause explanation of
+ * seasonal cheese, and nothing could even name what was wrong with it.
+ *
+ * The overshoot is not random. Two structural causes, both in the generator
+ * prompt rather than here -- the conversation few-shots itself off its own
+ * unannotated history, and a proportion ("30%") is enforced alongside a count
+ * ("use these four words"), which only agree at one reply length. See
+ * docs/backlog/009-target-language-ratio-drift.md. This ceiling stops the
+ * runaway; it does not remove the ratchet.
+ *
+ * A one-sided check on a two-sided quantity is worth suspecting on sight.
+ */
+export type RatioConformance =
+  | "conformant"
+  | "under-ratio"
+  | "over-ratio"
+  | "skipped";
 
 /**
  * Per-turn verdict on whether the output meets the directed language ratio.

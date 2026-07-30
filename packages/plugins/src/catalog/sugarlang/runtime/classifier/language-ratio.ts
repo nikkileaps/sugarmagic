@@ -42,11 +42,30 @@ function resolveFailFloor(posture: SupportPosture, directedRatio: number): numbe
 }
 
 /**
+ * The ceiling above which a reply is carrying too MUCH target language.
+ *
+ * Deliberately looser than the floor and not posture-keyed. Overshoot is a
+ * comprehensibility failure -- a beginner drowning -- and the tolerance should
+ * scale with how much target language was asked for: 0.3 directed allows up to
+ * 0.6, while 0.85 directed allows essentially anything, because at that posture
+ * the learner is expected to swim.
+ *
+ * The absolute floor of 0.35 keeps a very low directed ratio from making the
+ * ceiling so tight that ordinary lumpy prose trips it. Text is not smooth; one
+ * Spanish clause in a short reply is a big fraction.
+ */
+function resolveFailCeiling(directedRatio: number): number {
+  return Math.max(0.35, Math.min(1, directedRatio * 2));
+}
+
+/**
  * Compute the language-ratio verdict from a coverage profile.
  *
  * measuredRatio = resolvedTargetLanguageTokens / ratioCheckTokens.
  * Returns conformance "skipped" below MIN_RATIO_CHECK_DENOMINATOR.
- * Returns "under-ratio" when measuredRatio is grossly below the directed target.
+ * Returns "under-ratio" when measuredRatio is grossly below the directed target,
+ * and "over-ratio" when it is grossly above -- both directions are failures, and
+ * only the first one used to exist.
  */
 export function computeLanguageRatioVerdict(
   profile: CoverageProfile,
@@ -61,7 +80,13 @@ export function computeLanguageRatioVerdict(
   }
 
   const failFloor = resolveFailFloor(posture, directedRatio);
-  const conformance: RatioConformance = measuredRatio < failFloor ? "under-ratio" : "conformant";
+  const failCeiling = resolveFailCeiling(directedRatio);
+  const conformance: RatioConformance =
+    measuredRatio < failFloor
+      ? "under-ratio"
+      : measuredRatio > failCeiling
+        ? "over-ratio"
+        : "conformant";
 
   return { measuredRatio, directedRatio, posture, conformance };
 }

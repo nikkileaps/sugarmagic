@@ -77,14 +77,29 @@ interface RepairResult {
 
 function scoreCandidateVerdict(verdict: EnvelopeVerdict): Omit<CandidateScore, "voiceRetentionScore"> {
   const directed = verdict.languageRatioVerdict.directedRatio;
-  const ratioFraction = directed > 0
-    ? Math.min(verdict.languageRatioVerdict.measuredRatio / directed, 1)
-    : 1;
+  const measured = verdict.languageRatioVerdict.measuredRatio;
+
+  // 090.4: SCORED ON DISTANCE FROM THE TARGET, not on "did we reach it".
+  //
+  // This was `Math.min(measured / directed, 1)`, which caps at 1 -- so a reply
+  // three times over the directed ratio scored EXACTLY the same as one that hit
+  // it. Overshoot was invisible to selection as well as to the pass gate, so
+  // among several candidates the most over-the-top one could win on coverage
+  // with nothing pulling the other way.
+  const ratioFraction =
+    directed > 0 ? Math.max(0, 1 - Math.abs(measured - directed) / directed) : 1;
+
   return {
     score: verdict.profile.coverageRatio * 0.5 + ratioFraction * 0.5,
-    passes: verdict.withinEnvelope && verdict.languageRatioVerdict.conformance !== "under-ratio",
+    // Both directions fail. `over-ratio` did not exist as a verdict until 090.4,
+    // so "too much target language" was unrejectable -- an A1 learner could be
+    // handed a full-Spanish paragraph and every gate passed it.
+    passes:
+      verdict.withinEnvelope &&
+      verdict.languageRatioVerdict.conformance !== "under-ratio" &&
+      verdict.languageRatioVerdict.conformance !== "over-ratio",
     coverageRatio: verdict.profile.coverageRatio,
-    measuredRatio: verdict.languageRatioVerdict.measuredRatio,
+    measuredRatio: measured,
     conformance: verdict.languageRatioVerdict.conformance
   };
 }
