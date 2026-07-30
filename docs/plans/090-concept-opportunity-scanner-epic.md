@@ -1244,21 +1244,42 @@ decide posture today", and I repeated it. That is true for scripted lines and
 false for agent turns, and the unqualified version made this look like a design
 change rather than a hole.
 
-**2. THE MARKER BECOMES PRESENTATION-ONLY: DIRECTIVE IN, MARKED-UP TEXT OUT.**
+**2. THE MARKER BECOMES MARKUP: DIRECTIVE IN, ROLE-TAGGED SPANS OUT.**
 
-It runs AFTER the Teacher and consumes the Directive. It reads what the Teacher
-chose to teach, walks the text the Teacher settled on, finds those terms, and
-resolves each one's English for the mouseover.
+It runs AFTER the Teacher and consumes the Directive. It assigns each matched
+span a SEMANTIC ROLE from a closed set (nikki's vocabulary, 2026-07-30):
 
-It still touches the atlas, and that is correct -- the DIRECTION is what
-separates the jobs:
+```
+focus | recall | challenge | ambient | unmarked
+```
 
-| Job | Call | Direction | Rewrites? |
-|---|---|---|---|
-| substitution (rendering) | `resolveFromGloss` | english -> target | yes |
-| glossing (presentation) | `getGloss` | target -> english | no |
+**IT DOES NOT BUILD THE HOVER.** It does not style, gloss, or decide behavior --
+it says "this span is a focus word" and the PRESENTATION layer decides what that
+looks like, whether it gets a gloss hover, and how it behaves. Two vocabularies;
+the marker speaks only the first. (I wrote this contract twice before getting it
+right -- first as "presentation only, no atlas", then as "it resolves the English
+for the mouseover". Both wrong: it is markup, and the hover is downstream.)
 
-"Presentation-only" does not mean "no lookups"; it means no rewriting.
+**SPANS, NOT WORDS. PHRASE RESOLUTION BELONGS HERE.** `buenos dias` is ONE
+thing: one underline, one hover, one translation. Marked word-by-word it becomes
+two glosses for half a greeting -- and the presentation layer cannot repair that,
+because by the time it sees two spans the fact that they were one unit is gone.
+Multi-word wins: a competency exponent beats its constituent words.
+
+Do not hand-roll it. `createChunkMatcher` (classifier/chunk-matcher.ts) is a trie
+with longest-match already (:128-131). Drive it from `getAllInventoryChunks(lang)`,
+NOT from a scene's chunks -- those hold authored text only and never contain the
+dynamic phrases an NPC actually says.
+
+**THIS IS WHERE LLM OUTPUT BECOMES PROCEDURAL, AND THAT IS THE RISK.** nikki:
+*"that's where shit hits the fan a lot of the time."* The Directive is model
+output; the role vocabulary is a closed enum; this layer is the boundary. The
+failure mode is silent, because an unmapped element renders as `unmarked`, which
+is indistinguishable from "not taught".
+
+So the mapping must be TOTAL and unmappable must be LOUD. `unmarked` must never
+be a fallback -- it is the value meaning "nothing here", and defaulting to it
+absorbs every mapping failure invisibly.
 
 TWO MISSES, TWO ANSWERS, NEITHER SILENT (nikki, 2026-07-30):
 
@@ -1291,8 +1312,15 @@ SCOPE:
   assertion that cannot pass while it still swaps words). It may still call
   `getGloss`; glossing is presentation. It must not call `resolveFromGloss`,
   which is the rewriting direction.
-- A taught term with no available gloss is still marked, as a glossless term
-  (pin -- absent gloss must not read as "not taught").
+- A multi-word exponent produces ONE span, not one per word: `buenos dias` marks
+  as a single unit and its constituent words do not mark separately (pin -- the
+  presentation layer cannot recombine them afterwards).
+- A Directive element that maps to no role is REPORTED, never silently left
+  `unmarked` (pin -- `unmarked` means "nothing here", so using it as a fallback
+  makes every LLM-to-procedural mapping failure invisible; this is the boundary
+  where that class of bug lives).
+- A taught term the presentation layer cannot gloss is still marked (pin --
+  absent gloss must not read as "not taught").
 - A Directive naming a teachable that does not appear in the text produces a
   reported MISMATCH, not silence (pin -- this is the signal that realization and
   the text have drifted, and the whole point of realization is that they do not).

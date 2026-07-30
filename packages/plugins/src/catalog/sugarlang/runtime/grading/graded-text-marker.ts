@@ -28,25 +28,49 @@
  *
  * IT IS DEMOTED BUT NOT YET REDUCED, AND THAT IS THE NEXT STEP.
  *
- * THE TARGET CONTRACT: DIRECTIVE IN, MARKED-UP TEXT OUT.
+ * THE TARGET CONTRACT: DIRECTIVE IN, MARKED-UP SPANS OUT.
  *   It runs AFTER the Teacher. It reads the Directive -- what the Teacher chose
- *   to teach -- walks the text the Teacher settled on, finds those terms, and
- *   resolves each one's English for the mouseover.
+ *   to teach -- walks the text the Teacher settled on, and assigns each matched
+ *   span a SEMANTIC ROLE from a closed set:
  *
- *   It still uses the atlas, and that is fine, because the DIRECTION is what
- *   separates the two jobs:
+ *     focus | recall | challenge | ambient | unmarked
  *
- *     substitution (rendering)     resolveFromGloss: english -> target, rewrite
- *     glossing (presentation)      getGloss:         target -> english, display
+ *   IT DOES NOT BUILD THE HOVER. It does not style, gloss, or decide behavior.
+ *   It says "this span is a focus word"; the PRESENTATION layer decides what a
+ *   focus word looks like, whether it gets a gloss hover, and how it behaves.
+ *   Two vocabularies, and this file speaks only the first.
  *
- *   Only the first rewrites text. A lookup in service of display is presentation.
+ * SPANS, NOT WORDS -- PHRASE RESOLUTION HAPPENS HERE.
+ *   `buenos dias` is ONE thing: one underline, one hover, one translation. Marked
+ *   word-by-word it becomes two glosses for half a greeting, which is wrong in a
+ *   way the presentation layer cannot repair -- by the time it has two spans the
+ *   information that they were one unit is gone.
+ *
+ *   So the unit is a SPAN and multi-word wins: a competency exponent beats its
+ *   own constituent words. Do NOT hand-roll this. `createChunkMatcher`
+ *   (classifier/chunk-matcher.ts) is a trie that already does longest-match
+ *   (:128-131). Drive it from `getAllInventoryChunks(lang)` -- NOT from a
+ *   scene's chunks, which contain only authored text and never the dynamic
+ *   phrases an NPC actually says.
+ *
+ * THE HARD PART IS THAT THIS IS WHERE LLM OUTPUT BECOMES PROCEDURAL.
+ *   The Directive is model output. The role vocabulary above is a closed enum.
+ *   This file is the boundary between them, and that boundary is where things
+ *   break -- silently, because the failure renders as `unmarked`, which is
+ *   indistinguishable from "not taught".
+ *
+ *   So: the mapping must be TOTAL, and unmappable must be LOUD. Every Directive
+ *   element resolves to exactly one role or is reported unmappable. `unmarked`
+ *   must never be a fallback -- it is the value meaning "nothing here", and
+ *   defaulting to it makes every mapping failure invisible.
  *
  * TWO MISSES, TWO DIFFERENT ANSWERS -- neither of them silence:
  *   - The term is NOT IN THE TEXT. The Directive says teach `queso`; there is no
  *     `queso`. Nothing to mark, and that is a realization mismatch worth
  *     REPORTING: what the Teacher decided and what the text says have drifted.
- *   - The term is there but HAS NO GLOSS. Mark it anyway, as a glossless term --
- *     visibly a taught word, just without a hover.
+ *   - The term is there but the presentation layer has no gloss for it. Still
+ *     marked, as a span whose gloss is unavailable -- visibly a taught word.
+ *     Absent gloss must not read as "not taught".
  *
  * TODAY IT STILL SUBSTITUTES -- takes English, resolves through the atlas, swaps
  * in target forms -- which is rendering. It cannot stop while it is the thing
