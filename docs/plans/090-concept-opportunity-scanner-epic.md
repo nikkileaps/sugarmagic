@@ -715,13 +715,61 @@ lifetime: the budgeter keeps working, reading the same values from the atlas.
 
 ### 090.8 Realization -- NEW, and the most valuable story here
 
-**Given one piece of authored text, which of the slate's items does it teach.**
+**Given one piece of text, which vocabulary and competencies does it teach.**
 
-REALIZATION IS STRATEGY-DEPENDENT. This is the correction that matters most in
-this story, and an earlier draft of it got this wrong by assuming one shape.
+REWRITTEN 2026-07-30 (nikki). The design below replaces a two-strategy model --
+"substitute into authored text" vs "shape a generation prompt" -- with ONE
+operation run at two moments. The old framing rested on a claim that turned out
+to be false, and most of this story's complexity was downstream of it.
 
-The Teacher sets POSTURE. Posture selects a RENDERER. The two renderers realize
-a slate in fundamentally different ways:
+THE FALSE CLAIM: "AUTHORED ENGLISH CANNOT BE REWRITTEN, SO YOU CAN ONLY TEACH
+WORDS PHYSICALLY PRESENT IN IT." Authored text is ALREADY rewritten -- that is
+what baked variants are. The real constraint was never immutability; it is that
+the rewrite happens at build, keyed `{promptVersion, lang, band, contentHash}`
+(variant-cache.ts:82), with **no learner in the key**. Intersection-only teaching
+was a property of ONE technique (runtime token substitution), stated as if it
+were a law about text.
+
+THE OPERATION. Hand the Teacher a piece of text, the situation, and the learner
+if there is one:
+
+> *Here is what the NPC is about to say. Here is where this learner is. Here are
+> vocabulary and competencies worth teaching. Pick what is teachable IN THIS
+> TEXT. You may adjust the text a little -- not much, a little.*
+
+Out comes the text plus a record of what it now teaches. That is realization, and
+it is the same operation everywhere:
+
+| Moment | Learner available? | Result |
+|---|---|---|
+| build / rebuild | **no** -- situation with no runtime overlay | variants, baked per band |
+| runtime, scripted line | yes | already baked; read it |
+| runtime, agent turn | yes | realized live, against the drafted reply |
+
+BUILD-TIME REALIZATION IS LEARNER-BLIND, AND THAT IS ACCEPTED. A variant baked
+before anyone plays teaches what is teachable in that text at that band -- scene-
+and band-appropriate, not tuned to a person. An earlier draft of this rewrite
+proposed baking a FAMILY of variants per line and selecting at runtime by fit
+against the slate; nikki cut it as machinery for a problem that does not need
+solving yet. Band- and scene-appropriate is already enormously better than the
+status quo, which substitutes from the entire dictionary at or below band.
+
+The composition already supports this with no new shape: `composeSituation`
+(090.3) is total, so a call with a sceneId and no runtime context yields a
+situation whose every live fact is unavailable -- which IS the compile half
+alone.
+
+DIRECTION OF TRAVEL: A1/A2 SHOULD STOP BEING A SPECIAL RUNTIME PATH. Once the
+marker below is a pure renderer, there is no reason anchored/supported text is
+woven at runtime while target-dominant text is baked. Both are the same
+operation; only the moment differs. Not this story's scope, but this story must
+not entrench the split.
+
+---
+
+The posture table below is retained because it still describes what the RENDERERS
+do and where the slate can reach them. Read it as a survey of today, not as the
+target design:
 
 | Posture / surface | Renderer | How the slate is realized | Is "what got taught" knowable in advance? |
 |---|---|---|---|
@@ -794,15 +842,19 @@ two gateway calls (generate at graded-text-service.ts:317, fidelity judge at
 
 The model budgets **zero** LLM per rendered line or item
 (domain-model-after-epic-090.md:210). **That invariant is already false today**
--- row four is a live per-line call. An earlier draft asserted it as an untouched
-property; it is a property this epic must either restore (delete row four) or
-consciously except (keep it, and amend the model). Say which. Recommend deleting
-row four: it is the only thing standing between this epic and a true zero-LLM
-realization layer, and it is **production-reachable but never tested** -- 087
-turned it on (087:21, :113) and its own outstanding list records that "no test
-ever FIRES the live-render trigger" (087:143). A round-6 draft read that as
-"unfired path", which is backwards and made deletion sound safer than it is:
-deleting it is a behavior change to a live path, just an untested one.
+-- row four is a live per-line call.
+
+DECIDED 2026-07-30 (nikki): **delete it.** The work it does moves to build, where
+an LLM call per line is exactly what we want -- once, never in play. That is the
+whole reason for moving realization to build time, and keeping a runtime call
+alongside it would preserve the cost this design exists to remove.
+
+Stated honestly, because the deletion is not free: it is **production-reachable
+but never tested** -- 087 turned it on (087:21, :113) and its own outstanding
+list records that "no test ever FIRES the live-render trigger" (087:143). A
+round-6 draft read that as "unfired path", which is backwards. Deleting it is a
+behavior change to a live path; it is just an unobserved one, so nothing will
+fail loudly if the replacement is wrong.
 
 The honest consequence for row two, stated plainly because an earlier draft
 asserted both halves at once: **the slate does not shape B1+ authored item
@@ -810,8 +862,18 @@ text.** The variant was baked without a learner. Classification-after-the-fact i
 the only slate-relevant output there is. Do not "fix" this by calling `adapt` at
 runtime.
 
-THE WEAVE HAS NO ENGLISH-SIDE LEMMATIZATION, AND THE OLD EXIT FIXTURE COULD NOT
-HAVE PASSED. Round 6 finding; I re-measured it directly against the shipped
+THE ENGLISH-LEMMATIZATION GAP LARGELY DISSOLVES UNDER THE REWRITE, but the
+measurement is kept because it explains what the old design was fighting and what
+the marker must still not attempt.
+
+Runtime substitution needed an exact English→lemma lookup, so it broke on any
+inflected form. Once the Teacher rewrites the text at build, nothing needs to
+resolve `travellers` to a lemma -- the Teacher wrote the sentence and reported
+what it teaches. The gap only survives where something still SCANS English text,
+which after this story is the marker (finding terms in finished text) rather than
+a substituter (deciding what to replace).
+
+Round 6 finding, measured directly against the shipped
 `data/languages/es/cefrlex.json` primary-gloss index:
 
 | English surface in the fixture | resolves to |
@@ -837,12 +899,16 @@ This is the same mechanism as line 27's "'cheesemonger' and 'cheeses' both miss
 'cheese'", which the plan had filed only against the compile scrub. It bites the
 weave identically, and no story owned it.
 
-Decision: **English-side normalization is OUT of 090.8's scope** -- it is a
-separate concern (an English lemmatizer or a widened gloss index) with its own
-risk surface, and folding it in would make this story
-unbounded. Instead: the fixture uses BASE FORMS, and the gap goes to Deferred
-with a trigger. The epic still shows a beginner Spanish words; it shows them for
-base-form English only.
+Decision: **English-side normalization stays OUT of scope** -- a separate concern
+(an English lemmatizer or a widened gloss index) with its own risk surface.
+Fixtures use BASE FORMS and the gap goes to Deferred with a trigger.
+
+REVISIT TRIGGER, sharpened by the rewrite: the gap stops mattering for TEACHING
+once realization is baked, because the Teacher writes the sentence rather than
+matching against it. It still matters for MARKING -- if the marker misses
+`quesos` because it only knows `queso`, the player loses a gloss on a word that
+is genuinely being taught. So revisit when the marker's miss rate on inflected
+target forms becomes visible, not before.
 
 Consequences the story must honour:
 
@@ -863,14 +929,19 @@ Consequences the story must honour:
   This is open decision C, and it is now clearly two answers rather than a
   choice between two.
 
-THE WEAVER IS A RENDERER, NOT A DECIDER. `diglotWeave` makes no judgment -- it
-tokenizes, resolves through the atlas, and substitutes what it is handed. It
-belongs to *the model RENDERS*, not *the Teacher decides*, and it should not be
-folded into the Teacher: that would pull tokenization and citation forms into a
-decision boundary.
+THE WEAVER IS A RENDERER, NOT A DECIDER -- AND IT IS RENAMED `GradedTextMarker`.
+Decided 2026-07-30 (nikki): *"'weaver' was vague and stupid from the start."*
+Once the Teacher sees the text and picks what it teaches, there is nothing left
+to substitute. What remains is finding the target terms in the finished text and
+marking them for presentation -- highlight, gloss, hover. It stops being a weave
+the moment it stops inserting, so the name goes with the job.
 
-But it currently makes two decisions that are not its to make, and this story
-takes both away:
+`GradedTextMarker` sits with the family that already exists -- `GradedTextUnit`,
+`display-text-resolver` -- and the name states the job: mark graded text for
+display.
+
+It currently makes two decisions that are not its to make, and this story takes
+both away:
 
 1. **The pool** -- unowned, so each call site improvised. Fixed below.
 2. **The strategy choice** -- `isWeaveBand` (display-text-resolver.ts:63-65)
@@ -900,15 +971,35 @@ absence is the realization boundary.
 such seam; its own diagnosis at :96-101 is this finding stated in advance, and
 :107-113 schedules the revisit. **This story is what lands on that comment.**
 
-SCOPE:
+SCOPE (rewritten 2026-07-30):
 
-- A `realize(slate, standing, text, posture)` seam with TWO strategies behind
-  it, selected by posture -- substitution for anchored/supported, generation for
-  target-dominant. Not one function with a branch.
-- **The substitution strategy is the core of this story.** Pure, zero LLM, per narrative
-  unit, total in the same sense as `createDisplayTextResolver` -- absent inputs
-  yield authored text, never a throw. It owns the POOL (slate ∩ text) and the
-  per-text substitution count.
+- **A realization operation that takes text + situation + optional learner and
+  returns the text plus what it teaches.** ONE operation. The moment it runs
+  differs (build vs runtime); the operation does not. It may adjust the text
+  modestly -- the fidelity judge that already exists in `GradedTextService`
+  (:457) is what bounds "a little".
+- **`GradedTextMarker`** -- `diglotWeave` renamed and demoted. Pure, zero LLM,
+  total in the same sense as `createDisplayTextResolver`: absent inputs yield
+  authored text, never a throw. It does NOT choose a pool and does NOT choose a
+  strategy. It finds the target terms in finished text and marks them.
+- **Realization output feeds the highlight.** Observe becomes a READER of what
+  realization reported rather than a second, fuzzier matcher over the same turn.
+  This is what removes the standing disagreement between `findTermMatches` (a
+  loose regex over target forms) and the renderer (an exact lookup over English
+  glosses) about which terms are even present.
+- **Fold the ratio tables at 0.3/0.65/0.85.** nikki chose 30% for A1, 2026-07-30.
+  Delete the inline `0.2/0.5/0.8` at `sugar-lang-teacher-middleware.ts:233-236`
+  and read `TARGET_LANGUAGE_RATIO_BY_POSTURE`. Verified same quantity, same
+  posture keying, so this is a merge and not two lookalikes. The 087.6 note in
+  `band-envelope.ts` deferred this until "scripted rendering next changes" --
+  this story IS that change, so the trigger has fired. That note also misnames
+  the table's location (it says scripted middleware; it is the teacher
+  middleware); fix it when deleting.
+  **PLAYER-VISIBLE:** A1 scripted lines go from 20% to 30% target language. Say
+  so at wrap or it gets filed as a regression.
+- **Delete `isWeaveBand`** (display-text-resolver.ts:63-65), a copy of
+  `postureForBand`. De-duplication, not re-homing -- the Teacher does not decide
+  posture today and this story does not make it start.
 - **The prompt-shaping strategy caps `constraint.targetVocab` ITSELF -- both
   `introduce` AND `reinforce` -- not the overlay string.** In
   the same change as 090.4's de-truncation. Round 6 correction: round 5 named one
@@ -1066,6 +1157,28 @@ neither is read, so that rationale is struck.
 - Inflected English (`cheeses`, `heads`) is NOT expected to substitute, asserted
   explicitly (pin -- so the deferred gap is recorded as a known limit rather than
   rediscovered as a bug).
+
+ADDED BY THE 2026-07-30 REWRITE:
+
+- **Rendering a scripted line costs ZERO gateway calls**, asserted with a fake
+  gateway that fails the test if called at all (pin -- this is the invariant the
+  deleted live-render path was violating, and a call count is the only assertion
+  that cannot be satisfied by accident).
+- `diglotWeave` returns no hits outside git history; `GradedTextMarker` exists
+  and takes no pool-selection or strategy-selection argument (pin -- the rename
+  is only real if the decisions left with it).
+- **Realization reports what a text teaches, and the highlight reads THAT** --
+  not a second scan of the turn. Asserted by a case where the loose matcher and
+  the renderer would disagree: an English word that the fuzzy `\b<term>\w{0,4}\b`
+  matcher would light up (`come` matching "comes", `pan` matching "panel") is NOT
+  highlighted (pin -- the false-highlight risk, and the reason observe must
+  become a reader).
+- A build-time realization runs with **no learner** and still produces a variant
+  (pin -- the situation composes from the compile half alone, and the whole
+  build path depends on that being legal rather than degenerate).
+- The A1 target-language ratio read at render time is 0.3, from one table (pin --
+  paired with the grep above; a value pin without the grep passes on a duplicate,
+  and a grep without the value pin passes on the wrong number).
 
 ### 090.4 Teacher judgment: two doors in, a slate out
 
