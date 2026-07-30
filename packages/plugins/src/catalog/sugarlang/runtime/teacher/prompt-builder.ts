@@ -34,6 +34,7 @@
  */
 
 import type { TeacherContext } from "../types";
+import type { RuntimeFact } from "../situation";
 import {
   DIRECTOR_SYSTEM_TEMPLATE,
   DIRECTOR_USER_TEMPLATE,
@@ -41,6 +42,12 @@ import {
 } from "./prompt-template";
 
 const EMPTY_SECTION = "(none)";
+/**
+ * Distinct from `(none)` on purpose. `(none)` asserts a fact -- there is nothing
+ * here. `(unknown)` asserts nothing, because we could not read it. See
+ * `formatRuntimeFact`.
+ */
+const UNKNOWN_SECTION = "(unknown)";
 const MAX_DUE_LEMMAS = 8;
 const MAX_RECENT_TURNS = 4;
 const MAX_SCENE_LEMMAS = 6;
@@ -314,6 +321,59 @@ export function formatGameMoment(context: TeacherContext): string {
   ].join("\n");
 }
 
+/**
+ * Renders one runtime fact.
+ *
+ * THE WHOLE POINT IS THAT THESE THREE ARE DIFFERENT STRINGS:
+ *
+ *   unavailable            "(unknown)"   we could not read it
+ *   available, empty       "(none)"      we read it; there is nothing
+ *   available, non-empty   the values
+ *
+ * Collapsing the first two is how the Teacher ends up stating something we never
+ * knew -- "the player knows nothing" when the truth is "we could not find out".
+ * It teaches from that with full confidence, and no test fails.
+ *
+ * Implements: Plan 090 story 090.3
+ */
+function formatRuntimeFact<T>(
+  fact: RuntimeFact<T>,
+  render: (value: T) => string
+): string {
+  return fact.available ? render(fact.value) : UNKNOWN_SECTION;
+}
+
+/** SITUATION -- the live half of what the Teacher is deciding against. */
+export function formatSituation(context: TeacherContext): string {
+  const situation = context.situation;
+  if (!situation) {
+    return ["SITUATION:", `- ${UNKNOWN_SECTION}`].join("\n");
+  }
+
+  const runtime = situation.runtime;
+  return [
+    "SITUATION:",
+    `- scene: ${situation.sceneId}`,
+    `- about: ${formatRuntimeFact(
+      situation.sceneContext,
+      (model) => model.prose || EMPTY_SECTION
+    )}`,
+    `- current quest node: ${formatRuntimeFact(runtime.questObjectives, (fact) =>
+      listOrNone(fact.objectives.map((objective) => objective.displayName))
+    )}`,
+    `- quest stage: ${formatRuntimeFact(
+      runtime.questStage,
+      (stage) => stage.stageDisplayName ?? stage.stageId ?? EMPTY_SECTION
+    )}`,
+    `- time of day: ${formatRuntimeFact(runtime.timeOfDay, (band) => band)}`,
+    `- player has learned: ${formatRuntimeFact(runtime.knownFacts, listOrNone)}`,
+    `- recently in the world: ${formatRuntimeFact(
+      runtime.recentWorldEvents,
+      listOrNone
+    )}`
+  ].join("\n");
+}
+
 export function formatRecentDialogue(context: TeacherContext): string {
   const turns = context.recentTurns
     .slice(-MAX_RECENT_TURNS)
@@ -441,6 +501,7 @@ export function buildTeacherPrompt(context: TeacherContext): DirectorPrompt {
     learnerSummary: formatLearnerSummary(context),
     relationshipState: formatRelationshipState(context),
     sceneSnapshot: formatSceneSnapshot(context),
+    situation: formatSituation(context),
     npcContext: formatNpcContext(context),
     gameMoment: formatGameMoment(context),
     recentDialogue: formatRecentDialogue(context),

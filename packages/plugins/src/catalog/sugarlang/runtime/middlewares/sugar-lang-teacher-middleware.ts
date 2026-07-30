@@ -61,6 +61,7 @@ import {
   type SugarlangLoggerLike
 } from "./shared";
 import type { TeachSchedule } from "../scheduler/teach-schedule";
+import { composeSituation, situationKey } from "../situation";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
   getSentenceComplexityCap,
@@ -287,6 +288,18 @@ export function createSugarLangTeacherMiddleware(
         prePlacementOpeningLine || sceneId == null
           ? null
           : await services.sceneLexiconStore.ensure(sceneId);
+      // 090.3d: composed once per turn from the seeded compile half plus the
+      // runtime context. Null only when there is no scene at all -- a situation
+      // needs somewhere to BE, but needs nothing else.
+      const situation =
+        sceneId == null
+          ? null
+          : composeSituation({
+              sceneId,
+              sceneContext: deps.services.getSceneContext(sceneId),
+              runtimeContext: execution.runtimeContext
+            });
+
       let directive: PedagogicalDirective;
       const conversationId = getSugarlangConversationId(execution);
       const sessionId = getSugarAgentSessionId(execution);
@@ -415,6 +428,13 @@ export function createSugarLangTeacherMiddleware(
           learner,
           scene,
           atlas: services.atlas,
+          // 090.3d: the live half. Composed here because this is where the
+          // runtime context arrives on the execution object; `composeSituation`
+          // is total, so an absent context yields a situation whose every field
+          // says "unavailable" rather than no situation at all.
+          ...(situation === null
+            ? {}
+            : { situation, situationKey: situationKey(situation) }),
           prescription,
           npc: {
             npcDefinitionId: execution.selection.npcDefinitionId ?? null,

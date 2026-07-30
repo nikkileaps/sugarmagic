@@ -33,6 +33,9 @@ export const DIRECTOR_USER_TEMPLATE = [
   "{{learnerSummary}}",
   "{{relationshipState}}",
   "{{sceneSnapshot}}",
+  // 090.3d: the live half -- what is true in the world right now, as opposed to
+  // the scene snapshot above, which is the same on every visit.
+  "{{situation}}",
   "{{npcContext}}",
   "{{gameMoment}}",
   "{{recentDialogue}}",

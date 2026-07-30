@@ -30,6 +30,7 @@ import type { PedagogicalDirective } from "./pedagogy";
 import type { CEFRBand } from "../cefr";
 import type { LearnerProfile, LemmaCard } from "../learner";
 import type { CefrPosterior } from "../learner";
+import type { Situation } from "../situation";
 import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
 import type { CompiledSceneLexicon } from "./scene-lexicon";
 
@@ -149,6 +150,14 @@ export interface TeacherContext {
    * rather than as valid.
    */
   situationKey?: string;
+  /**
+   * 090.3d: the live half -- what is true in the world right now.
+   *
+   * Optional because a caller may have none (a test, or a path with no runtime
+   * context). Absent renders as "(unknown)" in the prompt rather than as an
+   * empty situation, because those are different claims.
+   */
+  situation?: Situation;
   prescription: LexicalPrescription;
   npc: TeacherNpcContext;
   recentTurns: TeacherRecentTurn[];

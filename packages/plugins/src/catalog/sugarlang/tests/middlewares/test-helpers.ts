@@ -235,6 +235,13 @@ export function createServicesStub(overrides: Record<string, unknown> = {}) {
       }
     }),
     findNpcDefinition: () => null,
+    /**
+     * 090.3d: the teacher middleware composes a Situation every turn and reads
+     * the seeded compile half from here. Undefined is the honest default -- a
+     * scene that was never built -- and `composeSituation` handles it, so tests
+     * that do not care about scene context need no change.
+     */
+    getSceneContext: () => undefined,
     ...remainingOverrides
   };
 }
