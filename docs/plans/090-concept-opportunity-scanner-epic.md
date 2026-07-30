@@ -1221,16 +1221,56 @@ vanish rather than get fixed:
 
 A baked variant has none of these, because the Teacher wrote the sentence.
 
+TWO THINGS FINISH HERE THAT 090.8 COULD ONLY HALF-DO.
+
+**1. POSTURE BECOMES A TEACHER DECISION EVERYWHERE.** nikki, 2026-07-30:
+*"the posture should become a teacher decision."*
+
+It already IS one where the Teacher runs. Verified: `supportPosture` is in the
+Teacher's output schema (prompt-builder.ts:91), REQUIRED by the JSON validator
+(schema-parser.ts:104-106), and read straight onto the constraint
+(sugar-lang-teacher-middleware.ts:464). Agent turns get a Teacher-chosen posture
+today.
+
+`postureForBand` exists only to fill the hole on the SCRIPTED path, which skips
+the Teacher entirely (`isScriptedMode` returns before any call). So this is not a
+new capability -- it is a gap that closes on its own once scripted lines get
+their build-time Teacher call. The Teacher picks posture per line at bake time,
+the constraint reads it exactly as the agent path already does, and the band
+derivation has nothing left to serve.
+
+Correcting the record: an earlier note in this plan said "the Teacher does not
+decide posture today", and I repeated it. That is true for scripted lines and
+false for agent turns, and the unqualified version made this look like a design
+change rather than a hole.
+
+**2. THE MARKER BECOMES PRESENTATION-ONLY.** nikki: *"the GradedTextMarker does
+presentation, it gets handed the information to mark up the words for the
+presentation to then display. THAT IS IT."*
+
+090.8 demoted it -- it chooses nothing -- but did not reduce it. `markGradedText`
+still SUBSTITUTES: takes English, resolves words through the atlas, swaps in
+target forms. That is rendering, not presentation. It cannot stop until the text
+arrives already realized, which is this story. After that its whole contract is:
+given finished text and what it teaches, find those terms and mark them.
+
 SCOPE:
 
 - Run realization at build for anchored/supported, producing variants keyed like
-  every other band.
-- Delete `diglotWeave`'s substitution path; `GradedTextMarker` (090.8) is already
-  the only thing left standing on it.
+  every other band, WITH the Teacher choosing posture per line.
+- Delete the substitution half of `markGradedText`; what remains marks terms in
+  finished text for presentation.
+- Delete `postureForBand` -- posture comes from the directive on every path.
 - Retire the runtime pool question entirely -- there is no pool if nothing
   substitutes.
 
-- Exit: `diglotWeave` returns no hits outside git history (pin).
+- Exit: `postureForBand` returns no hits outside git history; every consumer
+  reads `directive.supportPosture` (pin -- posture is a decision, and a
+  derivation sitting beside it is a second answer waiting to disagree).
+- `markGradedText` performs no substitution: it neither calls `resolveFromGloss`
+  nor rewrites text, asserted by handing it text and confirming the returned
+  string is character-identical to the input (pin -- the presentation-only
+  contract, and the assertion that cannot pass while it still swaps words).
 - An A1 line renders from a baked variant, and the render path makes zero gateway
   calls (pin -- asserted by call count, per 090.8).
 - Build produces A1 and A2 variants for a fixture scene (integration).

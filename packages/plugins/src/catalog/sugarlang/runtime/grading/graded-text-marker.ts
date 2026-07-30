@@ -26,6 +26,20 @@
  * path entirely: once realization happens at build, nothing needs to substitute
  * at runtime and only the MARKING half survives.
  *
+ * IT IS DEMOTED BUT NOT YET REDUCED, AND THAT IS THE NEXT STEP.
+ *   The target contract is presentation ONLY: hand it finished text plus what
+ *   that text teaches, and it finds those terms and marks them for display.
+ *   Nothing more.
+ *
+ *   Today it still substitutes -- takes English, resolves through the atlas,
+ *   swaps in target forms -- which is rendering, not presentation. It cannot
+ *   stop while it is the thing PRODUCING the target-language text at A1/A2.
+ *
+ *   REVISIT TRIGGER: when 090.11 lands build-time realization for anchored and
+ *   supported, the text arrives already realized. Delete `resolveSubstitution`
+ *   and the rewrite loop then; keep the term-finding and the reporting. The exit
+ *   to hold it to: the returned string is character-identical to the input.
+ *
  * Exports:
  *   - MarkedForm, GradedTextMarkResult
  *   - markGradedText
