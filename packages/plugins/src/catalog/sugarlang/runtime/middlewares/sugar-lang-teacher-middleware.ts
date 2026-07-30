@@ -15,6 +15,7 @@
  * Status: active
  */
 
+import { teachableRefKey, toVocabularyRefs } from "../contracts/teachable-ref";
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
 import {
   buildGeneratorPromptOverlay,
@@ -29,6 +30,7 @@ import {
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type {
   ActiveQuestEssentialLemma,
+  LemmaRef,
   TeacherRecentTurn,
   PedagogicalDirective,
   ProbeFloorState,
@@ -253,9 +255,9 @@ export function createSugarLangTeacherMiddleware(
           generatorPromptOverlay: "",
           minimalGreetingMode: false,
           targetVocab: {
-            introduce: prescription?.introduce ?? [],
-            reinforce: prescription?.reinforce ?? [],
-            avoid: prescription?.avoid ?? []
+            introduce: toVocabularyRefs(prescription?.introduce ?? []),
+            reinforce: toVocabularyRefs(prescription?.reinforce ?? []),
+            avoid: toVocabularyRefs(prescription?.avoid ?? [])
           },
           supportPosture: posture,
           targetLanguageRatio: ratio,
@@ -487,8 +489,11 @@ export function createSugarLangTeacherMiddleware(
         ...(teacherQuestEssentialLemmas.length
           ? {
               questEssentialLemmas: teacherQuestEssentialLemmas.map(
+                // 090.4: quest-essential entries are genuinely word-shaped --
+                // an objective names a lemma, not an act -- so the annotation
+                // keeps LemmaRef and this stays a LemmaRef mapping.
                 (entry: {
-                  lemmaRef: SugarlangConstraint["targetVocab"]["introduce"][number];
+                  lemmaRef: LemmaRef;
                   sourceObjectiveDisplayName: string;
                   supportLanguageGloss: string;
                 }) => ({
@@ -565,9 +570,13 @@ export function createSugarLangTeacherMiddleware(
           interactionStyle: constraint.interactionStyle,
           glossingStrategy: constraint.glossingStrategy,
           sentenceComplexityCap: constraint.sentenceComplexityCap,
-          introduce: constraint.targetVocab.introduce.map((lemma) => lemma.lemmaId),
-          reinforce: constraint.targetVocab.reinforce.map((lemma) => lemma.lemmaId),
-          avoid: constraint.targetVocab.avoid.map((lemma) => lemma.lemmaId),
+          // 090.4: teachableRefKey rather than lemmaId -- telemetry logs
+          // identity, and a competency has one too. Narrowing to words here
+          // would make competency decisions invisible in the traces, which is
+          // the opposite of what telemetry is for.
+          introduce: constraint.targetVocab.introduce.map(teachableRefKey),
+          reinforce: constraint.targetVocab.reinforce.map(teachableRefKey),
+          avoid: constraint.targetVocab.avoid.map(teachableRefKey),
           comprehensionCheckActive:
             constraint.comprehensionCheckInFlight?.active ?? false,
           prePlacementOpeningLine: constraint.prePlacementOpeningLine ?? null

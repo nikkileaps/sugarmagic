@@ -14,6 +14,7 @@
  * Status: active
  */
 
+import { toVocabularyRefs } from "../../contracts/teachable-ref";
 import type {
   CEFRBand,
   TeacherContext,
@@ -141,9 +142,12 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
 
     return {
       targetVocab: {
-        introduce,
-        reinforce: [...context.prescription.reinforce],
-        avoid: [...context.prescription.avoid]
+        // 090.4: the fallback still sources from the prescription -- rewriting it
+        // onto situation + learning status is the next piece of this story. The
+        // lift is honest: these really are words.
+        introduce: toVocabularyRefs(introduce),
+        reinforce: toVocabularyRefs(context.prescription.reinforce),
+        avoid: toVocabularyRefs(context.prescription.avoid)
       },
       supportPosture,
       targetLanguageRatio: TARGET_LANGUAGE_RATIO_BY_POSTURE[supportPosture],

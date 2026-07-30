@@ -18,6 +18,7 @@
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
+import { toVocabularyRefs } from "../../runtime/contracts/teachable-ref";
 import {
   INITIAL_PRODUCTIVE_STRENGTH,
   INITIAL_PROVISIONAL_EVIDENCE,
@@ -174,9 +175,9 @@ describe("sugarlang runtime contracts", () => {
   it("accepts the full pedagogical directive and constraint shapes", () => {
     const directive: PedagogicalDirective = {
       targetVocab: {
-        introduce: [{ lemmaId: "hola", lang: "es" }],
-        reinforce: [{ lemmaId: "tren", lang: "es" }],
-        avoid: [{ lemmaId: "ferrocarril", lang: "es" }]
+        introduce: [{ kind: "vocabulary", lemmaId: "hola", lang: "es" }],
+        reinforce: [{ kind: "vocabulary", lemmaId: "tren", lang: "es" }],
+        avoid: [{ kind: "vocabulary", lemmaId: "ferrocarril", lang: "es" }]
       },
       supportPosture: "supported",
       targetLanguageRatio: 0.7,
@@ -498,7 +499,13 @@ describe("sugarlang runtime contracts", () => {
     };
     const teacherPolicy: TeacherPolicy = {
       invoke: async () => ({
-        targetVocab: prescription,
+        // 090.4: the directive's slate is TeachableRefs; a LexicalPrescription
+        // is LemmaRefs. Lifting rather than casting keeps the difference real.
+        targetVocab: {
+          introduce: toVocabularyRefs(prescription.introduce),
+          reinforce: toVocabularyRefs(prescription.reinforce),
+          avoid: toVocabularyRefs(prescription.avoid)
+        },
         supportPosture: "supported",
         targetLanguageRatio: 0.7,
         interactionStyle: "natural_dialogue",

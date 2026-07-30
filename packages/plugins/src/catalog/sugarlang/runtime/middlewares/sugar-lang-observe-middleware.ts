@@ -31,6 +31,7 @@ import {
   getAllInventoryChunks
 } from "../inventory/competency-inventory-loader";
 import { countDiverseEncounters } from "../learner";
+import { vocabularyRefs } from "../contracts/teachable-ref";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
@@ -84,11 +85,27 @@ function collectLemmasFromText(
     }));
 }
 
+/**
+ * 090.4: observe records evidence about WORDS -- a hover, an encounter, a
+ * production -- and its card store is keyed by lemmaId. So it narrows to the
+ * vocabulary half, explicitly.
+ *
+ * COMPETENCIES ARE NOT SERVED HERE AND THAT IS A KNOWN GAP, not a decision that
+ * they do not matter. A competency is evidenced by its exponents appearing in a
+ * turn, which is what the chunk matcher finds and what `chunk:` cards used to
+ * approximate by smuggling competencies through this lemma channel. Recording
+ * competency evidence properly needs the realization output (090.11) so observe
+ * can read what was actually taught rather than re-deriving it.
+ *
+ * Named narrowing rather than an inline `kind === "vocabulary"` so this gap is
+ * visible at every call site instead of looking like ordinary list handling.
+ */
 function buildTargetLemmaSet(constraint: SugarlangConstraint): Set<string> {
   return new Set(
-    [...constraint.targetVocab.introduce, ...constraint.targetVocab.reinforce].map(
-      (lemma) => lemma.lemmaId
-    )
+    [
+      ...vocabularyRefs(constraint.targetVocab.introduce),
+      ...vocabularyRefs(constraint.targetVocab.reinforce)
+    ].map((lemma) => lemma.lemmaId)
   );
 }
 
@@ -539,7 +556,7 @@ export function createSugarLangObserveMiddleware(
         // Distinguish introduce hover (positive first exposure) from reinforce
         // hover (needed help remembering). See observations.ts for the
         // pedagogical rationale behind the different FSRS grades.
-        const isIntroduceHover = constraint.targetVocab.introduce.some(
+        const isIntroduceHover = vocabularyRefs(constraint.targetVocab.introduce).some(
           (l) => l.lemmaId === hoverLemma.lemma.lemmaId
         );
         const observationEvent = createObservationEvent({
@@ -564,7 +581,7 @@ export function createSugarLangObserveMiddleware(
       const debtDayIndex = blackboardForDebt ? getWorldDay(blackboardForDebt) : null;
       const debtNpcId = execution.selection.npcDefinitionId ?? null;
 
-      for (const introduce of constraint.targetVocab.introduce) {
+      for (const introduce of vocabularyRefs(constraint.targetVocab.introduce)) {
         if (!turnLemmas.some((entry) => entry.lemmaId === introduce.lemmaId)) {
           continue;
         }
@@ -616,7 +633,7 @@ export function createSugarLangObserveMiddleware(
       // encounter paydown for the outer-loop debt tracker.
       const isNpcTurn = !isPlayerSpokenTurn(normalizedTurn, deps.services.getPlayerDefinitionId());
       if (isNpcTurn) {
-        const introduceIds = new Set(constraint.targetVocab.introduce.map((l) => l.lemmaId));
+        const introduceIds = new Set(vocabularyRefs(constraint.targetVocab.introduce).map((l) => l.lemmaId));
         for (const { lemmaId } of turnLemmas) {
           if (!lemmaId) continue;
           // Skip introduce-list lemmas (handled above) and chunk: pseudo-ids.
@@ -910,13 +927,15 @@ export function createSugarLangObserveMiddleware(
       const reinforceTerms: string[] = [];
       const glosses: Record<string, string> = {};
 
-      for (const lemma of constraint.targetVocab.introduce) {
+      // 090.4: the highlight is built from words; competency exponents will come
+      // from realization output (090.11) rather than from re-deriving them here.
+      for (const lemma of vocabularyRefs(constraint.targetVocab.introduce)) {
         const surface = lemma.lemmaId.replace(/_/g, " ");
         introduceTerms.push(surface);
         const gloss = services.atlas.getGloss(lemma.lemmaId, learner.targetLanguage, supportLang);
         if (gloss) glosses[surface] = gloss;
       }
-      for (const lemma of constraint.targetVocab.reinforce) {
+      for (const lemma of vocabularyRefs(constraint.targetVocab.reinforce)) {
         const surface = lemma.lemmaId.replace(/_/g, " ");
         reinforceTerms.push(surface);
         const gloss = services.atlas.getGloss(lemma.lemmaId, learner.targetLanguage, supportLang);

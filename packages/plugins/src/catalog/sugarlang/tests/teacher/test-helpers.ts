@@ -252,9 +252,9 @@ export function createDirectiveFixture(
 ): PedagogicalDirective {
   return {
     targetVocab: {
-      introduce: [{ lemmaId: "billete", lang: "es" }],
-      reinforce: [{ lemmaId: "hola", lang: "es" }],
-      avoid: [{ lemmaId: "anden", lang: "es" }]
+      introduce: [{ kind: "vocabulary", lemmaId: "billete", lang: "es" }],
+      reinforce: [{ kind: "vocabulary", lemmaId: "hola", lang: "es" }],
+      avoid: [{ kind: "vocabulary", lemmaId: "anden", lang: "es" }]
     },
     supportPosture: "supported",
     targetLanguageRatio: 0.65,

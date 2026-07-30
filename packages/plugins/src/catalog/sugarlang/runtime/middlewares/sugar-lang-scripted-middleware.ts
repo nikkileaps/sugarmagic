@@ -31,6 +31,7 @@ import { resolveDialogueSpeaker } from "@sugarmagic/domain";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices, SugarlangExecutionServices } from "../runtime-services";
 import { markGradedText } from "../grading/graded-text-marker";
+import { vocabularyRefs, type TeachableRef } from "../contracts/teachable-ref";
 import { getAllInventoryChunks } from "../inventory/competency-inventory-loader";
 import { createSugarlangLogger } from "../logger";
 import type { SugarlangLoggerLike } from "./shared";
@@ -127,7 +128,12 @@ function applyWeave(
   logger: SugarlangLoggerLike,
   posture: string
 ): void {
-  const prescriptionIntroduce = constraint.targetVocab.introduce;
+  // 090.4: the marker substitutes WORDS, so it takes the vocabulary half.
+  // Competencies on the slate are realized as exponents by the chunk matcher
+  // inside the marker, not by word substitution -- narrowing here is explicit so
+  // that "competencies do not flow through this argument" is a stated fact
+  // rather than an accident of the type.
+  const vocabularyIntroduce = vocabularyRefs(constraint.targetVocab.introduce);
   let inventoryChunks: import("../contracts/competency-inventory").InventoryChunk[] = [];
   try {
     inventoryChunks = getAllInventoryChunks(targetLanguage);
@@ -136,7 +142,7 @@ function applyWeave(
   }
   const markResult = markGradedText(
     authoredText,
-    prescriptionIntroduce,
+    vocabularyIntroduce,
     inventoryChunks,
     services.atlas,
     targetLanguage,
@@ -165,7 +171,8 @@ function applyWeave(
     // REVISIT with 090.11: realization output gets its own field, observe reads
     // THAT for card creation, and `targetVocab` stops being rewritten at render
     // time. Then the Teacher is the only writer, full stop.
-    const wovenLemmaRefs: LemmaRef[] = markResult.markedForms.map((wf) => ({
+    const wovenLemmaRefs: TeachableRef[] = markResult.markedForms.map((wf) => ({
+      kind: "vocabulary" as const,
       lemmaId: wf.lemmaId,
       lang: targetLanguage
     }));

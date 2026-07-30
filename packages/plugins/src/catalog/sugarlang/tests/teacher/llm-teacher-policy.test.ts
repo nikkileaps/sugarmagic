@@ -127,7 +127,9 @@ describe("ClaudeTeacherPolicy", () => {
     );
 
     expect(directive.targetLanguageRatio).toBe(1);
-    expect(directive.targetVocab.introduce).toEqual([{ lemmaId: "queso", lang: "es" }]);
+    expect(directive.targetVocab.introduce).toEqual([
+      { kind: "vocabulary", lemmaId: "queso", lang: "es" }
+    ]);
   });
 
   it("throws TeacherInvocationError when the Claude client fails", async () => {

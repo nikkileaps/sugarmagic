@@ -28,6 +28,7 @@ import type { SugarlangLLMClient } from "../llm/types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type { SugarlangConstraint } from "../types";
 import { createSugarlangLogger } from "../logger";
+import { vocabularyRefs } from "../contracts/teachable-ref";
 import { languageDisplayName } from "../language-names";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
@@ -157,11 +158,16 @@ async function repairWithBestOfN(
 
   const targetLang = languageDisplayName(constraint.targetLanguage);
   const pct = Math.round(constraint.targetLanguageRatio * 100);
+  // 090.4: the repair prompt talks about WORDS, so it narrows to the vocabulary
+  // half explicitly. `vocabularyRefs` rather than an inline kind check, so this
+  // reads as a decision -- a competency is an act and has no place in "use these
+  // words if natural"; its exponents reach the model through the generator
+  // overlay instead.
   const vocabContext = [
-    `Forbidden words (use simpler synonyms): ${constraint.targetVocab.avoid.map((l) => l.lemmaId).join(", ") || "(none)"}.`,
+    `Forbidden words (use simpler synonyms): ${vocabularyRefs(constraint.targetVocab.avoid).map((l) => l.lemmaId).join(", ") || "(none)"}.`,
     `Use these words if natural: ${[
-      ...constraint.targetVocab.introduce.map((l) => l.lemmaId),
-      ...constraint.targetVocab.reinforce.map((l) => l.lemmaId)
+      ...vocabularyRefs(constraint.targetVocab.introduce).map((l) => l.lemmaId),
+      ...vocabularyRefs(constraint.targetVocab.reinforce).map((l) => l.lemmaId)
     ].join(", ") || "(none)"}. Do not force them.`
   ].join("\n");
   const voiceRubricLine = voiceSpec ? buildVoiceRubricLine(voiceSpec) : null;

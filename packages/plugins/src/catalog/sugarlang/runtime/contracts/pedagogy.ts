@@ -25,6 +25,7 @@
 
 import type { CEFRBand } from "../cefr";
 import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
+import type { TeachableRef } from "./teachable-ref";
 
 /**
  * High-level support posture the Director chooses for a turn.
@@ -109,10 +110,16 @@ export interface DirectiveLifetime {
  * Implements: Proposal 001 §3. Director
  */
 export interface PedagogicalDirective {
+  /**
+   * 090.4: TeachableRef, not LemmaRef -- a competency is nameable here directly.
+   * The field keeps the name `targetVocab` for now because ~57 call sites read
+   * it; renaming it to `slate` is a separate mechanical change and mixing the
+   * two would hide the semantic one.
+   */
   targetVocab: {
-    introduce: LemmaRef[];
-    reinforce: LemmaRef[];
-    avoid: LemmaRef[];
+    introduce: TeachableRef[];
+    reinforce: TeachableRef[];
+    avoid: TeachableRef[];
   };
   supportPosture: SupportPosture;
   targetLanguageRatio: number;
@@ -134,9 +141,9 @@ export interface PedagogicalDirective {
  */
 export interface SugarlangConstraint {
   targetVocab: {
-    introduce: LemmaRef[];
-    reinforce: LemmaRef[];
-    avoid: LemmaRef[];
+    introduce: TeachableRef[];
+    reinforce: TeachableRef[];
+    avoid: TeachableRef[];
   };
   supportPosture: SupportPosture;
   targetLanguageRatio: number;

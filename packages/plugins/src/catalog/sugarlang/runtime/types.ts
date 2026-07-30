@@ -16,6 +16,7 @@
  */
 
 export * from "./contracts/pedagogy";
+export * from "./contracts/teachable-ref";
 // 090.9: the learner owns its own types and exposes them from its module entry;
 // the CEFR band scale is its own module because words and text have bands too.
 export * from "./cefr";

@@ -18,6 +18,13 @@
  * Status: active
  */
 
+import {
+  isVocabularyRef,
+  teachableRefKey,
+  toVocabularyRefs,
+  vocabularyRefs,
+  type TeachableRef
+} from "../contracts/teachable-ref";
 import Ajv from "ajv";
 import type { ErrorObject } from "ajv";
 import type {
@@ -98,6 +105,45 @@ const lemmaRefSchema = {
   }
 } as const;
 
+/**
+ * 090.4: what the Teacher may name on the slate -- a word OR a competency.
+ *
+ * This schema is the thing that makes "introduce ask-where" expressible. While
+ * `targetVocab` accepted only `lemmaRefSchema`, a competency could reach
+ * teaching in exactly one way: flattened into a `chunk:` pseudo-lemma and
+ * smuggled through the lemma channel. The union closes that side door by
+ * opening a front one.
+ *
+ * `kind` is REQUIRED on both branches rather than defaulted to "vocabulary".
+ * A default would mean a malformed competency silently parses as a word with a
+ * missing lemmaId, and the failure would surface much later as an atlas miss.
+ */
+const teachableRefSchema = {
+  anyOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "lemmaId", "lang"],
+      properties: {
+        kind: { const: "vocabulary" },
+        lemmaId: { type: "string", minLength: 1 },
+        lang: { type: "string", minLength: 1 },
+        surfaceForm: { type: "string" }
+      }
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "competencyId", "lang"],
+      properties: {
+        kind: { const: "competency" },
+        competencyId: { type: "string", minLength: 1 },
+        lang: { type: "string", minLength: 1 }
+      }
+    }
+  ]
+} as const;
+
 const pedagogicalDirectiveSchema = {
   type: "object",
   additionalProperties: false,
@@ -121,9 +167,9 @@ const pedagogicalDirectiveSchema = {
       additionalProperties: false,
       required: ["introduce", "reinforce", "avoid"],
       properties: {
-        introduce: { type: "array", items: lemmaRefSchema },
-        reinforce: { type: "array", items: lemmaRefSchema },
-        avoid: { type: "array", items: lemmaRefSchema }
+        introduce: { type: "array", items: teachableRefSchema },
+        reinforce: { type: "array", items: teachableRefSchema },
+        avoid: { type: "array", items: teachableRefSchema }
       }
     },
     supportPosture: { enum: [...SUPPORT_POSTURES] },
@@ -349,6 +395,32 @@ function normalizeDirectiveShape(
   return normalized;
 }
 
+/**
+ * 090.4: sanitizes EITHER kind of teachable.
+ *
+ * A test caught this on its first run: repair silently dropped every competency,
+ * because this function only understood the word shape and anything it did not
+ * recognize returned null. That is the same disappearance the whole story is
+ * about, reintroduced one layer down -- the slate could carry a competency, the
+ * schema accepted it, and then repair quietly removed it again.
+ */
+function sanitizeTeachableRef(value: unknown): TeachableRef | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (value.kind === "competency") {
+    const competencyId =
+      typeof value.competencyId === "string" ? value.competencyId.trim() : "";
+    const lang = typeof value.lang === "string" ? value.lang.trim() : "";
+    if (!competencyId || !lang) {
+      return null;
+    }
+    return { kind: "competency", competencyId, lang };
+  }
+  const lemma = sanitizeLemmaRef(value);
+  return lemma ? { ...lemma, kind: "vocabulary" } : null;
+}
+
 function sanitizeLemmaRef(value: unknown): LemmaRef | null {
   if (!isRecord(value)) {
     return null;
@@ -400,19 +472,19 @@ function filterLemmaArray(
   value: unknown,
   allowed: Set<string> | null,
   questEssential: Set<string>
-): LemmaRef[] {
+): TeachableRef[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
-  const result: LemmaRef[] = [];
+  const result: TeachableRef[] = [];
   const seen = new Set<string>();
   for (const entry of value) {
-    const lemma = sanitizeLemmaRef(entry);
+    const lemma = sanitizeTeachableRef(entry);
     if (!lemma) {
       continue;
     }
-    const key = `${lemma.lang}:${lemma.lemmaId}`;
+    const key = teachableRefKey(lemma);
     if (allowed !== null && !allowed.has(key)) {
       continue;
     }
@@ -431,7 +503,8 @@ function filterPendingTargets(value: unknown, context: TeacherContext): LemmaRef
       (pending) => `${pending.lemmaRef.lang}:${pending.lemmaRef.lemmaId}`
     )
   );
-  return filterLemmaArray(value, allowed, new Set<string>());
+  // Probe targets are word-only -- you probe a word, not an act.
+  return vocabularyRefs(filterLemmaArray(value, allowed, new Set<string>()));
 }
 
 function takeOldestPendingTargets(context: TeacherContext): LemmaRef[] {
@@ -705,6 +778,7 @@ export function repairDirective(
     ...filterLemmaArray(targetVocab.reinforce, null, new Set<string>()),
     ...filterLemmaArray(targetVocab.avoid, null, new Set<string>())
   ]
+    .filter(isVocabularyRef)
     .filter((lemma) => questEssential.has(`${lemma.lang}:${lemma.lemmaId}`))
     .map((lemma) => lemma.lemmaId);
   if (contaminatedLemmaIds.length > 0) {
@@ -750,7 +824,7 @@ export function repairDirective(
     : getDefaultInteractionStyle(context);
   const glossingStrategy = isOneOf(record.glossingStrategy, GLOSSING_STRATEGIES)
     ? record.glossingStrategy
-    : getDefaultGlossingStrategy(context, repairedIntroduce);
+    : getDefaultGlossingStrategy(context, vocabularyRefs(repairedIntroduce));
   const sentenceComplexityCap = isOneOf(
     record.sentenceComplexityCap,
     SENTENCE_COMPLEXITY_CAPS
@@ -817,6 +891,9 @@ export function repairDirective(
 
   return {
     targetVocab: {
+      // 090.4: repair still parses word-shaped refs from the model. Competency
+      // parsing is the next piece; lifting here keeps the union honest rather
+      // than leaving a LemmaRef masquerading as a TeachableRef.
       introduce: repairedIntroduce,
       reinforce: repairedReinforce,
       avoid: repairedAvoid

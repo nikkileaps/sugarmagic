@@ -17,11 +17,30 @@
  */
 
 import type { SugarlangConstraint } from "../types";
-import type { LemmaRef } from "../contracts/lexical-prescription";
+import type { CompetencyRef, TeachableRef } from "../contracts/teachable-ref";
 import { languageDisplayName } from "../language-names";
 
-function listLemmaIds(lemmas: LemmaRef[]): string {
-  return lemmas.map((l) => l.lemmaId).join(", ");
+/**
+ * 090.4: the slate holds TeachableRefs, so rendering it means rendering BOTH
+ * kinds. Vocabulary is a word; a competency is an act, and telling an NPC to
+ * "use ask-where" is meaningless -- it has to be told what the act IS.
+ *
+ * The competency's realizing exponents live in the inventory, which this module
+ * does not have. So the caller resolves them and passes them in; absent a
+ * lookup, the competency still appears by id rather than vanishing. Silent
+ * omission here is precisely how competency teaching disappeared before.
+ */
+function listTeachables(
+  refs: TeachableRef[],
+  describeCompetency?: (ref: CompetencyRef) => string
+): string {
+  return refs
+    .map((ref) =>
+      ref.kind === "vocabulary"
+        ? ref.lemmaId
+        : describeCompetency?.(ref) ?? ref.competencyId
+    )
+    .join(", ");
 }
 
 function formatTargetLanguageGuidance(constraint: SugarlangConstraint): string {
@@ -46,13 +65,14 @@ function formatTargetLanguageGuidance(constraint: SugarlangConstraint): string {
  * path no longer uses a generator prompt overlay).
  */
 export function buildGeneratorPromptOverlay(
-  constraint: SugarlangConstraint
+  constraint: SugarlangConstraint,
+  describeCompetency?: (ref: CompetencyRef) => string
 ): string {
   const lines = [
     formatTargetLanguageGuidance(constraint),
-    `Reinforce vocabulary (weave naturally into your reply, not their English translations): ${listLemmaIds(constraint.targetVocab.reinforce) || "(none)"}.`,
-    `Introduce vocabulary (try to use naturally this turn, not their English translations): ${listLemmaIds(constraint.targetVocab.introduce) || "(none)"}. Do not substitute their English equivalents. These words do NOT need to be about you or your current activity. You can mention them in passing, as an observation, a rumor, a memory, a question, or just ambient scene description. Do not invent actions or goals for yourself to justify using these words.`,
-    `Forbidden vocabulary (use simpler synonyms): ${listLemmaIds(constraint.targetVocab.avoid.slice(0, 12)) || "(none)"}.`,
+    `Reinforce vocabulary (weave naturally into your reply, not their English translations): ${listTeachables(constraint.targetVocab.reinforce, describeCompetency) || "(none)"}.`,
+    `Introduce vocabulary (try to use naturally this turn, not their English translations): ${listTeachables(constraint.targetVocab.introduce, describeCompetency) || "(none)"}. Do not substitute their English equivalents. These words do NOT need to be about you or your current activity. You can mention them in passing, as an observation, a rumor, a memory, a question, or just ambient scene description. Do not invent actions or goals for yourself to justify using these words.`,
+    `Forbidden vocabulary (use simpler synonyms): ${listTeachables(constraint.targetVocab.avoid.slice(0, 12), describeCompetency) || "(none)"}.`,
     `CEFR envelope: learner is ${constraint.learnerCefr}; keep >=95% of lemmas at or below ${constraint.learnerCefr}+1 band.`,
     `Support posture: ${constraint.supportPosture}. Target-language ratio: ${constraint.targetLanguageRatio}. Sentence complexity: ${constraint.sentenceComplexityCap}.`,
     `Do NOT add parenthetical translations or inline glosses. The UI handles vocabulary glossing via hover tooltips. Let the NPC speak naturally.`
@@ -64,7 +84,7 @@ export function buildGeneratorPromptOverlay(
       "COMPREHENSION CHECK - THIS TURN MUST INCLUDE A PROBE:",
       "",
       "After speaking naturally in character, include a short in-character question that elicits a response demonstrating comprehension of one or more of these lemmas:",
-      `  ${listLemmaIds(constraint.comprehensionCheckInFlight.targetLemmas)}`,
+      `  ${constraint.comprehensionCheckInFlight.targetLemmas.map((l) => l.lemmaId).join(", ")}`,
       "",
       `Probe style: ${constraint.comprehensionCheckInFlight.probeStyle}`,
       `Character voice reminder: ${constraint.comprehensionCheckInFlight.characterVoiceReminder}`,

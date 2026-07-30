@@ -86,8 +86,8 @@ describe("parseDirective", () => {
     // quest-essential lemmas are still filtered -- so this is a narrowing of
     // the filter, not its removal.
     expect(repaired.targetVocab.introduce).toEqual([
-      { lemmaId: "invented", lang: "es" },
-      { lemmaId: "queso", lang: "es" }
+      { kind: "vocabulary", lemmaId: "invented", lang: "es" },
+      { kind: "vocabulary", lemmaId: "queso", lang: "es" }
     ]);
   });
 

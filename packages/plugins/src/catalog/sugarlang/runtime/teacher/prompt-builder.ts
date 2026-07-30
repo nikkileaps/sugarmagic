@@ -86,8 +86,16 @@ export const DIRECTOR_CEFR_DESCRIPTORS_PROMPT = `CEFR DESCRIPTORS:
 export const DIRECTOR_OUTPUT_SCHEMA_PROMPT = `OUTPUT JSON SCHEMA:
 
 Return valid JSON with:
-- targetVocab: { introduce: LemmaRef[], reinforce: LemmaRef[], avoid: LemmaRef[] }
-  where LemmaRef = { "lemmaId": string, "lang": string } (e.g. { "lemmaId": "casa", "lang": "es" })
+- targetVocab: { introduce: Teachable[], reinforce: Teachable[], avoid: Teachable[] }
+  A Teachable is EITHER a word or a competency. Both are valid; choose whichever
+  actually fits this moment.
+    word:       { "kind": "vocabulary", "lemmaId": string, "lang": string }
+                e.g. { "kind": "vocabulary", "lemmaId": "queso", "lang": "es" }
+    competency: { "kind": "competency", "competencyId": string, "lang": string }
+                e.g. { "kind": "competency", "competencyId": "ask-where", "lang": "es" }
+  A word is a thing to know. A competency is something the learner can DO --
+  greeting someone, asking where something is. Teaching an act is often worth
+  more than teaching another noun, so do not default to words.
 - supportPosture: "anchored" | "supported" | "target-dominant" | "target-only"
 - targetLanguageRatio: number in [0, 1]
 - interactionStyle: "listening_first" | "guided_dialogue" | "natural_dialogue" | "recast_mode" | "elicitation_mode"
