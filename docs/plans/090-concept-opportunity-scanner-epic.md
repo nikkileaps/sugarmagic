@@ -1260,6 +1260,24 @@ the marker speaks only the first. (I wrote this contract twice before getting it
 right -- first as "presentation only, no atlas", then as "it resolves the English
 for the mouseover". Both wrong: it is markup, and the hover is downstream.)
 
+**`ambient` IS THE RESIDUE, NOT A DIRECTIVE VALUE.** Four roles are read off the
+Teacher's decision. `ambient` is what remains after subtracting it: target-language
+tokens present in the text that the slate never accounted for -- nikki's purpose,
+*"to catch Spanish the LLM has added that isn't in the slate"*.
+
+Two consequences:
+
+- The marker cannot work from the Directive alone. It must independently detect
+  target-language content, then subtract what the slate explains. Reuse
+  `computeCoverage` + the classifier facade; the observe middleware already
+  tokenizes every turn. Do not build a second detector.
+- It becomes a DRIFT DETECTOR. Unrequested target language gets a name and shows
+  up in the output rather than passing as authored text.
+- `focus + recall + challenge + ambient` IS the target-language content, so the
+  marker's own output measures the realized ratio. That is how
+  `TARGET_LANGUAGE_RATIO_BY_POSTURE` finally becomes a governor rather than a
+  verifier -- the gap the plan noted had no implementation anywhere.
+
 **SPANS, NOT WORDS. PHRASE RESOLUTION BELONGS HERE.** `buenos dias` is ONE
 thing: one underline, one hover, one translation. Marked word-by-word it becomes
 two glosses for half a greeting -- and the presentation layer cannot repair that,
@@ -1321,6 +1339,10 @@ SCOPE:
   where that class of bug lives).
 - A taught term the presentation layer cannot gloss is still marked (pin --
   absent gloss must not read as "not taught").
+- **Target-language words the slate never asked for come back as `ambient`**,
+  asserted on text containing a Spanish word absent from the Directive (pin --
+  the drift detector, and the assertion that proves `ambient` is computed from
+  the text rather than read off the Directive).
 - A Directive naming a teachable that does not appear in the text produces a
   reported MISMATCH, not silence (pin -- this is the signal that realization and
   the text have drifted, and the whole point of realization is that they do not).

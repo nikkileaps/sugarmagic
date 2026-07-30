@@ -40,6 +40,28 @@
  *   focus word looks like, whether it gets a gloss hover, and how it behaves.
  *   Two vocabularies, and this file speaks only the first.
  *
+ * `ambient` DOES NOT COME FROM THE DIRECTIVE -- IT IS THE RESIDUE.
+ *   Four of the five roles are read off the Teacher's decision. `ambient` is
+ *   what is left when you subtract it: target-language tokens PRESENT in the
+ *   text that the slate never accounted for (nikki, 2026-07-30 -- "to catch
+ *   Spanish the LLM has added that isn't in the slate").
+ *
+ *   So the marker cannot work from the Directive alone. It must independently
+ *   detect target-language content and subtract what the slate explains. That
+ *   makes it a DRIFT DETECTOR as well as a marker: unrequested target language
+ *   acquires a name and appears in the output instead of passing silently as
+ *   authored text.
+ *
+ *   Reuse the existing detection -- `computeCoverage` and the classifier facade
+ *   already classify target-language content, and `computeLanguageRatioVerdict`
+ *   already measures the proportion. Do not build a second one.
+ *
+ *   Useful consequence: focus + recall + challenge + ambient IS the
+ *   target-language content of the text, so the marker's own output is what
+ *   measures the realized ratio against `TARGET_LANGUAGE_RATIO_BY_POSTURE`.
+ *   That table has only ever verified generated text; this is how it finally
+ *   governs.
+ *
  * SPANS, NOT WORDS -- PHRASE RESOLUTION HAPPENS HERE.
  *   `buenos dias` is ONE thing: one underline, one hover, one translation. Marked
  *   word-by-word it becomes two glosses for half a greeting, which is wrong in a
