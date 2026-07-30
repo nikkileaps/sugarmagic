@@ -971,6 +971,22 @@ absence is the realization boundary.
 such seam; its own diagnosis at :96-101 is this finding stated in advance, and
 :107-113 schedules the revisit. **This story is what lands on that comment.**
 
+SPLIT 2026-07-30 (nikki). 090.8 ships the parts that are observable on their own;
+moving A1/A2 to build-time realization is **090.11**, a follow-on. The reason for
+the split is that baking A1/A2 changes what the player reads on every beginner
+line, and bundling it with a rename and a ratio change would make a regression
+impossible to attribute.
+
+**IN 090.8:** the `GradedTextMarker` rename and demotion, the ratio fold at 30%,
+deleting the runtime live-render call, and realization output feeding the
+highlight.
+
+**IN 090.11:** A1/A2 realized at build, the runtime weave deleted, the band
+split stopping being architectural.
+
+090.8 must not entrench the runtime weave -- it strips the weave's decisions
+without yet removing the weave itself.
+
 SCOPE (rewritten 2026-07-30):
 
 - **A realization operation that takes text + situation + optional learner and
@@ -1179,6 +1195,50 @@ ADDED BY THE 2026-07-30 REWRITE:
 - The A1 target-language ratio read at render time is 0.3, from one table (pin --
   paired with the grep above; a value pin without the grep passes on a duplicate,
   and a grep without the value pin passes on the wrong number).
+
+### 090.11 A1/A2 realized at build -- NEW, split out of 090.8 (2026-07-30)
+
+**Delete the runtime weave. Beginner text is realized at build, like every other
+band.**
+
+Today anchored/supported text is woven at runtime -- tokens substituted into
+authored English as the line is displayed -- while target-dominant text is a
+baked variant read from cache. That split is not architectural; it is an accident
+of which technique arrived first. Both are the same operation (realization),
+differing only in when it runs.
+
+WHY IT IS ITS OWN STORY. It changes what the player reads on every beginner line.
+Bundled with 090.8's rename and ratio change, a regression could not be
+attributed to any one of them.
+
+WHAT IT UNLOCKS. Runtime token substitution is the source of several limits that
+vanish rather than get fixed:
+
+- Only words physically present in the English can be taught (the intersection
+  limit -- a technique property, not a law).
+- Inflected English misses entirely (`cheeses` does not resolve to `queso`).
+- The renderer needs an exact English→lemma index at display time.
+
+A baked variant has none of these, because the Teacher wrote the sentence.
+
+SCOPE:
+
+- Run realization at build for anchored/supported, producing variants keyed like
+  every other band.
+- Delete `diglotWeave`'s substitution path; `GradedTextMarker` (090.8) is already
+  the only thing left standing on it.
+- Retire the runtime pool question entirely -- there is no pool if nothing
+  substitutes.
+
+- Exit: `diglotWeave` returns no hits outside git history (pin).
+- An A1 line renders from a baked variant, and the render path makes zero gateway
+  calls (pin -- asserted by call count, per 090.8).
+- Build produces A1 and A2 variants for a fixture scene (integration).
+- An A1 line teaches a word that does NOT appear in the authored English (pin --
+  the intersection limit is gone, and this is the single assertion that proves
+  it; it is impossible under the runtime weave by construction).
+- Inflected English no longer needs to resolve: the deferred lemmatization gap is
+  narrowed to MARKING only, and the plan's Deferred entry says so (pin).
 
 ### 090.4 Teacher judgment: two doors in, a slate out
 
@@ -1699,9 +1759,14 @@ is what cost hours on 2026-07-28.
 ## Ordering constraints
 
 The epic ships. Every story ships as written, in the order given at the top:
-**090.1, 090.2, 090.9, 090.3, 090.8, 090.4, 090.10, 090.5, 090.7.** Scope calls
-are nikki's; this section records only the DEPENDENCIES, which are technical
-facts, not opinions about what matters.
+**090.1, 090.2, 090.9, 090.3, 090.8, 090.4, 090.10, 090.5, 090.7**, with
+**090.11** after 090.8. Scope calls are nikki's; this section records only the
+DEPENDENCIES, which are technical facts, not opinions about what matters.
+
+5. **090.11 after 090.8.** 090.11 deletes the runtime weave; 090.8 is what strips
+   the weave's decisions out of it first. Deleting it while it still owns the
+   pool and the strategy choice would take those decisions down with it, and they
+   have to land somewhere.
 
 Three are hard:
 
