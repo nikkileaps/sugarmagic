@@ -83,18 +83,21 @@ Duplicate authored-scene truth is not.
 - If a helper erases important meaning, it is too generic.
 - Each core behavior gets exactly one implementation. Two systems enforcing the
   same behavior is a bug, not flexibility.
-  - Source-of-truth is about DATA: one owner per concept. Single-enforcer is
+- Source-of-truth is about DATA: one owner per concept. Single-enforcer is
     about BEHAVIOR: one implementation per decision. A codebase can satisfy the
     first and still violate the second.
-  - Before adding a rule, threshold, table, or resolver, grep for one that
+- Before adding a rule, threshold, table, or resolver, grep for one that
     already exists — repo-wide, including `apps/` and `targets/`, not just
     `packages/`.
-  - Precedence belongs in one function, not spread across its callers. If two
+- Precedence belongs in one function, not spread across its callers. If two
     call sites consult the same sources in different orders, that is already
     the bug.
-  - A duplicate is not always literal. A copied constant, an inlined ternary of
+- A duplicate is not always literal. A copied constant, an inlined ternary of
     a shared table, or a second prompt asking the same question all count.
-  - When you find a second enforcer, delete it — do not "align" the two.
+- When you find a second enforcer, do not just delete it. It has almost
+    certainly drifted and now handles a case the other one does not, so
+    deleting it loses behavior silently. They need to be merged -- stop and
+    confirm the merged behavior with a human before choosing what survives.
 
 ## Tech Debt Rules
 
