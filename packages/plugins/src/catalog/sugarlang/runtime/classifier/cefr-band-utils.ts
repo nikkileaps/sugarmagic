@@ -1,41 +1,32 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/classifier/cefr-band-utils.ts
  *
- * Purpose: Provides the classifier's single CEFR band ordering helper.
+ * Purpose: Re-exports the canonical CEFR band ordering for classifier callers.
+ *
+ * 090.9 EMPTIED THIS FILE. Its header used to claim it was "the classifier's
+ * single CEFR band ordering helper" while five other modules declared the same
+ * array under different names -- and `lexical-budgeter.ts` imported the order
+ * from `learner/cefr-posterior` rather than from here. The declaration now lives
+ * beside the `CEFRBand` type in `contracts/learner-profile.ts`, which is the one
+ * module every caller (classifier, compile, runtime, and the Studio editor) can
+ * legally reach.
+ *
+ * This file survives only so the classifier's existing imports keep working. It
+ * is a re-export and must never grow a declaration of its own.
  *
  * Exports:
- *   - CEFR_BAND_ORDER
- *   - compareCefrBands
- *   - isBandAbove
+ *   - CEFR_BAND_ORDER, compareCefrBands, isBandAbove (all re-exported)
  *
  * Relationships:
  *   - Is consumed by coverage, envelope-rule, envelope-classifier, and auto-simplify.
- *   - Keeps CEFR ordering logic out of individual classifier stages.
  *
- * Implements: Proposal 001 §2. Envelope Classifier
+ * Implements: Proposal 001 §2. Envelope Classifier + Plan 090 story 090.9
  *
  * Status: active
  */
 
-import type { CEFRBand } from "../types";
-
-export const CEFR_BAND_ORDER: readonly CEFRBand[] = [
-  "A1",
-  "A2",
-  "B1",
-  "B2",
-  "C1",
-  "C2"
-];
-
-export function compareCefrBands(left: CEFRBand, right: CEFRBand): number {
-  return CEFR_BAND_ORDER.indexOf(left) - CEFR_BAND_ORDER.indexOf(right);
-}
-
-export function isBandAbove(
-  band: CEFRBand,
-  reference: CEFRBand,
-  delta = 0
-): boolean {
-  return compareCefrBands(band, reference) > delta;
-}
+export {
+  CEFR_BAND_ORDER,
+  compareCefrBands,
+  isBandAbove
+} from "../contracts/learner-profile";

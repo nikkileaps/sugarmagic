@@ -47,9 +47,22 @@ import {
 import type { SchedulerBoardView } from "./scheduler-board-view";
 import type { ScheduledTeachable, TeachReason, TeachSchedule } from "./teach-schedule";
 import { estimateSceneComprehensionRate, STRETCH_COMPREHENSION_FLOOR } from "./comprehension-rate";
+import { CEFR_BAND_ORDER } from "../contracts/learner-profile";
 
-/** Retrievability below this = the learner is overdue on this item. */
-export const DUE_RETRIEVABILITY_FLOOR = 0.7;
+/**
+ * 090.9: `DUE_RETRIEVABILITY_FLOOR` and `FLUENCY_RETRIEVABILITY_FLOOR` moved to
+ * `../learner/learning-status`. They answer "is this card due" and "does the
+ * learner know this" -- learner facts that lived here only because the scheduler
+ * needed them first. Re-exported so existing importers keep working.
+ */
+export {
+  DUE_RETRIEVABILITY_FLOOR,
+  FLUENCY_RETRIEVABILITY_FLOOR
+} from "../learner/learning-status";
+import {
+  DUE_RETRIEVABILITY_FLOOR,
+  FLUENCY_RETRIEVABILITY_FLOOR
+} from "../learner/learning-status";
 
 /**
  * 087.4: When fatigueScore reaches this threshold, the scheduler enters strain-suppressed
@@ -61,16 +74,11 @@ export const DUE_RETRIEVABILITY_FLOOR = 0.7;
  */
 export const STRAIN_SUPPRESS_THRESHOLD = 0.70;
 
-/**
- * 087.4: Lemmas at or above this retrievability are "well known" for fluency recycling.
- * Surfaces items the learner already has to create the at-ease consolidation experience.
- */
-export const FLUENCY_RETRIEVABILITY_FLOOR = 0.90;
 
 /** Max fluency items surfaced per turn in strain-suppressed mode. */
 const FLUENCY_ITEM_CAP = 3;
 
-const CEFR_BAND_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
+// 090.9: was a local copy, one of six. The order lives in contracts now.
 
 function bandIndex(band: string): number {
   const idx = (CEFR_BAND_ORDER as readonly string[]).indexOf(band);

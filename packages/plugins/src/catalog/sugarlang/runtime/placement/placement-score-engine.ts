@@ -24,13 +24,14 @@ import type {
   PlacementQuestionnaireResponse,
   PlacementScoreResult
 } from "../types";
+import { CEFR_BAND_ORDER as CEFR_BANDS_ASCENDING } from "../contracts/learner-profile";
 import { MorphologyLoader } from "../classifier/morphology-loader";
 import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
 
 export type { PlacementScoreResult } from "../types";
 
-const CEFR_BANDS_ASCENDING: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
+// 090.9: was a local copy named CEFR_BANDS_ASCENDING, one of six.
 const CONTENT_STOPWORDS: Record<string, Set<string>> = {
   es: new Set(["yo", "tu", "tú", "mi", "mis", "con", "de", "del", "la", "el", "los", "las", "un", "una", "y", "o"]),
   it: new Set(["io", "tu", "mio", "mia", "miei", "mie", "con", "di", "del", "della", "il", "lo", "la", "gli", "le", "un", "una", "e", "o"])

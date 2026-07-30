@@ -40,6 +40,7 @@
  */
 
 import type { CEFRBand } from "../contracts/learner-profile";
+import { CEFR_BAND_ORDER as BAND_ORDER } from "../contracts/learner-profile";
 import type { GradedTextSource } from "../contracts/graded-text";
 import type { SugarlangVariantCache } from "../compile/variant-cache";
 import type { LexicalAtlasProvider } from "../types";
@@ -64,7 +65,7 @@ function isWeaveBand(band: CEFRBand): boolean {
   return band === "A1" || band === "A2";
 }
 
-const BAND_ORDER: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
+// 090.9: was a local copy named BAND_ORDER, one of six.
 
 /**
  * Every band at or below the learner's, so the pool is "all the vocabulary this

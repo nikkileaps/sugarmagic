@@ -1370,9 +1370,16 @@ pre-warming somewhere to hang.
   distinguishable from a real first
   meeting (pin); no sugaragent import in sugarlang (pin).
 
-### 090.9 Standing -- NEW, small, unblocks 090.4
+### 090.9 LearningStatus -- NEW, small, unblocks 090.4
 
-Extract STANDING as a named fact on the learner: for a given lemma,
+NAMED `LearningStatus`, NOT `Standing` (nikki, 2026-07-30). "Standing" is a
+credit/sports metaphor -- it says a rank was conferred rather than describing a
+learner's relationship to a word. `LearningStatus` lands as the third member of
+an existing family in the same module (`DebtStatus`,
+`SugarlangPlacementStatus`), which beats introducing a metaphor nothing else in
+the module speaks. Lives at `runtime/learner/learning-status.ts`.
+
+Extract it as a named fact on the learner: for a given lemma,
 *unseen · learning · due · known · out-of-reach*. It is implicit today, spread
 across the band-envelope filter (lexical-budgeter.ts:157), the reviewCount split
 (:177, :181) and the FSRS adapter. 090.4's simplification depends on it existing
@@ -1418,6 +1425,23 @@ ui/shell/editor-support.ts:90), and `lexical-budgeter.ts:39` imports
 classifier's single CEFR band ordering helper". So 090.9's fold is RESTORING a
 documented invariant, not inventing one. Pure refactor, no behavior change --
 unlike the predicates above.
+
+BUILT 2026-07-30. All six were diffed before collapsing and are byte-identical
+in content -- same bands, same order, differing only in variable name and
+mutability annotation -- so the merge lost nothing. A SEVENTH was found during
+the fold and this enumeration missed it: `ui/shell/learner-override-section.tsx`
+renders the debug band picker from its own `BANDS` literal.
+`ui/shell/placement-question-bank-viewer.tsx:28` is NOT a copy -- it is a
+deliberate subset (A1..B2) and stays.
+
+The order landed in `contracts/learner-profile.ts`, beside the `CEFRBand` type
+it orders, NOT in `runtime/learner/`. That module's README forbids editor UI
+depending on its internals, and the Studio density histogram needs band order to
+draw a bar chart -- filing it there would have manufactured the violation. That
+is also why six copies existed: there was no home every caller could legally
+reach. The two retrievability floors DID move into `runtime/learner/`, off
+`outer-loop-scheduler`, because they define learner facts and only lived in the
+scheduler because 087 needed them first.
 
 - Exit: standing is derivable for any (learner, lemma) without invoking the
   budgeter (pin); the five values are exhaustive and total (pin); standing

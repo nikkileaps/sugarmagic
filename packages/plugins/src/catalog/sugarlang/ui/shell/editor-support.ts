@@ -25,6 +25,7 @@ import type {
   RegionDocument
 } from "@sugarmagic/domain";
 import { compareCefrBands } from "../../runtime/classifier/cefr-band-utils";
+import { CEFR_BAND_ORDER as SCENE_BANDS } from "../../runtime/contracts/learner-profile";
 import { MorphologyLoader } from "../../runtime/classifier/morphology-loader";
 import { IndexedDBChunkCache } from "../../runtime/compile/chunk-cache";
 import { IndexedDBCompileCache } from "../../runtime/compile/cache-indexeddb";
@@ -96,7 +97,7 @@ export interface SugarlangRebuildProgress {
 
 const atlas = new CefrLexAtlasProvider();
 const morphology = new MorphologyLoader();
-const SCENE_BANDS: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
+// 090.9: was a local copy named SCENE_BANDS, one of six.
 
 export function isAssessmentObjectiveNode(node: QuestNodeDefinition | null | undefined): boolean {
   return node?.objectiveSubtype === "assessment";
