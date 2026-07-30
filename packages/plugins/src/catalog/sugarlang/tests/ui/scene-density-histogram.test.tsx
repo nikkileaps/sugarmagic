@@ -34,7 +34,7 @@ vi.mock("@sugarmagic/ui", () => ({
 }));
 import { SceneDensityHistogram } from "../../ui/shell/scene-density-histogram";
 import { summarizeSceneDensity } from "../../ui/shell/editor-support";
-import type { CompiledSceneLexicon } from "../../runtime/types";
+import type { CEFRBand, CompiledSceneLexicon } from "../../runtime/types";
 
 const FIXTURE_LEXICON: CompiledSceneLexicon = {
   sceneId: "scene-1",
@@ -45,27 +45,18 @@ const FIXTURE_LEXICON: CompiledSceneLexicon = {
   lemmas: {
     hola: {
       lemmaId: "hola",
-      cefrPriorBand: "A1",
-      frequencyRank: 10,
-      partsOfSpeech: ["interjection"],
       isQuestCritical: false,
       sceneWeight: 1,
       npcSourceIds: []
     },
     trabajo: {
       lemmaId: "trabajo",
-      cefrPriorBand: "A2",
-      frequencyRank: 20,
-      partsOfSpeech: ["noun"],
       isQuestCritical: false,
       sceneWeight: 1,
       npcSourceIds: []
     },
     aduana: {
       lemmaId: "aduana",
-      cefrPriorBand: "B1",
-      frequencyRank: 30,
-      partsOfSpeech: ["noun"],
       isQuestCritical: true,
       sceneWeight: 1,
       npcSourceIds: []
@@ -83,14 +74,37 @@ const FIXTURE_LEXICON: CompiledSceneLexicon = {
   ]
 };
 
+/**
+ * 090.2c: bands come from the atlas, so the caller supplies the lookup. These
+ * are the bands the fixture entries used to carry inline.
+ */
+const FIXTURE_BANDS: Record<string, CEFRBand> = {
+  hola: "A1",
+  trabajo: "A2",
+  aduana: "B1"
+};
+
 describe("SceneDensityHistogram", () => {
   it("summarizes compiled lemmas by CEFR band", () => {
-    const summary = summarizeSceneDensity(FIXTURE_LEXICON);
+    const summary = summarizeSceneDensity(
+      FIXTURE_LEXICON,
+      (lemmaId) => FIXTURE_BANDS[lemmaId]
+    );
 
     expect(summary.totalLemmas).toBe(3);
     expect(summary.bandCounts.find((entry) => entry.band === "A1")?.count).toBe(1);
     expect(summary.bandCounts.find((entry) => entry.band === "A2")?.count).toBe(1);
     expect(summary.bandCounts.find((entry) => entry.band === "B1")?.count).toBe(1);
+  });
+
+  it("counts nothing when no band lookup is available", () => {
+    // Pin: with no atlas the histogram must report zeros rather than collapsing
+    // every lemma into one band, which is what an `undefined === undefined`
+    // comparison would have done.
+    const summary = summarizeSceneDensity(FIXTURE_LEXICON);
+
+    expect(summary.totalLemmas).toBe(3);
+    expect(summary.bandCounts.every((entry) => entry.count === 0)).toBe(true);
   });
 
   it("renders diagnostics for an active scene lexicon", () => {

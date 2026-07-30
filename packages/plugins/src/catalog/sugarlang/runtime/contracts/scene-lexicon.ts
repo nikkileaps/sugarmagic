@@ -67,21 +67,42 @@ export interface SceneAuthorWarning {
 /**
  * Per-lemma scene artifact entry used by the Budgeter and Director.
  *
+ * 090.2c DELETED `cefrPriorBand`, `frequencyRank` and `partsOfSpeech` from this
+ * type. All three were verbatim copies of atlas data written by
+ * `createSceneLemmaInfo(entry: AtlasLemmaEntry)` -- the atlas already owns them,
+ * and a second stored copy is the one-source-of-truth rule broken in the small.
+ * Readers look them up by `lemmaId` instead.
+ *
+ * WHAT IS STILL HERE, AND WHEN IT GOES (090.10)
+ *   `sceneWeight` and `npcSourceIds` exist ONLY to rank candidates inside the
+ *   budgeter (scoring.ts). The model hands ranking to the Teacher, so they die
+ *   when `prescribe()` does -- and not before, because the budgeter is still on
+ *   the live path (`sugar-lang-context-middleware.ts` calls
+ *   `services.budgeter.prescribe`). `CompiledSceneLexicon.anchors` is in the
+ *   same position.
+ *
+ *   REVISIT TRIGGER: when 090.10 deletes `prescribe()`, this whole type goes
+ *   with it. `lemmas: Record<string, SceneLemmaInfo>` collapses to
+ *   `lemmaIds: string[]` and the artifact becomes an INDEX INTO the atlas rather
+ *   than a subset OF it -- which is when it earns the name
+ *   `SceneVocabularyModel`. Do not attempt that collapse earlier: three of these
+ *   fields have a live consumer until then.
+ *
  * Implements: Proposal 001 §Scene Lexicon Compilation: One Compiler, Three Profiles, Preview-First
+ *   + Plan 090 story 090.2c
  */
 export interface SceneLemmaInfo {
   lemmaId: string;
-  cefrPriorBand: CEFRBand;
-  frequencyRank: number | null;
-  partsOfSpeech: string[];
   isQuestCritical: boolean;
   /** Accumulated scene relevance weight. Higher values mean the lemma appears
    *  more often and/or in higher-weight sources (dialogue, quest objectives, NPC lore).
-   *  Used by the budgeter to prioritize contextually relevant vocabulary. */
+   *  Used by the budgeter to prioritize contextually relevant vocabulary.
+   *  Dies with the budgeter (090.10). */
   sceneWeight: number;
   /** NPC definition IDs whose lore/bio contributed to this lemma's scene weight.
    *  Used by the budgeter to boost words from the NPC the player is currently
-   *  talking to over words from other NPCs in the scene. */
+   *  talking to over words from other NPCs in the scene.
+   *  Dies with the budgeter (090.10). */
   npcSourceIds: string[];
 }
 

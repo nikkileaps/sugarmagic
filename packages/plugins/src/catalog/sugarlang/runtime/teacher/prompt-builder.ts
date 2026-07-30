@@ -244,10 +244,17 @@ export function formatRelationshipState(context: TeacherContext): string {
 }
 
 export function formatSceneSnapshot(context: TeacherContext): string {
+  // 090.2c: band and frequency come from the atlas by lemmaId, not from a copy
+  // stored on the scene artifact.
+  const lang = context.lang.targetLanguage;
   const teachableLemmas = Object.values(context.scene.lemmas)
+    .map((lemma) => ({
+      lemmaId: lemma.lemmaId,
+      entry: context.atlas.getLemma(lemma.lemmaId, lang)
+    }))
     .sort((left, right) => {
-      const leftRank = left.frequencyRank ?? Number.MAX_SAFE_INTEGER;
-      const rightRank = right.frequencyRank ?? Number.MAX_SAFE_INTEGER;
+      const leftRank = left.entry?.frequencyRank ?? Number.MAX_SAFE_INTEGER;
+      const rightRank = right.entry?.frequencyRank ?? Number.MAX_SAFE_INTEGER;
       if (leftRank !== rightRank) {
         return leftRank - rightRank;
       }
@@ -255,8 +262,10 @@ export function formatSceneSnapshot(context: TeacherContext): string {
     })
     .slice(0, MAX_SCENE_LEMMAS)
     .map(
-      (lemma) =>
-        `${lemma.lemmaId} (${lemma.cefrPriorBand}, freq ${lemma.frequencyRank ?? "?"})`
+      ({ lemmaId, entry }) =>
+        `${lemmaId} (${entry?.cefrPriorBand ?? "?"}, freq ${
+          entry?.frequencyRank ?? "?"
+        })`
     );
 
   return [
@@ -351,8 +360,11 @@ export function formatPendingProvisional(context: TeacherContext): string {
   }
 
   const lines = context.pendingProvisionalLemmas.map((pending) => {
-    const sceneLemma = context.scene.lemmas[pending.lemmaRef.lemmaId];
-    const cefrBand = sceneLemma?.cefrPriorBand ?? "unknown";
+    const cefrBand =
+      context.atlas.getBand(
+        pending.lemmaRef.lemmaId,
+        context.lang.targetLanguage
+      ) ?? "unknown";
     return `- ${pending.lemmaRef.lemmaId} (${cefrBand}): ${pending.evidenceAmount} units, pending for ${pending.turnsPending} turns`;
   });
 

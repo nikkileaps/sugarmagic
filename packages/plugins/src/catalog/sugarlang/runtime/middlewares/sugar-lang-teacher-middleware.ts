@@ -414,6 +414,7 @@ export function createSugarLangTeacherMiddleware(
           },
           learner,
           scene,
+          atlas: services.atlas,
           prescription,
           npc: {
             npcDefinitionId: execution.selection.npcDefinitionId ?? null,
@@ -476,6 +477,7 @@ export function createSugarLangTeacherMiddleware(
                         anchors: [],
                         questEssentialLemmas: []
                       },
+                    atlas: services.atlas,
                     prescription,
                     npc: {
                       npcDefinitionId: execution.selection.npcDefinitionId ?? null,

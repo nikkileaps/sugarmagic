@@ -99,11 +99,12 @@ export function createBudgeterSceneLexicon(options: {
   const anchors: string[] = [];
 
   for (const entry of options.entries) {
+    // 090.2c: band / rank / POS live in the atlas now, so a fixture scene entry
+    // carries only what the scene actually owns. Tests that need band or rank
+    // must stub the atlas, which is the point -- the artifact cannot disagree
+    // with the dictionary any more.
     lemmas[entry.lemmaId] = {
       lemmaId: entry.lemmaId,
-      cefrPriorBand: entry.band,
-      frequencyRank: entry.frequencyRank ?? 1,
-      partsOfSpeech: ["noun"],
       isQuestCritical: entry.isQuestCritical ?? false,
       sceneWeight: 1,
       npcSourceIds: []

@@ -22,11 +22,27 @@ import {
   scoreBatch,
   scoreLemma
 } from "../../runtime/budgeter/scoring";
+import type { AtlasLemmaEntry, CEFRBand } from "../../runtime/types";
 import {
   createBudgeterLearner,
   createBudgeterLemmaCard,
   createBudgeterSceneLexicon
 } from "./test-helpers";
+
+/**
+ * 090.2c: band and frequency rank are atlas facts, passed to the scorer rather
+ * than read off the scene entry. Rank is fixed at 1 across these fixtures so the
+ * frequency term is constant and the assertions isolate the term under test.
+ */
+function atlasEntry(lemmaId: string, band: CEFRBand = "A1"): AtlasLemmaEntry {
+  return {
+    lemmaId,
+    lang: "es",
+    cefrPriorBand: band,
+    frequencyRank: 1,
+    partsOfSpeech: ["noun"]
+  };
+}
 
 describe("budgeter scoring", () => {
   it("scores due lemmas above recently reviewed ones", () => {
@@ -37,9 +53,9 @@ describe("budgeter scoring", () => {
     const fresh = createBudgeterLemmaCard("hola", "A1", { retrievability: 0.95 });
 
     expect(
-      scoreLemma(scene.lemmas.hola, due, scene, { nowMs: 1000, currentSessionTurn: 10 }).score
+      scoreLemma(scene.lemmas.hola, atlasEntry("hola"), due, scene, { nowMs: 1000, currentSessionTurn: 10 }).score
     ).toBeGreaterThan(
-      scoreLemma(scene.lemmas.hola, fresh, scene, { nowMs: 1000, currentSessionTurn: 10 }).score
+      scoreLemma(scene.lemmas.hola, atlasEntry("hola"), fresh, scene, { nowMs: 1000, currentSessionTurn: 10 }).score
     );
   });
 
@@ -61,23 +77,23 @@ describe("budgeter scoring", () => {
     });
 
     expect(
-      scoreLemma(anchorScene.lemmas.hola, card, anchorScene, {
+      scoreLemma(anchorScene.lemmas.hola, atlasEntry("hola"), card, anchorScene, {
         nowMs: 1000,
         currentSessionTurn: 10
       }).score
     ).toBeGreaterThan(
-      scoreLemma(anchorScene.lemmas.adios, clean, anchorScene, {
+      scoreLemma(anchorScene.lemmas.adios, atlasEntry("adios"), clean, anchorScene, {
         nowMs: 1000,
         currentSessionTurn: 10
       }).score
     );
     expect(
-      scoreLemma(anchorScene.lemmas.adios, clean, anchorScene, {
+      scoreLemma(anchorScene.lemmas.adios, atlasEntry("adios"), clean, anchorScene, {
         nowMs: 1000,
         currentSessionTurn: 10
       }).score
     ).toBeGreaterThan(
-      scoreLemma(anchorScene.lemmas.adios, thrashing, anchorScene, {
+      scoreLemma(anchorScene.lemmas.adios, atlasEntry("adios"), thrashing, anchorScene, {
         nowMs: 1000,
         currentSessionTurn: 10
       }).score
@@ -101,15 +117,15 @@ describe("budgeter scoring", () => {
       productiveStrength: 0.9
     });
 
-    const highGapScore = scoreLemma(scene.lemmas.llave, highGap, scene, {
+    const highGapScore = scoreLemma(scene.lemmas.llave, atlasEntry("llave"), highGap, scene, {
       nowMs: 1000,
       currentSessionTurn: 10
     });
-    const noGapScore = scoreLemma(scene.lemmas.llave, noGap, scene, {
+    const noGapScore = scoreLemma(scene.lemmas.llave, atlasEntry("llave"), noGap, scene, {
       nowMs: 1000,
       currentSessionTurn: 10
     });
-    const impossibleScore = scoreLemma(scene.lemmas.llave, impossible, scene, {
+    const impossibleScore = scoreLemma(scene.lemmas.llave, atlasEntry("llave"), impossible, scene, {
       nowMs: 1000,
       currentSessionTurn: 10
     });
@@ -132,18 +148,18 @@ describe("budgeter scoring", () => {
       entries: [{ lemmaId: "hola", band: "A1" }]
     });
 
-    const single = scoreLemma(scene.lemmas.hola, learner.lemmaCards.hola, scene, {
+    const single = scoreLemma(scene.lemmas.hola, atlasEntry("hola"), learner.lemmaCards.hola, scene, {
       nowMs: 1000,
       currentSessionTurn: 10
     });
     const batch = scoreBatch(
-      [{ lemma: scene.lemmas.hola, card: learner.lemmaCards.hola }],
+      [{ lemma: scene.lemmas.hola, atlasEntry: atlasEntry("hola"), card: learner.lemmaCards.hola }],
       scene,
       { nowMs: 1000, currentSessionTurn: 10 }
     );
 
     expect(batch[0]).toEqual(single);
-    expect(computeLemmaPriority(scene.lemmas.hola, learner, scene)).toBe(single.score);
+    expect(computeLemmaPriority(scene.lemmas.hola, atlasEntry("hola"), learner, scene)).toBe(single.score);
     expect(SCORING_WEIGHTS.w_prodgap).toBeGreaterThan(0);
   });
 });

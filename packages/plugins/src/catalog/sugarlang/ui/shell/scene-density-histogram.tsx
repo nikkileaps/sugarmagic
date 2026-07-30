@@ -17,9 +17,16 @@
 
 import type { GameProject, RegionDocument, Scene } from "@sugarmagic/domain";
 import { PanelSection } from "@sugarmagic/ui";
-import { useEffect, useState, type ReactElement } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement
+} from "react";
 import type { CEFRBand } from "../../runtime/types";
 import type { CompiledSceneLexicon, SceneLemmaInfo } from "../../runtime/types";
+import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
 import {
   compileAuthoringSceneLexicon,
   summarizeSceneDensity
@@ -82,14 +89,30 @@ export function SceneDensityHistogram(
   const [hoveredBand, setHoveredBand] = useState<CEFRBand | null>(null);
 
   const lexicon = props.lexicon ?? computedLexicon;
-  const density = summarizeSceneDensity(lexicon);
+  // 090.2c: band and frequency come from the atlas by lemmaId. The provider
+  // caches its own data per language, so constructing it here is a map lookup
+  // rather than a load.
+  const atlas = useMemo(() => new CefrLexAtlasProvider(), []);
+  const atlasEntryFor = useCallback(
+    (lemmaId: string) => atlas.getLemma(lemmaId, props.targetLanguage),
+    [atlas, props.targetLanguage]
+  );
+  const getBand = useCallback(
+    (lemmaId: string) => atlas.getBand(lemmaId, props.targetLanguage),
+    [atlas, props.targetLanguage]
+  );
+  const density = summarizeSceneDensity(lexicon, getBand);
   const maxCount = Math.max(1, ...density.bandCounts.map((entry) => entry.count));
 
   function lemmasForBand(band: CEFRBand): SceneLemmaInfo[] {
     if (!lexicon) return [];
     return Object.values(lexicon.lemmas)
-      .filter((lemma) => lemma.cefrPriorBand === band)
-      .sort((a, b) => (a.frequencyRank ?? Infinity) - (b.frequencyRank ?? Infinity));
+      .filter((lemma) => getBand(lemma.lemmaId) === band)
+      .sort(
+        (a, b) =>
+          (atlas.getFrequencyRank(a.lemmaId, props.targetLanguage) ?? Infinity) -
+          (atlas.getFrequencyRank(b.lemmaId, props.targetLanguage) ?? Infinity)
+      );
   }
 
   if (!props.activeRegion) {
@@ -246,11 +269,10 @@ export function SceneDensityHistogram(
                       <span
                         key={lemma.lemmaId}
                         title={[
-                          lemma.partsOfSpeech.length > 0
-                            ? lemma.partsOfSpeech.join(", ")
-                            : null,
-                          lemma.frequencyRank != null
-                            ? `freq #${lemma.frequencyRank}`
+                          atlasEntryFor(lemma.lemmaId)?.partsOfSpeech.join(", ") ||
+                            null,
+                          atlasEntryFor(lemma.lemmaId)?.frequencyRank != null
+                            ? `freq #${atlasEntryFor(lemma.lemmaId)?.frequencyRank}`
                             : null,
                           lemma.isQuestCritical ? "quest-critical" : null
                         ]

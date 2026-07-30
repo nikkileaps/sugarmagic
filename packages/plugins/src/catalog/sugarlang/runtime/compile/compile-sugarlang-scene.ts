@@ -126,12 +126,14 @@ function isQuestEssentialContentLemma(
   return true;
 }
 
+/**
+ * 090.2c: band, frequency rank and parts of speech are no longer copied here.
+ * They are atlas facts, looked up by `lemmaId` where they are needed, so this
+ * artifact cannot drift from the dictionary it was derived from.
+ */
 function createSceneLemmaInfo(entry: AtlasLemmaEntry): SceneLemmaInfo {
   return {
     lemmaId: entry.lemmaId,
-    cefrPriorBand: entry.cefrPriorBand,
-    frequencyRank: entry.frequencyRank ?? null,
-    partsOfSpeech: [...entry.partsOfSpeech].sort(compareStrings),
     isQuestCritical: false,
     sceneWeight: 0,
     npcSourceIds: []
@@ -383,9 +385,10 @@ export function compileSugarlangScene(
       );
     }
 
-    const highBandLemmas = semanticLemmas.filter((lemma) =>
-      isBandAbove(lemma.cefrPriorBand, "B2")
-    );
+    const highBandLemmas = semanticLemmas.filter((lemma) => {
+      const band = atlas.getBand(lemma.lemmaId, scene.targetLanguage);
+      return band !== undefined && isBandAbove(band, "B2");
+    });
     if (
       semanticLemmas.length > 0 &&
       highBandLemmas.length / semanticLemmas.length > 0.3

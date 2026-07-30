@@ -27,6 +27,7 @@ import type {
   LemmaCard,
   SceneLemmaInfo
 } from "../types";
+import type { AtlasLemmaEntry } from "../contracts/providers";
 import {
   decayProductiveStrength,
   decayProvisionalEvidence
@@ -80,7 +81,10 @@ export interface ScoringContext {
   currentNpcDefinitionId?: string | null;
 }
 
-function createFallbackCard(lemma: SceneLemmaInfo): LemmaCard {
+function createFallbackCard(
+  lemma: SceneLemmaInfo,
+  atlasEntry: AtlasLemmaEntry
+): LemmaCard {
   return {
     lemmaId: lemma.lemmaId,
     difficulty: 3,
@@ -89,7 +93,7 @@ function createFallbackCard(lemma: SceneLemmaInfo): LemmaCard {
     lastReviewedAt: null,
     reviewCount: 0,
     lapseCount: 0,
-    cefrPriorBand: lemma.cefrPriorBand,
+    cefrPriorBand: atlasEntry.cefrPriorBand,
     priorWeight: 1,
     productiveStrength: 0,
     lastProducedAtMs: null,
@@ -127,8 +131,14 @@ function summarizeReasons(components: LemmaScoreComponents): string[] {
   return reasons;
 }
 
+/**
+ * 090.2c: `atlasEntry` replaces the band/rank copies this used to read off
+ * `SceneLemmaInfo`. The caller resolves it once by lemmaId; the scene artifact
+ * no longer duplicates what the dictionary owns.
+ */
 export function scoreLemma(
   lemma: SceneLemmaInfo,
+  atlasEntry: AtlasLemmaEntry,
   card: LemmaCard,
   sceneLexicon: CompiledSceneLexicon,
   context: ScoringContext
@@ -138,7 +148,7 @@ export function scoreLemma(
     context.currentSessionTurn
   );
   // Frequency bonus: normalized to [0, 1] where rank 1 = 1.0 and rank 2000+ = ~0.
-  const freqRank = lemma.frequencyRank ?? 5000;
+  const freqRank = atlasEntry.frequencyRank ?? 5000;
   const freqBonus = Math.max(0, 1 - freqRank / 2000);
 
   // Scene relevance: normalized to [0, 1]. Saturates at 2.0 accumulated weight
@@ -182,22 +192,28 @@ export function scoreLemma(
 }
 
 export function scoreBatch(
-  candidates: Array<{ lemma: SceneLemmaInfo; card: LemmaCard }>,
+  candidates: Array<{
+    lemma: SceneLemmaInfo;
+    atlasEntry: AtlasLemmaEntry;
+    card: LemmaCard;
+  }>,
   sceneLexicon: CompiledSceneLexicon,
   context: ScoringContext
 ): LemmaScore[] {
-  return candidates.map(({ lemma, card }) =>
-    scoreLemma(lemma, card, sceneLexicon, context)
+  return candidates.map(({ lemma, atlasEntry, card }) =>
+    scoreLemma(lemma, atlasEntry, card, sceneLexicon, context)
   );
 }
 
 export function computeLemmaPriority(
   lemma: SceneLemmaInfo,
+  atlasEntry: AtlasLemmaEntry,
   learner: LearnerProfile,
   sceneLexicon: CompiledSceneLexicon
 ): number {
-  const card = learner.lemmaCards[lemma.lemmaId] ?? createFallbackCard(lemma);
-  return scoreLemma(lemma, card, sceneLexicon, {
+  const card =
+    learner.lemmaCards[lemma.lemmaId] ?? createFallbackCard(lemma, atlasEntry);
+  return scoreLemma(lemma, atlasEntry, card, sceneLexicon, {
     nowMs: learner.currentSession?.startedAt ?? 0,
     currentSessionTurn: learner.currentSession?.turns ?? 0
   }).score;

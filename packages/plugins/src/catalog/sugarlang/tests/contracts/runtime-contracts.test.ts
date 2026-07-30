@@ -17,6 +17,7 @@
 
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
 import { describe, expect, expectTypeOf, it } from "vitest";
+import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
 import {
   INITIAL_PRODUCTIVE_STRENGTH,
   INITIAL_PROVISIONAL_EVIDENCE,
@@ -331,9 +332,6 @@ describe("sugarlang runtime contracts", () => {
     };
     const sceneLemma: SceneLemmaInfo = {
       lemmaId: "hola",
-      cefrPriorBand: "A1",
-      frequencyRank: 10,
-      partsOfSpeech: ["interjection"],
       isQuestCritical: false,
       sceneWeight: 1,
       npcSourceIds: []
@@ -445,6 +443,7 @@ describe("sugarlang runtime contracts", () => {
     const teacherContext: TeacherContext = {
       conversationId: "conversation-1",
       learner,
+      atlas: new CefrLexAtlasProvider(),
       prescription,
       scene: lexicon,
       npc: {

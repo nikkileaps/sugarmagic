@@ -678,11 +678,39 @@ was inverted, not deleted.
   today and one of them is authoring feedback).
 - A multi-word label does not throw, does not warn, and does not reach the atlas
   POS filter (pin -- the miss is the mechanism, not a defect).
-- `SceneLemmaInfo` is deleted, asserted by grep (pin). No band, rank or POS value
-  is stored outside the atlas, asserted by grep for `cefrPriorBand:` outside
-  `providers.ts` and the atlas loader (pin -- the duplication this collapses).
+090.2c SPLIT IN TWO (nikki, 2026-07-29). The collapse cannot land as one step,
+and the reason is a dependency this plan stated in prose but never turned into a
+sequencing constraint. `SceneLemmaInfo` has three fields the budgeter still
+reads -- `sceneWeight` (scoring.ts), `npcSourceIds` (scoring.ts) and, via
+`CompiledSceneLexicon`, `anchors` (lexical-budgeter.ts:188, scoring.ts:159) --
+and the budgeter is LIVE: `services.budgeter.prescribe(...)` at
+sugar-lang-context-middleware.ts. "Dies with the budgeter" means dies in 090.10,
+which itself must follow 090.4. So:
+
+**090.2c (this story) -- the one-source-of-truth half.** Delete
+`cefrPriorBand`, `frequencyRank` and `partsOfSpeech` from `SceneLemmaInfo`.
+All three were verbatim atlas copies written by
+`createSceneLemmaInfo(entry: AtlasLemmaEntry)` (compile-sugarlang-scene.ts) --
+verified as the only writer, with no override path, so nothing is lost.
+Readers look them up by `lemmaId`. This does not depend on the budgeter's
+lifetime: the budgeter keeps working, reading the same values from the atlas.
+
+**090.2d -- folded into 090.10, below.** Everything that waits on the budgeter.
+
+- Exit (090.2c): no band, rank or POS is stored outside the atlas, asserted by
+  grep for `cefrPriorBand:` outside `providers.ts` and the atlas loader. The
+  surviving matches must all be LemmaCard seeding from an `atlasEntry`, which is
+  learner state rather than a scene artifact copy (pin -- the distinction is what
+  makes the remaining matches legitimate).
 - The Studio density histogram still renders, reading bands from the atlas
   (integration -- the one surviving consumer of the deleted fields).
+- With no atlas available the histogram reports ZERO per band, not every lemma
+  collapsed into one (pin -- `undefined === undefined` would have silently
+  binned everything together once the stored band was gone).
+- A lemma the atlas cannot band is not prescribable, and a lemma with no atlas
+  POS evidence is NOT classified as a function word (pin -- `every` over an empty
+  list is vacuously true, so absent evidence would otherwise read as evidence and
+  silently drop the lemma).
 
 ### 090.8 Realization -- NEW, and the most valuable story here
 
@@ -1239,6 +1267,24 @@ only after every owner named there has landed:
   (fallback-teacher-policy.ts:33-45) -- with the module.
 - Delete the transition scaffold from 090.2 (the read-time projection) in this
   same change, per the deletion order's own instruction.
+- **090.2d -- finish the artifact collapse 090.2c started.** Deferred here from
+  090.2c because these three fields have a live consumer until `prescribe()` is
+  gone, and only these three:
+  - Delete `SceneLemmaInfo.sceneWeight` and `.npcSourceIds` (read only by
+    scoring.ts, for ranking the model hands to the Teacher).
+  - Delete `CompiledSceneLexicon.anchors` (read only by lexical-budgeter.ts:188
+    and scoring.ts:159).
+  - `SceneLemmaInfo` is then EMPTY except `lemmaId` + `isQuestCritical`, so
+    collapse `lemmas: Record<string, SceneLemmaInfo>` to `lemmaIds: string[]`
+    plus `questEssentialLemmaIds`, delete the type, and rename the artifact to
+    `SceneVocabularyModel` and its producer to `SceneVocabularyExtractor`. The
+    artifact becomes an INDEX INTO the atlas rather than a subset OF it, which
+    is the point at which the name stops lying.
+  - Exit: grep for `SceneLemmaInfo`, `sceneWeight`, `npcSourceIds` and
+    `.anchors` returns nothing outside git history (pin). A revisit trigger to
+    this effect is recorded in the type's own doc comment
+    (contracts/scene-lexicon.ts), because a plan nobody rereads cannot schedule
+    its own work.
 
 BLOCKED ON THE TEACHABLE SLATE (2026-07-29). `prescription.introduce` is not
 only the vocabulary channel -- it is also the ONLY road competencies travel.
@@ -1464,6 +1510,14 @@ Three are hard:
    straight into a prompt.
 3. **090.10 after 090.4.** Every owner named in "Budgeter deletion order" must
    have landed before the module can go.
+4. **The artifact collapse after 090.10.** Added 2026-07-29, and it was a real
+   miss: three `SceneLemmaInfo` fields (`sceneWeight`, `npcSourceIds`, and
+   `anchors` on the parent) are read by the LIVE budgeter, so 090.2's
+   "delete `SceneLemmaInfo`, collapse to `lemmaIds`, rename to
+   `SceneVocabularyModel`" could not land in 090.2. The plan said "dies with the
+   budgeter" in prose and never turned it into a constraint -- the same failure
+   shape as a demolition no story owns. 090.2c ships the half that does not
+   depend on the budgeter (the verbatim atlas copies); 090.2d rides 090.10.
 
 The rest of the sequence is preference, not constraint.
 

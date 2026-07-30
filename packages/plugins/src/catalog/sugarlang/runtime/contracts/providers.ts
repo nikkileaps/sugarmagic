@@ -133,6 +133,12 @@ export interface TeacherContext {
   };
   learner: LearnerProfile;
   scene: CompiledSceneLexicon;
+  /**
+   * 090.2c: the scene artifact no longer stores band / frequency / POS copies of
+   * atlas data, so anything formatting a lemma for the prompt looks them up here
+   * by `lemmaId` and `lang.targetLanguage`.
+   */
+  atlas: LexicalAtlasProvider;
   prescription: LexicalPrescription;
   npc: TeacherNpcContext;
   recentTurns: TeacherRecentTurn[];

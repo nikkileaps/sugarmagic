@@ -192,18 +192,23 @@ export async function compileAuthoringSceneLexicon(
 }
 
 export function summarizeSceneDensity(
-  lexicon: CompiledSceneLexicon | null
+  lexicon: CompiledSceneLexicon | null,
+  // 090.2c: bands are atlas facts now, not stored on the scene artifact, so the
+  // caller supplies the lookup. Undefined means "atlas unavailable" and every
+  // band reads zero rather than silently mis-binning lemmas into one band.
+  getBand?: (lemmaId: string) => CEFRBand | undefined
 ): SceneDensitySummary {
   const totalLemmas = lexicon ? Object.keys(lexicon.lemmas).length : 0;
 
   return {
     totalLemmas,
     bandCounts: SCENE_BANDS.map((band) => {
-      const count = lexicon
-        ? Object.values(lexicon.lemmas).filter(
-            (lemma) => lemma.cefrPriorBand === band
-          ).length
-        : 0;
+      const count =
+        lexicon && getBand
+          ? Object.values(lexicon.lemmas).filter(
+              (lemma) => getBand(lemma.lemmaId) === band
+            ).length
+          : 0;
 
       return {
         band,

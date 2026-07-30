@@ -489,7 +489,7 @@ export function createSugarLangContextMiddleware(
           const info = sceneLexicon.lemmas[l.lemmaId];
           return {
             lemmaId: l.lemmaId,
-            freq: info?.frequencyRank ?? null,
+            freq: services.atlas.getFrequencyRank(l.lemmaId, targetLanguage) ?? null,
             sceneWeight: info?.sceneWeight ?? 0,
             isAnchor: sceneLexicon.anchors.includes(l.lemmaId)
           };

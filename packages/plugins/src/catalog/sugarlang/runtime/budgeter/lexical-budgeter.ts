@@ -20,6 +20,7 @@ import type {
   AtlasLemmaEntry,
   CEFRBand,
   LearnerPriorProvider,
+  LemmaCard,
   LexicalAtlasProvider,
   LexicalPrescription,
   LexicalPrescriptionInput,
@@ -74,9 +75,17 @@ const FUNCTIONAL_POS = new Set([
  * that should not be prescribed as target vocabulary. These words are too
  * common and ambiguous across languages to be useful teaching targets.
  */
-function isFunctionalLemma(lemma: SceneLemmaInfo): boolean {
+function isFunctionalLemma(
+  lemma: SceneLemmaInfo,
+  atlasEntry: AtlasLemmaEntry | undefined
+): boolean {
   if (lemma.lemmaId.length <= 2) return true;
-  return lemma.partsOfSpeech.every((pos) =>
+  // 090.2c: parts of speech come from the atlas rather than a stored copy. A
+  // lemma the atlas does not know has no POS evidence at all, and `every` over
+  // an empty list is vacuously true -- which would silently classify it as a
+  // function word and drop it. Absent evidence must not read as evidence.
+  if (!atlasEntry || atlasEntry.partsOfSpeech.length === 0) return false;
+  return atlasEntry.partsOfSpeech.every((pos) =>
     FUNCTIONAL_POS.has(pos.toLowerCase())
   );
 }
@@ -107,13 +116,14 @@ function compareScoresAscending(left: LemmaScore, right: LemmaScore): number {
   return left.lemmaId.localeCompare(right.lemmaId);
 }
 
-function buildFallbackAtlasEntry(lemma: SceneLemmaInfo): Pick<AtlasLemmaEntry, "cefrPriorBand" | "cefrPriorSource"> {
-  return {
-    cefrPriorBand: lemma.cefrPriorBand,
-    cefrPriorSource: "human-override"
-  };
-}
-
+/**
+ * 090.2c deleted `buildFallbackAtlasEntry`. It fell back to the compiled copy of
+ * `cefrPriorBand` when `atlas.getLemma` missed -- but that copy was written FROM
+ * the atlas at compile time, and `atlasVersion` is part of the content hash, so
+ * a miss meant the artifact was already stale and due for recompile. It was a
+ * fallback for a state the cache key prevents, and it labelled the value
+ * "human-override" when nothing had overridden anything.
+ */
 export class LexicalBudgeter {
   constructor(private readonly options: LexicalBudgeterOptions) {}
 
@@ -127,14 +137,22 @@ export class LexicalBudgeter {
     const questEssentialExclusionLemmaIds = new Set(
       (input.activeQuestEssentialLemmas ?? []).map((lemma) => lemma.lemmaId)
     );
-    const candidateLemmas = Object.values(input.sceneLexicon.lemmas).filter(
-      (lemma) =>
-        !questEssentialExclusionLemmaIds.has(lemma.lemmaId) &&
-        !isFunctionalLemma(lemma)
-    );
+    // 090.2c: every atlas fact is resolved ONCE here, by lemmaId, and carried
+    // alongside the scene entry. The artifact no longer stores its own copy, so
+    // this is the single point where the two are joined.
+    const candidateLemmas = Object.values(input.sceneLexicon.lemmas)
+      .map((lemma) => ({
+        lemma,
+        atlasEntry: this.options.atlas.getLemma(lemma.lemmaId, lang)
+      }))
+      .filter(
+        ({ lemma, atlasEntry }) =>
+          !questEssentialExclusionLemmaIds.has(lemma.lemmaId) &&
+          !isFunctionalLemma(lemma, atlasEntry)
+      );
 
     const learnerBandIndex = getBandIndex(input.learner.estimatedCefrBand);
-    const scoredCandidates = candidateLemmas.map((lemma) => {
+    const scoredCandidates = candidateLemmas.map(({ lemma, atlasEntry }) => {
       const card =
         input.learner.lemmaCards[lemma.lemmaId] ??
         this.options.learnerPriorProvider.getInitialLemmaCard(
@@ -142,22 +160,37 @@ export class LexicalBudgeter {
           lang,
           input.learner.estimatedCefrBand
         ) ??
-        seedCardFromAtlas(
-          lemma.lemmaId,
-          lang,
-          this.options.atlas.getLemma(lemma.lemmaId, lang) ??
-            buildFallbackAtlasEntry(lemma),
-          input.learner.estimatedCefrBand
-        );
+        (atlasEntry
+          ? seedCardFromAtlas(
+              lemma.lemmaId,
+              lang,
+              atlasEntry,
+              input.learner.estimatedCefrBand
+            )
+          : undefined);
 
-      return { lemma, card };
+      return { lemma, atlasEntry, card };
     });
 
-    const survivors = scoredCandidates.filter(
-      ({ lemma }) => getBandIndex(lemma.cefrPriorBand) <= learnerBandIndex + 1
+    // A lemma the atlas cannot band is not prescribable -- there is no evidence
+    // to place it against the learner's level. Previously this could not happen,
+    // because the compiled copy always carried a band.
+    const bandable = scoredCandidates.filter(
+      (
+        candidate
+      ): candidate is typeof candidate & {
+        card: LemmaCard;
+        atlasEntry: AtlasLemmaEntry;
+      } => candidate.card !== undefined && candidate.atlasEntry !== undefined
     );
-    const rejects = scoredCandidates.filter(
-      ({ lemma }) => getBandIndex(lemma.cefrPriorBand) > learnerBandIndex + 1
+
+    const survivors = bandable.filter(
+      ({ atlasEntry }) =>
+        getBandIndex(atlasEntry.cefrPriorBand) <= learnerBandIndex + 1
+    );
+    const rejects = bandable.filter(
+      ({ atlasEntry }) =>
+        getBandIndex(atlasEntry.cefrPriorBand) > learnerBandIndex + 1
     );
 
     const scoringContext = {

@@ -17,7 +17,9 @@
  */
 
 import type {
+  AtlasLemmaEntry,
   CompiledSceneLexicon,
+  LexicalAtlasProvider,
   TeacherContext,
   LexicalPrescription,
   PedagogicalDirective
@@ -26,6 +28,37 @@ import {
   createLemmaCard,
   createLearnerProfile
 } from "../learner/test-helpers";
+
+/**
+ * 090.2c: band / rank / POS moved out of the scene artifact into the atlas, so
+ * the fixture scene above no longer carries them and the prompt reads them from
+ * here. Values match what the scene entries used to declare, so prompt snapshots
+ * are unchanged by the move.
+ */
+function createTeacherAtlasProvider(): LexicalAtlasProvider {
+  const entries: AtlasLemmaEntry[] = [
+    { lemmaId: "hola", lang: "es", cefrPriorBand: "A1", frequencyRank: 1, partsOfSpeech: ["interjection"] },
+    { lemmaId: "billete", lang: "es", cefrPriorBand: "A2", frequencyRank: 15, partsOfSpeech: ["noun"] },
+    { lemmaId: "anden", lang: "es", cefrPriorBand: "B1", frequencyRank: 42, partsOfSpeech: ["noun"] },
+    { lemmaId: "queso", lang: "es", cefrPriorBand: "A2", frequencyRank: 90, partsOfSpeech: ["noun"] }
+  ];
+  const byId = new Map(entries.map((entry) => [`${entry.lang}:${entry.lemmaId}`, entry]));
+
+  return {
+    getLemma: (lemmaId, lang) => byId.get(`${lang}:${lemmaId}`),
+    getBand: (lemmaId, lang) => byId.get(`${lang}:${lemmaId}`)?.cefrPriorBand,
+    getFrequencyRank: (lemmaId, lang) =>
+      byId.get(`${lang}:${lemmaId}`)?.frequencyRank ?? undefined,
+    getGloss: (lemmaId, lang, supportLang) =>
+      byId.get(`${lang}:${lemmaId}`)?.glosses?.[supportLang],
+    resolveFromGloss: () => [],
+    listLemmasAtBand: (band, lang) =>
+      entries
+        .filter((entry) => entry.lang === lang && entry.cefrPriorBand === band)
+        .map((entry) => ({ lemmaId: entry.lemmaId, lang: entry.lang })),
+    getAtlasVersion: () => "atlas-v1"
+  };
+}
 
 export function createTeacherContext(
   overrides: Partial<TeacherContext> = {}
@@ -39,36 +72,24 @@ export function createTeacherContext(
     lemmas: {
       hola: {
         lemmaId: "hola",
-        cefrPriorBand: "A1",
-        frequencyRank: 1,
-        partsOfSpeech: ["interjection"],
         isQuestCritical: false,
         sceneWeight: 1,
         npcSourceIds: []
       },
       billete: {
         lemmaId: "billete",
-        cefrPriorBand: "A2",
-        frequencyRank: 15,
-        partsOfSpeech: ["noun"],
         isQuestCritical: true,
         sceneWeight: 1,
         npcSourceIds: []
       },
       anden: {
         lemmaId: "anden",
-        cefrPriorBand: "B1",
-        frequencyRank: 42,
-        partsOfSpeech: ["noun"],
         isQuestCritical: true,
         sceneWeight: 1,
         npcSourceIds: []
       },
       queso: {
         lemmaId: "queso",
-        cefrPriorBand: "A2",
-        frequencyRank: 90,
-        partsOfSpeech: ["noun"],
         isQuestCritical: false,
         sceneWeight: 1,
         npcSourceIds: []
@@ -155,6 +176,7 @@ export function createTeacherContext(
   return {
     conversationId: "conversation-1",
     learner,
+    atlas: createTeacherAtlasProvider(),
     scene,
     prescription,
     npc: {

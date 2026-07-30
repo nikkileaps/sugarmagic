@@ -77,7 +77,11 @@ describe("compileSugarlangScene", () => {
     );
 
     expect(Object.keys(lexicon.lemmas)).toContain("hola");
-    expect(lexicon.lemmas.altar?.cefrPriorBand).toBe("C1");
+    // 090.2c: the band is no longer copied onto the scene entry -- the artifact
+    // records WHICH lemmas are in the scene, and the atlas answers what band
+    // each one is. Assert both halves rather than a duplicated field.
+    expect(Object.keys(lexicon.lemmas)).toContain("altar");
+    expect(atlas.getBand("altar", "es")).toBe("C1");
     expect(lexicon.questEssentialLemmas.map((lemma) => lemma.lemmaId)).toEqual(
       expect.arrayContaining(["investigate", "altar", "etéreo", "keeper", "temple"])
     );
