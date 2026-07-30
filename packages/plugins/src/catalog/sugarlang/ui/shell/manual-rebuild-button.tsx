@@ -17,7 +17,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { GameProject, RegionDocument, Scene } from "@sugarmagic/domain";
-import { PanelSection } from "@sugarmagic/ui";
+import { PanelSection, ProgressToast } from "@sugarmagic/ui";
 import type { ReactElement } from "react";
 import {
   readSugarlangCompileStatus,
@@ -113,8 +113,18 @@ export function ManualRebuildButton(
       ? (progress.completedScenes / progress.totalScenes) * 100
       : 0;
 
+  // A rebuild is long (a gateway call per changed scene) and the panel it
+  // starts from is easy to navigate away from. The toast is fixed-position, so
+  // progress stays visible wherever the author goes in Studio.
+  const toastMessage = isRunning
+    ? progress.totalScenes > 0
+      ? `Building Sugarlang: ${progress.completedScenes} of ${progress.totalScenes} scenes`
+      : "Building Sugarlang..."
+    : null;
+
   return (
-    <PanelSection title="Sugarlang Compile Status" icon="🛠️">
+    <PanelSection title="Build" icon="🛠️">
+      {toastMessage ? <ProgressToast message={toastMessage} /> : null}
       <div style={{ display: "grid", gap: "1rem" }}>
         <p style={{ margin: 0, color: "var(--sm-color-subtext)" }}>
           Cached scenes: {status.cachedScenes} / {status.totalScenes}. Chunk-ready: {status.chunkCachedScenes}. Stale: {status.staleScenes}. Missing: {status.missingScenes}.
@@ -134,7 +144,7 @@ export function ManualRebuildButton(
             fontWeight: 600
           }}
         >
-          Rebuild Sugarlang Lexicon
+          Rebuild
         </button>
 
         {isRunning ? (

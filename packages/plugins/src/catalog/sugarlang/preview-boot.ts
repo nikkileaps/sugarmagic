@@ -24,6 +24,7 @@ import type { RuntimePluginEnvironment } from "../../runtime";
 import { resolveSugarLangTargetLanguage } from "./config";
 import { MorphologyLoader } from "./runtime/classifier/morphology-loader";
 import { IndexedDBCompileCache } from "./runtime/compile/cache-indexeddb";
+import { IndexedDBSceneContextCache } from "./runtime/compile/scene-context-cache";
 import { compileSugarlangScene } from "./runtime/compile/compile-sugarlang-scene";
 import {
   resolveSceneAuthoringContexts,
@@ -36,18 +37,33 @@ import {
 } from "./runtime/compile/preview-boot";
 import { CefrLexAtlasProvider } from "./runtime/providers/impls/cefr-lex-atlas-provider";
 
+/**
+ * The project's authored target language -- the config rung of the single
+ * resolver, read from the same place Studio's Language panel writes it.
+ */
+function readSugarlangConfiguredTargetLanguage(
+  session: AuthoringSession
+): string | null {
+  const entry = session.gameProject.pluginConfigurations.find(
+    (configuration) => configuration.pluginId === "sugarlang"
+  );
+  const value = (entry?.config as { targetLanguage?: unknown } | undefined)
+    ?.targetLanguage;
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
 export async function buildSugarlangPreviewBootPayloadForSession(
   session: AuthoringSession,
   workspaceId: string,
   environment: RuntimePluginEnvironment | undefined
 ): Promise<SugarlangPreviewBootPayload | null> {
-  // Always include studioWorkspaceId regardless of targetLanguage so the
-  // preview runtime can open the variant IDB even when no env-var language is set.
   const studioWorkspaceId = `sugarlang-studio:${session.gameProject.identity.id}`;
-  const targetLanguage = resolveSugarLangTargetLanguage(environment);
-  if (!targetLanguage) {
-    return { compiledScenes: [], studioWorkspaceId };
-  }
+  // Throws when nothing is configured, and that is deliberate -- it used to
+  // read env ONLY and silently return an empty payload, so setting the language
+  // in Studio's Language panel had no effect on preview and nothing said so.
+  const targetLanguage = resolveSugarLangTargetLanguage({
+    config: readSugarlangConfiguredTargetLanguage(session)
+  });
 
   const atlas = new CefrLexAtlasProvider();
   const morphology = new MorphologyLoader();
@@ -87,6 +103,24 @@ export async function buildSugarlangPreviewBootPayloadForSession(
     }
   }
 
-  const payload = await buildSugarlangPreviewBootPayload(scenes, cache, atlas, morphology);
+  // Scene context rides along when the author has built it. Reading the same
+  // IndexedDB the build wrote to is safe HERE and only here: this runs in
+  // Studio. The runtime it hands the payload to has no IndexedDB of its own.
+  //
+  // NOTE the id: `studioWorkspaceId`, NOT the `workspaceId` parameter. Those are
+  // different things -- `workspaceId` here is Studio's NAVIGATION workspace
+  // ("layout", "quests", ...), while the Rebuild button writes under
+  // `sugarlang-studio:{gameProjectId}` (resolveStudioCompileWorkspaceId). The
+  // compile cache above survives the mismatch only because it can recompile on
+  // the fly and repopulate whatever cache it is handed; scene context CANNOT --
+  // building it is a gateway call and a Studio-only pass -- so reading the wrong
+  // id means silently shipping no situations, ever.
+  const payload = await buildSugarlangPreviewBootPayload(
+    scenes,
+    cache,
+    atlas,
+    morphology,
+    new IndexedDBSceneContextCache({ workspaceId: studioWorkspaceId })
+  );
   return { ...payload, studioWorkspaceId };
 }

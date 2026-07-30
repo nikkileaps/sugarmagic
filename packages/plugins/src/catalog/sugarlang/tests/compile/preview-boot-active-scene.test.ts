@@ -23,6 +23,7 @@ import {
   createAuthoringSession,
   createDefaultGameProject,
   createDefaultScene,
+  createPluginConfigurationRecord,
   createRegionNPCPresence
 } from "@sugarmagic/domain";
 import type { NPCDefinition } from "@sugarmagic/domain";
@@ -48,6 +49,16 @@ describe("preview boot composes the active Scene overlay", () => {
     const region = createTestRegion();
     const gameProject = {
       ...createDefaultGameProject("Test Game", "project-preview-boot-test"),
+      // The language lives in PROJECT CONFIG, where Studio's Language panel
+      // writes it -- not in an environment variable. This test used to pass
+      // SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE, which was the only way the old
+      // env-only read could ever succeed and therefore hid the fact that a
+      // language set in Studio did nothing.
+      pluginConfigurations: [
+        createPluginConfigurationRecord("sugarlang", true, {
+          targetLanguage: "es"
+        })
+      ],
       npcDefinitions: [CHEESE_NPC],
       scenes: [
         createDefaultScene({
@@ -72,7 +83,7 @@ describe("preview boot composes the active Scene overlay", () => {
     const payload = await buildSugarlangPreviewBootPayloadForSession(
       session,
       "ws-preview-boot-test",
-      { SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE: "es" }
+      {}
     );
 
     expect(payload).not.toBeNull();

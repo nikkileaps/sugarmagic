@@ -28,7 +28,7 @@
  *
  * WHY IT IS ITS OWN MODULE
  *   It briefly lived on `SceneContextExtractor` (2026-07-29) and was moved back,
- *   because the two have different DEPENDENCY GRAIN and that is what decides the
+ *   because the two have different DEPENDENCY SCOPE and that is what decides the
  *   artifact boundary:
  *
  *     scene concepts   depend on ALL sources        -> one artifact per scene

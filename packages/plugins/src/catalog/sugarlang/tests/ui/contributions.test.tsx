@@ -33,8 +33,10 @@ describe("sugarlang shell contributions", () => {
     ).toEqual([
       "scene-density",
       "placement-event-hint",
-      "language-config",
+      // Build is FIRST on the Sugarlang workspace: nothing rebuilds on save or
+      // on a timer, so it is the only way to make a content edit take effect.
       "compile-status",
+      "language-config",
       "placement-question-bank",
       "turn-inspector",
       "comprehension-check-monitor",

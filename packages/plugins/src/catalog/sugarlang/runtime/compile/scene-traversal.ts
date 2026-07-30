@@ -35,6 +35,7 @@ import {
   speakerNpcDefinitionId
 } from "@sugarmagic/domain";
 import type { SourceLocation } from "../types";
+import type { ContextSource } from "../contracts/scene-context";
 
 export type TextBlobSourceKind =
   | "dialogue"
@@ -460,6 +461,155 @@ export function sceneLorePageFromDocumentDefinition(
       body: section.body
     }))
   };
+}
+
+/**
+ * Projects a scene's authored content into `ContextSource`s for the
+ * SceneContextExtractor.
+ *
+ * A THIN PROJECTION, not a second traversal. `collectSceneText` already walks
+ * every authored source for the vocabulary scan; this walks the same
+ * `SceneAuthoringContext` and shapes it differently -- structured presences and
+ * labels for a model to reason about, rather than weight-tagged text blobs. If
+ * a new authored source kind appears, both need it, and a parallel walk here
+ * would drift the first time someone forgets.
+ *
+ * Lives here rather than in the extractor deliberately: the extractor must stay
+ * lifecycle-agnostic and know nothing about `SceneAuthoringContext`. Callers
+ * project; the extractor just reads sources.
+ *
+ * `labels` carry AUTHORED facts that need no inference -- `placementLabel` is
+ * where an author types "Cheesemonger", and `NPCDefinition` has no role field,
+ * so it is the only authored signal for one. Prose is what the model infers
+ * from.
+ */
+export function projectSceneContextSources(
+  context: SceneAuthoringContext
+): ContextSource[] {
+  const sources: ContextSource[] = [];
+  /** `trimText` returns null for empty; sources want plain strings. */
+  const text = (value: string | null | undefined): string => trimText(value) ?? "";
+  const joinNonEmpty = (parts: Array<string | null>, sep: string): string =>
+    parts.filter((part): part is string => Boolean(part)).join(sep);
+
+  const regionProse = joinNonEmpty(
+    [
+      text(context.region.displayName),
+      ...context.region.areas.map((area) => text(area.displayName))
+    ],
+    ". "
+  );
+  if (regionProse) {
+    sources.push({
+      sourceId: `region:${context.region.identity.id}`,
+      kind: "region",
+      displayName: text(context.region.displayName) || undefined,
+      prose: regionProse
+    });
+  }
+
+  // placementLabel lives on the PRESENCE, not the definition -- the same NPC
+  // can be labelled differently where they stand.
+  const placementLabelByNpcId = new Map<string, string>();
+  for (const presence of context.regionContents.npcPresences) {
+    const label = text(presence.placementLabel ?? "");
+    if (label) placementLabelByNpcId.set(presence.npcDefinitionId, label);
+  }
+
+  for (const npc of [...context.npcs].sort((left, right) =>
+    compareStrings(left.definitionId, right.definitionId)
+  )) {
+    const placementLabel = placementLabelByNpcId.get(npc.definitionId);
+    sources.push({
+      sourceId: `npc:${npc.definitionId}`,
+      kind: "npc",
+      displayName: text(npc.displayName) || undefined,
+      ...(placementLabel ? { labels: { placementLabel } } : {}),
+      ...(text(npc.description ?? "")
+        ? { prose: text(npc.description ?? "") }
+        : {})
+    });
+  }
+
+  for (const quest of [...context.quests].sort((left, right) =>
+    compareStrings(left.definitionId, right.definitionId)
+  )) {
+    const prose = joinNonEmpty(
+      [text(quest.displayName), text(quest.description ?? "")],
+      ". "
+    );
+    if (!prose) continue;
+    sources.push({
+      sourceId: `quest:${quest.definitionId}`,
+      kind: "quest",
+      displayName: text(quest.displayName) || undefined,
+      prose
+    });
+  }
+
+  for (const item of [...context.items].sort((left, right) =>
+    compareStrings(left.definitionId, right.definitionId)
+  )) {
+    const prose = text(item.displayName);
+    if (!prose) continue;
+    sources.push({
+      sourceId: `item:${item.definitionId}`,
+      kind: "item",
+      displayName: prose,
+      prose
+    });
+  }
+
+  for (const page of [...context.lorePages].sort((left, right) =>
+    compareStrings(left.lorePageId, right.lorePageId)
+  )) {
+    const prose = joinNonEmpty(
+      [
+        text(page.body ?? ""),
+        ...page.sections.map((section) =>
+          joinNonEmpty([text(section.heading), text(section.body)], ": ")
+        )
+      ],
+      "\n"
+    );
+    if (!prose) continue;
+    sources.push({
+      sourceId: `lore:${page.lorePageId}`,
+      kind: "lore",
+      displayName: text(page.displayName) || undefined,
+      prose
+    });
+  }
+
+  // Dialogue is projected per NPC rather than per node: the extractor is asking
+  // what the scene is ABOUT, and one line rarely is. Per-line meaning is the
+  // LineIntentExtractor's job, at its own scope.
+  const dialogueProseByNpc = new Map<string, string[]>();
+  for (const dialogue of context.dialogues) {
+    const boundNpcId = dialogue.interactionBinding.npcDefinitionId;
+    for (const node of dialogue.nodes) {
+      const nodeText = text(node.text);
+      if (!nodeText) continue;
+      const npcId = speakerNpcDefinitionId(
+        resolveDialogueSpeaker(node.speakerId, boundNpcId)
+      );
+      if (!npcId) continue;
+      const existing = dialogueProseByNpc.get(npcId) ?? [];
+      existing.push(nodeText);
+      dialogueProseByNpc.set(npcId, existing);
+    }
+  }
+  for (const [npcId, lines] of [...dialogueProseByNpc.entries()].sort(
+    ([left], [right]) => compareStrings(left, right)
+  )) {
+    sources.push({
+      sourceId: `dialogue:${npcId}`,
+      kind: "npc",
+      prose: lines.join("\n")
+    });
+  }
+
+  return sources;
 }
 
 export function createSceneAuthoringContext(

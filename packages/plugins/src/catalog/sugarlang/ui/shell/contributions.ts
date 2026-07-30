@@ -108,6 +108,26 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
               })
             : null
       },
+      // FIRST on the Sugarlang workspace, deliberately: this is the only way to
+      // build anything. Nothing rebuilds on save or on a timer, so content edits
+      // are invisible until this runs. Section order here IS render order.
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
+        sectionId: "compile-status",
+        label: "Build",
+        summary:
+          "Builds Sugarlang's derived artifacts for the whole project -- scene vocabulary, multi-word expressions, line intent and scene concepts -- and shows cache status.",
+        render: (props) =>
+          createElement(ManualRebuildButton, {
+            gameProjectId: props.gameProjectId,
+            gameProject: props.gameProject,
+            regions: props.regions,
+            activeScene: props.activeScene ?? null,
+            targetLanguage: props.targetLanguage,
+            chunkExtractionEnabled: sugarlangChunkExtractionEnabled
+          })
+      },
       {
         pluginId: SUGARLANG_SHELL_PLUGIN_ID,
         workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
@@ -160,22 +180,6 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
             onResetLearner: () => resetSugarlangLearnerData()
           });
         }
-      },
-      {
-        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
-        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
-        sectionId: "compile-status",
-        label: "Compile Status",
-        summary: "Shows project-wide Sugarlang compile cache status and allows manual rebuilds.",
-        render: (props) =>
-          createElement(ManualRebuildButton, {
-            gameProjectId: props.gameProjectId,
-            gameProject: props.gameProject,
-            regions: props.regions,
-            activeScene: props.activeScene ?? null,
-            targetLanguage: props.targetLanguage,
-            chunkExtractionEnabled: sugarlangChunkExtractionEnabled
-          })
       },
       {
         pluginId: SUGARLANG_SHELL_PLUGIN_ID,

@@ -248,7 +248,9 @@ Resolution order, applied identically in `manifest.ts` (telemetry sink) and
 3. empty string -> no gateway client (teacher runs fallback-only) and, on a
    published target, the NoOp telemetry sink
 
-Related but distinct: the manifest also declares
-`gatewayRuntimeConfigKeys` mapping the `targetLanguage` config value to the
-gateway env var `SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE` (non-secret, plumbed by
-SugarDeploy at deploy time).
+Related but distinct: the manifest declares `gatewayRuntimeConfigKeys` for the
+values the gateway genuinely reads (models). `targetLanguage` was declared here
+until 2026-07-29 and is not any more -- the gateway never read it, and target
+language is a **player's** choice rather than a deploy value. It resolves
+player selection -> project config, in `resolveSugarLangTargetLanguage` and
+nowhere else.

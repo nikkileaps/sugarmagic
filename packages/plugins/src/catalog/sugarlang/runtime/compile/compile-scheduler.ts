@@ -36,6 +36,8 @@ import type { SugarlangCompileCache } from "./sugarlang-compile-cache";
 import type { SugarlangIntentCache, LineIntentCacheEntry } from "./intent-cache";
 import { buildIntentContentHash } from "./intent-cache";
 import type { LineIntentExtractionResult } from "./line-intent-extractor";
+import type { SceneContextExtractionResult } from "./scene-context-extractor";
+import type { SugarlangSceneContextCache } from "./scene-context-cache";
 import type { DialogueDefinition } from "@sugarmagic/domain";
 
 export interface SugarlangAuthoringChunkPipelineOptions {
@@ -69,6 +71,29 @@ export interface SugarlangAuthoringIntentPipelineOptions {
   telemetry?: TelemetrySink;
 }
 
+/**
+ * The scene-context build pass: what each scene's authored content is ABOUT.
+ *
+ * Deliberately has NO `debounceMs`. The other passes carry one and it is dead --
+ * `notifySceneChanged` and `scheduleDialogue` have zero callers repo-wide, and
+ * the only real entry point sets `debounceMs: 0` and flushes synchronously. A
+ * fourth unused timer would be three too many; see docs/backlog/007, which owns
+ * removing the rest.
+ */
+export interface SugarlangAuthoringSceneContextPassOptions {
+  cache: SugarlangSceneContextCache;
+  extractSceneContext: (
+    scene: SceneAuthoringContext,
+    contentHash: string
+  ) => Promise<SceneContextExtractionResult>;
+  promptVersion: string;
+  /**
+   * Language concepts are written in. NOT the target language: concepts are
+   * English, so one extraction serves every target language.
+   */
+  supportLanguage: string;
+}
+
 export interface SugarlangAuthoringCompileSchedulerOptions {
   getScenes: () => SceneAuthoringContext[];
   getDialogues?: () => DialogueDefinition[];
@@ -78,6 +103,12 @@ export interface SugarlangAuthoringCompileSchedulerOptions {
   debounceMs?: number;
   chunkPipeline?: SugarlangAuthoringChunkPipelineOptions;
   intentPipeline?: SugarlangAuthoringIntentPipelineOptions;
+  /**
+   * STUDIO ONLY. Never wired on the runtime path: `ensureScene` runs in the
+   * deployed game, and extraction is a gateway call -- a player's machine must
+   * not do authoring work. The runtime receives models by seeding.
+   */
+  sceneContextPass?: SugarlangAuthoringSceneContextPassOptions;
   onLog?: (message: string, detail?: Record<string, unknown>) => void;
 }
 
@@ -86,6 +117,7 @@ export class SugarlangAuthoringCompileScheduler {
   private readonly pendingSceneIds = new Set<string>();
   private readonly pendingChunkSceneIds = new Set<string>();
   private readonly pendingIntentDialogueIds = new Set<string>();
+  private readonly pendingSceneContextSceneIds = new Set<string>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private chunkTimer: ReturnType<typeof setTimeout> | null = null;
   private intentTimer: ReturnType<typeof setTimeout> | null = null;
@@ -95,12 +127,14 @@ export class SugarlangAuthoringCompileScheduler {
   private readonly onLog?: SugarlangAuthoringCompileSchedulerOptions["onLog"];
   private readonly chunkPipeline: SugarlangAuthoringChunkPipelineOptions | null;
   private readonly intentPipeline: SugarlangAuthoringIntentPipelineOptions | null;
+  private readonly sceneContextPass: SugarlangAuthoringSceneContextPassOptions | null;
   private readonly telemetry: TelemetrySink;
 
   constructor(private readonly options: SugarlangAuthoringCompileSchedulerOptions) {
     this.debounceMs = options.debounceMs ?? 250;
     this.chunkPipeline = options.chunkPipeline ?? null;
     this.intentPipeline = options.intentPipeline ?? null;
+    this.sceneContextPass = options.sceneContextPass ?? null;
     this.chunkDebounceMs = this.chunkPipeline?.debounceMs ?? 5000;
     this.intentDebounceMs = this.intentPipeline?.debounceMs ?? 5000;
     this.onLog = options.onLog;
@@ -124,6 +158,11 @@ export class SugarlangAuthoringCompileScheduler {
     if (this.intentPipeline && this.options.getDialogues) {
       for (const dialogue of this.options.getDialogues()) {
         this.pendingIntentDialogueIds.add(dialogue.definitionId);
+      }
+    }
+    if (this.sceneContextPass) {
+      for (const scene of this.options.getScenes()) {
+        this.pendingSceneContextSceneIds.add(scene.sceneId);
       }
     }
   }
@@ -228,6 +267,94 @@ export class SugarlangAuthoringCompileScheduler {
     this.armChunkTimer();
     this.armIntentTimer();
     return compiled;
+  }
+
+  /**
+   * Builds a SceneContextModel per pending scene -- what its content is ABOUT.
+   *
+   * Studio only. Cache-hit skips the gateway; a content change between the call
+   * starting and returning discards the result rather than writing a model that
+   * describes text the author has already replaced.
+   */
+  async flushSceneContext(): Promise<void> {
+    if (!this.sceneContextPass) {
+      return;
+    }
+
+    const requested = [...this.pendingSceneContextSceneIds].sort((left, right) =>
+      left.localeCompare(right)
+    );
+    this.pendingSceneContextSceneIds.clear();
+    const scenes = this.getRequestedScenes(requested);
+
+    for (const scene of scenes) {
+      const contentHash = compileSugarlangScene(
+        scene,
+        this.options.atlas,
+        this.options.morphology,
+        "runtime-preview"
+      ).contentHash;
+
+      const cacheKey = {
+        contentHash,
+        supportLanguage: this.sceneContextPass.supportLanguage,
+        promptVersion: this.sceneContextPass.promptVersion
+      };
+
+      const cached = await this.sceneContextPass.cache.get(cacheKey);
+      if (cached) {
+        this.onLog?.("scene-context-cache-hit", {
+          sceneId: scene.sceneId,
+          conceptCount: cached.model.concepts.length
+        });
+        continue;
+      }
+
+      const result = await this.sceneContextPass.extractSceneContext(
+        scene,
+        contentHash
+      );
+      if (result.failure) {
+        // Fail-soft: a scene with no context model is a worse build, not a
+        // broken one. The extractor already degraded to authored prose.
+        this.onLog?.("scene-context-extraction-failed", {
+          sceneId: scene.sceneId,
+          reason: result.failure.message
+        });
+        continue;
+      }
+
+      const latestScene = this.options
+        .getScenes()
+        .find((entry) => entry.sceneId === scene.sceneId);
+      if (!latestScene) {
+        continue;
+      }
+
+      const latestHash = compileSugarlangScene(
+        latestScene,
+        this.options.atlas,
+        this.options.morphology,
+        "runtime-preview"
+      ).contentHash;
+      if (latestHash !== contentHash) {
+        this.onLog?.("scene-context-stale-discarded", {
+          sceneId: scene.sceneId,
+          contentHash
+        });
+        continue;
+      }
+
+      await this.sceneContextPass.cache.set({
+        key: cacheKey,
+        sceneId: scene.sceneId,
+        model: result.model
+      });
+      this.onLog?.("scene-context-built", {
+        sceneId: scene.sceneId,
+        conceptCount: result.model.concepts.length
+      });
+    }
   }
 
   async flushChunks(): Promise<void> {

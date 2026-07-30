@@ -213,9 +213,13 @@ export function LearnerCardInspector(): ReactElement {
                     paddingLeft: "0.5rem"
                   }}
                 >
-                  {profile.chunkCards.map((c) => (
-                    <div key={c.lemmaId}>
-                      {c.lemmaId} [{c.cefrPriorBand}] pro {c.productiveStrength.toFixed(2)}
+                  {/* Same unvalidated-IndexedDB caveat as teach records below. */}
+                  {profile.chunkCards.map((c, index) => (
+                    <div key={`${c.lemmaId ?? "unreadable"}:${index}`}>
+                      {c.lemmaId ?? "(unreadable record)"} [{c.cefrPriorBand ?? "?"}] pro{" "}
+                      {typeof c.productiveStrength === "number"
+                        ? c.productiveStrength.toFixed(2)
+                        : "?"}
                     </div>
                   ))}
                 </div>
@@ -237,9 +241,20 @@ export function LearnerCardInspector(): ReactElement {
                     paddingLeft: "0.5rem"
                   }}
                 >
-                  {profile.teachRecords.map((r) => (
-                    <div key={r.competencyId}>
-                      {r.competencyId} via {r.realizingChunkId}
+                  {/*
+                    These come straight out of IndexedDB with no validation, so
+                    a record written under an older field name reads back with
+                    undefined fields -- which React sees as a MISSING key, not a
+                    bad one. Index-suffixing the key keeps the warning away, and
+                    showing "(unreadable)" makes the stale record visible instead
+                    of rendering a blank row. Plan 090.1 renamed functionId ->
+                    competencyId with no migration (dev-only), so records written
+                    before that read exactly this way; reset learner data to clear.
+                  */}
+                  {profile.teachRecords.map((r, index) => (
+                    <div key={`${r.competencyId ?? "unreadable"}:${index}`}>
+                      {r.competencyId ?? "(unreadable record)"} via{" "}
+                      {r.realizingChunkId ?? "?"}
                     </div>
                   ))}
                 </div>

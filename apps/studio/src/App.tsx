@@ -136,7 +136,6 @@ import {
   getDeploymentSettings,
   listDiscoveredPluginDefinitions,
   planGameDeployment,
-  resolveSugarLangTargetLanguage,
   resolveInstalledPluginDefinitions
 } from "@sugarmagic/plugins";
 import {
@@ -1188,8 +1187,21 @@ export function App() {
     ).SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL =
       studioRuntimeEnvironment.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL ?? "";
   }, [studioRuntimeEnvironment]);
-  const sugarlangTargetLanguage =
-    resolveSugarLangTargetLanguage(studioRuntimeEnvironment) ?? "es";
+  // Studio EDITS this value, it does not resolve it. `resolveSugarLangTargetLanguage`
+  // answers a runtime question -- "which language is this player learning?" --
+  // and throws when there is no answer, which is correct for the runtime and
+  // wrong here: a brand-new project has no language yet, and the author needs
+  // Studio to come up so they can go set one. Read the config field directly.
+  const sugarlangTargetLanguage = useMemo(() => {
+    const entry = pluginConfigurations.find(
+      (configuration) => configuration.pluginId === "sugarlang"
+    );
+    const configured = (entry?.config as { targetLanguage?: unknown } | undefined)
+      ?.targetLanguage;
+    return typeof configured === "string" && configured.trim().length > 0
+      ? configured.trim().toLowerCase()
+      : "";
+  }, [pluginConfigurations]);
   const studioPluginWorkspaceKinds = useMemo(
     () =>
       new Set(
@@ -3192,7 +3204,7 @@ export function App() {
               shell contribution seam.
             </Text>
             <Text size="xs" c="var(--sm-color-overlay0)">
-              Target language: {sugarlangTargetLanguage}
+              Target language: {sugarlangTargetLanguage || "(not set)"}
             </Text>
           </Stack>
         </Inspector>

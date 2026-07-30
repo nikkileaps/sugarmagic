@@ -76,7 +76,6 @@ interface RawBuildEnv {
    */
   VITE_SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL?: string;
   VITE_SUGARMAGIC_SUGARLANG_PROXY_BASE_URL?: string;
-  VITE_SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE?: string;
 }
 
 function asStringOrEmpty(value: unknown): string {
@@ -139,10 +138,10 @@ export function readBuildConfig(env: RawBuildEnv): BuildConfig {
     env.VITE_SUGARMAGIC_SUGARLANG_PROXY_BASE_URL ??
       env.VITE_SUGARMAGIC_GATEWAY_URL
   );
-  forward(
-    "SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE",
-    env.VITE_SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE
-  );
+  // No SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE forward (removed 2026-07-29):
+  // target language is a player's choice, resolved from their selection or the
+  // project's authored default. One value per deployment cannot express two
+  // players choosing different languages.
 
   return {
     gatewayUrl,

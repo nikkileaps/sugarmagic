@@ -52,7 +52,7 @@
  *
  * NOT THE PLACE FOR LINE INTENT
  *   `LineIntentExtractor` briefly lived here (2026-07-29) and was moved back
- *   out. The two have different DEPENDENCY GRAIN, and that is what decides an
+ *   out. The two have different DEPENDENCY SCOPE, and that is what decides an
  *   artifact boundary:
  *
  *     scene concepts   depend on ALL sources        -> one artifact per scene

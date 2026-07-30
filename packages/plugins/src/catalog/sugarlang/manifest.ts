@@ -27,6 +27,7 @@ import {
 } from "@sugarmagic/domain";
 import type {
   ConversationMiddlewareContribution,
+  DebugHudCardContribution,
   DialogueEntryDecoratorContribution,
   DisplayTextResolverContribution,
   RuntimePluginInstance
@@ -49,10 +50,12 @@ import {
 } from "./runtime/middlewares/sugar-lang-scripted-middleware";
 import {
   extractSugarlangPreviewBootLexicons,
+  extractSugarlangPreviewBootSceneContexts,
   extractSugarlangStudioWorkspaceId
 } from "./runtime/compile/preview-boot";
 import {
-  seedSugarlangRuntimeCompileCache
+  seedSugarlangRuntimeCompileCache,
+  seedSugarlangRuntimeSceneContext
 } from "./runtime/compile/runtime-cache-state";
 import {
   SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
@@ -61,6 +64,7 @@ import { createDisplayTextResolver } from "./runtime/grading/display-text-resolv
 import { GRADED_TEXT_PROMPT_VERSION } from "./runtime/grading/graded-text-service";
 import { createSugarlangLogger } from "./runtime/logger";
 import { createSugarlangDialogueContribution } from "./runtime/dialogue-entry-decorator";
+import { createSceneContextHudCard } from "./runtime/scene-context-hud-card";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
 import {
   flushTelemetry,
@@ -150,12 +154,21 @@ export function createSugarlangPlugin(
     }
   };
 
+  // Studio-preview-only readout of what the runtime was seeded with. The first
+  // thing that makes scene context visible at all -- everything else about it
+  // lives in IndexedDB and memory.
+  const sceneContextCardContribution = createSceneContextHudCard({
+    pluginId: context.configuration.pluginId,
+    getSceneContext: (sceneId) => services.getSceneContext(sceneId)
+  });
+
   const contributions: (
     | ConversationMiddlewareContribution
     | DialogueEntryDecoratorContribution
     | DisplayTextResolverContribution
+    | DebugHudCardContribution
   )[] =
-    [decoratorContribution, displayTextContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
+    [decoratorContribution, displayTextContribution, sceneContextCardContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
       const middleware = factory({ services, logger, telemetry });
       return {
         pluginId: context.configuration.pluginId,
@@ -183,6 +196,17 @@ export function createSugarlangPlugin(
       const bootPayload = runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID];
       const lexicons = extractSugarlangPreviewBootLexicons(bootPayload);
       await seedSugarlangRuntimeCompileCache(lexicons);
+      // The runtime cannot build these -- extraction is a gateway call and a
+      // Studio-only pass -- so a boot seed is the only way it ever has them.
+      const seededContexts = extractSugarlangPreviewBootSceneContexts(bootPayload);
+      seedSugarlangRuntimeSceneContext(seededContexts);
+      console.info(
+        `[sugarlang runtime] seeded ${seededContexts.length} scene context model(s)`,
+        seededContexts.map((model) => ({
+          sceneId: model.sceneId,
+          concepts: model.concepts.length
+        }))
+      );
       services.seedPreviewLexicons(bootPayload);
       const studioWorkspaceId = extractSugarlangStudioWorkspaceId(bootPayload);
       if (studioWorkspaceId) {
@@ -283,19 +307,15 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       default: ""
     }
   ],
-  // Story 46.15 — Sugarlang's targetLanguage is a non-secret
-  // per-game config value the gateway reads at request time
-  // (e.g., to bias generation toward the player's target
-  // language). Plumbed through deploy.sh + GHA workflow's
-  // deploy-backend env block via SugarDeploy's collection step.
+  // NOTE (2026-07-29): `targetLanguage` used to be declared here, plumbed to
+  // the gateway as SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE. It was removed for two
+  // reasons. First, the gateway never read it -- grep core.ts, there is no such
+  // lookup -- so it was shipping a variable nothing consumed. Second and more
+  // importantly, target language is a PLAYER's choice: two players of the same
+  // deployment must be able to pick differently, which one env var per
+  // deployment cannot express. It now resolves player -> project config, in
+  // resolveSugarLangTargetLanguage and nowhere else.
   gatewayRuntimeConfigKeys: [
-    {
-      configKey: "targetLanguage",
-      envVarName: "SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE",
-      description:
-        "Target language code (e.g. `es`, `fr`) the Sugarlang gateway uses to bias generation + verification. Pure config, never a credential.",
-      nonSecretAttestation: "safe-to-expose-publicly"
-    },
     {
       configKey: "teacherModel",
       envVarName: "SUGARMAGIC_SUGARLANG_TEACHER_MODEL",

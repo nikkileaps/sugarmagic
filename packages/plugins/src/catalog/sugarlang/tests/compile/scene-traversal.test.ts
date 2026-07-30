@@ -23,7 +23,10 @@ import {
   PLAYER_SPEAKER,
   PLAYER_VO_SPEAKER
 } from "@sugarmagic/domain";
-import { collectSceneText } from "../../runtime/compile/scene-traversal";
+import {
+  collectSceneText,
+  projectSceneContextSources
+} from "../../runtime/compile/scene-traversal";
 import { createTestSceneAuthoringContext } from "./test-helpers";
 
 describe("collectSceneText", () => {
@@ -70,6 +73,106 @@ describe("collectSceneText", () => {
     );
 
     expect(blobs).toEqual([]);
+  });
+});
+
+describe("projectSceneContextSources (Plan 090.1)", () => {
+  it("projects the authored sources the extractor reads", () => {
+    const sources = projectSceneContextSources(createTestSceneAuthoringContext());
+
+    // Every source must be identifiable: provenance is validated against these
+    // ids, and a concept citing an id we never sent gets dropped.
+    expect(sources.every((source) => source.sourceId.length > 0)).toBe(true);
+    expect(sources.map((source) => source.kind)).toContain("npc");
+    expect(sources.map((source) => source.kind)).toContain("region");
+  });
+
+  it("is deterministic across repeated projections", () => {
+    const context = createTestSceneAuthoringContext();
+
+    expect(projectSceneContextSources(context)).toEqual(
+      projectSceneContextSources(context)
+    );
+  });
+
+  it("passes an NPC bio through as prose for the model to infer from", () => {
+    const context = createTestSceneAuthoringContext({
+      npcDefinitions: [
+        {
+          definitionId: "npc-orrin",
+          displayName: "Orrin",
+          description: "A cheesemonger, forever waiting on a late shipment.",
+          interactionMode: "agent",
+          lorePageId: null,
+          presentation: {} as never
+        }
+      ]
+    });
+
+    const npc = projectSceneContextSources(context).find(
+      (source) => source.sourceId === "npc:npc-orrin"
+    );
+
+    // "cheese" appears in no form the word-scanner can match -- inferring it
+    // from this prose is the entire point of the pass.
+    expect(npc?.prose).toContain("cheesemonger");
+    expect(npc?.displayName).toBe("Orrin");
+  });
+
+  it("projects only NPCs actually present in the scene", () => {
+    // createSceneAuthoringContext filters definitions down to those with a
+    // presence, so an NPC defined but not placed contributes nothing. The
+    // extractor should never describe someone who is not there.
+    const context = createTestSceneAuthoringContext({
+      npcDefinitions: [
+        {
+          definitionId: "npc-elsewhere",
+          displayName: "Elsewhere",
+          description: "Stands in another region entirely.",
+          interactionMode: "agent",
+          lorePageId: null,
+          presentation: {} as never
+        }
+      ]
+    });
+
+    expect(
+      projectSceneContextSources(context).some((source) =>
+        source.sourceId.includes("npc-elsewhere")
+      )
+    ).toBe(false);
+  });
+
+  it("attributes dialogue to the speaking NPC, not to the whole dialogue", () => {
+    const sources = projectSceneContextSources(createTestSceneAuthoringContext());
+    const dialogueSources = sources.filter((source) =>
+      source.sourceId.startsWith("dialogue:")
+    );
+
+    // Per-NPC, because "what is this scene about" is not a per-line question --
+    // that scope belongs to LineIntentExtractor.
+    expect(dialogueSources.every((source) => source.kind === "npc")).toBe(true);
+  });
+
+  it("emits no source for content that is entirely empty", () => {
+    const sources = projectSceneContextSources(
+      createTestSceneAuthoringContext({
+        npcDefinitions: [],
+        dialogueDefinitions: [],
+        questDefinitions: [],
+        itemDefinitions: [],
+        documentDefinitions: [],
+        activeScene: null,
+        region: {
+          ...createTestSceneAuthoringContext().region,
+          displayName: "",
+          lorePageId: null,
+          areas: []
+        }
+      })
+    );
+
+    expect(sources).toEqual([]);
   });
 });
 

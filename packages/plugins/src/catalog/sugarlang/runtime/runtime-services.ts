@@ -45,6 +45,8 @@ import { MorphologyLoader } from "./classifier/morphology-loader";
 import { RuntimeCompileScheduler } from "./compile/compile-scheduler";
 import { getSugarlangRuntimeCompileCache } from "./compile/runtime-cache-state";
 import { DefaultSugarlangSceneLexiconStore } from "./compile/scene-lexicon-store";
+import type { SceneContextModel } from "./contracts/scene-context";
+import { getSugarlangRuntimeSceneContext } from "./compile/runtime-cache-state";
 import { createSceneAuthoringContext } from "./compile/scene-traversal";
 import {
   ClaudeTeacherPolicy,
@@ -178,15 +180,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * The selection wins when the host set one -- it is the per-conversation
+ * override -- and otherwise this falls through to the single resolver rather
+ * than reading the environment on its own. It used to skip config entirely, so
+ * a project language set in Studio was invisible here.
+ */
 function getSelectionLanguages(
   execution: ConversationExecutionContext,
-  environment: RuntimePluginEnvironment | undefined
+  resolveFallbackTargetLanguage: () => string | null
 ): { targetLanguage: string; supportLanguage: string } | null {
   const targetLanguage =
-    execution.selection.targetLanguage?.trim().toLowerCase() ??
-    resolveSugarLangTargetLanguage(environment);
+    execution.selection.targetLanguage?.trim().toLowerCase() ||
+    resolveFallbackTargetLanguage();
   const supportLanguage =
-    execution.selection.supportLanguage?.trim().toLowerCase() ?? "en";
+    execution.selection.supportLanguage?.trim().toLowerCase() || "en";
   if (!targetLanguage) {
     return null;
   }
@@ -317,8 +325,23 @@ export class SugarlangRuntimeServices {
     return this.config;
   }
 
-  getTargetLanguage(): string | null {
-    return this.config.targetLanguage || null;
+  /**
+   * The runtime's single answer for "which language are we teaching?".
+   *
+   * Delegates to `resolveSugarLangTargetLanguage`, which owns the precedence
+   * (player -> config -> env). Callers must not re-derive it: reading config or
+   * the environment directly is what produced four sources resolved in three
+   * different orders.
+   *
+   * `player` is threaded from the learner profile once a Settings-menu picker
+   * exists; until then it is simply absent and config wins, which is today's
+   * behaviour with the env fallback finally reachable.
+   */
+  getTargetLanguage(player?: string | null): string | null {
+    return resolveSugarLangTargetLanguage({
+      player,
+      config: this.config.targetLanguage
+    });
   }
 
   private getFirstExecutionServices(): SugarlangExecutionServices | null {
@@ -352,6 +375,22 @@ export class SugarlangRuntimeServices {
    * pinning a band then opening an item before any conversation used to return
    * null here, so the override silently did not apply outside dialogue.
    */
+  /**
+   * What a scene's authored content is ABOUT, if it was built and seeded.
+   *
+   * NOT the situation. This is the cached, scene-scoped half; 090.3 overlays the
+   * live half -- who is ACTUALLY present, met/unmet, quest stage, time of day --
+   * to produce what the Teacher reads. Treating this as the situation will
+   * describe NPCs who are not standing there, because presence conditions are
+   * runtime facts this cannot know.
+   *
+   * Undefined is a legal, quiet state: the scene was never built, or the author
+   * edited it since the last Rebuild so its content hash no longer matches.
+   */
+  getSceneContext(sceneId: string): SceneContextModel | undefined {
+    return getSugarlangRuntimeSceneContext(sceneId);
+  }
+
   async getLearnerBand(): Promise<CEFRBand | null> {
     // The pin is the single source of truth for a debug band override. It is
     // seeded from `config.debugBandOverride` at bind and by the Learner
@@ -516,7 +555,9 @@ export class SugarlangRuntimeServices {
   async resolveForExecution(
     execution: ConversationExecutionContext
   ): Promise<SugarlangExecutionServices | null> {
-    const languages = getSelectionLanguages(execution, this.environment);
+    const languages = getSelectionLanguages(execution, () =>
+      this.getTargetLanguage()
+    );
     if (!languages) {
       return null;
     }

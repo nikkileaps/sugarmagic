@@ -19,8 +19,7 @@ describe("target-web build config", () => {
       VITE_SUGARMAGIC_GAME_MAJOR_VERSION: "2",
       VITE_SUGARMAGIC_VERSIONED_SLUG: "wordlark-v2-fghij",
       VITE_SUGARMAGIC_GIT_SHA: "deadbeef",
-      VITE_SUGARMAGIC_BUILD_TIMESTAMP: "2026-06-22T00:00:00.000Z",
-      VITE_SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE: "es"
+      VITE_SUGARMAGIC_BUILD_TIMESTAMP: "2026-06-22T00:00:00.000Z"
     });
     expect(config).toEqual({
       gatewayUrl: "https://wordlark-v1-abcde-uc.a.run.app",
@@ -42,8 +41,9 @@ describe("target-web build config", () => {
         SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL:
           "https://wordlark-v1-abcde-uc.a.run.app",
         SUGARMAGIC_SUGARLANG_PROXY_BASE_URL:
-          "https://wordlark-v1-abcde-uc.a.run.app",
-        SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE: "es"
+          "https://wordlark-v1-abcde-uc.a.run.app"
+        // No SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE (removed 2026-07-29): target
+        // language is a player's choice, not a build variable.
       }
     });
   });

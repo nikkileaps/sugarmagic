@@ -38,6 +38,11 @@ import {
   LINE_INTENT_PROMPT_VERSION,
   LineIntentExtractor
 } from "../../runtime/compile/line-intent-extractor";
+import {
+  SCENE_CONTEXT_PROMPT_VERSION,
+  SceneContextExtractor
+} from "../../runtime/compile/scene-context-extractor";
+import { IndexedDBSceneContextCache } from "../../runtime/compile/scene-context-cache";
 import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 import { GradedTextService } from "../../runtime/grading/graded-text-service";
 import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
@@ -47,6 +52,7 @@ import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-s
 import { computeSceneContentHash } from "../../runtime/compile/content-hash";
 import {
   collectSceneText,
+  projectSceneContextSources,
   type SceneAuthoringContext
 } from "../../runtime/compile/scene-traversal";
 import {
@@ -338,6 +344,16 @@ export async function rebuildSugarlangCompileCache(
     ? new SugarlangGatewayClient(proxyBaseUrl)
     : null;
 
+  // Say so loudly when a pass cannot run. Without a gateway the scene-context
+  // pass is simply absent, which is indistinguishable from "ran and found
+  // nothing" -- the HUD shows "(not built)" either way.
+  if (!gatewayClient) {
+    console.warn(
+      "[sugarlang build] scene-context and chunk passes SKIPPED: no gateway base URL resolved. " +
+        "Scene context can never be built until the sugarlang gateway URL is set."
+    );
+  }
+
   const dialogueDefinitions = gameProject?.dialogueDefinitions ?? [];
   const scheduler = new SugarlangAuthoringCompileScheduler({
     getScenes: () => scenes,
@@ -384,8 +400,36 @@ export async function rebuildSugarlangCompileCache(
           promptVersion: LINE_INTENT_PROMPT_VERSION
         }
       : undefined,
+    // STUDIO ONLY, deliberately. The runtime's lazy path (`ensureScene`) runs in
+    // the deployed game, and this is a gateway call -- a player's machine must
+    // not do authoring work. The runtime receives models by seeding.
+    sceneContextPass: gatewayClient
+      ? {
+          cache: new IndexedDBSceneContextCache({ workspaceId }),
+          extractSceneContext: async (scene, contentHash) => {
+            return new SceneContextExtractor({
+              llmClient: gatewayClient
+            }).extract({
+              sources: projectSceneContextSources(scene),
+              // Support language, NOT target: concepts are English, so one
+              // extraction serves every target language.
+              supportLanguage: scene.supportLanguage,
+              sceneId: scene.sceneId,
+              contentHash
+            });
+          },
+          promptVersion: SCENE_CONTEXT_PROMPT_VERSION,
+          supportLanguage: scenes[0]?.supportLanguage ?? "en"
+        }
+      : undefined,
     onLog(message, detail) {
+      // Every pass logs through here, and only "compiled-scene" drives the
+      // progress bar. The rest used to be dropped on the floor, which meant a
+      // pass that silently did nothing looked identical to one that worked --
+      // exactly the state that cost an hour on 2026-07-29. Console is the
+      // cheapest honest surface until the Build panel grows a real readout.
       if (message !== "compiled-scene") {
+        console.info(`[sugarlang build] ${message}`, detail ?? {});
         return;
       }
 
@@ -403,6 +447,7 @@ export async function rebuildSugarlangCompileCache(
   await scheduler.flush();
   await scheduler.flushChunks();
   await scheduler.flushIntents();
+  await scheduler.flushSceneContext();
   scheduler.stop();
 
   return readSugarlangCompileStatus(
