@@ -230,7 +230,7 @@ export function createSugarLangTeacherMiddleware(
       // still needs a constraint so the scripted middleware can adapt the text).
       // 086.4: scripted branch no longer sets generatorPromptOverlay or writes a
       // sugaragent contribution -- the scripted middleware reads baked variants
-      // (target-dominant) or runs diglotWeave (anchored/supported), zero LLM.
+      // (target-dominant) or runs markGradedText (anchored/supported), zero LLM.
       if (isScriptedMode(execution)) {
         const targetLanguage =
           execution.selection.targetLanguage ?? learner.targetLanguage;

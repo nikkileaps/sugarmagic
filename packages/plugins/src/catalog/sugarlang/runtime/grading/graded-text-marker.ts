@@ -1,32 +1,51 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/classifier/diglot-weave.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/grading/graded-text-marker.ts
  *
- * Purpose: Substitutes target-language citation forms for English words that
- *          resolve to prescription-introduced lemmas or chunk surface forms,
- *          producing a mixed-text (diglot-woven) line for anchored/supported
- *          postures without an LLM call.
+ * Purpose: Places target-language forms into a piece of text FOR A POOL IT IS
+ *   HANDED, and reports what it placed so the presentation layer can mark them.
+ *
+ * RENAMED FROM `diglotWeave` (Plan 090.8a). "Weave" described a technique and
+ * described it vaguely; the job is marking graded text. The rename came with a
+ * demotion, which is the part that matters:
+ *
+ * IT IS A RENDERER, NOT A DECIDER. It makes no judgment about what should be
+ * taught. It tokenizes, resolves through the atlas, substitutes what it is
+ * given, and reports the result. Two decisions used to leak into it and both
+ * are gone:
+ *
+ *   1. THE POOL -- unowned, so every call site improvised. One handed it the
+ *      slate; another handed it EVERY lemma at or below the learner's band, i.e.
+ *      the whole dictionary, which is why item text produced semantically wrong
+ *      swaps (`left` -> izquierda, the direction rather than past-of-leave). The
+ *      pool is now strictly an argument, and choosing it is the caller's job.
+ *   2. THE STRATEGY CHOICE -- `isWeaveBand` let the renderer decide whether to
+ *      run at all, duplicating `postureForBand`. Deleted; callers pass posture.
+ *
+ * WHAT REMAINS IS A PURE FUNCTION THAT CANNOT DECIDE ANYTHING. That is the
+ * correct shape, and it is what makes 090.11 able to delete the substitution
+ * path entirely: once realization happens at build, nothing needs to substitute
+ * at runtime and only the MARKING half survives.
  *
  * Exports:
- *   - WeavedForm
- *   - DiglotWeaveResult
- *   - diglotWeave
+ *   - MarkedForm, GradedTextMarkResult
+ *   - markGradedText
  *
  * Relationships:
  *   - Depends on tokenize for word segmentation.
  *   - Depends on LexicalAtlasProvider.resolveFromGloss for English -> target mapping.
  *   - Depends on InventoryChunk for chunk surface substitution.
- *   - Consumed by sugar-lang-scripted-middleware for anchored/supported postures.
+ *   - Callers own the pool and the posture; this file owns neither.
  *
- * Implements: Plan 086 story 086.2
+ * Implements: Plan 086 story 086.2 + Plan 090 story 090.8a
  *
  * Status: active
  */
 
 import type { LexicalAtlasProvider } from "../types";
 import type { InventoryChunk } from "../contracts/competency-inventory";
-import { tokenize } from "./tokenize";
+import { tokenize } from "../classifier/tokenize";
 
-export interface WeavedForm {
+export interface MarkedForm {
   /** Citation form or chunk surface placed in text. */
   targetForm: string;
   /** Target-lang lemma this substitution represents. */
@@ -35,9 +54,9 @@ export interface WeavedForm {
   englishGloss: string;
 }
 
-export interface DiglotWeaveResult {
+export interface GradedTextMarkResult {
   text: string;
-  weavedForms: WeavedForm[];
+  markedForms: MarkedForm[];
 }
 
 /**
@@ -167,21 +186,21 @@ function matchLeadingCase(original: string, replacement: string): string {
  * The introduce list drives which substitutions are attempted. Words not in the
  * introduce list (directly or via chunk constituent) are left as English.
  */
-export function diglotWeave(
+export function markGradedText(
   authoredText: string,
   introduce: Array<{ lemmaId: string; lang: string }>,
   inventoryChunks: InventoryChunk[],
   atlas: LexicalAtlasProvider,
   targetLang: string,
   supportLang: string
-): DiglotWeaveResult {
+): GradedTextMarkResult {
   if (introduce.length === 0) {
-    return { text: authoredText, weavedForms: [] };
+    return { text: authoredText, markedForms: [] };
   }
 
   const introduceSet = buildIntroduceSet(introduce);
   const tokens = tokenize(authoredText, supportLang);
-  const weavedForms: WeavedForm[] = [];
+  const markedForms: MarkedForm[] = [];
 
   // Build a replacement map: character offset -> { targetForm, end }
   // We reconstruct the string in one pass over the original text.
@@ -228,7 +247,7 @@ export function diglotWeave(
     // Only report a weaved form when one actually landed, otherwise the gloss
     // UI would offer a hover for a word still shown in English.
     if (substitutedAnyOccurrence) {
-      weavedForms.push({
+      markedForms.push({
         targetForm: sub.targetForm,
         lemmaId: sub.lemmaId,
         englishGloss: word
@@ -237,7 +256,7 @@ export function diglotWeave(
   }
 
   if (replacements.size === 0) {
-    return { text: authoredText, weavedForms: [] };
+    return { text: authoredText, markedForms: [] };
   }
 
   // Reconstruct the text by splicing in target forms at the replacement offsets.
@@ -255,6 +274,6 @@ export function diglotWeave(
 
   return {
     text: parts.join(""),
-    weavedForms
+    markedForms
   };
 }

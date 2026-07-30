@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/classifier/diglot-weave.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/grading/graded-text-marker.test.ts
  *
  * Purpose: Guards the diglot weave -- citation-form substitution, chunk-surface
  *          substitution, English-frame preservation, and the mixed-text envelope
@@ -9,7 +9,7 @@
  *   - none
  *
  * Relationships:
- *   - Exercises runtime/classifier/diglot-weave.ts with a mock LexicalAtlasProvider.
+ *   - Exercises runtime/grading/graded-text-marker.ts with a mock LexicalAtlasProvider.
  *   - Exercises runtime/classifier/envelope-rule.ts applyMixedTextEnvelopePredicate.
  *
  * Implements: Plan 086 story 086.2
@@ -20,7 +20,7 @@
 import { describe, expect, it } from "vitest";
 import type { LexicalAtlasProvider, AtlasLemmaEntry } from "../../runtime/types";
 import type { InventoryChunk } from "../../runtime/contracts/competency-inventory";
-import { diglotWeave } from "../../runtime/classifier/diglot-weave";
+import { markGradedText } from "../../runtime/grading/graded-text-marker";
 import {
   applyMixedTextEnvelopePredicate,
   ENVELOPE_OUT_OF_ENVELOPE_ALLOWANCE
@@ -125,13 +125,13 @@ function createPrescription(lemmaIds: string[]): LexicalPrescription {
 }
 
 // ---------------------------------------------------------------------------
-// diglotWeave tests
+// markGradedText tests
 // ---------------------------------------------------------------------------
 
-describe("diglotWeave", () => {
+describe("markGradedText", () => {
   it("substitutes an English word with its bare citation form when it resolves to an introduced lemma", () => {
     const atlas = makeMockAtlas({ hello: [makeAtlasEntry("hola", "hello")] });
-    const result = diglotWeave(
+    const result = markGradedText(
       "Hello, how are you?",
       makeIntroduce(["hola"]),
       [],
@@ -144,17 +144,17 @@ describe("diglotWeave", () => {
     // carries sentence case rather than the bare lowercase citation form.
     expect(result.text).toContain("Hola");
     expect(result.text).not.toContain("*");
-    expect(result.weavedForms).toHaveLength(1);
-    expect(result.weavedForms[0]!.targetForm).toBe("hola");
-    expect(result.weavedForms[0]!.englishGloss).toBe("hello");
-    expect(result.weavedForms[0]!.lemmaId).toBe("hola");
+    expect(result.markedForms).toHaveLength(1);
+    expect(result.markedForms[0]!.targetForm).toBe("hola");
+    expect(result.markedForms[0]!.englishGloss).toBe("hello");
+    expect(result.markedForms[0]!.lemmaId).toBe("hola");
   });
 
   it("substitutes a chunk surface form when an English word resolves to a constituent lemma in the introduce list", () => {
     // "buenos" resolves to "bueno"; "bueno" is a constituent of the "buenos dias" chunk.
     const atlas = makeMockAtlas({ buenos: [makeAtlasEntry("bueno", "buenos")] });
     const chunk = makeInventoryChunk("buenos_dias", "buenos dias", ["bueno", "dia"]);
-    const result = diglotWeave(
+    const result = markGradedText(
       "Buenos, how are you?",
       makeIntroduce(["bueno"]),
       [chunk],
@@ -166,8 +166,8 @@ describe("diglotWeave", () => {
     // The chunk surface form is substituted, not just the bare lemma.
     expect(result.text).toContain("Buenos dias");
     expect(result.text).not.toContain("*");
-    expect(result.weavedForms).toHaveLength(1);
-    expect(result.weavedForms[0]!.targetForm).toBe("buenos dias");
+    expect(result.markedForms).toHaveLength(1);
+    expect(result.markedForms[0]!.targetForm).toBe("buenos dias");
   });
 
   it("leaves English words NOT in the introduce list unchanged", () => {
@@ -176,7 +176,7 @@ describe("diglotWeave", () => {
       station: [makeAtlasEntry("estacion", "station")]
     });
     // Only "hola" is introduced; "estacion" is not.
-    const result = diglotWeave(
+    const result = markGradedText(
       "Hello at the station.",
       makeIntroduce(["hola"]),
       [],
@@ -191,10 +191,10 @@ describe("diglotWeave", () => {
     expect(result.text).not.toContain("estacion");
   });
 
-  it("returns text unchanged and empty weavedForms when introduce list is empty", () => {
+  it("returns text unchanged and empty markedForms when introduce list is empty", () => {
     const atlas = makeMockAtlas({ hello: [makeAtlasEntry("hola", "hello")] });
     const authoredText = "Hello, welcome!";
-    const result = diglotWeave(
+    const result = markGradedText(
       authoredText,
       makeIntroduce([]),
       [],
@@ -204,14 +204,14 @@ describe("diglotWeave", () => {
     );
 
     expect(result.text).toBe(authoredText);
-    expect(result.weavedForms).toHaveLength(0);
+    expect(result.markedForms).toHaveLength(0);
   });
 
   it("substituted forms contain no asterisk wrapping", () => {
     // Regression guard: gesture-tag wrapping (*...*) would erase the form from
     // coverage, ratio, and encounter counting.
     const atlas = makeMockAtlas({ goodbye: [makeAtlasEntry("adios", "goodbye")] });
-    const result = diglotWeave(
+    const result = markGradedText(
       "Goodbye, friend.",
       makeIntroduce(["adios"]),
       [],
@@ -220,7 +220,7 @@ describe("diglotWeave", () => {
       "en"
     );
 
-    for (const wf of result.weavedForms) {
+    for (const wf of result.markedForms) {
       expect(wf.targetForm).not.toMatch(/^\*/);
       expect(wf.targetForm).not.toMatch(/\*$/);
     }
@@ -232,7 +232,7 @@ describe("diglotWeave", () => {
       hello: [makeAtlasEntry("hola", "hello")],
       goodbye: [makeAtlasEntry("adios", "goodbye")]
     });
-    const result = diglotWeave(
+    const result = markGradedText(
       "Hello and goodbye.",
       makeIntroduce(["hola", "adios"]),
       [],
@@ -243,7 +243,7 @@ describe("diglotWeave", () => {
 
     expect(result.text).toContain("Hola");
     expect(result.text).toContain("adios");
-    expect(result.weavedForms).toHaveLength(2);
+    expect(result.markedForms).toHaveLength(2);
   });
 });
 
@@ -335,7 +335,7 @@ describe("applyMixedTextEnvelopePredicate", () => {
   });
 });
 
-describe("diglotWeave -- proper nouns and titles are protected", () => {
+describe("markGradedText -- proper nouns and titles are protected", () => {
   const atlas = makeMockAtlas({
     station: [makeAtlasEntry("estación", "station")]
   });
@@ -346,7 +346,7 @@ describe("diglotWeave -- proper nouns and titles are protected", () => {
   it("does not substitute inside a capitalised multi-word title", () => {
     // The shipped bug: "Station Manager" is a fixed title ("Jefe de Estación"
     // in Spanish), so swapping one constituent produces a hybrid.
-    const result = diglotWeave(
+    const result = markGradedText(
       "I'm Horace Pennyfeather, Station Manager. If you need anything just hollar.",
       introduce,
       [],
@@ -356,11 +356,11 @@ describe("diglotWeave -- proper nouns and titles are protected", () => {
     );
     expect(result.text).toContain("Station Manager");
     expect(result.text).not.toContain("estación");
-    expect(result.weavedForms).toEqual([]);
+    expect(result.markedForms).toEqual([]);
   });
 
   it("still substitutes the same word when it is ordinary lowercase prose", () => {
-    const result = diglotWeave(
+    const result = markGradedText(
       "The station is closed today.",
       introduce,
       [],
@@ -369,11 +369,11 @@ describe("diglotWeave -- proper nouns and titles are protected", () => {
       "en"
     );
     expect(result.text).toContain("estación");
-    expect(result.weavedForms).toHaveLength(1);
+    expect(result.markedForms).toHaveLength(1);
   });
 
   it("substitutes a sentence-initial capital and preserves its casing", () => {
-    const result = diglotWeave(
+    const result = markGradedText(
       "Station closes at dusk.",
       introduce,
       [],
@@ -388,7 +388,7 @@ describe("diglotWeave -- proper nouns and titles are protected", () => {
   });
 
   it("protects only the title occurrence when a word appears both ways", () => {
-    const result = diglotWeave(
+    const result = markGradedText(
       "The station is near. Ask the Station Manager.",
       introduce,
       [],

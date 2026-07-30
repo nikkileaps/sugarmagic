@@ -7,12 +7,12 @@
  *
  * For anchored/supported postures: diglot weave (zero LLM calls).
  * For target-dominant posture: reads baked variant from variant cache; degrades
- *   to diglotWeave when cache miss or no variant cache wired (zero LLM calls).
+ *   to markGradedText when cache miss or no variant cache wired (zero LLM calls).
  *
  * For scripted dialogue:
  *   1. Reads the authored English turn text
  *   2. Reads the sugarlang constraint (posture/ratio)
- *   3a. anchored/supported: calls diglotWeave; updates constraint.targetVocab.introduce
+ *   3a. anchored/supported: calls markGradedText; updates constraint.targetVocab.introduce
  *       from woven forms (supplemented by intent artifact teachables when available)
  *   3b. target-dominant: reads baked variant from cache; updates constraint.targetVocab.introduce
  *       from intent artifact teachables; degrades to weave on cache miss
@@ -30,7 +30,7 @@ import type { ConversationMiddleware, ConversationTurnEnvelope } from "@sugarmag
 import { resolveDialogueSpeaker } from "@sugarmagic/domain";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices, SugarlangExecutionServices } from "../runtime-services";
-import { diglotWeave } from "../classifier/diglot-weave";
+import { markGradedText } from "../grading/graded-text-marker";
 import { getAllInventoryChunks } from "../inventory/competency-inventory-loader";
 import { createSugarlangLogger } from "../logger";
 import type { SugarlangLoggerLike } from "./shared";
@@ -127,7 +127,7 @@ function buildVariantContentHash(nodeId: string, nodeText: string): string {
 }
 
 /**
- * Runs diglotWeave on the authored text using the prescription's introduce list,
+ * Runs markGradedText on the authored text using the prescription's introduce list,
  * then updates constraint.targetVocab.introduce with the woven forms.
  * Shared between anchored/supported and the target-dominant degradation path.
  */
@@ -149,7 +149,7 @@ function applyWeave(
   } catch {
     // Missing inventory for this language -- weave proceeds with no chunk substitutions.
   }
-  const weaveResult = diglotWeave(
+  const markResult = markGradedText(
     authoredText,
     prescriptionIntroduce,
     inventoryChunks,
@@ -158,12 +158,12 @@ function applyWeave(
     supportLanguage
   );
 
-  if (weaveResult.weavedForms.length > 0) {
-    normalizedTurn.text = weaveResult.text;
+  if (markResult.markedForms.length > 0) {
+    normalizedTurn.text = markResult.text;
     // Replace the introduce list with only the woven forms so the observe
     // middleware highlights exactly what was substituted. (086.4: gloss-scan
     // lineIntroduce deleted; weave forms + intent artifact are the signal.)
-    const wovenLemmaRefs: LemmaRef[] = weaveResult.weavedForms.map((wf) => ({
+    const wovenLemmaRefs: LemmaRef[] = markResult.markedForms.map((wf) => ({
       lemmaId: wf.lemmaId,
       lang: targetLanguage
     }));
@@ -178,7 +178,7 @@ function applyWeave(
   logger.debug("Scripted line woven (zero LLM).", {
     authoredText,
     wovenText: normalizedTurn.text,
-    weavedCount: weaveResult.weavedForms.length,
+    weavedCount: markResult.markedForms.length,
     posture
   });
 }
@@ -277,7 +277,7 @@ export function createSugarLangScriptedMiddleware(
       }
 
       // target-dominant posture: read baked variant from variant cache (086.4).
-      // Degrades gracefully to diglotWeave when the cache is cold or unavailable.
+      // Degrades gracefully to markGradedText when the cache is cold or unavailable.
       const services = await deps.services.resolveForExecution(execution);
       if (!services) return normalizedTurn;
 
@@ -370,7 +370,7 @@ export function createSugarLangScriptedMiddleware(
 
       if (!usedVariant) {
         // Degrade: no variant cache, cache miss, or lookup error.
-        // Run diglotWeave to at least produce introduce highlights.
+        // Run markGradedText to at least produce introduce highlights.
         logger.debug("Scripted line (target-dominant): variant cache miss -- degrading to weave.", {
           authoredText,
           band,
