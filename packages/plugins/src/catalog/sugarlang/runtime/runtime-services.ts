@@ -54,6 +54,7 @@ import {
   createGatewayTeacherClient
 } from "./teacher/policies/llm-teacher-policy";
 import { DirectiveCache } from "./teacher/directive-cache";
+import { SlateStore } from "./situation";
 import { FallbackTeacherPolicy } from "./teacher/policies/fallback-teacher-policy";
 import { SugarLangTeacher } from "./teacher/sugar-lang-teacher";
 import {
@@ -233,6 +234,12 @@ export class SugarlangRuntimeServices {
   /** WorkspaceId the Studio used when baking variants; wired from boot payload in manifest init. */
   private studioWorkspaceId: string | null = null;
   private _standaloneVariantCache: SugarlangVariantCache | undefined;
+  /**
+   * 090.3: session-scoped, deliberately not persisted -- a slate is a decision
+   * about right now, and restoring one would resurrect a judgment made against a
+   * world state that no longer exists.
+   */
+  private readonly _slateStore = new SlateStore();
 
   constructor(options: SugarlangRuntimeServicesOptions) {
     this.config = options.config;
@@ -387,6 +394,19 @@ export class SugarlangRuntimeServices {
    */
   getSceneContext(sceneId: string): SceneContextModel | undefined {
     return getSugarlangRuntimeSceneContext(sceneId);
+  }
+
+  /**
+   * The slate store, keyed on the situation rather than a conversation.
+   *
+   * Deliberately reachable from here rather than from execution services: the
+   * item path renders with no conversation in scope, and a conversation-keyed
+   * lookup cannot serve it. Same reason `getLearnerBand` reads ambient services.
+   *
+   * Implements: Plan 090 story 090.3
+   */
+  get slateStore(): SlateStore {
+    return this._slateStore;
   }
 
   async getLearnerBand(): Promise<CEFRBand | null> {
