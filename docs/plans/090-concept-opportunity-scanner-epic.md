@@ -115,7 +115,8 @@ knows.
 
 ```
 SceneContextModel        compile, cached on content hash
-  + met/unmet, quest stage, time of day, who is ACTUALLY present
+  + current quest node/stage, time of day, facts the player has learned,
+    recent world events
   ---------------------------------------------------------------
 = SITUATION              what the Teacher is handed (090.3 composes it)
 ```
@@ -133,7 +134,7 @@ second visit. `SITUATION` stays the domain word -- it is a boundary in
 
 IT IS A SIBLING OF THE COMPILER, NOT A DEPENDENCY OF IT. `compileSugarlangScene` must NOT call the extractor: it is pure and synchronous and its output feeds `computeSceneContentHash`, while extraction is an async gateway call. Wiring it in would force the compiler async, make it require a gateway, break hash determinism, and break all eight of its direct callers (enumerated under 090.2 DELIVERY, where round 2 also establishes that the READ paths -- not the call sites -- are the seam that matters). This is exactly why chunks and intents are separate pipelines writing side fields post-hoc. It is also a SIBLING of the MultiWordExpressionExtractor, not an extension of it: that one is surface-bound (spots multi-word expressions appearing VERBATIM in authored text, prompt forbids inventing), this one is inferential (what the scene is ABOUT, usually a word appearing nowhere). Different linguistic objects, different consumers, no overlap -- MWEs are multi-word by definition, concepts are single-word by schema.
 
-NO SECOND TRAVERSAL OF AUTHORED CONTENT. The extractor consumes the SAME `SceneAuthoringContext` the compiler does (scene-traversal.ts:76-95: region, `regionContents` composed presences, npcs, dialogues, quests, items, lorePages). `collectSceneText` already walks every authored source; a parallel walk inside the extractor would drift the first time a source kind is added. On the authored side the "source" is a thin PROJECTION of that existing object -- structured presences / roles / place description for the model, rather than the compiler's weight-tagged text blobs. Same sources, same traversal, different projection. A source INTERFACE earns its place only on the runtime side, where live facts (met/unmet, quest stage, time) have no home in `SceneAuthoringContext`; it must never become a second way to read authored content.
+NO SECOND TRAVERSAL OF AUTHORED CONTENT. The extractor consumes the SAME `SceneAuthoringContext` the compiler does (scene-traversal.ts:76-95: region, `regionContents` composed presences, npcs, dialogues, quests, items, lorePages). `collectSceneText` already walks every authored source; a parallel walk inside the extractor would drift the first time a source kind is added. On the authored side the "source" is a thin PROJECTION of that existing object -- structured presences / roles / place description for the model, rather than the compiler's weight-tagged text blobs. Same sources, same traversal, different projection. A source INTERFACE earns its place only on the runtime side, where live facts (quest node, learned facts, time) have no home in `SceneAuthoringContext`; it must never become a second way to read authored content.
 
 ```
   SceneAuthoringContext        <- built ONCE by createSceneAuthoringContext
@@ -155,7 +156,7 @@ CALLERS decide which sources they hold and when they call:
 
   conversation start /       SceneContextModel +       SITUATION
   situation change        -> live runtime sources:      (the composed thing)
-                             met/unmet, quest stage,
+                             quest node, learned facts,
                              time of day, turns so far
                                     |
                                     v
@@ -1315,10 +1316,68 @@ all pass. This story does not start until the slate carries teachables.
 
 ### 090.3 Runtime overlay + situation lifecycle
 
-Overlay content unchanged: met/unmet, quest stage, time of day, turns so far.
-The round-3 findings all stand -- `evaluateRegionQuestBinding` fails closed on
-world flags, and the met/unmet ambiguity is the store-failure path, not the
-disabled path.
+SCOPE NARROWED 2026-07-30 (nikki). Start with the runtime facts that already
+arrive and are already digested; expand once testing shows what the Teacher can
+actually use. Reasoning: raw world state "can be anything", so a Teacher cannot
+make sense of it, and speccing the whole overlay up front spends effort on
+signals we have no evidence help.
+
+**IN -- all free on `execution.runtimeContext`, all absence-tolerant:**
+
+| Field | What it gives the Teacher |
+|---|---|
+| `activeQuestObjectives` | the current quest node |
+| `activeQuestStage`, `trackedQuest` | stage, and which quest is tracked |
+| `knownFacts` | display texts of facts the player has LEARNED this session |
+| `recentWorldEvents` | "quest advanced", "day advanced" -- capped at 10 |
+| `timeOfDay` | world-clock band |
+
+`knownFacts` and `recentWorldEvents` are the reason this scope works: runtime-core
+already digests world state into human-readable strings (Plan 074). That is the
+answer to "a world flag can be anything" -- someone already solved it, and the
+Teacher reads sentences rather than flag keys.
+
+**OUT -- NPC PRESENCE FILTERING, ENTIRELY.** Not deferred on cost; deferred
+because it fails in the silent direction. `RegionNPCPresence` is a PLACEMENT with
+an optional `condition` (region-authoring/index.ts:93-106) -- there is no separate
+presence flag on the NPC, so "has left the scene" and "is flag-gated" are the
+same mechanism. `evaluateRegionQuestBinding` returns FALSE for any binding with a
+`worldFlagEquals` clause when no flag predicate is supplied
+(region-conditions/index.ts:100-103), `RegionConditionContext.hasWorldFlag` is
+optional, and the plugin-visible `ConversationRuntimeContext` has no flag
+predicate at all. So a naive filter makes an NPC who IS standing there vanish
+from the situation. Accepted consequence of scoping out: a cached model may name
+an NPC who has left. Revisit when testing shows it actually misleads the Teacher
+-- not before.
+
+**OUT:** items in the region (`RegionItemPresence` exists in authoring but no
+runtime context surfaces it -- real plumbing, not a starting-narrow item); world
+flags as raw Teacher input.
+
+**NOT TOUCHED:** `ConversationRuntimeContext`. No runtime-core change in this
+story. The context arrives on the execution object the middleware is handed
+(conversation/index.ts:188) and sugarlang already reads it in five files, so this
+adds no cross-plugin seam and no sugaragent dependency.
+
+MET/UNMET IS DELETED FROM THIS EPIC -- IT WAS NEVER A FEATURE. Every prior
+revision listed it as overlay content. It does not exist. The nearest real thing
+is `isProbableFirstMeeting`, which is `recentTurns.length === 0`
+(prompt-builder.ts:169-171) -- "no turns yet in THIS conversation", not "has the
+player ever met this NPC". The prompt already names it `probable_first_meeting`,
+honestly; the plan promoted a heuristic's nickname into a capability and then
+wrote exits against it.
+
+ABSENCE IS THE DESIGN CONSTRAINT, NOT AN EDGE CASE. Every field above is optional
+AND nullable in its own type -- the signature of state nobody guarantees, because
+the blackboard is untyped raw state. So:
+
+**EMPTY AND MISSING MUST NOT COLLAPSE.** `knownFacts: []` means "the player has
+learned nothing yet". `knownFacts: undefined` means "we have no idea what the
+player knows". Render both as "the player knows nothing" and the Teacher teaches
+confidently from a fact we never had. This is the third instance of one bug shape
+in this epic -- `every` over an empty POS array reading as "function word"
+(090.2c), and `undefined === undefined` binning every unbanded lemma into one
+histogram bucket (090.2c). Absent evidence read as evidence. It gets a pin here.
 
 REFRAMED AS LIFECYCLE. The model's table says when each thing runs; this story
 owns making that true:
@@ -1358,17 +1417,27 @@ dodge the `sugarlang.context` / `sugaragent.memory` tie at stage `context`
 priority 10. Composing at scene load sidesteps the race entirely and gives
 pre-warming somewhere to hang.
 
-- Exit: met/unmet correct on first meeting and on return (integration); a
-  quest-stage advance moves the situation key and re-slates within one turn
-  (integration); an unchanged situation across five turns produces **exactly ONE
-  teacher call, on a learner WITH lemma-card history** (pin -- the lifecycle
-  claim. Round 6 correction: the old exit said ZERO, which for any non-cold-start
-  learner passes TODAY for the wrong reason, because the 087.6 branch never
-  reaches `teacher.invoke` at all. A pin that passes before the work is done
-  falsifies nothing); the slate is keyed on the situation, readable with no
-  conversation in scope (pin -- 090.8 depends on it); store-failure met/unmet is
-  distinguishable from a real first
-  meeting (pin); no sugaragent import in sugarlang (pin).
+- Exit: a quest-stage advance moves the situation key and re-slates within one
+  turn (integration).
+- An unchanged situation across five turns produces **exactly ONE teacher call,
+  on a learner WITH lemma-card history** (pin -- the lifecycle claim. Round 6
+  correction: the old exit said ZERO, which for any non-cold-start learner passes
+  TODAY for the wrong reason, because the 087.6 branch never reaches
+  `teacher.invoke` at all. A pin that passes before the work is done falsifies
+  nothing).
+- The slate is keyed on the situation and readable with NO conversation in scope
+  (pin -- 090.8 depends on it). Absent slate is a legal state; the pin is that
+  the read path says "no slate" legibly, not that it has content.
+- **A missing fact and an empty fact produce different prompt text** (pin --
+  `knownFacts: undefined` vs `knownFacts: []`, asserted against the built prompt
+  STRING. The third instance of absent-evidence-read-as-evidence in this epic, so
+  it is pinned rather than trusted).
+- The situation composes with EVERY runtime field absent, and says so rather than
+  failing (pin -- the blackboard guarantees nothing).
+- No presence filtering exists: grep finds no call to
+  `evaluateRegionQuestBinding` in sugarlang (pin -- scoped out deliberately, and
+  a later reader will otherwise assume it was forgotten).
+- No sugaragent import in sugarlang (pin).
 
 ### 090.9 LearningStatus -- NEW, small, unblocks 090.4
 
@@ -1727,9 +1796,9 @@ Round 4 also settled several of the round-3 questions:
 | 1. Gateway `purpose` for the Teacher | **RESOLVED and shipped.** `PURPOSE_MODELS` (deployment/gateway/core.ts:833-843) routes `teacher` -> `SUGARMAGIC_SUGARLANG_TEACHER_MODEL`, default claude-sonnet-4-6; `DEFAULT_DIRECTOR_MODEL` deleted. Struck. |
 | 2. POS enum: union vs per-language | **Still open.** es emits 12, it emits 14 (adds abbreviation, formula). Unaffected by the model. |
 | 3. Which introduce cap governs | **Settled by the model.** Both pre-truncation caps (`newItemsAllowed`=3, `getIntroduceLevelCap`=1 at A1) are deleted; capacity is one number the Learner reports, applied at realization. |
-| 4. World-flag-gated presences | **Still open, higher stakes.** `evaluateRegionQuestBinding` fails closed without a flag predicate, and Situation is now one of only TWO Teacher inputs -- a wrongly dropped presence has no other channel to compensate. Raised in priority. |
+| 4. World-flag-gated presences | **CLOSED 2026-07-30 (nikki): presence filtering is scoped out of 090.3 entirely.** Not solved -- declined. It fails in the silent direction (an NPC who IS there vanishes), and "flag-gated" and "left the scene" are the same mechanism because presence is a placement with a condition, not a flag on the NPC. Also correcting the argument in the previous row: "one of only TWO Teacher inputs" overstated it -- those two inputs carry a great deal about the scene, so a dropped presence is not uncompensated. Revisit when testing shows a stale NPC actually misleads the Teacher. |
 | 5. Is `publishSugarlangArtifacts` alive? | **Verified dead** -- no importer outside its own test. Not a design decision; a deletion. Downgraded. |
-| 6. Which "have they met" signal governs | **Still open, sharper.** Whichever wins must compose INTO situation. Note `isProbableFirstMeeting` is derived inside prompt-builder.ts:169-171 from `recentTurns` -- the prompt builder deriving a situation fact is itself a layering violation under the model. |
+| 6. Which "have they met" signal governs | **CLOSED 2026-07-30: there is no such signal, and there never was.** The question presupposed a capability the epic invented from a heuristic's nickname. `isProbableFirstMeeting` is `recentTurns.length === 0` (prompt-builder.ts:169-171) -- "no turns yet in THIS conversation", which the prompt already labels `probable_first_meeting`, accurately. Every "met/unmet" reference has been struck from this plan. The layering observation still stands and is unaffected: the prompt builder derives a situation-shaped fact, which the model says it should not. |
 
 New questions the model raises -- and three of the four it already answers.
 Listing them as "open" in the first draft of this section was wrong; the model
