@@ -81,6 +81,20 @@ Duplicate authored-scene truth is not.
 - Prefer narrow modules with obvious ownership.
 - Make names reflect domain meaning, not implementation details.
 - If a helper erases important meaning, it is too generic.
+- Each core behavior gets exactly one implementation. Two systems enforcing the
+  same behavior is a bug, not flexibility.
+  - Source-of-truth is about DATA: one owner per concept. Single-enforcer is
+    about BEHAVIOR: one implementation per decision. A codebase can satisfy the
+    first and still violate the second.
+  - Before adding a rule, threshold, table, or resolver, grep for one that
+    already exists — repo-wide, including `apps/` and `targets/`, not just
+    `packages/`.
+  - Precedence belongs in one function, not spread across its callers. If two
+    call sites consult the same sources in different orders, that is already
+    the bug.
+  - A duplicate is not always literal. A copied constant, an inlined ternary of
+    a shared table, or a second prompt asking the same question all count.
+  - When you find a second enforcer, delete it — do not "align" the two.
 
 ## Tech Debt Rules
 
