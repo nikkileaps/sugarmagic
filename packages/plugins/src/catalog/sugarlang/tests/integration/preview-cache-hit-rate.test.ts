@@ -230,16 +230,23 @@ describe("preview directive cache hit rate golden", () => {
       supportLanguage: "en"
     });
 
-    // Turns 1 and 2: 087.6 -- schedule-driven (greeting observed a lemma card so
-    // isColdStart=false). teacher.invoke() is bypassed; directive cache not consulted.
-    // Zero cache hits; still only the one greeting invocation.
+    // 090.4 REWROTE THIS TEST, and the rewrite is the point of the story.
+    //
+    // It used to read: "087.6 -- schedule-driven. teacher.invoke() is bypassed;
+    // directive cache not consulted. Zero cache hits." That was an accurate
+    // description of a system where the Teacher did not run.
+    //
+    // Now: the Teacher is invoked once, and subsequent turns HIT THE CACHE. One
+    // invocation plus two hits is the lifecycle 090.3b built -- decide once per
+    // situation, reuse across turns -- and it is strictly better than the old
+    // zero-hits number, which was zero only because nothing was ever cached.
     await host.submitInput({ kind: "advance" });
     await host.submitInput({ kind: "advance" });
 
     const phase1Resolved = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
     const phase1Hits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
     expect(phase1Resolved.length).toBe(1);
-    expect(phase1Hits.length).toBe(0);
+    expect(phase1Hits.length).toBe(2);
 
     // Fire a quest stage change -- DirectiveCache subscribes to the blackboard and
     // invalidates all cached directives on QUEST_ACTIVE_STAGE_FACT changes.
@@ -255,16 +262,24 @@ describe("preview directive cache hit rate golden", () => {
       updatedAtMs: 1000
     });
 
-    // Turn 3: schedule-driven -- the cache invalidation has no effect since the
-    // schedule-driven path never consults the directive cache. Still one total
-    // invocation (the greeting); still zero cache hits.
+    // Turn 3. NOTE what changed about invalidation: 090.3b deleted the
+    // blackboard subscription that used to invalidate every cached directive on
+    // any quest-stage event. The situation KEY governs now, and it is compared
+    // per conversation at read time. A raw blackboard write like the one above
+    // does not by itself move this conversation's key, so the directive is still
+    // valid and still served from cache.
+    //
+    // That is the intended behavior, not a gap: the old subscription
+    // over-invalidated, dropping good decisions whenever an unrelated quest
+    // advanced anywhere in the world.
     await host.submitInput({ kind: "advance" });
 
     const phase2Resolved = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
     const phase2Hits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
 
-    // Total across the full run: 1 invocation (greeting only), 0 hits.
+    // Total across the full run: 1 invocation, 3 hits. The Teacher decided once
+    // and that decision served every turn.
     expect(phase2Resolved.length).toBe(1);
-    expect(phase2Hits.length).toBe(0);
+    expect(phase2Hits.length).toBe(3);
   });
 });

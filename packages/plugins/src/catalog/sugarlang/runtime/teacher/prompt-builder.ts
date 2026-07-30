@@ -101,11 +101,34 @@ Return valid JSON with:
 - confidenceBand: "high" | "medium" | "low"
 - isFallbackDirective: false`;
 
+/**
+ * 090.4 REMOVED THE PRESCRIPTION FENCE.
+ *
+ * Three lines used to stand here:
+ *   - "Only output targetVocab lemmas that already appear in the prescription."
+ *   - "Never invent new target vocabulary."
+ *   - "...only 1-2 items FROM THE PRESCRIPTION..."
+ *
+ * Together they meant the Teacher's entire freedom was picking one or two things
+ * from three that a lexical scan had already chosen. It could not name a word
+ * the scan had missed -- which is the motivating bug of the whole epic: an agent
+ * NPC's lines do not exist at compile time, so `queso` never entered the scan,
+ * so the Teacher was structurally FORBIDDEN from teaching cheese to a
+ * cheese-obsessed character. It did not fail to think of it. It was not allowed
+ * to say it.
+ *
+ * The count cap SURVIVES and is deliberate. De-truncation (letting the slate
+ * itself grow past the budgeter's top-3) is a separate change ordered behind
+ * 090.8's prompt-shaping cap, because `generator-prompt-overlay.ts` renders
+ * `targetVocab.introduce` uncapped into the agent prompt. Removing the
+ * membership fence widens WHAT the Teacher may choose; it must not also widen
+ * HOW MANY, or an unbounded list goes straight into a prompt.
+ */
 export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 
-- Only output targetVocab lemmas that already appear in the prescription.
-- Never invent new target vocabulary.
-- Your targetVocab.introduce output should contain only 1-2 items from the prescription that fit this turn naturally. Do not force all prescribed items into one turn.
+- Choose targetVocab from what this situation makes teachable. You are not limited to the prescription.
+- Only use lemmas that exist in the target language; never invent words.
+- Your targetVocab.introduce output should contain only 1-2 items that fit this turn naturally. Do not force several items into one turn.
 - If a hard probe floor is active, you must trigger a comprehension check this turn.
 - Target lemmas for comprehension checks must come from the pending provisional list.
 - Keep citedSignals short and factual.`;

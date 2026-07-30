@@ -43,12 +43,22 @@ describe("parseDirective", () => {
     };
 
     const repaired = repairDirective(partial, context.prescription, context);
-    expect(repaired.targetVocab.introduce).toEqual(context.prescription.introduce);
-    expect(repaired.targetVocab.reinforce).toEqual(context.prescription.reinforce);
+
+    // 090.4 INVERTED THIS. It used to assert that a directive with no
+    // targetVocab was REFILLED from the prescription. That snap-back is what
+    // made the prescription the real author of every repaired directive while
+    // it looked like the Teacher's own output -- so removing the prompt fence
+    // alone would have changed nothing here.
+    //
+    // An empty list is now an empty list. "The Teacher named nothing usable for
+    // this turn" is a legitimate answer and has to be legible as one; refilling
+    // it invents a decision nobody made.
+    expect(repaired.targetVocab.introduce).toEqual([]);
+    expect(repaired.targetVocab.reinforce).toEqual([]);
     expect(repaired.glossingStrategy).toBe("parenthetical");
   });
 
-  it("drops invented introduce lemmas during repair", () => {
+  it("no longer drops lemmas the prescription did not contain", () => {
     const context = createTeacherContext({
       activeQuestEssentialLemmas: []
     });
@@ -67,7 +77,18 @@ describe("parseDirective", () => {
       context
     );
 
-    expect(repaired.targetVocab.introduce).toEqual([{ lemmaId: "queso", lang: "es" }]);
+    // 090.4: the whole point. `invented` is not in the prescription and it
+    // SURVIVES, because prescription membership no longer bounds what the
+    // Teacher may name. That fence is exactly why an agent NPC could never be
+    // taught a word the compile-time lexical scan had missed.
+    //
+    // Sanitization still applies -- malformed refs, duplicates and
+    // quest-essential lemmas are still filtered -- so this is a narrowing of
+    // the filter, not its removal.
+    expect(repaired.targetVocab.introduce).toEqual([
+      { lemmaId: "invented", lang: "es" },
+      { lemmaId: "queso", lang: "es" }
+    ]);
   });
 
   it("returns a structured error for malformed JSON", () => {

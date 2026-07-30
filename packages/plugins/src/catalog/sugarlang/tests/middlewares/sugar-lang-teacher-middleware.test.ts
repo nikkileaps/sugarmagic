@@ -415,6 +415,28 @@ function makeSchedule(overrides: Partial<TeachSchedule> = {}): TeachSchedule {
   };
 }
 
+/**
+ * 090.4: these tests used to pass a bare `vi.fn()` because the 087.6 branch meant
+ * the teacher was never called. It is called now, so the fake has to return
+ * something -- an undefined directive throws at the constraint assembly.
+ */
+function teacherDirectiveFixture() {
+  return {
+    targetVocab: { introduce: [], reinforce: [], avoid: [] },
+    supportPosture: "supported" as const,
+    targetLanguageRatio: 0.65,
+    interactionStyle: "natural_dialogue" as const,
+    glossingStrategy: "hover-only" as const,
+    sentenceComplexityCap: "two-clause" as const,
+    comprehensionCheck: { trigger: false, probeStyle: "none" as const, targetLemmas: [] },
+    directiveLifetime: { maxTurns: 20, invalidateOn: [] },
+    citedSignals: ["test"],
+    rationale: "test",
+    confidenceBand: "high" as const,
+    isFallbackDirective: false
+  };
+}
+
 function makeScheduleServices(invokeTeacher: ReturnType<typeof vi.fn>) {
   return {
     resolveForExecution: () => ({
@@ -439,9 +461,9 @@ function makeScheduleServices(invokeTeacher: ReturnType<typeof vi.fn>) {
   };
 }
 
-describe("SugarLangTeacherMiddleware -- 087.6 schedule-driven realization", () => {
-  it("builds a constraint from the schedule without invoking the teacher LLM", async () => {
-    const invokeTeacher = vi.fn();
+describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
+  it("INVOKES the teacher even when a schedule is present", async () => {
+    const invokeTeacher = vi.fn().mockResolvedValue(teacherDirectiveFixture());
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
@@ -455,40 +477,26 @@ describe("SugarLangTeacherMiddleware -- 087.6 schedule-driven realization", () =
 
     await middleware.prepare?.(execution);
 
-    expect(invokeTeacher).not.toHaveBeenCalled();
-    expect(execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).toMatchObject({
-      targetVocab: {
-        introduce: [{ lemmaId: "comer", lang: "es" }],
-        reinforce: [],
-        avoid: []
-      },
-      // Envelope values come from the shared band-envelope table (A2 ->
-      // supported -> 0.65, two-clause), NOT an inlined copy. If this test ever
-      // needs different numbers than FallbackTeacherPolicy produces for the
-      // same posture, the tables have diverged again.
-      supportPosture: "supported",
-      targetLanguageRatio: 0.65,
-      interactionStyle: "natural_dialogue",
-      sentenceComplexityCap: "two-clause"
-    });
+    // 090.4 INVERTED THIS ASSERTION. It used to read
+    // `expect(invokeTeacher).not.toHaveBeenCalled()` -- the 087.6 branch built
+    // the directive straight from `prescription` whenever a schedule existed and
+    // the learner was not cold-start, which is nearly always. The thing named
+    // "teacher middleware" never called the teacher.
+    //
+    // The branch is deleted. A schedule no longer suppresses judgment; it paces
+    // it. This is the single assertion that the Teacher is back on the path.
+    expect(invokeTeacher).toHaveBeenCalledTimes(1);
   });
 
-  it("schedule-driven directive has maxTurns=1 (recomputed every turn)", async () => {
-    const invokeTeacher = vi.fn();
-    const services = createServicesStub(makeScheduleServices(invokeTeacher));
-    const middleware = createSugarLangTeacherMiddleware({ services: services as never });
-    const execution = createTestExecution();
-    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
-    execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule();
-
-    await middleware.prepare?.(execution);
-
-    const directive = execution.annotations[SUGARLANG_DIRECTIVE_ANNOTATION] as { directiveLifetime: { maxTurns: number } };
-    expect(directive.directiveLifetime.maxTurns).toBe(1);
-  });
+  // 090.4 DELETED "schedule-driven directive has maxTurns=1". `maxTurns: 1` was
+  // a property of the deterministic bypass -- free to recompute every turn
+  // because it cost nothing. With the Teacher back on the path the lifetime
+  // comes from the directive itself, and the situation key (090.3b) is what
+  // decides when to re-plan. A per-turn recompute is now the thing to avoid,
+  // not the thing to assert.
 
   it("publishes retrieveBiasTerms in the sugarlang contribution when schedule has active lemmas", async () => {
-    const invokeTeacher = vi.fn();
+    const invokeTeacher = vi.fn().mockResolvedValue(teacherDirectiveFixture());
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
@@ -581,7 +589,7 @@ describe("SugarLangTeacherMiddleware -- 087.6 schedule-driven realization", () =
   });
 
   it("excludes fluency teachables from retrieveBiasTerms", async () => {
-    const invokeTeacher = vi.fn();
+    const invokeTeacher = vi.fn().mockResolvedValue(teacherDirectiveFixture());
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();

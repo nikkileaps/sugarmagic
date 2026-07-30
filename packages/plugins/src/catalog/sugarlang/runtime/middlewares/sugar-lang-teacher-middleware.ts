@@ -352,71 +352,24 @@ export function createSugarLangTeacherMiddleware(
           }),
           logger
         );
-      } else if (schedule && !schedule.isColdStart) {
-        // 087.6: schedule-driven realization. The outer loop has already determined
-        // what to teach; derive the directive deterministically without an LLM call.
-        // Directive lifetime is maxTurns=1 (free to recompute every turn since this
-        // path is deterministic and cheap). Fall through to the LLM path below when
-        // no schedule is present (cold-start or first-session) -- that path amortizes
-        // the LLM call over 3 turns.
-        const targetLanguage = execution.selection.targetLanguage ?? learner.targetLanguage;
-        // Envelope values come from the shared band-envelope table -- NOT inlined.
-        // A divergent copy here silently loosens the level control 083 enforces.
-        const posture = postureForBand(learner.estimatedCefrBand);
-        const ratio = TARGET_LANGUAGE_RATIO_BY_POSTURE[posture];
-        const glossingStrategy =
-          posture === "target-dominant" ? "none" as const : "hover-only" as const;
-        // A probe needs something to probe ABOUT: hardFloorReached can fire on the
-        // turns-since-probe clause alone (25 turns) with zero pending lemmas, which
-        // would arm the probe machinery with an empty target list -- and observe
-        // would then vacuously score it passed (0 of 0) into the strain model.
-        const probeTargets = pendingProvisional.slice(0, 2).map((p) => p.lemmaRef);
-        const probeTrigger =
-          probeTargets.length > 0 &&
-          (probeFloorState.hardFloorReached ||
-            (probeFloorState.softFloorReached && pendingProvisional.length >= 5));
-        directive = {
-          targetVocab: {
-            introduce: prescription.introduce,
-            reinforce: prescription.reinforce,
-            avoid: prescription.avoid
-          },
-          supportPosture: posture,
-          targetLanguageRatio: ratio,
-          interactionStyle: "natural_dialogue",
-          glossingStrategy,
-          sentenceComplexityCap: getSentenceComplexityCap(learner.estimatedCefrBand),
-          comprehensionCheck: {
-            trigger: probeTrigger,
-            probeStyle: probeTrigger ? "recall" : "none",
-            targetLemmas: probeTrigger ? probeTargets : [],
-            ...(probeTrigger
-              ? {
-                  triggerReason: probeFloorState.hardFloorReached
-                    ? ("hard-floor-turns" as const)
-                    : ("soft-floor" as const)
-                }
-              : {})
-          },
-          directiveLifetime: { maxTurns: 1, invalidateOn: [] },
-          citedSignals: ["schedule-driven"],
-          rationale: `Schedule-driven: ${schedule.teachables.length} teachable(s) paced by outer loop.`,
-          confidenceBand: "high",
-          isFallbackDirective: false
-        };
-        logger.debug("Schedule-driven directive built without teacher LLM.", {
-          conversationId,
-          sessionId,
-          turnId: traceTurnId,
-          sceneId: currentSceneId,
-          targetLanguage,
-          posture,
-          ratio,
-          scheduleTeachableCount: schedule.teachables.length,
-          introduceCount: prescription.introduce.length,
-          probeTrigger
-        });
       } else {
+        // 090.4 DELETED THE 087.6 SCHEDULE-DRIVEN BRANCH THAT USED TO SIT HERE.
+        //
+        // It caught every learner with any card history -- `schedule &&
+        // !schedule.isColdStart` -- and built the directive deterministically
+        // from `prescription.introduce/reinforce/avoid`, never calling
+        // `services.teacher.invoke` at all. So in steady state the Teacher did
+        // not run, and the thing named "teacher middleware" was a passthrough
+        // for the budgeter's output.
+        //
+        // It was added when the Teacher cost an LLM call per turn and that was
+        // too expensive. The situation key (090.3b) removes the reason: the
+        // Teacher now runs once per SITUATION rather than once per turn, so the
+        // cost it was avoiding is already gone.
+        //
+        // This is the deletion the epic's closing invariant requires -- two
+        // systems answering "what should be taught" is the condition it exists
+        // to remove.
         if (!scene) {
           logger.warn("Skipping Sugarlang teacher middleware - no scene id.");
           return execution;

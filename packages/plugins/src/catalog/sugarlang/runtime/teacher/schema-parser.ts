@@ -384,9 +384,21 @@ function buildQuestEssentialSet(context: TeacherContext): Set<string> {
   );
 }
 
+/**
+ * Sanitizes a lemma array, dropping quest-essential lemmas and duplicates.
+ *
+ * `allowed` is a membership gate that is now almost always `null` -- 090.4
+ * removed prescription membership as a constraint on what the Teacher may name.
+ * It is kept as a parameter rather than deleted because the contamination
+ * telemetry below still needs to ask "which of these WOULD a given set have
+ * excluded", and because a future caller may legitimately gate on something
+ * else. `null` means "no membership constraint", which is deliberately NOT the
+ * same as an empty set -- an empty set would exclude everything, and that
+ * distinction is exactly the kind that has bitten this codebase repeatedly.
+ */
 function filterLemmaArray(
   value: unknown,
-  allowed: Set<string>,
+  allowed: Set<string> | null,
   questEssential: Set<string>
 ): LemmaRef[] {
   if (!Array.isArray(value)) {
@@ -401,7 +413,10 @@ function filterLemmaArray(
       continue;
     }
     const key = `${lemma.lang}:${lemma.lemmaId}`;
-    if (!allowed.has(key) || questEssential.has(key) || seen.has(key)) {
+    if (allowed !== null && !allowed.has(key)) {
+      continue;
+    }
+    if (questEssential.has(key) || seen.has(key)) {
       continue;
     }
     seen.add(key);
@@ -668,26 +683,27 @@ export function repairDirective(
   const record = isRecord(partial) ? partial : {};
   const targetVocab = isRecord(record.targetVocab) ? record.targetVocab : {};
   const questEssential = buildQuestEssentialSet(context);
-  const introduceAllowed = getPrescriptionSet(prescription.introduce);
-  const reinforceAllowed = getPrescriptionSet(prescription.reinforce);
-  const avoidAllowed = getPrescriptionSet(prescription.avoid);
 
-  const introduce = filterLemmaArray(
-    targetVocab.introduce,
-    introduceAllowed,
-    questEssential
-  );
-  const reinforce = filterLemmaArray(
-    targetVocab.reinforce,
-    reinforceAllowed,
-    questEssential
-  );
-  const avoid = filterLemmaArray(targetVocab.avoid, avoidAllowed, questEssential);
+  // 090.4: PRESCRIPTION MEMBERSHIP NO LONGER FILTERS THE REPAIR.
+  //
+  // This was the SECOND fence, and the dangerous one. The prompt's version was
+  // visible -- an instruction the model could be seen obeying. This one was
+  // code: it filtered targetVocab against the prescription and then, if the
+  // filter emptied the list, DEFAULTED BACK to the prescription's own lemmas.
+  // So removing the prompt line alone would have changed nothing here; a
+  // directive needing repair would silently snap back to the old pool and look
+  // like the Teacher had simply agreed with the budgeter.
+  //
+  // Sanitization stays. What goes is membership: the Teacher may now name a
+  // lemma the prescription never contained, which is the entire point.
+  const introduce = filterLemmaArray(targetVocab.introduce, null, questEssential);
+  const reinforce = filterLemmaArray(targetVocab.reinforce, null, questEssential);
+  const avoid = filterLemmaArray(targetVocab.avoid, null, questEssential);
 
   const contaminatedLemmaIds = [
-    ...filterLemmaArray(targetVocab.introduce, introduceAllowed, new Set<string>()),
-    ...filterLemmaArray(targetVocab.reinforce, reinforceAllowed, new Set<string>()),
-    ...filterLemmaArray(targetVocab.avoid, avoidAllowed, new Set<string>())
+    ...filterLemmaArray(targetVocab.introduce, null, new Set<string>()),
+    ...filterLemmaArray(targetVocab.reinforce, null, new Set<string>()),
+    ...filterLemmaArray(targetVocab.avoid, null, new Set<string>())
   ]
     .filter((lemma) => questEssential.has(`${lemma.lang}:${lemma.lemmaId}`))
     .map((lemma) => lemma.lemmaId);
@@ -705,10 +721,22 @@ export function repairDirective(
     );
   }
 
-  const repairedIntroduce = introduce.length > 0 ? introduce : [...prescription.introduce];
-  const repairedReinforce =
-    reinforce.length > 0 ? reinforce : [...prescription.reinforce];
-  const repairedAvoid = avoid.length > 0 ? avoid : [...prescription.avoid];
+  // 090.4: THE SNAP-BACK IS GONE.
+  //
+  // These three lines used to read `introduce.length > 0 ? introduce :
+  // [...prescription.introduce]` -- when repair emptied a list, it refilled from
+  // the prescription. Combined with the membership filter above, that made the
+  // prescription the true author of every repaired directive while looking like
+  // the Teacher's own output.
+  //
+  // An empty list is now an empty list. It means the Teacher named nothing
+  // usable for this turn, which is a legitimate answer and must be legible as
+  // one; refilling it invents a decision nobody made. The prescription is still
+  // available in the context for anything that genuinely needs it -- it just no
+  // longer overwrites judgment.
+  const repairedIntroduce = introduce;
+  const repairedReinforce = reinforce;
+  const repairedAvoid = avoid;
 
   const supportPosture = isOneOf(record.supportPosture, SUPPORT_POSTURES)
     ? record.supportPosture

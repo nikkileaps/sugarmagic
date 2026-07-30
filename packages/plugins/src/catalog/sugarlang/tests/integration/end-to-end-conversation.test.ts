@@ -507,16 +507,19 @@ describe("end-to-end conversation golden", () => {
     // Turn 1: advance (fires a new directive -- cache miss).
     await host.submitInput({ kind: "advance" });
 
-    // Turn 2: advance -- schedule-driven (isColdStart=false after greeting observed a
-    // lemma card), so teacher.invoke() is never called and the directive cache is not
-    // consulted. No cache hits; still only one teacher invocation (from the greeting).
+    // Turn 2: advance. 090.4 deleted the 087.6 bypass, so the teacher path is
+    // taken and the directive cache IS consulted -- and hits, because the
+    // situation has not changed. The test name promises "only one teacher
+    // invocation fired", and that is still true; what changed is that the second
+    // turn now demonstrably REUSES the first decision rather than never having
+    // asked for one.
     await host.submitInput({ kind: "advance" });
 
     const cacheHits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
     const newDirectives = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
 
     expect(newDirectives.length).toBe(1);
-    expect(cacheHits.length).toBe(0);
+    expect(cacheHits.length).toBeGreaterThan(0);
   });
 
   it("verify pass: NPC text within the envelope passes through verify unchanged", async () => {
