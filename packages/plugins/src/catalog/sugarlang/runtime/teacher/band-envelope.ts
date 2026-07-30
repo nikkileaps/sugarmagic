@@ -40,6 +40,21 @@ import type { CEFRBand, PedagogicalDirective } from "../types";
  * target language. nikki's call. If beginner dialogue suddenly reads as denser,
  * this is why -- it is intended, not a regression.
  */
+/**
+ * How far the Teacher may move off the table's number for a posture.
+ *
+ * 090.4: the table used to govern NOTHING on the Teacher's path. The prompt
+ * asked for `targetLanguageRatio: number in [0, 1]` with no guidance at all, and
+ * nothing clamped the answer -- so an anchored A1 turn came back at 0.4 while
+ * the table said 0.3, and the model had no way to know it was wrong.
+ *
+ * A hard clamp was the other option. This band exists because density really is
+ * a moment-to-moment call -- a tense beat wants less target language than a
+ * relaxed one -- and posture alone is too coarse a lever for that. The table
+ * sets the centre; the Teacher may lean.
+ */
+export const TARGET_LANGUAGE_RATIO_TOLERANCE = 0.1;
+
 export const TARGET_LANGUAGE_RATIO_BY_POSTURE = {
   anchored: 0.3,
   supported: 0.65,
@@ -48,6 +63,24 @@ export const TARGET_LANGUAGE_RATIO_BY_POSTURE = {
 } as const;
 
 /** Sentence-complexity ceiling per band. A1 stays single-clause. */
+/**
+ * Bounds a Teacher-chosen ratio to its posture's band.
+ *
+ * The single place the table becomes a GOVERNOR rather than a suggestion.
+ * Callers must not re-derive this arithmetic; a second clamp with its own
+ * tolerance is the same divergence 090.8b just finished folding.
+ */
+export function clampRatioToPosture(
+  ratio: number,
+  posture: keyof typeof TARGET_LANGUAGE_RATIO_BY_POSTURE
+): number {
+  const centre = TARGET_LANGUAGE_RATIO_BY_POSTURE[posture];
+  if (!Number.isFinite(ratio)) return centre;
+  const low = Math.max(0, centre - TARGET_LANGUAGE_RATIO_TOLERANCE);
+  const high = Math.min(1, centre + TARGET_LANGUAGE_RATIO_TOLERANCE);
+  return Math.max(low, Math.min(high, ratio));
+}
+
 export function getSentenceComplexityCap(
   cefrBand: CEFRBand
 ): PedagogicalDirective["sentenceComplexityCap"] {

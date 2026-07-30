@@ -158,7 +158,20 @@ export interface TeacherContext {
    * empty situation, because those are different claims.
    */
   situation?: Situation;
-  prescription: LexicalPrescription;
+  /**
+   * 090.4b: DELETED. The Teacher no longer sees the budgeter's shortlist.
+   *
+   * It left in three steps, each of which had to happen or the others did
+   * nothing: the prompt block (so the model stops anchoring on it), the repair
+   * filter and snap-back (so a repaired directive stops silently reverting to
+   * it), and the fallback policy (which was built entirely from it, and fires
+   * precisely during an outage -- so the least-supervised path was the most
+   * tightly coupled to the machinery being deleted).
+   *
+   * What replaced it: the SITUATION says what this moment affords, and
+   * LEARNING STATUS says where the learner stands on each of those. Both are
+   * already on this context.
+   */
   npc: TeacherNpcContext;
   recentTurns: TeacherRecentTurn[];
   lang: TeacherLanguageContext;

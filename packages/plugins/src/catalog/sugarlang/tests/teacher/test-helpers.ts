@@ -37,10 +37,10 @@ import {
  */
 function createTeacherAtlasProvider(): LexicalAtlasProvider {
   const entries: AtlasLemmaEntry[] = [
-    { lemmaId: "hola", lang: "es", cefrPriorBand: "A1", frequencyRank: 1, partsOfSpeech: ["interjection"] },
-    { lemmaId: "billete", lang: "es", cefrPriorBand: "A2", frequencyRank: 15, partsOfSpeech: ["noun"] },
-    { lemmaId: "anden", lang: "es", cefrPriorBand: "B1", frequencyRank: 42, partsOfSpeech: ["noun"] },
-    { lemmaId: "queso", lang: "es", cefrPriorBand: "A2", frequencyRank: 90, partsOfSpeech: ["noun"] }
+    { lemmaId: "hola", lang: "es", cefrPriorBand: "A1", frequencyRank: 1, partsOfSpeech: ["interjection"], glosses: { en: "hello" } },
+    { lemmaId: "billete", lang: "es", cefrPriorBand: "A2", frequencyRank: 15, partsOfSpeech: ["noun"], glosses: { en: "ticket" } },
+    { lemmaId: "anden", lang: "es", cefrPriorBand: "B1", frequencyRank: 42, partsOfSpeech: ["noun"], glosses: { en: "platform" } },
+    { lemmaId: "queso", lang: "es", cefrPriorBand: "A2", frequencyRank: 90, partsOfSpeech: ["noun"], glosses: { en: "cheese" } }
   ];
   const byId = new Map(entries.map((entry) => [`${entry.lang}:${entry.lemmaId}`, entry]));
 
@@ -51,7 +51,15 @@ function createTeacherAtlasProvider(): LexicalAtlasProvider {
       byId.get(`${lang}:${lemmaId}`)?.frequencyRank ?? undefined,
     getGloss: (lemmaId, lang, supportLang) =>
       byId.get(`${lang}:${lemmaId}`)?.glosses?.[supportLang],
-    resolveFromGloss: () => [],
+    // 090.4b: a real reverse lookup, because the fallback now resolves concepts
+    // through it. Returning [] made every situation-derived slate silently
+    // empty -- the stub disagreeing with the real provider is its own bug class.
+    resolveFromGloss: (glossWord, lang, supportLang) =>
+      entries.filter(
+        (entry) =>
+          entry.lang === lang &&
+          entry.glosses?.[supportLang]?.toLowerCase() === glossWord.trim().toLowerCase()
+      ),
     listLemmasAtBand: (band, lang) =>
       entries
         .filter((entry) => entry.lang === lang && entry.cefrPriorBand === band)
@@ -178,7 +186,6 @@ export function createTeacherContext(
     learner,
     atlas: createTeacherAtlasProvider(),
     scene,
-    prescription,
     npc: {
       npcDefinitionId: "npc-orrin",
       displayName: "Orrin",

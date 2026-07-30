@@ -16,6 +16,7 @@
 
 import type { SugarlangLLMClient } from "../../llm/types";
 import { buildPostPlacementCalibrationHint, isInPostPlacementCalibration } from "../calibration-mode";
+import { traceTeacherCall } from "../teacher-trace";
 import {
   buildTeacherPrompt,
   estimatePromptTokens
@@ -229,6 +230,15 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
           reason: error instanceof Error ? error.message : "Claude request failed"
         })
       );
+      // Trace BEFORE throwing. A failed call that prints nothing looks exactly
+      // like a call that never happened, and the fallback directive that
+      // follows would then appear to come from nowhere.
+      traceTeacherCall({
+        context,
+        systemPrompt: prompt.system,
+        userPrompt,
+        errorText: error instanceof Error ? error.message : "Claude request failed"
+      });
       throw new TeacherInvocationError(
         error instanceof Error ? error.message : "Claude request failed",
         undefined,
@@ -264,7 +274,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         partialResponse: parseResult.error.partial,
         rawResponseText: response.text
       });
-      directive = repairDirective(parseResult.error.partial, context.prescription, context, {
+      directive = repairDirective(parseResult.error.partial, context, {
         telemetry: this.telemetry
       });
       parseMode = "repaired";
@@ -282,6 +292,12 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         partialResponse: parseResult.error.partial,
         rawResponseText: response.text,
         activeQuestEssentialLemmaCount: context.activeQuestEssentialLemmas.length
+      });
+      traceTeacherCall({
+        context,
+        systemPrompt: prompt.system,
+        userPrompt,
+        errorText: `parse failed: ${parseResult.error.message}`
       });
       throw new TeacherInvocationError(
         parseResult.error.message,
@@ -332,6 +348,16 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         }
       })
     );
+
+    // Console trace: situation + full prompt + directive, for the browser
+    // console. Placed on the success path AFTER the directive exists so all
+    // three are real; the throw paths above trace separately.
+    traceTeacherCall({
+      context,
+      systemPrompt: prompt.system,
+      userPrompt,
+      directive
+    });
 
     return directive;
   }

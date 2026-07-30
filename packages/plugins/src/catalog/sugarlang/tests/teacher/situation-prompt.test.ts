@@ -27,6 +27,7 @@ import { buildTeacherPrompt, formatSituation } from "../../runtime/teacher/promp
 import { composeSituation } from "../../runtime/situation";
 import { createTeacherContext } from "./test-helpers";
 import type { ConversationRuntimeContext } from "@sugarmagic/runtime-core";
+import type { SceneContextModel } from "../../runtime/contracts/scene-context";
 
 function runtimeContext(
   overrides: Partial<ConversationRuntimeContext> = {}
@@ -56,6 +57,61 @@ function situationSection(
     })
   );
 }
+
+describe("the scene's concepts reach the model", () => {
+  // FOUND IN PLAY, 2026-07-30. The situation block rendered prose and runtime
+  // facts and silently dropped the concept list, so a scene carrying 15 concepts
+  // including `cheese` reached the Teacher as a paragraph mentioning "a
+  // cheesemaker" -- and the Teacher, forbidden from inventing lemmas, could not
+  // name `queso`. Every unit test passed. This is the assertion that was
+  // missing: not "the block renders" but "the affordances are IN it".
+  function promptFor(...conceptLabels: string[]): string {
+    const model: SceneContextModel = {
+      sceneId: "scene-dock",
+      contentHash: "hash",
+      promptVersion: "090.1.0",
+      supportLanguage: "en",
+      prose: "A cheesemaker runs a shop here.",
+      concepts: conceptLabels.map((label) => ({
+        label,
+        pos: "noun" as const,
+        provenance: [{ sourceId: "npc:npc-finnick", kind: "npc" as const }]
+      })),
+      extractedAtMs: 1,
+      extractedByModel: "gateway-resolved",
+      reviewFlag: false
+    };
+    return buildTeacherPrompt(
+      createTeacherContext({
+        situation: composeSituation({ sceneId: "scene-dock", sceneContext: model })
+      })
+    ).user;
+  }
+
+  it("names the concept AND the lemma that supplies it", () => {
+    // The pair is what makes it actionable. A concept alone is English; the
+    // Teacher needs the target-language word to be allowed to name it.
+    const prompt = promptFor("cheese");
+
+    expect(prompt).toContain("cheese -> queso");
+  });
+
+  it("shows a concept the atlas cannot supply, rather than omitting it", () => {
+    // An unteachable concept is information. Dropping it silently is how a
+    // slate ends up mysteriously short with no explanation anywhere.
+    expect(promptFor("moon-bartering")).toContain("moon-bartering -> (no single word)");
+  });
+
+  it("does NOT present function words as what to teach", () => {
+    // The old SCENE SNAPSHOT sorted the scene lexicon by frequency and took six,
+    // which at the top of any frequency list is `el, de, a, para, haber, por` --
+    // printed under a heading saying "teachable lemmas", directly above the real
+    // affordances.
+    const prompt = promptFor("cheese");
+
+    expect(prompt).not.toContain("teachable lemmas:");
+  });
+});
 
 describe("formatSituation -- empty is not missing", () => {
   it("renders an unreadable fact as unknown and an empty one as none", () => {

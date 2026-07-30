@@ -18,6 +18,7 @@
  * Status: active
  */
 
+import { clampRatioToPosture } from "./band-envelope";
 import {
   isVocabularyRef,
   teachableRefKey,
@@ -732,6 +733,20 @@ export function parseDirective(
   }
 
   const directive = parsed as PedagogicalDirective;
+
+  // 090.4: the ratio is GOVERNED, not merely validated.
+  //
+  // The schema accepts any number in [0,1], so a model answering "anchored" with
+  // 0.4 passed straight through -- observed in play, against a table that says
+  // anchored means 0.3. The old `clampRatio` only ran on the REPAIR path, so a
+  // well-formed directive was never checked against the posture it claimed.
+  //
+  // One arithmetic, in band-envelope: see `clampRatioToPosture`.
+  directive.targetLanguageRatio = clampRatioToPosture(
+    directive.targetLanguageRatio,
+    directive.supportPosture
+  );
+
   if (options.context) {
     const enforcementError = enforceDirectiveRequirements(
       directive,
@@ -746,9 +761,13 @@ export function parseDirective(
   return { directive };
 }
 
+/**
+ * 090.4b: `prescription` is no longer a parameter. Once the membership filter
+ * and the snap-back were removed, nothing in here read it -- keeping it would
+ * have advertised an influence that no longer exists.
+ */
 export function repairDirective(
   partial: unknown,
-  prescription: LexicalPrescription,
   context: TeacherContext,
   options: RepairDirectiveOptions = {}
 ): PedagogicalDirective {
@@ -806,8 +825,7 @@ export function repairDirective(
   // An empty list is now an empty list. It means the Teacher named nothing
   // usable for this turn, which is a legitimate answer and must be legible as
   // one; refilling it invents a decision nobody made. The prescription is still
-  // available in the context for anything that genuinely needs it -- it just no
-  // longer overwrites judgment.
+  // gone entirely from this function.
   const repairedIntroduce = introduce;
   const repairedReinforce = reinforce;
   const repairedAvoid = avoid;
@@ -815,9 +833,12 @@ export function repairDirective(
   const supportPosture = isOneOf(record.supportPosture, SUPPORT_POSTURES)
     ? record.supportPosture
     : getDefaultSupportPosture(context);
-  const targetLanguageRatio = clampRatio(
-    record.targetLanguageRatio,
-    getDefaultTargetLanguageRatio(supportPosture)
+  // 090.4: same governor as the validated path -- one arithmetic, one table.
+  const targetLanguageRatio = clampRatioToPosture(
+    typeof record.targetLanguageRatio === "number"
+      ? record.targetLanguageRatio
+      : Number.NaN,
+    supportPosture
   );
   const interactionStyle = isOneOf(record.interactionStyle, INTERACTION_STYLES)
     ? record.interactionStyle

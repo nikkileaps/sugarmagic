@@ -392,7 +392,6 @@ export function createSugarLangTeacherMiddleware(
           ...(situation === null
             ? {}
             : { situation, situationKey: situationKey(situation) }),
-          prescription,
           npc: {
             npcDefinitionId: execution.selection.npcDefinitionId ?? null,
             displayName: execution.selection.npcDisplayName ?? null,
@@ -455,7 +454,6 @@ export function createSugarLangTeacherMiddleware(
                         questEssentialLemmas: []
                       },
                     atlas: services.atlas,
-                    prescription,
                     npc: {
                       npcDefinitionId: execution.selection.npcDefinitionId ?? null,
                       displayName: execution.selection.npcDisplayName ?? null,

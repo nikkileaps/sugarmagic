@@ -445,7 +445,6 @@ describe("sugarlang runtime contracts", () => {
       conversationId: "conversation-1",
       learner,
       atlas: new CefrLexAtlasProvider(),
-      prescription,
       scene: lexicon,
       npc: {
         npcDefinitionId: "npc-orinn",

@@ -88,7 +88,6 @@ describe("a competency can be taught", () => {
     // competency, so repair silently ate it.
     const repaired = repairDirective(
       { targetVocab: { introduce: [ASK_WHERE, QUESO], reinforce: [], avoid: [] } },
-      createTeacherContext().prescription,
       createTeacherContext()
     );
 

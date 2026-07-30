@@ -1280,6 +1280,24 @@ export async function handleSugarAgentSearch(
       ? Math.max(1, Math.min(8, Math.floor(body["maxResults"])))
       : 4;
 
+  // RELEVANCE FLOOR. Search used to return `max_num_results` regardless of how
+  // well anything matched, so a query with one good hit came back with one good
+  // hit and three pieces of whatever else was in the store -- which is how
+  // orphaned "smprobe_*" test files ended up handed to an NPC as world context.
+  //
+  // This is the principled fix rather than filtering by filename: junk got in
+  // because nothing asked whether a result was RELEVANT, and a name-based guard
+  // would leave the same hole open for the next irrelevant document.
+  //
+  // `ranking_options.score_threshold` is an OpenAI vector-store search parameter
+  // (verified against openai-node's VectorStoreSearchParams.RankingOptions).
+  // Callers may override; 0.3 is deliberately low -- the goal is excluding
+  // near-zero noise, not second-guessing the ranker.
+  const scoreThreshold =
+    typeof body["scoreThreshold"] === "number" && Number.isFinite(body["scoreThreshold"])
+      ? Math.max(0, Math.min(1, body["scoreThreshold"]))
+      : 0.3;
+
   if (!query || !vectorStoreId) {
     sendJson(res, 400, {
       ok: false,
@@ -1300,6 +1318,7 @@ export async function handleSugarAgentSearch(
       body: JSON.stringify({
         query,
         max_num_results: maxResults,
+        ranking_options: { score_threshold: scoreThreshold },
         filters:
           body["filters"] && typeof body["filters"] === "object" && !Array.isArray(body["filters"])
             ? body["filters"]
@@ -1793,6 +1812,40 @@ export async function handleSugarAgentLoreProbe(
     return;
   }
 
+  /**
+   * CLEANUP ALWAYS RUNS FROM HERE ON.
+   *
+   * It used to be step 5, in tail position -- so a probe that failed at attach,
+   * index or search returned early and left its file PERMANENTLY attached to the
+   * vector store. Three such orphans (2026-07-24 x2, 2026-07-27) were found being
+   * retrieved as real world context and handed to an NPC mid-conversation.
+   *
+   * A `finally` is the fix rather than a cleanup call before each early return:
+   * the latter is correct only until someone adds a sixth exit.
+   */
+  let hitFound = false;
+  let cleanupDone = false;
+  const cleanupProbeFile = async (): Promise<void> => {
+    if (cleanupDone || !uploadedFileId) return;
+    cleanupDone = true;
+    try {
+      await fetch(
+        "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/files/" + uploadedFileId,
+        { method: "DELETE", headers: authHeader }
+      );
+      await fetch("https://api.openai.com/v1/files/" + uploadedFileId, {
+        method: "DELETE",
+        headers: authHeader
+      });
+      steps["cleanup"] = { ok: true };
+    } catch (err) {
+      // Best effort on the DELETEs themselves -- but the ATTEMPT is now
+      // guaranteed, which is the part that was missing.
+      steps["cleanup"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+
+  try {
   // Step 2: attach to vector store
   try {
     const attachRes = await fetch(
@@ -1840,7 +1893,6 @@ export async function handleSugarAgentLoreProbe(
   }
 
   // Step 4: search for the probe phrase
-  let hitFound = false;
   try {
     const searchRes = await fetch(
       "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/search",
@@ -1867,19 +1919,9 @@ export async function handleSugarAgentLoreProbe(
     return;
   }
 
-  // Step 5: cleanup (best effort -- don't fail the probe if cleanup blows up)
-  try {
-    await fetch(
-      "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/files/" + uploadedFileId,
-      { method: "DELETE", headers: authHeader }
-    );
-    await fetch("https://api.openai.com/v1/files/" + uploadedFileId, {
-      method: "DELETE",
-      headers: authHeader
-    });
-    steps["cleanup"] = { ok: true };
-  } catch (err) {
-    steps["cleanup"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+
+  } finally {
+    await cleanupProbeFile();
   }
 
   const durationMs = Date.now() - startMs;

@@ -18,20 +18,65 @@
 import { describe, expect, it } from "vitest";
 import { FallbackTeacherPolicy } from "../../runtime/teacher/policies/fallback-teacher-policy";
 import { createTeacherContext } from "./test-helpers";
+import { composeSituation } from "../../runtime/situation";
+import type { SceneContextModel } from "../../runtime/contracts/scene-context";
+
+/**
+ * 090.4b: the fallback derives its slate from the SITUATION now, not the
+ * prescription, so these tests have to supply one. That is the change in one
+ * line: a fallback with no situation teaches nothing, which is the correct
+ * answer and used to be impossible because the budgeter always had an opinion.
+ *
+ * `queso` is A1 in the shipped atlas and absent from the fixture learner's
+ * cards, so its learning status is `unseen` -> introduce. `hola` is on a card
+ * with low retrievability -> due -> reinforce.
+ */
+function situationTeaching(...conceptLabels: string[]) {
+  const sceneContext: SceneContextModel = {
+    sceneId: "scene-station",
+    contentHash: "hash",
+    promptVersion: "090.1.0",
+    supportLanguage: "en",
+    prose: "A station.",
+    concepts: conceptLabels.map((label) => ({
+      label,
+      pos: "noun" as const,
+      provenance: [{ sourceId: "npc:npc-orrin", kind: "npc" as const }]
+    })),
+    extractedAtMs: 1,
+    extractedByModel: "gateway-resolved",
+    reviewFlag: false
+  };
+  return composeSituation({ sceneId: "scene-station", sceneContext });
+}
 
 describe("FallbackTeacherPolicy", () => {
   const policy = new FallbackTeacherPolicy();
 
   it("always produces a valid fallback directive", async () => {
-    const directive = await policy.invoke(createTeacherContext());
-    expect(directive.targetVocab.reinforce).toHaveLength(1);
+    const directive = await policy.invoke(
+      createTeacherContext({ situation: situationTeaching("ticket", "cheese") })
+    );
+
+    // The mapping IS the behavior, so assert both halves:
+    //   ticket -> billete, reviewCount 0        -> unseen -> introduce
+    //   cheese -> queso,   retrievability 0.42  -> due    -> reinforce
+    // Learning status (090.9) is doing the sorting; the prescription is not
+    // consulted at all.
+    expect(directive.targetVocab.introduce).toEqual([
+      { kind: "vocabulary", lemmaId: "billete", lang: "es" }
+    ]);
+    expect(directive.targetVocab.reinforce).toEqual([
+      { kind: "vocabulary", lemmaId: "queso", lang: "es" }
+    ]);
     expect(directive.directiveLifetime.maxTurns).toBe(3);
     expect(directive.isFallbackDirective).toBe(true);
   });
 
   it("produces anchored posture with inline glossing at cold start", async () => {
     const context = createTeacherContext({
-      activeQuestEssentialLemmas: []
+      activeQuestEssentialLemmas: [],
+      situation: situationTeaching("ticket")
     });
     context.learner.assessment.status = "unassessed";
     context.learner.assessment.cefrConfidence = 0.2;

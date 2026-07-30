@@ -14,7 +14,13 @@
  * Status: active
  */
 
-import { toVocabularyRefs } from "../../contracts/teachable-ref";
+import {
+  vocabularyRefs,
+  type TeachableRef
+} from "../../contracts/teachable-ref";
+import { isAvailable } from "../../situation";
+import { getLearningStatus } from "../../learner";
+import { resolveSceneTeachables } from "../../inventory/scene-teachable-resolver";
 import type {
   CEFRBand,
   TeacherContext,
@@ -115,6 +121,87 @@ function pickTriggerReason(
   return undefined;
 }
 
+/**
+ * 090.4b: the fallback's slate, derived from the SITUATION and the learner --
+ * not from the prescription.
+ *
+ * It used to be `context.prescription.introduce.slice(0, cap)`, which made the
+ * budgeter the author of every fallback directive and meant `prescription` could
+ * never leave `TeacherContext`. Worse, the fallback fires exactly when the
+ * gateway is unavailable -- so the path taken during an outage was the one most
+ * tightly coupled to the machinery the epic is deleting.
+ *
+ * The replacement uses what the epic already built: concepts from the situation,
+ * resolved against the atlas (090.2), then sorted by where the learner stands on
+ * each (090.9). No LLM, fully deterministic, which is the whole point of a
+ * fallback.
+ *
+ *   unseen        -> introduce, capped by band
+ *   due           -> reinforce
+ *   out-of-reach  -> avoid
+ *   learning/known-> neither; nothing to do about them this turn
+ *
+ * Returns empty lists when there is no situation or the scene was never built.
+ * That is a legitimate answer -- "teach nothing this turn" -- and far better
+ * than inventing a slate from a scan the Teacher is no longer bound by.
+ */
+function deriveFallbackSlate(context: TeacherContext): {
+  introduce: TeachableRef[];
+  reinforce: TeachableRef[];
+  avoid: TeachableRef[];
+} {
+  const empty = { introduce: [], reinforce: [], avoid: [] };
+  const situation = context.situation;
+  if (!situation || !isAvailable(situation.sceneContext)) {
+    return empty;
+  }
+
+  const targetLanguage = context.lang.targetLanguage;
+  const { teachables } = resolveSceneTeachables({
+    concepts: situation.sceneContext.value.concepts,
+    atlas: context.atlas,
+    targetLanguage,
+    supportLanguage: context.lang.supportLanguage
+  });
+
+  const introduce: TeachableRef[] = [];
+  const reinforce: TeachableRef[] = [];
+  const avoid: TeachableRef[] = [];
+
+  for (const teachable of teachables) {
+    if (teachable.kind !== "vocabulary") {
+      // Competencies are nameable on the slate (090.4a) but the fallback has no
+      // deterministic way to choose between them -- that judgment is the
+      // Teacher's. Skipping is honest; guessing would put an unjustified act in
+      // front of the learner during an outage.
+      continue;
+    }
+    const ref: TeachableRef = {
+      kind: "vocabulary",
+      lemmaId: teachable.id,
+      lang: targetLanguage
+    };
+    const status = getLearningStatus({
+      card: context.learner.lemmaCards[teachable.id],
+      itemBand: context.atlas.getBand(teachable.id, targetLanguage),
+      learnerBand: context.learner.estimatedCefrBand
+    });
+
+    if (status === "unseen") introduce.push(ref);
+    else if (status === "due") reinforce.push(ref);
+    else if (status === "out-of-reach") avoid.push(ref);
+  }
+
+  return {
+    introduce: introduce.slice(
+      0,
+      getIntroduceLevelCap(context.learner.estimatedCefrBand)
+    ),
+    reinforce,
+    avoid
+  };
+}
+
 export class FallbackTeacherPolicy implements TeacherPolicy {
   async invoke(
     context: TeacherContext,
@@ -122,11 +209,11 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
   ): Promise<PedagogicalDirective> {
     const confidence = context.learner.assessment.cefrConfidence;
     const supportPosture = pickFallbackPosture(confidence);
-    const introduce = context.prescription.introduce.slice(
-      0,
-      getIntroduceLevelCap(context.learner.estimatedCefrBand)
+    const slate = deriveFallbackSlate(context);
+    const glossingStrategy = pickGlossingStrategy(
+      context,
+      vocabularyRefs(slate.introduce)
     );
-    const glossingStrategy = pickGlossingStrategy(context, introduce);
     const shouldTriggerProbe =
       context.probeFloorState.hardFloorReached ||
       (context.probeFloorState.softFloorReached && confidence >= 0.3);
@@ -141,14 +228,7 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
     }
 
     return {
-      targetVocab: {
-        // 090.4: the fallback still sources from the prescription -- rewriting it
-        // onto situation + learning status is the next piece of this story. The
-        // lift is honest: these really are words.
-        introduce: toVocabularyRefs(introduce),
-        reinforce: toVocabularyRefs(context.prescription.reinforce),
-        avoid: toVocabularyRefs(context.prescription.avoid)
-      },
+      targetVocab: slate,
       supportPosture,
       targetLanguageRatio: TARGET_LANGUAGE_RATIO_BY_POSTURE[supportPosture],
       interactionStyle: pickInteractionStyle(context, confidence),

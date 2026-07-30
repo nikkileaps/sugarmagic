@@ -126,7 +126,10 @@ describe("ClaudeTeacherPolicy", () => {
       })
     );
 
-    expect(directive.targetLanguageRatio).toBe(1);
+    // 090.4: the repaired ratio is now governed by the posture's band rather
+    // than only by [0,1] -- `supported` centres on 0.65, so an out-of-range
+    // request lands at 0.75.
+    expect(directive.targetLanguageRatio).toBe(0.75);
     expect(directive.targetVocab.introduce).toEqual([
       { kind: "vocabulary", lemmaId: "queso", lang: "es" }
     ]);

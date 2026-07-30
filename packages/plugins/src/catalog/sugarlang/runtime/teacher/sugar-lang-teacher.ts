@@ -14,6 +14,7 @@
  * Status: active
  */
 
+import { traceTeacherDirective } from "./teacher-trace";
 import { isInPostPlacementCalibration } from "./calibration-mode";
 import { DirectiveCache } from "./directive-cache";
 import { FallbackTeacherPolicy } from "./policies/fallback-teacher-policy";
@@ -92,6 +93,11 @@ export class SugarLangTeacher {
           parseMode: "cached"
         })
       );
+      traceTeacherDirective({
+        context: effectiveContext,
+        directive: cached,
+        source: "cache"
+      });
       return cached;
     }
 
@@ -107,6 +113,11 @@ export class SugarLangTeacher {
       outcome = "fallback";
       directive = await this.fallbackPolicy.invoke(effectiveContext, {
         triggerReasonOverride: error.fallbackTriggerReason
+      });
+      traceTeacherDirective({
+        context: effectiveContext,
+        directive,
+        source: "fallback"
       });
     }
 

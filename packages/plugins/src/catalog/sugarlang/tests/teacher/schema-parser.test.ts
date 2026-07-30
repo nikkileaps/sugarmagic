@@ -42,7 +42,7 @@ describe("parseDirective", () => {
       targetLanguageRatio: 0.5
     };
 
-    const repaired = repairDirective(partial, context.prescription, context);
+    const repaired = repairDirective(partial, context);
 
     // 090.4 INVERTED THIS. It used to assert that a directive with no
     // targetVocab was REFILLED from the prescription. That snap-back is what
@@ -73,7 +73,6 @@ describe("parseDirective", () => {
           avoid: []
         }
       },
-      context.prescription,
       context
     );
 
@@ -210,17 +209,27 @@ describe("parseDirective", () => {
     }
   });
 
-  it("clamps out-of-range targetLanguageRatio during repair", () => {
-    const context = createTeacherContext();
+  it("clamps targetLanguageRatio to the POSTURE's band, not just to [0,1]", () => {
+    // 090.4 tightened this. It used to assert 1.5 -> 1.0, i.e. the only bound
+    // was the unit interval, so a directive claiming "anchored" could ask for
+    // 100% target language and pass. Observed in play at a milder scale: the
+    // Teacher answered "anchored" with 0.4 against a table saying 0.3.
+    //
+    // Repair with no posture defaults to `supported` (0.65), so the band is
+    // 0.55-0.75 and 1.5 lands on 0.75.
     const repaired = repairDirective(
-      {
-        targetLanguageRatio: 1.5
-      },
-      context.prescription,
-      context
+      { targetLanguageRatio: 1.5 },
+      createTeacherContext()
     );
 
-    expect(repaired.targetLanguageRatio).toBe(1);
+    expect(repaired.supportPosture).toBe("supported");
+    expect(repaired.targetLanguageRatio).toBe(0.75);
+  });
+
+  it("falls back to the posture's centre when the ratio is missing", () => {
+    const repaired = repairDirective({}, createTeacherContext());
+
+    expect(repaired.targetLanguageRatio).toBe(0.65);
   });
 
   it("rejects a directive that ignores the hard floor requirement", () => {
