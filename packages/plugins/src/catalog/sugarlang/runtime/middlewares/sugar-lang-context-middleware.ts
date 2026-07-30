@@ -63,7 +63,6 @@ import {
   type SugarlangLoggerLike
 } from "./shared";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
-import { resolveCompetencyTags } from "../inventory/competency-tag-resolver";
 import type { SchedulerBoardView } from "../scheduler/scheduler-board-view";
 import type { TeachSchedule } from "../scheduler/teach-schedule";
 import { realizeCompetencyChunksFromSchedule } from "../scheduler/competency-chunk-realizer";
@@ -366,14 +365,6 @@ export function createSugarLangContextMiddleware(
       // function-chunk realization step (087.3).
       let availableCompetencies: Competency[] = [];
       try {
-        let competencyTags = { sceneCompetencies: [] as string[], npcCompetencies: {} as Record<string, string[]> };
-        try {
-          const inventory = loadCompetencyInventory(targetLanguage);
-          const dialogues = deps.services.getDialogueDefinitions();
-          competencyTags = resolveCompetencyTags(sceneLexicon?.chunks, inventory, targetLanguage, dialogues);
-        } catch {
-          // Inventory not available for this language or tags failed; schedule degrades.
-        }
         const teachRecords = await services.teachRecordStore.list();
         const activeDebts = await services.ledgerStore.getActiveDebts();
         try {
@@ -395,7 +386,6 @@ export function createSugarLangContextMiddleware(
           },
           scene: {
             sceneId,
-            competencyTags,
             dayIndex: blackboard ? getWorldDay(blackboard) : null,
             sceneLemmaIds: Object.keys(sceneLexicon?.lemmas ?? {}).filter(
               (id) => !id.startsWith("chunk:")

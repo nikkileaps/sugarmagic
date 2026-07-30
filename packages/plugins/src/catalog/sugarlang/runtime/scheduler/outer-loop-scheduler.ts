@@ -194,12 +194,18 @@ export class OuterLoopScheduler {
       const fnBandIdx = bandIndex(fn.band);
       const isAboveBand = fnBandIdx > learnerBandIdx;
 
-      // Stretch gate: above-band functions require comprehension floor + scene affinity,
-      // and only one is allowed per turn.
+      // Stretch gate: above-band functions require a comprehension floor, and
+      // only one is allowed per turn.
+      //
+      // 090.2 removed a third condition here -- scene affinity. It asked whether
+      // the scene's compiled chunks intersected the competency's target-language
+      // forms, which could only be true if Spanish had leaked into English
+      // authored text, so it was gating on a question that answered "no" almost
+      // always. Whether a scene calls for a competency is the Teacher's call
+      // against the situation, not a precondition applied before it runs.
       if (isAboveBand) {
         if (stretchCandidateAdded) continue;
         if (sceneComprehensionRate < STRETCH_COMPREHENSION_FLOOR) continue;
-        if (!scene.competencyTags.sceneCompetencies.includes(fn.competencyId)) continue;
       }
 
       // familiarityBoost (087.3): fraction of constituent chunks already in card store × 0.05.
@@ -211,39 +217,21 @@ export class OuterLoopScheduler {
       // Band-derived base priority: A1 = 0.50, decreasing to C2 = 0.20.
       const basePriority = 0.50 - (fnBandIdx / CEFR_BAND_ORDER.length) * 0.30;
 
-      let affinityBoost = 0;
-      const affinityNpcIds: string[] = [];
-      const isInScene = scene.competencyTags.sceneCompetencies.includes(fn.competencyId);
-
-      if (isInScene) {
-        affinityBoost += 0.15;
-        for (const [npcId, npcFns] of Object.entries(scene.competencyTags.npcCompetencies)) {
-          if (npcFns.includes(fn.competencyId)) {
-            affinityNpcIds.push(npcId);
-          }
-        }
-        if (
-          npcDefinitionId &&
-          scene.competencyTags.npcCompetencies[npcDefinitionId]?.includes(fn.competencyId)
-        ) {
-          affinityBoost += 0.10;
-        }
-      }
-
-      const teachReason: TeachReason = isAboveBand
-        ? "stretch"
-        : isInScene
-        ? "function-affinity"
-        : "introduction";
+      // 090.2: scene-affinity boosts (+0.15 in-scene, +0.10 for the bound NPC)
+      // were removed with the field they read. They were scene-content ranking
+      // computed before the Teacher runs -- the budgeter's shape -- and they
+      // sourced from a gate that reported an empty scene almost always, so the
+      // boosts were dead in practice as well as wrong in principle.
+      const teachReason: TeachReason = isAboveBand ? "stretch" : "introduction";
 
       if (isAboveBand) stretchCandidateAdded = true;
 
       candidates.push({
         id: fn.competencyId,
         kind: "competency",
-        priority: clamp01(basePriority + affinityBoost + familiarityBoost),
+        priority: clamp01(basePriority + familiarityBoost),
         teachReason,
-        affinityNpcIds
+        affinityNpcIds: []
       });
     }
 

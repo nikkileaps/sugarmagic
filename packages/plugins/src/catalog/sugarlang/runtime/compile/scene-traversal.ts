@@ -36,6 +36,10 @@ import {
 } from "@sugarmagic/domain";
 import type { SourceLocation } from "../types";
 import type { ContextSource } from "../contracts/scene-context";
+import {
+  dialogueContextSourceId,
+  npcContextSourceId
+} from "../contracts/scene-context";
 
 export type TextBlobSourceKind =
   | "dialogue"
@@ -521,7 +525,7 @@ export function projectSceneContextSources(
   )) {
     const placementLabel = placementLabelByNpcId.get(npc.definitionId);
     sources.push({
-      sourceId: `npc:${npc.definitionId}`,
+      sourceId: npcContextSourceId(npc.definitionId),
       kind: "npc",
       displayName: text(npc.displayName) || undefined,
       ...(placementLabel ? { labels: { placementLabel } } : {}),
@@ -603,7 +607,7 @@ export function projectSceneContextSources(
     ([left], [right]) => compareStrings(left, right)
   )) {
     sources.push({
-      sourceId: `dialogue:${npcId}`,
+      sourceId: dialogueContextSourceId(npcId),
       kind: "npc",
       prose: lines.join("\n")
     });

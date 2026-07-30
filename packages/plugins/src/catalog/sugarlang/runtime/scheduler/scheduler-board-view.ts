@@ -27,7 +27,6 @@
 
 import type { LemmaCard } from "../types";
 import type { Competency } from "../contracts/competency-inventory";
-import type { CompetencyTagResult } from "../inventory/competency-tag-resolver";
 import type { DebtStatus } from "../learner/encounter-debt-ledger";
 
 export interface SchedulerLearnerView {
@@ -61,11 +60,14 @@ export interface SchedulerCurriculumView {
 export interface SchedulerSceneView {
   sceneId: string | null;
   /**
-   * Competency tag results for the current scene and its NPCs.
-   * Empty (sceneCompetencies: [], npcCompetencies: {}) when the scene lexicon is not yet
-   * compiled or the competency inventory does not cover this language.
+   * 090.2: there is deliberately NO scene-competency field here.
+   *
+   * The scheduler ranks on LEARNER state -- what is due, introduced, in debt,
+   * and fatigue -- which is spaced-repetition bookkeeping and not a judgment.
+   * Whether a scene calls for a given competency is scene-content ranking, which
+   * is the budgeter's job wearing the scheduler's clothes, and it belongs to the
+   * Teacher reading the situation (090.3 composes it, 090.4 decides).
    */
-  competencyTags: CompetencyTagResult;
   /**
    * WORLD_DAY_FACT value (in-game days elapsed since start).
    * Null when authored quests have not yet advanced the world day counter.

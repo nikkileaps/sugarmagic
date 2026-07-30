@@ -63,7 +63,6 @@ function emptyBoard(
     },
     scene: {
       sceneId: "scene-1",
-      competencyTags: { sceneCompetencies: [], npcCompetencies: {} },
       dayIndex: null,
       sceneLemmaIds: []
     },
@@ -253,71 +252,13 @@ describe("OuterLoopScheduler", () => {
     });
   });
 
-  describe("scene affinity boost", () => {
-    it("function present in scene gets higher priority and teachReason=function-affinity", () => {
-      const board = emptyBoard({
-        learner: {
-          cefrBand: "B1",
-          cefrConfidence: 0.7,
-          lemmaCards: { hola: makeCard("hola", 0.95) }, // non-cold-start seed
-          fatigueScore: 0
-        },
-        curriculum: {
-          introducedCompetencyIds: new Set(),
-          availableCompetencies: FIXTURE_FUNCTIONS
-        },
-        scene: {
-          sceneId: "market",
-          competencyTags: {
-            sceneCompetencies: ["buy"],
-            npcCompetencies: {}
-          },
-          dayIndex: null,
-          sceneLemmaIds: []
-        }
-      });
-      const schedule = scheduler.compute(board);
-      const buyItem = schedule.teachables.find((t) => t.id === "buy");
-      const greetItem = schedule.teachables.find((t) => t.id === "greet");
-      expect(buyItem?.teachReason).toBe("function-affinity");
-      // buy (B1 + affinity) should beat a non-affinity A1 function
-      expect(buyItem!.priority).toBeGreaterThan(greetItem!.priority);
-    });
-
-    it("current NPC affinity adds extra boost", () => {
-      const board = emptyBoard({
-        learner: {
-          cefrBand: "B1",
-          cefrConfidence: 0.7,
-          lemmaCards: { hola: makeCard("hola", 0.95) }, // non-cold-start seed
-          fatigueScore: 0
-        },
-        curriculum: {
-          introducedCompetencyIds: new Set(),
-          availableCompetencies: [FIXTURE_FUNCTIONS[0], FIXTURE_FUNCTIONS[2]]  // greet + buy
-        },
-        scene: {
-          sceneId: "market",
-          competencyTags: {
-            sceneCompetencies: ["greet", "buy"],
-            npcCompetencies: { "npc-market": ["buy"] }
-          },
-          dayIndex: null,
-          sceneLemmaIds: []
-        },
-        npcDefinitionId: "npc-market"
-      });
-      const schedule = scheduler.compute(board);
-      const buyItem = schedule.teachables.find((t) => t.id === "buy");
-      // buy has scene + NPC affinity, so the current NPC is recorded on the
-      // teachable. NOTE: this does NOT pin priority ORDER -- greet (A1) still
-      // outranks buy (B1) here because the band term dominates the affinity
-      // boost; asserting buy > greet fails today. Whether NPC affinity should
-      // outweigh band ordering is a 090.3 question (opportunity signals).
-      expect(buyItem).toBeDefined();
-      expect(buyItem!.affinityNpcIds).toContain("npc-market");
-    });
-  });
+  // 090.2 DELETED the scene-affinity and NPC-affinity boost tests along with the
+  // behavior. Both read `SchedulerSceneView.competencyTags`, which was scene-
+  // content ranking computed BEFORE the Teacher runs -- the budgeter's shape --
+  // and it sourced from a chunk intersection that reported an empty scene almost
+  // always, so the boosts were dead in practice as well as wrong in principle.
+  // Whether a scene calls for a competency is now the Teacher's call against the
+  // situation (090.3 composes it, 090.4 decides).
 
   describe("schedule ordering", () => {
     it("is deterministic: same board produces identical schedule twice", () => {
@@ -375,7 +316,7 @@ describe("OuterLoopScheduler", () => {
           lemmaCards: { hola: makeCard("hola", 0.5) },
           fatigueScore: 0
         },
-        scene: { sceneId: "my-scene", competencyTags: { sceneCompetencies: [], npcCompetencies: {} }, dayIndex: null, sceneLemmaIds: [] }
+        scene: { sceneId: "my-scene", dayIndex: null, sceneLemmaIds: [] }
       });
       expect(scheduler.compute(board).sceneId).toBe("my-scene");
     });
@@ -519,7 +460,7 @@ describe("OuterLoopScheduler", () => {
           availableCompetencies: [],
           activeDebts: new Map([["adios", { itemKind: "vocabulary" as const, diverseEncounterCount: 5, targetEncounters: 10 }]])
         },
-        scene: { sceneId: null, competencyTags: { sceneCompetencies: [], npcCompetencies: {} }, dayIndex: null, sceneLemmaIds: [] }
+        scene: { sceneId: null, dayIndex: null, sceneLemmaIds: [] }
       });
       scheduler.compute(board);
       await telemetry.flush();
@@ -575,8 +516,7 @@ describe("OuterLoopScheduler", () => {
         },
         scene: {
           sceneId: "test",
-          competencyTags: { sceneCompetencies: [], npcCompetencies: {} },
-          dayIndex: null,
+              dayIndex: null,
           sceneLemmaIds: ["hola", "adios", "gracias"] // gracias has no card = 0 retrievability
         }
       });
@@ -599,7 +539,6 @@ describe("OuterLoopScheduler", () => {
         },
         scene: {
           sceneId: "test",
-          competencyTags: { sceneCompetencies: ["order-food"], npcCompetencies: {} },
           dayIndex: null,
           sceneLemmaIds: ["hola", "adios", "gracias"] // 1/3 known -- below 0.80
         }
@@ -609,7 +548,7 @@ describe("OuterLoopScheduler", () => {
       expect(schedule.teachables.some((t) => t.teachReason === "stretch")).toBe(false);
     });
 
-    it("stretch allowance triggered when comprehensionRate >= 0.80 and above-band function has scene affinity", () => {
+    it("stretch allowance triggered when comprehensionRate >= 0.80", () => {
       const board = emptyBoard({
         learner: {
           cefrBand: "A1",
@@ -628,7 +567,6 @@ describe("OuterLoopScheduler", () => {
         },
         scene: {
           sceneId: "test",
-          competencyTags: { sceneCompetencies: ["order-food"], npcCompetencies: {} },
           dayIndex: null,
           sceneLemmaIds: ["hola", "adios", "gracias", "perdon"] // 4/4 = 1.0 >= 0.80
         }
@@ -640,7 +578,13 @@ describe("OuterLoopScheduler", () => {
       expect(stretchItem!.id).toBe("order-food");
     });
 
-    it("above-band function with NO scene affinity is NOT added even when comprehension floor met", () => {
+    it("an above-band function IS now offered when the comprehension floor is met", () => {
+      // 090.2 REVERSED this case. It previously asserted that `negotiate` was
+      // withheld for lacking scene affinity -- but affinity came from a chunk
+      // intersection that reported an empty scene almost always, so the real
+      // effect was that above-band competencies were withheld unconditionally.
+      // The comprehension floor is the honest gate; what a scene calls for is
+      // the Teacher's judgment, made later against the situation.
       const board = emptyBoard({
         learner: {
           cefrBand: "A1",
@@ -657,17 +601,16 @@ describe("OuterLoopScheduler", () => {
         },
         scene: {
           sceneId: "test",
-          competencyTags: { sceneCompetencies: [], npcCompetencies: {} }, // negotiate NOT in scene
           dayIndex: null,
           sceneLemmaIds: ["hola", "adios"] // 2/2 = 1.0 >= 0.80
         }
       });
       const schedule = scheduler.compute(board);
-      expect(schedule.stretchAllowanceActive).toBe(false);
-      expect(schedule.teachables.some((t) => t.id === "negotiate")).toBe(false);
+      expect(schedule.stretchAllowanceActive).toBe(true);
+      expect(schedule.teachables.some((t) => t.id === "negotiate")).toBe(true);
     });
 
-    it("only one stretch item is added even when multiple above-band functions have scene affinity", () => {
+    it("only one stretch item is added even when multiple above-band functions qualify", () => {
       const B1_FN_2 = {
         competencyId: "ask-directions",
         displayName: "Ask directions",
@@ -688,7 +631,6 @@ describe("OuterLoopScheduler", () => {
         },
         scene: {
           sceneId: "test",
-          competencyTags: { sceneCompetencies: ["order-food", "ask-directions"], npcCompetencies: {} },
           dayIndex: null,
           sceneLemmaIds: ["hola", "adios"] // 2/2 = 1.0 >= 0.80
         }

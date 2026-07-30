@@ -106,6 +106,46 @@ export interface ConceptProvenance {
 }
 
 /**
+ * How an NPC-attributable `sourceId` is encoded, minted and read in one place.
+ *
+ * An NPC reaches the extractor two ways -- as a character (its description) and
+ * as a voice (the lines it speaks) -- so both prefixes exist and both mean "this
+ * NPC". Readers that want to answer "which NPC is this concept about" must go
+ * through `npcDefinitionIdFromProvenance` rather than slicing the string, or the
+ * encoding ends up known in as many places as there are readers.
+ */
+export function npcContextSourceId(npcDefinitionId: string): string {
+  return `npc:${npcDefinitionId}`;
+}
+
+export function dialogueContextSourceId(npcDefinitionId: string): string {
+  return `dialogue:${npcDefinitionId}`;
+}
+
+/**
+ * The NPC a provenance entry attributes to, or undefined when it is not about
+ * one. Player-spoken dialogue never mints a source at all (the speaker resolver
+ * drops it upstream), so a player line cannot arrive here.
+ */
+export function npcDefinitionIdFromProvenance(
+  entry: ConceptProvenance
+): string | undefined {
+  if (entry.kind !== "npc") {
+    return undefined;
+  }
+  const separator = entry.sourceId.indexOf(":");
+  if (separator < 0) {
+    return undefined;
+  }
+  const prefix = entry.sourceId.slice(0, separator);
+  if (prefix !== "npc" && prefix !== "dialogue") {
+    return undefined;
+  }
+  const npcDefinitionId = entry.sourceId.slice(separator + 1);
+  return npcDefinitionId.length > 0 ? npcDefinitionId : undefined;
+}
+
+/**
  * One thing a piece of content is about, or does.
  *
  * DEMAND, not supply. A concept says "this is relevant here"; it does not say

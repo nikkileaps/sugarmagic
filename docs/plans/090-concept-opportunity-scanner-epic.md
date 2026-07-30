@@ -410,7 +410,28 @@ A CONCEPT THEREFORE HAS NO KIND. An earlier draft of the contract tagged
 concepts `thing` vs `act`; that forces `greeting` to pick one and discard the
 other resolution -- destroying the exact case that lets a word be taught INSIDE
 the act that uses it (`hola` within `greet`), which is the difference between a
-flashcard and speaking. Resolution tries both tables and records what came back.
+flashcard and speaking.
+
+ONLY ONE OF THE TWO TABLES IS JOINED BY LOOKUP. Amended 2026-07-29 (nikki). The
+asymmetry below is not just a description of the two tables -- it decides the
+MECHANISM for each, and an earlier revision of this story missed that:
+
+- **The atlas is joined here.** 11,000 entries cannot go in a prompt, and
+  `cheese` -> `queso` is a dictionary fact rather than a judgment. A
+  deterministic reverse-gloss lookup is the right tool.
+- **The competency inventory is NOT joined here.** Ten entries fit in a prompt
+  trivially, and "does this scene call for `ask-where`" is a judgment. It is made
+  by the Teacher, against the situation, in 090.4.
+
+The first build of this story matched concept labels against a hand-authored
+`conceptLabels` alias list on each competency (`greeting` -> `greet`). That is a
+lookup table standing in for a decision: it needs new aliases for every content
+domain forever, an exact-match miss is silent, and it is the prescriber's own
+shape -- precomputing what the Teacher exists to decide. It was reverted.
+
+THE FLOW IS NOT CONCEPTS -> TEACHER. It is concepts -> SITUATION (090.3 overlays
+the runtime half) -> Teacher, with the inventory alongside. 090.2 stops at
+vocabulary resolution and does not reach the Teacher at all.
 
 THE SINGLE-WORD RULE MOVES DOWN, IT DOES NOT APPLY TO CONCEPTS. Atlas resolution
 needs one word and simply MISSES on a phrase. That miss is informative, not an
@@ -487,10 +508,65 @@ scheduler) plus the whole dedup/merge apparatus, which existed solely to
 preserve the `w_npc` boost (scoring.ts:149-154) -- a RANKING mechanism the model
 gives to the Teacher.
 
-KEEP the storage side: `conceptLemmas?` as a side field written through the
-scheduler like chunks. It is the compile artifact. Drop the read-time projection
-into `lemmas` unless the budgeter-deletion order (below) proves it is needed as
-a transition scaffold.
+AMENDED 2026-07-29 (nikki): THE OUTPUT IS A TEACHABLE LIST, AND IT IS DERIVED,
+NOT STORED. The previous text specced `conceptLemmas?` as a side field written
+through the scheduler like chunks. Three things are wrong with that.
+
+**1. `conceptLemmas` is a lemma-only name for a two-table result.** It predates
+the two-table decision at the top of this story and cannot hold a competency
+resolution. That is not cosmetic -- it rebuilds, one story earlier, the exact
+defect [domain-model-after-epic-090.md:516](../../packages/plugins/src/catalog/sugarlang/docs/api/domain-model-after-epic-090.md)
+already names: *"The slate must carry TEACHABLEs, not lemma refs. Competency
+reaches teaching only by being flattened into `prescription.introduce`, so
+deleting the prescriber deletes competency teaching."* 090.10 then deletes the
+prescriber on top of it. The noun is TEACHABLE -- already the settled umbrella
+(domain-terms.md:177, `ScheduledTeachable` in scheduler/teach-schedule.ts).
+
+```ts
+SceneTeachable {
+  kind: "vocabulary" | "competency"
+  id: string                       // lemmaId, or competencyId
+  concepts: string[]               // the concept labels that demanded it
+  provenance: ConceptProvenance[]  // union across those concepts
+  mustComprehend: boolean          // true if any demanding concept is quest-essential
+}
+```
+
+The demand side must survive into the row. Drop it and the Teacher cannot tell
+quest-critical from incidental, or "three NPCs are about this" from "one lore
+page mentions it" -- which is the ranking signal the model hands the Teacher in
+place of the budgeter's `w_npc` boost. Rows are keyed by teachable, so two
+concepts resolving to one lemma merge into one row with two demanders; that also
+removes any need for concept identity (`Concept` has no id --
+scene-context.ts:137-167).
+
+**2. It is DERIVED AT READ TIME, and persisted nowhere.** Both inputs are already
+in hand wherever the list is wanted, and both lookups are O(1):
+
+- the atlas gloss reverse index is built once and cached in-provider
+  (cefr-lex-atlas-provider.ts:168, :208-217), so resolution is a `Map.get`
+- the competency inventory is a 10-entry file loaded by
+  competency-inventory-loader
+- concepts are already cached and already seeded into the runtime (090.1g)
+
+Deriving dissolves every problem storing it created: no artifact-home question
+(it does not ride `SceneVocabularyModel`, which answers a different question), no
+cache key, no concept identity, and no stale resolution after a curriculum edit.
+
+This is not a new pattern -- it is the one this exact problem already uses.
+`resolveCompetencyTags` resolves scene competencies at read time for stated
+reason (competency-tag-resolver.ts:5-6): *"Tags are NEVER stored in the compiled
+artifact so they automatically reflect inventory edits without recompile."*
+
+**3. Storing it had an unfundable cache key.** A stored resolution invalidates on
+atlas change AND inventory change. `SceneVocabularyModel`'s hash covers
+`atlas:${atlasVersion}` (content-hash.ts:153-157); nothing covers the inventory,
+which carries only `schemaVersion: "1"` -- a shape literal, not a content version
+(contracts/competency-inventory.ts:86). Storing would have required inventing an
+inventory content version. Deriving does not.
+
+Drop the read-time projection into `lemmas` unless the budgeter-deletion order
+(below) proves it is needed as a transition scaffold.
 
 COLLAPSE THE ARTIFACT. `CompiledSceneLexicon` is a record map shadowing the
 atlas, and once the budgeter goes it is almost entirely dead weight.
@@ -540,9 +616,60 @@ is the lexicon. `SceneVocabularyModel`, produced by a `SceneVocabularyExtractor`
 "The architecture" above, where it is now the SceneContextExtractor's sibling rather
 than "the compiler").
 
+090.2 OWNS A DELETION (nikki, 2026-07-29). There is already an enforcer of "is
+this competency teachable in this scene": `resolveCompetencyTags`
+(inventory/competency-tag-resolver.ts), consumed by outer-loop-scheduler.ts:202-227
+to gate `isInScene` and per-NPC teaching. It answers by intersecting the
+inventory's TARGET-LANGUAGE chunk forms (`hola`, `buenos dias`) with chunks the
+MWE extractor pulled *"verbatim in the provided scene text"*
+(multi-word-expression-extractor.ts:141) -- and authored text is English by the
+first invariant of this epic. An English `good morning` cannot match a Spanish
+`buenos dias`, so the gate appears to be answering "no competencies here" almost
+always, and the scheduler has been skipping competency teaching on that basis.
+
+Two enforcers of one question is the condition this epic exists to remove, so the
+chunk-intersection path goes. nikki's call, explicitly including "even if it
+breaks things"; anything that genuinely cannot be repointed yet ships as an
+obviously-named `TEMPShim*` module, never as a quiet fallback.
+
+AND ITS CONSUMER GOES WITH IT. Revised 2026-07-29 after the first build swapped
+the new resolution INTO the old consumer -- which reproduced the shape the epic
+exists to delete. `SchedulerSceneView.competencyTags` fed two gates in
+`outer-loop-scheduler` (the stretch gate at :202, affinity boosts at :216-231),
+both of which rank on SCENE CONTENT before the Teacher runs. That is the
+budgeter's job wearing the scheduler's clothes.
+
+The line that separates the two, and the reason the scheduler itself survives:
+**the scheduler ranks on LEARNER state** -- what is due, introduced, in debt,
+fatigue -- which is spaced-repetition bookkeeping and not a judgment. **The
+budgeter ranked on SCENE content**, which is. So `competencyTags` and both gates
+are deleted; the scheduler keeps its learner-state half.
+
+Note the direction of the resulting behavior change: the stretch gate previously
+required scene affinity, and affinity was always empty, so above-band
+competencies were withheld unconditionally. Removing it makes them REACHABLE
+when the comprehension floor is met. The old test asserting they were withheld
+was inverted, not deleted.
+
 - Exit: concepts resolve to the four pinned lemma ids; when a concept carries a
-  POS, `partsOfSpeech` contains it; empty pool drops with telemetry; the side
-  field is persisted and survives a cache-hit recompile.
+  POS, `partsOfSpeech` contains it; empty pool drops with telemetry.
+- `resolveCompetencyTags` is deleted, asserted by grep -- along with
+  `sceneCompetencies` / `npcCompetencies` / the `competencyTags` field on the
+  scheduler board view and the call at context-middleware.ts:373 (pin -- the
+  second enforcer, not just its call site).
+- No competency is resolved by lookup anywhere: every row this story produces is
+  `kind: "vocabulary"` (pin -- if competency rows appear, an alias table has been
+  reintroduced in place of the Teacher).
+- An above-band competency IS offered when the comprehension floor is met, with
+  no scene-affinity precondition (pin -- the inverted test; it asserts the gate
+  that was silently withholding everything is gone).
+- The list is DERIVED, asserted two ways (pin -- this is the amendment above):
+  grep finds no `conceptLemmas` and no persisted teachable field on any compiled
+  artifact; and editing the competency inventory changes the resolved list with
+  NO recompile, the same property competency-tag-resolver.ts:5-6 protects.
+- Two concepts resolving to one lemma produce ONE row carrying both demanders,
+  with provenance unioned and `mustComprehend` true if either demands it (pin --
+  the merge is what removes the need for concept identity).
 - **All four resolution outcomes are distinguishable**, asserted on real atlas
   data (integration): `cheese` -> vocabulary only; `greeting` -> vocabulary AND
   competency; `self introduction` -> competency only, with the atlas miss NOT
