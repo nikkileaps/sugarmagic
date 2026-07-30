@@ -49,9 +49,9 @@ import type { LineIntentCacheKey } from "../compile/intent-cache";
 import { buildIntentContentHash } from "../compile/intent-cache";
 import type { CEFRBand } from "../cefr";
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
-import type { LiveRenderCacheKey } from "../compile/live-render-cache";
-import { buildTeachablesKey } from "../compile/live-render-cache";
-import { verifyLiveRender } from "../compile/verify-live-render";
+// 090.8c: the live-render cache and its verifier are no longer imported here.
+// They remain in compile/ because the BUILD path still needs them (090.11);
+// what left is the runtime caller.
 
 export interface SugarLangScriptedMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -287,11 +287,22 @@ export function createSugarLangScriptedMiddleware(
 
       let usedVariant = false;
 
-      // 087.5: deterministic trigger -- due teachable x line-intent match x strain headroom.
-      // Reads the outer-loop schedule (written by context middleware) and the intent artifact
-      // for this node (baked by the compile pipeline). When a scheduled due item's id appears
-      // in the line's mustConveyFacts AND the learner is not in strain-suppressed mode,
-      // the line renders live with the due word woven in.
+      // 090.8c DELETED THE 087.5 LIVE-RENDER PATH.
+      //
+      // It fired a gateway call WHILE DISPLAYING an authored dialogue line: when
+      // a scheduled due teachable matched the line's intent facts, it asked the
+      // LLM to render the line in the target language, verified the result, and
+      // used it. The model budgets ZERO LLM per rendered line, so this was the
+      // one thing making that invariant false.
+      //
+      // The work moves to build (090.11). An LLM call per line is exactly right
+      // once, at bake time; it is exactly wrong on the turn the player is
+      // waiting for.
+      //
+      // Stated plainly because the deletion is not free: this path was
+      // production-reachable and NEVER TESTED -- 087's own outstanding list
+      // records that no test ever fired the trigger. Nothing will fail loudly if
+      // removing it was wrong. The zero-gateway-call pin below is the guard.
       const dialogueDefinitionId = execution.selection.dialogueDefinitionId ?? "";
       const nodeIntent = dialogueDefinitionId && nodeId
         ? services.dialogueDefinitions
@@ -299,109 +310,6 @@ export function createSugarLangScriptedMiddleware(
             ?.nodes.find((n) => n.nodeId === nodeId)?.intent
         : undefined;
       const intentContentHash = buildIntentContentHash(nodeId, authoredText, nodeIntent);
-      const schedule = execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] as TeachSchedule | undefined;
-      let liveRenderTriggered = false;
-      let liveRenderIntroduce = constraint.targetVocab.introduce;
-
-      if (nodeId && schedule && !schedule.strainSuppressed && services.intentCache) {
-        try {
-          const intentKey: LineIntentCacheKey = {
-            contentHash: buildIntentContentHash(nodeId, authoredText, nodeIntent),
-            intentPromptVersion: LINE_INTENT_PROMPT_VERSION
-          };
-          const intentEntry = await services.intentCache.get(intentKey);
-          if (intentEntry && intentEntry.artifact.mustConveyFacts.length > 0) {
-            const factSet = new Set(intentEntry.artifact.mustConveyFacts);
-            const dueMatches: LemmaRef[] = schedule.teachables
-              .filter((t) => t.teachReason === "due" && factSet.has(t.id))
-              .map((t) => ({ lemmaId: t.id, lang: targetLanguage }));
-            if (dueMatches.length > 0) {
-              liveRenderTriggered = true;
-              liveRenderIntroduce = dueMatches;
-            }
-          }
-        } catch {
-          // Trigger check is optional -- never error the turn; fall through to baked variant
-        }
-      }
-
-      if (liveRenderTriggered) {
-        const introduce = liveRenderIntroduce;
-        const teachablesKey = buildTeachablesKey(introduce);
-        const liveKey: LiveRenderCacheKey = {
-          nodeId,
-          dialogueDefinitionId,
-          lang: constraint.targetLanguage,
-          band,
-          posture: constraint.supportPosture,
-          teachablesKey
-        };
-
-        try {
-          // Cache hit: skip LLM entirely.
-          const cached = services.liveRenderCache?.get(liveKey) ?? null;
-          if (cached) {
-            normalizedTurn.text = cached.text;
-            usedVariant = true;
-            logger.debug("Scripted line: live-render cache hit (zero LLM).", {
-              nodeId,
-              band,
-              lang: constraint.targetLanguage
-            });
-          } else if (services.llmClient) {
-            // Cache miss: call the LLM to render the line live.
-            const inventoryChunks = getAllInventoryChunks(constraint.targetLanguage);
-            const llmResult = await services.llmClient.generate({
-              systemPrompt: [
-                `You are a dialogue writer for a language-learning game.`,
-                `Render the given English dialogue line in ${constraint.targetLanguage} for a ${band} learner.`,
-                `Return only the translated/adapted line, nothing else.`
-              ].join(" "),
-              userPrompt: [
-                `Target language: ${constraint.targetLanguage}`,
-                `Learner level: ${band}`,
-                `\nOriginal English line:\n${authoredText}`
-              ].join("\n"),
-              maxTokens: 300
-            });
-
-            const renderedText = llmResult.text.trim();
-            if (renderedText) {
-              // Verify with deterministic gates only (no LLM fidelity judge at runtime).
-              const verdict = verifyLiveRender({
-                text: renderedText,
-                targetLang: constraint.targetLanguage,
-                band,
-                posture: constraint.supportPosture,
-                directedRatio: constraint.targetLanguageRatio,
-                introduce,
-                inventoryChunks,
-                atlas: services.atlas
-              });
-
-              if (verdict.overallPasses) {
-                // Cache and use the live render.
-                services.liveRenderCache?.set(liveKey, {
-                  text: renderedText,
-                  verdict,
-                  cachedAtMs: Date.now()
-                });
-                normalizedTurn.text = renderedText;
-                usedVariant = true;
-                logger.debug("Scripted line: live-render produced and cached.", {
-                  nodeId,
-                  band,
-                  lang: constraint.targetLanguage
-                });
-              }
-              // On verify failure: fall through to baked variant below (usedVariant stays false).
-            }
-            // On empty response or LLM error caught below: fall through (usedVariant stays false).
-          }
-        } catch {
-          // Any live-render failure is non-fatal -- fall through to baked variant below.
-        }
-      }
 
       // Only consult the baked variant when the live render did NOT produce the
       // line. Without the !usedVariant gate a baked-variant cache hit overwrites
