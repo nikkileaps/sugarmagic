@@ -15,21 +15,32 @@
  *   from that scene and files it under the id the consumer actually has. Small
  *   duplication, and it removes the lookup from the consumer entirely.
  *
- * WHY A PLAIN MAP AND NOT AN INDEXEDDB CACHE
- *   Same shape as the runtime scene-context store next door: a small derived
- *   record, written by one pass, read in the same Studio session. Persisting it
- *   would mean ~400 lines of IDB boilerplate to make a REBUILD ARTEFACT survive
- *   a page reload, which is the one thing a rebuild trivially reproduces.
+ * IT IS PERSISTED TO THE PROJECT (nikki, 2026-07-31)
+ *   The in-memory Map is a read cache, not the storage. The document below is
+ *   serialized into the project's `pluginConfigurations[pluginId="sugarlang"]`
+ *   slot, because every derived artifact here eventually has to DEPLOY WITH THE
+ *   GAME, and a workspace-local store does not travel.
  *
- *   THE DEGRADATION IS DELIBERATE AND SAFE. After a reload the plan is gone and
- *   a bake proceeds with no slate -- level-graded, no vocabulary steer, which is
- *   exactly what every bake did before slates existed. Missing plan means "no
- *   steer", never "steer toward nothing". If baking-after-reload-without-slate
- *   turns out to matter in practice, THAT is the trigger to persist this; until
- *   then a reload just means pressing Rebuild again.
+ *   It goes in the plugin's namespaced config rather than as a new field on
+ *   `GameProject`, following the rule stated on that type: the domain carries
+ *   game-authoring concerns, plugin-shaped concerns live in the plugin's slot.
+ *
+ * STORED PER SCENE, READ PER DIALOGUE
+ *   The Teacher answers per scene, so storing per dialogue would duplicate the
+ *   same answer across every dialogue in it. The document keeps one entry per
+ *   (scene, band) plus a dialogue -> scene index, and hydration fans it out into
+ *   the lookup shape the consumer wants.
+ *
+ * EVERY ENTRY CARRIES ITS SCENE'S CONTENT HASH
+ *   A teach plan is derived from a scene's CONCEPTS, so it goes stale the moment
+ *   that scene's authored content changes -- and unlike a baked variant, whose
+ *   key includes the line's text, nothing about a plan would otherwise notice.
+ *   Persisting a derived artifact without a staleness signal is how a JSON blob
+ *   becomes quietly wrong; the hash is what lets a reader tell.
  *
  * Exports:
  *   - getSugarlangTeachPlan, seedSugarlangTeachPlan, clearSugarlangTeachPlan
+ *   - SugarlangTeachPlanDocument, serializeTeachPlans, hydrateTeachPlans
  *
  * Relationships:
  *   - Studio/build only. Nothing in a shipped game reads or writes this; the
@@ -94,4 +105,101 @@ export function seedSugarlangTeachPlan(
 
 export function clearSugarlangTeachPlan(): void {
   teachPlans.clear();
+}
+
+/** Config-slot key. One string, so reader and writer cannot disagree. */
+export const SUGARLANG_TEACH_PLAN_CONFIG_KEY = "teachPlans";
+
+/**
+ * Bumped when the persisted SHAPE changes. A document from an older version is
+ * ignored rather than migrated -- a rebuild reproduces it in one press, so
+ * migration code would be carried forever to save an action that is already
+ * cheap.
+ */
+export const TEACH_PLAN_DOCUMENT_VERSION = "090.11.1";
+
+/** What gets written into the project. JSON only -- no functions, no Maps. */
+export interface SugarlangTeachPlanDocument {
+  version: string;
+  lang: string;
+  scenes: {
+    sceneId: string;
+    /**
+     * The scene content hash the plan was derived from. A reader comparing this
+     * against the scene's current hash learns the plan is stale; without it a
+     * persisted plan is indistinguishable from a current one.
+     */
+    contentHash: string | null;
+    fromSceneContext: boolean;
+    bands: { band: CEFRBand; slate: GradedTextSlate; posture: SupportPosture }[];
+  }[];
+  /** dialogueDefinitionId -> sceneId. The index that makes per-dialogue reads work. */
+  dialogueScenes: { dialogueDefinitionId: string; sceneId: string }[];
+}
+
+export function serializeTeachPlans(args: {
+  lang: string;
+  scenes: {
+    sceneId: string;
+    contentHash: string | null;
+    fromSceneContext: boolean;
+    dialogueDefinitionIds: string[];
+    bands: { band: CEFRBand; slate: GradedTextSlate; posture: SupportPosture }[];
+  }[];
+}): SugarlangTeachPlanDocument {
+  return {
+    version: TEACH_PLAN_DOCUMENT_VERSION,
+    lang: args.lang,
+    scenes: args.scenes.map((scene) => ({
+      sceneId: scene.sceneId,
+      contentHash: scene.contentHash,
+      fromSceneContext: scene.fromSceneContext,
+      bands: scene.bands
+    })),
+    dialogueScenes: args.scenes.flatMap((scene) =>
+      scene.dialogueDefinitionIds.map((dialogueDefinitionId) => ({
+        dialogueDefinitionId,
+        sceneId: scene.sceneId
+      }))
+    )
+  };
+}
+
+/**
+ * Loads a persisted document into the in-memory lookup, replacing whatever was
+ * there. Returns how many entries were hydrated.
+ *
+ * Unknown or malformed input hydrates NOTHING and returns 0 rather than
+ * throwing: a project written by a different version must not stop Studio from
+ * opening, and a bake with no plan is a valid bake.
+ */
+export function hydrateTeachPlans(input: unknown): number {
+  const doc = input as SugarlangTeachPlanDocument | undefined;
+  if (
+    !doc ||
+    typeof doc !== "object" ||
+    doc.version !== TEACH_PLAN_DOCUMENT_VERSION ||
+    !Array.isArray(doc.scenes) ||
+    !Array.isArray(doc.dialogueScenes)
+  ) {
+    return 0;
+  }
+
+  const bySceneId = new Map(doc.scenes.map((scene) => [scene.sceneId, scene]));
+  teachPlans.clear();
+
+  let hydrated = 0;
+  for (const { dialogueDefinitionId, sceneId } of doc.dialogueScenes) {
+    const scene = bySceneId.get(sceneId);
+    if (!scene) continue;
+    for (const { band, slate, posture } of scene.bands ?? []) {
+      teachPlans.set(planKey(dialogueDefinitionId, doc.lang, band), {
+        slate,
+        posture,
+        fromSceneContext: scene.fromSceneContext
+      });
+      hydrated += 1;
+    }
+  }
+  return hydrated;
 }

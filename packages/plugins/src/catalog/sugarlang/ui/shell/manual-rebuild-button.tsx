@@ -25,6 +25,10 @@ import {
   resolveStudioCompileWorkspaceId,
   type SugarlangCompileStatusSummary
 } from "./editor-support";
+import {
+  hydrateTeachPlans,
+  type SugarlangTeachPlanDocument
+} from "../../runtime/compile/teach-plan-state";
 
 export interface ManualRebuildButtonProps {
   gameProjectId: string | null;
@@ -38,6 +42,17 @@ export interface ManualRebuildButtonProps {
    *  for chunks). Cached chunks from prior runs are still used by the
    *  classifier. Default: true. */
   chunkExtractionEnabled?: boolean;
+  /**
+   * Persists the rebuilt teach plan into the project's sugarlang config slot.
+   * Absent means the plan stays in memory for this session only -- valid, but
+   * it will not survive a reload and will not deploy with the game.
+   */
+  onPersistTeachPlan?: (document: SugarlangTeachPlanDocument) => void;
+  /**
+   * The teach plan already stored on the project, hydrated into the in-memory
+   * lookup on mount so a bake works before any rebuild this session.
+   */
+  storedTeachPlan?: unknown;
 }
 
 const EMPTY_STATUS: SugarlangCompileStatusSummary = {
@@ -64,6 +79,16 @@ export function ManualRebuildButton(
     currentSceneId: null as string | null
   });
   const [message, setMessage] = useState<string | null>(null);
+
+  // Load the project's stored plan into the in-memory lookup. Without this a
+  // bake right after opening Studio would be un-steered until someone pressed
+  // Rebuild, which is exactly the silent gap persisting the plan exists to close.
+  useEffect(() => {
+    const hydrated = hydrateTeachPlans(props.storedTeachPlan);
+    if (hydrated > 0) {
+      console.info("[sugarlang build] teach-plan-hydrated", { entries: hydrated });
+    }
+  }, [props.storedTeachPlan]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +121,10 @@ export function ManualRebuildButton(
         props.activeScene ?? null,
         workspaceId,
         setProgress,
-        { chunkExtractionEnabled: props.chunkExtractionEnabled ?? true }
+        {
+          chunkExtractionEnabled: props.chunkExtractionEnabled ?? true,
+          onTeachPlanDocument: props.onPersistTeachPlan
+        }
       );
       setStatus(nextStatus);
       setLastRebuildAt(Date.now());

@@ -47,7 +47,9 @@ import { IndexedDBSceneContextCache } from "../../runtime/compile/scene-context-
 import { planSceneTeaching } from "../../runtime/compile/scene-teach-plan";
 import {
   getSugarlangTeachPlan,
-  seedSugarlangTeachPlan
+  seedSugarlangTeachPlan,
+  serializeTeachPlans,
+  type SugarlangTeachPlanDocument
 } from "../../runtime/compile/teach-plan-state";
 import {
   ClaudeTeacherPolicy,
@@ -350,15 +352,16 @@ async function runTeachPlanPass(args: {
   gatewayClient: SugarlangGatewayClient | null;
   sceneContextCache: IndexedDBSceneContextCache | null;
   targetLanguage: string;
-}): Promise<void> {
+}): Promise<SugarlangTeachPlanDocument | null> {
   const { scenes, gatewayClient, sceneContextCache, targetLanguage } = args;
-  if (!gatewayClient || !sceneContextCache) return;
+  if (!gatewayClient || !sceneContextCache) return null;
 
   const teacher = new ClaudeTeacherPolicy({
     client: createGatewayTeacherClient(gatewayClient)
   });
   const currentHashes = computeCurrentSceneHashes(scenes);
   const seeds: Parameters<typeof seedSugarlangTeachPlan>[0] = [];
+  const planned: Parameters<typeof serializeTeachPlans>[0]["scenes"] = [];
 
   for (const scene of scenes) {
     const contentHash = currentHashes.get(scene.sceneId);
@@ -387,6 +390,8 @@ async function runTeachPlanPass(args: {
         console.info(`[sugarlang build] ${message}`, detail ?? {})
     });
 
+    const fromSceneContext = cached?.model != null;
+
     // Fan the scene's answer out to every dialogue reachable from it, because
     // the consumer (the variants popover) holds a dialogue id and no scene.
     for (const dialogue of scene.dialogues) {
@@ -395,14 +400,27 @@ async function runTeachPlanPass(args: {
           dialogueDefinitionId: dialogue.definitionId,
           lang: targetLanguage,
           band,
-          entry: {
-            slate,
-            posture: directive.supportPosture,
-            fromSceneContext: cached?.model != null
-          }
+          entry: { slate, posture: directive.supportPosture, fromSceneContext }
         });
       }
     }
+
+    // Stored per SCENE -- one entry per (scene, band) rather than one per
+    // (dialogue, band), because the Teacher answered per scene and duplicating
+    // it across a scene's dialogues would bloat the project document for no
+    // information gain. The dialogue index below is what makes per-dialogue
+    // reads work after hydration.
+    planned.push({
+      sceneId: scene.sceneId,
+      contentHash: contentHash ?? null,
+      fromSceneContext,
+      dialogueDefinitionIds: scene.dialogues.map((d) => d.definitionId),
+      bands: [...plan.byBand].map(([band, { directive, slate }]) => ({
+        band,
+        slate,
+        posture: directive.supportPosture
+      }))
+    });
   }
 
   seedSugarlangTeachPlan(seeds);
@@ -410,6 +428,8 @@ async function runTeachPlanPass(args: {
     entries: seeds.length,
     scenes: scenes.length
   });
+
+  return serializeTeachPlans({ lang: targetLanguage, scenes: planned });
 }
 
 export async function rebuildSugarlangCompileCache(
@@ -419,7 +439,15 @@ export async function rebuildSugarlangCompileCache(
   activeScene: Scene | null,
   workspaceId: string,
   onProgress?: (progress: SugarlangRebuildProgress) => void,
-  options?: { chunkExtractionEnabled?: boolean }
+  options?: {
+    chunkExtractionEnabled?: boolean;
+    /**
+     * Receives the teach plan so the caller can persist it into the project's
+     * sugarlang config slot. Omitted means the plan lives only in memory for
+     * this session, which is a valid (if forgetful) mode.
+     */
+    onTeachPlanDocument?: (document: SugarlangTeachPlanDocument) => void;
+  }
 ): Promise<SugarlangCompileStatusSummary> {
   const scenes = await createSugarlangSceneContexts(
     gameProject,
@@ -555,7 +583,7 @@ export async function rebuildSugarlangCompileCache(
   // just wrote. Cheap by construction: ONE Teacher call per (scene, band), not
   // per line, because the build-time situation is scene-level. It does NOT bake
   // variants; baking is per-node and stays where it is.
-  await runTeachPlanPass({
+  const teachPlanDocument = await runTeachPlanPass({
     scenes,
     gatewayClient,
     sceneContextCache: gatewayClient
@@ -563,6 +591,13 @@ export async function rebuildSugarlangCompileCache(
       : null,
     targetLanguage
   });
+
+  // Handed OUT rather than written here. This module has no command channel and
+  // should not grow one -- persisting into the project is a Studio command, and
+  // the caller is the piece that already holds the dispatcher.
+  if (teachPlanDocument) {
+    options?.onTeachPlanDocument?.(teachPlanDocument);
+  }
 
   return readSugarlangCompileStatus(
     gameProject,
