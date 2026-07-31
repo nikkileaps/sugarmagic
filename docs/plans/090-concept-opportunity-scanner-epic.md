@@ -1201,6 +1201,29 @@ ADDED BY THE 2026-07-30 REWRITE:
 **Delete the runtime weave. Beginner text is realized at build, like every other
 band.**
 
+STATUS 2026-07-31: **NOT BUILT. Closed by mistake and reopened.** The lit
+migration marked this done off two commit titles -- `[docs] 090.11: posture
+becomes a Teacher decision everywhere` and `[docs] split 090.11 out of 090.8`.
+Both are DOCS commits: the design landed, the code did not. Ground truth is in
+`graded-text-marker.ts` itself, which still substitutes and says so in future
+tense at :25 (*"what makes 090.11 able to delete the substitution"*) and :101
+(*"REVISIT TRIGGER: when 090.11 lands build-time realization"*).
+
+Consequence worth stating plainly, because it misled a later session: the marker
+is STILL THE WEAVER. Its header describes markup-only with five roles; its body
+resolves substitutions and splices target forms into the string. Agent text needs
+no weaving (the Spanish is already there); scripted anchored/supported text
+still arrives in English and is woven live, because nothing bakes it first. That
+asymmetry is not a design split to preserve -- it is this story, unbuilt.
+
+SCOPE BOUNDARY WITH 090.12 (2026-07-31). 090.12 was written as though the marker
+were already markup-only, and duplicated work specified here. Corrected: **this
+story owns the marker entirely** -- all five roles including `ambient`, phrase
+spans, and the total-mapping rule. `runtime/grading/ambient-spans.ts` (committed
+2661d8c) is a piece of THIS story that arrived early; fold it into the marker
+rather than leaving it as a parallel detector. 090.12 keeps only what is new:
+the selection gesture, the popover, atlas resolution and lookup telemetry.
+
 Today anchored/supported text is woven at runtime -- tokens substituted into
 authored English as the line is displayed -- while target-dominant text is a
 baked variant read from cache. That split is not architectural; it is an accident
@@ -1906,29 +1929,27 @@ keep their hover gloss; selection is the second, player-initiated way in. One
 rule -- "select any target-language text to look it up" -- is simpler to explain
 and to build than carving out exceptions.
 
-ONE MARKER OVER BOTH PATHS -- CORRECTED 2026-07-31 (nikki). An earlier draft of
-this story put ambient detection in the observe middleware, where the agent
-path builds `dialogueHighlight` inline from `constraint.targetVocab`. That is
-the wrong home and would have entrenched the exact duplication this epic
-exists to remove: `markGradedText` is called ONLY from the scripted middleware
-and the item display resolver, so highlighting currently has TWO builders --
-the marker for scripted and item text, and an inline loop in
-`sugar-lang-observe-middleware.ts` for agent turns.
+SCOPE CORRECTED 2026-07-31. This story was written as though the marker were
+already markup-only. It is not -- 090.11 is unbuilt and still owns the weaver.
+Two wrong turns are recorded here because each looked right on partial evidence:
 
-The epic's thesis is one realization operation run at two MOMENTS, not two
-operations split by path. Scripted text gets its target language at BUILD and
-agent text at RUNTIME, but both went through the Teacher against the scene
-context -- so both contain words the marker can recognise, and both should be
-marked by the same code.
+1. "Ambient goes in the observe middleware." Wrong home. It belongs in the
+   marker, with the other four roles.
+2. "There are two highlight builders." Also wrong, and asserted from a call-site
+   grep without checking whether the observe write was mode-gated. It is not:
+   `observe.finalize` runs for scripted AND agent turns, so it is already the
+   single builder. `markGradedText` produces a different artifact
+   (`markedForms` -- which English words it REPLACED), which exists only on the
+   scripted path because only scripted text still needs weaving.
 
-So: run `markGradedText` over agent output too, and delete the observe
-middleware's inline highlight builder. For agent text the marker's SUBSTITUTION
-half is a no-op -- the target language is already in the string -- leaving only
-the marking half, which the marker's own header already says is its real
-contract ("it says 'this span is a focus word'; presentation decides what that
-looks like"). Ambient detection therefore lives in the marker, beside the four
-roles it is already specified to produce, and `dialogueHighlight` is built FROM
-the marker's output on both paths rather than assembled twice.
+The real answer, nikki 2026-07-31: *"substitution shouldn't be happening anymore.
+This isn't the weaver any more. The Spanish is already there; all markGradedText
+does is MARKUP TEXT."* That is true once 090.11 bakes A1/A2 at build, and not
+before. So the ordering is 090.11 first, and the marker work -- all five roles,
+`ambient` included -- belongs to it.
+
+WHAT THIS STORY KEEPS: the selection gesture, the popover card, atlas
+resolution, and lookup telemetry. Everything about roles and spans is 090.11.
 
 DO NOT BREAK THE TAUGHT-WORD PRESENTATION (nikki, 2026-07-31). Gold (introduce),
 blue (recall) and the celebrate animation the player gets for typing a taught
