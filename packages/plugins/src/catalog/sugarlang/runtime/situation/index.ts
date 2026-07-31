@@ -20,7 +20,13 @@
  * Status: active
  */
 
-export type { Situation, SituationRuntimeFacts } from "./situation";
+export type {
+  Situation,
+  SituationRuntimeFacts,
+  TeacherNpcContext,
+  TeacherRecentTurn
+} from "./situation";
+export { EMPTY_NPC_CONTEXT } from "./situation";
 export { composeSituation } from "./compose";
 export type { ComposeSituationInput } from "./compose";
 export { situationKey } from "./situation-key";

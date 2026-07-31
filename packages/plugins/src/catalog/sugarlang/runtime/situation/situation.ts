@@ -53,6 +53,44 @@ import type { SceneContextModel } from "../contracts/scene-context";
 import type { RuntimeFact } from "./runtime-fact";
 
 /**
+ * NPC slice passed into the teacher prompt builder and policy.
+ *
+ * 090.4: moved here from contracts/providers.ts -- who the Teacher is talking
+ * to is situation content, one of the two doors, not a third TeacherContext
+ * field.
+ *
+ * Implements: Proposal 001 §3. Director
+ */
+export interface TeacherNpcContext {
+  npcDefinitionId: string | null;
+  displayName: string | null;
+  lorePageId: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Recent turn summary passed into the teacher for conversational continuity.
+ *
+ * 090.4: moved here from contracts/providers.ts, same reason as
+ * `TeacherNpcContext`.
+ *
+ * Implements: Proposal 001 §3. Director
+ */
+export interface TeacherRecentTurn {
+  turnId: string;
+  speaker: "player" | "npc";
+  text: string;
+  lang?: string;
+}
+
+/** An NPC-less, turn-less default -- composeSituation's shape with no conversation. */
+export const EMPTY_NPC_CONTEXT: TeacherNpcContext = {
+  npcDefinitionId: null,
+  displayName: null,
+  lorePageId: null
+};
+
+/**
  * The live half. Each field is independently unavailable -- they come from
  * different writers and go missing independently, so one absent field must
  * never invalidate the rest of the situation.
@@ -86,4 +124,33 @@ export interface Situation {
    */
   sceneContext: RuntimeFact<SceneContextModel>;
   runtime: SituationRuntimeFacts;
+  /**
+   * 090.4: who the Teacher is talking to, if there is a conversation at all.
+   * Absent when composed with no conversation (e.g. an item view reading a
+   * situation via the slate store, per 090.3c). NOT part of `situationKey` --
+   * a different NPC delivering the same scene content is not a different
+   * teaching situation.
+   */
+  npc?: TeacherNpcContext;
+  /**
+   * 090.4: recent turns, for conversational continuity in the prompt.
+   * Deliberately excluded from `situationKey`, the same treatment as
+   * `runtime.knownFacts` / `runtime.recentWorldEvents` -- it changes every
+   * turn and reaches the Teacher through the prompt without invalidating a
+   * decision that is still correct.
+   */
+  recentTurns?: TeacherRecentTurn[];
+  /**
+   * 090.4: turns elapsed in THIS conversation since the last comprehension
+   * probe. Conversation state, read off the execution -- not learner state and
+   * not on the profile -- so it rides here beside `recentTurns` rather than
+   * being carried as a fourth argument everywhere.
+   *
+   * It is the one non-learner input to the probe-floor signals
+   * (learner/pacing-signals.ts). Absent reads as 0, matching
+   * `getTurnsSinceLastProbe`'s own default for an execution that has never
+   * probed. Excluded from `situationKey` for the same reason `recentTurns` is:
+   * it moves every turn and must not re-slate on its own.
+   */
+  turnsSinceLastProbe?: number;
 }

@@ -24,6 +24,7 @@ import {
   formatPendingProvisional
 } from "../../runtime/teacher/prompt-builder";
 import { createTeacherContext } from "./test-helpers";
+import { createLemmaCard } from "../learner/test-helpers";
 
 describe("buildTeacherPrompt", () => {
   it("assembles the expected prompt slices for a fixture context", () => {
@@ -83,33 +84,39 @@ describe("buildTeacherPrompt", () => {
     expect(output).toContain("Total pending: 3 lemmas");
   });
 
+  // 090.4: the probe floors are DERIVED (learner/pacing-signals.ts), so these
+  // set the conversation turn count that produces them rather than injecting
+  // the state directly. Soft floor needs >= 15 turns AND >= 5 pending; the
+  // fixture carries 3 pending, so the soft-floor case supplies its own cards.
   it("surfaces the soft floor recommendation in the user prompt", () => {
-    const prompt = buildTeacherPrompt(
-      createTeacherContext({
-        probeFloorState: {
-          turnsSinceLastProbe: 12,
-          totalPendingLemmas: 3,
-          softFloorReached: true,
-          hardFloorReached: false
-        }
-      })
-    );
+    const base = createTeacherContext();
+    const prompt = buildTeacherPrompt({
+      ...base,
+      learner: {
+        ...base.learner,
+        currentSession: { ...base.learner.currentSession!, turns: 10 },
+        lemmaCards: Object.fromEntries(
+          ["uno", "dos", "tres", "cuatro", "cinco"].map((lemmaId) => [
+            lemmaId,
+            createLemmaCard(lemmaId, "A1", {
+              provisionalEvidence: 1,
+              provisionalEvidenceFirstSeenTurn: 9
+            })
+          ])
+        )
+      },
+      situation: { ...base.situation!, turnsSinceLastProbe: 20 }
+    });
 
     expect(prompt.user).toContain("SOFT FLOOR - probe recommended");
   });
 
   it("surfaces the hard floor requirement in the user prompt", () => {
-    const prompt = buildTeacherPrompt(
-      createTeacherContext({
-        probeFloorState: {
-          turnsSinceLastProbe: 26,
-          totalPendingLemmas: 3,
-          softFloorReached: true,
-          hardFloorReached: true,
-          hardFloorReason: "turns-since-probe"
-        }
-      })
-    );
+    const base = createTeacherContext();
+    const prompt = buildTeacherPrompt({
+      ...base,
+      situation: { ...base.situation!, turnsSinceLastProbe: 26 }
+    });
 
     expect(prompt.user).toContain(
       "The hard probe floor is active. This turn must trigger a comprehension check."
@@ -118,27 +125,22 @@ describe("buildTeacherPrompt", () => {
   });
 
   it("renders a no-pending message instead of a blank provisional section", () => {
-    const output = formatPendingProvisional(
-      createTeacherContext({
-        pendingProvisionalLemmas: [],
-        probeFloorState: {
-          turnsSinceLastProbe: 1,
-          totalPendingLemmas: 0,
-          softFloorReached: false,
-          hardFloorReached: false
-        }
-      })
-    );
+    const base = createTeacherContext();
+    const output = formatPendingProvisional({
+      ...base,
+      learner: { ...base.learner, lemmaCards: {} },
+      situation: { ...base.situation!, turnsSinceLastProbe: 1 }
+    });
 
     expect(output).toContain("No pending provisional evidence.");
   });
 
   it("surfaces first-meeting guidance when there is no prior dialogue", () => {
-    const prompt = buildTeacherPrompt(
-      createTeacherContext({
-        recentTurns: []
-      })
-    );
+    const base = createTeacherContext();
+    const prompt = buildTeacherPrompt({
+      ...base,
+      situation: { ...base.situation!, recentTurns: [] }
+    });
 
     expect(prompt.user).toContain("relationship state: probable_first_meeting");
     expect(prompt.user).toContain("A brief greeting or tiny self-introduction is enough.");

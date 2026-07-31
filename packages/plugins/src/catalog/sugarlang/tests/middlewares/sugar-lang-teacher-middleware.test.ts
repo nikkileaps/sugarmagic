@@ -282,11 +282,12 @@ describe("SugarLangTeacherMiddleware", () => {
     await middleware.prepare?.(execution);
 
     expect(invokeTeacher).toHaveBeenCalledTimes(1);
-    expect(invokeTeacher.mock.calls[0][0]).toEqual(
-      expect.objectContaining({
-        activeQuestEssentialLemmas: []
-      })
-    );
+    // 090.4: activeQuestEssentialLemmas is no longer a TeacherContext field at
+    // all (see the sibling test above); what this test actually protects is
+    // that the VERIFIER's constraint channel stays empty for a non-focused turn.
+    expect(execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).not.toMatchObject({
+      questEssentialLemmas: expect.anything()
+    });
     expect(execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).not.toMatchObject({
       questEssentialLemmas: expect.anything()
     });
@@ -384,15 +385,19 @@ describe("SugarLangTeacherMiddleware", () => {
     await middleware.prepare?.(execution);
 
     expect(invokeTeacher).toHaveBeenCalledTimes(1);
-    expect(invokeTeacher.mock.calls[0][0]).toEqual(
-      expect.objectContaining({
-        activeQuestEssentialLemmas: [
-          expect.objectContaining({
-            lemmaRef: { lemmaId: "maleta", lang: "es" }
-          })
-        ]
-      })
-    );
+    // 090.4: quest-essential stopped being a channel INTO the Teacher --
+    // services.teacher.invoke no longer takes activeQuestEssentialLemmas at
+    // all; the Teacher derives its own quest-essential set from the situation
+    // instead (see resolveQuestEssentialLemmaRefs). The annotation-fed set
+    // asserted here still drives the VERIFIER's enforcement channel, which is
+    // this constraint field.
+    expect(execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).toMatchObject({
+      questEssentialLemmas: [
+        expect.objectContaining({
+          lemmaRef: { lemmaId: "maleta", lang: "es" }
+        })
+      ]
+    });
   });
 });
 

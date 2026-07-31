@@ -31,7 +31,6 @@ import type { SugarlangRuntimeServices } from "../runtime-services";
 import type {
   ActiveQuestEssentialLemma,
   LemmaRef,
-  TeacherRecentTurn,
   PedagogicalDirective,
   ProbeFloorState,
   SugarlangConstraint
@@ -58,6 +57,7 @@ import {
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
   getSceneId,
+  getTurnsSinceLastProbe,
   isQuestObjectiveInFocus,
   isScriptedMode,
   shouldRunSugarlangForExecution,
@@ -65,6 +65,7 @@ import {
 } from "./shared";
 import type { TeachSchedule } from "../scheduler/teach-schedule";
 import { composeSituation, situationKey } from "../situation";
+import type { TeacherNpcContext, TeacherRecentTurn } from "../situation";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
   getSentenceComplexityCap,
@@ -293,6 +294,13 @@ export function createSugarLangTeacherMiddleware(
         prePlacementOpeningLine || sceneId == null
           ? null
           : await services.sceneLexiconStore.ensure(sceneId);
+      const npc: TeacherNpcContext = {
+        npcDefinitionId: execution.selection.npcDefinitionId ?? null,
+        displayName: execution.selection.npcDisplayName ?? null,
+        lorePageId: execution.selection.lorePageId ?? null,
+        metadata: execution.selection.metadata
+      };
+      const recentTurns = buildRecentTurns(execution.state);
       // 090.3d: composed once per turn from the seeded compile half plus the
       // runtime context. Null only when there is no scene at all -- a situation
       // needs somewhere to BE, but needs nothing else.
@@ -302,7 +310,12 @@ export function createSugarLangTeacherMiddleware(
           : composeSituation({
               sceneId,
               sceneContext: deps.services.getSceneContext(sceneId),
-              runtimeContext: execution.runtimeContext
+              runtimeContext: execution.runtimeContext,
+              npc,
+              recentTurns,
+              // 090.4: conversation state, and the one non-learner input to the
+              // probe-floor signals the Teacher derives.
+              turnsSinceLastProbe: getTurnsSinceLastProbe(execution)
             });
 
       let directive: PedagogicalDirective;
@@ -310,6 +323,11 @@ export function createSugarLangTeacherMiddleware(
       const sessionId = getSugarAgentSessionId(execution);
       const traceTurnId = getSugarlangTelemetryTurnId(execution, "prepare");
       const currentSceneId = getSceneId(execution);
+      // 090.4: this annotation-fed set still drives the VERIFIER's
+      // parenthetical-gloss check (constraint.questEssentialLemmas below) --
+      // that consumer is unchanged. The Teacher itself no longer reads it; it
+      // derives its own quest-essential set from the situation (see
+      // resolveQuestEssentialLemmaRefs at the invoke call below).
       const annotatedQuestEssentialLemmas =
         (execution.annotations[SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION] as
           | ActiveQuestEssentialLemma[]
@@ -321,25 +339,12 @@ export function createSugarLangTeacherMiddleware(
       const teacherQuestEssentialLemmas = questObjectiveInFocus
         ? annotatedQuestEssentialLemmas
         : [];
-      const pendingProvisional = (
-        execution.annotations[SUGARLANG_PENDING_PROVISIONAL_ANNOTATION] as
-          | Array<{
-              lemmaRef: { lemmaId: string; lang: string };
-              evidenceAmount: number;
-              turnsPending: number;
-            }>
-          | undefined
-      ) ?? [];
-      const probeFloorState = (
-        execution.annotations[SUGARLANG_PROBE_FLOOR_ANNOTATION] as
-          | ProbeFloorState
-          | undefined
-      ) ?? {
-        turnsSinceLastProbe: 0,
-        totalPendingLemmas: 0,
-        softFloorReached: false,
-        hardFloorReached: false
-      };
+      // 090.4: the pending-provisional and probe-floor ANNOTATIONS are no
+      // longer read here. Both are signals derived from the learner's own cards
+      // plus `turnsSinceLastProbe` (learner/pacing-signals.ts), so the Teacher
+      // derives them itself rather than being handed a copy that could disagree
+      // with the learner it was also handed. The annotations still exist for
+      // the observe/verify middlewares, which is a different consumer.
 
       if (prePlacementOpeningLine) {
         directive = createPrePlacementDirective();
@@ -384,7 +389,6 @@ export function createSugarLangTeacherMiddleware(
             sessionId
           },
           learner,
-          scene,
           atlas: services.atlas,
           // 090.3d: the live half. Composed here because this is where the
           // runtime context arrives on the execution object; `composeSituation`
@@ -393,22 +397,11 @@ export function createSugarLangTeacherMiddleware(
           ...(situation === null
             ? {}
             : { situation, situationKey: situationKey(situation) }),
-          npc: {
-            npcDefinitionId: execution.selection.npcDefinitionId ?? null,
-            displayName: execution.selection.npcDisplayName ?? null,
-            lorePageId: execution.selection.lorePageId ?? null,
-            metadata: execution.selection.metadata
-          },
-          recentTurns: buildRecentTurns(execution.state),
           lang: {
             targetLanguage: execution.selection.targetLanguage ?? learner.targetLanguage,
             supportLanguage: execution.selection.supportLanguage ?? learner.supportLanguage
           },
-          calibrationActive: false,
-          pendingProvisionalLemmas: pendingProvisional,
-          probeFloorState,
-          activeQuestEssentialLemmas: teacherQuestEssentialLemmas,
-          selectionMetadata: execution.selection.metadata
+          calibrationActive: false
         });
       }
 
@@ -435,50 +428,7 @@ export function createSugarLangTeacherMiddleware(
                 targetLemmas: directive.comprehensionCheck.targetLemmas,
                 characterVoiceReminder:
                   directive.comprehensionCheck.characterVoiceReminder ??
-                  extractCharacterVoiceReminder({
-                    conversationId:
-                      execution.selection.npcDefinitionId ??
-                      execution.selection.dialogueDefinitionId ??
-                      "conversation",
-                    learner,
-                    scene:
-                      scene ??
-                      {
-                        sceneId: "unknown-scene",
-                        contentHash: "unknown",
-                        pipelineVersion: "unknown",
-                        atlasVersion: "unknown",
-                        profile: "runtime-preview",
-                        lemmas: {},
-                        properNouns: [],
-                        anchors: [],
-                        questEssentialLemmas: []
-                      },
-                    atlas: services.atlas,
-                    npc: {
-                      npcDefinitionId: execution.selection.npcDefinitionId ?? null,
-                      displayName: execution.selection.npcDisplayName ?? null,
-                      lorePageId: execution.selection.lorePageId ?? null,
-                      metadata: execution.selection.metadata
-                    },
-                    recentTurns: buildRecentTurns(execution.state),
-                    lang: {
-                      targetLanguage:
-                        execution.selection.targetLanguage ?? learner.targetLanguage,
-                      supportLanguage:
-                        execution.selection.supportLanguage ?? learner.supportLanguage
-                    },
-                    calibrationActive: false,
-                    pendingProvisionalLemmas: [],
-                    probeFloorState: {
-                      turnsSinceLastProbe: 0,
-                      totalPendingLemmas: 0,
-                      softFloorReached: false,
-                      hardFloorReached: false
-                    },
-                    activeQuestEssentialLemmas: [],
-                    selectionMetadata: execution.selection.metadata
-                  }),
+                  extractCharacterVoiceReminder(npc),
                 triggerReason:
                   directive.comprehensionCheck.triggerReason ??
                   "director-discretion"

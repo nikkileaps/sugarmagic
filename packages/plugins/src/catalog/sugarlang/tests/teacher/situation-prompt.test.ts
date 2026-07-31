@@ -142,8 +142,12 @@ describe("formatSituation -- empty is not missing", () => {
 
   it("says unknown for the whole section when there is no situation at all", () => {
     // Distinct from a situation whose fields are individually unavailable: the
-    // caller had none to give, which is a different claim again.
-    const section = formatSituation(createTeacherContext());
+    // caller had none to give, which is a different claim again. The fixture
+    // hands the Teacher a situation by default (090.4 -- npc/recentTurns live
+    // there now), so this test overrides it away explicitly.
+    const section = formatSituation(
+      createTeacherContext({ situation: undefined })
+    );
 
     expect(section).toContain("(unknown)");
     expect(section).not.toContain("scene:");

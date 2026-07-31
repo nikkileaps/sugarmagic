@@ -120,11 +120,7 @@ describe("ClaudeTeacherPolicy", () => {
       }
     });
 
-    const directive = await policy.invoke(
-      createTeacherContext({
-        activeQuestEssentialLemmas: []
-      })
-    );
+    const directive = await policy.invoke(createTeacherContext());
 
     // 090.4: the repaired ratio is now governed by the posture's band rather
     // than only by [0,1] -- `supported` centres on 0.65, so an out-of-range

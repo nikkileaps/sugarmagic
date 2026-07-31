@@ -33,7 +33,8 @@
  */
 
 import type { TeacherContext } from "../types";
-import type { RuntimeFact } from "../situation";
+import { EMPTY_NPC_CONTEXT, type RuntimeFact } from "../situation";
+import { computePacingSignals } from "../learner";
 import { resolveSceneTeachables } from "../inventory/scene-teachable-resolver";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
@@ -253,7 +254,18 @@ function estimateDueScore(card: TeacherContext["learner"]["lemmaCards"][string])
 }
 
 function isProbableFirstMeeting(context: TeacherContext): boolean {
-  return context.recentTurns.length === 0;
+  return (context.situation?.recentTurns ?? []).length === 0;
+}
+
+/**
+ * 090.4: probe-pacing signals, derived rather than carried. See
+ * learner/pacing-signals.ts.
+ */
+function pacingSignals(context: TeacherContext) {
+  return computePacingSignals(
+    context.learner,
+    context.situation?.turnsSinceLastProbe ?? 0
+  );
 }
 
 function isA1OrLowerConfidence(context: TeacherContext): boolean {
@@ -313,7 +325,7 @@ export function formatRelationshipState(context: TeacherContext): string {
   const probableFirstMeeting = isProbableFirstMeeting(context);
   return [
     "RELATIONSHIP STATE:",
-    `- prior dialogue turns with this NPC in prompt context: ${context.recentTurns.length}`,
+    `- prior dialogue turns with this NPC in prompt context: ${(context.situation?.recentTurns ?? []).length}`,
     `- relationship state: ${
       probableFirstMeeting ? "probable_first_meeting" : "ongoing_conversation"
     }`,
@@ -331,29 +343,30 @@ export function formatSceneSnapshot(context: TeacherContext): string {
   // directly above the real affordances. Actively steering, not merely useless.
   //
   // What this scene can teach now lives in the SITUATION block as concept ->
-  // lemma pairs. The rest of this block is scene identity, which is still worth
-  // stating.
+  // lemma pairs. `properNouns` went with `scene` -- it lived on the vocabulary
+  // model (SceneVocabularyModel), not on situational content, and this block
+  // has no scene door to read it from anymore.
   return [
     "SCENE SNAPSHOT:",
-    `- sceneId: ${context.scene.sceneId}`,
-    `- proper noun count: ${context.scene.properNouns.length}`
+    `- sceneId: ${context.situation?.sceneId ?? UNKNOWN_SECTION}`
   ].join("\n");
 }
 
 export function formatNpcContext(context: TeacherContext): string {
+  const npc = context.situation?.npc ?? EMPTY_NPC_CONTEXT;
   return [
     "NPC CONTEXT:",
-    `- npcDefinitionId: ${context.npc.npcDefinitionId ?? "(none)"}`,
-    `- displayName: ${context.npc.displayName ?? "(unknown)"}`,
-    `- lorePageId: ${context.npc.lorePageId ?? "(none)"}`,
+    `- npcDefinitionId: ${npc.npcDefinitionId ?? "(none)"}`,
+    `- displayName: ${npc.displayName ?? "(unknown)"}`,
+    `- lorePageId: ${npc.lorePageId ?? "(none)"}`,
     `- metadata: ${
-      context.npc.metadata ? JSON.stringify(context.npc.metadata) : EMPTY_SECTION
+      npc.metadata ? JSON.stringify(npc.metadata) : EMPTY_SECTION
     }`
   ].join("\n");
 }
 
 export function formatProbeFloorState(context: TeacherContext): string {
-  const state = context.probeFloorState;
+  const state = pacingSignals(context).probeFloorState;
   const soft = state.softFloorReached
     ? "SOFT FLOOR - probe recommended"
     : "soft floor not reached";
@@ -368,11 +381,6 @@ export function formatGameMoment(context: TeacherContext): string {
   return [
     "GAME MOMENT:",
     `- conversationId: ${context.conversationId}`,
-    `- selection metadata: ${
-      context.selectionMetadata
-        ? JSON.stringify(context.selectionMetadata)
-        : EMPTY_SECTION
-    }`,
     `- probe floor: ${formatProbeFloorState(context)}`
   ].join("\n");
 }
@@ -484,7 +492,7 @@ export function formatSituation(context: TeacherContext): string {
 }
 
 export function formatRecentDialogue(context: TeacherContext): string {
-  const turns = context.recentTurns
+  const turns = (context.situation?.recentTurns ?? [])
     .slice(-MAX_RECENT_TURNS)
     .map(
       (turn) =>
@@ -500,13 +508,14 @@ export function formatRecentDialogue(context: TeacherContext): string {
 // fence came out; the formatter went with the field.
 
 export function formatPendingProvisional(context: TeacherContext): string {
-  if (context.pendingProvisionalLemmas.length === 0) {
+  const { pendingProvisionalLemmas, probeFloorState } = pacingSignals(context);
+  if (pendingProvisionalLemmas.length === 0) {
     return ["PENDING PROVISIONAL EVIDENCE:", "", "No pending provisional evidence."].join(
       "\n"
     );
   }
 
-  const lines = context.pendingProvisionalLemmas.map((pending) => {
+  const lines = pendingProvisionalLemmas.map((pending) => {
     const cefrBand =
       context.atlas.getBand(
         pending.lemmaRef.lemmaId,
@@ -515,7 +524,7 @@ export function formatPendingProvisional(context: TeacherContext): string {
     return `- ${pending.lemmaRef.lemmaId} (${cefrBand}): ${pending.evidenceAmount} units, pending for ${pending.turnsPending} turns`;
   });
 
-  const floorState = context.probeFloorState;
+  const floorState = probeFloorState;
   const floorSummary = [
     floorState.softFloorReached ? "SOFT FLOOR - probe recommended" : "",
     floorState.hardFloorReached
@@ -534,7 +543,7 @@ export function formatPendingProvisional(context: TeacherContext): string {
     "",
     ...lines,
     "",
-    `Total pending: ${context.pendingProvisionalLemmas.length} lemmas, ${floorState.turnsSinceLastProbe} turns since last probe.`,
+    `Total pending: ${pendingProvisionalLemmas.length} lemmas, ${floorState.turnsSinceLastProbe} turns since last probe.`,
     `Probe floor state: ${floorSummary || "no probe floor active"}`
   ].join("\n");
 }
@@ -567,7 +576,7 @@ export function formatTurnShapingHints(context: TeacherContext): string {
     );
   }
 
-  if (context.probeFloorState.hardFloorReached) {
+  if (pacingSignals(context).probeFloorState.hardFloorReached) {
     hints.push(
       "The hard probe floor is active. This turn must trigger a comprehension check."
     );

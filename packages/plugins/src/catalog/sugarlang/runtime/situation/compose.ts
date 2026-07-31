@@ -33,7 +33,12 @@
 import type { ConversationRuntimeContext } from "@sugarmagic/runtime-core";
 import type { SceneContextModel } from "../contracts/scene-context";
 import { runtimeFact, unavailable } from "./runtime-fact";
-import type { Situation, SituationRuntimeFacts } from "./situation";
+import type {
+  Situation,
+  SituationRuntimeFacts,
+  TeacherNpcContext,
+  TeacherRecentTurn
+} from "./situation";
 
 export interface ComposeSituationInput {
   sceneId: string;
@@ -41,6 +46,12 @@ export interface ComposeSituationInput {
   sceneContext?: SceneContextModel | null | undefined;
   /** Whatever the middleware was handed. Absent is legal. */
   runtimeContext?: ConversationRuntimeContext | null | undefined;
+  /** 090.4: who the Teacher is talking to. Absent when there is no conversation. */
+  npc?: TeacherNpcContext | null | undefined;
+  /** 090.4: recent turns for conversational continuity. Absent is legal. */
+  recentTurns?: TeacherRecentTurn[] | null | undefined;
+  /** 090.4: conversation turns since the last comprehension probe. Absent reads as 0. */
+  turnsSinceLastProbe?: number | null | undefined;
 }
 
 /** Every runtime fact unavailable -- the shape a situation takes with no live context. */
@@ -78,6 +89,11 @@ export function composeSituation(input: ComposeSituationInput): Situation {
     sceneContext: runtimeFact(input.sceneContext),
     runtime: input.runtimeContext
       ? readRuntimeFacts(input.runtimeContext)
-      : noRuntimeFacts()
+      : noRuntimeFacts(),
+    ...(input.npc ? { npc: input.npc } : {}),
+    ...(input.recentTurns ? { recentTurns: input.recentTurns } : {}),
+    ...(input.turnsSinceLastProbe == null
+      ? {}
+      : { turnsSinceLastProbe: input.turnsSinceLastProbe })
   };
 }

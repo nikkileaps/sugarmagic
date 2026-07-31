@@ -18,12 +18,12 @@
 
 import type {
   AtlasLemmaEntry,
-  CompiledSceneLexicon,
   LexicalAtlasProvider,
   TeacherContext,
   LexicalPrescription,
   PedagogicalDirective
 } from "../../runtime/types";
+import { runtimeFact, unavailable, type Situation } from "../../runtime/situation";
 import {
   createLemmaCard,
   createLearnerProfile
@@ -71,50 +71,82 @@ function createTeacherAtlasProvider(): LexicalAtlasProvider {
 export function createTeacherContext(
   overrides: Partial<TeacherContext> = {}
 ): TeacherContext {
-  const scene: CompiledSceneLexicon = {
+  // 090.4: replaces the old CompiledSceneLexicon `scene` fixture (deleted from
+  // TeacherContext -- see contracts/providers.ts's two-doors note). Concepts
+  // here resolve through the atlas fixture below the same way the deleted
+  // scene's four lemmas used to: `ticket` -> billete (mustComprehend, matching
+  // the old questEssentialLemmas entry), `cheese` -> queso, `hello` -> hola,
+  // `platform` -> anden.
+  const situation: Situation = {
     sceneId: "scene-station",
-    contentHash: "scene-hash",
-    pipelineVersion: "pipeline-v1",
-    atlasVersion: "atlas-v1",
-    profile: "runtime-preview",
-    lemmas: {
-      hola: {
-        lemmaId: "hola",
-        isQuestCritical: false,
-        sceneWeight: 1,
-        npcSourceIds: []
-      },
-      billete: {
-        lemmaId: "billete",
-        isQuestCritical: true,
-        sceneWeight: 1,
-        npcSourceIds: []
-      },
-      anden: {
-        lemmaId: "anden",
-        isQuestCritical: true,
-        sceneWeight: 1,
-        npcSourceIds: []
-      },
-      queso: {
-        lemmaId: "queso",
-        isQuestCritical: false,
-        sceneWeight: 1,
-        npcSourceIds: []
+    sceneContext: runtimeFact({
+      sceneId: "scene-station",
+      contentHash: "scene-hash",
+      promptVersion: "prompt-v1",
+      supportLanguage: "en",
+      prose: "A train station platform where a stationmaster sells tickets.",
+      concepts: [
+        {
+          label: "hello",
+          pos: "interjection",
+          provenance: [{ sourceId: "npc:npc-orrin", kind: "npc" }]
+        },
+        {
+          label: "ticket",
+          pos: "noun",
+          provenance: [{ sourceId: "npc:npc-orrin", kind: "npc" }],
+          mustComprehend: true
+        },
+        {
+          label: "platform",
+          pos: "noun",
+          provenance: [{ sourceId: "region:scene-station", kind: "region" }]
+        },
+        {
+          label: "cheese",
+          pos: "noun",
+          provenance: [{ sourceId: "npc:npc-orrin", kind: "npc" }]
+        }
+      ],
+      extractedAtMs: 100,
+      extractedByModel: "test-model",
+      reviewFlag: false
+    }),
+    runtime: {
+      questObjectives: unavailable(),
+      questStage: unavailable(),
+      trackedQuest: unavailable(),
+      timeOfDay: unavailable(),
+      knownFacts: unavailable(),
+      recentWorldEvents: unavailable()
+    },
+    npc: {
+      npcDefinitionId: "npc-orrin",
+      displayName: "Orrin",
+      lorePageId: "root.characters.orrin",
+      metadata: {
+        mood: "brisk",
+        role: "stationmaster"
       }
     },
-    properNouns: ["Orrin"],
-    anchors: ["hola"],
-    questEssentialLemmas: [
+    recentTurns: [
       {
-        lemmaId: "billete",
-        lang: "es",
-        cefrBand: "A2",
-        sourceQuestId: "quest-ticket",
-        sourceObjectiveNodeId: "objective-ticket",
-        sourceObjectiveDisplayName: "Ask for a ticket"
+        turnId: "turn-1",
+        speaker: "npc",
+        text: "Hola, viajero.",
+        lang: "es"
+      },
+      {
+        turnId: "turn-2",
+        speaker: "player",
+        text: "Necesito ayuda.",
+        lang: "es"
       }
-    ]
+    ],
+    // 090.4: the value the old hand-written probeFloorState carried. With 3
+    // pending lemmas (oldest 7 turns) this derives to neither floor reached,
+    // which is what that fixture asserted.
+    turnsSinceLastProbe: 9
   };
 
   const prescription: LexicalPrescription = {
@@ -147,34 +179,55 @@ export function createTeacherContext(
     currentSession: {
       sessionId: "session-1",
       startedAt: 100,
-      turns: 4,
+      // 090.4: was 4. The pending-provisional signal is DERIVED from
+      // `turns - provisionalEvidenceFirstSeenTurn` now (learner/pacing-signals.ts)
+      // rather than hand-written on the context, so the turn counter has to be
+      // far enough along for the per-card ages below to be expressible.
+      turns: 10,
       avgResponseLatencyMs: 900,
       hoverRate: 0.2,
       probeFailRate: 0.05,
       fatigueScore: 0.15
     },
+    // 090.4: THESE CARDS NOW PRODUCE THE PENDING-PROVISIONAL LIST.
+    //
+    // It used to be written by hand on the TeacherContext, and it DISAGREED
+    // with these cards -- it listed `hola` and `queso` as pending when neither
+    // card carried provisional evidence, and omitted `anden`, which did. That
+    // is the stub-disagrees-with-the-real-thing bug class this fixture already
+    // got bitten by once (see `resolveFromGloss` above). Deriving removes the
+    // second copy; these values are what the old hand-written list claimed:
+    //
+    //   billete  2 units, pending 7 turns   (10 - 3)
+    //   queso    1 unit,  pending 5 turns   (10 - 5)
+    //   hola     1 unit,  pending 3 turns   (10 - 7)
+    //   anden    not pending
     lemmaCards: {
       hola: createLemmaCard("hola", "A1", {
         retrievability: 0.9,
         reviewCount: 3,
-        lastReviewedAt: 900
+        lastReviewedAt: 900,
+        provisionalEvidence: 1,
+        provisionalEvidenceFirstSeenTurn: 7
       }),
       queso: createLemmaCard("queso", "A2", {
         retrievability: 0.42,
         lapseCount: 1,
         reviewCount: 1,
-        lastReviewedAt: 800
+        lastReviewedAt: 800,
+        provisionalEvidence: 1,
+        provisionalEvidenceFirstSeenTurn: 5
       }),
       billete: createLemmaCard("billete", "A2", {
         retrievability: 0.3,
         provisionalEvidence: 2,
+        provisionalEvidenceFirstSeenTurn: 3,
         reviewCount: 0,
         lastReviewedAt: 700
       }),
       anden: createLemmaCard("anden", "B1", {
         retrievability: 0.2,
         lapseCount: 2,
-        provisionalEvidence: 1,
         reviewCount: 1,
         lastReviewedAt: 600
       })
@@ -185,71 +238,12 @@ export function createTeacherContext(
     conversationId: "conversation-1",
     learner,
     atlas: createTeacherAtlasProvider(),
-    scene,
-    npc: {
-      npcDefinitionId: "npc-orrin",
-      displayName: "Orrin",
-      lorePageId: "root.characters.orrin",
-      metadata: {
-        mood: "brisk",
-        role: "stationmaster"
-      }
-    },
-    recentTurns: [
-      {
-        turnId: "turn-1",
-        speaker: "npc",
-        text: "Hola, viajero.",
-        lang: "es"
-      },
-      {
-        turnId: "turn-2",
-        speaker: "player",
-        text: "Necesito ayuda.",
-        lang: "es"
-      }
-    ],
+    situation,
     lang: {
       targetLanguage: "es",
       supportLanguage: "en"
     },
     calibrationActive: false,
-    pendingProvisionalLemmas: [
-      {
-        lemmaRef: { lemmaId: "hola", lang: "es" },
-        evidenceAmount: 1,
-        turnsPending: 3
-      },
-      {
-        lemmaRef: { lemmaId: "billete", lang: "es" },
-        evidenceAmount: 2,
-        turnsPending: 7
-      },
-      {
-        lemmaRef: { lemmaId: "queso", lang: "es" },
-        evidenceAmount: 1,
-        turnsPending: 5
-      }
-    ],
-    probeFloorState: {
-      turnsSinceLastProbe: 9,
-      totalPendingLemmas: 3,
-      softFloorReached: false,
-      hardFloorReached: false
-    },
-    activeQuestEssentialLemmas: [
-      {
-        lemmaRef: { lemmaId: "billete", lang: "es" },
-        sourceObjectiveNodeId: "objective-ticket",
-        sourceObjectiveDisplayName: "Ask for a ticket",
-        sourceQuestId: "quest-ticket",
-        cefrBand: "A2",
-        supportLanguageGloss: "ticket"
-      }
-    ],
-    selectionMetadata: {
-      beat: "player asks for travel help"
-    },
     ...overrides
   };
 }

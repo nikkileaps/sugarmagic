@@ -30,6 +30,7 @@ import {
   emitTelemetry,
   type TelemetrySink
 } from "../telemetry/telemetry";
+import { EMPTY_NPC_CONTEXT } from "../situation";
 import { TeacherInvocationError } from "./policies/llm-teacher-policy";
 
 export interface SugarLangTeacherOptions {
@@ -59,6 +60,8 @@ export class SugarLangTeacher {
       ...context,
       calibrationActive
     };
+    const sceneId = effectiveContext.situation?.sceneId ?? "unknown-scene";
+    const npc = effectiveContext.situation?.npc ?? EMPTY_NPC_CONTEXT;
     // 090.4: the learner key is computed HERE rather than carried on the
     // context, because it must reflect the learner as of THIS turn -- the whole
     // point is catching a change that happened since the last decision.
@@ -77,9 +80,9 @@ export class SugarLangTeacher {
           sessionId: effectiveContext.telemetryContext?.sessionId,
           turnId: effectiveContext.telemetryContext?.turnId,
           timestamp: Date.now(),
-          sceneId: effectiveContext.scene.sceneId,
-          npcId: effectiveContext.npc.npcDefinitionId,
-          npcDisplayName: effectiveContext.npc.displayName,
+          sceneId: sceneId,
+          npcId: npc.npcDefinitionId,
+          npcDisplayName: npc.displayName,
           fallback: cached.isFallbackDirective
         })
       );
@@ -90,9 +93,9 @@ export class SugarLangTeacher {
           sessionId: effectiveContext.telemetryContext?.sessionId,
           turnId: effectiveContext.telemetryContext?.turnId,
           timestamp: Date.now(),
-          sceneId: effectiveContext.scene.sceneId,
-          npcId: effectiveContext.npc.npcDefinitionId,
-          npcDisplayName: effectiveContext.npc.displayName,
+          sceneId: sceneId,
+          npcId: npc.npcDefinitionId,
+          npcDisplayName: npc.displayName,
           directive: cached,
           cacheHit: true,
           fallback: cached.isFallbackDirective,
@@ -136,9 +139,9 @@ export class SugarLangTeacher {
         sessionId: effectiveContext.telemetryContext?.sessionId,
         turnId: effectiveContext.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: effectiveContext.scene.sceneId,
-        npcId: effectiveContext.npc.npcDefinitionId,
-        npcDisplayName: effectiveContext.npc.displayName,
+        sceneId: sceneId,
+        npcId: npc.npcDefinitionId,
+        npcDisplayName: npc.displayName,
         outcome,
         fallback: directive.isFallbackDirective,
         calibrationActive

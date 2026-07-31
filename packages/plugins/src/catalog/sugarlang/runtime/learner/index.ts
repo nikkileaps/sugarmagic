@@ -48,6 +48,13 @@ export {
   PROVISIONAL_EVIDENCE_MAX
 } from "./learner-profile";
 
+export type { PendingProvisional, ProbeFloorState } from "./pacing-signals";
+export {
+  computePacingSignals,
+  computePendingProvisionalLemmas,
+  computeProbeFloorState
+} from "./pacing-signals";
+
 export {
   CEFR_BAND_ORDER,
   computeEvidenceShare,

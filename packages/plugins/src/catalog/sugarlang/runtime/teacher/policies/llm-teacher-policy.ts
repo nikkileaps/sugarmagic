@@ -33,6 +33,9 @@ import {
   emitTelemetry,
   type TelemetrySink
 } from "../../telemetry/telemetry";
+import { EMPTY_NPC_CONTEXT } from "../../situation";
+import { computePacingSignals } from "../../learner";
+import { resolveQuestEssentialLemmaRefs } from "../quest-essential";
 
 // NO DEFAULT MODEL ON PURPOSE (2026-07-28). This used to be
 // `DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6"`, which was inert: the gateway
@@ -153,6 +156,13 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
   async invoke(
     context: TeacherContext
   ): Promise<PedagogicalDirective> {
+    const sceneId = context.situation?.sceneId ?? "unknown-scene";
+    const npc = context.situation?.npc ?? EMPTY_NPC_CONTEXT;
+    // 090.4: derived, not carried -- see learner/pacing-signals.ts.
+    const { pendingProvisionalLemmas, probeFloorState } = computePacingSignals(
+      context.learner,
+      context.situation?.turnsSinceLastProbe ?? 0
+    );
     const prompt = buildTeacherPrompt(context);
     const shouldAppendCalibrationHint =
       context.calibrationActive || isInPostPlacementCalibration(context.learner);
@@ -163,9 +173,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
 
     this.logger.info("Teacher prompt constructed.", {
       conversationId: context.conversationId,
-      sceneId: context.scene.sceneId,
-      npcDefinitionId: context.npc.npcDefinitionId ?? null,
-      npcDisplayName: context.npc.displayName ?? null,
+      sceneId,
+      npcDefinitionId: npc.npcDefinitionId ?? null,
+      npcDisplayName: npc.displayName ?? null,
       learnerBand: context.learner.estimatedCefrBand,
       calibrationActive: shouldAppendCalibrationHint,
       model: this.model,
@@ -180,20 +190,24 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: startedAt,
-        sceneId: context.scene.sceneId,
-        npcId: context.npc.npcDefinitionId,
-        npcDisplayName: context.npc.displayName,
+        sceneId,
+        npcId: npc.npcDefinitionId,
+        npcDisplayName: npc.displayName,
         directorContext: {
           calibrationActive: context.calibrationActive,
-          citedQuestEssentialCount: context.activeQuestEssentialLemmas.length,
-          pendingProvisionalCount: context.pendingProvisionalLemmas.length,
+          citedQuestEssentialCount: resolveQuestEssentialLemmaRefs(
+            context.situation,
+            context.atlas,
+            context.lang
+          ).length,
+          pendingProvisionalCount: pendingProvisionalLemmas.length,
           learnerBand: context.learner.estimatedCefrBand
         },
         cacheHit: false,
         model: this.model,
         cacheMarkers: prompt.cacheMarkers,
-        pendingProvisionalSnapshot: context.pendingProvisionalLemmas,
-        probeFloorState: context.probeFloorState
+        pendingProvisionalSnapshot: pendingProvisionalLemmas,
+        probeFloorState
       })
     );
 
@@ -209,9 +223,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     } catch (error) {
       this.logger.warn("Teacher invocation failed.", {
         conversationId: context.conversationId,
-        sceneId: context.scene.sceneId,
-        npcDefinitionId: context.npc.npcDefinitionId ?? null,
-        npcDisplayName: context.npc.displayName ?? null,
+        sceneId: sceneId,
+        npcDefinitionId: npc.npcDefinitionId ?? null,
+        npcDisplayName: npc.displayName ?? null,
         model: this.model,
         reason: error instanceof Error ? error.message : "Claude request failed"
       });
@@ -222,9 +236,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
           sessionId: context.telemetryContext?.sessionId,
           turnId: context.telemetryContext?.turnId,
           timestamp: this.now(),
-          sceneId: context.scene.sceneId,
-          npcId: context.npc.npcDefinitionId,
-          npcDisplayName: context.npc.displayName,
+          sceneId: sceneId,
+          npcId: npc.npcDefinitionId,
+          npcDisplayName: npc.displayName,
           model: this.model,
           latencyMs: this.now() - startedAt,
           reason: error instanceof Error ? error.message : "Claude request failed"
@@ -263,9 +277,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     ) {
       this.logger.warn("Teacher response failed schema validation; applying repair.", {
         conversationId: context.conversationId,
-        sceneId: context.scene.sceneId,
-        npcDefinitionId: context.npc.npcDefinitionId ?? null,
-        npcDisplayName: context.npc.displayName ?? null,
+        sceneId: sceneId,
+        npcDefinitionId: npc.npcDefinitionId ?? null,
+        npcDisplayName: npc.displayName ?? null,
         model: this.model,
         requestId: response.requestId ?? null,
         errorCode: parseResult.error.code,
@@ -281,9 +295,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     } else {
       this.logger.warn("Teacher response rejected before repair; falling back.", {
         conversationId: context.conversationId,
-        sceneId: context.scene.sceneId,
-        npcDefinitionId: context.npc.npcDefinitionId ?? null,
-        npcDisplayName: context.npc.displayName ?? null,
+        sceneId: sceneId,
+        npcDefinitionId: npc.npcDefinitionId ?? null,
+        npcDisplayName: npc.displayName ?? null,
         model: this.model,
         requestId: response.requestId ?? null,
         errorCode: parseResult.error.code,
@@ -291,7 +305,11 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         errorDetails: parseResult.error.details,
         partialResponse: parseResult.error.partial,
         rawResponseText: response.text,
-        activeQuestEssentialLemmaCount: context.activeQuestEssentialLemmas.length
+        activeQuestEssentialLemmaCount: resolveQuestEssentialLemmaRefs(
+          context.situation,
+          context.atlas,
+          context.lang
+        ).length
       });
       traceTeacherCall({
         context,
@@ -310,9 +328,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
 
     this.logger.info("Teacher response received.", {
       conversationId: context.conversationId,
-      sceneId: context.scene.sceneId,
-      npcDefinitionId: context.npc.npcDefinitionId ?? null,
-      npcDisplayName: context.npc.displayName ?? null,
+      sceneId: sceneId,
+      npcDefinitionId: npc.npcDefinitionId ?? null,
+      npcDisplayName: npc.displayName ?? null,
       model: this.model,
       requestId: response.requestId ?? null,
       rawResponseText: response.text,
@@ -328,9 +346,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: endedAt,
-        sceneId: context.scene.sceneId,
-        npcId: context.npc.npcDefinitionId,
-        npcDisplayName: context.npc.displayName,
+        sceneId: sceneId,
+        npcId: npc.npcDefinitionId,
+        npcDisplayName: npc.displayName,
         directive,
         model: this.model,
         latencyMs: endedAt - startedAt,

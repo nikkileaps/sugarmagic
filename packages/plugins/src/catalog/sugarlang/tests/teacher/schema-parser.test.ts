@@ -21,6 +21,25 @@ import {
   repairDirective
 } from "../../runtime/teacher/schema-parser";
 import { createDirectiveFixture, createTeacherContext } from "./test-helpers";
+import { unavailable } from "../../runtime/situation";
+import type { SceneContextModel } from "../../runtime/contracts/scene-context";
+
+/**
+ * A context whose situation has no quest-essential concept -- the default
+ * fixture's "ticket" concept is mustComprehend, which forces parenthetical/
+ * inline glossing (090.4). Tests unrelated to that enforcement use this so
+ * they are not coupled to it.
+ */
+function contextWithNoQuestEssential() {
+  const base = createTeacherContext();
+  return {
+    ...base,
+    situation: {
+      ...base.situation!,
+      sceneContext: unavailable<SceneContextModel>()
+    }
+  };
+}
 
 describe("parseDirective", () => {
   it("parses valid JSON into a directive", () => {
@@ -59,9 +78,7 @@ describe("parseDirective", () => {
   });
 
   it("no longer drops lemmas the prescription did not contain", () => {
-    const context = createTeacherContext({
-      activeQuestEssentialLemmas: []
-    });
+    const context = createTeacherContext();
     const repaired = repairDirective(
       {
         targetVocab: {
@@ -102,9 +119,7 @@ describe("parseDirective", () => {
   });
 
   it("parses Claude-style fenced JSON and normalizes common schema drift", () => {
-    const context = createTeacherContext({
-      activeQuestEssentialLemmas: []
-    });
+    const context = contextWithNoQuestEssential();
     const result = parseDirective(
       `\`\`\`json
 {
@@ -160,9 +175,7 @@ describe("parseDirective", () => {
   });
 
   it("normalizes a null probeStyle to none when comprehensionCheck.trigger is false", () => {
-    const context = createTeacherContext({
-      activeQuestEssentialLemmas: []
-    });
+    const context = contextWithNoQuestEssential();
     const result = parseDirective(
       `\`\`\`json
 {
@@ -233,15 +246,12 @@ describe("parseDirective", () => {
   });
 
   it("rejects a directive that ignores the hard floor requirement", () => {
-    const context = createTeacherContext({
-      probeFloorState: {
-        turnsSinceLastProbe: 26,
-        totalPendingLemmas: 3,
-        softFloorReached: true,
-        hardFloorReached: true,
-        hardFloorReason: "turns-since-probe"
-      }
-    });
+    // 090.4: hard floor is derived from turnsSinceLastProbe >= 25.
+    const base = createTeacherContext();
+    const context = {
+      ...base,
+      situation: { ...base.situation!, turnsSinceLastProbe: 26 }
+    };
     const telemetry = {
       emit: vi.fn()
     };

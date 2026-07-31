@@ -18,9 +18,10 @@ import {
   vocabularyRefs,
   type TeachableRef
 } from "../../contracts/teachable-ref";
-import { isAvailable } from "../../situation";
-import { getLearningStatus } from "../../learner";
+import { isAvailable, EMPTY_NPC_CONTEXT } from "../../situation";
+import { computePacingSignals, getLearningStatus } from "../../learner";
 import { resolveSceneTeachables } from "../../inventory/scene-teachable-resolver";
+import { resolveQuestEssentialLemmaRefs } from "../quest-essential";
 import type {
   CEFRBand,
   TeacherContext,
@@ -53,6 +54,17 @@ function getIntroduceLevelCap(cefrBand: CEFRBand): number {
   }
 }
 
+/**
+ * 090.4: probe-pacing signals, derived rather than carried. See
+ * learner/pacing-signals.ts.
+ */
+function pacingSignals(context: TeacherContext) {
+  return computePacingSignals(
+    context.learner,
+    context.situation?.turnsSinceLastProbe ?? 0
+  );
+}
+
 function pickFallbackPosture(
   confidence: number
 ): PedagogicalDirective["supportPosture"] {
@@ -82,7 +94,9 @@ function pickGlossingStrategy(
   context: TeacherContext,
   introduce: LemmaRef[]
 ): PedagogicalDirective["glossingStrategy"] {
-  if (context.activeQuestEssentialLemmas.length > 0) {
+  if (
+    resolveQuestEssentialLemmaRefs(context.situation, context.atlas, context.lang).length > 0
+  ) {
     return "parenthetical";
   }
   if (introduce.length > 0) {
@@ -92,7 +106,7 @@ function pickGlossingStrategy(
 }
 
 function takeOldestPending(context: TeacherContext): LemmaRef[] {
-  return [...context.pendingProvisionalLemmas]
+  return [...pacingSignals(context).pendingProvisionalLemmas]
     .sort((left, right) => {
       if (left.turnsPending !== right.turnsPending) {
         return right.turnsPending - left.turnsPending;
@@ -110,12 +124,13 @@ function pickTriggerReason(
   if (options?.triggerReasonOverride) {
     return options.triggerReasonOverride;
   }
-  if (context.probeFloorState.hardFloorReached) {
-    return context.probeFloorState.hardFloorReason === "lemma-age"
+  const probeFloorState = pacingSignals(context).probeFloorState;
+  if (probeFloorState.hardFloorReached) {
+    return probeFloorState.hardFloorReason === "lemma-age"
       ? "hard-floor-lemma-age"
       : "hard-floor-turns";
   }
-  if (context.probeFloorState.softFloorReached) {
+  if (probeFloorState.softFloorReached) {
     return "soft-floor";
   }
   return undefined;
@@ -214,9 +229,10 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
       context,
       vocabularyRefs(slate.introduce)
     );
+    const probeFloorState = pacingSignals(context).probeFloorState;
     const shouldTriggerProbe =
-      context.probeFloorState.hardFloorReached ||
-      (context.probeFloorState.softFloorReached && confidence >= 0.3);
+      probeFloorState.hardFloorReached ||
+      (probeFloorState.softFloorReached && confidence >= 0.3);
     const targetLemmas = shouldTriggerProbe ? takeOldestPending(context) : [];
     const triggerReason = shouldTriggerProbe
       ? pickTriggerReason(context, options)
@@ -243,8 +259,8 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
             targetLemmas,
             triggerReason,
             characterVoiceReminder:
-              context.npc.displayName != null
-                ? `Stay in ${context.npc.displayName}'s established character voice.`
+              (context.situation?.npc ?? EMPTY_NPC_CONTEXT).displayName != null
+                ? `Stay in ${(context.situation?.npc ?? EMPTY_NPC_CONTEXT).displayName}'s established character voice.`
                 : "Stay in the NPC's established character voice.",
             acceptableResponseForms: "short-phrase"
           }

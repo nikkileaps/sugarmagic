@@ -38,6 +38,7 @@
  */
 
 import type { PedagogicalDirective, TeacherContext } from "../types";
+import { EMPTY_NPC_CONTEXT } from "../situation";
 
 const TRACE_FLAG = "__sugarlangTraceTeacher";
 
@@ -98,7 +99,8 @@ export function traceTeacherDirective(args: {
   if (!traceEnabled()) return;
   /* eslint-disable no-console */
   const { context, directive, source } = args;
-  const npc = context.npc.displayName ?? context.npc.npcDefinitionId ?? "(unknown npc)";
+  const contextNpc = context.situation?.npc ?? EMPTY_NPC_CONTEXT;
+  const npc = contextNpc.displayName ?? contextNpc.npcDefinitionId ?? "(unknown npc)";
   const label =
     source === "cache"
       ? "served from CACHE (no model call, no prompt)"
@@ -129,9 +131,10 @@ export function traceTeacherCall(args: {
   /* eslint-disable no-console */
 
   const { context, systemPrompt, userPrompt, directive, errorText } = args;
-  const npc = context.npc.displayName ?? context.npc.npcDefinitionId ?? "(unknown npc)";
+  const contextNpc = context.situation?.npc ?? EMPTY_NPC_CONTEXT;
+  const npc = contextNpc.displayName ?? contextNpc.npcDefinitionId ?? "(unknown npc)";
 
-  group(`[sugarlang] TEACHER CALL -- ${npc} -- ${context.scene.sceneId}`, () => {
+  group(`[sugarlang] TEACHER CALL -- ${npc} -- ${context.situation?.sceneId ?? "unknown-scene"}`, () => {
     group("1. SITUATION handed to the Teacher", () => {
       if (!context.situation) {
         console.info(

@@ -5,11 +5,7 @@
  *
  * Exports:
  *   - AtlasLemmaEntry
- *   - PendingProvisional
- *   - ProbeFloorState
  *   - ActiveQuestEssentialLemma
- *   - TeacherNpcContext
- *   - TeacherRecentTurn
  *   - TeacherLanguageContext
  *   - TeacherContext
  *   - LexicalAtlasProvider
@@ -32,7 +28,6 @@ import type { LearnerProfile, LemmaCard } from "../learner";
 import type { CefrPosterior } from "../learner";
 import type { Situation } from "../situation";
 import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
-import type { CompiledSceneLexicon } from "./scene-lexicon";
 
 /**
  * Canonical atlas entry returned by the lexical-atlas provider.
@@ -51,31 +46,15 @@ export interface AtlasLemmaEntry {
 }
 
 /**
- * Runtime-computed view of a lemma with uncommitted provisional evidence.
- *
- * Implements: Proposal 001 §Observer Latency Bias and In-Character Comprehension Checks
- */
-export interface PendingProvisional {
-  lemmaRef: LemmaRef;
-  evidenceAmount: number;
-  turnsPending: number;
-}
-
-/**
- * Soft/hard-floor state used to govern comprehension-probe frequency.
- *
- * Implements: Proposal 001 §Observer Latency Bias and In-Character Comprehension Checks
- */
-export interface ProbeFloorState {
-  turnsSinceLastProbe: number;
-  totalPendingLemmas: number;
-  softFloorReached: boolean;
-  hardFloorReached: boolean;
-  hardFloorReason?: "turns-since-probe" | "lemma-age";
-}
-
-/**
  * Active quest-essential lemma filtered down to currently active objectives.
+ *
+ * 090.4: DELETED from TeacherContext -- see ../teacher/quest-essential.ts.
+ * This type survives only for the OLDER `sceneLexicon.questEssentialLemmas`
+ * annotation pipeline that the VERIFIER still reads
+ * (middlewares/shared.ts, sugar-lang-verify-middleware.ts) to check whether a
+ * rendered line glossed a quest-critical word. That is a different consumer
+ * checking rendered output, not the Teacher's input, and is out of this
+ * story's scope.
  *
  * Implements: Proposal 001 §Quest-Essential Lemma Exemption
  */
@@ -86,30 +65,6 @@ export interface ActiveQuestEssentialLemma {
   sourceQuestId: string;
   cefrBand: CEFRBand;
   supportLanguageGloss: string;
-}
-
-/**
- * NPC slice passed into the teacher prompt builder and policy.
- *
- * Implements: Proposal 001 §3. Director
- */
-export interface TeacherNpcContext {
-  npcDefinitionId: string | null;
-  displayName: string | null;
-  lorePageId: string | null;
-  metadata?: Record<string, unknown>;
-}
-
-/**
- * Recent turn summary passed into the teacher for conversational continuity.
- *
- * Implements: Proposal 001 §3. Director
- */
-export interface TeacherRecentTurn {
-  turnId: string;
-  speaker: "player" | "npc";
-  text: string;
-  lang?: string;
 }
 
 /**
@@ -125,6 +80,36 @@ export interface TeacherLanguageContext {
 /**
  * Full teacher invocation context owned by middleware assembly.
  *
+ * TWO CONTENT DOORS (090.4). `TeacherContext` used to carry learner, scene,
+ * prescription, npc, recentTurns, calibrationActive, pendingProvisionalLemmas,
+ * probeFloorState, activeQuestEssentialLemmas, selectionMetadata -- eleven
+ * ways in for what is really two questions: what is this moment (`situation`)
+ * and where does this learner stand (`learner`).
+ *
+ * Three different fixes got the count down, and the distinction between them is
+ * the useful part:
+ *
+ *   MOVED    `scene`, `npc`, `recentTurns` are facts about the moment, so they
+ *            are on the SITUATION (../situation/situation.ts). So is
+ *            `turnsSinceLastProbe`, which is conversation state.
+ *   DERIVED  `pendingProvisionalLemmas` and `probeFloorState` are SIGNALS --
+ *            pure functions of the learner's own cards plus a turn count
+ *            (../learner/pacing-signals.ts). `activeQuestEssentialLemmas` is
+ *            likewise a function of the situation's concepts
+ *            (../teacher/quest-essential.ts). A derived value carried as a
+ *            field is a copy that can disagree with what it came from, so none
+ *            of the three is a field any more.
+ *   DELETED  `prescription` (090.4b) and `selectionMetadata`, whose only use
+ *            -- formatGameMoment -- gave its shape no documented meaning.
+ *
+ * `learner` is therefore plain `LearnerProfile` again: everything that was
+ * wrapped around it either was not learner state or did not need storing.
+ *
+ * What survives alongside the two doors is plumbing, not content:
+ * `conversationId` and `situationKey` are cache/identity keys, and `atlas` is
+ * a stateless ADR-010 lookup service (the same category as any other
+ * provider), not information about the learner or the world.
+ *
  * Implements: Proposal 001 §3. Director / §Observer Latency Bias / §Quest-Essential Lemma Exemption
  */
 export interface TeacherContext {
@@ -134,11 +119,11 @@ export interface TeacherContext {
     sessionId: string;
   };
   learner: LearnerProfile;
-  scene: CompiledSceneLexicon;
   /**
-   * 090.2c: the scene artifact no longer stores band / frequency / POS copies of
-   * atlas data, so anything formatting a lemma for the prompt looks them up here
-   * by `lemmaId` and `lang.targetLanguage`.
+   * 090.2c/090.4: a stateless lookup service (ADR 010 provider), not
+   * situational content -- used for lemma-formatting lookups and for
+   * resolving scene teachables (resolveSceneTeachables), the same role atlas
+   * plays everywhere else in this stack.
    */
   atlas: LexicalAtlasProvider;
   /**
@@ -151,35 +136,16 @@ export interface TeacherContext {
    */
   situationKey?: string;
   /**
-   * 090.3d: the live half -- what is true in the world right now.
+   * 090.3d/090.4: the live half -- what is true in the world right now, who
+   * the Teacher is talking to, and what was just said.
    *
    * Optional because a caller may have none (a test, or a path with no runtime
    * context). Absent renders as "(unknown)" in the prompt rather than as an
    * empty situation, because those are different claims.
    */
   situation?: Situation;
-  /**
-   * 090.4b: DELETED. The Teacher no longer sees the budgeter's shortlist.
-   *
-   * It left in three steps, each of which had to happen or the others did
-   * nothing: the prompt block (so the model stops anchoring on it), the repair
-   * filter and snap-back (so a repaired directive stops silently reverting to
-   * it), and the fallback policy (which was built entirely from it, and fires
-   * precisely during an outage -- so the least-supervised path was the most
-   * tightly coupled to the machinery being deleted).
-   *
-   * What replaced it: the SITUATION says what this moment affords, and
-   * LEARNING STATUS says where the learner stands on each of those. Both are
-   * already on this context.
-   */
-  npc: TeacherNpcContext;
-  recentTurns: TeacherRecentTurn[];
   lang: TeacherLanguageContext;
   calibrationActive: boolean;
-  pendingProvisionalLemmas: PendingProvisional[];
-  probeFloorState: ProbeFloorState;
-  activeQuestEssentialLemmas: ActiveQuestEssentialLemma[];
-  selectionMetadata?: Record<string, unknown>;
 }
 
 /**

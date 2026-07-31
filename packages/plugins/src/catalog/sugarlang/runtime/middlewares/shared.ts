@@ -27,7 +27,6 @@ import type {
 import { isPlayerSpeaker, resolveDialogueSpeaker } from "@sugarmagic/domain";
 import type {
   ActiveQuestEssentialLemma,
-  TeacherContext,
   LearnerProfile,
   LemmaObservation,
   LemmaRef,
@@ -37,6 +36,7 @@ import type {
   ProbeFloorState,
   SugarlangConstraint
 } from "../types";
+import type { TeacherNpcContext } from "../situation";
 export type { SugarlangLoggerLike } from "../logger";
 
 export interface LearnerSnapshot {
@@ -161,53 +161,17 @@ export function buildLearnerSnapshot(profile: LearnerProfile): LearnerSnapshot {
   };
 }
 
-export function computePendingProvisionalLemmas(
-  learner: LearnerProfile
-): PendingProvisional[] {
-  const currentTurn = learner.currentSession?.turns ?? 0;
-  return Object.values(learner.lemmaCards)
-    .filter((card) => !card.lemmaId.startsWith("chunk:") && card.provisionalEvidence > 0)
-    .map((card) => ({
-      lemmaRef: {
-        lemmaId: card.lemmaId,
-        lang: learner.targetLanguage
-      },
-      evidenceAmount: card.provisionalEvidence,
-      turnsPending:
-        card.provisionalEvidenceFirstSeenTurn === null
-          ? 0
-          : Math.max(0, currentTurn - card.provisionalEvidenceFirstSeenTurn)
-    }))
-    .sort((left, right) => {
-      if (left.turnsPending !== right.turnsPending) {
-        return right.turnsPending - left.turnsPending;
-      }
-      return left.lemmaRef.lemmaId.localeCompare(right.lemmaRef.lemmaId);
-    });
-}
-
-export function computeProbeFloorState(
-  pending: PendingProvisional[],
-  turnsSinceLastProbe: number
-): ProbeFloorState {
-  const oldestPending = pending[0]?.turnsPending ?? 0;
-  const hardFloorReached =
-    turnsSinceLastProbe >= 25 || oldestPending >= 25;
-  const hardFloorReason =
-    turnsSinceLastProbe >= 25
-      ? "turns-since-probe"
-      : oldestPending >= 25
-        ? "lemma-age"
-        : undefined;
-
-  return {
-    turnsSinceLastProbe,
-    totalPendingLemmas: pending.length,
-    softFloorReached: turnsSinceLastProbe >= 15 && pending.length >= 5,
-    hardFloorReached,
-    ...(hardFloorReason ? { hardFloorReason } : {})
-  };
-}
+// 090.4: `computePendingProvisionalLemmas` and `computeProbeFloorState` moved to
+// learner/pacing-signals.ts and are re-exported below for existing callers.
+// They are learner-derived signals, and living here meant the teacher could not
+// derive them without depending on middleware -- so they were computed once and
+// carried as data instead, which is what put two non-learner fields on the
+// Teacher's learner door.
+export {
+  computePacingSignals,
+  computePendingProvisionalLemmas,
+  computeProbeFloorState
+} from "../learner";
 
 export function buildEmptyPrescription(summary: string): LexicalPrescription {
   return {
@@ -264,14 +228,19 @@ export function setStoredComprehensionCheck(
   execution.state[SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE] = value;
 }
 
+/**
+ * 090.4: takes just the NPC slice, not a whole TeacherContext -- this was the
+ * only reader of npc.metadata/displayName in its caller, so building a full
+ * (mostly fake) context to satisfy the old signature was pure overhead.
+ */
 export function extractCharacterVoiceReminder(
-  context: TeacherContext
+  npc: TeacherNpcContext | undefined
 ): string {
-  if (typeof context.npc.metadata?.voice === "string" && context.npc.metadata.voice.trim()) {
-    return context.npc.metadata.voice.trim();
+  if (typeof npc?.metadata?.voice === "string" && npc.metadata.voice.trim()) {
+    return npc.metadata.voice.trim();
   }
-  if (context.npc.displayName) {
-    return `Stay in ${context.npc.displayName}'s voice.`;
+  if (npc?.displayName) {
+    return `Stay in ${npc.displayName}'s voice.`;
   }
   return "Stay in the NPC's established voice.";
 }

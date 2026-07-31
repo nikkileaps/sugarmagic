@@ -19,6 +19,8 @@ import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
 import { toVocabularyRefs } from "../../runtime/contracts/teachable-ref";
+import { unavailable, type Situation } from "../../runtime/situation";
+import { computeProbeFloorState } from "../../runtime/learner";
 import {
   INITIAL_PRODUCTIVE_STRENGTH,
   INITIAL_PROVISIONAL_EVIDENCE,
@@ -427,25 +429,20 @@ describe("sugarlang runtime contracts", () => {
         conformance: "conformant"
       }
     };
-    const pendingLemma: ActiveQuestEssentialLemma = {
-      lemmaRef: { lemmaId: "billete", lang: "es" },
-      sourceObjectiveNodeId: "objective-1",
-      sourceObjectiveDisplayName: "Ask for a ticket",
-      sourceQuestId: "quest-1",
-      cefrBand: "B1",
-      supportLanguageGloss: "ticket"
-    };
-    const probeFloorState: ProbeFloorState = {
-      turnsSinceLastProbe: 16,
-      totalPendingLemmas: 5,
-      softFloorReached: true,
-      hardFloorReached: false
-    };
-    const teacherContext: TeacherContext = {
-      conversationId: "conversation-1",
-      learner,
-      atlas: new CefrLexAtlasProvider(),
-      scene: lexicon,
+    // 090.4: npc / recentTurns / turnsSinceLastProbe fold into situation, per
+    // TeacherContext's two content doors -- see contracts/providers.ts's own
+    // note on the collapse.
+    const situation: Situation = {
+      sceneId: lexicon.sceneId,
+      sceneContext: unavailable(),
+      runtime: {
+        questObjectives: unavailable(),
+        questStage: unavailable(),
+        trackedQuest: unavailable(),
+        timeOfDay: unavailable(),
+        knownFacts: unavailable(),
+        recentWorldEvents: unavailable()
+      },
       npc: {
         npcDefinitionId: "npc-orinn",
         displayName: "Orrin",
@@ -460,21 +457,18 @@ describe("sugarlang runtime contracts", () => {
           lang: "es"
         }
       ],
+      turnsSinceLastProbe: 16
+    };
+    const teacherContext: TeacherContext = {
+      conversationId: "conversation-1",
+      learner,
+      atlas: new CefrLexAtlasProvider(),
+      situation,
       lang: {
         targetLanguage: "es",
         supportLanguage: "en"
       },
-      calibrationActive: false,
-      pendingProvisionalLemmas: [
-        {
-          lemmaRef: { lemmaId: "hola", lang: "es" },
-          evidenceAmount: 1,
-          turnsPending: 3
-        }
-      ],
-      probeFloorState,
-      activeQuestEssentialLemmas: [pendingLemma],
-      selectionMetadata: {}
+      calibrationActive: false
     };
     const atlas: LexicalAtlasProvider = {
       getLemma: () =>
@@ -601,7 +595,17 @@ describe("sugarlang runtime contracts", () => {
     };
 
     expect(verdict.withinEnvelope).toBe(false);
-    expect(teacherContext.probeFloorState.softFloorReached).toBe(true);
+    // 090.4: derived, not carried. 16 turns since the last probe with 5 pending
+    // lemmas is exactly the soft floor (>= 15 turns AND >= 5 pending).
+    const derivedProbeFloor: ProbeFloorState = computeProbeFloorState(
+      Array.from({ length: 5 }, (_, index) => ({
+        lemmaRef: { lemmaId: `pending-${index}`, lang: "es" },
+        evidenceAmount: 1,
+        turnsPending: 3
+      })),
+      teacherContext.situation?.turnsSinceLastProbe ?? 0
+    );
+    expect(derivedProbeFloor.softFloorReached).toBe(true);
     expect(atlas.getAtlasVersion("es")).toBe("atlas-1");
     expect(priorProvider.getCefrInitialPosterior("A2").A2.alpha).toBe(1);
     expectTypeOf(teacherPolicy.invoke(teacherContext)).toEqualTypeOf<

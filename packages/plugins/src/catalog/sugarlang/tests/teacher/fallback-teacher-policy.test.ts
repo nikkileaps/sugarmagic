@@ -18,6 +18,7 @@
 import { describe, expect, it } from "vitest";
 import { FallbackTeacherPolicy } from "../../runtime/teacher/policies/fallback-teacher-policy";
 import { createTeacherContext } from "./test-helpers";
+import { createLemmaCard } from "../learner/test-helpers";
 import { composeSituation } from "../../runtime/situation";
 import type { SceneContextModel } from "../../runtime/contracts/scene-context";
 
@@ -75,7 +76,6 @@ describe("FallbackTeacherPolicy", () => {
 
   it("produces anchored posture with inline glossing at cold start", async () => {
     const context = createTeacherContext({
-      activeQuestEssentialLemmas: [],
       situation: situationTeaching("ticket")
     });
     context.learner.assessment.status = "unassessed";
@@ -105,24 +105,40 @@ describe("FallbackTeacherPolicy", () => {
   });
 
   it("honors the hard floor with the oldest pending lemmas", async () => {
-    const directive = await policy.invoke(
-      createTeacherContext({
-        probeFloorState: {
-          turnsSinceLastProbe: 30,
-          totalPendingLemmas: 5,
-          softFloorReached: true,
-          hardFloorReached: true,
-          hardFloorReason: "turns-since-probe"
-        },
-        pendingProvisionalLemmas: [
-          { lemmaRef: { lemmaId: "uno", lang: "es" }, evidenceAmount: 1, turnsPending: 1 },
-          { lemmaRef: { lemmaId: "dos", lang: "es" }, evidenceAmount: 1, turnsPending: 2 },
-          { lemmaRef: { lemmaId: "tres", lang: "es" }, evidenceAmount: 1, turnsPending: 3 },
-          { lemmaRef: { lemmaId: "cuatro", lang: "es" }, evidenceAmount: 1, turnsPending: 4 },
-          { lemmaRef: { lemmaId: "cinco", lang: "es" }, evidenceAmount: 1, turnsPending: 5 }
-        ]
-      })
-    );
+    // 090.4: the floor state and the pending list are DERIVED, so this sets up
+    // what produces them -- five cards carrying provisional evidence, and a
+    // conversation 30 turns past its last probe (>= the hard floor's 25).
+    const base = createTeacherContext();
+    const directive = await policy.invoke({
+      ...base,
+      learner: {
+        ...base.learner,
+        currentSession: { ...base.learner.currentSession!, turns: 10 },
+        lemmaCards: {
+          uno: createLemmaCard("uno", "A1", {
+            provisionalEvidence: 1,
+            provisionalEvidenceFirstSeenTurn: 9
+          }),
+          dos: createLemmaCard("dos", "A1", {
+            provisionalEvidence: 1,
+            provisionalEvidenceFirstSeenTurn: 8
+          }),
+          tres: createLemmaCard("tres", "A1", {
+            provisionalEvidence: 1,
+            provisionalEvidenceFirstSeenTurn: 7
+          }),
+          cuatro: createLemmaCard("cuatro", "A1", {
+            provisionalEvidence: 1,
+            provisionalEvidenceFirstSeenTurn: 6
+          }),
+          cinco: createLemmaCard("cinco", "A1", {
+            provisionalEvidence: 1,
+            provisionalEvidenceFirstSeenTurn: 5
+          })
+        }
+      },
+      situation: { ...base.situation!, turnsSinceLastProbe: 30 }
+    });
 
     expect(directive.comprehensionCheck.trigger).toBe(true);
     expect(directive.comprehensionCheck.targetLemmas).toEqual([
@@ -134,16 +150,28 @@ describe("FallbackTeacherPolicy", () => {
   });
 
   it("triggers a soft-floor probe for confident learners", async () => {
+    // 090.4: the soft floor is `turnsSinceLastProbe >= 15 && pending >= 5`.
+    // The injected fixture this replaced claimed softFloorReached with
+    // turnsSinceLastProbe 10 and 3 pending -- a state the real rule cannot
+    // produce, so the test was asserting against something unreachable.
     const context = createTeacherContext();
     context.learner.assessment.cefrConfidence = 0.8;
     const directive = await policy.invoke({
       ...context,
-      probeFloorState: {
-        turnsSinceLastProbe: 10,
-        totalPendingLemmas: 3,
-        softFloorReached: true,
-        hardFloorReached: false
-      }
+      learner: {
+        ...context.learner,
+        currentSession: { ...context.learner.currentSession!, turns: 10 },
+        lemmaCards: Object.fromEntries(
+          ["uno", "dos", "tres", "cuatro", "cinco"].map((lemmaId) => [
+            lemmaId,
+            createLemmaCard(lemmaId, "A1", {
+              provisionalEvidence: 1,
+              provisionalEvidenceFirstSeenTurn: 9
+            })
+          ])
+        )
+      },
+      situation: { ...context.situation!, turnsSinceLastProbe: 20 }
     });
 
     expect(directive.comprehensionCheck.trigger).toBe(true);
@@ -151,17 +179,12 @@ describe("FallbackTeacherPolicy", () => {
   });
 
   it("does not trigger a probe when no floor is active", async () => {
-    const directive = await policy.invoke(
-      createTeacherContext({
-        probeFloorState: {
-          turnsSinceLastProbe: 2,
-          totalPendingLemmas: 0,
-          softFloorReached: false,
-          hardFloorReached: false
-        },
-        pendingProvisionalLemmas: []
-      })
-    );
+    const base = createTeacherContext();
+    const directive = await policy.invoke({
+      ...base,
+      learner: { ...base.learner, lemmaCards: {} },
+      situation: { ...base.situation!, turnsSinceLastProbe: 2 }
+    });
 
     expect(directive.comprehensionCheck.trigger).toBe(false);
     expect(directive.comprehensionCheck.targetLemmas).toEqual([]);

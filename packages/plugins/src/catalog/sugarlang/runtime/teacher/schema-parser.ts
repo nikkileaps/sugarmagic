@@ -43,6 +43,21 @@ import {
   type TelemetryEvent,
   type TelemetrySink
 } from "../telemetry/telemetry";
+import { EMPTY_NPC_CONTEXT } from "../situation";
+import { computePacingSignals } from "../learner";
+import { resolveQuestEssentialLemmaRefs } from "./quest-essential";
+
+/**
+ * 090.4: the probe-pacing signals, derived rather than carried. See
+ * learner/pacing-signals.ts -- both are pure functions of the learner's cards
+ * plus the conversation's turn count, so a stored copy could only drift.
+ */
+function pacingSignals(context: TeacherContext) {
+  return computePacingSignals(
+    context.learner,
+    context.situation?.turnsSinceLastProbe ?? 0
+  );
+}
 
 const ajv = new Ajv({
   allErrors: true,
@@ -451,9 +466,15 @@ function getPrescriptionSet(lemmas: LemmaRef[]): Set<string> {
 
 function buildQuestEssentialSet(context: TeacherContext): Set<string> {
   return new Set(
-    context.activeQuestEssentialLemmas.map(
-      (lemma) => `${lemma.lemmaRef.lang}:${lemma.lemmaRef.lemmaId}`
+    resolveQuestEssentialLemmaRefs(context.situation, context.atlas, context.lang).map(
+      (lemma) => `${lemma.lang}:${lemma.lemmaId}`
     )
+  );
+}
+
+function hasQuestEssential(context: TeacherContext): boolean {
+  return (
+    resolveQuestEssentialLemmaRefs(context.situation, context.atlas, context.lang).length > 0
   );
 }
 
@@ -500,7 +521,7 @@ function filterLemmaArray(
 
 function filterPendingTargets(value: unknown, context: TeacherContext): LemmaRef[] {
   const allowed = new Set(
-    context.pendingProvisionalLemmas.map(
+    pacingSignals(context).pendingProvisionalLemmas.map(
       (pending) => `${pending.lemmaRef.lang}:${pending.lemmaRef.lemmaId}`
     )
   );
@@ -509,7 +530,7 @@ function filterPendingTargets(value: unknown, context: TeacherContext): LemmaRef
 }
 
 function takeOldestPendingTargets(context: TeacherContext): LemmaRef[] {
-  return [...context.pendingProvisionalLemmas]
+  return [...pacingSignals(context).pendingProvisionalLemmas]
     .sort((left, right) => {
       if (left.turnsPending !== right.turnsPending) {
         return right.turnsPending - left.turnsPending;
@@ -576,7 +597,7 @@ function getDefaultGlossingStrategy(
   context: TeacherContext,
   introduce: LemmaRef[]
 ): GlossingStrategy {
-  if (context.activeQuestEssentialLemmas.length > 0) {
+  if (hasQuestEssential(context)) {
     return "parenthetical";
   }
   if (introduce.length > 0) {
@@ -630,8 +651,13 @@ function enforceDirectiveRequirements(
   context: TeacherContext,
   telemetry: TelemetrySink
 ): DirectiveParseError | null {
+  const questEssentialLemmas = resolveQuestEssentialLemmaRefs(
+    context.situation,
+    context.atlas,
+    context.lang
+  );
   if (
-    context.activeQuestEssentialLemmas.length > 0 &&
+    questEssentialLemmas.length > 0 &&
     (directive.glossingStrategy === "hover-only" ||
       directive.glossingStrategy === "none")
   ) {
@@ -641,10 +667,10 @@ function enforceDirectiveRequirements(
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: context.scene.sceneId,
+        sceneId: context.situation?.sceneId ?? "unknown-scene",
         originalGlossingStrategy: directive.glossingStrategy,
         correctedGlossingStrategy: "parenthetical",
-        questEssentialLemmaCount: context.activeQuestEssentialLemmas.length
+        questEssentialLemmaCount: questEssentialLemmas.length
       }),
       telemetry
     );
@@ -662,15 +688,16 @@ function enforceDirectiveRequirements(
     };
   }
 
-  if (context.probeFloorState.hardFloorReached && !directive.comprehensionCheck.trigger) {
+  const probeFloorState = pacingSignals(context).probeFloorState;
+  if (probeFloorState.hardFloorReached && !directive.comprehensionCheck.trigger) {
     maybeEmit(
       createTelemetryEvent("comprehension.director-hard-floor-violated", {
         conversationId: context.conversationId,
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: context.scene.sceneId,
-        hardFloorReason: context.probeFloorState.hardFloorReason ?? null
+        sceneId: context.situation?.sceneId ?? "unknown-scene",
+        hardFloorReason: probeFloorState.hardFloorReason ?? null
       }),
       telemetry
     );
@@ -807,7 +834,7 @@ export function repairDirective(
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: context.scene.sceneId,
+        sceneId: context.situation?.sceneId ?? "unknown-scene",
         contaminatedLemmas: contaminatedLemmaIds
       }),
       telemetry
@@ -856,17 +883,18 @@ export function repairDirective(
   const rawComprehension = isRecord(record.comprehensionCheck)
     ? record.comprehensionCheck
     : {};
+  const probeFloorState = pacingSignals(context).probeFloorState;
   const shouldTriggerProbe =
     typeof rawComprehension.trigger === "boolean"
-      ? rawComprehension.trigger || context.probeFloorState.hardFloorReached
-      : context.probeFloorState.hardFloorReached;
+      ? rawComprehension.trigger || probeFloorState.hardFloorReached
+      : probeFloorState.hardFloorReached;
   let targetLemmas = shouldTriggerProbe
     ? filterPendingTargets(rawComprehension.targetLemmas, context)
     : [];
   if (
     shouldTriggerProbe &&
     targetLemmas.length === 0 &&
-    (context.probeFloorState.softFloorReached || context.probeFloorState.hardFloorReached)
+    (probeFloorState.softFloorReached || probeFloorState.hardFloorReached)
   ) {
     targetLemmas = takeOldestPendingTargets(context);
   }
@@ -880,11 +908,11 @@ export function repairDirective(
   const triggerReason = shouldTriggerProbe
     ? isOneOf(rawComprehension.triggerReason, PROBE_REASONS)
       ? rawComprehension.triggerReason
-      : context.probeFloorState.hardFloorReached
-        ? context.probeFloorState.hardFloorReason === "lemma-age"
+      : probeFloorState.hardFloorReached
+        ? probeFloorState.hardFloorReason === "lemma-age"
           ? "hard-floor-lemma-age"
           : "hard-floor-turns"
-        : context.probeFloorState.softFloorReached
+        : probeFloorState.softFloorReached
           ? "soft-floor"
           : "director-discretion"
     : undefined;
@@ -923,7 +951,7 @@ export function repairDirective(
     targetLanguageRatio,
     interactionStyle,
     glossingStrategy:
-      context.activeQuestEssentialLemmas.length > 0 &&
+      hasQuestEssential(context) &&
       (glossingStrategy === "hover-only" || glossingStrategy === "none")
         ? "parenthetical"
         : glossingStrategy,
@@ -938,8 +966,8 @@ export function repairDirective(
             typeof rawComprehension.characterVoiceReminder === "string" &&
             rawComprehension.characterVoiceReminder.trim()
               ? rawComprehension.characterVoiceReminder.trim()
-              : context.npc.displayName != null
-                ? `Stay in ${context.npc.displayName}'s character voice.`
+              : (context.situation?.npc ?? EMPTY_NPC_CONTEXT).displayName != null
+                ? `Stay in ${(context.situation?.npc ?? EMPTY_NPC_CONTEXT).displayName}'s character voice.`
                 : "Stay in the NPC's character voice.",
           acceptableResponseForms: isOneOf(
             rawComprehension.acceptableResponseForms,

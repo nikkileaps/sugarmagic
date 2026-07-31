@@ -29,6 +29,8 @@ export type {
   LearnerProfile,
   LemmaCard,
   LearningStatus,
+  PendingProvisional,
+  ProbeFloorState,
   SessionRecord
 } from "./learner";
 export {
