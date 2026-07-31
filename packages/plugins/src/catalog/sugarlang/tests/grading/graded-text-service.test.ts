@@ -47,6 +47,44 @@ function createService(client: SugarlangLLMClient): GradedTextService {
 }
 
 describe("GradedTextService", () => {
+  it("090.11: an A1 bake is told to write MOSTLY ENGLISH, not mostly Spanish", () => {
+    // THE BUG THIS PINS, found in play 2026-07-31: an A1 variant came back
+    // 100% Spanish. The prompt said "predominantly or entirely in the target
+    // language" for EVERY band, unconditionally, while posture and ratio were
+    // passed only to the VERIFIER. The model was told to write full target
+    // language and then measured against a rule it had never been shown.
+    //
+    // The old snapshot tests passed throughout, because they asserted the
+    // hardcoded sentence rather than the relationship between band and
+    // instruction. Asserting the RELATIONSHIP is what makes this catchable.
+    const anchored = buildAdaptationPrompt({
+      sourceText: "Thanks! I need to find my suitcase. Do you know where it is?",
+      targetLang: "es",
+      band: "A1",
+      posture: "anchored",
+      directedRatio: 0.3
+    });
+
+    expect(anchored.system).toContain("mostly in the support language (English)");
+    expect(anchored.system).toContain("30%");
+    expect(anchored.system).not.toContain("predominantly or entirely");
+  });
+
+  it("090.11: the same builder still directs a B1+ bake to the target language", () => {
+    // The fix must not flip the other direction. target-dominant still means
+    // mostly Spanish -- the bug was that EVERY band was told that.
+    const dominant = buildAdaptationPrompt({
+      sourceText: "Thanks! I need to find my suitcase.",
+      targetLang: "es",
+      band: "B1",
+      posture: "target-dominant",
+      directedRatio: 0.85
+    });
+
+    expect(dominant.system).toContain("mostly in es");
+    expect(dominant.system).toContain("85%");
+  });
+
   it("adapts source text and returns a verdict", async () => {
     const result = await createService(
       createMockClient("El jefe de estacion busca su equipaje.")
@@ -168,7 +206,7 @@ describe("GradedTextService", () => {
       })
     ).toMatchInlineSnapshot(`
       {
-        "system": "You are a writer for a language-learning game. Adapt the given English item description into es for a elementary (A2) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a elementary (A2) learner. The output must be predominantly or entirely in es, grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line item description stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
+        "system": "You are a writer for a language-learning game. Adapt the given English item description into es for a elementary (A2) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a elementary (A2) learner. Write mostly in es -- about 85% -- with brief support-language anchoring only where it aids comprehension. Keep it grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line item description stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
         "user": "Target language: es
       Learner level: A2 (elementary (A2))
 
@@ -192,7 +230,7 @@ describe("GradedTextService", () => {
       })
     ).toMatchInlineSnapshot(`
       {
-        "system": "You are a writer for a language-learning game. Adapt the given English dialogue line into es for a intermediate (B1) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a intermediate (B1) learner. The output must be predominantly or entirely in es, grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line dialogue line stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
+        "system": "You are a writer for a language-learning game. Adapt the given English dialogue line into es for a intermediate (B1) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a intermediate (B1) learner. Write mostly in es -- about 85% -- with brief support-language anchoring only where it aids comprehension. Keep it grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line dialogue line stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
         "user": "Target language: es
       Learner level: B1 (intermediate (B1))
 

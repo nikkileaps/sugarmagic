@@ -122,6 +122,7 @@ import type { LexicalAtlasProvider } from "../types";
 import type { InventoryChunk } from "../contracts/competency-inventory";
 import { applyMixedTextEnvelopePredicate } from "../classifier/envelope-rule";
 import { computeLanguageRatioVerdict } from "../classifier/language-ratio";
+import { describeLanguageMix } from "../teacher/band-envelope";
 import { computeVoiceRetentionScore } from "../classifier/envelope-classifier";
 import { computeCoverage } from "../classifier/coverage";
 import { tokenize } from "../classifier/tokenize";
@@ -234,7 +235,17 @@ export function buildAdaptationPrompt(
     `You are a writer for a language-learning game.`,
     `Adapt the given English ${register} into ${request.targetLang} for a ${bandDesc} learner.`,
     `Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a ${bandDesc} learner.`,
-    `The output must be predominantly or entirely in ${request.targetLang}, grammatically natural for the learner level.`,
+    // 090.11: WAS "predominantly or entirely in ${targetLang}", unconditionally.
+    // That single sentence is why an A1 bake came back 100% Spanish while the
+    // envelope directed 30%: posture and ratio were passed to the VERIFIER and
+    // never to the generator, so the model was told to write full target
+    // language and then measured against a rule it had never seen.
+    describeLanguageMix(
+      request.posture ?? DEFAULT_POSTURE,
+      request.targetLang,
+      request.directedRatio
+    ),
+    `Keep it grammatically natural for the learner level.`,
     `Preserve the length and shape of the original -- a one-line ${register} stays one line, a paragraph stays a paragraph.`,
     `Do not add glosses, translations, or explanations inline.`,
     `Return only the adapted text, nothing else.`

@@ -19,7 +19,10 @@
 import type { SugarlangConstraint } from "../types";
 import type { CompetencyRef, TeachableRef } from "../contracts/teachable-ref";
 import { languageDisplayName } from "../language-names";
-import { getIntroduceCapForBand } from "../teacher/band-envelope";
+import {
+  describeLanguageMix,
+  getIntroduceCapForBand
+} from "../teacher/band-envelope";
 
 /**
  * 090.4: the slate holds TeachableRefs, so rendering it means rendering BOTH
@@ -83,18 +86,16 @@ function listTeachables(
 }
 
 function formatTargetLanguageGuidance(constraint: SugarlangConstraint): string {
-  const ratioPercent = Math.round(constraint.targetLanguageRatio * 100);
-  const lang = languageDisplayName(constraint.targetLanguage);
-  switch (constraint.supportPosture) {
-    case "anchored":
-      return `Language constraint: Reply mostly in the support language (English). Sprinkle in a few ${lang} words — about ${ratioPercent}% of the reply.`;
-    case "supported":
-      return `Language constraint: Use a mixed reply. Keep roughly ${ratioPercent}% of the reply in ${lang} and the rest in the support language so meaning stays easy to follow.`;
-    case "target-dominant":
-      return `Language constraint: Reply mostly in ${lang}, with brief support-language anchoring only when it helps comprehension. Aim for about ${ratioPercent}% ${lang}.`;
-    case "target-only":
-      return `Language constraint: Reply entirely in ${lang}.`;
-  }
+  // 090.11: one wording, shared with the build-time bake. These two prompts had
+  // drifted until they contradicted each other -- the bake told the model to
+  // write "predominantly or entirely" in the target language at every band,
+  // including A1. Same posture must mean the same instruction wherever the text
+  // is written.
+  return `Language constraint: ${describeLanguageMix(
+    constraint.supportPosture,
+    languageDisplayName(constraint.targetLanguage),
+    constraint.targetLanguageRatio
+  )}`;
 }
 
 /**

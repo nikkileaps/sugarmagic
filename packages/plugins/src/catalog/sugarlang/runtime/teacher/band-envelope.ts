@@ -24,6 +24,8 @@
 
 import type { CEFRBand, PedagogicalDirective } from "../types";
 
+type SupportPosture = PedagogicalDirective["supportPosture"];
+
 /**
  * Directed target-language share per posture. One table, repo-wide.
  *
@@ -146,4 +148,38 @@ export function postureForBand(
   if (cefrBand === "A1") return "anchored";
   if (cefrBand === "A2") return "supported";
   return "target-dominant";
+}
+
+/**
+ * How much of a line should be target language, as an INSTRUCTION to whichever
+ * model is writing it.
+ *
+ * ONE WORDING, TWO CALLERS. The agent path (generator-prompt-overlay) and the
+ * build-time bake (graded-text-service) both have to tell a model how much
+ * target language to use, and they had drifted to the point of contradiction:
+ * the bake's prompt said "predominantly or entirely in the target language"
+ * for EVERY band, so an A1 line was generated fully in Spanish while the
+ * envelope said 30%. The ratio reached the verifier and never the generator,
+ * which is a hard failure to see -- the text looks deliberate.
+ *
+ * Both callers read this, so a posture cannot mean two things again.
+ *
+ * Implements: Plan 090 story 090.11
+ */
+export function describeLanguageMix(
+  posture: SupportPosture,
+  targetLanguageName: string,
+  ratio: number = TARGET_LANGUAGE_RATIO_BY_POSTURE[posture]
+): string {
+  const percent = Math.round(ratio * 100);
+  switch (posture) {
+    case "anchored":
+      return `Write mostly in the support language (English), sprinkling in a few ${targetLanguageName} words -- about ${percent}% of the text. A beginner must be able to follow the sentence from the English alone.`;
+    case "supported":
+      return `Write a mixed text: roughly ${percent}% ${targetLanguageName}, the rest in the support language (English), so meaning stays easy to follow.`;
+    case "target-dominant":
+      return `Write mostly in ${targetLanguageName} -- about ${percent}% -- with brief support-language anchoring only where it aids comprehension.`;
+    case "target-only":
+      return `Write entirely in ${targetLanguageName}.`;
+  }
 }
