@@ -44,6 +44,15 @@ import {
   SceneContextExtractor
 } from "../../runtime/compile/scene-context-extractor";
 import { IndexedDBSceneContextCache } from "../../runtime/compile/scene-context-cache";
+import { planSceneTeaching } from "../../runtime/compile/scene-teach-plan";
+import {
+  getSugarlangTeachPlan,
+  seedSugarlangTeachPlan
+} from "../../runtime/compile/teach-plan-state";
+import {
+  ClaudeTeacherPolicy,
+  createGatewayTeacherClient
+} from "../../runtime/teacher/policies/llm-teacher-policy";
 import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 import { GradedTextService } from "../../runtime/grading/graded-text-service";
 import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
@@ -320,6 +329,89 @@ export async function readSugarlangCompileStatus(
   };
 }
 
+/**
+ * Asks the Teacher what each scene's lines should teach, at every baked band,
+ * and files the answer under the dialogues reachable from that scene.
+ *
+ * ONE CALL PER (SCENE, BAND). Not per line -- the build-time situation is
+ * scene-level, so a per-line call would ask an identical question and pay a
+ * gateway round-trip for an identical answer. A 50-node scene across 6 bands is
+ * 6 calls.
+ *
+ * This pass does NOT bake variants. Baking is per node and expensive, and it
+ * stays where it already is (on demand, from the variants popover). This pass
+ * only makes the SLATE available for whenever a bake happens.
+ *
+ * Silent when there is no gateway: without one there is no Teacher to ask, and
+ * the outer function has already warned loudly about the gateway being absent.
+ */
+async function runTeachPlanPass(args: {
+  scenes: SceneAuthoringContext[];
+  gatewayClient: SugarlangGatewayClient | null;
+  sceneContextCache: IndexedDBSceneContextCache | null;
+  targetLanguage: string;
+}): Promise<void> {
+  const { scenes, gatewayClient, sceneContextCache, targetLanguage } = args;
+  if (!gatewayClient || !sceneContextCache) return;
+
+  const teacher = new ClaudeTeacherPolicy({
+    client: createGatewayTeacherClient(gatewayClient)
+  });
+  const currentHashes = computeCurrentSceneHashes(scenes);
+  const seeds: Parameters<typeof seedSugarlangTeachPlan>[0] = [];
+
+  for (const scene of scenes) {
+    const contentHash = currentHashes.get(scene.sceneId);
+    // Read back what the scene-context pass just wrote. A miss is not fatal:
+    // planSceneTeaching still asks, from a situation whose facts are all
+    // unavailable, which is a weak directive rather than a wrong one.
+    const cached = contentHash
+      ? await sceneContextCache
+          .get({
+            contentHash,
+            supportLanguage: scene.supportLanguage,
+            promptVersion: SCENE_CONTEXT_PROMPT_VERSION
+          })
+          .catch(() => null)
+      : null;
+
+    const plan = await planSceneTeaching({
+      sceneId: scene.sceneId,
+      sceneContext: cached?.model ?? null,
+      bands: DIALOGUE_VARIANT_BANDS,
+      targetLanguage,
+      supportLanguage: scene.supportLanguage,
+      teacher,
+      atlas,
+      onLog: (message: string, detail?: Record<string, unknown>) =>
+        console.info(`[sugarlang build] ${message}`, detail ?? {})
+    });
+
+    // Fan the scene's answer out to every dialogue reachable from it, because
+    // the consumer (the variants popover) holds a dialogue id and no scene.
+    for (const dialogue of scene.dialogues) {
+      for (const [band, { directive, slate }] of plan.byBand) {
+        seeds.push({
+          dialogueDefinitionId: dialogue.definitionId,
+          lang: targetLanguage,
+          band,
+          entry: {
+            slate,
+            posture: directive.supportPosture,
+            fromSceneContext: cached?.model != null
+          }
+        });
+      }
+    }
+  }
+
+  seedSugarlangTeachPlan(seeds);
+  console.info("[sugarlang build] teach-plan-seeded", {
+    entries: seeds.length,
+    scenes: scenes.length
+  });
+}
+
 export async function rebuildSugarlangCompileCache(
   gameProject: GameProject | null,
   regions: RegionDocument[],
@@ -459,6 +551,19 @@ export async function rebuildSugarlangCompileCache(
   await scheduler.flushSceneContext();
   scheduler.stop();
 
+  // TEACH PLAN PASS -- runs LAST, because it reads what the scene-context pass
+  // just wrote. Cheap by construction: ONE Teacher call per (scene, band), not
+  // per line, because the build-time situation is scene-level. It does NOT bake
+  // variants; baking is per-node and stays where it is.
+  await runTeachPlanPass({
+    scenes,
+    gatewayClient,
+    sceneContextCache: gatewayClient
+      ? new IndexedDBSceneContextCache({ workspaceId })
+      : null,
+    targetLanguage
+  });
+
   return readSugarlangCompileStatus(
     gameProject,
     regions,
@@ -589,8 +694,23 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       await Promise.all(
         DISPLAY_BANDS.map(async (band) => {
           try {
+            // 090.11: the Teacher's answer for this dialogue's scene, if the
+            // rebuild pass has run this session. Absent means no slate and the
+            // band's own posture -- exactly what this call did before slates
+            // existed, which is why a missing plan degrades safely rather than
+            // blocking the bake.
+            const plan = getSugarlangTeachPlan(dialogueDefinitionId, targetLanguage, band);
             const generated = await generateVariant(
-              { authoredText: nodeText, targetLang: targetLanguage, band, intent: null, contentHash, dialogueDefinitionId, nodeId },
+              {
+                authoredText: nodeText,
+                targetLang: targetLanguage,
+                band,
+                intent: null,
+                contentHash,
+                dialogueDefinitionId,
+                nodeId,
+                ...(plan ? { teach: plan.slate, posture: plan.posture } : {})
+              },
               { llmClient, atlas, inventoryChunks }
             );
             if (generated.variant) {
