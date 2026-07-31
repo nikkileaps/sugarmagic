@@ -88,6 +88,19 @@ export const DIALOGUE_VARIANT_BANDS: readonly CEFRBand[] = [
 /**
  * Bands that get a baked ITEM variant. Beginner item text is substituted at
  * runtime instead (see above), so baking below B1 here buys nothing.
+ *
+ * IF YOU ADD A1 OR A2 HERE, FIX THE POSTURE FIRST (noted 2026-07-31).
+ * The item bake calls `GradedTextService.adapt` WITHOUT a posture
+ * (`ui/shell/editor-support.ts`), so it falls to `DEFAULT_POSTURE`, which is
+ * `target-dominant` -- ~85% target language. That is correct for every band in
+ * this list today, which is the only reason it is not a live bug. Adding a
+ * beginner band would instruct the model to write an A1 item description almost
+ * entirely in the target language, and the ratio gate would then measure it
+ * against the anchored envelope it was never shown.
+ *
+ * This is the exact failure the dialogue bake hit in play and 090.11 fixed
+ * there: posture reaching the verifier and never the generator. The dialogue
+ * path now passes `posture ?? postureForBand(band)`; the item path does not.
  */
 export const ITEM_VARIANT_BANDS: readonly CEFRBand[] = [
   "B1",

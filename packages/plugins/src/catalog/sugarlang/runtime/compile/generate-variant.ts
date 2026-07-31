@@ -44,6 +44,7 @@ import type { BakedLineVariant } from "../contracts/baked-variant";
 import type { SugarlangLLMClient } from "../llm/types";
 import type { LexicalAtlasProvider } from "../types";
 import type { InventoryChunk } from "../contracts/competency-inventory";
+import type { GradedTextSlate } from "../grading/graded-text-service";
 import {
   GRADED_TEXT_PROMPT_VERSION,
   GradedTextService,
@@ -76,6 +77,19 @@ export interface GenerateVariantInput {
    * Teacher-chosen posture arrives once the build-time Teacher call lands.
    */
   posture?: SupportPosture;
+  /**
+   * 090.11: what the Teacher wants this line to teach.
+   *
+   * This is the field that makes a build-time Teacher call worth making at all.
+   * Without it the only directive value the bake could consume was `posture`,
+   * which `postureForBand` already derives for free -- so calling the Teacher
+   * bought a gateway round-trip and changed nothing.
+   *
+   * Absent means "no vocabulary steer, grade for level only", which is what
+   * every caller did before this existed and remains valid for any caller
+   * without a scene.
+   */
+  teach?: GradedTextSlate;
 }
 
 export interface GenerateVariantResult {
@@ -117,6 +131,7 @@ export async function generateVariant(
     band: input.band,
     posture,
     directedRatio: TARGET_LANGUAGE_RATIO_BY_POSTURE[posture],
+    ...(input.teach ? { teach: input.teach } : {}),
     mustConveyFacts: input.intent?.mustConveyFacts ?? [],
     guidance: {
       register: "dialogue line",

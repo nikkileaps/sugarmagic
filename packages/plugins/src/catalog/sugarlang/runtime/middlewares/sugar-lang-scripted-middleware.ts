@@ -34,6 +34,7 @@ import { resolveDialogueSpeaker } from "@sugarmagic/domain";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices, SugarlangExecutionServices } from "../runtime-services";
 import { markGradedText } from "../grading/graded-text-marker";
+import { buildDialogueNodeContentHash } from "../grading/sources/dialogue-node-source";
 import { vocabularyRefs, type TeachableRef } from "../contracts/teachable-ref";
 import { getAllInventoryChunks } from "../inventory/competency-inventory-loader";
 import { createSugarlangLogger } from "../logger";
@@ -105,15 +106,14 @@ function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
 // propositions, so it filtered everything out.
 
 /**
- * Builds the contentHash for a dialogue node as the VARIANT cache expects it.
- * The variant pipeline keys on JSON.stringify({}) on both bake and runtime sides
- * deliberately -- intent is embedded in the LLM prompt, not the cache key, so
- * variant cache hits survive hand-authored intent edits.
- * Do NOT use this for the intent cache key; use buildIntentContentHash there.
+ * MERGED 2026-07-31. This was a private, byte-identical copy of
+ * `buildDialogueNodeContentHash`, which is the bake side of the same key. Two
+ * copies of the function that decides whether the runtime finds what the build
+ * wrote is the one duplication in this pipeline that fails silently and totally:
+ * if they drift, every scripted line misses cache forever and quietly falls
+ * through to the weave. Read the full rule at the definition.
  */
-function buildVariantContentHash(nodeId: string, nodeText: string): string {
-  return [nodeId, nodeText, JSON.stringify({})].join("|");
-}
+const buildVariantContentHash = buildDialogueNodeContentHash;
 
 /**
  * Runs markGradedText on the authored text using the prescription's introduce list,

@@ -17,12 +17,16 @@
  */
 
 import type { SugarlangConstraint } from "../types";
-import type { CompetencyRef, TeachableRef } from "../contracts/teachable-ref";
+import type { CompetencyRef } from "../contracts/teachable-ref";
 import { languageDisplayName } from "../language-names";
 import {
   describeLanguageMix,
   getIntroduceCapForBand
 } from "../teacher/band-envelope";
+import {
+  MAX_PROMPT_REINFORCE,
+  renderTeachableList
+} from "../teacher/slate-prompt";
 
 /**
  * 090.4: the slate holds TeachableRefs, so rendering it means rendering BOTH
@@ -53,37 +57,12 @@ import {
  * A competency's EXPONENTS do not count against this. They are how the act is
  * performed, not additional things to teach, and are capped inside
  * `describeCompetency`.
+ *
+ * 090.11: `MAX_PROMPT_REINFORCE` and the list renderer moved to
+ * `teacher/slate-prompt.ts` when the build-time bake gained a slate input and
+ * needed the same rendering. This module keeps the CAPS-and-composition policy;
+ * the shared module owns only how a list of teachables becomes text.
  */
-const MAX_PROMPT_REINFORCE = 4;
-
-/**
- * One teachable per line.
- *
- * WAS a `", "` join, and that was wrong the moment the slate could hold a
- * competency: `describeCompetency` returns `<descriptor> -- e.g. a, b, c`,
- * which already ENDS in a comma-separated list. Joining the next item onto it
- * produced, verbatim, in a live conversation:
- *
- *   Can greet people in a simple way. -- e.g. hola, buenos dias, buenas tardes, queso
- *
- * telling the NPC that `queso` is a way to greet someone. Any renderer that
- * flattens a list of items where an item may itself expand into a list has this
- * bug; a line break is the separator that cannot be confused with the contents.
- */
-function listTeachables(
-  refs: TeachableRef[],
-  describeCompetency?: (ref: CompetencyRef) => string
-): string {
-  const rendered = refs.map((ref) =>
-    ref.kind === "vocabulary"
-      ? ref.lemmaId
-      : describeCompetency?.(ref) ?? ref.competencyId
-  );
-  if (rendered.length === 0) {
-    return "";
-  }
-  return `\n${rendered.map((entry) => `- ${entry}`).join("\n")}`;
-}
 
 function formatTargetLanguageGuidance(constraint: SugarlangConstraint): string {
   // 090.11: one wording, shared with the build-time bake. These two prompts had
@@ -110,9 +89,9 @@ export function buildGeneratorPromptOverlay(
 ): string {
   const lines = [
     formatTargetLanguageGuidance(constraint),
-    `Reinforce (weave naturally into your reply, not their English translations):${listTeachables(constraint.targetVocab.reinforce.slice(0, MAX_PROMPT_REINFORCE), describeCompetency) || " (none)"}`,
-    `Introduce (try to use naturally this turn, not their English translations):${listTeachables(constraint.targetVocab.introduce.slice(0, getIntroduceCapForBand(constraint.learnerCefr)), describeCompetency) || " (none)"}\nDo not substitute their English equivalents. These do NOT need to be about you or your current activity. You can mention them in passing, as an observation, a rumor, a memory, a question, or just ambient scene description. Do not invent actions or goals for yourself to justify using them.`,
-    `Forbidden vocabulary (use simpler synonyms):${listTeachables(constraint.targetVocab.avoid.slice(0, 12), describeCompetency) || " (none)"}`,
+    `Reinforce (weave naturally into your reply, not their English translations):${renderTeachableList(constraint.targetVocab.reinforce.slice(0, MAX_PROMPT_REINFORCE), describeCompetency) || " (none)"}`,
+    `Introduce (try to use naturally this turn, not their English translations):${renderTeachableList(constraint.targetVocab.introduce.slice(0, getIntroduceCapForBand(constraint.learnerCefr)), describeCompetency) || " (none)"}\nDo not substitute their English equivalents. These do NOT need to be about you or your current activity. You can mention them in passing, as an observation, a rumor, a memory, a question, or just ambient scene description. Do not invent actions or goals for yourself to justify using them.`,
+    `Forbidden vocabulary (use simpler synonyms):${renderTeachableList(constraint.targetVocab.avoid.slice(0, 12), describeCompetency) || " (none)"}`,
     `CEFR envelope: learner is ${constraint.learnerCefr}; keep >=95% of lemmas at or below ${constraint.learnerCefr}+1 band.`,
     `Support posture: ${constraint.supportPosture}. Target-language ratio: ${constraint.targetLanguageRatio}. Sentence complexity: ${constraint.sentenceComplexityCap}.`,
     `Do NOT add parenthetical translations or inline glosses. The UI handles vocabulary glossing via hover tooltips. Let the NPC speak naturally.`
