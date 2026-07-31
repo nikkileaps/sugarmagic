@@ -32,6 +32,8 @@ import {
 } from "../inventory/competency-inventory-loader";
 import { countDiverseEncounters } from "../learner";
 import { vocabularyRefs } from "../contracts/teachable-ref";
+import { findAmbientSpans } from "../grading/ambient-spans";
+import { MorphologyLoader } from "../classifier/morphology-loader";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
@@ -946,12 +948,47 @@ export function createSugarLangObserveMiddleware(
         introduceTerms.push(teachLineSurface);
       }
       const focusTerms = [...introduceTerms, ...reinforceTerms];
-      if (focusTerms.length > 0) {
+
+      // 090.11/090.12: AMBIENT -- target language the slate never asked for.
+      //
+      // Everything above is derived from `constraint.targetVocab`, which is why
+      // only the Teacher's chosen words were ever known to the system. A line
+      // could be half Spanish and the annotation would describe two words of it.
+      // This is the rest of it: found by lemmatizing the finished text against
+      // the atlas and subtracting what the slate already explains.
+      //
+      // Not styled -- see the note on `ambientSpans`. It exists so a SELECTED
+      // span can be resolved, and so the realized ratio becomes measurable.
+      let ambientSpans: ReturnType<typeof findAmbientSpans> = [];
+      try {
+        ambientSpans = findAmbientSpans({
+          text: normalizedTurn.text,
+          targetLanguage: learner.targetLanguage,
+          atlas: services.atlas,
+          morphology: new MorphologyLoader(),
+          slateTerms: focusTerms
+          // properNouns intentionally omitted: the scene vocabulary model is not
+          // resolved on this path, and passing none is the safe direction -- a
+          // name may appear as an ambient span, but `lookupSelection` refuses to
+          // gloss anything the atlas cannot answer, so no card is offered for it.
+          // Wire the real list through when the marker owns this (090.11).
+        });
+      } catch {
+        // Detection is an affordance, not a turn requirement. A failure here
+        // must not cost the player their line.
+      }
+
+      // The annotation is written when there is ANYTHING to say -- taught terms
+      // OR ambient spans. Previously it required focus terms, so a line that was
+      // all unrequested Spanish produced no annotation at all, which is exactly
+      // the line a player most needs to be able to interrogate.
+      if (focusTerms.length > 0 || ambientSpans.length > 0) {
         normalizedTurn.annotations!["dialogueHighlight"] = {
           focusTerms,
           introduceTerms,
           celebrateTerms: [],
-          glosses
+          glosses,
+          ...(ambientSpans.length > 0 ? { ambientSpans } : {})
         };
       }
 

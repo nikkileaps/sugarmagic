@@ -123,6 +123,25 @@ import type { LexicalAtlasProvider } from "../types";
 import type { InventoryChunk } from "../contracts/competency-inventory";
 import { tokenize } from "../classifier/tokenize";
 
+/**
+ * 090.11: the closed role vocabulary. A span is exactly one of these.
+ *
+ * `unmarked` MUST NEVER BE A FALLBACK. It is the value meaning "nothing here",
+ * so defaulting to it on a mapping failure absorbs the failure invisibly -- an
+ * element that should have been `focus` renders identically to one that was
+ * never taught, and nothing anywhere reports it. This is the boundary where
+ * model output becomes a closed enum, which is where silent failures live.
+ */
+export const MARK_ROLES = [
+  "focus",
+  "recall",
+  "challenge",
+  "ambient",
+  "unmarked"
+] as const;
+
+export type MarkRole = (typeof MARK_ROLES)[number];
+
 export interface MarkedForm {
   /** Citation form or chunk surface placed in text. */
   targetForm: string;
@@ -130,6 +149,12 @@ export interface MarkedForm {
   lemmaId: string;
   /** Original English word for UI gloss. */
   englishGloss: string;
+  /**
+   * 090.11: what this span IS, pedagogically. Optional while the weave still
+   * produces forms without one; a span reaching presentation with no role is
+   * styled exactly as before, which is what keeps gold/blue/celebrate intact.
+   */
+  role?: MarkRole;
 }
 
 export interface GradedTextMarkResult {
