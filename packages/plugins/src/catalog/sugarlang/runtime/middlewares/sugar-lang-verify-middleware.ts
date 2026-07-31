@@ -48,6 +48,19 @@ import {
   type SugarlangLoggerLike
 } from "./shared";
 
+/**
+ * The lemma ids the Teacher chose to introduce, for the band-ceiling exemption.
+ *
+ * 090.10: was `constraint.rawPrescription` -- the budgeter's shortlist. The
+ * exemption means "we are deliberately teaching this word, so do not flag it as
+ * above the learner's band", which is a statement about the Teacher's decision,
+ * not about what a lexical scan surfaced. Competency refs carry no lemmaId and
+ * are filtered out by `vocabularyRefs`.
+ */
+function taughtLemmaIds(constraint: SugarlangConstraint): string[] {
+  return vocabularyRefs(constraint.targetVocab.introduce).map((ref) => ref.lemmaId);
+}
+
 export interface SugarLangVerifyMiddlewareDeps {
   services: SugarlangRuntimeServices;
   logger?: SugarlangLoggerLike;
@@ -351,7 +364,7 @@ export function createSugarLangVerifyMiddleware(
           ? new Set(voiceSpec.interjections)
           : undefined;
       const verdict = services.classifier.check(normalizedTurn.text, learner, {
-        prescription: scene ? constraint.rawPrescription : null,
+        taughtLemmaIds: scene ? taughtLemmaIds(constraint) : null,
         knownEntities: scene ? new Set(scene.properNouns) : new Set(),
         questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
         voiceInterjections,
@@ -372,7 +385,6 @@ export function createSugarLangVerifyMiddleware(
           timestamp: Date.now(),
           sceneId: sceneId ?? null,
           learnerSnapshot: buildLearnerSnapshot(learner),
-          prescription: constraint.rawPrescription,
           verdict,
           inputText: normalizedTurn.text,
           constraint
@@ -496,7 +508,7 @@ export function createSugarLangVerifyMiddleware(
 
       const checkCandidate = (text: string): EnvelopeVerdict =>
         services.classifier.check(text, learner, {
-          prescription: scene ? constraint.rawPrescription : null,
+          taughtLemmaIds: scene ? taughtLemmaIds(constraint) : null,
           knownEntities: scene ? new Set(scene.properNouns) : new Set(),
           questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
           voiceInterjections,

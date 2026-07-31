@@ -22,23 +22,21 @@ import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_DIRECTIVE_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
-  SUGARLANG_PRESCRIPTION_ANNOTATION,
   SUGARLANG_SCHEDULE_ANNOTATION
 } from "../../runtime/middlewares/shared";
 import type { TeachSchedule } from "../../runtime/scheduler/teach-schedule";
 import {
-  createEmptyPrescription,
   createServicesStub,
   createTestExecution,
   createTestLearnerProfile
 } from "./test-helpers";
 
 describe("SugarLangTeacherMiddleware", () => {
-  // Story 071.5 — the prescription guard must sit BELOW the scripted-mode
-  // block. Prescription-less scripted dialogue still needs a constraint so
-  // the scripted middleware can adapt the authored text; hoisting the guard
-  // back above the block silently reintroduces the bypass.
-  it("scripted mode without a prescription still builds a constraint (empty targetVocab, synthetic rawPrescription), teacher not invoked", async () => {
+  // 090.10: was "the prescription guard must sit BELOW the scripted-mode block"
+  // (Story 071.5). There is no prescription and no guard any more, but the
+  // property that mattered survives and is what this still pins: scripted
+  // dialogue gets a constraint without the teacher LLM being called.
+  it("scripted mode builds a constraint with an empty slate, teacher not invoked", async () => {
     const invokeTeacher = vi.fn();
     const services = createServicesStub({
       resolveForExecution: () => ({
@@ -65,7 +63,6 @@ describe("SugarLangTeacherMiddleware", () => {
         metadata: {}
       }
     });
-    // Deliberately no SUGARLANG_PRESCRIPTION_ANNOTATION.
 
     await middleware.prepare?.(execution);
 
@@ -75,11 +72,6 @@ describe("SugarLangTeacherMiddleware", () => {
         introduce: [],
         reinforce: [],
         avoid: []
-      },
-      rawPrescription: {
-        rationale: {
-          summary: "scripted-mode-no-prescription"
-        }
       }
     });
   });
@@ -125,7 +117,11 @@ describe("SugarLangTeacherMiddleware", () => {
     });
   });
 
-  it("non-scripted mode without a prescription returns without writing a constraint", async () => {
+  // 090.10: this used to pin the PRESCRIPTION gate -- "no prescription, no
+  // constraint". That gate is deleted; the Teacher must run for every
+  // agentified turn. What still legitimately stops the middleware is having no
+  // SCENE to be in, which is what this now pins.
+  it("non-scripted mode with no scene returns without writing a constraint", async () => {
     const invokeTeacher = vi.fn();
     const services = createServicesStub({
       resolveForExecution: () => ({
@@ -143,7 +139,6 @@ describe("SugarLangTeacherMiddleware", () => {
       services: services as never
     });
     const execution = createTestExecution();
-    // Deliberately no SUGARLANG_PRESCRIPTION_ANNOTATION.
 
     await middleware.prepare?.(execution);
 
@@ -169,7 +164,6 @@ describe("SugarLangTeacherMiddleware", () => {
       services: services as never
     });
     const execution = createTestExecution();
-    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
     execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION] = {
       text: "Let's start in English.",
       lang: "en",
@@ -267,7 +261,6 @@ describe("SugarLangTeacherMiddleware", () => {
         }
       }
     });
-    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
     execution.annotations[SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION] = [
       {
         lemmaRef: { lemmaId: "maleta", lang: "es" },
@@ -370,7 +363,6 @@ describe("SugarLangTeacherMiddleware", () => {
         }
       }
     });
-    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
     execution.annotations[SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION] = [
       {
         lemmaRef: { lemmaId: "maleta", lang: "es" },
@@ -472,12 +464,6 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
-    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = {
-      ...createEmptyPrescription(),
-      introduce: [{ lemmaId: "comer", lang: "es" }],
-      reinforce: [],
-      avoid: []
-    };
     execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule();
 
     await middleware.prepare?.(execution);
@@ -505,7 +491,6 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
-    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
     execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule();
 
     await middleware.prepare?.(execution);
@@ -532,7 +517,6 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
-    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
     // No schedule annotation.
 
     await middleware.prepare?.(execution);
@@ -559,7 +543,6 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
-    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
     // No SUGARLANG_SCHEDULE_ANNOTATION.
 
     await middleware.prepare?.(execution);
@@ -585,7 +568,6 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
-    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
     execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule({ isColdStart: true });
 
     await middleware.prepare?.(execution);
@@ -598,7 +580,6 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
-    execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = createEmptyPrescription();
     execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule({
       teachables: [
         { id: "comer", kind: "vocabulary", priority: 0.9, teachReason: "due", affinityNpcIds: [] },

@@ -39,7 +39,6 @@ import { IndexedDBIntentCache, type SugarlangIntentCache } from "./compile/inten
 import { LiveRenderCache } from "./compile/live-render-cache";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
 import type { SugarlangLLMClient } from "./llm/types";
-import { LexicalBudgeter } from "./budgeter/lexical-budgeter";
 import { EnvelopeClassifier } from "./classifier/envelope-classifier";
 import { MorphologyLoader } from "./classifier/morphology-loader";
 import { RuntimeCompileScheduler } from "./compile/compile-scheduler";
@@ -102,7 +101,6 @@ export interface SugarlangExecutionServices {
   atlas: CefrLexAtlasProvider;
   morphology: MorphologyLoader;
   classifier: EnvelopeClassifier;
-  budgeter: LexicalBudgeter;
   placementQuestionnaireLoader: PlacementQuestionnaireLoader;
   placementScoreEngine: PlacementScoreEngine;
   learnerStore: BlackboardLearnerStore;
@@ -155,7 +153,6 @@ interface LanguageBundle {
   atlas: CefrLexAtlasProvider;
   morphology: MorphologyLoader;
   classifier: EnvelopeClassifier;
-  budgeter: LexicalBudgeter;
   placementQuestionnaireLoader: PlacementQuestionnaireLoader;
   placementScoreEngine: PlacementScoreEngine;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
@@ -749,10 +746,6 @@ export class SugarlangRuntimeServices {
       telemetry: this.telemetry
     });
     const learnerPriorProvider = new FsrsLearnerPriorProvider(atlas);
-    const budgeter = new LexicalBudgeter({
-      atlas,
-      learnerPriorProvider
-    });
     const placementQuestionnaireLoader = new PlacementQuestionnaireLoader();
     const placementScoreEngine = new PlacementScoreEngine(atlas, morphology);
     const compileCache = getSugarlangRuntimeCompileCache();
@@ -797,7 +790,6 @@ export class SugarlangRuntimeServices {
       atlas,
       morphology,
       classifier,
-      budgeter,
       placementQuestionnaireLoader,
       placementScoreEngine,
       sceneLexiconStore

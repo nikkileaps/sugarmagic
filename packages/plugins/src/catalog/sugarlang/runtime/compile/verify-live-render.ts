@@ -100,7 +100,7 @@ export function verifyLiveRender(input: VerifyLiveRenderInput): VariantVerdict {
 
   // Gate 1: Mixed-text envelope predicate (allowance + ceiling; no coverage floor).
   const envelopeResult = applyMixedTextEnvelopePredicate(profile, band, {
-    prescription: null
+    taughtLemmaIds: null
   });
   const envelopePasses = envelopeResult.passes;
 

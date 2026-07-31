@@ -82,7 +82,14 @@ export interface EnvelopeClassifierOptions {
 }
 
 export interface EnvelopeClassifierCheckOptions {
-  prescription?: LexicalPrescription | null;
+  /**
+   * 090.10: lemma ids the TEACHER chose to introduce this situation, exempt
+   * from the band ceiling because teaching them is the point. Was
+   * `prescription: LexicalPrescription` -- the budgeter's shortlist -- so the
+   * exemption tracked what a lexical scan had picked rather than what the
+   * Teacher decided.
+   */
+  taughtLemmaIds?: string[] | null;
   knownEntities?: Set<string>;
   questEssentialLemmas?: Set<string>;
   /** NPC-authored interjection tokens whitelisted from envelope enforcement. See Plan 083 story 083.3. */
@@ -206,7 +213,7 @@ export class EnvelopeClassifier {
       text
     );
     const ruleResult = this.rule(profile, learner.estimatedCefrBand, {
-      prescription: options.prescription,
+      taughtLemmaIds: options.taughtLemmaIds,
       knownEntities: options.knownEntities,
       questEssentialLemmas: options.questEssentialLemmas,
       voiceInterjections: options.voiceInterjections

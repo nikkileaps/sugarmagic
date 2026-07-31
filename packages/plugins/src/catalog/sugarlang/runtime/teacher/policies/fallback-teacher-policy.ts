@@ -31,28 +31,16 @@ import type {
 } from "../../types";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
-  getSentenceComplexityCap
+  getSentenceComplexityCap,
+  getIntroduceCapForBand
 } from "../band-envelope";
 
 export interface FallbackTeacherPolicyOptions {
   triggerReasonOverride?: PedagogicalDirective["comprehensionCheck"]["triggerReason"];
 }
 
-function getIntroduceLevelCap(cefrBand: CEFRBand): number {
-  switch (cefrBand) {
-    case "A1":
-      return 1;
-    case "A2":
-      return 2;
-    case "B1":
-      return 3;
-    case "B2":
-      return 4;
-    case "C1":
-    case "C2":
-      return 5;
-  }
-}
+// 090.10: `getIntroduceLevelCap` deleted -- it was a second, disagreeing answer
+// to the same question. See `getIntroduceCapForBand` in ../band-envelope.
 
 /**
  * 090.4: probe-pacing signals, derived rather than carried. See
@@ -210,7 +198,7 @@ function deriveFallbackSlate(context: TeacherContext): {
   return {
     introduce: introduce.slice(
       0,
-      getIntroduceLevelCap(context.learner.estimatedCefrBand)
+      getIntroduceCapForBand(context.learner.estimatedCefrBand)
     ),
     reinforce,
     avoid

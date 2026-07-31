@@ -107,7 +107,6 @@ export function createBaseConstraint(
     sentenceComplexityCap: "two-clause",
     targetLanguage: "es",
     learnerCefr: "A2",
-    rawPrescription: createEmptyPrescription(),
     ...overrides
   };
 }

@@ -45,11 +45,9 @@ import {
   SUGARLANG_PLACEMENT_PHASE_STATE,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
-  SUGARLANG_PRESCRIPTION_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_QUEST_ESSENTIAL_IDS_ANNOTATION,
   SUGARLANG_SCHEDULE_ANNOTATION,
-  buildEmptyPrescription,
   buildLearnerSnapshot,
   computePendingProvisionalLemmas,
   computeProbeFloorState,
@@ -301,9 +299,6 @@ export function createSugarLangContextMiddleware(
       }
 
       if (placementPhase === "questionnaire") {
-        execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = buildEmptyPrescription(
-          "Placement questionnaire phase - no prescription needed."
-        );
         return execution;
       }
 
@@ -311,10 +306,6 @@ export function createSugarLangContextMiddleware(
         const npc = deps.services.findNpcDefinition(
           execution.selection.npcDefinitionId
         );
-        execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] =
-          buildEmptyPrescription(
-            "Pre-placement opening dialog - no prescription needed."
-          );
         execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION] =
           pickPrePlacementOpeningLine({
             npcDisplayName: execution.selection.npcDisplayName,
@@ -436,67 +427,27 @@ export function createSugarLangContextMiddleware(
             ) ??
             lemma.sourceObjectiveDisplayName
         }));
-      const prescription = await services.budgeter.prescribe({
-        learner: refreshedLearner,
-        sceneLexicon,
-        conversationState: {
-          currentSessionTurn: refreshedLearner.currentSession?.turns ?? 0,
-          turnSeconds: undefined,
-          nowMs: Date.now()
-        },
-        activeQuestEssentialLemmas: activeQuestEssentialLemmas.map((entry) => ({
-          lemmaId: entry.lemmaRef.lemmaId,
-          lang: entry.lemmaRef.lang,
-          cefrBand: entry.cefrBand,
-          sourceQuestId: entry.sourceQuestId,
-          sourceObjectiveNodeId: entry.sourceObjectiveNodeId,
-          sourceObjectiveDisplayName: entry.sourceObjectiveDisplayName
-        })),
-        npcDefinitionId: execution.selection.npcDefinitionId ?? null
-      });
-
-      execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = prescription;
-
-      // 087.3: Inject scheduled function chunks into the prescription introduce list.
-      // The schedule may have picked a function teachable; realize its chunk: refs here
-      // so the scripted middleware can use them. Capped at remaining newItemsAllowed budget.
-      const schedule = execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] as TeachSchedule | undefined;
-      if (schedule && availableCompetencies.length > 0) {
-        try {
-          const competencyChunkRefs = realizeCompetencyChunksFromSchedule(
-            schedule,
-            targetLanguage,
-            refreshedLearner.lemmaCards,
-            availableCompetencies
-          );
-          if (competencyChunkRefs.length > 0) {
-            const cap = Math.max(
-              0,
-              prescription.budget.newItemsAllowed - prescription.introduce.length
-            );
-            const toInject = competencyChunkRefs.slice(0, cap);
-            if (toInject.length > 0) {
-              prescription.introduce = [...prescription.introduce, ...toInject];
-            }
-          }
-        } catch {
-          // Non-fatal: function chunk realization failure degrades gracefully.
-        }
-      }
-
-      logger.debug("Budgeter prescription details.", {
-        introduce: prescription.introduce.map((l) => {
-          const info = sceneLexicon.lemmas[l.lemmaId];
-          return {
-            lemmaId: l.lemmaId,
-            freq: services.atlas.getFrequencyRank(l.lemmaId, targetLanguage) ?? null,
-            sceneWeight: info?.sceneWeight ?? 0,
-            isAnchor: sceneLexicon.anchors.includes(l.lemmaId)
-          };
-        }),
-        anchor: prescription.anchor?.lemmaId ?? null,
-        candidateCount: Object.keys(sceneLexicon.lemmas).length
-      });
+      // 090.10: THE PRESCRIBER IS GONE, AND WITH IT THE COMPETENCY SIDE DOOR.
+      //
+      // What used to be here: `budgeter.prescribe()` produced a ranked, capped
+      // shortlist of lemmas; it was annotated for the teacher middleware, and
+      // scheduled competencies were expanded into `chunk:` pseudo-lemmas and
+      // INJECTED into `prescription.introduce` so they could ride the lemma
+      // channel. That shortlist was not an input to the Teacher's decision, it
+      // WAS the decision -- the Teacher could only pick 1-2 items from what a
+      // lexical scan had already chosen.
+      //
+      // It is the motivating bug end to end: `queso` never entered
+      // `sceneLexicon.lemmas` (the sole candidate source) for an agent NPC whose
+      // lines do not exist at compile time, so it never entered the prescription,
+      // and the Teacher was then forbidden from naming it. The Teacher did not
+      // fail to think of cheese; it was structurally prohibited from saying it.
+      //
+      // What replaces it: the SITUATION supplies candidates (concepts resolved
+      // against the atlas, 090.2), LEARNING STATUS supplies eligibility (090.9),
+      // and the Teacher ranks (090.4). Competencies need no side door because
+      // the slate carries teachables directly and the prompt now lists the
+      // inventory the Teacher may choose from (090.10a).
       execution.annotations[SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION] =
         buildLearnerSnapshot(refreshedLearner);
       execution.annotations[SUGARLANG_PENDING_PROVISIONAL_ANNOTATION] =
@@ -511,25 +462,10 @@ export function createSugarLangContextMiddleware(
         execution.annotations[SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION] = true;
       }
 
-      await emitTelemetry(
-        telemetry,
-        createTelemetryEvent("budgeter.prescription-generated", {
-          conversationId: getSugarlangConversationId(execution),
-          sessionId: getSugarAgentSessionId(execution),
-          turnId: getSugarlangTelemetryTurnId(execution, "prepare"),
-          timestamp: Date.now(),
-          sceneId,
-          learnerSnapshot: buildLearnerSnapshot(refreshedLearner),
-          prescription,
-          rationale: prescription.rationale,
-          pendingProvisionalSnapshot: pendingProvisional,
-          probeFloorState,
-          questEssentialState: {
-            activeQuestEssentialLemmas
-          }
-        }),
-        logger
-      );
+      // 090.10: `budgeter.prescription-generated` deleted with the budgeter that
+      // emitted it. `rationale-trace` reads that event optionally and falls back
+      // through `??` chains, so the debug panel degrades rather than breaking;
+      // retargeting the trace onto the slate + realization is 090.7's job.
 
       // Drain any pending hover observation from the UI layer so the
       // observer middleware can process it during finalize.

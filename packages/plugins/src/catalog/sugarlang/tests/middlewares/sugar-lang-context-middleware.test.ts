@@ -25,7 +25,6 @@ import {
 import {
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
-  SUGARLANG_PRESCRIPTION_ANNOTATION
 } from "../../runtime/middlewares/shared";
 import {
   createServicesStub,
@@ -129,11 +128,8 @@ describe("SugarLangContextMiddleware", () => {
     expect(execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION]).toEqual({
       phase: "opening-dialog"
     });
-    expect(execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION]).toMatchObject({
-      introduce: [],
-      reinforce: [],
-      avoid: []
-    });
+    // 090.10: the empty-prescription annotation this used to assert went with
+    // the budgeter. The opening-dialog line is the part that mattered.
     expect(execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION]).toEqual({
       text: "Welcome to the placement check.",
       lang: "en",
@@ -246,19 +242,6 @@ describe("SugarLangContextMiddleware", () => {
       anchors: [],
       questEssentialLemmas: []
     });
-    const prescribe = vi.fn().mockResolvedValue({
-      introduce: [],
-      reinforce: [],
-      avoid: [],
-      budget: { newItemsAllowed: 0 },
-      rationale: {
-        summary: "normal runtime",
-        candidateSetSize: 0,
-        envelopeSurvivorCount: 0,
-        priorityScores: [],
-        reasons: []
-      }
-    });
     const services = createServicesStub({
       getBlackboard: () => blackboard,
       resolveForExecution: () => ({
@@ -270,9 +253,6 @@ describe("SugarLangContextMiddleware", () => {
         },
         sceneLexiconStore: {
           ensure
-        },
-        budgeter: {
-          prescribe
         },
         atlas: {
           getLemma: vi.fn().mockReturnValue(undefined)
@@ -316,25 +296,14 @@ describe("SugarLangContextMiddleware", () => {
     await middleware.prepare?.(execution);
 
     expect(execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION]).toBeUndefined();
-    expect(prescribe).toHaveBeenCalledTimes(1);
+    // 090.10: was `expect(prescribe).toHaveBeenCalledTimes(1)`. The budgeter is
+    // gone; `ensure` below proves the same thing -- the middleware fell through
+    // to the normal runtime path rather than short-circuiting on placement.
     expect(ensure).toHaveBeenCalledTimes(1);
   });
 
   it("treats the placement role as inert when placement is globally disabled", async () => {
     const learner = createTestLearnerProfile();
-    const prescribe = vi.fn().mockResolvedValue({
-      introduce: [],
-      reinforce: [],
-      avoid: [],
-      budget: { newItemsAllowed: 0 },
-      rationale: {
-        summary: "normal runtime",
-        candidateSetSize: 0,
-        envelopeSurvivorCount: 0,
-        priorityScores: [],
-        reasons: []
-      }
-    });
     const services = createServicesStub({
       getConfig: () => ({
         debugLogging: false,
@@ -366,9 +335,6 @@ describe("SugarLangContextMiddleware", () => {
             questEssentialLemmas: []
           })
         },
-        budgeter: {
-          prescribe
-        },
         atlas: {
           getLemma: vi.fn().mockReturnValue(undefined)
         }
@@ -411,6 +377,8 @@ describe("SugarLangContextMiddleware", () => {
     await middleware.prepare?.(execution);
 
     expect(execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION]).toBeUndefined();
-    expect(prescribe).toHaveBeenCalledTimes(1);
+    // 090.10: was `expect(prescribe).toHaveBeenCalledTimes(1)`. The budgeter is
+    // gone; `ensure` below proves the same thing -- the middleware fell through
+    // to the normal runtime path rather than short-circuiting on placement.
   });
 });

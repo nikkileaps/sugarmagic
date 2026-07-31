@@ -233,18 +233,6 @@ describe("sugarlang runtime contracts", () => {
         text: "Welcome to Wordlark Hollow.",
         lang: "en",
         lineId: "opening-1"
-      },
-      rawPrescription: {
-        introduce: [],
-        reinforce: [],
-        avoid: [],
-        budget: { newItemsAllowed: 0 },
-        rationale: {
-          candidateSetSize: 0,
-          envelopeSurvivorCount: 0,
-          priorityScores: [],
-          reasons: []
-        }
       }
     };
 
@@ -672,19 +660,7 @@ const noProbeConstraint: SugarlangConstraint = {
   glossingStrategy: "inline",
   sentenceComplexityCap: "free",
   targetLanguage: "es",
-  learnerCefr: "A1",
-  rawPrescription: {
-    introduce: [],
-    reinforce: [],
-    avoid: [],
-    budget: { newItemsAllowed: 0 },
-    rationale: {
-      candidateSetSize: 0,
-      envelopeSurvivorCount: 0,
-      priorityScores: [],
-      reasons: []
-    }
-  }
+  learnerCefr: "A1"
 };
 void noProbeConstraint;
 

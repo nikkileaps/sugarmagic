@@ -70,7 +70,7 @@ export interface StoredComprehensionCheck {
   triggerReason: string;
 }
 
-export const SUGARLANG_PRESCRIPTION_ANNOTATION = "sugarlang.prescription";
+// 090.10: SUGARLANG_PRESCRIPTION_ANNOTATION deleted with the budgeter that wrote it.
 export const SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION = "sugarlang.learnerSnapshot";
 export const SUGARLANG_PENDING_PROVISIONAL_ANNOTATION =
   "sugarlang.pendingProvisionalLemmas";
@@ -173,23 +173,7 @@ export {
   computeProbeFloorState
 } from "../learner";
 
-export function buildEmptyPrescription(summary: string): LexicalPrescription {
-  return {
-    introduce: [],
-    reinforce: [],
-    avoid: [],
-    budget: {
-      newItemsAllowed: 0
-    },
-    rationale: {
-      summary,
-      candidateSetSize: 0,
-      envelopeSurvivorCount: 0,
-      priorityScores: [],
-      reasons: []
-    }
-  };
-}
+// 090.10: `buildEmptyPrescription` deleted -- nothing produces a prescription now.
 
 export function getTurnsSinceLastProbe(execution: ConversationExecutionContext): number {
   const value = execution.state[SUGARLANG_TURNS_SINCE_LAST_PROBE_STATE];

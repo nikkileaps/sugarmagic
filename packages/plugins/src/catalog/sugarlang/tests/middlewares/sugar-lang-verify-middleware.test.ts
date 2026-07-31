@@ -245,18 +245,14 @@ describe("SugarLangVerifyMiddleware", () => {
       services: services as never
     });
     const execution = createTestExecution();
+    // 090.10: was a `rawPrescription` whose `avoid` list named this lemma. The
+    // prescription is gone; the Teacher's own slate is the equivalent, and the
+    // band-ceiling exemption only ever read `introduce` either way.
     execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({
-      rawPrescription: {
+      targetVocab: {
         introduce: [],
         reinforce: [],
-        avoid: [{ lemmaId: "complicado", lang: "es" }],
-        budget: { newItemsAllowed: 0 },
-        rationale: {
-          candidateSetSize: 0,
-          envelopeSurvivorCount: 0,
-          priorityScores: [],
-          reasons: []
-        }
+        avoid: [{ kind: "vocabulary", lemmaId: "complicado", lang: "es" }]
       }
     });
 

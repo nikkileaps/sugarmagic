@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/budgeter/test-helpers.ts
+ * packages/plugins/src/catalog/sugarlang/tests/integration/scene-lexicon-fixture.ts
  *
  * Purpose: Shares compact fixtures for Epic 8 budgeter tests.
  *

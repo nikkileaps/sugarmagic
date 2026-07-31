@@ -26,7 +26,7 @@ import {
   createUniformCefrPosterior,
   seedCefrPosteriorFromSelfReport
 } from "../../learner";
-import { seedCardFromAtlas } from "../../budgeter/fsrs-adapter";
+import { seedCardFromAtlas } from "../../learner/fsrs-adapter";
 
 export class FsrsLearnerPriorProvider implements LearnerPriorProvider {
   constructor(private readonly atlas: LexicalAtlasProvider) {}

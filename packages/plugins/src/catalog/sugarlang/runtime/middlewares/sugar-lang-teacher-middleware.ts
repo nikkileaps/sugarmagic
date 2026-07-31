@@ -48,11 +48,9 @@ import {
   SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION,
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
-  SUGARLANG_PRESCRIPTION_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_SCHEDULE_ANNOTATION,
   extractCharacterVoiceReminder,
-  buildEmptyPrescription,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
@@ -221,17 +219,11 @@ export function createSugarLangTeacherMiddleware(
         return execution;
       }
 
-      const prescription = execution.annotations[
-        SUGARLANG_PRESCRIPTION_ANNOTATION
-      ] as SugarlangConstraint["rawPrescription"] | undefined;
-
       const learner = await services.learnerStore.getCurrentProfile();
 
       // Scripted mode: skip the teacher LLM call. Build a lightweight
       // constraint with posture/ratio based on the learner's level.
       // The authored text IS the curriculum — we only control language mix.
-      // Runs even without a prescription (prescription-less scripted dialogue
-      // still needs a constraint so the scripted middleware can adapt the text).
       // 086.4: scripted branch no longer sets generatorPromptOverlay or writes a
       // sugaragent contribution -- the scripted middleware reads baked variants
       // (target-dominant) or runs markGradedText (anchored/supported), zero LLM.
@@ -256,33 +248,36 @@ export function createSugarLangTeacherMiddleware(
         const constraint: SugarlangConstraint = {
           generatorPromptOverlay: "",
           minimalGreetingMode: false,
-          targetVocab: {
-            introduce: toVocabularyRefs(prescription?.introduce ?? []),
-            reinforce: toVocabularyRefs(prescription?.reinforce ?? []),
-            avoid: toVocabularyRefs(prescription?.avoid ?? [])
-          },
+          // 090.10: was seeded from the prescription. A scripted line's text is
+          // already decided, so the slate only ever narrowed which already-present
+          // words the weave substituted -- and the weave now draws the whole band
+          // (090.8). Empty is the honest value: scripted mode teaches from the
+          // authored text, not from a slate.
+          targetVocab: { introduce: [], reinforce: [], avoid: [] },
           supportPosture: posture,
           targetLanguageRatio: ratio,
           interactionStyle: "natural_dialogue",
           glossingStrategy,
           sentenceComplexityCap: "free",
           targetLanguage,
-          learnerCefr: learner.estimatedCefrBand,
-          rawPrescription: prescription ?? buildEmptyPrescription("scripted-mode-no-prescription")
+          learnerCefr: learner.estimatedCefrBand
         };
         execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
         logger.debug("Scripted mode: lightweight constraint built.", {
           learnerCefr: learner.estimatedCefrBand,
           posture,
-          ratio,
-          hadPrescription: Boolean(prescription)
+          ratio
         });
         return execution;
       }
 
-      if (!prescription) {
-        return execution;
-      }
+      // 090.10: THE PRESCRIPTION GATE IS GONE.
+      //
+      // This read `if (!prescription) return execution;` -- harmless while the
+      // budgeter always wrote one, and fatal the moment it stopped: the guard
+      // would be true every turn, the middleware would return early every turn,
+      // and the Teacher would never run again. Nothing would fail; NPCs would
+      // just quietly go back to ungraded output.
       const schedule = execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] as
         | TeachSchedule
         | undefined;
@@ -416,7 +411,6 @@ export function createSugarLangTeacherMiddleware(
         sentenceComplexityCap: directive.sentenceComplexityCap,
         targetLanguage: execution.selection.targetLanguage ?? learner.targetLanguage,
         learnerCefr: learner.estimatedCefrBand,
-        rawPrescription: prescription,
         ...(directive.comprehensionCheck.trigger
           ? {
               comprehensionCheckInFlight: {

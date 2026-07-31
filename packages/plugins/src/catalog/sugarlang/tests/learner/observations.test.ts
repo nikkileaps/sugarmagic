@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/budgeter/observations.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/learner/observations.test.ts
  *
  * Purpose: Verifies the pure observation-to-outcome rule table.
  *
@@ -7,7 +7,7 @@
  *   - none
  *
  * Relationships:
- *   - Imports ../../runtime/budgeter/observations as the implementation under test.
+ *   - Imports ../../runtime/learner/observations as the implementation under test.
  *   - Covers Epic 8 Story 8.2.
  *
  * Implements: Proposal 001 §1. Lexical Budgeter
@@ -27,7 +27,7 @@ import {
   computeProvisionalEvidenceDelta,
   observationToFsrsGrade,
   observationToOutcome
-} from "../../runtime/budgeter/observations";
+} from "../../runtime/learner/observations";
 
 function createObservation(kind: ObservationKind): LemmaObservation {
   switch (kind) {

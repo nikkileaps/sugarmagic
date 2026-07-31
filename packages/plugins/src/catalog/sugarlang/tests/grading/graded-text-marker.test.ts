@@ -305,7 +305,7 @@ describe("applyMixedTextEnvelopePredicate", () => {
       ceilingExceededLemmas: [prescribedLemma]
     });
     const result = applyMixedTextEnvelopePredicate(profile, "A1", {
-      prescription: createPrescription(["hola"])
+      taughtLemmaIds: ["hola"]
     });
 
     expect(result.passes).toBe(true);
@@ -327,7 +327,7 @@ describe("applyMixedTextEnvelopePredicate", () => {
       questEssentialLemmasMatched: []
     });
     const result = applyMixedTextEnvelopePredicate(profile, "A1", {
-      prescription: createPrescription(["hola"])
+      taughtLemmaIds: ["hola"]
     });
 
     expect(result.passes).toBe(true);

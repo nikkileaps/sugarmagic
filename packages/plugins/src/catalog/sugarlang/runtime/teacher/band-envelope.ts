@@ -81,6 +81,44 @@ export function clampRatioToPosture(
   return Math.max(low, Math.min(high, ratio));
 }
 
+/**
+ * How many NEW teachables one NPC turn may introduce, by learner band.
+ *
+ * ONE TABLE, ONE ENFORCER (nikki, 2026-07-30). There were two answers to this
+ * and they disagreed: `generator-prompt-overlay` capped every learner at a flat
+ * 2 (raised to 3), while `fallback-teacher-policy.getIntroduceLevelCap` ran a
+ * per-band curve of 1/2/3/4/5. So the gateway going down silently changed how
+ * much an A1 learner was taught -- from 3 down to 1 -- with nothing saying why.
+ * Same shape as the 0.2/0.5/0.8-vs-0.3/0.65/0.85 ratio divergence 090.8b folded.
+ *
+ * The per-band curve was the right idea in the wrong place: capacity is a
+ * property of the learner, not of whichever code path happened to be running.
+ * It lives here beside the other band-keyed pedagogical tables until 090.5
+ * (learner capacity) takes it further -- fatigue, session depth and
+ * conversation depth all modulate this, and none of them are read yet.
+ *
+ * Values shifted up from the old curve (nikki, 2026-07-30): the old A1 of 1
+ * made a conversation read as light on teachables even when the Teacher had
+ * chosen well. A competency counts as one item here; its exponents do not
+ * (they are how the act is performed, not extra things to learn).
+ *
+ *   A1 3   A2 4   B1 5   B2 5   C1 6   C2 6
+ */
+export function getIntroduceCapForBand(cefrBand: CEFRBand): number {
+  switch (cefrBand) {
+    case "A1":
+      return 3;
+    case "A2":
+      return 4;
+    case "B1":
+    case "B2":
+      return 5;
+    case "C1":
+    case "C2":
+      return 6;
+  }
+}
+
 export function getSentenceComplexityCap(
   cefrBand: CEFRBand
 ): PedagogicalDirective["sentenceComplexityCap"] {

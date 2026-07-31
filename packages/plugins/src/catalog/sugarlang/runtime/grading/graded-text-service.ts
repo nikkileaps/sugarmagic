@@ -398,7 +398,7 @@ export class GradedTextService {
     // strings, not target lemma ids. The structural allowance + ceiling checks
     // are the meaningful part.
     const envelopePasses = applyMixedTextEnvelopePredicate(profile, request.band, {
-      prescription: null
+      taughtLemmaIds: null
     }).passes;
 
     // Gate 2: language ratio.

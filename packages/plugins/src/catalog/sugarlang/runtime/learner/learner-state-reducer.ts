@@ -65,13 +65,13 @@ import {
   emitTelemetry,
   type TelemetrySink
 } from "../telemetry/telemetry";
-import { observationToOutcome } from "../budgeter/observations";
+import { observationToOutcome } from "./observations";
 import {
   applyOutcome,
   commitProvisionalEvidence as commitCardProvisionalEvidence,
   decayProvisionalEvidence as decayCardProvisionalEvidence,
   discardProvisionalEvidence as discardCardProvisionalEvidence
-} from "../budgeter/fsrs-adapter";
+} from "./fsrs-adapter";
 
 interface ReducerObservationEvent {
   type: "observation";

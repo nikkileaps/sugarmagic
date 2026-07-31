@@ -48,7 +48,7 @@ import { createSugarlangLogger } from "../../runtime/logger";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import { SUGARLANG_CONSTRAINT_ANNOTATION } from "../../runtime/middlewares/shared";
 import { createTestRegion, createTestActiveScene } from "../compile/test-helpers";
-import { createBudgeterSceneLexicon } from "../budgeter/test-helpers";
+import { createBudgeterSceneLexicon } from "./scene-lexicon-fixture";
 import { clearSugarlangRuntimeCompileCache } from "../../runtime/compile/runtime-cache-state";
 import { installFetchGuard, uninstallFetchGuard, jsonResponse } from "./fetch-guard";
 import { MemoryVariantCache } from "../../runtime/compile/variant-cache";

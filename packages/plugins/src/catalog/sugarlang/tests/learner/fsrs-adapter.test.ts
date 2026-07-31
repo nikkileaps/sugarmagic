@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/budgeter/fsrs-adapter.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/learner/fsrs-adapter.test.ts
  *
  * Purpose: Verifies the FSRS adapter, productive-strength updates, and provisional-evidence helpers.
  *
@@ -7,7 +7,7 @@
  *   - none
  *
  * Relationships:
- *   - Imports ../../runtime/budgeter/fsrs-adapter as the implementation under test.
+ *   - Imports ../../runtime/learner/fsrs-adapter as the implementation under test.
  *   - Covers Epic 8 Story 8.1.
  *
  * Implements: Proposal 001 §1. Lexical Budgeter
@@ -26,15 +26,18 @@ import {
   decayProvisionalEvidence,
   discardProvisionalEvidence,
   seedCardFromAtlas
-} from "../../runtime/budgeter/fsrs-adapter";
-import { observationToOutcome } from "../../runtime/budgeter/observations";
-import { createBudgeterLemmaCard } from "./test-helpers";
+} from "../../runtime/learner/fsrs-adapter";
+import { observationToOutcome } from "../../runtime/learner/observations";
+// 090.10: was `createBudgeterLemmaCard` from the budgeter test helpers -- a
+// byte-identical duplicate of this module's own card fixture. The budgeter is
+// gone; the duplicate went with it.
+import { createLemmaCard } from "./test-helpers";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe("fsrs-adapter", () => {
   it("advances stability for a Good receptive outcome", () => {
-    const card = createBudgeterLemmaCard("hola", "A1");
+    const card = createLemmaCard("hola", "A1");
 
     const nextCard = applyOutcome(
       card,
@@ -47,7 +50,7 @@ describe("fsrs-adapter", () => {
   });
 
   it("applies Again by incrementing lapses and reducing review state quality", () => {
-    const card = createBudgeterLemmaCard("hola", "A1", {
+    const card = createLemmaCard("hola", "A1", {
       reviewCount: 2,
       lastReviewedAt: 500,
       lapseCount: 0
@@ -64,7 +67,7 @@ describe("fsrs-adapter", () => {
   });
 
   it("updates productive strength and lastProducedAtMs for positive production deltas", () => {
-    const card = createBudgeterLemmaCard("hola", "A1", {
+    const card = createLemmaCard("hola", "A1", {
       productiveStrength: 0.2
     });
 
@@ -79,7 +82,7 @@ describe("fsrs-adapter", () => {
   });
 
   it("applies negative productive deltas and clamps within [0, 1]", () => {
-    const card = createBudgeterLemmaCard("hola", "A1", {
+    const card = createLemmaCard("hola", "A1", {
       productiveStrength: 0.4
     });
 
@@ -118,7 +121,7 @@ describe("fsrs-adapter", () => {
   });
 
   it("decays productive strength on the configured half-life", () => {
-    const card = createBudgeterLemmaCard("hola", "A1", {
+    const card = createLemmaCard("hola", "A1", {
       productiveStrength: 1,
       lastProducedAtMs: 0
     });
@@ -132,7 +135,7 @@ describe("fsrs-adapter", () => {
   });
 
   it("is immutable and deterministic for fixed inputs", () => {
-    const card = createBudgeterLemmaCard("hola", "A1", {
+    const card = createLemmaCard("hola", "A1", {
       productiveStrength: 0.3,
       provisionalEvidence: 0.2
     });
@@ -155,7 +158,7 @@ describe("fsrs-adapter", () => {
   });
 
   it("accumulates and clamps provisional evidence while leaving FSRS state untouched for rapid-advance", () => {
-    const card = createBudgeterLemmaCard("hola", "A1", {
+    const card = createLemmaCard("hola", "A1", {
       stability: 1.5,
       retrievability: 0.8,
       reviewCount: 2,
@@ -172,7 +175,7 @@ describe("fsrs-adapter", () => {
       10
     );
     const clamped = applyOutcome(
-      createBudgeterLemmaCard("hola", "A1", {
+      createLemmaCard("hola", "A1", {
         provisionalEvidence: 4.9
       }),
       { receptiveGrade: null, productiveStrengthDelta: 0, provisionalEvidenceDelta: 0.3 },
@@ -192,7 +195,7 @@ describe("fsrs-adapter", () => {
   });
 
   it("commits, discards, and decays provisional evidence correctly", () => {
-    const card = createBudgeterLemmaCard("hola", "A1", {
+    const card = createLemmaCard("hola", "A1", {
       provisionalEvidence: 2.5,
       provisionalEvidenceFirstSeenTurn: 10,
       stability: 1
@@ -209,8 +212,8 @@ describe("fsrs-adapter", () => {
     expect(committed.provisionalEvidence).toBe(0);
     expect(committed.provisionalEvidenceFirstSeenTurn).toBeNull();
     expect(committed.stability).toBeGreaterThan(card.stability);
-    expect(commitProvisionalEvidence(createBudgeterLemmaCard("empty", "A1")).stability).toBe(
-      createBudgeterLemmaCard("empty", "A1").stability
+    expect(commitProvisionalEvidence(createLemmaCard("empty", "A1")).stability).toBe(
+      createLemmaCard("empty", "A1").stability
     );
     expect(discarded.provisionalEvidence).toBe(0);
     expect(discarded.stability).toBe(card.stability);

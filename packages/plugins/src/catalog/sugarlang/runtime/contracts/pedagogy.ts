@@ -171,7 +171,9 @@ export interface SugarlangConstraint {
     lang: string;
     lineId: string;
   };
-  rawPrescription: LexicalPrescription;
+  // 090.10: `rawPrescription` DELETED with the budgeter. The band-ceiling
+  // exemption it fed now reads the Teacher's own slate -- see
+  // `taughtLemmaIds` in sugar-lang-verify-middleware.ts.
   /**
    * Pre-formatted prompt overlay for the NPC generator. Sugarlang builds this
    * string for its own internal use (sugar-lang-scripted-middleware.ts reads it

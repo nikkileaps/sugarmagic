@@ -137,7 +137,13 @@ export type EnvelopeExemptionKind =
  * Implements: Proposal 001 §2. Envelope Classifier / §Quest-Essential Lemma Exemption
  */
 export interface EnvelopeRuleOptions {
-  prescription?: LexicalPrescription | null;
+  /**
+   * 090.10: lemma ids the TEACHER chose to introduce, exempt from the band
+   * ceiling because teaching them is the point. Was
+   * `prescription: LexicalPrescription` -- the budgeter's shortlist -- which
+   * made the exemption track a lexical scan's picks rather than a decision.
+   */
+  taughtLemmaIds?: string[] | null;
   knownEntities?: Set<string>;
   questEssentialLemmas?: Set<string>;
   /** NPC-authored interjection tokens whitelisted from envelope enforcement. See Plan 083 story 083.3. */

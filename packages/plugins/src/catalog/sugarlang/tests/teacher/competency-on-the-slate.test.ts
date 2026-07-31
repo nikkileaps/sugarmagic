@@ -33,6 +33,7 @@ import {
 } from "../../runtime/teacher/prompt-builder";
 import { buildGeneratorPromptOverlay } from "../../runtime/middlewares/generator-prompt-overlay";
 import { createCompetencyDescriber } from "../../runtime/inventory/describe-competency";
+import { getIntroduceCapForBand } from "../../runtime/teacher/band-envelope";
 import {
   competencyRefs,
   vocabularyRefs,
@@ -60,14 +61,7 @@ function constraintWith(introduce: TeachableRef[]): SugarlangConstraint {
     sentenceComplexityCap: "free",
     targetLanguage: "es",
     supportLanguage: "en",
-    learnerCefr: "B1",
-    rawPrescription: {
-      introduce: [],
-      reinforce: [],
-      avoid: [],
-      budget: { newItemsAllowed: 2 },
-      rationale: { summary: "test", candidateSetSize: 0, envelopeSurvivorCount: 0, priorityScores: [], reasons: [] }
-    }
+    learnerCefr: "B1"
   } as unknown as SugarlangConstraint;
 }
 
@@ -178,16 +172,34 @@ describe("a competency can be taught", () => {
     const six: TeachableRef[] = ["queso", "barca", "oficio", "saludo", "maleta", "billete"].map(
       (lemmaId) => ({ kind: "vocabulary" as const, lemmaId, lang: "es" })
     );
-    const overlay = buildGeneratorPromptOverlay(constraintWith(six));
+    // 090.10: each teachable is now its own `- ` line rather than a comma join,
+    // so the section spans lines. Counts the bullets between the Introduce
+    // header and the instruction paragraph that closes it.
+    function introducedCount(text: string): number {
+      const lines = text.split("\n");
+      const after = lines.slice(
+        lines.findIndex((line) => line.startsWith("Introduce (")) + 1
+      );
+      const end = after.findIndex((line) => !line.startsWith("- "));
+      return after.slice(0, end === -1 ? undefined : end).length;
+    }
 
-    const introduceLine = overlay
-      .split("\n")
-      .find((line) => line.startsWith("Introduce vocabulary"));
-    const named = six.filter((ref) =>
-      introduceLine?.includes(ref.kind === "vocabulary" ? ref.lemmaId : "")
+    // The cap is PER BAND, from a single table (`getIntroduceCapForBand`).
+    // Asserting TWO bands deliberately: one assertion passes just as well
+    // against a flat constant, which is exactly what this was -- while a
+    // different per-band curve lived in the fallback policy and disagreed.
+    expect(introducedCount(buildGeneratorPromptOverlay(constraintWith(six)))).toBe(
+      getIntroduceCapForBand("B1")
     );
-
-    expect(named).toHaveLength(2);
+    expect(
+      introducedCount(
+        buildGeneratorPromptOverlay({
+          ...constraintWith(six),
+          learnerCefr: "A1"
+        })
+      )
+    ).toBe(getIntroduceCapForBand("A1"));
+    expect(getIntroduceCapForBand("A1")).toBeLessThan(getIntroduceCapForBand("B1"));
   });
 
   it("degrades to the id rather than dropping the competency", () => {

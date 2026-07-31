@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/budgeter/fsrs-adapter.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/learner/fsrs-adapter.ts
  *
  * Purpose: Wraps the external ts-fsrs scheduler in sugarlang-owned card helpers.
  *

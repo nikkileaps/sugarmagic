@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/budgeter/observations.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/learner/observations.ts
  *
  * Purpose: Implements the pure observation-to-outcome rule table used by the
  *          Budgeter and learner reducer.
