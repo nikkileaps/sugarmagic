@@ -49,7 +49,7 @@ splice.
 Budget split:
 
 - cacheable system prompt: role, pedagogical rubric, CEFR descriptors, output schema, hard constraints, comprehension guidance
-- dynamic user prompt: learner state, relationship state, scene snapshot, NPC context, moment metadata, recent turns, prescription, pending provisional state, and turn-shaping hints
+- dynamic user prompt: the SITUATION (scene concepts, runtime facts, NPC, recent turns) and the LEARNER (state, derived pacing signals), plus turn-shaping hints. These are the two content doors on `TeacherContext`; there is no prescription.
 
 The builder now renders a canonical template from `prompt-template.ts` so the
 prompt wording has one editable source of truth. The current Teacher prompt
@@ -61,12 +61,11 @@ is being debugged.
 `parseDirective(json, { context, telemetry })` performs strict JSON parsing and
 schema validation.
 
-`repairDirective(partial, prescription, context)` is deterministic:
+`repairDirective(partial, context, options)` is deterministic:
 
-- fills missing required fields from prescription-safe defaults
+- fills missing required fields from safe defaults
 - clamps `targetLanguageRatio` to `[0, 1]`
 - drops unknown or malformed fields
-- enforces the no-invention rule by filtering `targetVocab` to prescription subsets
 - strips any quest-essential lemma that leaked into `targetVocab`
 - repairs invalid comprehension-check target lemmas back to the pending list
 

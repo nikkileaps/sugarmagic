@@ -2,8 +2,11 @@
  * packages/plugins/src/catalog/sugarlang/runtime/middlewares/sugar-lang-scripted-middleware.ts
  *
  * Purpose: Adapts scripted (authored English) NPC dialogue to the learner's
- *          language level. Runs in the analysis stage at priority 15 (after
- *          verify at 20, before observe at 90).
+ *          language level. Runs in the analysis stage at priority 15, so it goes
+ *          BEFORE verify (20) and observe (90) -- lower priority sorts first.
+ *          This header said "after verify at 20" until 2026-07-31, which is
+ *          backwards. It is harmless only because verify returns early in
+ *          scripted mode; if that early return ever goes, the order matters.
  *
  * For anchored/supported postures: diglot weave (zero LLM calls).
  * For target-dominant posture: reads baked variant from variant cache; degrades

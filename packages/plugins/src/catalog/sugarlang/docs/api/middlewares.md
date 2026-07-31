@@ -1,21 +1,22 @@
 # Middleware API
 
-Status: Updated in Epic 11
+Status: Updated in Epic 090
 
-Sugarlang contributes four `conversation.middleware` entries that run in a fixed
+Sugarlang contributes five `conversation.middleware` entries that run in a fixed
 order:
 
 1. `sugarlang.context` at stage `context`, priority `10`
 2. `sugarlang.teacher` at stage `policy`, priority `30`
-3. `sugarlang.verify` at stage `analysis`, priority `20`
-4. `sugarlang.observe` at stage `analysis`, priority `90`
+3. `sugarlang.scripted` at stage `analysis`, priority `15`
+4. `sugarlang.verify` at stage `analysis`, priority `20`
+5. `sugarlang.observe` at stage `analysis`, priority `90`
 
 ## Runtime Ownership
 
 The plugin owns one runtime service graph in
 `packages/plugins/src/catalog/sugarlang/runtime/runtime-services.ts`. The
 middlewares share that service graph rather than constructing their own copies
-of the atlas, classifier, budgeter, learner store, or director.
+of the atlas, classifier, learner store, or director.
 
 The authored placement tag still flows through:
 
@@ -28,9 +29,8 @@ These middlewares write and read turn-scoped annotations using the shared keys
 declared in
 `packages/plugins/src/catalog/sugarlang/runtime/middlewares/shared.ts`.
 
-Important keys written during Epic 10:
+Important keys:
 
-- `sugarlang.prescription`
 - `sugarlang.learnerSnapshot`
 - `sugarlang.pendingProvisionalLemmas`
 - `sugarlang.probeFloorState`
@@ -45,11 +45,16 @@ Important keys written during Epic 10:
 
 ## Stage Responsibilities
 
-`sugarlang.context` loads learner state, placement state, and scene lexicon
-data, then writes the lexical prescription and prompt-facing learner snapshot.
+`sugarlang.context` loads learner state, placement state, and scene vocabulary
+data, and writes the prompt-facing learner snapshot.
 
-`sugarlang.teacher` merges the prescription with a pedagogical directive and
-produces the final `SugarlangConstraint` that SugarAgent reads.
+`sugarlang.teacher` composes the situation, asks the Teacher for a
+`PedagogicalDirective`, and produces the final `SugarlangConstraint` that
+SugarAgent reads. There is no prescription to merge -- the Teacher decides from
+the situation and the learner directly.
+
+`sugarlang.scripted` serves authored dialogue lines, reading the variant baked
+for the learner's band rather than generating text.
 
 `sugarlang.verify` re-checks the generated text against the envelope classifier,
 attempts one repair call, and falls back to deterministic auto-simplification.

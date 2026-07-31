@@ -16,10 +16,13 @@
  *   stored copy from drifting out of agreement with the cards it came from.
  *
  * WHY THEY LIVE IN THE LEARNER MODULE
- *   docs/api/domain-model-after-epic-090.md puts CAPACITY inside `LEARNER`,
- *   alongside band and standing. These two probe-pacing signals are what exists
- *   of it. The fatigue/strain half was deleted in 090.5 -- it had never run --
- *   so if capacity is ever revisited, it starts HERE rather than in a new home.
+ *   CAPACITY is a property of the LEARNER, alongside band and standing. These
+ *   two probe-pacing signals are what exists of it, so if capacity is ever
+ *   revisited it starts HERE rather than in a new home.
+ *
+ *   The fatigue/strain half was deleted in 090.5. It WAS live code -- see the
+ *   correction at `scheduler/outer-loop-scheduler.ts:67`, which this comment
+ *   used to contradict by claiming it had never run.
  *
  *   They were in `middlewares/shared.ts`, which made the teacher unable to
  *   derive them without depending on middleware -- so they were computed once

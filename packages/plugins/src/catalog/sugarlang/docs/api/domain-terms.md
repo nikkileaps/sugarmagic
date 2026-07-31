@@ -60,7 +60,7 @@ The word is overloaded on two other things, so check which one is meant:
 | Use | What it actually is |
 |---|---|
 | `LexicalAtlasProvider` | the lexicon. The dictionary. |
-| `sceneLexicon` / `CompiledSceneLexicon` | **not** a lexicon -- one scene's slice of it. See scene vocabulary below. |
+| `SceneVocabularyModel` | **not** a lexicon -- one scene's slice of it. See scene vocabulary below. |
 | `interpretLexicon` | unrelated. Surface forms grouped by category, used to interpret what the *player* typed (`buildInterpretLexicon`), not to teach. |
 
 ### Scene vocabulary
@@ -69,10 +69,11 @@ Which lexicon entries one scene's authored text actually uses, plus the proper
 nouns in it. An **index into** the lexicon -- a list of ids -- not a copy of it;
 band, rank and part of speech are looked up by id.
 
-Today it is `CompiledSceneLexicon` / `SceneLemmaInfo`
-(`runtime/contracts/scene-lexicon.ts`) and does store copies of atlas fields.
-Plan 090 collapses it to ids and renames it, because calling a scene's subset a
-"lexicon" is what made it read as a second dictionary.
+`SceneVocabularyModel` (`runtime/contracts/scene-lexicon.ts`), carrying
+`lemmaIds: string[]` and `properNouns: string[]`. It was `CompiledSceneLexicon`
+and stored copies of atlas fields; calling a scene's subset a "lexicon" is what
+made it read as a second dictionary, and copying the fields is what let the two
+drift.
 
 **Lexicon vs scene vocabulary:** the lexicon is every word in the language; the
 scene vocabulary is which of them this text uses.
@@ -89,7 +90,9 @@ model. Introduced by Plan 090.
 A concept is *what a piece of content is about, or does*. It is **demand**: it
 says "this is relevant here" and nothing about what to teach. Resolution then
 looks it up in two supply tables -- the atlas and the competency inventory --
-and it may hit both, one, or neither:
+and it may hit both, one, or neither. The atlas half is a mechanical lookup; the
+competency half is a judgment the **Teacher** makes, not the code. See
+[domain-model.md](./domain-model.md).
 
 | concept | atlas | competency |
 |---|---|---|
@@ -99,6 +102,23 @@ and it may hit both, one, or neither:
 
 So a concept has no kind, and its label is not constrained to one word: a phrase
 simply misses the atlas, and that miss is the signal to try the other table.
+
+### Situation
+
+One scene at one moment: a compiled half (`sceneContext`, what the scene is
+about) and a live half (`runtime`, quest state / time of day / world events),
+plus the NPC and recent turns. Type: `Situation`
+(`runtime/situation/situation.ts`), built by `composeSituation`, which is
+**total** -- it always returns one, and represents absence inside the structure.
+
+One of the two content doors into the Teacher. The other is the learner.
+
+### Runtime fact
+
+`RuntimeFact<T>` (`runtime/situation/runtime-fact.ts`) -- available with a
+value, or unavailable. The distinction between "there is no active quest" and
+"we could not read the quest system" is load-bearing and survives all the way
+into the prompt, where it renders as `(none)` versus `(unknown)`.
 
 ### Dialogue blob
 
@@ -134,9 +154,11 @@ blobs -> scene vocabulary     what words are IN this text
 prose -> concepts -> lemmas   what this content is ABOUT
 ```
 
-Only the first exists in shipped code, and it is why a cheese-obsessed NPC never
-taught `queso`: his lines are generated at runtime, so "cheese" was never in
-authored text for the scan to find. Plan 090 adds the second.
+Both exist. For a long time only the first did, and it is why a cheese-obsessed
+NPC never taught `queso`: his lines are generated at runtime, so "cheese" was
+never in authored text for the scan to find. Scanning the words that happen to
+be *present* cannot reach a word that is merely *relevant*, which is what the
+second path is for.
 
 ---
 
@@ -162,6 +184,30 @@ avoid, plus posture, ratio, complexity cap and whether to run a comprehension
 check. Type: `PedagogicalDirective` (`runtime/contracts/pedagogy.ts`). Cached per
 conversation by `DirectiveCache`.
 
+### Slate
+
+The teaching half of a directive: which teachables to `introduce`, `reinforce`
+and `avoid` on this turn. `SlateItem` / `SlateAction`
+(`runtime/situation/slate.ts`); the actions are `introduce | reinforce | probe |
+skip`.
+
+"Slate" is the decision; "directive" is the slate plus the rendering envelope
+(posture, ratio, complexity cap).
+
+### Realization
+
+Turning a directive into text. One operation at two moments -- **build time**
+for authored dialogue lines (producing a cached variant) and **runtime** for
+agent-generated lines. Both shape a generator; neither substitutes words into
+already-written text.
+
+### Ambient span
+
+Target language in a line that the atlas knows but the slate never asked for.
+Found by `findAmbientSpans` (`runtime/grading/ambient-spans.ts`), marked so the
+player can select it for a translation, deliberately left unstyled -- the styled
+treatment belongs to what is actually being taught.
+
 ### Constraint
 
 The directive re-expressed for the renderer, carried on the conversation
@@ -185,8 +231,13 @@ Anything the Teacher can teach. Two subtypes today:
 A third (conjugation) is anticipated, not built. Both subtypes share a shape: a
 language-neutral thing plus how this language performs it.
 
-In code the umbrella is `ScheduledTeachable` (`runtime/scheduler/teach-schedule.ts`),
-whose `kind` is `"vocabulary" | "competency"`.
+The kinds are `TEACHABLE_KINDS` (`runtime/contracts/scene-teachable.ts`).
+Two shapes carry them, and the difference is where they came from:
+
+| type | file | what it is |
+|---|---|---|
+| `SceneTeachable` | `runtime/contracts/scene-teachable.ts` | what a scene's concepts resolved to -- the supply available here |
+| `ScheduledTeachable` | `runtime/scheduler/teach-schedule.ts` | what the outer-loop scheduler has queued for this learner |
 
 ### Competency
 
@@ -205,12 +256,16 @@ Named `function` until 2026-07-29, after CEFR's "functional syllabus". Renamed
 because it collided with the programming sense on every read; `Competency`,
 `competencyId`, `competency-inventory.json`, `kind: "competency"` throughout now.
 
-### Diglot weave
+### Diglot weave (deleted)
 
 Substituting target-language words into otherwise-English text, so a beginner
-reads mostly English with real target words embedded. Implementation:
-`runtime/classifier/diglot-weave.ts`. It is a renderer: it substitutes what it
-is handed and makes no decision about what should be taught.
+read mostly English with real target words embedded.
+
+**Gone as of Epic 090.** The target language is now written by the model that
+writes the line, at whatever ratio the posture directs -- so there is nothing
+left to weave in afterwards. Kept in this glossary only because the word still
+appears in older commits and comments; if you find code doing substitution on
+finished text, it is a survival and should be deleted.
 
 ### Variant
 
@@ -230,7 +285,7 @@ Worth flagging, because each has bitten:
   scope tier.
 - **bake** -- narrowly, compiling scripted line *variants*. Other compile-time
   pipelines (chunks, intents, concepts) are not "baking".
-- **avoid** -- currently conflates *too hard right now* with *deliberately
-  withheld*. See [domain-model-after-epic-090.md](./domain-model-after-epic-090.md).
+- **avoid** -- conflates *too hard right now* with *deliberately withheld*. Both
+  reach the directive's `avoid` list and nothing downstream can tell them apart.
 - **lexicon** -- the atlas, a scene's subset of it, or the player-input
   `interpretLexicon`. See Lexicon above.

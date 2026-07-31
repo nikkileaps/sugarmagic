@@ -93,7 +93,7 @@ The weights are exported as named constants:
 - `SESSION_FATIGUE_LATENCY_WEIGHT`
 
 Budgeter-owned productive-strength decay constants live in
-`runtime/budgeter/fsrs-adapter.ts` and are intentionally named exports:
+`runtime/learner/fsrs-adapter.ts` and are intentionally named exports:
 
 - `PRODUCTIVE_DECAY_HALF_LIFE_DAYS`
 - `PRODUCTIVE_DECAY_LOW_STRENGTH_MULTIPLIER`

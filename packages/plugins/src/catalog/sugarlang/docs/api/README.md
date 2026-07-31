@@ -3,15 +3,21 @@
 This index tracks the API documents that later epics fill in as sugarlang moves
 from skeleton to implementation.
 
+**New here?** Read [conversation-flow.md](./conversation-flow.md) first -- it
+walks one NPC conversation end to end -- then [domain-model.md](./domain-model.md)
+for how the pieces relate, with [domain-terms.md](./domain-terms.md) open beside
+it as a glossary.
+
 | File                           | Scope                                                                                   | Populated By            | Status            |
 | ------------------------------ | --------------------------------------------------------------------------------------- | ----------------------- | ----------------- |
+| `conversation-flow.md`         | End-to-end walkthrough of one conversation, in domain language. Start here.             | Epic 090                | Updated in Epic 090 |
+| `domain-model.md`              | How the domain entities relate: the two doors, supply vs demand, realization, invariants. | Epic 090                | Updated in Epic 090 |
 | `domain-terms.md`              | Glossary: atlas / lemma / lexicon / concept / blob and the rest of the domain nouns.    | Epic 090                | Updated in Epic 090 |
-| `budgeter.md`                  | Public Budgeter inputs, outputs, scoring hooks, and rationale surfaces.                 | Epic 3, Epic 8          | Updated in Epic 3 |
 | `classifier.md`                | Public Envelope Classifier interfaces, deterministic pipeline, and repair entry points. | Epic 3, Epic 5          | Updated in Epic 3 |
-| `teacher.md`                   | Teacher output contract, prompt boundary, schema parsing, and fallback policy seams.    | Epic 3, Epic 9          | Updated in Epic 3 |
+| `teacher.md`                   | Teacher output contract, prompt boundary, schema parsing, and fallback policy seams.    | Epic 3, Epic 9, Epic 090 | Updated in Epic 090 |
 | `learner-state.md`             | Learner profile, reducer-owned state, persistence, session signals, and placement seeding. | Epic 3, Epic 7, Epic 11 | Updated in Epic 11 |
 | `scene-lexicon-compilation.md` | Scene compiler, content hashing, cache ownership, and compile-profile contract.         | Epic 3, Epic 6          | Updated in Epic 3 |
-| `middlewares.md`               | Middleware ordering, annotation contracts, SugarAgent integration, and placement flow ownership. | Epic 2, Epic 10, Epic 11 | Updated in Epic 11 |
+| `middlewares.md`               | Middleware ordering, annotation contracts, SugarAgent integration, and placement flow ownership. | Epic 2, Epic 10, Epic 090 | Updated in Epic 090 |
 | `placement-contract.md`        | Placement capability boundary, questionnaire ownership, scoring, configuration, and replay inertness. | Epic 2, Epic 3, Epic 11 | Updated in Epic 11 |
 | `editor-contributions.md`      | Studio-facing shell contribution surfaces and editor-only plugin UI.                    | Epic 1, Epic 11, Epic 12 | Updated in Epic 11 |
 | `telemetry.md`                 | Telemetry sink contract, rationale traces, and debug-panel-facing data surfaces.        | Epic 1, Epic 13         | Updated           |
