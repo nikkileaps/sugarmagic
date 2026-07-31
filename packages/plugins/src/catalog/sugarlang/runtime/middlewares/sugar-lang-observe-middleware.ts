@@ -33,6 +33,7 @@ import {
 import { countDiverseEncounters } from "../learner";
 import { vocabularyRefs } from "../contracts/teachable-ref";
 import { findAmbientSpans } from "../grading/ambient-spans";
+import { traceRealization } from "../teacher/teacher-trace";
 import { MorphologyLoader } from "../classifier/morphology-loader";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
@@ -977,6 +978,16 @@ export function createSugarLangObserveMiddleware(
         // Detection is an affordance, not a turn requirement. A failure here
         // must not cost the player their line.
       }
+
+      // 090.7: the realization half of the trace. The teacher trace shows the
+      // DECISION and runs before any text exists; this shows what the text
+      // actually did with it, and calls out DISJOINT explicitly.
+      traceRealization({
+        npcDisplayName: execution.selection.npcDisplayName ?? null,
+        text: normalizedTurn.text,
+        slateTerms: focusTerms,
+        ambientSurfaces: ambientSpans.map((span) => span.surface)
+      });
 
       // The annotation is written when there is ANYTHING to say -- taught terms
       // OR ambient spans. Previously it required focus terms, so a line that was

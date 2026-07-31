@@ -224,3 +224,53 @@ export function traceTeacherCall(args: {
   });
   /* eslint-enable no-console */
 }
+
+/**
+ * 090.7: WHAT THE SLATE ASKED FOR vs WHAT THE TEXT ACTUALLY DID.
+ *
+ * The trace above shows the DECISION. This shows the REALIZATION, and the whole
+ * point is telling apart two failures that look identical from the outside:
+ *
+ *   "the slate was right and nothing in this text matched it"
+ *   "the slate was wrong"
+ *
+ * Distinguishing those by hand is what cost hours on 2026-07-28. So DISJOINT is
+ * called out explicitly rather than left to be inferred by comparing two lists
+ * -- an empty intersection is the single most diagnostic thing here and it is
+ * invisible if you only print both sides.
+ */
+export function traceRealization(args: {
+  npcDisplayName: string | null;
+  text: string;
+  slateTerms: string[];
+  ambientSurfaces: string[];
+}): void {
+  if (!traceEnabled()) return;
+  /* eslint-disable no-console */
+  const { npcDisplayName, text, slateTerms, ambientSurfaces } = args;
+  const lowered = text.toLocaleLowerCase();
+  const landed = slateTerms.filter((term) => lowered.includes(term.toLocaleLowerCase()));
+  const missed = slateTerms.filter((term) => !lowered.includes(term.toLocaleLowerCase()));
+  const disjoint = slateTerms.length > 0 && landed.length === 0;
+
+  group(
+    `[sugarlang] REALIZATION -- ${npcDisplayName ?? "(unknown npc)"}${
+      disjoint ? " -- DISJOINT: nothing the slate asked for is in this line" : ""
+    }`,
+    () => {
+      console.info("slate asked for:", slateTerms.length > 0 ? slateTerms.join(", ") : "(none)");
+      console.info("landed in the text:", landed.length > 0 ? landed.join(", ") : "(none)");
+      console.info("asked for but absent:", missed.length > 0 ? missed.join(", ") : "(none)");
+      // Ambient is the other half of the picture: target language the line
+      // contains that nobody asked for. A line can be disjoint AND full of
+      // Spanish, which says the generator ignored the slate rather than failing
+      // to find room for it.
+      console.info(
+        "target language nobody asked for:",
+        ambientSurfaces.length > 0 ? ambientSurfaces.join(", ") : "(none)"
+      );
+      console.info("text:", text);
+    }
+  );
+  /* eslint-enable no-console */
+}
