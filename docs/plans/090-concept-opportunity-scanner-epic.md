@@ -1342,9 +1342,34 @@ SCOPE:
 - Delete the substitution half of `markGradedText`; what remains marks terms in
   finished text for presentation.
 - Delete `postureForBand` -- posture comes from the directive on every path.
+
+**DO NOT BREAK THE TAUGHT-WORD PRESENTATION** (nikki, 2026-07-31). Gold for
+introduce, blue for recall, and the celebrate animation the player gets for
+typing a taught word are load-bearing, liked, and older than this epic. This
+story rewrites the layer directly upstream of them, which is exactly when they
+get broken by accident. The three things that carry them:
+
+```
+HighlightMatch.introduce          gold (introduce) vs blue (recall)
+HighlightMatch.celebrate          the animation; set in dialogue-entry-decorator.ts
+                                  on PLAYER turns, when a typed word matches a focus term
+DialogueHighlightAnnotation       { focusTerms, introduceTerms, celebrateTerms, glosses }
+```
+
+ADD, NEVER RESHAPE. Roles and spans ride as NEW optional fields on the
+annotation; those four fields, `findTermMatches`, and both `HighlightMatch`
+booleans keep their shape and meaning. A presentation layer that reads roles is
+additive to the one that reads `introduce`/`celebrate`, not a replacement for
+it. Done this way, breaking the reward loop is structurally impossible rather
+than merely unlikely -- which matters because a regression here is silent in
+tests and obvious only in play.
 - Retire the runtime pool question entirely -- there is no pool if nothing
   substitutes.
 
+- Gold, blue and the celebrate animation are unchanged: `HighlightMatch.introduce`,
+  `HighlightMatch.celebrate` and the four `DialogueHighlightAnnotation` fields
+  keep their shape and meaning, and a player typing a taught word still fires the
+  animation (integration -- the pin nikki asked for by name, 2026-07-31).
 - Exit: `postureForBand` returns no hits outside git history; every consumer
   reads `directive.supportPosture` (pin -- posture is a decision, and a
   derivation sitting beside it is a second answer waiting to disagree).
