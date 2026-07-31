@@ -30,6 +30,7 @@ import type { SugarlangConstraint } from "../types";
 import { createSugarlangLogger } from "../logger";
 import { vocabularyRefs } from "../contracts/teachable-ref";
 import { languageDisplayName } from "../language-names";
+import { exceedsReadabilityCeiling } from "../teacher/band-envelope";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
@@ -462,7 +463,31 @@ export function createSugarLangVerifyMiddleware(
       // glossing via hover tooltips. The NPC speaks naturally.
 
       const ratioVerdict = verdict.languageRatioVerdict;
-      if (verdict.withinEnvelope && ratioVerdict.conformance !== "under-ratio") {
+
+      // TOO DENSE TO READ -> REPAIR. This gate previously only caught
+      // `under-ratio`, so "too much target language" was unrepairable: an A1
+      // learner could be handed a full-Spanish paragraph and every gate passed
+      // it. `over-ratio` was added as a verdict to name that, but the verdict
+      // alone changed nothing here -- `"over-ratio" !== "under-ratio"` is true,
+      // so those turns still returned before repair could start.
+      //
+      // DELIBERATELY NOT `conformance !== "over-ratio"` (nikki, 2026-07-31).
+      // `over-ratio` means "off the directed ratio", which at A1 fires from 0.45
+      // -- off-target and perfectly readable. Repairing every one of those buys
+      // a second LLM call on most turns to correct a tuning miss.
+      //
+      // The trigger is the READABILITY CEILING instead: far above the directed
+      // ratio, per band, and null (no guard) at C1/C2 where a fully
+      // target-language line is the goal. Rare by construction.
+      const tooDenseToRead = exceedsReadabilityCeiling(
+        ratioVerdict.measuredRatio,
+        constraint.learnerCefr
+      );
+      if (
+        verdict.withinEnvelope &&
+        ratioVerdict.conformance !== "under-ratio" &&
+        !tooDenseToRead
+      ) {
         return normalizedTurn;
       }
 
@@ -494,6 +519,15 @@ export function createSugarLangVerifyMiddleware(
         const pct = Math.round(constraint.targetLanguageRatio * 100);
         violationLabels.push(
           `Rewrite this reply so about ${pct}% of it is in ${languageDisplayName(constraint.targetLanguage)}; keep the meaning.`
+        );
+      }
+      // The other direction. Without this the ceiling triggered a repair whose
+      // violation list was EMPTY -- the model was asked to fix a line and never
+      // told what was wrong with it, which is worse than not repairing at all.
+      if (tooDenseToRead) {
+        const pct = Math.round(constraint.targetLanguageRatio * 100);
+        violationLabels.push(
+          `This is too dense to read at ${constraint.learnerCefr}. Rewrite it with about ${pct}% ${languageDisplayName(constraint.targetLanguage)} and the rest in plain English; keep the meaning.`
         );
       }
       violationLabels.push(

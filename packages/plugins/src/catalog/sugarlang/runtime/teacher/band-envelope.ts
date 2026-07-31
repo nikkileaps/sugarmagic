@@ -121,6 +121,63 @@ export function getIntroduceCapForBand(cefrBand: CEFRBand): number {
   }
 }
 
+/**
+ * THE READABILITY CEILING: above this share of target language, a line stops
+ * being hard and starts being unreadable, and the turn is regenerated.
+ *
+ * NOT THE SAME THING AS `over-ratio`, and the distinction is the whole point.
+ *   `TARGET_LANGUAGE_RATIO_BY_POSTURE` says what a line SHOULD be (A1: 0.3) and
+ *   `clampRatioToPosture` allows the Teacher +/-0.1 around it. A line at 0.45 is
+ *   already `over-ratio` -- off-target, worth measuring, and completely readable.
+ *   Repairing every one of those would mean a second LLM call on most turns for
+ *   a tuning miss.
+ *
+ *   This is the OTHER question: is the line still comprehensible to this learner
+ *   at all? An A1 beginner handed 90% Spanish cannot read it -- that is a broken
+ *   turn, not a drifted one. So the ceiling sits FAR above the directed ratio
+ *   (0.3 directed vs 0.7 ceiling at A1) and is expected to fire rarely.
+ *
+ * NULL MEANS NO CEILING. At C1/C2 a fully target-language line is the goal, not
+ * a failure, so there is nothing to guard against and `null` says so explicitly
+ * rather than encoding it as 1.0 -- "no guard" and "guard at 100%" differ if
+ * anyone ever makes the comparison inclusive.
+ *
+ * Values from nikki, 2026-07-31:
+ *   A1 0.70   A2 0.80   B1 0.90   B2 0.90   C1 none   C2 none
+ */
+export function getReadabilityCeilingForBand(cefrBand: CEFRBand): number | null {
+  switch (cefrBand) {
+    case "A1":
+      return 0.7;
+    case "A2":
+      return 0.8;
+    case "B1":
+    case "B2":
+      return 0.9;
+    case "C1":
+    case "C2":
+      return null;
+  }
+}
+
+/**
+ * Is this line too dense in the target language to be readable by this learner?
+ *
+ * The single enforcer for that question. A caller comparing against
+ * `getReadabilityCeilingForBand` itself has to remember that null means "no
+ * ceiling" and that the comparison is strictly-greater; two callers doing that
+ * by hand is how the ratio tables diverged before.
+ */
+export function exceedsReadabilityCeiling(
+  measuredRatio: number,
+  cefrBand: CEFRBand
+): boolean {
+  const ceiling = getReadabilityCeilingForBand(cefrBand);
+  if (ceiling === null) return false;
+  if (!Number.isFinite(measuredRatio)) return false;
+  return measuredRatio > ceiling;
+}
+
 export function getSentenceComplexityCap(
   cefrBand: CEFRBand
 ): PedagogicalDirective["sentenceComplexityCap"] {

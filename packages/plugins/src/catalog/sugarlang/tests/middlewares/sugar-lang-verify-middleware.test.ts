@@ -31,6 +31,112 @@ import {
   createTestTurn
 } from "./test-helpers";
 
+// Shared ratio-verdict fixtures for the readability-ceiling gate (090.11).
+const RATIO_VERDICT_A1_TOO_DENSE = {
+        withinEnvelope: true,
+        profile: {
+          totalTokens: 10,
+          knownTokens: 10,
+          inBandTokens: 10,
+          unknownTokens: 0,
+          bandHistogram: { A1: 10, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
+          outOfEnvelopeLemmas: [],
+          ceilingExceededLemmas: [],
+          questEssentialLemmasMatched: [],
+          coverageRatio: 1,
+          ratioCheckTokens: 10,
+          resolvedTargetLanguageTokens: 10
+        },
+        worstViolation: null,
+        rule: "test",
+        violations: [],
+        exemptionsApplied: [],
+        languageRatioVerdict: {
+          measuredRatio: 0.92,
+          directedRatio: 0.3,
+          posture: "anchored",
+          conformance: "over-ratio"
+        }
+      };
+const RATIO_VERDICT_A1_OFF_TARGET = {
+        withinEnvelope: true,
+        profile: {
+          totalTokens: 10,
+          knownTokens: 10,
+          inBandTokens: 10,
+          unknownTokens: 0,
+          bandHistogram: { A1: 10, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
+          outOfEnvelopeLemmas: [],
+          ceilingExceededLemmas: [],
+          questEssentialLemmasMatched: [],
+          coverageRatio: 1,
+          ratioCheckTokens: 10,
+          resolvedTargetLanguageTokens: 10
+        },
+        worstViolation: null,
+        rule: "test",
+        violations: [],
+        exemptionsApplied: [],
+        languageRatioVerdict: {
+          measuredRatio: 0.45,
+          directedRatio: 0.3,
+          posture: "anchored",
+          conformance: "over-ratio"
+        }
+      };
+const RATIO_VERDICT_A1_ON_TARGET = {
+        withinEnvelope: true,
+        profile: {
+          totalTokens: 10,
+          knownTokens: 10,
+          inBandTokens: 10,
+          unknownTokens: 0,
+          bandHistogram: { A1: 10, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
+          outOfEnvelopeLemmas: [],
+          ceilingExceededLemmas: [],
+          questEssentialLemmasMatched: [],
+          coverageRatio: 1,
+          ratioCheckTokens: 10,
+          resolvedTargetLanguageTokens: 10
+        },
+        worstViolation: null,
+        rule: "test",
+        violations: [],
+        exemptionsApplied: [],
+        languageRatioVerdict: {
+          measuredRatio: 0.3,
+          directedRatio: 0.3,
+          posture: "anchored",
+          conformance: "conformant"
+        }
+      };
+const RATIO_VERDICT_C2_FULL_TARGET = {
+        withinEnvelope: true,
+        profile: {
+          totalTokens: 10,
+          knownTokens: 10,
+          inBandTokens: 10,
+          unknownTokens: 0,
+          bandHistogram: { A1: 10, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 },
+          outOfEnvelopeLemmas: [],
+          ceilingExceededLemmas: [],
+          questEssentialLemmasMatched: [],
+          coverageRatio: 1,
+          ratioCheckTokens: 10,
+          resolvedTargetLanguageTokens: 10
+        },
+        worstViolation: null,
+        rule: "test",
+        violations: [],
+        exemptionsApplied: [],
+        languageRatioVerdict: {
+          measuredRatio: 1,
+          directedRatio: 1,
+          posture: "anchored",
+          conformance: "conformant"
+        }
+      };
+
 describe("SugarLangVerifyMiddleware", () => {
   it("temporarily bypasses verification when verify is disabled in Sugarlang config", async () => {
     const classifierCheck = vi.fn();
@@ -638,7 +744,7 @@ describe("SugarLangVerifyMiddleware", () => {
               withinEnvelope: true,
               profile: { totalTokens: 2, knownTokens: 2, inBandTokens: 2, unknownTokens: 0, bandHistogram: { A1: 2, A2: 0, B1: 0, B2: 0, C1: 0, C2: 0 }, outOfEnvelopeLemmas: [], ceilingExceededLemmas: [], questEssentialLemmasMatched: [], coverageRatio: 1, ratioCheckTokens: 2, resolvedTargetLanguageTokens: 2 },
               worstViolation: null, rule: "test", violations: [], exemptionsApplied: [],
-              languageRatioVerdict: { measuredRatio: 1, directedRatio: 0.65, posture: "supported", conformance: "conformant" }
+              languageRatioVerdict: { measuredRatio: 0.65, directedRatio: 0.65, posture: "supported", conformance: "conformant" }
             })
           },
           llmClient
@@ -699,7 +805,7 @@ describe("SugarLangVerifyMiddleware", () => {
               violations: [],
               exemptionsApplied: [],
               languageRatioVerdict: {
-                measuredRatio: 1,
+                measuredRatio: 0.65,
                 directedRatio: 0.65,
                 posture: "supported",
                 conformance: "conformant"
@@ -943,5 +1049,147 @@ describe("SugarLangVerifyMiddleware", () => {
     const result = await middleware.finalize?.(execution, createTestTurn("The original text here."));
 
     expect(result?.text).toBe("¡Ay! Buenas tardes, amigo.");
+  });
+  it("090.11: an A1 line ABOVE the readability ceiling triggers repair", async () => {
+    // THE BUG THIS CLOSES. `over-ratio` was added as a verdict so "too much
+    // target language" could be named, but this gate only ever tested for
+    // `under-ratio` -- and `"over-ratio" !== "under-ratio"` is true, so the turn
+    // returned before repair could start. The motivating case, verbatim from the
+    // contract: "an A1 learner could be handed a full-Spanish paragraph and
+    // every gate passed it."
+    const llmClient = {
+      generate: vi.fn().mockResolvedValue({ text: "Hola, viajero.", requestId: null })
+    };
+    const classifierCheck = vi
+      .fn()
+      .mockReturnValueOnce(RATIO_VERDICT_A1_TOO_DENSE)
+      .mockReturnValue(RATIO_VERDICT_A1_ON_TARGET);
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: {
+            getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+          },
+          sceneLexiconStore: {
+            ensure: vi.fn().mockResolvedValue({
+              sceneId: "scene-1",
+              contentHash: "hash",
+              pipelineVersion: "v1",
+              atlasVersion: "v1",
+              profile: "runtime-preview",
+              lemmas: {},
+              properNouns: [],
+              anchors: [],
+              questEssentialLemmas: []
+            })
+          },
+          classifier: { check: classifierCheck },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({
+      supportPosture: "anchored",
+      targetLanguageRatio: 0.3,
+      learnerCefr: "A1"
+    });
+
+    await middleware.finalize?.(
+      execution,
+      createTestTurn("Buenos dias viajero, el barco llega manana por la manana.")
+    );
+
+    expect(llmClient.generate).toHaveBeenCalled();
+  });
+
+  it("090.11: an A1 line merely OFF-TARGET does not spend a repair call", async () => {
+    // 0.45 against a directed 0.3 is already `over-ratio` -- off-target and
+    // perfectly readable. Repairing every one of these would mean a second LLM
+    // call on most turns to correct a tuning miss rather than a broken turn.
+    // This is why the trigger is the readability ceiling and NOT `over-ratio`.
+    const llmClient = { generate: vi.fn() };
+    const classifierCheck = vi.fn().mockReturnValue(RATIO_VERDICT_A1_OFF_TARGET);
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: {
+            getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+          },
+          sceneLexiconStore: {
+            ensure: vi.fn().mockResolvedValue({
+              sceneId: "scene-1",
+              contentHash: "hash",
+              pipelineVersion: "v1",
+              atlasVersion: "v1",
+              profile: "runtime-preview",
+              lemmas: {},
+              properNouns: [],
+              anchors: [],
+              questEssentialLemmas: []
+            })
+          },
+          classifier: { check: classifierCheck },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({
+      supportPosture: "anchored",
+      targetLanguageRatio: 0.3,
+      learnerCefr: "A1"
+    });
+
+    await middleware.finalize?.(
+      execution,
+      createTestTurn("Hello there, buenos dias traveller.")
+    );
+
+    expect(llmClient.generate).not.toHaveBeenCalled();
+  });
+
+  it("090.11: a C2 line at 100% target language is never repaired for density", async () => {
+    // A fully target-language line is the GOAL at C2. There is no ceiling, and
+    // the guard must not invent one.
+    const llmClient = { generate: vi.fn() };
+    const classifierCheck = vi.fn().mockReturnValue(RATIO_VERDICT_C2_FULL_TARGET);
+    const middleware = createSugarLangVerifyMiddleware({
+      services: createServicesStub({
+        resolveForExecution: () => ({
+          learnerStore: {
+            getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+          },
+          sceneLexiconStore: {
+            ensure: vi.fn().mockResolvedValue({
+              sceneId: "scene-1",
+              contentHash: "hash",
+              pipelineVersion: "v1",
+              atlasVersion: "v1",
+              profile: "runtime-preview",
+              lemmas: {},
+              properNouns: [],
+              anchors: [],
+              questEssentialLemmas: []
+            })
+          },
+          classifier: { check: classifierCheck },
+          llmClient
+        })
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({
+      supportPosture: "target-only",
+      targetLanguageRatio: 1,
+      learnerCefr: "C2"
+    });
+
+    await middleware.finalize?.(
+      execution,
+      createTestTurn("El barco llega manana por la manana temprano.")
+    );
+
+    expect(llmClient.generate).not.toHaveBeenCalled();
   });
 });

@@ -30,6 +30,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
+  exceedsReadabilityCeiling,
+  getReadabilityCeilingForBand,
   postureForBand
 } from "../../runtime/teacher/band-envelope";
 
@@ -73,5 +75,68 @@ describe("target-language ratio", () => {
     });
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("readability ceiling", () => {
+  // The OTHER ratio question. TARGET_LANGUAGE_RATIO_BY_POSTURE says what a line
+  // SHOULD be; this says when it has stopped being readable at all. They are far
+  // apart on purpose -- A1 is directed at 0.3 and does not get repaired until
+  // 0.7 -- because repairing every off-target line means a second LLM call on
+  // most turns for a tuning miss rather than a broken turn.
+  it.each([
+    ["A1", 0.7],
+    ["A2", 0.8],
+    ["B1", 0.9],
+    ["B2", 0.9]
+  ] as const)("guards %s at %s", (band, ceiling) => {
+    expect(getReadabilityCeilingForBand(band)).toBe(ceiling);
+  });
+
+  it.each(["C1", "C2"] as const)("does NOT guard %s", (band) => {
+    // A fully target-language line is the GOAL at C1/C2, not a failure. null
+    // rather than 1.0 so "no guard" and "guard at 100%" cannot be confused.
+    expect(getReadabilityCeilingForBand(band)).toBeNull();
+  });
+
+  it("sits well ABOVE the directed ratio at every guarded band", () => {
+    // If a ceiling ever slipped to or below the directed ratio, every
+    // on-target line would be repaired -- the expensive failure this design
+    // exists to avoid.
+    for (const band of ["A1", "A2", "B1", "B2"] as const) {
+      const ceiling = getReadabilityCeilingForBand(band)!;
+      const directed = TARGET_LANGUAGE_RATIO_BY_POSTURE[postureForBand(band)];
+      expect(ceiling).toBeGreaterThan(directed);
+    }
+  });
+
+  it("an A1 line at the DIRECTED ratio is not too dense", () => {
+    expect(exceedsReadabilityCeiling(0.3, "A1")).toBe(false);
+  });
+
+  it("an A1 line that is merely off-target is not too dense either", () => {
+    // 0.45 is already `over-ratio` against a 0.3 directed ratio. Readable.
+    expect(exceedsReadabilityCeiling(0.45, "A1")).toBe(false);
+  });
+
+  it("an A1 line at 90% target language IS too dense", () => {
+    // The motivating case: "an A1 learner could be handed a full-Spanish
+    // paragraph and every gate passed it."
+    expect(exceedsReadabilityCeiling(0.9, "A1")).toBe(true);
+  });
+
+  it("a C2 line at 100% target language is never too dense", () => {
+    expect(exceedsReadabilityCeiling(1, "C2")).toBe(false);
+  });
+
+  it("treats the ceiling as strictly-greater, not inclusive", () => {
+    expect(exceedsReadabilityCeiling(0.7, "A1")).toBe(false);
+    expect(exceedsReadabilityCeiling(0.71, "A1")).toBe(true);
+  });
+
+  it("a non-finite measurement never triggers repair", () => {
+    // A measurement failure must not spend an LLM call on a turn nobody has
+    // shown to be broken.
+    expect(exceedsReadabilityCeiling(Number.NaN, "A1")).toBe(false);
   });
 });
