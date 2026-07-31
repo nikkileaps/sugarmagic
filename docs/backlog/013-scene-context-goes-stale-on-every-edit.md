@@ -60,19 +60,43 @@ step the author has to remember after every edit.
   a preview launched during one hits exactly today's bug. Either block, or show
   it clearly, or serve the previous model until the new one lands.
 
-## The cheap mitigation, independent of the above
+## Where the "not built" signal belongs
 
-Whatever the trigger ends up being, `(not-built)` should be VISIBLE where it
-matters -- the debug HUD already says it, but the person affected is looking at
-a conversation, not the HUD. A one-line warning in the teacher trace when
-`sceneContext.available` is false would have made this diagnosable in seconds
-instead of a full session.
+NOT in the runtime, and not in the teacher trace (nikki, 2026-07-31):
+
+> "the person affected is playing a game -- i'm not going to surface fucking
+> errors to that person unless its catastrophic and the game cannot be played
+> any more or data would be lost"
+
+Worth noting the trace is more player-facing than it looks: `traceEnabled()`
+returns true for ANY browser with the flag unset, so it is on in a shipped game,
+not only in a Studio preview. A stale-context warning there would put an
+AUTHORING failure in a player's console.
+
+This is an authoring problem and the signal belongs on the authoring side --
+Studio already shows `context (not-built)` in the debug HUD. If that needs to be
+louder, it gets louder in Studio.
 
 ## Related, found while diagnosing this
 
 Nothing validates that a Teacher-named lemma exists in the atlas. With no scene
 context the Teacher freelanced `estación` / `llegada` / `hola` from the quest
-text; those happen to be real, but an invented word would pass through
-`repairDirective` (its membership filter has been `null` since 090.4 removed the
-prescription fence) and reach the learner with no gloss, no band, and a LemmaCard
-for a word the dictionary does not have. Worth a drop-with-telemetry guard.
+text. They reach the learner with no gloss and no band, and a LemmaCard is
+created for a word the dictionary does not have.
+
+DO NOT DROP THEM (nikki, 2026-07-31):
+
+> "if we drop them how the fuck are we going to make coherent sentences?"
+
+The atlas is ~11,000 entries -- an INCOMPLETE dictionary. A Spanish word missing
+from it is a gap in our lexicon, not an invented word, so discarding the
+Teacher's choice lets a limited dictionary veto a sound pedagogical judgment and
+leaves the line with less to teach for no gain.
+
+EMIT TELEMETRY INSTEAD, and note where it points: a Teacher-chosen lemma the
+atlas cannot supply is the same signal as
+[backlog 012](./012-lookup-telemetry-grows-the-lexicon.md) -- a word the
+curriculum reached for and the dictionary could not answer. Arguably a better
+source than player lookups, because it is the Teacher reaching rather than a
+player guessing. The missing gloss is the real user-visible symptom and is worth
+solving on its own (011's MT/LLM fallback would answer it).
