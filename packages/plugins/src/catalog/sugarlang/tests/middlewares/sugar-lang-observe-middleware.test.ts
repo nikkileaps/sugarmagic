@@ -267,6 +267,87 @@ describe("SugarLangObserveMiddleware", () => {
     expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("chunk:buenos_dias");
   });
 
+  it("090.11: a competency on the slate highlights the exponent the NPC actually said", async () => {
+    // THE GAP THIS CLOSES. `vocabularyRefs()` dropped every competency when the
+    // highlight was built, so an NPC could perform `greet` with "Buenos dias"
+    // and nothing was lit -- the learner saw no indication that the phrase was
+    // the thing being taught.
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+        },
+        learnerStateReducer: { apply: vi.fn().mockResolvedValue(undefined) },
+        sceneLexiconStore: makeSceneLexiconStoreWith([BUENOS_DIAS_CHUNK])
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({
+      targetVocab: {
+        introduce: [{ kind: "competency", competencyId: "greet", lang: "es" }],
+        reinforce: [],
+        avoid: []
+      }
+    });
+
+    const turn = await middleware.finalize?.(
+      execution,
+      createTestTurn("Buenos dias, viajero.")
+    );
+
+    const highlight = turn?.annotations?.["dialogueHighlight"] as
+      | { focusTerms: string[]; glosses?: Record<string, string> }
+      | undefined;
+
+    // ONE term carrying the whole phrase -- not "buenos" and "dias" separately.
+    expect(highlight?.focusTerms).toContain("Buenos dias");
+    expect(highlight?.focusTerms.some((term) => term.toLowerCase() === "dias")).toBe(
+      false
+    );
+    // The hover explains the ACT, because that is what is being taught.
+    expect(highlight?.glosses?.["Buenos dias"]).toContain("greet");
+  });
+
+  it("090.11: a slated competency whose exponent is ABSENT is not listed", async () => {
+    // MATCHED AGAINST THE TEXT, NOT LISTED FROM THE INVENTORY. `introduce-self`
+    // has several exponents (me llamo, mi nombre es, mucho gusto) and this line
+    // uses none of them. Naming a phrase that is not on screen would offer the
+    // learner a term they cannot find, and would make the realization trace
+    // claim the line taught something it did not.
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+        },
+        learnerStateReducer: { apply: vi.fn().mockResolvedValue(undefined) },
+        sceneLexiconStore: makeSceneLexiconStoreWith([])
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({
+      targetVocab: {
+        introduce: [{ kind: "competency", competencyId: "introduce-self", lang: "es" }],
+        reinforce: [],
+        avoid: []
+      }
+    });
+
+    const turn = await middleware.finalize?.(
+      execution,
+      createTestTurn("El barco llega manana.")
+    );
+
+    const highlight = turn?.annotations?.["dialogueHighlight"] as
+      | { focusTerms: string[] }
+      | undefined;
+
+    for (const exponent of ["me llamo", "mi nombre es", "mucho gusto"]) {
+      expect(highlight?.focusTerms ?? []).not.toContain(exponent);
+    }
+  });
+
   it("085.3: emits chunk-produced for player-spoken scripted line containing a chunk", async () => {
     const apply = vi.fn().mockResolvedValue(undefined);
     const services = createServicesStub({
