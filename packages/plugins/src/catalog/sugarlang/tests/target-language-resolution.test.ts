@@ -2,8 +2,14 @@
  * packages/plugins/src/catalog/sugarlang/tests/target-language-resolution.test.ts
  *
  * Purpose: Pins the SINGLE precedence for target language -- player -> config,
- *   with no environment rung -- and that an unresolved language THROWS rather
- *   than degrading.
+ *   with no environment rung -- and that the lookup is TOTAL: it returns null
+ *   rather than deciding for its callers.
+ *
+ *   WHERE THE POLICY LIVES INSTEAD (nikki, 2026-07-31). The same lookup serves
+ *   Studio, preview, and a shipped game, and they want different things from a
+ *   null: Studio must come up (a freshly installed plugin has no language yet),
+ *   preview must refuse to launch, and the runtime must throw. Those rules are
+ *   tested where they are enforced, not here.
  *
  * Exports:
  *   - none
@@ -38,29 +44,27 @@ describe("resolveSugarLangTargetLanguage", () => {
     expect(resolveSugarLangTargetLanguage({ config: "it" })).toBe("it");
   });
 
-  it("THROWS when nothing is configured", () => {
-    // Not a degraded state -- a misconfiguration. A language-learning system
-    // with no language cannot make a single meaningful downstream decision, and
-    // returning null let a broken preview boot "successfully" for months.
-    expect(() => resolveSugarLangTargetLanguage({})).toThrow(
-      SugarlangMissingTargetLanguageError
-    );
+  it("returns NULL when nothing is configured, rather than throwing", () => {
+    // IT DOES NOT GET TO DECIDE. This threw for a while, which forced Studio to
+    // hold the runtime's opinion: an unconfigured project could not open its own
+    // Build panel, and the preview -- whose builder is called inside a
+    // postMessage argument -- went blank with no error at all.
+    //
+    // Total lookup, policy at the callers.
+    expect(resolveSugarLangTargetLanguage({})).toBeNull();
+    expect(resolveSugarLangTargetLanguage({ player: null, config: undefined })).toBeNull();
   });
 
-  it("names both fixable places in the error", () => {
-    // The old failure mode was a blank screen with no clue which knob was missing.
-    expect(() => resolveSugarLangTargetLanguage({})).toThrow(/Language panel/);
-    expect(() => resolveSugarLangTargetLanguage({})).toThrow(/player/);
-  });
+  it("still exports a named error for the callers that DO fail loudly", () => {
+    // The runtime throws this (see the conversation context middleware). It
+    // stays a distinct type so a catch-all cannot absorb it as generic, and its
+    // message names both places the author can fix it.
+    const error = new SugarlangMissingTargetLanguageError();
 
-  it("has its own error type, so a catch-all cannot absorb it as generic", () => {
-    try {
-      resolveSugarLangTargetLanguage({ player: null, config: undefined });
-      expect.unreachable("should have thrown");
-    } catch (error) {
-      expect(error).toBeInstanceOf(SugarlangMissingTargetLanguageError);
-      expect((error as Error).name).toBe("SugarlangMissingTargetLanguageError");
-    }
+    expect(error).toBeInstanceOf(SugarlangMissingTargetLanguageError);
+    expect(error.name).toBe("SugarlangMissingTargetLanguageError");
+    expect(error.message).toMatch(/Language panel/);
+    expect(error.message).toMatch(/player/);
   });
 
   it.each([
@@ -70,9 +74,9 @@ describe("resolveSugarLangTargetLanguage", () => {
     expect(
       resolveSugarLangTargetLanguage({ player: blank, config: "es" })
     ).toBe("es");
-    expect(() =>
+    expect(
       resolveSugarLangTargetLanguage({ player: blank, config: blank })
-    ).toThrow(SugarlangMissingTargetLanguageError);
+    ).toBeNull();
   });
 
   it("normalizes case and surrounding whitespace", () => {

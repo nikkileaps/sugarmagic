@@ -190,31 +190,47 @@ export function normalizeSugarLangPluginConfig(
  *   2. config   the authored default for this project (Studio's Language
  *               panel). What a new player gets before choosing.
  *
- * THERE IS NO THIRD RUNG. If neither is set this THROWS, and the caller is
- * expected to let it propagate. A language-learning system with no language is
- * not degraded, it is misconfigured -- every downstream decision (which atlas,
- * which lexicon, which cards, which variants) is meaningless without one.
- * Returning null here is precisely what let a misconfigured preview boot
- * "successfully" with an empty payload and no situations for months.
+ * THERE IS NO THIRD RUNG. If neither is set this returns null.
+ *
+ * IT RETURNS NULL RATHER THAN THROWING, AND THAT IS THE WHOLE DESIGN.
+ *   This threw for a while, on the reasoning that a language-learning system
+ *   with no language is misconfigured rather than degraded. That reasoning is
+ *   right about the RUNTIME and wrong as a property of this function, because
+ *   THIS FUNCTION CANNOT KNOW WHERE IT IS RUNNING. The same lookup is called
+ *   from Studio, from the preview boot builder, and from a shipped game, and
+ *   those three want different things from the same answer:
+ *
+ *     Studio           null is NORMAL. The plugin was just installed and nobody
+ *                      has opened the Language panel yet. Studio must come up so
+ *                      they can go set one.
+ *     preview          null is FATAL, loudly. Refuse to launch and say so.
+ *     shipped runtime  null is FATAL, loudly. If sugarlang is enabled the game
+ *                      must not run without a language.
+ *
+ *   Baking the throw in here forced Studio to have the runtime's opinion: an
+ *   unconfigured project could not open its own Build panel. So the lookup stays
+ *   TOTAL and each caller applies its own rule. `SugarlangMissingTargetLanguageError`
+ *   is still exported for the callers that choose to fail loudly.
+ *
+ *   The failure this replaced is still worth avoiding: returning null once let a
+ *   misconfigured preview boot "successfully" with an empty payload for months.
+ *   The fix for that is the PREVIEW refusing to launch -- a decision only the
+ *   preview caller can make -- not a leaf lookup deciding for everyone.
  *
  * Both rungs are optional so callers pass only what they have: a compile-time
  * caller has no player, a runtime caller has both.
- *
- * @throws SugarlangMissingTargetLanguageError when no rung yields a language.
  */
 export function resolveSugarLangTargetLanguage(sources: {
   /** The learner's selection, e.g. LearnerProfile.targetLanguage. */
   player?: string | null | undefined;
   /** The project's authored default, e.g. SugarLangPluginConfig.targetLanguage. */
   config?: string | null | undefined;
-}): string {
-  const resolved =
+}): string | null {
+  return (
     normalizeLanguageValue(sources.player) ??
-    normalizeLanguageValue(sources.config);
-  if (!resolved) {
-    throw new SugarlangMissingTargetLanguageError();
-  }
-  return resolved;
+    normalizeLanguageValue(sources.config) ??
+    null
+  );
 }
 
 /**

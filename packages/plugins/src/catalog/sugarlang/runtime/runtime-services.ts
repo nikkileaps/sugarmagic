@@ -331,13 +331,20 @@ export class SugarlangRuntimeServices {
    * The runtime's single answer for "which language are we teaching?".
    *
    * Delegates to `resolveSugarLangTargetLanguage`, which owns the precedence
-   * (player -> config -> env). Callers must not re-derive it: reading config or
-   * the environment directly is what produced four sources resolved in three
-   * different orders.
+   * (player -> config). Callers must not re-derive it: reading config directly
+   * is what produced four sources resolved in three different orders. There is
+   * no env rung -- `SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE` was removed 2026-07-29
+   * because one value per deployment cannot express a per-player choice.
+   *
+   * NULL IS A REAL ANSWER HERE, and it does NOT mean "carry on without one".
+   * The resolver is total because Studio legitimately has no language yet; the
+   * RUNTIME does not get to be relaxed about it. The conversation context
+   * middleware turns a null into a thrown
+   * `SugarlangMissingTargetLanguageError`, because a shipped game with sugarlang
+   * enabled and no language is misconfigured, not degraded.
    *
    * `player` is threaded from the learner profile once a Settings-menu picker
-   * exists; until then it is simply absent and config wins, which is today's
-   * behaviour with the env fallback finally reachable.
+   * exists; until then it is simply absent and config wins.
    */
   getTargetLanguage(player?: string | null): string | null {
     return resolveSugarLangTargetLanguage({

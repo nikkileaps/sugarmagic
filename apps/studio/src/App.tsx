@@ -198,6 +198,7 @@ import {
   ModeBar,
   ProjectManagerDialog,
   ShellFrame,
+  ErrorToast,
   ProgressToast,
   StatusBar,
   ViewportFrame,
@@ -675,7 +676,9 @@ function handleReorderScene(sceneId: string, direction: "up" | "down") {
 
 function handleStartPreview(
   assetSources: Record<string, string>,
-  installedPluginIds: string[]
+  installedPluginIds: string[],
+  /** Surfaces a refusal to boot (see PreviewBootResult) as a visible error. */
+  onBootRefused?: (message: string, detail?: string) => void
 ) {
   const { session } = projectStore.getState();
   if (!session) return;
@@ -723,13 +726,20 @@ function handleStartPreview(
   // window closes (handled by the same interval below).
   async function onMessage(event: MessageEvent) {
     if (event.data?.type === "PREVIEW_READY") {
-      await postPreviewBootMessage(
+      const result = await postPreviewBootMessage(
         capturedWindow,
         capturedSession,
         capturedSnapshot,
         capturedAssetSources,
         capturedInstalledPluginIds
       );
+      if (!result.ok) {
+        // Close the preview rather than leaving it on a blank screen. A window
+        // that opened and shows nothing reads as a hang; a closed window plus an
+        // error reads as a refusal, which is what it is.
+        capturedWindow.close();
+        onBootRefused?.(result.message, result.detail);
+      }
     }
   }
   window.addEventListener("message", onMessage);
@@ -770,19 +780,69 @@ function handleStopPreview() {
   shell.setSelection(snapshot.selectedEntityIds);
 }
 
+/**
+ * Why this returns a result instead of just posting.
+ *
+ * Preview IS the runtime, and the runtime must not run with sugarlang enabled
+ * and no target language (nikki, 2026-07-31). Refusing is correct -- but it has
+ * to be VISIBLE. Until 2026-07-31 the sugarlang payload was built inside the
+ * `postMessage` argument list, so a throw meant PREVIEW_BOOT was never sent at
+ * all: the preview window sat blank forever with nothing said, and it happened
+ * for projects that do not use sugarlang either.
+ */
+type PreviewBootResult =
+  | { ok: true }
+  | { ok: false; message: string; detail?: string };
+
 async function postPreviewBootMessage(
   previewWindow: Window,
   session: ReturnType<typeof projectStore.getState>["session"],
   snapshot: AuthoringContextSnapshot,
   assetSources: Record<string, string>,
   installedPluginIds: string[]
-) {
+): Promise<PreviewBootResult> {
   if (!session || previewWindow.closed) {
-    return;
+    return { ok: true };
   }
 
   const regions = getAllRegions(session);
   const runtimeEnvironment = readStudioPluginRuntimeEnvironment();
+
+  // Built BEFORE the message, so a failure here is a decision rather than a
+  // silently suppressed postMessage.
+  const sugarlangEnabled =
+    session.gameProject.pluginConfigurations.find(
+      (configuration) => configuration.pluginId === "sugarlang"
+    )?.enabled === true;
+
+  let sugarlangBootPayload: Awaited<
+    ReturnType<typeof buildSugarlangPreviewBootPayloadForSession>
+  > = null;
+  try {
+    sugarlangBootPayload = await buildSugarlangPreviewBootPayloadForSession(
+      session,
+      snapshot.activeWorkspaceId ?? session.gameProject.identity.id,
+      runtimeEnvironment
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      message: "Preview could not start: building the Sugarlang payload failed.",
+      detail: error instanceof Error ? error.message : String(error)
+    };
+  }
+
+  // ONLY when sugarlang is actually enabled. A project running vanilla, or with
+  // only sugaragent, must not be blocked by sugarlang's configuration.
+  if (sugarlangEnabled && !sugarlangBootPayload) {
+    return {
+      ok: false,
+      message: "Preview did not start: Sugarlang is enabled but no target language is set.",
+      detail:
+        "Set a target language in the Sugarlang workspace's Language panel, or disable the Sugarlang plugin to preview without it."
+    };
+  }
+
   previewWindow.postMessage(
     {
       type: "PREVIEW_BOOT",
@@ -831,16 +891,13 @@ async function postPreviewBootMessage(
       // implicit playerPresence defaults.
       defaultGameSavePayload: session.gameProject.defaultGameSavePayload,
       pluginBootPayloads: {
-        sugarlang:
-          (await buildSugarlangPreviewBootPayloadForSession(
-            session,
-            snapshot.activeWorkspaceId ?? session.gameProject.identity.id,
-            runtimeEnvironment
-          )) ?? undefined
+        sugarlang: sugarlangBootPayload ?? undefined
       }
     },
     "*"
   );
+
+  return { ok: true };
 }
 
 // --- App ---
@@ -1068,6 +1125,13 @@ export function App() {
     () => pluginConfigurations.map((configuration) => configuration.pluginId),
     [pluginConfigurations]
   );
+  /** Set when the preview refuses to boot -- e.g. sugarlang enabled with no
+   *  target language. Rendered as an ErrorToast so the refusal is visible
+   *  instead of presenting as a blank preview window. */
+  const [previewBootError, setPreviewBootError] = useState<{
+    message: string;
+    detail?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!projectHandle || phase !== "active") {
@@ -1137,7 +1201,11 @@ export function App() {
       snapshot,
       assetSourceStore.getState().sources,
       currentInstalledPluginIds
-    );
+    ).then((result) => {
+      if (!result.ok) {
+        setPreviewBootError({ message: result.message, detail: result.detail });
+      }
+    });
     // Triggers ONLY: the preview opening, and a project first loading
     // (`hasSession` flips false->true once). Selection, tab switches, and
     // content edits deliberately do NOT reboot a running preview.
@@ -4028,9 +4096,14 @@ export function App() {
             {phase === "active" && (
               <ActionStripe
                 isPreviewRunning={isPreviewRunning}
-                onStartPreview={() =>
-                  handleStartPreview(assetSources, installedPluginIds)
-                }
+                onStartPreview={() => {
+                  setPreviewBootError(null);
+                  handleStartPreview(
+                    assetSources,
+                    installedPluginIds,
+                    (message, detail) => setPreviewBootError({ message, detail })
+                  );
+                }}
                 onStopPreview={handleStopPreview}
                 previewDisabled={!session}
               />
@@ -4149,6 +4222,13 @@ export function App() {
         maskPreviewVersion={paintedMaskPreviewVersion}
       />
       {busyToast ? <ProgressToast message={busyToast} /> : null}
+      {previewBootError ? (
+        <ErrorToast
+          message={previewBootError.message}
+          detail={previewBootError.detail}
+          onDismiss={() => setPreviewBootError(null)}
+        />
+      ) : null}
     </SurfaceAuthoringProvider>
   );
 }

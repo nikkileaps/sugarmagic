@@ -32,6 +32,7 @@ import {
   createTestLearnerProfile
 } from "./test-helpers";
 import { createLearnerBlackboard } from "../learner/test-helpers";
+import { SugarlangMissingTargetLanguageError } from "../../config";
 
 describe("SugarLangContextMiddleware", () => {
   it("runs sugarlang context for scripted NPC conversations", async () => {
@@ -380,5 +381,53 @@ describe("SugarLangContextMiddleware", () => {
     // 090.10: was `expect(prescribe).toHaveBeenCalledTimes(1)`. The budgeter is
     // gone; `ensure` below proves the same thing -- the middleware fell through
     // to the normal runtime path rather than short-circuiting on placement.
+  });
+  it("090.11: THROWS in the runtime when no target language is configured", async () => {
+    // THE RUNTIME DOES NOT RUN WITHOUT A LANGUAGE (nikki, 2026-07-31).
+    //
+    // This used to `return execution`, so a shipped game with sugarlang enabled
+    // and no language ran every conversation with sugarlang silently inert --
+    // nothing graded, nothing taught. That is indistinguishable from "the
+    // teaching is bad" and is the worst possible presentation of a one-field
+    // configuration mistake.
+    //
+    // Studio and preview are the layers allowed to be relaxed about this, and
+    // they each handle it their own way. Reaching HERE means a BUILT GAME
+    // shipped misconfigured.
+    const middleware = createSugarLangContextMiddleware({
+      services: createServicesStub({
+        getTargetLanguage: () => null
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.selection.targetLanguage = "";
+
+    await expect(middleware.prepare?.(execution)).rejects.toThrow(
+      SugarlangMissingTargetLanguageError
+    );
+  });
+
+  it("090.11: does NOT throw for a conversation sugarlang is not part of", async () => {
+    // The enabled-check is `shouldRunSugarlangForExecution`, which returns
+    // before the language is ever read. A project that never uses sugarlang must
+    // not be crashed by sugarlang's configuration.
+    const middleware = createSugarLangContextMiddleware({
+      services: createServicesStub({
+        getTargetLanguage: () => null
+      }) as never
+    });
+    const execution = createTestExecution({
+      selection: {
+        conversationKind: "free-form",
+        npcDefinitionId: null,
+        npcDisplayName: null,
+        interactionMode: "agent",
+        targetLanguage: "",
+        supportLanguage: "en",
+        metadata: {}
+      } as never
+    });
+
+    await expect(middleware.prepare?.(execution)).resolves.toBeDefined();
   });
 });

@@ -58,12 +58,23 @@ export async function buildSugarlangPreviewBootPayloadForSession(
   environment: RuntimePluginEnvironment | undefined
 ): Promise<SugarlangPreviewBootPayload | null> {
   const studioWorkspaceId = `sugarlang-studio:${session.gameProject.identity.id}`;
-  // Throws when nothing is configured, and that is deliberate -- it used to
-  // read env ONLY and silently return an empty payload, so setting the language
-  // in Studio's Language panel had no effect on preview and nothing said so.
+  // NULL MEANS "NO PAYLOAD", NOT "EMPTY PAYLOAD", AND THE CALLER DECIDES.
+  //
+  // This used to throw, which put the runtime's opinion inside a builder Studio
+  // calls -- and because the call sits inside `postMessage`'s argument list, the
+  // throw meant PREVIEW_BOOT was never sent at all: a blank preview and no error.
+  // Before that it returned an EMPTY payload, which is how a misconfigured
+  // preview booted "successfully" with nothing to teach for months.
+  //
+  // Neither. It returns null, and `postPreviewBootMessage` refuses to launch the
+  // preview with a visible error -- the only place that knows whether sugarlang
+  // is even enabled for this project.
   const targetLanguage = resolveSugarLangTargetLanguage({
     config: readSugarlangConfiguredTargetLanguage(session)
   });
+  if (!targetLanguage) {
+    return null;
+  }
 
   const atlas = new CefrLexAtlasProvider();
   const morphology = new MorphologyLoader();

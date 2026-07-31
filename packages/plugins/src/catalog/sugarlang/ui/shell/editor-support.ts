@@ -315,6 +315,23 @@ export async function readSugarlangCompileStatus(
   activeScene: Scene | null,
   workspaceId: string
 ): Promise<SugarlangCompileStatusSummary> {
+  // STUDIO TOLERATES A NULL LANGUAGE. A freshly installed plugin has none, and
+  // the author needs the Build panel to open so they can go and set one.
+  //
+  // Without this, `computeCurrentSceneHashes` -> `atlas.getAtlasVersion("")`
+  // throws `Missing sugarlang cefrlex data for language ""`, and the Build
+  // panel's status read is a `.then()` with no `.catch` -- so merely OPENING the
+  // panel on an unconfigured project produced an unhandled rejection.
+  if (!targetLanguage || targetLanguage.trim().length === 0) {
+    return {
+      totalScenes: 0,
+      cachedScenes: 0,
+      staleScenes: 0,
+      missingScenes: 0,
+      chunkCachedScenes: 0
+    };
+  }
+
   const scenes = await createSugarlangSceneContexts(
     gameProject,
     regions,
@@ -503,6 +520,38 @@ export async function rebuildSugarlangCompileCache(
     onTeachPlanDocument?: (document: SugarlangTeachPlanDocument) => void;
   }
 ): Promise<SugarlangRebuildResult> {
+  // VALIDATE BEFORE DESTROYING ANYTHING (nikki, 2026-07-31).
+  //
+  // `cache.invalidate()` below wipes the compile cache, and until this guard
+  // existed a project with no target language got as far as that wipe and THEN
+  // threw -- `atlas.getAtlasVersion("")` raises `Missing sugarlang cefrlex data
+  // for language ""`. So pressing Rebuild on an unconfigured project destroyed
+  // the cache and failed, which is the worst possible order.
+  //
+  // A null language in STUDIO is normal, not an error: the plugin was just
+  // installed and nobody has opened the Language panel yet. So this is a refusal
+  // with an explanation, not a crash -- Studio has to stay usable so the author
+  // can go and set one.
+  if (!targetLanguage || targetLanguage.trim().length === 0) {
+    return {
+      status: await readSugarlangCompileStatus(
+        gameProject,
+        regions,
+        targetLanguage,
+        activeScene,
+        workspaceId
+      ),
+      problems: [
+        {
+          pass: "gateway",
+          message: "No target language set, so nothing was built.",
+          detail:
+            "Set one in the Sugarlang workspace's Language panel, then rebuild. Nothing was changed or invalidated."
+        }
+      ]
+    };
+  }
+
   const scenes = await createSugarlangSceneContexts(
     gameProject,
     regions,

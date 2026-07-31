@@ -105,11 +105,21 @@ export function ManualRebuildButton(
       props.targetLanguage,
       props.activeScene ?? null,
       workspaceId
-    ).then((nextStatus) => {
-      if (!cancelled) {
-        setStatus(nextStatus);
-      }
-    });
+    )
+      .then((nextStatus) => {
+        if (!cancelled) {
+          setStatus(nextStatus);
+        }
+      })
+      // A status READ must never take Studio down. It was a bare `.then()`, so
+      // anything thrown in here became an unhandled rejection just from opening
+      // the panel. The status is an informational readout; failing to compute it
+      // means showing zeros, not breaking the workspace.
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          console.error("[sugarlang build] status read failed", error);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -119,6 +129,9 @@ export function ManualRebuildButton(
   async function handleRebuild(): Promise<void> {
     setIsRunning(true);
     setMessage(null);
+    // Clear the previous run's failure too, or a stale red toast sits over a
+    // rebuild that is currently succeeding.
+    setFailure(null);
     try {
       const result = await rebuildSugarlangCompileCache(
         props.gameProject,

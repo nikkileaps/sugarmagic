@@ -16,6 +16,7 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
+import { SugarlangMissingTargetLanguageError } from "../../config";
 import { drainPendingHover } from "../dialogue-entry-decorator";
 import {
   SUGARLANG_PLACEMENT_STATUS_FACT,
@@ -171,8 +172,23 @@ export function createSugarLangContextMiddleware(
       const targetLanguage =
         execution.selection.targetLanguage ||
         deps.services.getTargetLanguage();
+      // THE RUNTIME DOES NOT RUN WITHOUT A LANGUAGE (nikki, 2026-07-31).
+      //
+      // This used to `return execution` here, so a shipped game with sugarlang
+      // enabled and no target language ran every conversation with sugarlang
+      // silently inert -- nothing graded, nothing taught, nothing said. That is
+      // indistinguishable from "the teaching is bad" and is the worst possible
+      // presentation of a one-field configuration mistake.
+      //
+      // We are past every layer that is allowed to be relaxed about this: Studio
+      // tolerates a null language because a freshly installed plugin has none,
+      // and preview refuses to launch. Reaching HERE with no language means a
+      // BUILT GAME shipped misconfigured, so it fails loudly.
+      //
+      // `shouldRunSugarlangForExecution` above is the enabled-check: if the
+      // plugin is not participating in this conversation we already returned.
       if (!targetLanguage) {
-        return execution;
+        throw new SugarlangMissingTargetLanguageError();
       }
       // Ensure the selection carries targetLanguage for downstream readers.
       execution.selection.targetLanguage = targetLanguage;
