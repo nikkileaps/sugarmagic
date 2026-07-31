@@ -36,6 +36,8 @@ import type { TeacherContext } from "../types";
 import { EMPTY_NPC_CONTEXT, type RuntimeFact } from "../situation";
 import { computePacingSignals } from "../learner";
 import { resolveSceneTeachables } from "../inventory/scene-teachable-resolver";
+import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
+import type { Competency } from "../contracts/competency-inventory";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
   TARGET_LANGUAGE_RATIO_TOLERANCE
@@ -352,6 +354,52 @@ export function formatSceneSnapshot(context: TeacherContext): string {
   ].join("\n");
 }
 
+/**
+ * The competencies this curriculum can actually teach, by id.
+ *
+ * 090.10: THE MENU THAT WAS MISSING. `targetVocab` has accepted
+ * `{kind: "competency", competencyId}` since 090.4a and the output-shape block
+ * shows an example, but the id space was never stated -- so the Teacher could
+ * only name a competency by guessing, and in practice competencies reached
+ * teaching through a side door instead: the scheduler expanded them into
+ * `chunk:` refs and they were injected into `prescription.introduce`. Deleting
+ * the prescriber removes that door, so the menu has to exist first or
+ * competency teaching stops with nothing failing.
+ *
+ * Read at prompt time from the inventory, deliberately: it is ten entries, it
+ * is the same read-time resolution `resolveSceneTeachables` already does above,
+ * and it means a curriculum edit shows up without a recompile
+ * (competency-tag-resolver.ts:5-6 protects the same property).
+ *
+ * The BAND is shown because the Teacher already has the learner's band and can
+ * therefore judge reach; the DESCRIPTOR is shown because "ask-where" alone does
+ * not say what the learner would be able to do.
+ */
+export function formatAvailableCompetencies(context: TeacherContext): string {
+  let competencies: Competency[] = [];
+  try {
+    competencies = loadCompetencyInventory(context.lang.targetLanguage).competencies;
+  } catch {
+    // A missing or malformed inventory is not fatal to a teaching decision --
+    // the Teacher simply has no competencies to choose from this turn, which is
+    // the same state as an empty curriculum and reads identically below.
+    competencies = [];
+  }
+
+  if (competencies.length === 0) {
+    return ["COMPETENCIES THIS CURRICULUM CAN TEACH:", `- ${EMPTY_SECTION}`].join("\n");
+  }
+
+  return [
+    "COMPETENCIES THIS CURRICULUM CAN TEACH:",
+    "These are the ONLY valid competencyId values. Never invent one.",
+    ...competencies.map(
+      (competency) =>
+        `- ${competency.competencyId} (${competency.band}): ${competency.cefrDescriptor}`
+    )
+  ].join("\n");
+}
+
 export function formatNpcContext(context: TeacherContext): string {
   const npc = context.situation?.npc ?? EMPTY_NPC_CONTEXT;
   return [
@@ -605,6 +653,7 @@ export function buildTeacherPrompt(context: TeacherContext): DirectorPrompt {
     relationshipState: formatRelationshipState(context),
     sceneSnapshot: formatSceneSnapshot(context),
     situation: formatSituation(context),
+    availableCompetencies: formatAvailableCompetencies(context),
     npcContext: formatNpcContext(context),
     gameMoment: formatGameMoment(context),
     recentDialogue: formatRecentDialogue(context),

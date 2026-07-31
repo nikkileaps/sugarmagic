@@ -27,6 +27,10 @@
 
 import { describe, expect, it } from "vitest";
 import { parseDirective, repairDirective } from "../../runtime/teacher/schema-parser";
+import {
+  buildTeacherPrompt,
+  formatAvailableCompetencies
+} from "../../runtime/teacher/prompt-builder";
 import { buildGeneratorPromptOverlay } from "../../runtime/middlewares/generator-prompt-overlay";
 import { createCompetencyDescriber } from "../../runtime/inventory/describe-competency";
 import {
@@ -66,6 +70,40 @@ function constraintWith(introduce: TeachableRef[]): SugarlangConstraint {
     }
   } as unknown as SugarlangConstraint;
 }
+
+describe("the Teacher is told which competencies exist", () => {
+  // 090.10: the schema has accepted a competencyId since 090.4a, but the prompt
+  // never said which ids are real -- so naming one meant guessing, and in
+  // practice competencies arrived by being flattened into
+  // `prescription.introduce` instead. That road is what 090.10 deletes, so this
+  // menu is the precondition for deleting it safely.
+  it("lists real competency ids in the user prompt", () => {
+    const prompt = buildTeacherPrompt(createTeacherContext()).user;
+
+    expect(prompt).toContain("COMPETENCIES THIS CURRICULUM CAN TEACH:");
+    expect(prompt).toContain("ask-where");
+  });
+
+  it("names them as the only valid ids, so the model does not invent one", () => {
+    // Asserted against the prompt STRING. A mock gateway cannot falsify prompt
+    // content -- it returns whatever it was told to regardless of what was asked.
+    expect(formatAvailableCompetencies(createTeacherContext())).toContain(
+      "Never invent one"
+    );
+  });
+
+  it("carries the descriptor, not just the id", () => {
+    // `ask-where` alone does not tell the Teacher what the learner would be able
+    // to DO, which is the whole basis for judging whether this moment calls for it.
+    const section = formatAvailableCompetencies(createTeacherContext());
+    const askWhere = section
+      .split("\n")
+      .find((line) => line.includes("ask-where"));
+
+    expect(askWhere).toBeDefined();
+    expect(askWhere!.length).toBeGreaterThan("- ask-where (A1): ".length);
+  });
+});
 
 describe("a competency can be taught", () => {
   it("parses out of a directive naming one", () => {

@@ -62,6 +62,33 @@ function traceEnabled(): boolean {
   return (window as unknown as TraceGlobal)[TRACE_FLAG] !== false;
 }
 
+/**
+ * COMPETENCIES ON ONE LINE, because the question they answer is a yes/no and
+ * the raw slate cannot answer it at a glance.
+ *
+ * A competency is a `{kind: "competency", competencyId}` object sitting inside
+ * a collapsed array of mostly-vocabulary refs, so "are competencies still
+ * reaching the directive" meant expanding three arrays and reading every entry.
+ * That is precisely the question 090.10 needs watched while the prescriber is
+ * deleted: `prescription.introduce` is the road competencies currently travel,
+ * so if the slate stops carrying them, competency teaching stops SILENTLY --
+ * no test fails and nothing else in this trace changes.
+ *
+ * Prints `(none)` rather than an empty array: "the Teacher named no
+ * competencies this turn" and "competencies stopped arriving" look identical
+ * as `[]`, and only one of them is a bug.
+ */
+function competencyLine(directive: PedagogicalDirective): string {
+  const ids = [
+    ...directive.targetVocab.introduce,
+    ...directive.targetVocab.reinforce
+  ]
+    .filter((ref) => ref.kind === "competency")
+    .map((ref) => (ref as { competencyId: string }).competencyId);
+
+  return ids.length > 0 ? ids.join(", ") : "(none)";
+}
+
 function group(label: string, body: () => void): void {
   /* eslint-disable no-console */
   const canGroup = typeof console.groupCollapsed === "function";
@@ -109,6 +136,7 @@ export function traceTeacherDirective(args: {
   group(`[sugarlang] TEACHER DIRECTIVE -- ${npc} -- ${label}`, () => {
     console.info("situationKey:", context.situationKey ?? "(none)");
     console.info("directive:", directive);
+    console.info("competencies on the slate:", competencyLine(directive));
     console.info("slate:", {
       introduce: directive.targetVocab.introduce,
       reinforce: directive.targetVocab.reinforce,
@@ -182,6 +210,7 @@ export function traceTeacherCall(args: {
         return;
       }
       console.info("directive:", directive);
+      console.info("competencies on the slate:", competencyLine(directive));
       console.info("slate:", {
         introduce: directive.targetVocab.introduce,
         reinforce: directive.targetVocab.reinforce,
