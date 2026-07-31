@@ -192,6 +192,36 @@ function applyWeave(
   });
 }
 
+/**
+ * 090.11: one place that reads a baked variant, shared by the beginner path and
+ * the target-dominant path.
+ *
+ * Returns null for every reason a variant might be absent -- no cache wired, a
+ * scene never built, a bake that failed its gates -- because the caller's answer
+ * is the same for all of them: fall back rather than fail the turn.
+ */
+async function readBakedVariant(
+  services: { variantCache?: { get: (key: VariantCacheKey) => Promise<{ variant: { text: string } } | null> } },
+  nodeId: string,
+  authoredText: string,
+  targetLanguage: string,
+  band: CEFRBand
+): Promise<{ text: string } | null> {
+  if (!services.variantCache) return null;
+  try {
+    const cached = await services.variantCache.get({
+      lang: targetLanguage,
+      band,
+      contentHash: buildVariantContentHash(nodeId, authoredText),
+      variantPromptVersion: VARIANT_PROMPT_VERSION
+    });
+    return cached ? { text: cached.variant.text } : null;
+  } catch {
+    // A cache read failure is not a turn failure.
+    return null;
+  }
+}
+
 export function createSugarLangScriptedMiddleware(
   deps: SugarLangScriptedMiddlewareDeps
 ): ConversationMiddleware {
@@ -220,14 +250,51 @@ export function createSugarLangScriptedMiddleware(
       const targetLanguage = constraint.targetLanguage;
       const supportLanguage = execution.selection.supportLanguage ?? "en";
 
-      // Anchored and supported postures use the zero-LLM weave path (086.2).
-      // The English frame is expected; introduced lemmas are substituted bare.
+      // 090.11: ANCHORED/SUPPORTED READ THE BAKED VARIANT FIRST.
+      //
+      // These two postures were the last ones realized at RUNTIME -- the weave
+      // substituting lemmas into authored English as the line displayed -- while
+      // every other band read a variant baked at build. Both are the same
+      // operation; only the moment differed, and the split was an accident of
+      // which technique arrived first.
+      //
+      // The weave stays as the FALLBACK, not the path. A cold cache, a scene
+      // never built, or a bake that failed its gates all land here, and a woven
+      // line is far better than an untouched English one. It is deleted for good
+      // once the build-time Teacher call makes a missing A1 variant a build
+      // error rather than a normal state.
+      //
+      // Why it could not switch on sooner: A1/A2 were not in the baked set at
+      // all, because `GradedTextService` defaults posture to `target-dominant`
+      // and so verified a beginner bake against a B1+ ratio. `generateVariant`
+      // passes posture and ratio now, which is what makes these bands bakeable.
       if (
         constraint.supportPosture === "anchored" ||
         constraint.supportPosture === "supported"
       ) {
         const services = await deps.services.resolveForExecution(execution);
         if (!services) return normalizedTurn;
+
+        const beginnerNodeId = String(normalizedTurn.metadata?.nodeId ?? "");
+        const beginnerVariant = beginnerNodeId
+          ? await readBakedVariant(
+              services,
+              beginnerNodeId,
+              authoredText,
+              targetLanguage,
+              constraint.learnerCefr as CEFRBand
+            )
+          : null;
+
+        if (beginnerVariant) {
+          normalizedTurn.text = beginnerVariant.text;
+          logger.debug("Scripted beginner line read from baked variant.", {
+            posture: constraint.supportPosture,
+            band: constraint.learnerCefr,
+            nodeId: beginnerNodeId
+          });
+          return normalizedTurn;
+        }
 
         applyWeave(
           authoredText,

@@ -136,6 +136,60 @@ function dueSchedule() {
 }
 
 describe("scripted rendering costs nothing", () => {
+  it("090.11: an A1 line reads the baked variant instead of weaving", async () => {
+    // THE BEHAVIOUR CHANGE. Beginner lines were the last ones realized at
+    // runtime; every other band already read a bake. This is the pin that the
+    // baked text actually reaches the player -- if the branch silently fell
+    // through to the weave, the turn would still succeed and still cost no
+    // gateway call, so nothing else here would notice.
+    const llmClient = forbiddenGateway();
+    const services = scriptedServices(llmClient) as unknown as {
+      variantCache: unknown;
+      resolveForExecution: () => Promise<unknown>;
+    };
+    const baked = { variant: { text: "Buenos dias. Quiere queso?" } };
+    const resolved = await services.resolveForExecution();
+    (resolved as { variantCache: unknown }).variantCache = {
+      get: async () => baked
+    };
+
+    const middleware = createSugarLangScriptedMiddleware({
+      services: services as never
+    });
+    const execution = scriptedExecution("anchored");
+
+    const turn = await middleware.finalize?.(execution, {
+      speakerId: "npc-orrin",
+      text: "Good morning. Would you like some cheese?",
+      metadata: { nodeId: "node-1" }
+    } as never);
+
+    expect(turn?.text).toBe("Buenos dias. Quiere queso?");
+    expect(llmClient.generate).not.toHaveBeenCalled();
+  });
+
+  it("090.11: falls back to the weave when no variant is baked", async () => {
+    // The fallback is deliberate, not vestigial. A cold cache, an unbuilt scene
+    // or a bake that failed its gates all land here, and a woven line beats an
+    // untouched English one. Asserting the turn still renders rather than
+    // asserting exact text, because the weave's output depends on the atlas.
+    const llmClient = forbiddenGateway();
+    const middleware = createSugarLangScriptedMiddleware({
+      services: scriptedServices(llmClient) as never
+    });
+    const execution = scriptedExecution("anchored");
+
+    const turn = await middleware.finalize?.(execution, {
+      speakerId: "npc-orrin",
+      text: "Good morning. Would you like some cheese?",
+      metadata: { nodeId: "node-1" }
+    } as never);
+
+    expect(turn).toBeDefined();
+    expect(turn?.text).toBeTruthy();
+    expect(llmClient.generate).not.toHaveBeenCalled();
+  });
+
   it("renders an authored line without calling the gateway", async () => {
     const llmClient = forbiddenGateway();
     const middleware = createSugarLangScriptedMiddleware({

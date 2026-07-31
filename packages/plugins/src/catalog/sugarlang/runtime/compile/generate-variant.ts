@@ -38,6 +38,7 @@
  */
 
 import type { CEFRBand } from "../cefr";
+import type { SupportPosture } from "../contracts/pedagogy";
 import type { LineIntentArtifact } from "../contracts/line-intent";
 import type { BakedLineVariant } from "../contracts/baked-variant";
 import type { SugarlangLLMClient } from "../llm/types";
@@ -48,6 +49,10 @@ import {
   GradedTextService,
   VOICE_RETENTION_PASS_THRESHOLD
 } from "../grading/graded-text-service";
+import {
+  TARGET_LANGUAGE_RATIO_BY_POSTURE,
+  postureForBand
+} from "../teacher/band-envelope";
 
 /**
  * Re-exported so the variant cache key and the runtime lookup keep reading one
@@ -65,6 +70,12 @@ export interface GenerateVariantInput {
   contentHash: string;
   dialogueDefinitionId: string;
   nodeId: string;
+  /**
+   * 090.11: posture for this line. Absent falls back to the band's posture --
+   * the same derivation the runtime scripted path uses today. Present is how a
+   * Teacher-chosen posture arrives once the build-time Teacher call lands.
+   */
+  posture?: SupportPosture;
 }
 
 export interface GenerateVariantResult {
@@ -86,10 +97,26 @@ export async function generateVariant(
     inventoryChunks: deps.inventoryChunks
   });
 
+  // 090.11: POSTURE AND RATIO ARE PASSED, NOT DEFAULTED.
+  //
+  // `GradedTextService` falls back to `target-dominant` / its default ratio when
+  // the caller says nothing, which is ~85% target language. That was harmless
+  // while only B1+ was baked and actively wrong the moment A1 joined: an A1
+  // variant would be generated and then VERIFIED against a B1+ ratio, so either
+  // the line comes out far too Spanish or the ratio gate rejects everything.
+  // That defaulting is why A1/A2 were never in the baked set.
+  //
+  // `postureForBand` is the interim source. The story's end state is the Teacher
+  // choosing posture per line at bake time; this is the same value the runtime
+  // scripted path already derives, moved earlier, so turning A1/A2 on does not
+  // wait for the Teacher call.
+  const posture = input.posture ?? postureForBand(input.band);
   const result = await adapter.adapt({
     sourceText: input.authoredText,
     targetLang: input.targetLang,
     band: input.band,
+    posture,
+    directedRatio: TARGET_LANGUAGE_RATIO_BY_POSTURE[posture],
     mustConveyFacts: input.intent?.mustConveyFacts ?? [],
     guidance: {
       register: "dialogue line",
