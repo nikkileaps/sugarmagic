@@ -99,8 +99,34 @@ describe("Sugarlang compile rebuild helpers", () => {
 
     expect(before.totalScenes).toBe(1);
     expect(before.missingScenes).toBe(1);
-    expect(after.cachedScenes).toBe(1);
-    expect(after.missingScenes).toBe(0);
+    expect(after.status.cachedScenes).toBe(1);
+    expect(after.status.missingScenes).toBe(0);
     expect(progress.at(-1)).toBe(1);
+  });
+
+  it("reports the missing gateway as a PROBLEM, not as a successful rebuild", async () => {
+    // This test exists because the opposite was true: with no gateway URL the
+    // scene-context, chunk and teach-plan passes were all silently skipped and
+    // the button still said "rebuilt successfully". The build then looks fine
+    // and the game quietly teaches nothing its scenes are about -- which
+    // presents much later as "the Teacher made a boring choice" and sends
+    // someone debugging the wrong layer entirely.
+    const { gameProject, region } = createGameProjectFixture();
+    const workspaceId = resolveStudioCompileWorkspaceId(gameProject.identity.id);
+
+    const result = await rebuildSugarlangCompileCache(
+      gameProject,
+      [region],
+      "es",
+      null,
+      workspaceId,
+      () => {}
+    );
+
+    const gatewayProblem = result.problems.find(
+      (problem) => problem.pass === "gateway"
+    );
+    expect(gatewayProblem).toBeDefined();
+    expect(gatewayProblem?.message).toContain("NOT built");
   });
 });

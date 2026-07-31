@@ -17,7 +17,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { GameProject, RegionDocument, Scene } from "@sugarmagic/domain";
-import { PanelSection, ProgressToast } from "@sugarmagic/ui";
+import { ErrorToast, PanelSection, ProgressToast } from "@sugarmagic/ui";
 import type { ReactElement } from "react";
 import {
   readSugarlangCompileStatus,
@@ -79,6 +79,12 @@ export function ManualRebuildButton(
     currentSceneId: null as string | null
   });
   const [message, setMessage] = useState<string | null>(null);
+  /** Non-null means the last rebuild did not fully succeed. Never inferred from
+   *  message text -- that was how a failure could render green. */
+  const [failure, setFailure] = useState<{
+    message: string;
+    detail?: string;
+  } | null>(null);
 
   // Load the project's stored plan into the in-memory lookup. Without this a
   // bake right after opening Studio would be un-steered until someone pressed
@@ -114,7 +120,7 @@ export function ManualRebuildButton(
     setIsRunning(true);
     setMessage(null);
     try {
-      const nextStatus = await rebuildSugarlangCompileCache(
+      const result = await rebuildSugarlangCompileCache(
         props.gameProject,
         props.regions,
         props.targetLanguage,
@@ -126,11 +132,38 @@ export function ManualRebuildButton(
           onTeachPlanDocument: props.onPersistTeachPlan
         }
       );
-      setStatus(nextStatus);
+      setStatus(result.status);
       setLastRebuildAt(Date.now());
-      setMessage("Sugarlang lexicons rebuilt successfully.");
+
+      // A rebuild that built nothing is not a successful rebuild. This used to
+      // say "rebuilt successfully" unconditionally, and whether the panel
+      // rendered green was decided by sniffing the message for the substring
+      // "successfully" -- so a failure whose text happened to contain the word
+      // rendered as a success.
+      if (result.problems.length > 0) {
+        setFailure({
+          message: result.problems[0]!.message,
+          detail:
+            result.problems.length > 1
+              ? `${result.problems[0]!.detail ?? ""} (+${result.problems.length - 1} more -- see the console)`.trim()
+              : result.problems[0]!.detail
+        });
+        setMessage(null);
+        for (const problem of result.problems) {
+          console.error(`[sugarlang build] ${problem.pass}: ${problem.message}`, problem.detail ?? "");
+        }
+        return;
+      }
+
+      setFailure(null);
+      setMessage("Sugarlang artifacts rebuilt successfully.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
+      // A THROW is different from a reported problem: the rebuild did not
+      // finish at all, so nothing downstream can be trusted.
+      const text = error instanceof Error ? error.message : String(error);
+      setMessage(null);
+      setFailure({ message: "Rebuild failed.", detail: text });
+      console.error("[sugarlang build] rebuild threw", error);
     } finally {
       setIsRunning(false);
     }
@@ -153,6 +186,16 @@ export function ManualRebuildButton(
   return (
     <PanelSection title="Build" icon="🛠️">
       {toastMessage ? <ProgressToast message={toastMessage} /> : null}
+      {/* Pinned and dismissible, because the Build panel can be scrolled away
+          from -- an inline-only error is one you can be looking straight past
+          while wondering why nothing is being taught. */}
+      {failure ? (
+        <ErrorToast
+          message={failure.message}
+          detail={failure.detail}
+          onDismiss={() => setFailure(null)}
+        />
+      ) : null}
       <div style={{ display: "grid", gap: "1rem" }}>
         <p style={{ margin: 0, color: "var(--sm-color-subtext)" }}>
           Cached scenes: {status.cachedScenes} / {status.totalScenes}. Chunk-ready: {status.chunkCachedScenes}. Stale: {status.staleScenes}. Missing: {status.missingScenes}.
@@ -210,19 +253,33 @@ export function ManualRebuildButton(
           <div
             style={{
               borderRadius: 10,
-              border: `1px solid ${
-                message.includes("successfully")
-                  ? "rgba(166, 227, 161, 0.35)"
-                  : "rgba(243, 139, 168, 0.35)"
-              }`,
-              background: message.includes("successfully")
-                ? "rgba(166, 227, 161, 0.08)"
-                : "rgba(243, 139, 168, 0.08)",
+              border: "1px solid rgba(166, 227, 161, 0.35)",
+              background: "rgba(166, 227, 161, 0.08)",
               padding: "0.75rem",
               fontSize: "0.85rem"
             }}
           >
             {message}
+          </div>
+        ) : null}
+
+        {failure ? (
+          <div
+            style={{
+              borderRadius: 10,
+              border: "1px solid rgba(243, 139, 168, 0.55)",
+              background: "rgba(243, 139, 168, 0.12)",
+              padding: "0.75rem",
+              fontSize: "0.85rem"
+            }}
+          >
+            <strong>{failure.message}</strong>
+            {failure.detail ? (
+              <>
+                <br />
+                {failure.detail}
+              </>
+            ) : null}
           </div>
         ) : null}
       </div>

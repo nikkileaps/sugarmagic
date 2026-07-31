@@ -105,6 +105,32 @@ export interface SugarlangCompileStatusSummary {
   chunkCachedScenes: number;
 }
 
+/**
+ * What went wrong during a rebuild, as things the AUTHOR can act on.
+ *
+ * WHY THIS EXISTS. A rebuild used to report success unconditionally: it caught
+ * nothing, and a missing gateway merely `console.warn`ed and left every pass
+ * undefined. So "Sugarlang lexicons rebuilt successfully" printed while NOTHING
+ * was built -- which is precisely the failure that presents later as "the
+ * Teacher made a boring choice" and sends someone debugging the wrong layer.
+ *
+ * A rebuild that builds nothing is not a successful rebuild.
+ */
+export interface SugarlangRebuildProblem {
+  /** Which pass. */
+  pass: "gateway" | "scene-context" | "teach-plan";
+  /** One line, addressed to the author, saying what is now not built. */
+  message: string;
+  /** What to do about it, when there is a useful answer. */
+  detail?: string;
+}
+
+export interface SugarlangRebuildResult {
+  status: SugarlangCompileStatusSummary;
+  /** Empty means the rebuild genuinely built everything it was asked to. */
+  problems: SugarlangRebuildProblem[];
+}
+
 export interface SugarlangRebuildProgress {
   completedScenes: number;
   totalScenes: number;
@@ -352,8 +378,12 @@ async function runTeachPlanPass(args: {
   gatewayClient: SugarlangGatewayClient | null;
   sceneContextCache: IndexedDBSceneContextCache | null;
   targetLanguage: string;
+  problems: SugarlangRebuildProblem[];
 }): Promise<SugarlangTeachPlanDocument | null> {
-  const { scenes, gatewayClient, sceneContextCache, targetLanguage } = args;
+  const { scenes, gatewayClient, sceneContextCache, targetLanguage, problems } =
+    args;
+  // No gateway is already reported by the caller as one gateway-level problem;
+  // repeating it per scene would bury the real message under noise.
   if (!gatewayClient || !sceneContextCache) return null;
 
   const teacher = new ClaudeTeacherPolicy({
@@ -391,6 +421,30 @@ async function runTeachPlanPass(args: {
     });
 
     const fromSceneContext = cached?.model != null;
+
+    // A plan built from no scene context is the quiet failure this whole story
+    // is downstream of: the bake still runs, the line still renders, and it
+    // teaches nothing the scene is about.
+    if (!fromSceneContext) {
+      problems.push({
+        pass: "scene-context",
+        message: `Scene "${scene.sceneId}" has no built context, so its lines were planned with nothing to teach.`,
+        detail:
+          "Its concepts are missing or stale. Rebuild again; if it persists, the scene-context pass is failing for this scene."
+      });
+    }
+
+    const failedBands = DIALOGUE_VARIANT_BANDS.filter(
+      (band) => !plan.byBand.has(band)
+    );
+    if (failedBands.length > 0) {
+      problems.push({
+        pass: "teach-plan",
+        message: `Scene "${scene.sceneId}": the Teacher failed for ${failedBands.join(", ")}.`,
+        detail:
+          "Lines baked at those bands will be graded for level but will not be steered toward any vocabulary."
+      });
+    }
 
     // Fan the scene's answer out to every dialogue reachable from it, because
     // the consumer (the variants popover) holds a dialogue id and no scene.
@@ -448,7 +502,7 @@ export async function rebuildSugarlangCompileCache(
      */
     onTeachPlanDocument?: (document: SugarlangTeachPlanDocument) => void;
   }
-): Promise<SugarlangCompileStatusSummary> {
+): Promise<SugarlangRebuildResult> {
   const scenes = await createSugarlangSceneContexts(
     gameProject,
     regions,
@@ -473,14 +527,26 @@ export async function rebuildSugarlangCompileCache(
     ? new SugarlangGatewayClient(proxyBaseUrl)
     : null;
 
+  const problems: SugarlangRebuildProblem[] = [];
+
   // Say so loudly when a pass cannot run. Without a gateway the scene-context
   // pass is simply absent, which is indistinguishable from "ran and found
   // nothing" -- the HUD shows "(not built)" either way.
+  //
+  // This used to be console-only, so the button still said "rebuilt
+  // successfully". It now reaches the author.
   if (!gatewayClient) {
     console.warn(
       "[sugarlang build] scene-context and chunk passes SKIPPED: no gateway base URL resolved. " +
         "Scene context can never be built until the sugarlang gateway URL is set."
     );
+    problems.push({
+      pass: "gateway",
+      message:
+        "Build incomplete: no sugarlang gateway URL, so scene concepts, chunks and teaching plans were NOT built.",
+      detail:
+        "NPCs will still talk, but they will not teach what your scenes are about. Set the sugarlang gateway URL and rebuild."
+    });
   }
 
   const dialogueDefinitions = gameProject?.dialogueDefinitions ?? [];
@@ -589,7 +655,8 @@ export async function rebuildSugarlangCompileCache(
     sceneContextCache: gatewayClient
       ? new IndexedDBSceneContextCache({ workspaceId })
       : null,
-    targetLanguage
+    targetLanguage,
+    problems
   });
 
   // Handed OUT rather than written here. This module has no command channel and
@@ -599,13 +666,16 @@ export async function rebuildSugarlangCompileCache(
     options?.onTeachPlanDocument?.(teachPlanDocument);
   }
 
-  return readSugarlangCompileStatus(
-    gameProject,
-    regions,
-    targetLanguage,
-    activeScene,
-    workspaceId
-  );
+  return {
+    status: await readSugarlangCompileStatus(
+      gameProject,
+      regions,
+      targetLanguage,
+      activeScene,
+      workspaceId
+    ),
+    problems
+  };
 }
 
 export function loadPlacementQuestionBank(
