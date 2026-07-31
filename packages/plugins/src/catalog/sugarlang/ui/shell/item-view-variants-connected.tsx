@@ -29,11 +29,12 @@ import { Badge, Button, Group, Stack, Text } from "@mantine/core";
 import type { ItemDefinition } from "@sugarmagic/domain";
 import type { CEFRBand } from "../../runtime/cefr";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
-import { VARIANT_BANDS } from "../../runtime/contracts/baked-variant";
+import { ITEM_VARIANT_BANDS } from "../../runtime/contracts/baked-variant";
 import { createVariantAuthoringClient } from "./editor-support";
 
-// 090.11: same shared list -- the item bake fans out over it too.
-const BANDS = VARIANT_BANDS;
+// 090.11: items keep B1+. Beginner item text is substituted at runtime, so a
+// baked A1 variant would never be read -- see ITEM_VARIANT_BANDS.
+const BANDS = ITEM_VARIANT_BANDS;
 
 export interface ItemViewVariantsConnectedProps {
   item: ItemDefinition | null;

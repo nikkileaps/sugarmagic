@@ -64,13 +64,32 @@ export type BakedVariantStore = Map<
  * surface would show, which reads as "the feature did not work" rather than
  * "one list disagreed with another".
  *
- * A1 and A2 are included as of 090.11. Beginner lines were the last ones
- * realized at runtime by token substitution; they are baked like every other
- * band now.
+ * A1 and A2 are included as of 090.11 -- for DIALOGUE. Beginner dialogue lines
+ * were the last ones realized at runtime by token substitution; they are baked
+ * like every other band now.
+ *
+ * ITEMS ARE DIFFERENT ON PURPOSE, which is why there are two lists below rather
+ * than one shared one. `display-text-resolver` short-circuits A1/A2 item text to
+ * `markText` before it ever consults the variant cache (:191-197), so a baked
+ * beginner item variant would be generated, stored, billed -- and never read.
+ * The two lists look identical at B1+ and are not the same decision; collapsing
+ * them to one constant made items sprout two empty rows in the Studio panel and
+ * bake variants nothing would ever display.
  */
-export const VARIANT_BANDS: readonly CEFRBand[] = [
+export const DIALOGUE_VARIANT_BANDS: readonly CEFRBand[] = [
   "A1",
   "A2",
+  "B1",
+  "B2",
+  "C1",
+  "C2"
+] as const;
+
+/**
+ * Bands that get a baked ITEM variant. Beginner item text is substituted at
+ * runtime instead (see above), so baking below B1 here buys nothing.
+ */
+export const ITEM_VARIANT_BANDS: readonly CEFRBand[] = [
   "B1",
   "B2",
   "C1",

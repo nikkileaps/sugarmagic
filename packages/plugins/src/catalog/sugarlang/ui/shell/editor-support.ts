@@ -49,7 +49,10 @@ import { GradedTextService } from "../../runtime/grading/graded-text-service";
 import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
 import { getAllInventoryChunks } from "../../runtime/inventory/competency-inventory-loader";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
-import { VARIANT_BANDS } from "../../runtime/contracts/baked-variant";
+import {
+  DIALOGUE_VARIANT_BANDS,
+  ITEM_VARIANT_BANDS
+} from "../../runtime/contracts/baked-variant";
 import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-scene";
 import { computeSceneContentHash } from "../../runtime/compile/content-hash";
 import {
@@ -479,7 +482,7 @@ export function loadPlacementQuestionBank(
 // 090.11: the baked band set lives in the baked-variant contract now -- it was
 // spelled independently here and in two Studio panels, so turning A1/A2 on in
 // one place left the others showing the old four.
-const DISPLAY_BANDS = VARIANT_BANDS;
+const DISPLAY_BANDS = DIALOGUE_VARIANT_BANDS;
 
 function buildVariantContentHash(nodeId: string, nodeText: string): string {
   return [nodeId, nodeText, JSON.stringify({})].join("|");
@@ -600,7 +603,7 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       const contentHash = buildItemViewContentHash(itemDefinitionId, field, text);
       const result: Partial<Record<CEFRBand, BakedLineVariant>> = {};
       await Promise.all(
-        DISPLAY_BANDS.map(async (band) => {
+        ITEM_VARIANT_BANDS.map(async (band) => {
           const entry = await cache.get({
             lang: targetLanguage,
             band,
@@ -625,7 +628,7 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       const service = new GradedTextService({ llmClient, atlas, inventoryChunks });
       const result: Partial<Record<CEFRBand, BakedLineVariant>> = {};
       await Promise.all(
-        DISPLAY_BANDS.map(async (band) => {
+        ITEM_VARIANT_BANDS.map(async (band) => {
           try {
             const graded = await service.adapt({
               sourceText: text,

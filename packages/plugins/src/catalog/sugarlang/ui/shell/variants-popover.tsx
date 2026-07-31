@@ -33,11 +33,11 @@ import {
 } from "@mantine/core";
 import type { DialogueNodeDefinition } from "@sugarmagic/domain";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
-import { VARIANT_BANDS } from "../../runtime/contracts/baked-variant";
+import { DIALOGUE_VARIANT_BANDS } from "../../runtime/contracts/baked-variant";
 import type { CEFRBand } from "../../runtime/cefr";
 
 // 090.11: shared with the bake so a baked A1 variant is never invisible here.
-const DISPLAY_BANDS = VARIANT_BANDS;
+const DISPLAY_BANDS = DIALOGUE_VARIANT_BANDS;
 
 export interface VariantsPopoverProps {
   node: DialogueNodeDefinition;
