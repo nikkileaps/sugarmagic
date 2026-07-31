@@ -21,7 +21,6 @@
  *   Priority formula: 0.80 * (1 - diverseCount / targetCount) -> [0.08, 0.80].
  *
  * 087.3 extends: ZPDES-shaped packing + per-scene comprehension-rate target.
- * 087.4 extends: strain curve + fluency valley scheduling.
  *
  * Exports:
  *   - DUE_RETRIEVABILITY_FLOOR
@@ -50,40 +49,41 @@ import { estimateSceneComprehensionRate, STRETCH_COMPREHENSION_FLOOR } from "./c
 import { CEFR_BAND_ORDER } from "../learner";
 
 /**
- * 090.9: `DUE_RETRIEVABILITY_FLOOR` and `FLUENCY_RETRIEVABILITY_FLOOR` moved to
- * `../learner/learning-status`. They answer "is this card due" and "does the
- * learner know this" -- learner facts that lived here only because the scheduler
- * needed them first. Re-exported so existing importers keep working.
+ * 090.9: `DUE_RETRIEVABILITY_FLOOR` moved to `../learner/learning-status` -- it
+ * answers "is this card due", a learner fact that lived here only because the
+ * scheduler needed it first. Re-exported so existing importers keep working.
+ * (Its sibling `KNOWN_RETRIEVABILITY_FLOOR` lives there too -- it survived 090.5
+ * and was renamed from `FLUENCY_RETRIEVABILITY_FLOOR`, since it always really
+ * meant "the learner knows this" rather than anything about fluency recycling.)
  */
-export {
-  DUE_RETRIEVABILITY_FLOOR,
-  FLUENCY_RETRIEVABILITY_FLOOR
-} from "../learner";
-import {
-  DUE_RETRIEVABILITY_FLOOR,
-  FLUENCY_RETRIEVABILITY_FLOOR
-} from "../learner";
+export { DUE_RETRIEVABILITY_FLOOR } from "../learner";
+import { DUE_RETRIEVABILITY_FLOOR } from "../learner";
 
-/**
- * 087.4: When fatigueScore reaches this threshold, the scheduler enters strain-suppressed
- * mode: introductions, function-affinity, and stretch candidates are dropped and fluency
- * items (well-known lemmas) are surfaced instead. Modeled on L4D's tension-relief curve.
- *
- * At 0.70 the learner needs heavy hovering or ~3/4 probes failed. The valley ends
- * naturally as hoverRate drops with familiar material.
- *
- * 090.5 CORRECTED THE ARITHMETIC IN THIS COMMENT. It used to say "35 turns +
- * heavy hovering". Turns contribute `0.30 * (turns / 50)` (session-signals.ts,
- * unbounded per-term -- only the SUM is clamped), so at 35 turns they add 0.21,
- * and turns alone do not cross 0.70 until roughly 117. The old figure made
- * strain look reachable in a normal-length conversation when it is really
- * hover- and probe-failure-driven at that length.
- */
-export const STRAIN_SUPPRESS_THRESHOLD = 0.70;
+// 090.5: STRAIN_SUPPRESS_THRESHOLD and the whole fatigue/strain mechanism are
+// DELETED (nikki, 2026-07-30). It modelled an L4D-style tension-relief valley:
+// once `fatigueScore` crossed 0.70 the scheduler stopped introducing new items
+// and surfaced well-known ones instead.
+//
+// THIS WAS LIVE CODE, NOT DEAD CODE. An earlier reading of this claimed it never
+// ran, on the grounds that `fatigueScore` hangs off `profile.currentSession` and
+// only a `session-start` event creates one -- which no production code emits.
+// That was wrong and is recorded here so nobody re-derives it: `applyObservation`
+// LAZILY CREATES `currentSession`, the observe middleware drives the reducer
+// every turn, and fatigue was recomputed on each observation. Strain could and
+// did fire. Tracing one writer of a field is not tracing all of them.
+//
+// Deleted anyway, for the reason that outlasts the mechanism: this was the
+// SCHEDULER deciding what should be taught -- suppressing introductions, picking
+// comfort vocabulary -- which is the second-authority condition this epic exists
+// to remove. If pacing-for-strain returns, it arrives as LEARNER state the
+// Teacher reads (the capacity half of the two doors), not as a branch here that
+// overrides the Teacher's slate after the fact. Whether players want it at all
+// is unproven, so it is not being rebuilt speculatively.
+//
+// Deleted with it: fluency recycling, which only ran inside the suppressed
+// branch. Due-based resurfacing is untouched and unrelated -- that is FSRS decay
+// through `getLearningStatus` (learner/learning-status.ts), section 1 below.
 
-
-/** Max fluency items surfaced per turn in strain-suppressed mode. */
-const FLUENCY_ITEM_CAP = 3;
 
 // 090.9: was a local copy, one of six. The order lives in contracts now.
 
@@ -119,7 +119,6 @@ export class OuterLoopScheduler {
 
     const dayAxisDegraded = scene.dayIndex === null;
     const sceneComprehensionRate = estimateSceneComprehensionRate(learner.lemmaCards, scene.sceneLemmaIds);
-    const strainSuppressed = learner.fatigueScore >= STRAIN_SUPPRESS_THRESHOLD;
 
     if (isColdStart) {
       void emitTelemetry(
@@ -131,7 +130,6 @@ export class OuterLoopScheduler {
           teachableCount: 0,
           isColdStart: true,
           learnerBand: learner.cefrBand,
-          fatigueScore: learner.fatigueScore,
           dueItemCount: 0,
           debtServiceCount: 0,
           introductionCount: 0,
@@ -142,7 +140,6 @@ export class OuterLoopScheduler {
           dayAxisDegraded,
           sceneComprehensionRate,
           stretchAllowanceActive: false,
-          strainSuppressed: false
         })
       );
       return {
@@ -152,7 +149,6 @@ export class OuterLoopScheduler {
         conversationId,
         sceneComprehensionRate,
         stretchAllowanceActive: false,
-        strainSuppressed: false
       };
     }
 
@@ -193,8 +189,6 @@ export class OuterLoopScheduler {
     }
 
     // --- 3. Unintroduced competencies, band ordering as the floor ---
-    // Skipped entirely in strain-suppressed mode (087.4). When strain is high the
-    // scheduler surfaces fluency items (section 4) instead of new introductions.
     //
     // Above-band (band+1) competencies are gated behind the stretch allowance:
     // only one is included per turn, only when scene comprehension >= STRETCH_COMPREHENSION_FLOOR,
@@ -202,7 +196,7 @@ export class OuterLoopScheduler {
     const learnerBandIdx = bandIndex(learner.cefrBand);
     let stretchCandidateAdded = false;
 
-    if (!strainSuppressed) for (const fn of curriculum.availableCompetencies) {
+    for (const fn of curriculum.availableCompetencies) {
       if (curriculum.introducedCompetencyIds.has(fn.competencyId)) continue;
       if (curriculum.activeDebts.has(fn.competencyId)) continue;
 
@@ -252,28 +246,8 @@ export class OuterLoopScheduler {
 
     const stretchAllowanceActive = stretchCandidateAdded;
 
-    // --- 4. Fluency recycling (087.4, strain-suppressed mode only) ---
-    // Surface well-known lemmas (retrievability >= FLUENCY_RETRIEVABILITY_FLOOR) as positive
-    // reinforcement. These are things the learner already knows, included so NPCs use familiar
-    // phrases during the valley period. Capped at FLUENCY_ITEM_CAP per turn.
-    // Mentor-line delivery timing: deferred to when a mentor NPC ships in authored content.
-    // Revisit at this section when a mentor NPC exists (see plan 087 deferred list).
-    if (strainSuppressed) {
-      let fluencyAdded = 0;
-      for (const [lemmaId, card] of Object.entries(learner.lemmaCards)) {
-        if (fluencyAdded >= FLUENCY_ITEM_CAP) break;
-        if (lemmaId.startsWith("chunk:")) continue;
-        if (card.retrievability < FLUENCY_RETRIEVABILITY_FLOOR) continue;
-        candidates.push({
-          id: lemmaId,
-          kind: "vocabulary",
-          priority: card.retrievability * 0.20, // low band: below due/debt but present
-          teachReason: "fluency",
-          affinityNpcIds: []
-        });
-        fluencyAdded += 1;
-      }
-    }
+    // 090.5: fluency recycling deleted with strain -- it only ran inside the
+    // suppressed branch, which never fired.
 
     // Sort descending by priority; break ties alphabetically by id for determinism.
     candidates.sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
@@ -293,7 +267,6 @@ export class OuterLoopScheduler {
         teachableCount: candidates.length,
         isColdStart: false,
         learnerBand: learner.cefrBand,
-        fatigueScore: learner.fatigueScore,
         dueItemCount: dueCount,
         debtServiceCount,
         introductionCount: introCount,
@@ -304,7 +277,6 @@ export class OuterLoopScheduler {
         dayAxisDegraded,
         sceneComprehensionRate,
         stretchAllowanceActive,
-        strainSuppressed
       })
     );
 
@@ -315,7 +287,6 @@ export class OuterLoopScheduler {
       conversationId,
       sceneComprehensionRate,
       stretchAllowanceActive,
-      strainSuppressed
     };
   }
 }

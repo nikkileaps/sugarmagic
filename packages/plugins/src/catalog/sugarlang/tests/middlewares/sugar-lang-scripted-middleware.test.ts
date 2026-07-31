@@ -127,7 +127,6 @@ function dueSchedule() {
     teachables: [
       { id: "queso", kind: "vocabulary", teachReason: "due", affinityNpcIds: [] }
     ],
-    strainSuppressed: false,
     isColdStart: false,
     sceneId: "scene-dock",
     conversationId: "c1",

@@ -368,7 +368,6 @@ export function createSugarLangContextMiddleware(
             cefrBand: learner.estimatedCefrBand,
             cefrConfidence: learner.assessment.cefrConfidence,
             lemmaCards: learner.lemmaCards,
-            fatigueScore: learner.currentSession?.fatigueScore ?? 0
           },
           curriculum: {
             introducedCompetencyIds: new Set(teachRecords.map((r) => r.competencyId)),

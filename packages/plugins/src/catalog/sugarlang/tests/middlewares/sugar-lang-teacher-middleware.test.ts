@@ -405,7 +405,6 @@ function makeSchedule(overrides: Partial<TeachSchedule> = {}): TeachSchedule {
     conversationId: "conv-1",
     sceneComprehensionRate: 0.65,
     stretchAllowanceActive: false,
-    strainSuppressed: false,
     ...overrides
   };
 }
@@ -572,22 +571,6 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     expect(invokeTeacher).toHaveBeenCalledTimes(1);
   });
 
-  it("excludes fluency teachables from retrieveBiasTerms", async () => {
-    const invokeTeacher = vi.fn().mockResolvedValue(teacherDirectiveFixture());
-    const services = createServicesStub(makeScheduleServices(invokeTeacher));
-    const middleware = createSugarLangTeacherMiddleware({ services: services as never });
-    const execution = createTestExecution();
-    execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] = makeSchedule({
-      teachables: [
-        { id: "comer", kind: "vocabulary", priority: 0.9, teachReason: "due", affinityNpcIds: [] },
-        { id: "agua", kind: "vocabulary", priority: 0.5, teachReason: "fluency", affinityNpcIds: [] }
-      ]
-    });
-
-    await middleware.prepare?.(execution);
-
-    const contrib = execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] as { retrieveBiasTerms?: string[] };
-    expect(contrib.retrieveBiasTerms).toEqual(["comer"]);
-    expect(contrib.retrieveBiasTerms).not.toContain("agua");
-  });
+  // 090.5: "excludes fluency teachables from retrieveBiasTerms" deleted --
+  // `fluency` was only ever produced inside the strain branch, which never ran.
 });

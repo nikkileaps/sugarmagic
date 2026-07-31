@@ -112,11 +112,10 @@ export interface CurrentSessionSignals {
   sessionId: string;
   startedAt: number;
   turns: number;
-  avgResponseLatencyMs: number;
-  hoverRate: number;
-  /** 087.4: fraction of probes that failed this session. Replaced retryRate (always 0 -- no producers). */
-  probeFailRate: number;
-  fatigueScore: number;
+  // 090.5: avgResponseLatencyMs / hoverRate / probeFailRate / fatigueScore
+  // deleted. All four fed `computeFatigueScore` and nothing else, and the strain
+  // curve they drove never ran in production -- `currentSession` is only created
+  // by a `session-start` event, which nothing outside tests emits.
 }
 
 /**

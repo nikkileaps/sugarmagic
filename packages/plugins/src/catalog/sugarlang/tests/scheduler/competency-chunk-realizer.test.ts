@@ -41,7 +41,6 @@ function makeSchedule(overrides: Partial<TeachSchedule> = {}): TeachSchedule {
     conversationId: "conv-1",
     sceneComprehensionRate: 1.0,
     stretchAllowanceActive: false,
-    strainSuppressed: false,
     ...overrides
   };
 }

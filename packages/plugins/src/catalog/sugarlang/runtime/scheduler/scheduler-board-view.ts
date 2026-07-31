@@ -34,8 +34,7 @@ export interface SchedulerLearnerView {
   cefrConfidence: number;
   /** All lemma cards from the learner profile (keyed by lemmaId; includes chunk: cards). */
   lemmaCards: Record<string, LemmaCard>;
-  /** 0-1 fatigue signal from session-signals (hoverRate, probeFailRate, latency, turns). */
-  fatigueScore: number;
+  // 090.5: `fatigueScore` deleted with the strain mechanism it fed.
 }
 
 export interface SchedulerCurriculumView {

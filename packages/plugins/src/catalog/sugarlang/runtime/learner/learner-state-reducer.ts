@@ -45,10 +45,6 @@ import {
   isInPostPlacementCalibration
 } from "./calibration-window";
 import {
-  computeFatigueScore,
-  computeProbeFailRate
-} from "./session-signals";
-import {
   createEmptyLearnerProfile,
   loadLearnerProfile,
   saveLearnerProfile
@@ -193,12 +189,12 @@ function createSessionAccumulator(profile: LearnerProfile): SessionAccumulator {
     lastTurnId: null,
     turns: currentSession.turns,
     lemmasSeen: currentSession.turns,
-    hoverCount: currentSession.hoverRate * currentSession.turns,
+    hoverCount: 0,
     // probeFailCount / probeCount cannot be reconstructed without probeCount.
     // Start fresh on session resume; the persisted fatigueScore captures prior strain.
     probeFailCount: 0,
     probeCount: 0,
-    totalResponseLatencyMs: currentSession.avgResponseLatencyMs * currentSession.turns,
+    totalResponseLatencyMs: 0,
     latencySamples: currentSession.turns,
     lastObservedAtMs: null
   };
@@ -268,11 +264,7 @@ export class LearnerStateReducer {
         profile.currentSession = {
           sessionId: event.sessionId,
           startedAt: event.startedAtMs,
-          turns: 0,
-          avgResponseLatencyMs: 0,
-          hoverRate: 0,
-          probeFailRate: 0,
-          fatigueScore: 0
+          turns: 0
         };
         this.sessionAccumulators.set(event.sessionId, createSessionAccumulator(profile));
         await emitTelemetry(
@@ -409,11 +401,6 @@ export class LearnerStateReducer {
             accumulator.probeFailCount += 1;
           }
           this.sessionAccumulators.set(currentSession.sessionId, accumulator);
-          currentSession.probeFailRate = computeProbeFailRate(
-            accumulator.probeFailCount,
-            accumulator.probeCount
-          );
-          currentSession.fatigueScore = computeFatigueScore(currentSession);
         }
         break;
       }
@@ -584,17 +571,8 @@ export class LearnerStateReducer {
       );
     }
 
-    currentSession.hoverRate =
-      accumulator.lemmasSeen > 0 ? accumulator.hoverCount / accumulator.lemmasSeen : 0;
-    currentSession.probeFailRate = computeProbeFailRate(
-      accumulator.probeFailCount,
-      accumulator.probeCount
-    );
-    currentSession.avgResponseLatencyMs =
-      accumulator.latencySamples > 0
-        ? accumulator.totalResponseLatencyMs / accumulator.latencySamples
-        : 0;
-    currentSession.fatigueScore = computeFatigueScore(currentSession);
+    // 090.5: hoverRate / probeFailRate / avgResponseLatencyMs / fatigueScore all
+    // deleted -- they existed only to feed the strain curve, which never ran.
 
     this.sessionAccumulators.set(currentSession.sessionId, accumulator);
     profile.lemmaCards[nextCard.lemmaId] = nextCard;

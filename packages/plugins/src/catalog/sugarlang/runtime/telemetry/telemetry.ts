@@ -727,7 +727,6 @@ export type TelemetryEvent =
         teachableCount: number;
         isColdStart: boolean;
         learnerBand: string;
-        fatigueScore: number;
         dueItemCount: number;
         debtServiceCount: number;
         introductionCount: number;
@@ -742,7 +741,6 @@ export type TelemetryEvent =
         /** 087.3: True when stretch allowance gate was triggered this turn. */
         stretchAllowanceActive: boolean;
         /** 087.4: True when fatigueScore >= STRAIN_SUPPRESS_THRESHOLD; introductions suppressed. */
-        strainSuppressed: boolean;
       }
     >
   | TelemetryEventOf<

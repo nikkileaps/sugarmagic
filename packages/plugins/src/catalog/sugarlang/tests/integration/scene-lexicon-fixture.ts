@@ -73,10 +73,6 @@ export function createBudgeterLearner(
       sessionId: "session-1",
       startedAt: 1000,
       turns: 10,
-      avgResponseLatencyMs: 1000,
-      hoverRate: 0.1,
-      probeFailRate: 0.05,
-      fatigueScore: 0.1
     },
     sessionHistory: [],
     ...overrides

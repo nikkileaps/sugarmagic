@@ -69,7 +69,7 @@ export {
 export { learnerKey } from "./learner-key";
 export {
   DUE_RETRIEVABILITY_FLOOR,
-  FLUENCY_RETRIEVABILITY_FLOOR,
+  KNOWN_RETRIEVABILITY_FLOOR,
   LEARNING_STATUSES,
   getLearningStatus
 } from "./learning-status";
@@ -99,4 +99,5 @@ export * from "./fact-definitions";
 export * from "./calibration-window";
 export * from "./persistence";
 export * from "./learner-state-reducer";
-export * from "./session-signals";
+// 090.5: `session-signals` deleted -- it computed the fatigue/strain score,
+// which never ran. See outer-loop-scheduler.ts for the full note.

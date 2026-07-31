@@ -163,10 +163,6 @@ export function createTeacherContext(
       // rather than hand-written on the context, so the turn counter has to be
       // far enough along for the per-card ages below to be expressible.
       turns: 10,
-      avgResponseLatencyMs: 900,
-      hoverRate: 0.2,
-      probeFailRate: 0.05,
-      fatigueScore: 0.15
     },
     // 090.4: THESE CARDS NOW PRODUCE THE PENDING-PROVISIONAL LIST.
     //

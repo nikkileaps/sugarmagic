@@ -490,7 +490,7 @@ export function createSugarLangTeacherMiddleware(
       const scheduledBiasTerms: string[] =
         schedule && !schedule.isColdStart
           ? schedule.teachables
-              .filter((t) => t.kind === "vocabulary" && t.teachReason !== "fluency")
+              .filter((t) => t.kind === "vocabulary")
               .slice(0, 3)
               .map((t) => t.id)
           : [];

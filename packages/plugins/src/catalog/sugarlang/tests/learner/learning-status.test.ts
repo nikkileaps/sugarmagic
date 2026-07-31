@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   DUE_RETRIEVABILITY_FLOOR,
-  FLUENCY_RETRIEVABILITY_FLOOR,
+  KNOWN_RETRIEVABILITY_FLOOR,
   LEARNING_STATUSES,
   getLearningStatus,
   type LearningStatus
@@ -70,7 +70,7 @@ describe("getLearningStatus -- the five values", () => {
   });
 
   it("a reviewed card at or above the fluency floor is known", () => {
-    expect(status(card({ retrievability: FLUENCY_RETRIEVABILITY_FLOOR }))).toBe("known");
+    expect(status(card({ retrievability: KNOWN_RETRIEVABILITY_FLOOR }))).toBe("known");
   });
 
   it("between the two floors is learning", () => {

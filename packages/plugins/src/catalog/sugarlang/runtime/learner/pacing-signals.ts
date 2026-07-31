@@ -11,16 +11,15 @@
  *     probeFloorState           <- pendingProvisionalLemmas + turnsSinceLastProbe
  *
  *   Nothing here is a new fact about the learner, so nothing here is persisted
- *   and nothing here belongs on `LearnerProfile`. They are the same category as
- *   `computeFatigueScore` in ./session-signals -- a reading taken off learner
- *   state, not a piece of it. Deriving at the read site is what keeps a stored
- *   copy from drifting out of agreement with the cards it came from.
+ *   and nothing here belongs on `LearnerProfile`. They are readings TAKEN OFF
+ *   learner state, not pieces of it. Deriving at the read site is what keeps a
+ *   stored copy from drifting out of agreement with the cards it came from.
  *
  * WHY THEY LIVE IN THE LEARNER MODULE
- *   docs/api/domain-model-after-epic-090.md puts CAPACITY -- "fatigue, session
- *   depth, conversation depth" -- inside `LEARNER`, alongside band and standing.
- *   These are the first two capacity signals to exist in code. 090.5 (learner
- *   capacity) adds the rest HERE rather than inventing a parallel home.
+ *   docs/api/domain-model-after-epic-090.md puts CAPACITY inside `LEARNER`,
+ *   alongside band and standing. These two probe-pacing signals are what exists
+ *   of it. The fatigue/strain half was deleted in 090.5 -- it had never run --
+ *   so if capacity is ever revisited, it starts HERE rather than in a new home.
  *
  *   They were in `middlewares/shared.ts`, which made the teacher unable to
  *   derive them without depending on middleware -- so they were computed once

@@ -61,10 +61,6 @@ export function createTestLearnerProfile(
       sessionId: "session-1",
       startedAt: 1,
       turns: 2,
-      avgResponseLatencyMs: 500,
-      hoverRate: 0,
-      probeFailRate: 0,
-      fatigueScore: 0
     },
     sessionHistory: [],
     ...overrides

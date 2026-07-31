@@ -29,7 +29,7 @@
  *   compares it to a floor.
  *
  * Exports:
- *   - DUE_RETRIEVABILITY_FLOOR, FLUENCY_RETRIEVABILITY_FLOOR
+ *   - DUE_RETRIEVABILITY_FLOOR, KNOWN_RETRIEVABILITY_FLOOR
  *   - LEARNING_STATUSES, LearningStatus
  *   - getLearningStatus
  *
@@ -59,11 +59,13 @@ export const DUE_RETRIEVABILITY_FLOOR = 0.7;
 /**
  * At or above this retrievability the learner is treated as knowing the item.
  *
- * 087.4 introduced it for fluency recycling (surfacing well-known lemmas during
- * a strain valley); it is the same threshold that decides `known` here, and it
- * must not be declared twice.
+ * 090.5 renamed it from `FLUENCY_RETRIEVABILITY_FLOOR`. 087.4 introduced it for
+ * fluency recycling -- surfacing well-known lemmas during a strain valley -- and
+ * that feature is gone, but the threshold itself was always really "does the
+ * learner know this", which is what `known` means here. The old name outlived
+ * the only thing it referred to.
  */
-export const FLUENCY_RETRIEVABILITY_FLOOR = 0.90;
+export const KNOWN_RETRIEVABILITY_FLOOR = 0.90;
 
 export const LEARNING_STATUSES = [
   "unseen",
@@ -130,7 +132,7 @@ export function getLearningStatus(input: LearningStatusInput): LearningStatus {
     return "unseen";
   }
 
-  if (card.retrievability >= FLUENCY_RETRIEVABILITY_FLOOR) {
+  if (card.retrievability >= KNOWN_RETRIEVABILITY_FLOOR) {
     return "known";
   }
 
