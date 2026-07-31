@@ -18,6 +18,43 @@ const HOVER_DWELL_MS = 300;
 
 export interface TurnTextOptions {
   onTermHover?: (event: { term: string; dwellMs: number }) => void;
+  /**
+   * 090.12: fired when the player SELECTS text inside this turn -- drag across a
+   * word the way you would with a highlighter. The host resolves it to a gloss
+   * and decides whether to show anything.
+   *
+   * Deliberately not hover: at B2+ most of a line is target language, so hover
+   * fires constantly on words nobody asked about. Selection only happens on
+   * purpose. Taught words keep their hover gloss; this is the second way in and
+   * works on any span, including target language the Teacher never chose.
+   */
+  onSelectionLookup?: (event: { selection: string; anchor: DOMRect | null }) => void;
+}
+
+/**
+ * Attaches the selection listener. Separated so it is obvious this touches
+ * NOTHING about how terms are marked up -- gold, blue and the celebrate
+ * animation come from classes applied below and are not reachable from here.
+ */
+function attachSelectionLookup(
+  element: HTMLElement,
+  notify: NonNullable<TurnTextOptions["onSelectionLookup"]>
+): void {
+  element.addEventListener("mouseup", () => {
+    const selection = typeof window !== "undefined" ? window.getSelection() : null;
+    const text = selection?.toString() ?? "";
+    if (!text.trim()) {
+      return;
+    }
+    // Only react to a selection that lies inside THIS turn. A drag starting in
+    // another entry and ending here would otherwise look up text the player
+    // never pointed at in this line.
+    const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    if (!range || !element.contains(range.commonAncestorContainer)) {
+      return;
+    }
+    notify({ selection: text, anchor: range.getBoundingClientRect() });
+  });
 }
 
 /**
@@ -31,6 +68,14 @@ export function createTurnTextElement(
 ): HTMLDivElement {
   const textElement = document.createElement("div");
   textElement.className = "sm-dialogue-entry-text";
+
+  // 090.12: selection works on EVERY turn, including ones with no highlight at
+  // all. A line can be full of target language the slate never asked for --
+  // that is exactly the case the player most needs to be able to interrogate,
+  // and it is the case that returns early below.
+  if (options.onSelectionLookup) {
+    attachSelectionLookup(textElement, options.onSelectionLookup);
+  }
 
   const turnHighlight = readDialogueHighlight(turn.annotations);
   if (!turnHighlight || turnHighlight.focusTerms.length === 0) {

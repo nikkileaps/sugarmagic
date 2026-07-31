@@ -21,6 +21,11 @@ import { createTurnTextElement } from "./turn-text";
 
 export interface ScriptedDialogueBoxOptions {
   onTermHover?: (event: { term: string; dwellMs: number }) => void;
+  /** 090.12: select-to-translate, same gesture as the free-form panel. */
+  onSelectionLookup?: (event: {
+    selection: string;
+    anchor: DOMRect | null;
+  }) => void;
 }
 
 export interface ScriptedDialogueBox {
@@ -125,7 +130,12 @@ export function createScriptedDialogueBox(
       currentInput = onInput;
       clearBody();
       setSpeaker(turn.speakerLabel ?? null);
-      body.appendChild(createTurnTextElement(turn, { onTermHover: options.onTermHover }));
+      body.appendChild(
+        createTurnTextElement(turn, {
+          onTermHover: options.onTermHover,
+          onSelectionLookup: options.onSelectionLookup
+        })
+      );
 
       const teachLine = readTeachLine(turn.annotations);
       if (teachLine) {

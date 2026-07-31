@@ -126,7 +126,10 @@ export function createSugarlangPlugin(
     payload: {
       summary: "Highlights focus vocabulary, celebrates player production, and tracks hover observations.",
       decorate: dialogueContribution.decorate,
-      onTermHover: dialogueContribution.onTermHover
+      onTermHover: dialogueContribution.onTermHover,
+      // 090.12: select-to-translate. The panel calls this on a mouseup inside a
+      // turn; null means show nothing.
+      lookupSelection: dialogueContribution.lookupSelection
     }
   };
 

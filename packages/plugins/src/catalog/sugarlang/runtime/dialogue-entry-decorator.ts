@@ -23,6 +23,9 @@ import {
   readDialogueHighlight
 } from "@sugarmagic/runtime-core";
 import { isPlayerSpeaker, resolveDialogueSpeaker } from "@sugarmagic/domain";
+import { lookupSelection } from "./grading/lookup-selection";
+import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider";
+import { MorphologyLoader } from "./classifier/morphology-loader";
 
 export interface PendingHover {
   lemmaId: string;
@@ -46,11 +49,21 @@ export function drainPendingHover(): PendingHover | null {
 export function createSugarlangDialogueContribution(): {
   decorate: (turn: ConversationTurnEnvelope) => ConversationTurnEnvelope;
   onTermHover: (event: TermHoverEvent) => void;
+  lookupSelection: (
+    selection: string
+  ) => { surface: string; gloss: string } | null;
 } {
   let currentFocusTerms: string[] = [];
   let currentIntroduceTerms: string[] = [];
   let currentGlosses: Record<string, string> = {};
   let currentTargetLanguage = "es";
+
+  // 090.12: the lookup resolver owns its atlas and morphology rather than
+  // taking them from the async service graph. Both are lazy and cache
+  // internally, and the resolver must be SYNCHRONOUS -- it answers a mouseup,
+  // and a card that arrives after the player has moved on is worse than none.
+  const lookupAtlas = new CefrLexAtlasProvider();
+  const lookupMorphology = new MorphologyLoader();
 
   function decorate(turn: ConversationTurnEnvelope): ConversationTurnEnvelope {
     const highlight = readDialogueHighlight(turn.annotations);
@@ -108,5 +121,26 @@ export function createSugarlangDialogueContribution(): {
     };
   }
 
-  return { decorate, onTermHover };
+  /**
+   * 090.12: what the player gets for selecting a span.
+   *
+   * Atlas-only by design (see grading/lookup-selection.ts). Returns null for
+   * every expected miss -- support-language words, names, punctuation, genuine
+   * phrases -- and the panel shows nothing rather than an error, because from
+   * the player's side those are all the same event: nothing to look up here.
+   */
+  function lookupSelectionForPanel(
+    selection: string
+  ): { surface: string; gloss: string } | null {
+    const result = lookupSelection({
+      selection,
+      targetLanguage: currentTargetLanguage,
+      supportLanguage: "en",
+      atlas: lookupAtlas,
+      morphology: lookupMorphology
+    });
+    return result ? { surface: result.surface, gloss: result.gloss } : null;
+  }
+
+  return { decorate, onTermHover, lookupSelection: lookupSelectionForPanel };
 }

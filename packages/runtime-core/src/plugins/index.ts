@@ -210,6 +210,15 @@ export type DialogueEntryDecoratorContribution = RuntimePluginContributionBase<
     summary: string;
     decorate: (turn: ConversationTurnEnvelope) => ConversationTurnEnvelope;
     onTermHover?: (event: TermHoverEvent) => void;
+    /**
+     * 090.12: resolve a span the player SELECTED to something worth showing.
+     * Returning null means "nothing to say" and the panel shows no card --
+     * most misses are expected (support-language words, names, punctuation),
+     * so silence is the honest answer rather than an error.
+     */
+    lookupSelection?: (
+      selection: string
+    ) => { surface: string; gloss: string } | null;
   }
 >;
 

@@ -510,6 +510,12 @@ export function createRuntimeGameplaySessionController(
   const hoverHandlers = decoratorContributions
     .map((c) => c.payload.onTermHover)
     .filter((h): h is NonNullable<typeof h> => h != null);
+  // 090.12: first plugin that can answer a lookup wins. Plugins that do not
+  // supply one are simply skipped, so the gesture stays inert rather than
+  // erroring when no language plugin is loaded.
+  const lookupHandlers = decoratorContributions
+    .map((c) => c.payload.lookupSelection)
+    .filter((h): h is NonNullable<typeof h> => h != null);
   const dialoguePanel = createRuntimeDialoguePanel(root, {
     entryDecorators,
     actionRegistry: options.actionRegistry,
@@ -523,6 +529,16 @@ export function createRuntimeGameplaySessionController(
               dwellMs: event.dwellMs
             };
             for (const handler of hoverHandlers) handler(hoverEvent);
+          }
+        : undefined,
+    onSelectionLookup:
+      lookupHandlers.length > 0
+        ? (selection) => {
+            for (const handler of lookupHandlers) {
+              const result = handler(selection);
+              if (result) return result;
+            }
+            return null;
           }
         : undefined
   });
