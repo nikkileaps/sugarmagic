@@ -49,8 +49,6 @@ import type {
   EnvelopeVerdict,
   LearnerProfile,
   LemmaRef,
-  LexicalPrescription,
-  LexicalRationale,
   ObservationEvent,
   PedagogicalDirective,
   PlacementScoreResult,
@@ -122,22 +120,9 @@ type TelemetryEventOf<TKind extends string, TPayload> = TelemetryEventBase & {
 } & TPayload;
 
 export type TelemetryEvent =
-  | TelemetryEventOf<
-      "budgeter.prescription-generated",
-      {
-        sceneId: string;
-        learnerSnapshot: LearnerSnapshot;
-        prescription: LexicalPrescription;
-        rationale: LexicalRationale;
-        pendingProvisionalSnapshot: Array<{
-          lemmaRef: LemmaRef;
-          evidenceAmount: number;
-          turnsPending: number;
-        }>;
-        probeFloorState: ProbeFloorState;
-        questEssentialState: QuestEssentialTelemetryState;
-      }
-    >
+  // 090.5: `budgeter.prescription-generated` deleted. 090.10 removed the only
+  // emitter; the event type outlived it, so the debug surfaces still declared a
+  // shape nothing could ever produce.
   | TelemetryEventOf<
       "director.invocation-started",
       {
@@ -213,7 +198,6 @@ export type TelemetryEvent =
       {
         sceneId: string | null;
         learnerSnapshot: LearnerSnapshot;
-        prescription: LexicalPrescription;
         verdict: EnvelopeVerdict;
         inputText: string;
         constraint?: SugarlangConstraint;

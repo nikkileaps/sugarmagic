@@ -20,7 +20,6 @@ import type {
   AtlasLemmaEntry,
   LexicalAtlasProvider,
   TeacherContext,
-  LexicalPrescription,
   PedagogicalDirective
 } from "../../runtime/types";
 import { runtimeFact, unavailable, type Situation } from "../../runtime/situation";
@@ -147,26 +146,6 @@ export function createTeacherContext(
     // pending lemmas (oldest 7 turns) this derives to neither floor reached,
     // which is what that fixture asserted.
     turnsSinceLastProbe: 9
-  };
-
-  const prescription: LexicalPrescription = {
-    introduce: [
-      { lemmaId: "billete", lang: "es" },
-      { lemmaId: "queso", lang: "es" }
-    ],
-    reinforce: [{ lemmaId: "hola", lang: "es" }],
-    avoid: [{ lemmaId: "anden", lang: "es" }],
-    anchor: { lemmaId: "hola", lang: "es" },
-    budget: {
-      newItemsAllowed: 2
-    },
-    rationale: {
-      summary: "Favor ticket-buying vocabulary.",
-      candidateSetSize: 4,
-      envelopeSurvivorCount: 3,
-      priorityScores: [],
-      reasons: ["test"]
-    }
   };
 
   const learner = createLearnerProfile("A2", {

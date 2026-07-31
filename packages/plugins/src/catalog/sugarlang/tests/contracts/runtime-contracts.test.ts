@@ -41,7 +41,6 @@ import {
   type LemmaCard,
   type LexicalAtlasProvider,
   type LexicalChunk,
-  type LexicalPrescription,
   type ObservationKind,
   type ObservationOutcome,
   type PedagogicalDirective,
@@ -288,27 +287,8 @@ describe("sugarlang runtime contracts", () => {
       currentSession: null,
       sessionHistory: []
     };
-    const prescription: LexicalPrescription = {
-      introduce: [{ lemmaId: "hola", lang: "es" }],
-      reinforce: [{ lemmaId: "tren", lang: "es" }],
-      avoid: [{ lemmaId: "ferrocarril", lang: "es" }],
-      anchor: { lemmaId: "estacion", lang: "es" },
-      budget: { newItemsAllowed: 1, turnSeconds: 20 },
-      rationale: {
-        summary: "One new station word, one due review.",
-        candidateSetSize: 20,
-        envelopeSurvivorCount: 14,
-        priorityScores: [
-          {
-            lemmaRef: { lemmaId: "hola", lang: "es" },
-            score: 0.9,
-            reasons: ["scene-anchor", "new-item-slot"]
-          }
-        ],
-        reasons: ["one anchor selected"],
-        questEssentialExclusionLemmaIds: ["billete"]
-      }
-    };
+    // 090.5: the LexicalPrescription fixture is gone with the type. The lemma
+    // lists it fed into the directive below are now written inline.
     const chunk: LexicalChunk = {
       chunkId: "chunk-1",
       normalizedForm: "de_vez_en_cuando",
@@ -472,12 +452,12 @@ describe("sugarlang runtime contracts", () => {
     };
     const teacherPolicy: TeacherPolicy = {
       invoke: async () => ({
-        // 090.4: the directive's slate is TeachableRefs; a LexicalPrescription
-        // is LemmaRefs. Lifting rather than casting keeps the difference real.
+        // 090.4: the directive's slate is TeachableRefs, not bare LemmaRefs.
+        // Lifting rather than casting keeps the difference real.
         targetVocab: {
-          introduce: toVocabularyRefs(prescription.introduce),
-          reinforce: toVocabularyRefs(prescription.reinforce),
-          avoid: toVocabularyRefs(prescription.avoid)
+          introduce: toVocabularyRefs([{ lemmaId: "hola", lang: "es" }]),
+          reinforce: toVocabularyRefs([{ lemmaId: "tren", lang: "es" }]),
+          avoid: toVocabularyRefs([{ lemmaId: "ferrocarril", lang: "es" }])
         },
         supportPosture: "supported",
         targetLanguageRatio: 0.7,

@@ -69,8 +69,15 @@ import {
  * mode: introductions, function-affinity, and stretch candidates are dropped and fluency
  * items (well-known lemmas) are surfaced instead. Modeled on L4D's tension-relief curve.
  *
- * At 0.70 the learner needs (e.g.) 35 turns + heavy hovering or 3/4 probes failed.
- * The valley ends naturally as hoverRate drops with familiar material.
+ * At 0.70 the learner needs heavy hovering or ~3/4 probes failed. The valley ends
+ * naturally as hoverRate drops with familiar material.
+ *
+ * 090.5 CORRECTED THE ARITHMETIC IN THIS COMMENT. It used to say "35 turns +
+ * heavy hovering". Turns contribute `0.30 * (turns / 50)` (session-signals.ts,
+ * unbounded per-term -- only the SUM is clamped), so at 35 turns they add 0.21,
+ * and turns alone do not cross 0.70 until roughly 117. The old figure made
+ * strain look reachable in a normal-length conversation when it is really
+ * hover- and probe-failure-driven at that length.
  */
 export const STRAIN_SUPPRESS_THRESHOLD = 0.70;
 

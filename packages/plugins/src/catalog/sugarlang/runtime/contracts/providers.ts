@@ -27,7 +27,7 @@ import type { CEFRBand } from "../cefr";
 import type { LearnerProfile, LemmaCard } from "../learner";
 import type { CefrPosterior } from "../learner";
 import type { Situation } from "../situation";
-import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
+import type { LemmaRef } from "./lexical-prescription";
 
 /**
  * Canonical atlas entry returned by the lexical-atlas provider.

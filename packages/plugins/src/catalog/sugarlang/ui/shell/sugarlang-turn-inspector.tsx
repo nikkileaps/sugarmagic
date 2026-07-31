@@ -194,10 +194,6 @@ export function SugarlangTurnInspector(
               <pre>{renderJson(trace.turnContext)}</pre>
             </div>
             <div>
-              <strong>Prescription</strong>
-              <pre>{renderJson(trace.prescription)}</pre>
-            </div>
-            <div>
               <strong>Directive</strong>
               <pre>{renderJson(trace.directive)}</pre>
             </div>

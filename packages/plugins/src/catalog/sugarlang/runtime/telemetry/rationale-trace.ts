@@ -6,7 +6,6 @@
  * Exports:
  *   - RationaleTrace
  *   - RationaleTraceBuilder
- *   - buildRationaleTrace
  *
  * Relationships:
  *   - Depends on the canonical telemetry event stream.
@@ -19,15 +18,12 @@
 
 import type {
   EnvelopeVerdict,
-  LexicalRationale,
-  LexicalPrescription,
   PedagogicalDirective,
   ProbeFloorState
 } from "../types";
 import type { LearnerSnapshot } from "../middlewares/shared";
 import type {
   QueryableTelemetrySink,
-  QuestEssentialTelemetryState,
   TelemetryEvent,
   TelemetryLearnerDelta
 } from "./telemetry";
@@ -71,10 +67,10 @@ export interface RationaleTraceComprehensionCheck {
 
 export interface RationaleTrace {
   turnContext: RationaleTraceTurnContext;
-  prescription: {
-    prescription: LexicalPrescription;
-    rationale: LexicalRationale;
-  } | null;
+  // 090.5: `prescription` deleted. It was sourced entirely from
+  // `budgeter.prescription-generated`, which 090.10 stopped emitting -- so this
+  // section had been null on every trace since. What the Teacher decided, and
+  // why, is the `directive` section below.
   directive: RationaleTraceDirective | null;
   verdict: RationaleTraceVerdict | null;
   repair: RationaleTraceRepair | null;
@@ -87,7 +83,6 @@ export interface RationaleTrace {
     turnsPending: number;
   }>;
   probeFloorState: ProbeFloorState | null;
-  questEssentialState: QuestEssentialTelemetryState | null;
   matchedChunks: Array<{
     chunkId: string;
     cefrBand: string;
@@ -131,8 +126,9 @@ export class RationaleTraceBuilder {
       turnId
     });
     const sorted = [...events].sort((left, right) => eventTimestamp(left) - eventTimestamp(right));
-    const prescriptionEvent = firstOfKind(sorted, "budgeter.prescription-generated");
-    const directiveEvent = firstOfKind(sorted, "director.invocation-completed");
+      const directiveEvent = firstOfKind(sorted, "director.invocation-completed");
+    // 090.5: the pacing snapshot rides the STARTED event, not the completed one.
+    const directiveStartedEvent = firstOfKind(sorted, "director.invocation-started");
     const verdictEvent = firstOfKind(sorted, "classifier.verdict");
     const chunkHitEvent = firstOfKind(sorted, "chunk.hit-during-classification");
     const repairEvent = firstOfKind(sorted, "verify.repair-triggered");
@@ -152,13 +148,11 @@ export class RationaleTraceBuilder {
         conversationId,
         turnId,
         sessionId:
-          prescriptionEvent?.sessionId ??
           directiveEvent?.sessionId ??
           verdictEvent?.sessionId ??
           observeEvent?.sessionId ??
           null,
         sceneId:
-          prescriptionEvent?.sceneId ??
           directiveEvent?.sceneId ??
           verdictEvent?.sceneId ??
           observeEvent?.sceneId ??
@@ -166,15 +160,10 @@ export class RationaleTraceBuilder {
         npcId: directiveEvent?.npcId ?? probeTriggerEvent?.npcId ?? null,
         npcDisplayName:
           directiveEvent?.npcDisplayName ?? probeTriggerEvent?.npcDisplayName ?? null,
-        learnerSnapshot: prescriptionEvent?.learnerSnapshot ?? null,
+        // 090.5: was the prescription event's snapshot; the verdict carries one too.
+        learnerSnapshot: verdictEvent?.learnerSnapshot ?? null,
         timestamp: sorted[0]?.timestamp ?? null
       },
-      prescription: prescriptionEvent
-        ? {
-            prescription: prescriptionEvent.prescription,
-            rationale: prescriptionEvent.rationale
-          }
-        : null,
       directive: directiveEvent
         ? {
             directive: directiveEvent.directive,
@@ -220,24 +209,16 @@ export class RationaleTraceBuilder {
               )
             }
           : null,
-      pendingProvisionalSnapshot:
-        prescriptionEvent?.pendingProvisionalSnapshot ?? [],
-      probeFloorState: prescriptionEvent?.probeFloorState ?? null,
-      questEssentialState: prescriptionEvent?.questEssentialState ?? null,
+      // 090.5: re-sourced from the Teacher's own invocation event, which has
+      // carried both since 087 -- the budgeter event that used to supply them
+      // no longer exists.
+      pendingProvisionalSnapshot: directiveStartedEvent?.pendingProvisionalSnapshot ?? [],
+      probeFloorState: directiveStartedEvent?.probeFloorState ?? null,
       matchedChunks: chunkHitEvent?.matchedChunks ?? [],
       events: sorted
     };
   }
 }
 
-export function buildRationaleTrace(
-  prescription: LexicalPrescription,
-  directive: PedagogicalDirective,
-  verdict: EnvelopeVerdict
-): Record<string, unknown> {
-  return {
-    prescription,
-    directive,
-    verdict
-  };
-}
+// 090.5: `buildRationaleTrace` deleted -- exported and never called, and its
+// first parameter was a LexicalPrescription, which no longer exists.

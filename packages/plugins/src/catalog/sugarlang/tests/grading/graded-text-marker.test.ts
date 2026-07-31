@@ -25,7 +25,7 @@ import {
   applyMixedTextEnvelopePredicate,
   ENVELOPE_OUT_OF_ENVELOPE_ALLOWANCE
 } from "../../runtime/classifier/envelope-rule";
-import type { CoverageProfile, LemmaRef, LexicalPrescription } from "../../runtime/types";
+import type { CoverageProfile, LemmaRef } from "../../runtime/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -114,15 +114,7 @@ function createLemmaRef(lemmaId: string): LemmaRef {
   return { lemmaId, surfaceForm: lemmaId, lang: "es" };
 }
 
-function createPrescription(lemmaIds: string[]): LexicalPrescription {
-  return {
-    introduce: lemmaIds.map((id) => ({ lemmaId: id, lang: "es" })),
-    reinforce: [],
-    avoid: [],
-    budget: { newItemsAllowed: lemmaIds.length },
-    rationale: { candidateSetSize: 0, envelopeSurvivorCount: 0, priorityScores: [], reasons: [] }
-  };
-}
+// 090.5: `createPrescription` deleted -- the exemption takes lemma ids now.
 
 // ---------------------------------------------------------------------------
 // markGradedText tests

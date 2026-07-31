@@ -24,7 +24,7 @@
  */
 
 import type { CEFRBand } from "../cefr";
-import type { LemmaRef, LexicalPrescription } from "./lexical-prescription";
+import type { LemmaRef } from "./lexical-prescription";
 import type { TeachableRef } from "./teachable-ref";
 
 /**

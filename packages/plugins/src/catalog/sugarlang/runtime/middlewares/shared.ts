@@ -30,7 +30,6 @@ import type {
   LearnerProfile,
   LemmaObservation,
   LemmaRef,
-  LexicalPrescription,
   PendingProvisional,
   PlacementScoreResult,
   ProbeFloorState,

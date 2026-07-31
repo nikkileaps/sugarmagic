@@ -19,7 +19,6 @@ import { describe, expect, it } from "vitest";
 import type {
   CoverageProfile,
   LemmaRef,
-  LexicalPrescription,
   LexicalChunk
 } from "../../runtime/types";
 import {

@@ -33,7 +33,6 @@ import type {
   TeacherContext,
   GlossingStrategy,
   LemmaRef,
-  LexicalPrescription,
   PedagogicalDirective
 } from "../types";
 import {

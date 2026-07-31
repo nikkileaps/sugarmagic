@@ -36,76 +36,8 @@ export interface LemmaRef {
   lang: string;
 }
 
-/**
- * Turn-level lexical budget allocated by the Budgeter.
- *
- * Implements: Proposal 001 §1. Lexical Budgeter
- */
-export interface LexicalBudget {
-  newItemsAllowed: number;
-  turnSeconds?: number;
-}
-
-/**
- * Scored rationale entry for a candidate lemma.
- *
- * Implements: Proposal 001 §1. Lexical Budgeter
- */
-export interface LexicalPriorityScore {
-  lemmaRef: LemmaRef;
-  score: number;
-  components?: {
-    due: number;
-    new: number;
-    anchor: number;
-    prodgap: number;
-    lapse: number;
-  };
-  reasons: string[];
-}
-
-/**
- * Transparent reasoning trail for a generated lexical prescription.
- *
- * Implements: Proposal 001 §1. Lexical Budgeter
- */
-export interface LexicalRationale {
-  summary?: string;
-  candidateSetSize: number;
-  envelopeSurvivorCount: number;
-  priorityScores: LexicalPriorityScore[];
-  reasons: string[];
-  levelCap?: number;
-  chosenIntroduce?: LemmaRef[];
-  chosenReinforce?: LemmaRef[];
-  droppedByEnvelope?: LemmaRef[];
-  questEssentialExclusionLemmaIds?: string[];
-}
-
-/**
- * Raw Budgeter output that the Director reshapes but does not replace.
- *
- * Implements: Proposal 001 §1. Lexical Budgeter
- */
-export interface LexicalPrescription {
-  introduce: LemmaRef[];
-  reinforce: LemmaRef[];
-  avoid: LemmaRef[];
-  anchor?: LemmaRef;
-  budget: LexicalBudget;
-  rationale: LexicalRationale;
-}
-
-/**
- * Input contract for the Budgeter's prescribe step.
- *
- * Implements: Proposal 001 §1. Lexical Budgeter
- */
-export interface LexicalPrescriptionInput {
-  learner: LearnerProfile;
-  sceneLexicon: SceneVocabularyModel;
-  conversationState: Record<string, unknown>;
-  activeQuestEssentialLemmas?: QuestEssentialLemma[];
-  /** The NPC the player is currently talking to, for NPC-specific scoring. */
-  npcDefinitionId?: string | null;
-}
+// 090.5: `LexicalPrescription`, `LexicalPrescriptionInput`, `LexicalBudget`,
+// `LexicalPriorityScore` and `LexicalRationale` all DELETED. 090.10 removed the
+// budgeter that produced them; these outlived it as types nothing could build
+// and nothing read. `LemmaRef` above is the only survivor -- it was always a
+// general-purpose reference that happened to live in this file.

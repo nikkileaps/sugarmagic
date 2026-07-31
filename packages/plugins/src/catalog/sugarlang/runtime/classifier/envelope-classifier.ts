@@ -27,7 +27,6 @@ import type {
   LanguageRatioVerdict,
   LearnerProfile,
   LexicalAtlasProvider,
-  LexicalPrescription,
   SupportPosture
 } from "../types";
 import { MorphologyLoader } from "./morphology-loader";
