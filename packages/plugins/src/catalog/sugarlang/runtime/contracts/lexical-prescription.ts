@@ -21,7 +21,7 @@
 
 import type { LearnerProfile } from "../learner";
 import type {
-  CompiledSceneLexicon,
+  SceneVocabularyModel,
   QuestEssentialLemma
 } from "./scene-lexicon";
 
@@ -103,7 +103,7 @@ export interface LexicalPrescription {
  */
 export interface LexicalPrescriptionInput {
   learner: LearnerProfile;
-  sceneLexicon: CompiledSceneLexicon;
+  sceneLexicon: SceneVocabularyModel;
   conversationState: Record<string, unknown>;
   activeQuestEssentialLemmas?: QuestEssentialLemma[];
   /** The NPC the player is currently talking to, for NPC-specific scoring. */

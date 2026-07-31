@@ -20,7 +20,7 @@
  */
 
 import type {
-  CompiledSceneLexicon,
+  SceneVocabularyModel,
   EnvelopeRule,
   EnvelopeViolation,
   EnvelopeVerdict,
@@ -95,7 +95,7 @@ export interface EnvelopeClassifierCheckOptions {
   /** NPC-authored interjection tokens whitelisted from envelope enforcement. See Plan 083 story 083.3. */
   voiceInterjections?: Set<string>;
   lang?: string;
-  sceneLexicon?: Pick<CompiledSceneLexicon, "sceneId" | "contentHash" | "chunks"> | null;
+  sceneLexicon?: Pick<SceneVocabularyModel, "sceneId" | "contentHash" | "chunks"> | null;
   conversationId?: string;
   turnId?: string;
   sessionId?: string;
@@ -164,7 +164,7 @@ export class EnvelopeClassifier {
 
   private resolveChunkMatcher(
     lang: string,
-    sceneLexicon: Pick<CompiledSceneLexicon, "contentHash" | "chunks"> | null | undefined
+    sceneLexicon: Pick<SceneVocabularyModel, "contentHash" | "chunks"> | null | undefined
   ): ChunkMatcher | null {
     if (!sceneLexicon?.chunks?.length) {
       return null;

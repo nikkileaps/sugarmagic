@@ -19,11 +19,10 @@ import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
 import type {
   AtlasLemmaEntry,
   CEFRBand,
-  CompiledSceneLexicon,
+  SceneVocabularyModel,
   LexicalAtlasProvider,
   QuestEssentialLemma,
   SceneAuthorWarning,
-  SceneLemmaInfo,
   SourceLocation,
   VoiceChannelSpec
 } from "../types";
@@ -126,19 +125,9 @@ function isQuestEssentialContentLemma(
   return true;
 }
 
-/**
- * 090.2c: band, frequency rank and parts of speech are no longer copied here.
- * They are atlas facts, looked up by `lemmaId` where they are needed, so this
- * artifact cannot drift from the dictionary it was derived from.
- */
-function createSceneLemmaInfo(entry: AtlasLemmaEntry): SceneLemmaInfo {
-  return {
-    lemmaId: entry.lemmaId,
-    isQuestCritical: false,
-    sceneWeight: 0,
-    npcSourceIds: []
-  };
-}
+// 090.2d: `createSceneLemmaInfo` deleted with `SceneLemmaInfo`. The artifact
+// stores lemma IDS now; everything else it used to carry was either an atlas
+// copy (090.2c) or budgeter ranking state (090.10).
 
 function createQuestEssentialLemma(
   lemmaId: string,
@@ -251,7 +240,7 @@ export function compileSugarlangScene(
   atlas: LexicalAtlasProvider,
   morphology: MorphologyLoader,
   profile: RuntimeCompileProfile
-): CompiledSceneLexicon {
+): SceneVocabularyModel {
   const textBlobs = collectSceneText(scene);
   const atlasVersion = atlas.getAtlasVersion(scene.targetLanguage);
   const contentHash = computeSceneContentHash(
@@ -259,7 +248,7 @@ export function compileSugarlangScene(
     atlasVersion,
     SUGARLANG_COMPILE_PIPELINE_VERSION
   );
-  const lemmaMap = new Map<string, SceneLemmaInfo>();
+  const lemmaIdSet = new Set<string>();
   const sourceMap = new Map<string, SourceLocation[]>();
   const anchorLemmaIds = new Set<string>();
   const questEssentialMap = new Map<string, QuestEssentialLemma>();
@@ -314,20 +303,11 @@ export function compileSugarlangScene(
       }
 
       for (const atlasEntry of resolvedEntries) {
-        if (!lemmaMap.has(atlasEntry.lemmaId)) {
-          lemmaMap.set(atlasEntry.lemmaId, createSceneLemmaInfo(atlasEntry));
-        }
-        // Accumulate scene relevance: each occurrence in a text blob adds
-        // the blob's source-kind weight. Words mentioned many times in
-        // high-weight sources (dialogue, NPC lore, quest text) score higher.
-        const lemmaInfo = lemmaMap.get(atlasEntry.lemmaId)!;
-        lemmaInfo.sceneWeight += blob.weight;
-
-        // Track which NPCs contributed this lemma so the budgeter can boost
-        // words from the NPC the player is currently talking to.
-        if (blob.npcDefinitionId && !lemmaInfo.npcSourceIds.includes(blob.npcDefinitionId)) {
-          lemmaInfo.npcSourceIds.push(blob.npcDefinitionId);
-        }
+        // 090.2d: was also accumulating `sceneWeight` (per-blob relevance) and
+        // `npcSourceIds` (which NPC contributed the word). Both existed only so
+        // the budgeter could rank; ranking is the Teacher's now, against the
+        // situation, so neither is computed or stored.
+        lemmaIdSet.add(atlasEntry.lemmaId);
 
         if (profile === "authoring-preview") {
           sourceMap.set(
@@ -354,18 +334,15 @@ export function compileSugarlangScene(
               createQuestEssentialLemma(atlasEntry.lemmaId, atlasEntry, blob)
             );
           }
-          const existingLemma = lemmaMap.get(atlasEntry.lemmaId);
-          if (existingLemma) {
-            existingLemma.isQuestCritical = true;
-          }
+          // 090.2d: `isQuestCritical` deleted -- the compiler set it and
+          // nothing ever read it. Quest-essential lemmas reach consumers
+          // through `questEssentialLemmas` below, which is read.
         }
       }
     }
   }
 
-  const semanticLemmas = [...lemmaMap.values()].sort((left, right) =>
-    compareStrings(left.lemmaId, right.lemmaId)
-  );
+  const semanticLemmaIds = [...lemmaIdSet].sort(compareStrings);
   const questEssentialLemmas = [...questEssentialMap.values()].sort((left, right) =>
     left.sourceObjectiveNodeId === right.sourceObjectiveNodeId
       ? compareStrings(left.lemmaId, right.lemmaId)
@@ -385,13 +362,13 @@ export function compileSugarlangScene(
       );
     }
 
-    const highBandLemmas = semanticLemmas.filter((lemma) => {
-      const band = atlas.getBand(lemma.lemmaId, scene.targetLanguage);
+    const highBandLemmas = semanticLemmaIds.filter((lemmaId) => {
+      const band = atlas.getBand(lemmaId, scene.targetLanguage);
       return band !== undefined && isBandAbove(band, "B2");
     });
     if (
-      semanticLemmas.length > 0 &&
-      highBandLemmas.length / semanticLemmas.length > 0.3
+      semanticLemmaIds.length > 0 &&
+      highBandLemmas.length / semanticLemmaIds.length > 0.3
     ) {
       diagnostics.push(
         makeDiagnostic(
@@ -458,17 +435,14 @@ export function compileSugarlangScene(
   }
 
   const npcVoiceSpecs = buildNpcVoiceSpecs(scene);
-  const lexicon: CompiledSceneLexicon = {
+  const lexicon: SceneVocabularyModel = {
     sceneId: scene.sceneId,
     contentHash,
     pipelineVersion: SUGARLANG_COMPILE_PIPELINE_VERSION,
     atlasVersion,
     profile,
-    lemmas: Object.fromEntries(
-      semanticLemmas.map((lemma) => [lemma.lemmaId, lemma])
-    ),
+    lemmaIds: semanticLemmaIds,
     properNouns: [...properNouns].sort(compareStrings),
-    anchors: [...anchorLemmaIds].sort(compareStrings),
     questEssentialLemmas,
     ...(npcVoiceSpecs ? { npcVoiceSpecs } : {})
   };

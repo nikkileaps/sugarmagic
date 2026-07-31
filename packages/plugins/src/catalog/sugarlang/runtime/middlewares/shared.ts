@@ -229,29 +229,17 @@ export function extractCharacterVoiceReminder(
   return "Stay in the NPC's established voice.";
 }
 
-export function findQuestEssentialUses(
-  text: string,
-  constraint: SugarlangConstraint
-): Array<{
-  lemmaId: string;
-  supportLanguageGloss: string;
-  hasParentheticalGloss: boolean;
-}> {
-  const normalized = text.normalize("NFC");
-  return (constraint.questEssentialLemmas ?? []).map((entry) => {
-    const pattern = new RegExp(
-      `\\b${escapeRegExp(entry.lemmaRef.lemmaId)}\\b\\s*\\([^)]*${escapeRegExp(
-        entry.supportLanguageGloss
-      )}[^)]*\\)`,
-      "i"
-    );
-    return {
-      lemmaId: entry.lemmaRef.lemmaId,
-      supportLanguageGloss: entry.supportLanguageGloss,
-      hasParentheticalGloss: pattern.test(normalized)
-    };
-  });
-}
+// 090.2d: `findQuestEssentialUses` DELETED. It regex-matched a rendered line for
+// `billete (ticket)` and reported `hasParentheticalGloss` per quest-essential
+// lemma -- and it was imported by the verify middleware and never called. So the
+// one thing that looked like it enforced inline glossing on quest-critical words
+// checked nothing, which is worse than absent: it reads as covered.
+//
+// What DOES run is `enforceDirectiveRequirements` (teacher/schema-parser.ts),
+// which forces `glossingStrategy: "parenthetical"` when the situation carries a
+// must-comprehend concept. That governs the INSTRUCTION, not the output -- so
+// nothing currently verifies the NPC obeyed. Real gap, predates this epic,
+// belongs with 090.7 (visibility) where the slate-vs-realization split lives.
 
 function normalizeQuestFocusText(text: string): string {
   return text.normalize("NFC").toLocaleLowerCase();

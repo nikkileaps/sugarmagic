@@ -29,7 +29,7 @@ import {
   type AtlasLemmaEntry,
   type CEFRBand,
   type CefrPosterior,
-  type CompiledSceneLexicon,
+  type SceneVocabularyModel,
   type ComprehensionCheckSpec,
   type CoverageProfile,
   type TeacherContext,
@@ -54,7 +54,6 @@ import {
   type ProbeTriggerReason,
   type ProducedObservationKind,
   type QuestEssentialLemma,
-  type SceneLemmaInfo,
   type SugarlangConstraint
 } from "../../runtime/types";
 
@@ -321,12 +320,6 @@ describe("sugarlang runtime contracts", () => {
       extractorPromptVersion: "v1",
       source: "llm-extracted"
     };
-    const sceneLemma: SceneLemmaInfo = {
-      lemmaId: "hola",
-      isQuestCritical: false,
-      sceneWeight: 1,
-      npcSourceIds: []
-    };
     const questEssential: QuestEssentialLemma = {
       lemmaId: "billete",
       lang: "es",
@@ -335,15 +328,14 @@ describe("sugarlang runtime contracts", () => {
       sourceObjectiveNodeId: "objective-1",
       sourceObjectiveDisplayName: "Ask for a ticket"
     };
-    const lexicon: CompiledSceneLexicon = {
+    const lexicon: SceneVocabularyModel = {
       sceneId: "scene-1",
       contentHash: "hash-1",
       pipelineVersion: "pipeline-1",
       atlasVersion: "atlas-1",
       profile: "authoring-preview",
-      lemmas: { hola: sceneLemma },
+      lemmaIds: ["hola"],
       properNouns: ["Orrin"],
-      anchors: ["hola"],
       questEssentialLemmas: [questEssential],
       sources: {
         hola: [
@@ -613,7 +605,7 @@ describe("sugarlang runtime contracts", () => {
       | "produced-unprompted"
       | "produced-incorrect"
     >();
-    expectTypeOf<CompiledSceneLexicon["profile"]>().toEqualTypeOf<RuntimeCompileProfile>();
+    expectTypeOf<SceneVocabularyModel["profile"]>().toEqualTypeOf<RuntimeCompileProfile>();
     expectTypeOf<PlacementScoreResult["perBandScores"]>().toEqualTypeOf<
       Record<CEFRBand, { correct: number; total: number }>
     >();
@@ -724,38 +716,36 @@ mapObservationKind("hovered");
 
 // Quest-essential lemmas are required on the compiled scene lexicon.
 // @ts-expect-error missing questEssentialLemmas
-const invalidLexicon: CompiledSceneLexicon = {
+const invalidLexicon: SceneVocabularyModel = {
   sceneId: "scene-1",
   contentHash: "hash",
   pipelineVersion: "pipeline",
   atlasVersion: "atlas",
   profile: "runtime-preview",
-  lemmas: {},
-  properNouns: [],
-  anchors: []
+  lemmaIds: [],
+  properNouns: []
 };
 void invalidLexicon;
 
-const lexiconWithoutChunks: CompiledSceneLexicon = {
+const lexiconWithoutChunks: SceneVocabularyModel = {
   sceneId: "scene-2",
   contentHash: "hash-2",
   pipelineVersion: "pipeline",
   atlasVersion: "atlas",
   profile: "runtime-preview",
-  lemmas: {},
+  lemmaIds: [],
   properNouns: [],
-  anchors: [],
   questEssentialLemmas: []
 };
 void lexiconWithoutChunks;
 
-const lexiconWithEmptyChunks: CompiledSceneLexicon = {
+const lexiconWithEmptyChunks: SceneVocabularyModel = {
   ...lexiconWithoutChunks,
   chunks: []
 };
 void lexiconWithEmptyChunks;
 
-const lexiconWithChunks: CompiledSceneLexicon = {
+const lexiconWithChunks: SceneVocabularyModel = {
   ...lexiconWithoutChunks,
   chunks: [
     {

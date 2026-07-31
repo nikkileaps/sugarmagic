@@ -378,7 +378,7 @@ export function createSugarLangContextMiddleware(
           scene: {
             sceneId,
             dayIndex: blackboard ? getWorldDay(blackboard) : null,
-            sceneLemmaIds: Object.keys(sceneLexicon?.lemmas ?? {}).filter(
+            sceneLemmaIds: (sceneLexicon?.lemmaIds ?? []).filter(
               (id) => !id.startsWith("chunk:")
             )
           },

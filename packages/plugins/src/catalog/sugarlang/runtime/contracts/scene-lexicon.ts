@@ -11,7 +11,7 @@
  *   - SceneLemmaInfo
  *   - QuestEssentialLemma
  *   - LexicalChunk
- *   - CompiledSceneLexicon
+ *   - SceneVocabularyModel
  *
  * Relationships:
  *   - Depends on runtime compile-profile and learner-profile types.
@@ -78,7 +78,7 @@ export interface SceneAuthorWarning {
  *   budgeter (scoring.ts). The model hands ranking to the Teacher, so they die
  *   when `prescribe()` does -- and not before, because the budgeter is still on
  *   the live path (`sugar-lang-context-middleware.ts` calls
- *   `services.budgeter.prescribe`). `CompiledSceneLexicon.anchors` is in the
+ *   `services.budgeter.prescribe`). `SceneVocabularyModel.anchors` is in the
  *   same position.
  *
  *   REVISIT TRIGGER: when 090.10 deletes `prescribe()`, this whole type goes
@@ -91,20 +91,12 @@ export interface SceneAuthorWarning {
  * Implements: Proposal 001 §Scene Lexicon Compilation: One Compiler, Three Profiles, Preview-First
  *   + Plan 090 story 090.2c
  */
-export interface SceneLemmaInfo {
-  lemmaId: string;
-  isQuestCritical: boolean;
-  /** Accumulated scene relevance weight. Higher values mean the lemma appears
-   *  more often and/or in higher-weight sources (dialogue, quest objectives, NPC lore).
-   *  Used by the budgeter to prioritize contextually relevant vocabulary.
-   *  Dies with the budgeter (090.10). */
-  sceneWeight: number;
-  /** NPC definition IDs whose lore/bio contributed to this lemma's scene weight.
-   *  Used by the budgeter to boost words from the NPC the player is currently
-   *  talking to over words from other NPCs in the scene.
-   *  Dies with the budgeter (090.10). */
-  npcSourceIds: string[];
-}
+// 090.2d: `SceneLemmaInfo` DELETED. Of its five fields, three were verbatim
+// atlas copies (removed in 090.2c), and `sceneWeight` / `npcSourceIds` existed
+// only for budgeter ranking. `isQuestCritical` turned out to be written by the
+// compiler and read by nothing at all. What survives is the lemma id, so the
+// record collapses to a list of them -- an INDEX INTO the atlas rather than a
+// subset OF it, which is the point at which the name stops lying.
 
 /**
  * Quest-objective lemma that bypasses the normal envelope ceiling.
@@ -162,15 +154,15 @@ export interface VoiceChannelSpec {
  *
  * Implements: Proposal 001 §Scene Lexicon Compilation: One Compiler, Three Profiles, Preview-First
  */
-export interface CompiledSceneLexicon {
+export interface SceneVocabularyModel {
   sceneId: string;
   contentHash: string;
   pipelineVersion: string;
   atlasVersion: string;
   profile: RuntimeCompileProfile;
-  lemmas: Record<string, SceneLemmaInfo>;
+  /** 090.2d: was `lemmas: Record<string, SceneLemmaInfo>`. */
+  lemmaIds: string[];
   properNouns: string[];
-  anchors: string[];
   questEssentialLemmas: QuestEssentialLemma[];
   sources?: Record<string, SourceLocation[]>;
   diagnostics?: SceneAuthorWarning[];

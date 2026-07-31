@@ -66,7 +66,7 @@ import { SUGARLANG_PLACEMENT_COMPLETED_EVENT } from "../../runtime/quest-integra
 import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
 import type {
   CEFRBand,
-  CompiledSceneLexicon,
+  SceneVocabularyModel,
   PlacementQuestionnaire
 } from "../../runtime/types";
 
@@ -172,7 +172,7 @@ export async function compileAuthoringSceneLexicon(
   regions: RegionDocument[],
   targetLanguage: string,
   activeScene: Scene | null
-) : Promise<CompiledSceneLexicon | null> {
+) : Promise<SceneVocabularyModel | null> {
   if (!gameProject || !activeRegion) {
     return null;
   }
@@ -193,22 +193,20 @@ export async function compileAuthoringSceneLexicon(
 }
 
 export function summarizeSceneDensity(
-  lexicon: CompiledSceneLexicon | null,
+  lexicon: SceneVocabularyModel | null,
   // 090.2c: bands are atlas facts now, not stored on the scene artifact, so the
   // caller supplies the lookup. Undefined means "atlas unavailable" and every
   // band reads zero rather than silently mis-binning lemmas into one band.
   getBand?: (lemmaId: string) => CEFRBand | undefined
 ): SceneDensitySummary {
-  const totalLemmas = lexicon ? Object.keys(lexicon.lemmas).length : 0;
+  const totalLemmas = lexicon ? lexicon.lemmaIds.length : 0;
 
   return {
     totalLemmas,
     bandCounts: SCENE_BANDS.map((band) => {
       const count =
         lexicon && getBand
-          ? Object.values(lexicon.lemmas).filter(
-              (lemma) => getBand(lemma.lemmaId) === band
-            ).length
+          ? lexicon.lemmaIds.filter((lemmaId) => getBand(lemmaId) === band).length
           : 0;
 
       return {

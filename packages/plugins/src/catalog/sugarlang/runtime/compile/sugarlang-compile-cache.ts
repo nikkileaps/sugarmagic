@@ -19,7 +19,7 @@
  */
 
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
-import type { CompiledSceneLexicon } from "../types";
+import type { SceneVocabularyModel } from "../types";
 
 export interface CacheEntryMeta {
   cacheKey: string;
@@ -43,8 +43,8 @@ export interface SugarlangCompileCache {
     sceneId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
-  ) => Promise<CompiledSceneLexicon | null>;
-  set: (lexicon: CompiledSceneLexicon) => Promise<void>;
+  ) => Promise<SceneVocabularyModel | null>;
+  set: (lexicon: SceneVocabularyModel) => Promise<void>;
   has: (
     sceneId: string,
     contentHash: string,
@@ -59,9 +59,9 @@ export abstract class BaseSugarlangCompileCache implements SugarlangCompileCache
     sceneId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
-  ): Promise<CompiledSceneLexicon | null>;
+  ): Promise<SceneVocabularyModel | null>;
 
-  abstract set(lexicon: CompiledSceneLexicon): Promise<void>;
+  abstract set(lexicon: SceneVocabularyModel): Promise<void>;
 
   async has(
     sceneId: string,

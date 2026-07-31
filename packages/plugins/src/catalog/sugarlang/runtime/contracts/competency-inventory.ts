@@ -39,7 +39,7 @@ export type InterpretLexiconCategory = (typeof INTERPRET_LEXICON_CATEGORIES)[num
  */
 export interface InventoryChunk {
   chunkId: string;
-  /** Underscore-normalized lowercase form -- join key to CompiledSceneLexicon.chunks. */
+  /** Underscore-normalized lowercase form -- join key to SceneVocabularyModel.chunks. */
   normalizedForm: string;
   /** Human-readable surface variants (may include diacritics, punctuation). */
   surfaceForms: string[];

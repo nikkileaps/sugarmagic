@@ -30,7 +30,7 @@
  * Status: active
  */
 
-import type { CompiledSceneLexicon } from "../types";
+import type { SceneVocabularyModel } from "../types";
 import type { SceneContextModel } from "../contracts/scene-context";
 import { MemoryCompileCache } from "./cache-memory";
 
@@ -44,7 +44,7 @@ export function getSugarlangRuntimeCompileCache(): MemoryCompileCache {
 }
 
 export async function seedSugarlangRuntimeCompileCache(
-  lexicons: CompiledSceneLexicon[]
+  lexicons: SceneVocabularyModel[]
 ): Promise<void> {
   for (const lexicon of lexicons) {
     await runtimeCompileCache.set(lexicon);

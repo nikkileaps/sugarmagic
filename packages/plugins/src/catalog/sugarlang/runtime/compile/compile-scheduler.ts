@@ -19,7 +19,7 @@
  */
 
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
-import type { CompiledSceneLexicon } from "../types";
+import type { SceneVocabularyModel } from "../types";
 import type { MorphologyLoader } from "../classifier/morphology-loader";
 import type { LexicalAtlasProvider } from "../types";
 import {
@@ -216,7 +216,7 @@ export class SugarlangAuthoringCompileScheduler {
   private async writeChunksIntoCompileCache(
     sceneId: string,
     contentHash: string,
-    chunks: NonNullable<CompiledSceneLexicon["chunks"]>
+    chunks: NonNullable<SceneVocabularyModel["chunks"]>
   ): Promise<void> {
     for (const profile of ["runtime-preview", "authoring-preview"] as const) {
       const existing = await this.options.cache.get(sceneId, contentHash, profile);
@@ -231,7 +231,7 @@ export class SugarlangAuthoringCompileScheduler {
     }
   }
 
-  async flush(): Promise<CompiledSceneLexicon[]> {
+  async flush(): Promise<SceneVocabularyModel[]> {
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -241,7 +241,7 @@ export class SugarlangAuthoringCompileScheduler {
     this.pendingSceneIds.clear();
     const scenes = this.getRequestedScenes(requested);
 
-    const compiled: CompiledSceneLexicon[] = [];
+    const compiled: SceneVocabularyModel[] = [];
     for (const scene of scenes) {
       for (const profile of ["runtime-preview", "authoring-preview"] as const) {
         const lexicon = compileSugarlangScene(
@@ -578,7 +578,7 @@ export interface RuntimeCompileSchedulerOptions {
 export class RuntimeCompileScheduler {
   constructor(private readonly options: RuntimeCompileSchedulerOptions) {}
 
-  async ensureScene(sceneId: string): Promise<CompiledSceneLexicon> {
+  async ensureScene(sceneId: string): Promise<SceneVocabularyModel> {
     const scene = this.options.getScene(sceneId);
     if (!scene) {
       throw new Error(`Unknown sugarlang scene "${sceneId}".`);
@@ -603,8 +603,8 @@ export class RuntimeCompileScheduler {
     return lexicon;
   }
 
-  async prime(sceneIds: Iterable<string>): Promise<CompiledSceneLexicon[]> {
-    const compiled: CompiledSceneLexicon[] = [];
+  async prime(sceneIds: Iterable<string>): Promise<SceneVocabularyModel[]> {
+    const compiled: SceneVocabularyModel[] = [];
     for (const sceneId of [...sceneIds].sort((left, right) =>
       left.localeCompare(right)
     )) {

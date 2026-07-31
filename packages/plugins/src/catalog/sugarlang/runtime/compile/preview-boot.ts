@@ -17,7 +17,7 @@
  * Status: active
  */
 
-import type { CompiledSceneLexicon } from "../types";
+import type { SceneVocabularyModel } from "../types";
 import type { SceneContextModel } from "../contracts/scene-context";
 import type { SugarlangSceneContextCache } from "./scene-context-cache";
 import { SCENE_CONTEXT_PROMPT_VERSION } from "./scene-context-extractor";
@@ -28,7 +28,7 @@ import type { LexicalAtlasProvider } from "../types";
 import type { MorphologyLoader } from "../classifier/morphology-loader";
 
 export interface SugarlangPreviewBootPayload {
-  compiledScenes: CompiledSceneLexicon[];
+  compiledScenes: SceneVocabularyModel[];
   /** IDB workspaceId the Studio used when baking variants. Runtime reads it to open the same db. */
   studioWorkspaceId?: string;
   /**
@@ -54,7 +54,7 @@ export async function buildSugarlangPreviewBootPayload(
   sceneContextCache?: SugarlangSceneContextCache,
   sceneContextPromptVersion: string = SCENE_CONTEXT_PROMPT_VERSION
 ): Promise<SugarlangPreviewBootPayload> {
-  const compiledScenes: CompiledSceneLexicon[] = [];
+  const compiledScenes: SceneVocabularyModel[] = [];
   const sceneContextModels: SceneContextModel[] = [];
 
   for (const scene of [...scenes].sort((left, right) =>
@@ -108,14 +108,14 @@ export async function buildSugarlangPreviewBootPayload(
 
 export function extractSugarlangPreviewBootLexicons(
   payload: unknown
-): CompiledSceneLexicon[] {
+): SceneVocabularyModel[] {
   if (typeof payload !== "object" || payload === null) {
     return [];
   }
 
   const record = payload as Partial<SugarlangPreviewBootPayload>;
   return Array.isArray(record.compiledScenes)
-    ? (record.compiledScenes as CompiledSceneLexicon[])
+    ? (record.compiledScenes as SceneVocabularyModel[])
     : [];
 }
 

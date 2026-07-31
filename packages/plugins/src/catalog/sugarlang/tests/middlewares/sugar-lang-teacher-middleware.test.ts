@@ -227,9 +227,8 @@ describe("SugarLangTeacherMiddleware", () => {
             pipelineVersion: "v1",
             atlasVersion: "v1",
             profile: "runtime-preview",
-            lemmas: {},
+            lemmaIds: [],
             properNouns: [],
-            anchors: [],
             questEssentialLemmas: []
           })
         },
@@ -326,9 +325,8 @@ describe("SugarLangTeacherMiddleware", () => {
             pipelineVersion: "v1",
             atlasVersion: "v1",
             profile: "runtime-preview",
-            lemmas: {},
+            lemmaIds: [],
             properNouns: [],
-            anchors: [],
             questEssentialLemmas: []
           })
         },
@@ -447,9 +445,8 @@ function makeScheduleServices(invokeTeacher: ReturnType<typeof vi.fn>) {
           pipelineVersion: "v1",
           atlasVersion: "v1",
           profile: "runtime-preview",
-          lemmas: {},
+          lemmaIds: [],
           properNouns: [],
-          anchors: [],
           questEssentialLemmas: []
         })
       },

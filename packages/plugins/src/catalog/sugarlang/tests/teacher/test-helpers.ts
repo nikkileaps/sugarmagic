@@ -71,7 +71,7 @@ function createTeacherAtlasProvider(): LexicalAtlasProvider {
 export function createTeacherContext(
   overrides: Partial<TeacherContext> = {}
 ): TeacherContext {
-  // 090.4: replaces the old CompiledSceneLexicon `scene` fixture (deleted from
+  // 090.4: replaces the old SceneVocabularyModel `scene` fixture (deleted from
   // TeacherContext -- see contracts/providers.ts's two-doors note). Concepts
   // here resolve through the atlas fixture below the same way the deleted
   // scene's four lemmas used to: `ticket` -> billete (mustComprehend, matching

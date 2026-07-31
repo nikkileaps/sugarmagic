@@ -229,9 +229,8 @@ describe("SugarLangVerifyMiddleware", () => {
             pipelineVersion: "v1",
             atlasVersion: "v1",
             profile: "runtime-preview",
-            lemmas: {},
+            lemmaIds: [],
             properNouns: [],
-            anchors: [],
             questEssentialLemmas: []
           })
         },

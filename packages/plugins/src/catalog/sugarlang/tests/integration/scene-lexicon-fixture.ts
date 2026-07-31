@@ -21,12 +21,11 @@
 import type {
   AtlasLemmaEntry,
   CEFRBand,
-  CompiledSceneLexicon,
+  SceneVocabularyModel,
   LearnerProfile,
   LemmaCard,
   LexicalAtlasProvider,
-  QuestEssentialLemma,
-  SceneLemmaInfo
+  QuestEssentialLemma
 } from "../../runtime/types";
 import { createUniformCefrPosterior } from "../../runtime/learner/cefr-posterior";
 
@@ -94,24 +93,15 @@ export function createBudgeterSceneLexicon(options: {
     isQuestCritical?: boolean;
   }>;
   questEssentialLemmas?: QuestEssentialLemma[];
-}): CompiledSceneLexicon {
-  const lemmas: Record<string, SceneLemmaInfo> = {};
-  const anchors: string[] = [];
+}): SceneVocabularyModel {
+  const lemmaIds: string[] = [];
 
   for (const entry of options.entries) {
     // 090.2c: band / rank / POS live in the atlas now, so a fixture scene entry
     // carries only what the scene actually owns. Tests that need band or rank
     // must stub the atlas, which is the point -- the artifact cannot disagree
     // with the dictionary any more.
-    lemmas[entry.lemmaId] = {
-      lemmaId: entry.lemmaId,
-      isQuestCritical: entry.isQuestCritical ?? false,
-      sceneWeight: 1,
-      npcSourceIds: []
-    };
-    if (entry.anchor) {
-      anchors.push(entry.lemmaId);
-    }
+    lemmaIds.push(entry.lemmaId);
   }
 
   return {
@@ -120,9 +110,8 @@ export function createBudgeterSceneLexicon(options: {
     pipelineVersion: "pipeline-v1",
     atlasVersion: "atlas-v1",
     profile: "runtime-preview",
-    lemmas,
+    lemmaIds,
     properNouns: [],
-    anchors,
     questEssentialLemmas: options.questEssentialLemmas ?? []
   };
 }

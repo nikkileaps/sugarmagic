@@ -34,36 +34,16 @@ vi.mock("@sugarmagic/ui", () => ({
 }));
 import { SceneDensityHistogram } from "../../ui/shell/scene-density-histogram";
 import { summarizeSceneDensity } from "../../ui/shell/editor-support";
-import type { CEFRBand, CompiledSceneLexicon } from "../../runtime/types";
+import type { CEFRBand, SceneVocabularyModel } from "../../runtime/types";
 
-const FIXTURE_LEXICON: CompiledSceneLexicon = {
+const FIXTURE_LEXICON: SceneVocabularyModel = {
   sceneId: "scene-1",
   contentHash: "hash-1",
   pipelineVersion: "1",
   atlasVersion: "atlas-1",
   profile: "authoring-preview",
-  lemmas: {
-    hola: {
-      lemmaId: "hola",
-      isQuestCritical: false,
-      sceneWeight: 1,
-      npcSourceIds: []
-    },
-    trabajo: {
-      lemmaId: "trabajo",
-      isQuestCritical: false,
-      sceneWeight: 1,
-      npcSourceIds: []
-    },
-    aduana: {
-      lemmaId: "aduana",
-      isQuestCritical: true,
-      sceneWeight: 1,
-      npcSourceIds: []
-    }
-  },
+  lemmaIds: ["hola", "trabajo", "aduana"],
   properNouns: [],
-  anchors: [],
   questEssentialLemmas: [],
   diagnostics: [
     {
