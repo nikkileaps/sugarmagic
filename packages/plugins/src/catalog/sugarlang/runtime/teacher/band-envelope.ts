@@ -137,13 +137,27 @@ export function getIntroduceCapForBand(cefrBand: CEFRBand): number {
  *   turn, not a drifted one. So the ceiling sits FAR above the directed ratio
  *   (0.3 directed vs 0.7 ceiling at A1) and is expected to fire rarely.
  *
- * NULL MEANS NO CEILING. At C1/C2 a fully target-language line is the goal, not
- * a failure, so there is nothing to guard against and `null` says so explicitly
- * rather than encoding it as 1.0 -- "no guard" and "guard at 100%" differ if
- * anyone ever makes the comparison inclusive.
+ * NULL MEANS NO CEILING. From B1 up a fully target-language line is the goal,
+ * not a failure, so there is nothing to guard against. `null` rather than 1.0
+ * because "no guard" and "guard at 100%" differ the moment anyone makes the
+ * comparison inclusive.
  *
  * Values from nikki, 2026-07-31:
- *   A1 0.70   A2 0.80   B1 0.90   B2 0.90   C1 none   C2 none
+ *   A1 0.70   A2 0.80   B1 none   B2 none   C1 none   C2 none
+ *
+ * B1/B2 STARTED AT 0.90 AND WERE DROPPED THE SAME DAY. Both sit at
+ * `target-dominant`, directed 0.85, so a 0.90 ceiling left FIVE POINTS of
+ * headroom -- and a generator told "mostly Spanish, about 85%" routinely lands
+ * at 95-100%. The guard fired on ordinary output instead of rare breakage.
+ *
+ * The end-to-end test showed it concretely: an all-English B2 turn triggered the
+ * existing under-ratio repair, the repair came back fully Spanish, and the
+ * ceiling immediately flagged that CORRECT repair as too dense and repaired
+ * again. Two model calls to undo a system that was already doing the right
+ * thing.
+ *
+ * The headroom is what makes this table work, not the absolute number: A1 is
+ * directed at 0.30 and guarded at 0.70, forty points clear.
  */
 export function getReadabilityCeilingForBand(cefrBand: CEFRBand): number | null {
   switch (cefrBand) {
@@ -153,7 +167,6 @@ export function getReadabilityCeilingForBand(cefrBand: CEFRBand): number | null 
       return 0.8;
     case "B1":
     case "B2":
-      return 0.9;
     case "C1":
     case "C2":
       return null;

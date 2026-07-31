@@ -86,27 +86,33 @@ describe("readability ceiling", () => {
   // most turns for a tuning miss rather than a broken turn.
   it.each([
     ["A1", 0.7],
-    ["A2", 0.8],
-    ["B1", 0.9],
-    ["B2", 0.9]
+    ["A2", 0.8]
   ] as const)("guards %s at %s", (band, ceiling) => {
     expect(getReadabilityCeilingForBand(band)).toBe(ceiling);
   });
 
-  it.each(["C1", "C2"] as const)("does NOT guard %s", (band) => {
-    // A fully target-language line is the GOAL at C1/C2, not a failure. null
+  it.each(["B1", "B2", "C1", "C2"] as const)("does NOT guard %s", (band) => {
+    // From B1 up a fully target-language line is the GOAL, not a failure. null
     // rather than 1.0 so "no guard" and "guard at 100%" cannot be confused.
     expect(getReadabilityCeilingForBand(band)).toBeNull();
   });
 
-  it("sits well ABOVE the directed ratio at every guarded band", () => {
-    // If a ceiling ever slipped to or below the directed ratio, every
-    // on-target line would be repaired -- the expensive failure this design
-    // exists to avoid.
-    for (const band of ["A1", "A2", "B1", "B2"] as const) {
-      const ceiling = getReadabilityCeilingForBand(band)!;
+  it("leaves REAL headroom above the directed ratio at every guarded band", () => {
+    // NOT just `> directed`. B1/B2 were briefly guarded at 0.90 while directed
+    // at 0.85 -- five points, which passes a greater-than check and still fires
+    // on ordinary output, because a generator told "about 85%" routinely lands
+    // at 95-100%. The end-to-end test caught it: a correct all-Spanish repair at
+    // B2 was immediately flagged as too dense and repaired again.
+    //
+    // A ceiling is for RARE breakage. If it sits within a generator's normal
+    // spread of the target, it is a second cost centre, not a guard.
+    const MIN_HEADROOM = 0.15;
+
+    for (const band of ["A1", "A2", "B1", "B2", "C1", "C2"] as const) {
+      const ceiling = getReadabilityCeilingForBand(band);
+      if (ceiling === null) continue;
       const directed = TARGET_LANGUAGE_RATIO_BY_POSTURE[postureForBand(band)];
-      expect(ceiling).toBeGreaterThan(directed);
+      expect(ceiling - directed).toBeGreaterThanOrEqual(MIN_HEADROOM);
     }
   });
 
@@ -117,6 +123,12 @@ describe("readability ceiling", () => {
   it("an A1 line that is merely off-target is not too dense either", () => {
     // 0.45 is already `over-ratio` against a 0.3 directed ratio. Readable.
     expect(exceedsReadabilityCeiling(0.45, "A1")).toBe(false);
+  });
+
+  it("a B2 line at 100% target language is NOT too dense", () => {
+    // target-dominant IS the intent from B1 up. This was guarded at 0.90 for
+    // part of 2026-07-31 and it made correct output repairable.
+    expect(exceedsReadabilityCeiling(1, "B2")).toBe(false);
   });
 
   it("an A1 line at 90% target language IS too dense", () => {

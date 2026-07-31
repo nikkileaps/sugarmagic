@@ -402,6 +402,19 @@ export function createSugarLangVerifyMiddleware(
           measuredRatio: verdict.languageRatioVerdict.measuredRatio,
           directedRatio: verdict.languageRatioVerdict.directedRatio,
           posture: verdict.languageRatioVerdict.posture,
+          // THE GROUPING KEY FOR RATIO ANALYSIS (nikki, 2026-07-31).
+          //
+          // "at band X the intended ratio was Y and we got Z" is the question
+          // worth asking, and it could not be answered from this event: posture
+          // was here but band was not, and posture does not invert -- B1, B2, C1
+          // and C2 all map to `target-dominant`, so grouping by posture merges
+          // four bands into one bucket.
+          //
+          // With band + directed + measured the categorical `conformance` below
+          // stops being the analysis surface and becomes what it should be: a
+          // derived convenience. Any threshold can be recomputed after the fact
+          // from the raw numbers, including ones we have not thought of.
+          learnerCefr: constraint.learnerCefr,
           conformance: verdict.languageRatioVerdict.conformance,
           denominator: verdict.profile.ratioCheckTokens,
           degradedExclusion: !sceneId
