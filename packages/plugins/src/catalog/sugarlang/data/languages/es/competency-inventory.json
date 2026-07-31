@@ -14,30 +14,56 @@
           {
             "chunkId": "que_es",
             "normalizedForm": "que_es",
-            "surfaceForms": ["que es", "que es esto", "que significa"],
+            "surfaceForms": [
+              "que es",
+              "que es esto",
+              "que significa"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["que", "ser"]
+            "constituentLemmas": [
+              "que",
+              "ser"
+            ]
           },
           {
             "chunkId": "no_entiendo",
             "normalizedForm": "no_entiendo",
-            "surfaceForms": ["no entiendo", "no lo entiendo"],
+            "surfaceForms": [
+              "no entiendo",
+              "no lo entiendo"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["no", "entender"]
+            "constituentLemmas": [
+              "no",
+              "entender"
+            ]
           },
           {
             "chunkId": "mas_despacio",
             "normalizedForm": "mas_despacio",
-            "surfaceForms": ["mas despacio", "mas despacio por favor", "habla mas despacio"],
+            "surfaceForms": [
+              "mas despacio",
+              "mas despacio por favor",
+              "habla mas despacio"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["mas", "despacio"]
+            "constituentLemmas": [
+              "mas",
+              "despacio"
+            ]
           },
           {
             "chunkId": "como_se_dice",
             "normalizedForm": "como_se_dice",
-            "surfaceForms": ["como se dice", "como se llama"],
+            "surfaceForms": [
+              "como se dice",
+              "como se llama"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["como", "decir"]
+            "constituentLemmas": [
+              "como",
+              "decir"
+            ]
           }
         ]
       }
@@ -53,37 +79,107 @@
           {
             "chunkId": "hola",
             "normalizedForm": "hola",
-            "surfaceForms": ["hola"],
+            "surfaceForms": [
+              "hola"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["hola"]
+            "constituentLemmas": [
+              "hola"
+            ]
           },
           {
             "chunkId": "buenos_dias",
             "normalizedForm": "buenos_dias",
-            "surfaceForms": ["buenos dias", "buenos días"],
+            "surfaceForms": [
+              "buenos dias",
+              "buenos días"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["bueno", "dia"]
+            "constituentLemmas": [
+              "bueno",
+              "dia"
+            ]
           },
           {
             "chunkId": "buenas_tardes",
             "normalizedForm": "buenas_tardes",
-            "surfaceForms": ["buenas tardes"],
+            "surfaceForms": [
+              "buenas tardes"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["bueno", "tarde"]
+            "constituentLemmas": [
+              "bueno",
+              "tarde"
+            ]
           },
           {
             "chunkId": "buenas_noches",
             "normalizedForm": "buenas_noches",
-            "surfaceForms": ["buenas noches"],
+            "surfaceForms": [
+              "buenas noches"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["bueno", "noche"]
+            "constituentLemmas": [
+              "bueno",
+              "noche"
+            ]
           },
           {
             "chunkId": "buenas",
             "normalizedForm": "buenas",
-            "surfaceForms": ["buenas"],
+            "surfaceForms": [
+              "buenas"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["bueno"]
+            "constituentLemmas": [
+              "bueno"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "introduce-self",
+      "displayName": "Introduce yourself",
+      "cefrDescriptor": "Can say their own name and introduce themselves simply.",
+      "band": "A1",
+      "chunks": {
+        "es": [
+          {
+            "chunkId": "me_llamo",
+            "normalizedForm": "me_llamo",
+            "surfaceForms": [
+              "me llamo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "me",
+              "llamar"
+            ]
+          },
+          {
+            "chunkId": "mi_nombre_es",
+            "normalizedForm": "mi_nombre_es",
+            "surfaceForms": [
+              "mi nombre es"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "nombre",
+              "ser"
+            ]
+          },
+          {
+            "chunkId": "mucho_gusto",
+            "normalizedForm": "mucho_gusto",
+            "surfaceForms": [
+              "mucho gusto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mucho",
+              "gusto"
+            ]
           }
         ]
       }
@@ -99,23 +195,37 @@
           {
             "chunkId": "gracias",
             "normalizedForm": "gracias",
-            "surfaceForms": ["gracias"],
+            "surfaceForms": [
+              "gracias"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["gracia"]
+            "constituentLemmas": [
+              "gracia"
+            ]
           },
           {
             "chunkId": "muchas_gracias",
             "normalizedForm": "muchas_gracias",
-            "surfaceForms": ["muchas gracias"],
+            "surfaceForms": [
+              "muchas gracias"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["mucho", "gracia"]
+            "constituentLemmas": [
+              "mucho",
+              "gracia"
+            ]
           },
           {
             "chunkId": "mil_gracias",
             "normalizedForm": "mil_gracias",
-            "surfaceForms": ["mil gracias"],
+            "surfaceForms": [
+              "mil gracias"
+            ],
             "cefrBand": "A2",
-            "constituentLemmas": ["mil", "gracia"]
+            "constituentLemmas": [
+              "mil",
+              "gracia"
+            ]
           }
         ]
       }
@@ -131,58 +241,93 @@
           {
             "chunkId": "si",
             "normalizedForm": "si",
-            "surfaceForms": ["si", "si", "sí"],
+            "surfaceForms": [
+              "si",
+              "si",
+              "sí"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["si"]
+            "constituentLemmas": [
+              "si"
+            ]
           },
           {
             "chunkId": "claro",
             "normalizedForm": "claro",
-            "surfaceForms": ["claro", "claro que si"],
+            "surfaceForms": [
+              "claro",
+              "claro que si"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["claro"]
+            "constituentLemmas": [
+              "claro"
+            ]
           },
           {
             "chunkId": "vale",
             "normalizedForm": "vale",
-            "surfaceForms": ["vale"],
+            "surfaceForms": [
+              "vale"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["valer"]
+            "constituentLemmas": [
+              "valer"
+            ]
           },
           {
             "chunkId": "de_acuerdo",
             "normalizedForm": "de_acuerdo",
-            "surfaceForms": ["de acuerdo"],
+            "surfaceForms": [
+              "de acuerdo"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["acuerdo"]
+            "constituentLemmas": [
+              "acuerdo"
+            ]
           },
           {
             "chunkId": "entendido",
             "normalizedForm": "entendido",
-            "surfaceForms": ["entendido"],
+            "surfaceForms": [
+              "entendido"
+            ],
             "cefrBand": "A2",
-            "constituentLemmas": ["entender"]
+            "constituentLemmas": [
+              "entender"
+            ]
           },
           {
             "chunkId": "perfecto",
             "normalizedForm": "perfecto",
-            "surfaceForms": ["perfecto"],
+            "surfaceForms": [
+              "perfecto"
+            ],
             "cefrBand": "A2",
-            "constituentLemmas": ["perfecto"]
+            "constituentLemmas": [
+              "perfecto"
+            ]
           },
           {
             "chunkId": "genial",
             "normalizedForm": "genial",
-            "surfaceForms": ["genial"],
+            "surfaceForms": [
+              "genial"
+            ],
             "cefrBand": "A2",
-            "constituentLemmas": ["genial"]
+            "constituentLemmas": [
+              "genial"
+            ]
           },
           {
             "chunkId": "bueno",
             "normalizedForm": "bueno",
-            "surfaceForms": ["bueno"],
+            "surfaceForms": [
+              "bueno"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["bueno"]
+            "constituentLemmas": [
+              "bueno"
+            ]
           }
         ]
       }
@@ -198,44 +343,74 @@
           {
             "chunkId": "adios",
             "normalizedForm": "adios",
-            "surfaceForms": ["adios", "adiós"],
+            "surfaceForms": [
+              "adios",
+              "adiós"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["adios"]
+            "constituentLemmas": [
+              "adios"
+            ]
           },
           {
             "chunkId": "hasta_luego",
             "normalizedForm": "hasta_luego",
-            "surfaceForms": ["hasta luego"],
+            "surfaceForms": [
+              "hasta luego"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["hasta", "luego"]
+            "constituentLemmas": [
+              "hasta",
+              "luego"
+            ]
           },
           {
             "chunkId": "hasta_pronto",
             "normalizedForm": "hasta_pronto",
-            "surfaceForms": ["hasta pronto"],
+            "surfaceForms": [
+              "hasta pronto"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["hasta", "pronto"]
+            "constituentLemmas": [
+              "hasta",
+              "pronto"
+            ]
           },
           {
             "chunkId": "hasta_manana",
             "normalizedForm": "hasta_manana",
-            "surfaceForms": ["hasta manana", "hasta mañana"],
+            "surfaceForms": [
+              "hasta manana",
+              "hasta mañana"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["hasta", "manana"]
+            "constituentLemmas": [
+              "hasta",
+              "manana"
+            ]
           },
           {
             "chunkId": "nos_vemos",
             "normalizedForm": "nos_vemos",
-            "surfaceForms": ["nos vemos"],
+            "surfaceForms": [
+              "nos vemos"
+            ],
             "cefrBand": "A2",
-            "constituentLemmas": ["ver"]
+            "constituentLemmas": [
+              "ver"
+            ]
           },
           {
             "chunkId": "chao",
             "normalizedForm": "chao",
-            "surfaceForms": ["chao", "chau"],
+            "surfaceForms": [
+              "chao",
+              "chau"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["chao"]
+            "constituentLemmas": [
+              "chao"
+            ]
           }
         ]
       }
@@ -250,16 +425,27 @@
           {
             "chunkId": "por_favor",
             "normalizedForm": "por_favor",
-            "surfaceForms": ["por favor"],
+            "surfaceForms": [
+              "por favor"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["por", "favor"]
+            "constituentLemmas": [
+              "por",
+              "favor"
+            ]
           },
           {
             "chunkId": "me_das",
             "normalizedForm": "me_das",
-            "surfaceForms": ["me das", "me puedes dar", "me puede dar"],
+            "surfaceForms": [
+              "me das",
+              "me puedes dar",
+              "me puede dar"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["dar"]
+            "constituentLemmas": [
+              "dar"
+            ]
           }
         ]
       }
@@ -274,9 +460,16 @@
           {
             "chunkId": "que_es_esto",
             "normalizedForm": "que_es_esto",
-            "surfaceForms": ["que es esto", "que es eso"],
+            "surfaceForms": [
+              "que es esto",
+              "que es eso"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["que", "ser", "esto"]
+            "constituentLemmas": [
+              "que",
+              "ser",
+              "esto"
+            ]
           }
         ]
       }
@@ -291,9 +484,15 @@
           {
             "chunkId": "donde_esta",
             "normalizedForm": "donde_esta",
-            "surfaceForms": ["donde esta", "donde está"],
+            "surfaceForms": [
+              "donde esta",
+              "donde está"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["donde", "estar"]
+            "constituentLemmas": [
+              "donde",
+              "estar"
+            ]
           }
         ]
       }
@@ -308,16 +507,30 @@
           {
             "chunkId": "cuanto_cuesta",
             "normalizedForm": "cuanto_cuesta",
-            "surfaceForms": ["cuanto cuesta", "cuánto cuesta", "cuanto vale", "cuánto vale"],
+            "surfaceForms": [
+              "cuanto cuesta",
+              "cuánto cuesta",
+              "cuanto vale",
+              "cuánto vale"
+            ],
             "cefrBand": "A2",
-            "constituentLemmas": ["cuanto", "costar"]
+            "constituentLemmas": [
+              "cuanto",
+              "costar"
+            ]
           },
           {
             "chunkId": "me_lo_llevo",
             "normalizedForm": "me_lo_llevo",
-            "surfaceForms": ["me lo llevo", "lo quiero"],
+            "surfaceForms": [
+              "me lo llevo",
+              "lo quiero"
+            ],
             "cefrBand": "A2",
-            "constituentLemmas": ["llevar", "querer"]
+            "constituentLemmas": [
+              "llevar",
+              "querer"
+            ]
           }
         ]
       }
@@ -332,9 +545,15 @@
           {
             "chunkId": "no_gracias",
             "normalizedForm": "no_gracias",
-            "surfaceForms": ["no gracias", "no, gracias"],
+            "surfaceForms": [
+              "no gracias",
+              "no, gracias"
+            ],
             "cefrBand": "A1",
-            "constituentLemmas": ["no", "gracia"]
+            "constituentLemmas": [
+              "no",
+              "gracia"
+            ]
           }
         ]
       }
