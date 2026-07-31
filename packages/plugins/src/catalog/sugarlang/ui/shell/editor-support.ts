@@ -47,6 +47,7 @@ import { IndexedDBSceneContextCache } from "../../runtime/compile/scene-context-
 import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 import { GradedTextService } from "../../runtime/grading/graded-text-service";
 import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
+import { buildDialogueNodeContentHash } from "../../runtime/grading/sources/dialogue-node-source";
 import { getAllInventoryChunks } from "../../runtime/inventory/competency-inventory-loader";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
 import {
@@ -484,9 +485,14 @@ export function loadPlacementQuestionBank(
 // one place left the others showing the old four.
 const DISPLAY_BANDS = DIALOGUE_VARIANT_BANDS;
 
-function buildVariantContentHash(nodeId: string, nodeText: string): string {
-  return [nodeId, nodeText, JSON.stringify({})].join("|");
-}
+/**
+ * MERGED 2026-07-31. This was the THIRD byte-identical copy of the variant
+ * cache key's content leg (bake source, scripted middleware, here). The Studio
+ * popover writes variants under it and the runtime reads them under it, so a
+ * drift between any two copies is a silent, total cache miss. See the rule at
+ * the definition.
+ */
+const buildVariantContentHash = buildDialogueNodeContentHash;
 
 export interface VariantAuthoringClient {
   /** Returns null when the gateway URL is not configured. */
