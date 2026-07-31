@@ -29,9 +29,11 @@ import { Badge, Button, Group, Stack, Text } from "@mantine/core";
 import type { ItemDefinition } from "@sugarmagic/domain";
 import type { CEFRBand } from "../../runtime/cefr";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
+import { VARIANT_BANDS } from "../../runtime/contracts/baked-variant";
 import { createVariantAuthoringClient } from "./editor-support";
 
-const BANDS: CEFRBand[] = ["B1", "B2", "C1", "C2"];
+// 090.11: same shared list -- the item bake fans out over it too.
+const BANDS = VARIANT_BANDS;
 
 export interface ItemViewVariantsConnectedProps {
   item: ItemDefinition | null;

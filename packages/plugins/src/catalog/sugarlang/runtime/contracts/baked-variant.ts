@@ -52,3 +52,27 @@ export type BakedVariantStore = Map<
   string,
   Map<CEFRBand, Map<string, GradedTextRecord>>
 >;
+
+/**
+ * 090.11: the bands that get a baked variant, and the single source of truth
+ * for it.
+ *
+ * This list existed in THREE places -- the authoring client, the dialogue
+ * variants popover, and the item-view variants panel -- all spelling
+ * `["B1","B2","C1","C2"]` independently. Turning A1/A2 on meant editing one and
+ * silently leaving two: the bake produced beginner variants that no Studio
+ * surface would show, which reads as "the feature did not work" rather than
+ * "one list disagreed with another".
+ *
+ * A1 and A2 are included as of 090.11. Beginner lines were the last ones
+ * realized at runtime by token substitution; they are baked like every other
+ * band now.
+ */
+export const VARIANT_BANDS: readonly CEFRBand[] = [
+  "A1",
+  "A2",
+  "B1",
+  "B2",
+  "C1",
+  "C2"
+] as const;

@@ -49,6 +49,7 @@ import { GradedTextService } from "../../runtime/grading/graded-text-service";
 import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
 import { getAllInventoryChunks } from "../../runtime/inventory/competency-inventory-loader";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
+import { VARIANT_BANDS } from "../../runtime/contracts/baked-variant";
 import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-scene";
 import { computeSceneContentHash } from "../../runtime/compile/content-hash";
 import {
@@ -475,25 +476,10 @@ export function loadPlacementQuestionBank(
 
 // --- Variant authoring client (086.3) ---
 
-// 090.11: A1 and A2 JOIN THE BAKED SET.
-//
-// Beginner lines were the only ones realized at runtime -- tokens substituted
-// into authored English as the line displayed -- while every other band read a
-// baked variant. That split was an accident of which technique arrived first,
-// not a design: both are the same operation, differing only in when it runs.
-//
-// It could not simply be switched on before now, because `GradedTextService`
-// defaults an unspecified posture to `target-dominant` (~85% target language),
-// so an A1 bake was generated and verified against a B1+ ratio. `generateVariant`
-// now passes posture and ratio explicitly, which is what makes these two bands
-// bakeable at all.
-//
-// What this unlocks, per the plan: runtime substitution could only ever teach
-// words physically present in the authored English, and missed inflections
-// entirely (`cheeses` never resolved to `queso`). Neither gets fixed -- both
-// stop existing, because the Teacher wrote the sentence instead of a token
-// swapper editing it at display time.
-const DISPLAY_BANDS: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
+// 090.11: the baked band set lives in the baked-variant contract now -- it was
+// spelled independently here and in two Studio panels, so turning A1/A2 on in
+// one place left the others showing the old four.
+const DISPLAY_BANDS = VARIANT_BANDS;
 
 function buildVariantContentHash(nodeId: string, nodeText: string): string {
   return [nodeId, nodeText, JSON.stringify({})].join("|");
