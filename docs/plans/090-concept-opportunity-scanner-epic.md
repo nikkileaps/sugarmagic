@@ -1871,6 +1871,121 @@ is what cost hours on 2026-07-28.
 - Exit: the trace distinguishes slate from realization; a turn where slate and
   text are disjoint says so explicitly (pin).
 
+### 090.12 Ambient marking + select-to-translate -- NEW (2026-07-30)
+
+**The marker knows what is target language. The player cannot ask it anything.**
+
+090.8 specified five marker roles -- `focus | recall | challenge | ambient |
+unmarked` -- and documented `ambient` as THE RESIDUE: target-language tokens
+present in the text that the slate never accounted for. That header is still
+accurate about the design and describes code that does not exist. `MarkedForm`
+is `{targetForm, lemmaId, englishGloss}` with no role at all, `markGradedText`
+only walks the introduce set, and `dialogueHighlight` carries a flat
+`focusTerms` list. So today **only slate words are marked**, and every other
+Spanish word in a line is invisible to the system and unaskable by the player.
+
+AMBIENT IS DATA, NOT DECORATION (nikki, 2026-07-30). The obvious move --
+style ambient words a third colour, quieter than focus-yellow and recall-blue --
+is self-defeating and the story deliberately does not do it. At A1 (25% target
+language) ambient is a handful of words. At B2+ (85%) it is nearly the whole
+line, so marking it marks everything, which means nothing, and drowns the two
+colours that do carry meaning. Presentation therefore styles `focus` and
+`recall` exactly as it does now; `ambient` is computed and never rendered.
+
+What it is FOR is the gesture:
+
+**SELECTION, NOT HOVER.** Drag across a word or phrase the way you would with a
+highlighter, get a popover card with the English. Hover was rejected explicitly
+(nikki): at B2+ so much of the line is target language that hovering fires
+constantly on words the player is not asking about. Selection is deliberate,
+and it resolves phrases for free -- `buenos dias` is one drag, so the marker
+does not have to have pre-grouped it.
+
+Selection works on ALL target language, taught and ambient alike. Taught words
+keep their hover gloss; selection is the second, player-initiated way in. One
+rule -- "select any target-language text to look it up" -- is simpler to explain
+and to build than carving out exceptions.
+
+ONE MARKER OVER BOTH PATHS -- CORRECTED 2026-07-31 (nikki). An earlier draft of
+this story put ambient detection in the observe middleware, where the agent
+path builds `dialogueHighlight` inline from `constraint.targetVocab`. That is
+the wrong home and would have entrenched the exact duplication this epic
+exists to remove: `markGradedText` is called ONLY from the scripted middleware
+and the item display resolver, so highlighting currently has TWO builders --
+the marker for scripted and item text, and an inline loop in
+`sugar-lang-observe-middleware.ts` for agent turns.
+
+The epic's thesis is one realization operation run at two MOMENTS, not two
+operations split by path. Scripted text gets its target language at BUILD and
+agent text at RUNTIME, but both went through the Teacher against the scene
+context -- so both contain words the marker can recognise, and both should be
+marked by the same code.
+
+So: run `markGradedText` over agent output too, and delete the observe
+middleware's inline highlight builder. For agent text the marker's SUBSTITUTION
+half is a no-op -- the target language is already in the string -- leaving only
+the marking half, which the marker's own header already says is its real
+contract ("it says 'this span is a focus word'; presentation decides what that
+looks like"). Ambient detection therefore lives in the marker, beside the four
+roles it is already specified to produce, and `dialogueHighlight` is built FROM
+the marker's output on both paths rather than assembled twice.
+
+DO NOT BREAK THE TAUGHT-WORD PRESENTATION (nikki, 2026-07-31). Gold (introduce),
+blue (recall) and the celebrate animation the player gets for typing a taught
+word are load-bearing and liked. `HighlightMatch.introduce` drives the colour,
+`HighlightMatch.celebrate` drives the animation (set in
+`dialogue-entry-decorator.ts` on player turns), and
+`DialogueHighlightAnnotation` is `{focusTerms, introduceTerms, celebrateTerms,
+glosses}`. Ambient rides as a NEW OPTIONAL FIELD; those four and
+`findTermMatches` are not restructured. Add, never reshape -- that makes
+breaking the reward loop structurally impossible rather than merely unlikely.
+
+RESOLUTION IS ATLAS-ONLY IN THIS STORY. Selected span -> `MorphologyLoader`
+(surface -> lemma, already used by the classifier) -> `atlas.getGloss`. Free,
+instant, offline, and the hit rate should be high because the generator is
+fenced to A1+1 and told never to invent words. Proper nouns are recognised via
+the compiled artifact's `properNouns` and deliberately not translated. A span
+that resolves to nothing shows NO card -- silence reads as "nothing here",
+where an error card reads as broken.
+
+Everything past the atlas is deferred:
+[backlog 011](../backlog/011-selection-lookup-beyond-the-atlas.md) holds the
+fallback for spans the atlas cannot answer (MT for single words, LLM for
+phrases, cached), other surfaces (items, lore, quests), and why lookups must
+NOT feed FSRS. [backlog 012](../backlog/012-lookup-telemetry-grows-the-lexicon.md)
+holds the separate and larger idea that lookup telemetry should GROW the
+lexicon -- a shared gateway-side cache plus a promotion rule, which changes
+where curriculum comes from and is not a caching detail.
+
+FALLS OUT FREE: once ambient is computed, `focus + recall + challenge + ambient`
+IS the target-language content of a line -- so the marker's own output can
+finally VERIFY the realized ratio against `TARGET_LANGUAGE_RATIO_BY_POSTURE`,
+which today only ever instructs the generator and never checks it. Scope that
+in-story or defer it explicitly; do not leave it implied.
+
+- Exit: a line containing target language the slate did not ask for produces
+  `ambient` spans (unit) -- this is the one that fails today.
+- `markGradedText` is the ONLY producer of highlight roles: the observe
+  middleware's inline builder is deleted, asserted by grep (pin -- two builders
+  of the same thing is the condition this epic exists to remove, and the agent
+  path having its own is why ambient was invisible).
+- Gold, blue and the celebrate animation are unchanged: `HighlightMatch.introduce`,
+  `HighlightMatch.celebrate` and the four existing `DialogueHighlightAnnotation`
+  fields keep their shape and meaning (pin -- the reward loop is liked and must
+  survive the unification).
+- Presentation renders `focus` and `recall` only; no ambient styling reaches the
+  DOM (pin -- the deliberate non-feature, and the thing a later "let's just add
+  a colour" would quietly undo).
+- Selecting a taught word and an ambient word both yield a card with the English
+  (integration).
+- Selecting a phrase spanning two words yields ONE card, not two (pin -- the
+  reason selection was chosen over hover).
+- Selecting a proper noun yields no card (pin).
+- A span the atlas cannot resolve yields no card and no error (pin).
+- Lookups emit telemetry and create NO lemma card (pin -- backlog 011 §D; a
+  lookup is evidence of interest, not of knowledge state, and FSRS models the
+  latter).
+
 ## Ordering constraints
 
 The epic ships. Every story ships as written, in the order given at the top:
