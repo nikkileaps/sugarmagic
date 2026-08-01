@@ -27,7 +27,8 @@ import type {
   QuestFormDefinition
 } from "../conversation";
 import { isQuestFormDefinition } from "../conversation";
-import { readTeachLine } from "./highlight";
+import { findTermMatches, readDialogueHighlight, readTeachLine } from "./highlight";
+import { splitTextIntoChunks, type UnbreakableRange } from "./chunk-text";
 import { createTurnTextElement } from "./turn-text";
 import { createPaperPanel } from "./paper-panel";
 import {
@@ -183,6 +184,21 @@ export function createRuntimeDialoguePanel(
   activeContainer.className = "sm-dialogue-panel-active";
   scrollArea.appendChild(activeContainer);
 
+  /**
+   * Off-screen twin of a message card, used to measure how many lines a
+   * candidate chunk wraps to. It lives INSIDE the scroll area and carries the
+   * real card classes on purpose: the answer depends on the card's exact
+   * content width and typography, so anything measured somewhere else is
+   * measuring a different box.
+   */
+  const measureEntry = document.createElement("div");
+  measureEntry.className = "sm-dialogue-entry sm-dialogue-measure";
+  measureEntry.setAttribute("aria-hidden", "true");
+  const measureCard = document.createElement("div");
+  measureCard.className = "sm-dialogue-entry-card";
+  measureEntry.appendChild(measureCard);
+  scrollArea.appendChild(measureEntry);
+
   panel.appendChild(scrollArea);
 
   // Shown only when the player has scrolled up and something new arrived.
@@ -242,6 +258,16 @@ export function createRuntimeDialoguePanel(
    * cursor under a line they have not read yet.
    */
   let awaitingReadAdvance = false;
+  /**
+   * Chunks of the CURRENT turn still waiting to be shown. A long-winded NPC is
+   * read a card at a time: each Enter shows the next chunk, and only when this
+   * empties does the turn behave as it always did (reading beat, then input).
+   *
+   * Presentation only -- `currentChunkTurn` is the one real envelope, and every
+   * chunk card is rendered from it with a different `text`.
+   */
+  let pendingChunks: string[] = [];
+  let currentChunkTurn: ConversationTurnEnvelope | null = null;
   let currentInputPlaceholder = "";
   let onInput: ((input: ConversationPlayerInput) => void) | null = null;
   let onCancel: (() => void) | null = null;
@@ -255,6 +281,10 @@ export function createRuntimeDialoguePanel(
     currentChoices = [];
     currentInputMode = "advance";
     awaitingReadAdvance = false;
+    // Chunks belong to the turn that is ending. Left behind, the next turn's
+    // first Enter would show a fragment of the previous conversation.
+    pendingChunks = [];
+    currentChunkTurn = null;
     currentInputPlaceholder = "";
     actionsContainer.innerHTML = "";
     enrichmentContainer.innerHTML = "";
@@ -349,6 +379,90 @@ export function createRuntimeDialoguePanel(
     observer.observe(card);
     entryPaperObservers.push(observer);
     return card;
+  }
+
+  /** A card may run to three lines; past that the turn is read a chunk at a time. */
+  const MAX_TURN_LINES = 3;
+
+  /**
+   * Counts the line boxes a candidate chunk wraps to, by rendering it exactly
+   * the way the real card will and reading back its geometry.
+   *
+   * The tooltip and celebrate burst are stripped from the probe first. Both are
+   * `position: absolute`, so removing them cannot change the wrapping -- but
+   * they DO produce client rects, and left in they are counted as extra lines.
+   */
+  function countRenderedLines(turn: ConversationTurnEnvelope, text: string): number {
+    const probe = createTurnTextElement({ ...turn, text });
+    probe
+      .querySelectorAll(".sm-dialogue-focus-tooltip, .sm-dialogue-focus-burst")
+      .forEach((node) => node.remove());
+    measureCard.replaceChildren(probe);
+
+    const range = document.createRange();
+    range.selectNodeContents(probe);
+    const tops = Array.from(range.getClientRects())
+      .filter((rect) => rect.width > 0 || rect.height > 0)
+      .map((rect) => rect.top)
+      .sort((a, b) => a - b);
+    measureCard.replaceChildren();
+
+    if (tops.length === 0) return 1;
+
+    // Tops are CLUSTERED, not compared exactly. A focus term is an inline-flex
+    // box aligned on the baseline, so its rect can sit a pixel or two off the
+    // plain text beside it on the same line; comparing exactly counts one line
+    // as two the moment a line contains a highlighted word.
+    const lineHeight = Number.parseFloat(getComputedStyle(probe).lineHeight);
+    const tolerance = Number.isFinite(lineHeight) ? Math.max(4, lineHeight * 0.5) : 8;
+    let lines = 1;
+    for (let i = 1; i < tops.length; i++) {
+      if (tops[i]! - tops[i - 1]! > tolerance) lines++;
+    }
+    return lines;
+  }
+
+  /** Matched focus terms, as offsets that a chunk boundary must not cut through. */
+  function unbreakableRanges(turn: ConversationTurnEnvelope): UnbreakableRange[] {
+    const highlight = readDialogueHighlight(turn.annotations);
+    if (!highlight || highlight.focusTerms.length === 0) return [];
+    return findTermMatches(
+      turn.text,
+      highlight.focusTerms,
+      highlight.celebrateTerms,
+      highlight.introduceTerms
+    ).map((match) => ({ start: match.start, end: match.end }));
+  }
+
+  function chunkTurnText(turn: ConversationTurnEnvelope): string[] {
+    // No layout to measure against (panel not shown yet, or a non-DOM test
+    // host): show the turn whole. Degrading to the previous behaviour is
+    // correct here -- the player still reads the line.
+    if (!measureCard.isConnected || measureCard.getBoundingClientRect().width <= 0) {
+      return [turn.text];
+    }
+    return splitTextIntoChunks(turn.text, {
+      maxLines: MAX_TURN_LINES,
+      measureLines: (text) => countRenderedLines(turn, text),
+      unbreakable: unbreakableRanges(turn)
+    });
+  }
+
+  /** True while the panel is still showing a turn, waiting on Enter to continue. */
+  function inReadingBeat(): boolean {
+    return (
+      pendingChunks.length > 0 || (currentInputMode === "free_text" && awaitingReadAdvance)
+    );
+  }
+
+  /** Shows the next chunk of the current turn, tucking the one just read behind it. */
+  function advanceChunk(): void {
+    const next = pendingChunks.shift();
+    if (next === undefined || !currentChunkTurn) return;
+    graduateActive();
+    activeContainer.appendChild(createEntry({ ...currentChunkTurn, text: next }));
+    renderActions();
+    scrollToBottom(true);
   }
 
   function createEntry(turn: ConversationTurnEnvelope): HTMLDivElement {
@@ -520,14 +634,16 @@ export function createRuntimeDialoguePanel(
     // Beat two onwards: the arrow has done its job. Leaving it pulsing while
     // the player types keeps telling them to press Enter to continue, which is
     // now the wrong instruction.
-    if (!awaitingReadAdvance) {
+    if (!inReadingBeat()) {
       activeContainer
         .querySelectorAll(".sm-dialogue-entry-advance")
         .forEach((el) => el.remove());
     }
 
-    if (currentInputMode === "free_text" && awaitingReadAdvance) {
-      // Beat one: the NPC card alone, with the advance arrow. No input yet.
+    if (inReadingBeat()) {
+      // Beat one: the NPC card alone, with the advance arrow. No input yet --
+      // and no CHOICES either while chunks remain, because the turn has not
+      // finished saying what it has to say.
       const newest = activeContainer.querySelector<HTMLElement>(
         ".sm-dialogue-entry .sm-dialogue-entry-card"
       );
@@ -678,6 +794,15 @@ export function createRuntimeDialoguePanel(
             if (scriptedBox.getChoiceIds().length > 1) return;
             event.preventDefault();
             scriptedBox.submitAdvance();
+            return;
+          }
+          // A long turn is read a chunk at a time, and chunks come FIRST: the
+          // input card must not appear while the NPC is still talking. Safe
+          // ahead of the free-text check because no textarea exists yet --
+          // `renderActions` withholds it for as long as chunks remain.
+          if (pendingChunks.length > 0) {
+            event.preventDefault();
+            advanceChunk();
             return;
           }
           // Beat one -> beat two: Enter promotes the reading beat into the
@@ -831,7 +956,15 @@ export function createRuntimeDialoguePanel(
       // Re-armed per NPC turn: every new line gets read before it gets answered.
       awaitingReadAdvance = currentInputMode === "free_text";
       activeContainer.innerHTML = "";
-      activeContainer.appendChild(createEntry(turn));
+      // A turn longer than the card is read a chunk at a time rather than being
+      // clipped mid-sentence at the panel's bottom edge. The envelope is
+      // untouched; only the number of cards drawn for it changes.
+      currentChunkTurn = turn;
+      const chunks = chunkTurnText(turn);
+      pendingChunks = chunks.slice(1);
+      activeContainer.appendChild(
+        createEntry(chunks.length > 1 ? { ...turn, text: chunks[0]! } : turn)
+      );
       renderActions();
 
       // 085.5: Render the teach-line annotation in the enrichment slot if present.
@@ -1363,6 +1496,16 @@ function injectStyles() {
        lands it squarely on the 14px sliver in front of it; stacked, that buries
        the deck. Each sliver needs only enough shadow to separate it from its
        neighbour, so every depth rule carries the same tight drop-shadow. */
+
+    /* The line-measuring twin. It must LAY OUT (that is the entire point, and
+       why this is not "display: none") while occupying no visible space and
+       taking no part in the deck. */
+    .sm-dialogue-measure {
+      visibility: hidden;
+      height: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
 
     /* The current turn is unscaled and paints over the whole deck. */
     .sm-dialogue-panel-active {
