@@ -1,6 +1,64 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_STACK_DEPTH, stackWindow, stepFrontIndex } from "./card-stack";
+import {
+  DEFAULT_STACK_DEPTH,
+  accumulateWheelSteps,
+  stackWindow,
+  stepFrontIndex
+} from "./card-stack";
+
+describe("accumulateWheelSteps", () => {
+  const base = { accumulator: 0, stepPx: 20, maxSteps: 4 };
+
+  it("carries small deltas until they add up to a card", () => {
+    let acc = 0;
+    const seen: number[] = [];
+    // A trackpad flick: many small pixel deltas.
+    for (let i = 0; i < 5; i++) {
+      const out = accumulateWheelSteps({ ...base, deltaY: 6, deltaMode: 0, accumulator: acc });
+      acc = out.accumulator;
+      seen.push(out.steps);
+    }
+    // 30px in => one card; the rest carries.
+    expect(seen.reduce((a, b) => a + b, 0)).toBe(1);
+    expect(acc).toBeGreaterThanOrEqual(0);
+    expect(acc).toBeLessThan(base.stepPx);
+  });
+
+  it("treats a line-mode wheel as comparable to a pixel-mode trackpad", () => {
+    // deltaY of 3 LINES is a normal wheel notch; unnormalised it is 3px and
+    // would take seven notches to move one card.
+    const lines = accumulateWheelSteps({ ...base, deltaY: 3, deltaMode: 1 });
+    expect(lines.steps).toBe(2);
+
+    const pixels = accumulateWheelSteps({ ...base, deltaY: 3, deltaMode: 0 });
+    expect(pixels.steps).toBe(0);
+  });
+
+  it("resets on a direction change instead of cancelling out", () => {
+    const down = accumulateWheelSteps({ ...base, deltaY: 15, deltaMode: 0 });
+    expect(down.steps).toBe(0);
+    expect(down.accumulator).toBe(15);
+
+    // Reversing must not subtract from the carried delta.
+    const up = accumulateWheelSteps({
+      ...base,
+      deltaY: -15,
+      deltaMode: 0,
+      accumulator: down.accumulator
+    });
+    expect(up.accumulator).toBe(-15);
+  });
+
+  it("caps a hard flick instead of teleporting through the conversation", () => {
+    const out = accumulateWheelSteps({ ...base, deltaY: 4000, deltaMode: 0 });
+    expect(out.steps).toBe(4);
+  });
+
+  it("steps negative for a negative delta", () => {
+    expect(accumulateWheelSteps({ ...base, deltaY: -40, deltaMode: 0 }).steps).toBe(-2);
+  });
+});
 
 describe("stackWindow", () => {
   it("renders the front card plus three behind it, back to front", () => {

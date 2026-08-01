@@ -29,7 +29,12 @@ import type {
 import { isQuestFormDefinition } from "../conversation";
 import { findTermMatches, readDialogueHighlight, readTeachLine } from "./highlight";
 import { splitTextIntoChunks, type UnbreakableRange } from "./chunk-text";
-import { DEFAULT_STACK_DEPTH, stackWindow, stepFrontIndex } from "./card-stack";
+import {
+  DEFAULT_STACK_DEPTH,
+  accumulateWheelSteps,
+  stackWindow,
+  stepFrontIndex
+} from "./card-stack";
 import { createTurnTextElement } from "./turn-text";
 import { createPaperPanel, type PaperPanel } from "./paper-panel";
 import {
@@ -595,7 +600,13 @@ export function createRuntimeDialoguePanel(
    * flick to a few cards instead of teleporting to the start of the
    * conversation, while still letting repeated flicks get there quickly.
    */
-  const WHEEL_STEP_PX = 40;
+  // Tuned by feel, from 40 -> 20 -> 14. At 40 a normal scroll produced no
+  // movement at all for the first part of the gesture, which reads as the stack
+  // being broken rather than merely stiff -- the first card has to move early
+  // enough to say "this responds to you". Deltas still accumulate, so precise
+  // one-card steps remain available; this only lowers the price of the first.
+  // Below about 10 a resting hand on a trackpad starts walking the stack.
+  const WHEEL_STEP_PX = 14;
   const MAX_CARDS_PER_FLICK = 4;
   let wheelAccumulator = 0;
 
@@ -604,12 +615,18 @@ export function createRuntimeDialoguePanel(
     (event: WheelEvent) => {
       if (cards.length <= 1) return;
       event.preventDefault();
-      wheelAccumulator += event.deltaY;
-      const steps = Math.trunc(wheelAccumulator / WHEEL_STEP_PX);
+      const { steps, accumulator } = accumulateWheelSteps({
+        deltaY: event.deltaY,
+        deltaMode: event.deltaMode,
+        accumulator: wheelAccumulator,
+        stepPx: WHEEL_STEP_PX,
+        maxSteps: MAX_CARDS_PER_FLICK
+      });
+      wheelAccumulator = accumulator;
       if (steps === 0) return;
-      wheelAccumulator -= steps * WHEEL_STEP_PX;
-      const capped = Math.max(-MAX_CARDS_PER_FLICK, Math.min(MAX_CARDS_PER_FLICK, steps));
-      stepStack(-capped);
+      // Scrolling DOWN pulls older cards forward -- the physical reading of the
+      // stack, and the opposite of a chat log.
+      stepStack(-steps);
     },
     { passive: false }
   );

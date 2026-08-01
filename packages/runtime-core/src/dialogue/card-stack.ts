@@ -70,6 +70,60 @@ export function stackWindow(input: StackWindowInput): StackSlot[] {
   return slots;
 }
 
+/** A line of wheel delta, for devices that report lines instead of pixels. */
+const WHEEL_LINE_PX = 16;
+/** A page of wheel delta. Coarse on purpose -- one page is a decisive gesture. */
+const WHEEL_PAGE_PX = 400;
+
+export interface WheelStepInput {
+  /** Raw `WheelEvent.deltaY`. */
+  deltaY: number;
+  /** Raw `WheelEvent.deltaMode`: 0 pixels, 1 lines, 2 pages. */
+  deltaMode: number;
+  /** Delta carried over from previous events in the gesture. */
+  accumulator: number;
+  /** Delta required to move the stack by one card. */
+  stepPx: number;
+  /** Cap on how many cards a single event may move. */
+  maxSteps: number;
+}
+
+export interface WheelStepResult {
+  /** Cards to move. Positive is the same direction as a positive deltaY. */
+  steps: number;
+  /** Delta to carry into the next event. */
+  accumulator: number;
+}
+
+/**
+ * Turns a stream of wheel events into discrete card steps.
+ *
+ * WHY deltaMode IS NORMALISED
+ *   A trackpad reports PIXELS, but a mouse wheel on some browsers reports
+ *   LINES -- deltaY of 3 where a trackpad sends 3px. Comparing both against a
+ *   pixel threshold makes the wheel roughly sixteen times less sensitive than
+ *   the trackpad, which reads as the stack being broken rather than stiff.
+ *
+ * WHY A DIRECTION CHANGE RESETS
+ *   The accumulator is signed, so a scroll up followed by a scroll down would
+ *   otherwise cancel out and the stack would sit still through both. Reversing
+ *   is a new gesture and starts from zero.
+ */
+export function accumulateWheelSteps(input: WheelStepInput): WheelStepResult {
+  const { deltaY, deltaMode, accumulator, stepPx, maxSteps } = input;
+  const scale =
+    deltaMode === 1 ? WHEEL_LINE_PX : deltaMode === 2 ? WHEEL_PAGE_PX : 1;
+  const delta = deltaY * scale;
+
+  const reversed = delta !== 0 && accumulator !== 0 && Math.sign(delta) !== Math.sign(accumulator);
+  let carried = (reversed ? 0 : accumulator) + delta;
+
+  const raw = Math.trunc(carried / stepPx);
+  const steps = Math.max(-maxSteps, Math.min(maxSteps, raw));
+  carried -= steps * stepPx;
+  return { steps, accumulator: carried };
+}
+
 export interface StepFrontInput {
   total: number;
   frontIndex: number;
