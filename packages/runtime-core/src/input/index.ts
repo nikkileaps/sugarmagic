@@ -3,7 +3,8 @@
  *
  * Ported from Sugarengine's InputManager.
  * WASD/Arrow keys → moveX/moveY normalized input.
- * Movement lock stack for UI contexts.
+ * World-input lock stack for UI contexts: while any lock is held the world
+ * takes no movement, no camera zoom and no camera orbit.
  */
 
 export interface RuntimeInputState {
@@ -19,9 +20,9 @@ export interface RuntimeInputManager {
   isInteractPressed: () => boolean;
   consumeInteract: () => void;
   endFrame: () => void;
-  addMovementLock: (id: string) => void;
-  removeMovementLock: (id: string) => void;
-  isMovementLocked: () => boolean;
+  addWorldInputLock: (id: string) => void;
+  removeWorldInputLock: (id: string) => void;
+  isWorldInputLocked: () => boolean;
   onRightDrag: ((dx: number, dy: number) => void) | null;
   onScroll: ((delta: number) => void) | null;
 }
@@ -29,7 +30,20 @@ export interface RuntimeInputManager {
 export function createRuntimeInputManager(): RuntimeInputManager {
   const keys = new Set<string>();
   const keysJustPressed = new Set<string>();
-  const movementLocks = new Set<string>();
+  /**
+   * While any lock is held, the game world stops taking player input: no
+   * movement, no camera zoom, no camera orbit. Every overlay claims one on open
+   * and releases it on close, keyed by owner so two overlays cannot unlock each
+   * other.
+   *
+   * This was called `movementLocks` and gated ONLY movement, which meant the
+   * camera stayed live under every overlay in the game -- scrolling over a
+   * dialogue card zoomed the scene behind it. Widening it here rather than
+   * per-overlay keeps one enforcer: an overlay that claims the lock is
+   * inert-by-default, instead of each having to remember to suppress the
+   * camera itself.
+   */
+  const worldInputLocks = new Set<string>();
   let isDragging = false;
   let lastPointerX = 0;
   let lastPointerY = 0;
@@ -59,6 +73,7 @@ export function createRuntimeInputManager(): RuntimeInputManager {
   }
 
   function handlePointerDown(e: PointerEvent) {
+    if (worldInputLocks.size > 0) return;
     if (e.button === 2) {
       isDragging = true;
       lastPointerX = e.clientX;
@@ -67,6 +82,13 @@ export function createRuntimeInputManager(): RuntimeInputManager {
   }
 
   function handlePointerMove(e: PointerEvent) {
+    // Ends an orbit that was ALREADY under way when the lock was claimed.
+    // Guarding only pointerdown stops a new drag from starting but lets one in
+    // flight keep steering the camera under the overlay that just opened.
+    if (worldInputLocks.size > 0) {
+      isDragging = false;
+      return;
+    }
     if (isDragging) {
       const dx = e.clientX - lastPointerX;
       const dy = e.clientY - lastPointerY;
@@ -81,7 +103,10 @@ export function createRuntimeInputManager(): RuntimeInputManager {
   }
 
   function handleWheel(e: WheelEvent) {
+    // Still swallowed while locked, so the page behind never scrolls -- but the
+    // camera does not act on it.
     e.preventDefault();
+    if (worldInputLocks.size > 0) return;
     manager.onScroll?.(e.deltaY > 0 ? 1 : -1);
   }
 
@@ -117,7 +142,7 @@ export function createRuntimeInputManager(): RuntimeInputManager {
     },
 
     getInput(): RuntimeInputState {
-      if (movementLocks.size > 0) {
+      if (worldInputLocks.size > 0) {
         return { moveX: 0, moveY: 0, isDragging };
       }
 
@@ -150,16 +175,16 @@ export function createRuntimeInputManager(): RuntimeInputManager {
       keysJustPressed.clear();
     },
 
-    addMovementLock(id: string) {
-      movementLocks.add(id);
+    addWorldInputLock(id: string) {
+      worldInputLocks.add(id);
     },
 
-    removeMovementLock(id: string) {
-      movementLocks.delete(id);
+    removeWorldInputLock(id: string) {
+      worldInputLocks.delete(id);
     },
 
-    isMovementLocked() {
-      return movementLocks.size > 0;
+    isWorldInputLocked() {
+      return worldInputLocks.size > 0;
     }
   };
 

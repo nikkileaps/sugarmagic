@@ -793,8 +793,8 @@ export function createRuntimeGameplaySessionController(
         mountRoot: root,
         config: pluginConfigById.get(contribution.pluginId) ?? {},
         dispatchCastable: dispatchCastableFromPlugin,
-        claimInput: (lockId) => inputManager.addMovementLock(lockId),
-        releaseInput: (lockId) => inputManager.removeMovementLock(lockId)
+        claimInput: (lockId) => inputManager.addWorldInputLock(lockId),
+        releaseInput: (lockId) => inputManager.removeWorldInputLock(lockId)
       });
 
       const subscribedKinds = new Set(contribution.payload.emitKinds);
@@ -1753,7 +1753,7 @@ export function createRuntimeGameplaySessionController(
     ...conversationMiddlewares
   ]);
   dialogueManager.setOnStart(() => {
-    inputManager.addMovementLock(DIALOGUE_LOCK_ID);
+    inputManager.addWorldInputLock(DIALOGUE_LOCK_ID);
     inputManager.consumeInteract();
     syncInteractionPrompt();
   });
@@ -1761,7 +1761,7 @@ export function createRuntimeGameplaySessionController(
     questDialogueCoordinator.handleDialogueNodeEnter(nodeId);
   });
   dialogueManager.setOnEnd((dialogueDefinitionId, reason) => {
-    inputManager.removeMovementLock(DIALOGUE_LOCK_ID);
+    inputManager.removeWorldInputLock(DIALOGUE_LOCK_ID);
     inputManager.consumeInteract();
     questDialogueCoordinator.handleDialogueEnd(dialogueDefinitionId, reason);
     syncInteractionPrompt();
@@ -1881,9 +1881,9 @@ export function createRuntimeGameplaySessionController(
 
   questJournal.setOnOpenChange((isOpen) => {
     if (isOpen) {
-      inputManager.addMovementLock(JOURNAL_LOCK_ID);
+      inputManager.addWorldInputLock(JOURNAL_LOCK_ID);
     } else {
-      inputManager.removeMovementLock(JOURNAL_LOCK_ID);
+      inputManager.removeWorldInputLock(JOURNAL_LOCK_ID);
     }
     syncInteractionPrompt();
   });
@@ -1892,9 +1892,9 @@ export function createRuntimeGameplaySessionController(
   });
   spellMenuUi.setOnOpenChange((isOpen) => {
     if (isOpen) {
-      inputManager.addMovementLock(SPELL_MENU_LOCK_ID);
+      inputManager.addWorldInputLock(SPELL_MENU_LOCK_ID);
     } else {
-      inputManager.removeMovementLock(SPELL_MENU_LOCK_ID);
+      inputManager.removeWorldInputLock(SPELL_MENU_LOCK_ID);
     }
     syncInteractionPrompt();
   });
@@ -1909,9 +1909,9 @@ export function createRuntimeGameplaySessionController(
   });
   inventoryUi.setOnOpenChange((isOpen) => {
     if (isOpen) {
-      inputManager.addMovementLock(INVENTORY_LOCK_ID);
+      inputManager.addWorldInputLock(INVENTORY_LOCK_ID);
     } else {
-      inputManager.removeMovementLock(INVENTORY_LOCK_ID);
+      inputManager.removeWorldInputLock(INVENTORY_LOCK_ID);
     }
     syncInteractionPrompt();
   });
@@ -2015,9 +2015,9 @@ export function createRuntimeGameplaySessionController(
   });
   itemViewUi.setOnOpenChange((isOpen) => {
     if (isOpen) {
-      inputManager.addMovementLock(ITEM_VIEW_LOCK_ID);
+      inputManager.addWorldInputLock(ITEM_VIEW_LOCK_ID);
     } else {
-      inputManager.removeMovementLock(ITEM_VIEW_LOCK_ID);
+      inputManager.removeWorldInputLock(ITEM_VIEW_LOCK_ID);
       // Closing supersedes any resolution still in flight, so it cannot pop the
       // panel back open (and re-take the movement lock) after the player
       // dismissed it.
@@ -2027,9 +2027,9 @@ export function createRuntimeGameplaySessionController(
   });
   documentReaderUi.setOnOpenChange((isOpen) => {
     if (isOpen) {
-      inputManager.addMovementLock(DOCUMENT_READER_LOCK_ID);
+      inputManager.addWorldInputLock(DOCUMENT_READER_LOCK_ID);
     } else {
-      inputManager.removeMovementLock(DOCUMENT_READER_LOCK_ID);
+      inputManager.removeWorldInputLock(DOCUMENT_READER_LOCK_ID);
     }
     syncInteractionPrompt();
   });

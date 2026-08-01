@@ -18,6 +18,7 @@
 import type { ConversationPlayerInput, ConversationTurnEnvelope } from "../conversation";
 import { readTeachLine } from "./highlight";
 import { createTurnTextElement } from "./turn-text";
+import { createPaperPanel } from "./paper-panel";
 
 export interface ScriptedDialogueBoxOptions {
   onTermHover?: (event: { term: string; dwellMs: number }) => void;
@@ -49,7 +50,8 @@ export function createScriptedDialogueBox(
   options: ScriptedDialogueBoxOptions = {}
 ): ScriptedDialogueBox {
   const container = document.createElement("div");
-  container.className = "sm-dialogue-box-container";
+  // Same celebration treatment as the panel -- both present on paper.
+  container.className = "sm-dialogue-box-container sm-celebrate-v2";
 
   const box = document.createElement("div");
   box.className = "sm-dialogue-box";
@@ -71,9 +73,23 @@ export function createScriptedDialogueBox(
   advance.setAttribute("aria-hidden", "true");
   advance.textContent = "▶";
 
-  box.append(body, enrichment, choices, advance);
+  // The torn-paper background. FIRST child so it sits behind the content;
+  // everything above it is position:relative with a z-index in the stylesheet.
+  const paper = createPaperPanel();
+  box.append(paper.element, body, enrichment, choices, advance);
   container.append(speaker, box);
   parent.appendChild(container);
+
+  // The box changes size on EVERY line, so the outline has to be regenerated
+  // rather than authored once. This is string building, not rasterising, and
+  // createPaperPanel short-circuits when the size has not actually changed.
+  const paperObserver = new ResizeObserver(() => {
+    // BORDER box, not contentRect: contentRect excludes padding, and the paper
+    // has to cover the whole panel including its 28px of it.
+    const rect = box.getBoundingClientRect();
+    paper.resize(rect.width, rect.height);
+  });
+  paperObserver.observe(box);
 
   let currentInput: ((input: ConversationPlayerInput) => void) | null = null;
   let currentChoiceIds: string[] = [];
@@ -181,6 +197,8 @@ export function createScriptedDialogueBox(
     },
 
     dispose() {
+      paperObserver.disconnect();
+      paper.dispose();
       container.remove();
     }
   };
