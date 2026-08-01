@@ -53,7 +53,6 @@ import {
   createGatewayTeacherClient
 } from "./teacher/policies/llm-teacher-policy";
 import { DirectiveCache } from "./teacher/directive-cache";
-import { SlateStore } from "./situation";
 import { FallbackTeacherPolicy } from "./teacher/policies/fallback-teacher-policy";
 import { SugarLangTeacher } from "./teacher/sugar-lang-teacher";
 import {
@@ -236,7 +235,6 @@ export class SugarlangRuntimeServices {
    * about right now, and restoring one would resurrect a judgment made against a
    * world state that no longer exists.
    */
-  private readonly _slateStore = new SlateStore();
 
   constructor(options: SugarlangRuntimeServicesOptions) {
     this.config = options.config;
@@ -409,9 +407,6 @@ export class SugarlangRuntimeServices {
    *
    * Implements: Plan 090 story 090.3
    */
-  get slateStore(): SlateStore {
-    return this._slateStore;
-  }
 
   async getLearnerBand(): Promise<CEFRBand | null> {
     // The pin is the single source of truth for a debug band override. It is

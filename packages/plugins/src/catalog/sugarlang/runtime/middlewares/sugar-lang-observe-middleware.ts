@@ -1004,13 +1004,23 @@ export function createSugarLangObserveMiddleware(
       // OR ambient spans. Previously it required focus terms, so a line that was
       // all unrequested Spanish produced no annotation at all, which is exactly
       // the line a player most needs to be able to interrogate.
-      if (focusTerms.length > 0 || ambientSpans.length > 0) {
+      // rf6.11.1: the annotation no longer carries `ambientSpans`, and no longer
+      // gets written just because some exist.
+      //
+      // `readDialogueHighlight` never copied the field into its return value, so
+      // nothing downstream could see it -- and an annotation whose `focusTerms`
+      // was empty said "this line was examined and teaches nothing", which is a
+      // different claim from "this line was not marked".
+      //
+      // The COMPUTATION stays: `traceRealization` below reads it to print
+      // "target language nobody asked for", which is the diagnostic that tells a
+      // disjoint line (slate ignored) from a line the generator had no room for.
+      if (focusTerms.length > 0) {
         normalizedTurn.annotations!["dialogueHighlight"] = {
           focusTerms,
           introduceTerms,
           celebrateTerms: [],
-          glosses,
-          ...(ambientSpans.length > 0 ? { ambientSpans } : {})
+          glosses
         };
       }
 

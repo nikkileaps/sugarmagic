@@ -34,26 +34,6 @@ export interface DialogueHighlightAnnotation {
   celebrateTerms: string[];
   /** Optional term → gloss map for tooltip display (e.g. { "queso": "cheese" }). */
   glosses?: Record<string, string>;
-  /**
-   * 090.11/090.12: target-language spans the slate never asked for.
-   *
-   * ADDED, NOT RESTRUCTURED. The four fields above and `findTermMatches` are
-   * untouched, so gold (introduce), blue (recall) and the celebrate animation
-   * cannot be affected by anything downstream of this field -- there is no edit
-   * to them to get wrong.
-   *
-   * Deliberately NOT styled. At A1 (25% target language) ambient is a few
-   * words; at B2+ (85%) it is nearly the whole line, so marking it would mark
-   * everything and drown the two colours that carry meaning. It exists so the
-   * system KNOWS where the target language is -- for select-to-translate, and
-   * so `focus + recall + ambient` can finally measure the realized ratio.
-   */
-  ambientSpans?: Array<{
-    start: number;
-    end: number;
-    surface: string;
-    lemmaId: string;
-  }>;
 }
 
 const DIALOGUE_HIGHLIGHT_KEY = "dialogueHighlight";

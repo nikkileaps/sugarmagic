@@ -31,7 +31,5 @@ export { composeSituation } from "./compose";
 export type { ComposeSituationInput } from "./compose";
 export { situationKey } from "./situation-key";
 export type { Slate, SlateAction, SlateItem } from "./slate";
-export { SlateStore } from "./slate-store";
-export type { SlateReadResult } from "./slate-store";
 export { factValue, isAvailable, runtimeFact, unavailable } from "./runtime-fact";
 export type { RuntimeFact } from "./runtime-fact";

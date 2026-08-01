@@ -334,11 +334,16 @@ export function createSugarLangScriptedMiddleware(
       // GONE. Both were computed on every scripted turn and read by nothing --
       // they fed the live-render path deleted in 090.8c.
 
-      // Only consult the baked variant when the live render did NOT produce the
-      // line. Without the !usedVariant gate a baked-variant cache hit overwrites
-      // a successful live render -- and since baked variants exist for every node
-      // in a baked scene, that is exactly where the 087.5 trigger is meant to fire.
-      if (!usedVariant && services.variantCache) {
+      // rf6.5.1: the gate here was `!usedVariant && services.variantCache`. The
+      // negation was unconditionally true -- nothing assigned `usedVariant`
+      // between its declaration and this point -- and its comment justified the
+      // gate by saying it stopped a baked variant from overwriting a successful
+      // LIVE RENDER, a path deleted in 090.8c. A condition that cannot be false,
+      // explained by machinery that no longer exists.
+      //
+      // `usedVariant` itself STAYS: the `if (!usedVariant)` below is what tells a
+      // cache hit from a miss, and the miss branch is what serves authored English.
+      if (services.variantCache) {
         try {
           const cacheKey: VariantCacheKey = {
             lang: targetLanguage,
