@@ -123,7 +123,12 @@ export function splitTextIntoChunks(text: string, options: SplitTextOptions): st
     // `base` always advances -- a chunker that can return no progress hangs the
     // dialogue rather than degrading it.
     const cut = candidates[best >= 0 ? best : 0]!;
-    chunks.push(text.slice(base, cut).trimEnd());
+    // Only whitespace lies before the first candidate when the text is indented
+    // or the opening word already overflows -- pushing that slice put an EMPTY
+    // card in the conversation. `base` still advances, so nothing is lost and
+    // the loop still terminates.
+    const chunk = text.slice(base, cut).trimEnd();
+    if (chunk) chunks.push(chunk);
     base = cut;
   }
 

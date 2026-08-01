@@ -90,6 +90,22 @@ describe("splitTextIntoChunks", () => {
     expect(chunks.join(" ").split(/\s+/)).toEqual(text.split(/\s+/));
   });
 
+  it("never emits an empty chunk when the text is indented", () => {
+    // Leading whitespace put the first cut at the first word, so the slice
+    // before it was blank -- and a blank chunk is a blank card.
+    const text = `   ${"x".repeat(50)} tail`;
+
+    const chunks = splitTextIntoChunks(text, {
+      maxLines: 1,
+      measureLines: fakeMeasure(10)
+    });
+
+    expect(chunks.every((chunk) => chunk.trim() !== "")).toBe(true);
+    expect(chunks.join(" ").split(/\s+/).filter(Boolean)).toEqual(
+      text.split(/\s+/).filter(Boolean)
+    );
+  });
+
   it("rejects a nonsensical line budget rather than looping", () => {
     expect(() =>
       splitTextIntoChunks("anything at all", { maxLines: 0, measureLines: fakeMeasure(5) })

@@ -31,7 +31,7 @@ import { findTermMatches, readDialogueHighlight, readTeachLine } from "./highlig
 import { splitTextIntoChunks, type UnbreakableRange } from "./chunk-text";
 import { DEFAULT_STACK_DEPTH, stackWindow, stepFrontIndex } from "./card-stack";
 import { createTurnTextElement } from "./turn-text";
-import { createPaperPanel } from "./paper-panel";
+import { createPaperPanel, type PaperPanel } from "./paper-panel";
 import {
   createScriptedDialogueBox,
   type ScriptedDialogueBox
@@ -211,7 +211,12 @@ export function createRuntimeDialoguePanel(
   const measureCard = document.createElement("div");
   measureCard.className = "sm-dialogue-entry-card";
   measureEntry.appendChild(measureCard);
-  panel.appendChild(measureEntry);
+  // INSIDE the stack, not beside it. As a child of the panel it laid out at the
+  // full panel width while a real card sits inside the stack's 8px insets --
+  // 16px wider, so text that measured three lines wrapped to four in the real
+  // card and blew the chunker's whole guarantee. renderStack keeps it as the
+  // first child; it is height:0 and hidden, so it costs the stack nothing.
+  stackContainer.appendChild(measureEntry);
 
   const enrichmentContainer = document.createElement("div");
   enrichmentContainer.className = "sm-dialogue-panel-enrichment";
@@ -240,7 +245,27 @@ export function createRuntimeDialoguePanel(
   let currentChoices: ConversationTurnEnvelope["choices"] = [];
   /** One per rendered card. Disconnected on dispose so a long conversation
    *  does not leave an observer per message alive after the panel is gone. */
-  const entryPaperObservers: ResizeObserver[] = [];
+  /**
+   * Per-card paper resources, keyed by the entry element.
+   *
+   * These used to be a write-only array drained only in `dispose()` -- but the
+   * panel lives for the whole session while `clearHistory()` runs per
+   * conversation and `renderActions` rebuilds the player card every turn, so
+   * an observer plus a detached filtered SVG leaked per discarded card. A card
+   * owns its observer, and releases it when it leaves the conversation.
+   */
+  const entryPaperResources = new Map<
+    HTMLElement,
+    { observer: ResizeObserver; paper: PaperPanel }
+  >();
+
+  function releaseEntryResources(el: HTMLElement): void {
+    const held = entryPaperResources.get(el);
+    if (!held) return;
+    held.observer.disconnect();
+    held.paper.dispose();
+    entryPaperResources.delete(el);
+  }
   let currentInputMode: ConversationTurnEnvelope["inputMode"] = "advance";
   /**
    * THE READING BEAT.
@@ -272,7 +297,12 @@ export function createRuntimeDialoguePanel(
 
   function stopCurrent() {
     onInput = null;
-    onCancel = null;
+    // onCancel deliberately SURVIVES. stopCurrent runs on every submit, so
+    // clearing it here left Escape dead from the moment the player sent a
+    // message until the reply arrived -- the exact stretch where they are most
+    // likely to want out, and the celebration hold widened it further. Leaving
+    // a conversation is a property of the conversation, not of the turn that
+    // happens to be showing. Cleared in hide() and clearHistory() instead.
     currentChoices = [];
     currentInputMode = "advance";
     awaitingReadAdvance = false;
@@ -285,7 +315,7 @@ export function createRuntimeDialoguePanel(
     enrichmentContainer.innerHTML = "";
     // The live player card is a card in the stack, so ending the turn has to
     // take it OUT of the stack -- clearing a container no longer does it.
-    removeFrontCardIf("input");
+    removeNewestCardIf("input");
     textInput = null;
     pendingSpeakerLabel = null;
     currentTurnMetadata = undefined;
@@ -298,11 +328,30 @@ export function createRuntimeDialoguePanel(
   const cards: StackEntry[] = [];
   /** Which card is at the front. Equals the last index unless browsing history. */
   let frontIndex = -1;
-  /** Guards the transition so a fast flick cannot re-enter mid-render. */
-  let stackAnimation = 0;
+  /**
+   * In-flight card animations, cancelled at the start of the next render so a
+   * fast flick walks the stack instead of stacking up competing animations.
+   * This used to be a generation counter checked in `onfinish`, which cancelled
+   * animations that had already finished -- i.e. did nothing at all.
+   */
+  const runningStackAnimations: Animation[] = [];
 
   function frontCard(): StackEntry | null {
     return cards[frontIndex] ?? null;
+  }
+
+  /**
+   * THE NEWEST CARD IS NOT THE FRONT CARD.
+   *
+   * `frontIndex` is what the player is LOOKING AT and they can move it by
+   * scrolling; the newest card is always the last one in the list. Every
+   * conversation mutation -- swapping the thinking card for its answer,
+   * dropping the live input card -- belongs to the newest card, and keying any
+   * of it off `frontIndex` breaks the moment the player scrolls back while a
+   * reply is in flight.
+   */
+  function newestCard(): StackEntry | null {
+    return cards[cards.length - 1] ?? null;
   }
 
   function isBrowsingHistory(): boolean {
@@ -325,12 +374,18 @@ export function createRuntimeDialoguePanel(
       depth: DEFAULT_STACK_DEPTH
     });
 
+    // Rects are captured BEFORE cancelling the in-flight animations, because
+    // getBoundingClientRect includes the transform -- so a card mid-flight is
+    // measured where it currently APPEARS, and the next FLIP continues from
+    // there instead of snapping back to its resting slot.
     const before = new Map<HTMLElement, DOMRect>();
     if (animate) {
       for (const child of Array.from(stackContainer.children)) {
         before.set(child as HTMLElement, child.getBoundingClientRect());
       }
     }
+    for (const animation of runningStackAnimations) animation.cancel();
+    runningStackAnimations.length = 0;
 
     const next = slots.map((slot) => {
       const entry = cards[slot.index]!;
@@ -354,10 +409,9 @@ export function createRuntimeDialoguePanel(
       }
       return entry.el;
     });
-    stackContainer.replaceChildren(...next);
+    stackContainer.replaceChildren(measureEntry, ...next);
 
     if (!animate) return;
-    const generation = ++stackAnimation;
     for (const el of next) {
       const prev = before.get(el);
       const now = el.getBoundingClientRect();
@@ -369,12 +423,14 @@ export function createRuntimeDialoguePanel(
 
       if (!prev) {
         // A card that was not on screen a moment ago: rise into place.
-        el.animate(
-          [
-            { transform: `translateY(16px) ${restingTransform}`, opacity: 0 },
-            { transform: restingTransform || "none", opacity: 1 }
-          ],
-          { duration: 200, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+        runningStackAnimations.push(
+          el.animate(
+            [
+              { transform: `translateY(16px) ${restingTransform}`, opacity: 0 },
+              { transform: restingTransform || "none", opacity: 1 }
+            ],
+            { duration: 200, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+          )
         );
         continue;
       }
@@ -382,18 +438,15 @@ export function createRuntimeDialoguePanel(
       const dy = prev.top - now.top;
       const scale = now.width > 0 ? prev.width / now.width : 1;
       if (Math.abs(dy) < 0.5 && Math.abs(scale - 1) < 0.005) continue;
-      const animation = el.animate(
-        [
-          { transform: `translateY(${dy}px) scale(${scale}) ${restingTransform}` },
-          { transform: restingTransform || "none" }
-        ],
-        { duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+      runningStackAnimations.push(
+        el.animate(
+          [
+            { transform: `translateY(${dy}px) scale(${scale}) ${restingTransform}` },
+            { transform: restingTransform || "none" }
+          ],
+          { duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+        )
       );
-      // A newer transition supersedes this one rather than fighting it, so a
-      // fast flick walks the stack instead of queueing a backlog of animations.
-      animation.onfinish = () => {
-        if (generation !== stackAnimation) animation.cancel();
-      };
     }
   }
 
@@ -406,20 +459,24 @@ export function createRuntimeDialoguePanel(
     return entry;
   }
 
-  /** Swaps the front card in place -- the thinking card becoming its answer. */
-  function replaceFrontCard(el: HTMLElement, kind: StackEntry["kind"]): void {
-    if (frontIndex < 0) {
+  /** Swaps the newest card in place -- the thinking card becoming its answer. */
+  function replaceNewestCard(el: HTMLElement, kind: StackEntry["kind"]): void {
+    const replaced = newestCard();
+    if (!replaced) {
       pushCard(el, kind);
       return;
     }
-    cards[frontIndex] = { el, kind };
+    releaseEntryResources(replaced.el);
+    cards[cards.length - 1] = { el, kind };
     renderStack(false);
   }
 
-  function removeFrontCardIf(kind: StackEntry["kind"]): void {
-    if (frontCard()?.kind !== kind) return;
-    cards.splice(frontIndex, 1);
-    frontIndex = cards.length - 1;
+  function removeNewestCardIf(kind: StackEntry["kind"]): void {
+    const newest = newestCard();
+    if (newest?.kind !== kind) return;
+    releaseEntryResources(newest.el);
+    cards.pop();
+    frontIndex = Math.min(frontIndex, cards.length - 1);
     renderStack(false);
   }
 
@@ -444,13 +501,14 @@ export function createRuntimeDialoguePanel(
       frozenFrontCard.style.height = "";
       frozenFrontCard = null;
     }
+    for (const entry of cards) releaseEntryResources(entry.el);
     cards.length = 0;
     frontIndex = -1;
     stackContainer.replaceChildren();
   }
 
-  function frontIsPendingEntry(): boolean {
-    return frontCard()?.kind === "pending";
+  function newestIsPendingEntry(): boolean {
+    return newestCard()?.kind === "pending";
   }
 
   /**
@@ -505,6 +563,18 @@ export function createRuntimeDialoguePanel(
     // event-driven hold would stall the conversation permanently. The runtime
     // has to keep the player playing.
     holdTimer = setTimeout(releaseFrontHold, CELEBRATE_HOLD_MS);
+  }
+
+  /**
+   * DialogueManager starts its auto-close timer when it calls showTurn, not
+   * when the card appears -- so holding a self-closing turn behind the
+   * celebration spends the window the player has to read it, and a 2200ms
+   * closing turn held for 1420ms flashes past. Correctness beats the flourish:
+   * the celebration is cut short instead.
+   */
+  function declaresAutoClose(turn: ConversationTurnEnvelope): boolean {
+    const value = turn.metadata?.["autoCloseAfterMs"];
+    return typeof value === "number" && Number.isFinite(value) && value > 0;
   }
 
   function whenFrontReleased(run: () => void): void {
@@ -601,7 +671,7 @@ export function createRuntimeDialoguePanel(
       paper.resize(rect.width, rect.height);
     });
     observer.observe(card);
-    entryPaperObservers.push(observer);
+    entryPaperResources.set(entry, { observer, paper });
     return card;
   }
 
@@ -629,6 +699,9 @@ export function createRuntimeDialoguePanel(
       .filter((rect) => rect.width > 0 || rect.height > 0)
       .map((rect) => rect.top)
       .sort((a, b) => a - b);
+    // Read BEFORE detaching: getComputedStyle on a detached element yields no
+    // line-height, so this silently fell through to the 8px default every time.
+    const lineHeight = Number.parseFloat(getComputedStyle(probe).lineHeight);
     measureCard.replaceChildren();
 
     if (tops.length === 0) return 1;
@@ -637,7 +710,6 @@ export function createRuntimeDialoguePanel(
     // box aligned on the baseline, so its rect can sit a pixel or two off the
     // plain text beside it on the same line; comparing exactly counts one line
     // as two the moment a line contains a highlighted word.
-    const lineHeight = Number.parseFloat(getComputedStyle(probe).lineHeight);
     const tolerance = Number.isFinite(lineHeight) ? Math.max(4, lineHeight * 0.5) : 8;
     let lines = 1;
     for (let i = 1; i < tops.length; i++) {
@@ -850,7 +922,7 @@ export function createRuntimeDialoguePanel(
     actionsContainer.innerHTML = "";
     // Any live player card is rebuilt below if it is still wanted; leaving the
     // old one in the stack would put two textareas in the conversation.
-    removeFrontCardIf("input");
+    removeNewestCardIf("input");
     textInput = null;
 
     function createFooterRow(hintText: string, includeSubmit: boolean): HTMLDivElement {
@@ -1160,6 +1232,7 @@ export function createRuntimeDialoguePanel(
       actionsContainer.innerHTML = "";
       enrichmentContainer.innerHTML = "";
       stopCurrent();
+      onCancel = null;
       uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
       // Story 50.5 — restore the in-game mode. If something else
       // had set activeOverlayMenuKey to a non-dialogue value before
@@ -1174,6 +1247,7 @@ export function createRuntimeDialoguePanel(
       scriptedBox.hide();
       cancelFrontHold();
       clearStack();
+      onCancel = null;
       actionsContainer.innerHTML = "";
       enrichmentContainer.innerHTML = "";
       uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
@@ -1208,9 +1282,13 @@ export function createRuntimeDialoguePanel(
       stopCurrent();
       // Replace a thinking card rather than stacking a second one: showPending
       // is called on every submit, and two dots cards in a row is not history.
+      // Whatever arrives is the newest card, so the player is brought back to
+      // it. Leaving them parked in history while the conversation moves on
+      // means the card they are answering is off-window.
+      goToPresent();
       const pendingEntry = createPendingEntry(pendingSpeakerLabel);
-      if (frontIsPendingEntry()) {
-        replaceFrontCard(pendingEntry, "pending");
+      if (newestIsPendingEntry()) {
+        replaceNewestCard(pendingEntry, "pending");
       } else {
         pushCard(pendingEntry, "pending");
       }
@@ -1218,8 +1296,14 @@ export function createRuntimeDialoguePanel(
     },
     showTurn(turn, handleTurnInput, handleCancel) {
       if (holdTimer) {
-        whenFrontReleased(() => panelApi.showTurn(turn, handleTurnInput, handleCancel));
-        return;
+        if (declaresAutoClose(turn)) {
+          cancelFrontHold();
+        } else {
+          whenFrontReleased(() =>
+            panelApi.showTurn(turn, handleTurnInput, handleCancel)
+          );
+          return;
+        }
       }
       // conversationKind is stable for the session; inputMode is NOT a valid
       // switch (an agent's closing turn reports "advance", which would snap a
@@ -1246,6 +1330,7 @@ export function createRuntimeDialoguePanel(
       // A turn longer than the card is read a chunk at a time rather than being
       // clipped mid-sentence at the panel's bottom edge. The envelope is
       // untouched; only the number of cards drawn for it changes.
+      goToPresent();
       currentChunkTurn = turn;
       const chunks = chunkTurnText(turn);
       pendingChunks = chunks.slice(1);
@@ -1254,8 +1339,8 @@ export function createRuntimeDialoguePanel(
       );
       // The answer takes the thinking card's PLACE. Pushing instead would
       // leave the dots sitting in the stack as if they were something said.
-      if (frontIsPendingEntry()) {
-        replaceFrontCard(firstEntry, "response");
+      if (newestIsPendingEntry()) {
+        replaceNewestCard(firstEntry, "response");
       } else {
         pushCard(firstEntry, "response");
       }
@@ -1289,8 +1374,9 @@ export function createRuntimeDialoguePanel(
       // removing the container below would NOT take it with it, and a lookup
       // card left open at dispose would simply stay on screen forever.
       document.removeEventListener("mousedown", handleDocumentMouseDown);
-      for (const observer of entryPaperObservers) observer.disconnect();
-      entryPaperObservers.length = 0;
+      for (const el of Array.from(entryPaperResources.keys())) {
+        releaseEntryResources(el);
+      }
       hideLookupCard();
       scriptedBox.dispose();
       parentContainer.removeChild(container);
@@ -2001,14 +2087,6 @@ function injectStyles() {
 
     .sm-dialogue-choice-btn .choice-text {
       flex: 1;
-    }
-
-    .sm-dialogue-continue-hint {
-      text-align: center;
-      color: rgba(240,232,223,0.6);
-      font-size: 12px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
     }
 
     .sm-dialogue-input-form {

@@ -3,7 +3,8 @@
  *
  * Ported from Sugarengine's InputManager.
  * WASD/Arrow keys → moveX/moveY normalized input.
- * Movement lock stack for UI contexts.
+ * World-input lock stack for UI contexts: while any lock is held the world
+ * takes no movement, no camera zoom and no camera orbit.
  */
 
 export interface RuntimeInputState {
@@ -81,6 +82,13 @@ export function createRuntimeInputManager(): RuntimeInputManager {
   }
 
   function handlePointerMove(e: PointerEvent) {
+    // Ends an orbit that was ALREADY under way when the lock was claimed.
+    // Guarding only pointerdown stops a new drag from starting but lets one in
+    // flight keep steering the camera under the overlay that just opened.
+    if (worldInputLocks.size > 0) {
+      isDragging = false;
+      return;
+    }
     if (isDragging) {
       const dx = e.clientX - lastPointerX;
       const dy = e.clientY - lastPointerY;

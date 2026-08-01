@@ -239,13 +239,17 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
           ...compileThemeVariables(props.theme)
         }}
       >
-        {/* HUD HIDDEN DURING CONVERSATION.
-            None of it is usable mid-dialogue -- inventory, caster and home are
-            all blocked while talking -- and it competes with the conversation
-            for the bottom of the screen, which is the one place the dialogue
-            stack needs. Reuses the overlay key the panel already sets and
-            clears, so there is no second source of "is dialogue open". */}
-        {props.hudDefinition && state.activeOverlayMenuKey !== "dialogue"
+        {/* HUD HIDDEN UNDER ANY OVERLAY.
+            None of it is usable while an overlay owns the screen -- inventory,
+            caster and home are all blocked -- and it competes for the bottom of
+            the screen, which is the one place the dialogue stack needs.
+
+            Asks whether ANY overlay is up rather than naming "dialogue". Today
+            dialogue is the only thing that sets this key, so the two are
+            identical; the difference is that a second overlay inherits this
+            instead of silently missing it. Reuses the key the overlay already
+            sets and clears, so there is no second source of "is one open". */}
+        {props.hudDefinition && state.activeOverlayMenuKey === null
           ? renderNode({
               node: props.hudDefinition.root,
               theme: props.theme,
