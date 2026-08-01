@@ -50,7 +50,8 @@ export function createScriptedDialogueBox(
   options: ScriptedDialogueBoxOptions = {}
 ): ScriptedDialogueBox {
   const container = document.createElement("div");
-  container.className = "sm-dialogue-box-container";
+  // Same celebration treatment as the panel -- both present on paper.
+  container.className = "sm-dialogue-box-container sm-celebrate-v2";
 
   const box = document.createElement("div");
   box.className = "sm-dialogue-box";

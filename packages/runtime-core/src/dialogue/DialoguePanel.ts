@@ -114,6 +114,7 @@ export function createRuntimeDialoguePanel(
   const actionRegistry = options?.actionRegistry;
   const uiStateStore = options?.uiStateStore;
   injectStyles();
+  installCelebrationToggle();
 
   // ONE popover, reused. Creating a card per lookup leaks nodes over a long
   // conversation and makes "is a card open" unanswerable.
@@ -177,7 +178,7 @@ export function createRuntimeDialoguePanel(
   document.addEventListener("mousedown", handleDocumentMouseDown);
 
   const container = document.createElement("div");
-  container.className = "sm-dialogue-panel-container";
+  container.className = `sm-dialogue-panel-container ${CELEBRATION_VARIANT_CLASS}`;
 
   const panel = document.createElement("div");
   panel.className = "sm-dialogue-panel";
@@ -1403,6 +1404,28 @@ export function createRuntimeDialoguePanel(
   return panelApi;
 }
 
+/**
+ * Default celebration treatment. v2 backs the gold with a purple disc so it
+ * reads on paper; v1 is the original, which was tuned against a dark panel.
+ * Both are in the stylesheet -- see the v2 block there.
+ */
+const CELEBRATION_VARIANT_CLASS = "sm-celebrate-v2";
+
+/**
+ * DEV ONLY: flip celebration treatments live, on every card already on screen,
+ * so the two can be compared without a rebuild or a fresh conversation.
+ */
+function installCelebrationToggle(): void {
+  const host = globalThis as unknown as Record<string, unknown>;
+  if (host.__smCelebration) return;
+  host.__smCelebration = (variant: "v1" | "v2") => {
+    document
+      .querySelectorAll(".sm-dialogue-panel-container, .sm-dialogue-box-container")
+      .forEach((el) => el.classList.toggle("sm-celebrate-v2", variant === "v2"));
+    return variant;
+  };
+}
+
 function injectStyles() {
   if (document.getElementById("sm-dialogue-panel-styles")) return;
 
@@ -2416,6 +2439,53 @@ function injectStyles() {
       0% { opacity: 0; transform: translate(-50%, -46%) scale(0.3); }
       24% { opacity: 0.9; }
       100% { opacity: 0; transform: translate(-50%, -74%) scale(1.5); }
+    }
+
+    /* ---- CELEBRATION v2: a purple disc behind the gold ----
+       v1 (the ring and star above) was designed against the old DARK chat
+       panel, where gold on near-black was the whole effect. On paper the same
+       gold has almost nothing to read against -- the star washes out and the
+       ring disappears. v2 adds ONLY a backing disc; the ring and star keep
+       their exact v1 geometry, timing and colour.
+
+       Both treatments live in the sheet. Switch with:
+         window.__smCelebration("v1" | "v2")
+
+       The disc is display:none unless an ancestor carries "sm-celebrate-v2",
+       so v1 renders precisely as it always did. */
+    .sm-dialogue-focus-burst-disc {
+      display: none;
+    }
+
+    .sm-celebrate-v2 .sm-dialogue-focus-burst-disc {
+      display: block;
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 56px;
+      height: 56px;
+      border-radius: 999px;
+      /* Solid at the centre so the star has a dark ground, falling to near
+         nothing at the rim so it never reads as a shape in its own right --
+         it should look like light, not like a sticker. */
+      background: radial-gradient(
+        circle closest-side,
+        rgba(109, 58, 134, 1) 0%,
+        rgba(109, 58, 134, 0.55) 52%,
+        rgba(109, 58, 134, 0.1) 100%
+      );
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.25);
+      /* Finishes AHEAD of the star (1320ms) on purpose: the star's last beat is
+         a fade upward, and it should be over paper by then, not over purple. */
+      animation: sm-dialogue-focus-disc 1150ms cubic-bezier(0.16, 0.84, 0.22, 1)
+        forwards;
+    }
+
+    @keyframes sm-dialogue-focus-disc {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.25); }
+      14% { opacity: 0.95; transform: translate(-50%, -54%) scale(0.8); }
+      100% { opacity: 0; transform: translate(-50%, -64%) scale(1.45); }
     }
 
     @keyframes sm-dialogue-focus-burst {

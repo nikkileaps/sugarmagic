@@ -148,11 +148,18 @@ export function createTurnTextElement(
     if (match.celebrate) {
       const burst = document.createElement("span");
       burst.className = "sm-dialogue-focus-burst";
+      // The disc backs the gold so it has something to read against on paper.
+      // FIRST in the DOM because these are all positioned with z-index auto, so
+      // paint order is document order -- the disc must be behind the ring and
+      // the star, not over them. Inert unless the v2 treatment is on.
+      const disc = document.createElement("span");
+      disc.className = "sm-dialogue-focus-burst-disc";
       const halo = document.createElement("span");
       halo.className = "sm-dialogue-focus-burst-halo";
       const star = document.createElement("span");
       star.className = "sm-dialogue-focus-burst-star";
       star.textContent = "★";
+      burst.appendChild(disc);
       burst.appendChild(halo);
       burst.appendChild(star);
       wrapper.appendChild(burst);
