@@ -141,13 +141,20 @@ export function createRuntimeDialoguePanel(
     showLookupCard(result, event.anchor);
   }
 
-  // Any click that is not itself a new selection dismisses the card. Registered
-  // once, not per card, so it cannot outlive the panel.
-  document.addEventListener("mousedown", (mouseEvent) => {
+  // Any click that is not itself a new selection dismisses the card.
+  //
+  // NAMED AND REMOVED IN `dispose()`. This was an anonymous listener with the
+  // comment "registered once, not per card, so it cannot outlive the panel" --
+  // which had it backwards: registering once on `document` is precisely what
+  // made it outlive the panel, because nothing ever took it off. Every
+  // conversation left another listener holding `lookupCard` and `hideLookupCard`
+  // alive, and after dispose they fired against a panel that was gone.
+  function handleDocumentMouseDown(mouseEvent: MouseEvent): void {
     if (lookupCard && !lookupCard.contains(mouseEvent.target as Node)) {
       hideLookupCard();
     }
-  });
+  }
+  document.addEventListener("mousedown", handleDocumentMouseDown);
 
   const container = document.createElement("div");
   container.className = "sm-dialogue-panel-container";
@@ -687,6 +694,12 @@ export function createRuntimeDialoguePanel(
     dispose() {
       for (const unregister of unregisterActions) unregister();
       stopCurrent();
+      // Both halves of select-to-translate: the document listener, and a card
+      // that is parented to document.body rather than to this panel -- so
+      // removing the container below would NOT take it with it, and a lookup
+      // card left open at dispose would simply stay on screen forever.
+      document.removeEventListener("mousedown", handleDocumentMouseDown);
+      hideLookupCard();
       scriptedBox.dispose();
       parentContainer.removeChild(container);
     }

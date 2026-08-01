@@ -139,12 +139,23 @@ import { createChunkMatcher } from "../classifier/chunk-matcher";
 import { MorphologyLoader } from "../classifier/morphology-loader";
 
 /**
- * Bumped to 086.3.1 when the prompt stopped saying "dialogue line" and started
- * taking the register from the caller. This string is a leg of the variant
- * cache key, so every previously baked variant re-grades on the next run --
- * intended, and cheap at current content volume.
+ * A LEG OF THE VARIANT CACHE KEY. Bumping it re-grades every previously baked
+ * variant on the next run -- intended, and cheap at current content volume.
+ *
+ * BUMP IT WHENEVER `buildAdaptationPrompt` CHANGES MATERIALLY. Forgetting is
+ * silent and looks like the change did not work: the prompt is new, but every
+ * existing variant stays cached under the old key and is served unchanged.
+ *
+ * History:
+ *   086.3.1  the prompt stopped saying "dialogue line" and took the register
+ *            from the caller.
+ *   090.11.0 the prompt gained a Teach section carrying the Teacher's slate.
+ *            This one was nearly missed -- the slate only appears when a caller
+ *            passes `teach`, so the no-slate prompt is byte-identical and no
+ *            snapshot moved. Without the bump, every already-baked variant would
+ *            have stayed cached and never picked up slate steering at all.
  */
-export const GRADED_TEXT_PROMPT_VERSION = "086.3.1";
+export const GRADED_TEXT_PROMPT_VERSION = "090.11.0";
 
 /** Minimum voice-retention score for the voice gate to pass. */
 export const VOICE_RETENTION_PASS_THRESHOLD = 0.5;

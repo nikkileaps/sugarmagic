@@ -28,30 +28,41 @@ in `packages/plugins/src/catalog/sugarlang/manifest.ts`):
 
 Effective per-turn order: context and teacher run in `prepare`; then the
 provider generates the turn; then scripted, verify, and observe run in
-`finalize`, in that order. (The header comment in
-`sugar-lang-scripted-middleware.ts` says "after verify at 20"; the sort says
-otherwise -- 15 runs before 20. In practice the two never touch the same
-turn: scripted only handles `scripted-dialogue` turns and verify skips them.)
+`finalize`, in that order. Scripted at 15 runs BEFORE verify at 20 -- lower
+priority sorts first. (The header comment in `sugar-lang-scripted-middleware.ts`
+claimed "after verify at 20" until 2026-07-31; it was backwards, and harmless
+only because the two never touch the same turn: scripted only handles
+`scripted-dialogue` turns and verify skips them.)
 
 ## What Each Middleware Does
 
 **`sugarlang.context` (context, 10).** Loads the learner profile and scene
-lexicon, drives the placement flow state machine (opening-dialog ->
-questionnaire -> closing-dialog), and runs the lexical budgeter. Writes the
-per-turn annotations everything downstream reads: `sugarlang.prescription`,
-`sugarlang.learnerSnapshot`, `sugarlang.pendingProvisionalLemmas`,
-`sugarlang.probeFloorState`, `sugarlang.activeQuestEssentialLemmas`,
-`sugarlang.placementFlow`, and the pre-placement opening line. Emits
-`budgeter.prescription-generated` and `pre-placement.opening-dialog-turn`.
+vocabulary, and drives the placement flow state machine (opening-dialog ->
+questionnaire -> closing-dialog). Writes the per-turn annotations everything
+downstream reads: `sugarlang.learnerSnapshot`,
+`sugarlang.pendingProvisionalLemmas`, `sugarlang.probeFloorState`,
+`sugarlang.activeQuestEssentialLemmas`, `sugarlang.placementFlow`, and the
+pre-placement opening line. Emits `pre-placement.opening-dialog-turn`.
 
-**`sugarlang.teacher` (policy, 30).** Invokes the Director
-(`runtime/teacher/sugar-lang-teacher.ts`): directive cache first, then the
-Claude policy via the gateway, then the deterministic fallback policy. Merges
-the resulting `PedagogicalDirective` with the context-stage prescription into
-the final `sugarlang.constraint` annotation (including the
-`generatorPromptOverlay` string the NPC generator splices verbatim), decides
-comprehension-probe triggering against the probe floor, and short-circuits
-with a fixed pre-placement directive during the opening dialog.
+It also THROWS `SugarlangMissingTargetLanguageError` when no target language
+resolves. That is deliberate and is the runtime's rule only: Studio tolerates a
+null language (a freshly installed plugin has none) and preview refuses to
+launch with a visible error. Reaching this middleware without one means a built
+game shipped misconfigured, and the previous behaviour -- returning early --
+ran every conversation with sugarlang silently inert.
+
+**`sugarlang.teacher` (policy, 30).** Composes the `Situation` and invokes the
+Teacher (`runtime/teacher/sugar-lang-teacher.ts`): directive cache first, then
+the Claude policy via the gateway, then the deterministic fallback policy. Turns
+the resulting `PedagogicalDirective` into the `sugarlang.constraint` annotation
+(including the `generatorPromptOverlay` string the NPC generator splices
+verbatim), decides comprehension-probe triggering against the probe floor, and
+short-circuits with a fixed pre-placement directive during the opening dialog.
+
+There is no prescription to merge. The Lexical Budgeter was deleted in Epic 090
+-- the Teacher reads the situation and the learner directly and decides for
+itself. See the plugin-local
+`docs/api/domain-model.md` for why (a concept is demand, a teachable is supply).
 
 The Director system prompt includes `DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK`
 (085.6): when the player uses or attempts a communicative function the NPC has
@@ -66,18 +77,23 @@ of a hardcoded constant. Only the four categories consumed by
 populated; functions without `interpretLexiconCategory` (including item-zero
 meta-language chunks) do not contribute.
 
-**`sugarlang.scripted` (analysis, 15).** Scripted-dialogue turns only. Takes
-the authored English line, scans it for teaching candidates via the
-gloss index (`atlas.resolveFromGloss`), and calls the LLM
-(`scriptedAdaptationModel` config, default `claude-haiku-4-5-20251001`) to
-adapt the line to the learner's level using the constraint's prompt overlay,
-preserving meaning and quest content. Replaces `turn.text` with the adapted
-line; on any LLM failure it falls back to the authored text. Narrator,
-player-VO, and excerpt speakers are never adapted.
+**`sugarlang.scripted` (analysis, 15).** Scripted-dialogue turns only, and it
+makes ZERO LLM calls. It reads the VARIANT baked for this line at the learner's
+band (`runtime/compile/variant-cache.ts`) and replaces `turn.text` with it.
+Baking happens at authoring time in Studio, not here.
+
+On a cache miss it falls back to `applyWeave`, which substitutes target-language
+words into the authored English via `markGradedText`. That fallback is the last
+survival of the old diglot-weave design and is load-bearing only because a
+missing variant is currently a NORMAL state: variants are generated one node at
+a time from the Studio variants popover, so most lines have none. It goes away
+once bulk baking lands.
+
+Narrator, player-VO, and excerpt speakers are never adapted.
 
 **`sugarlang.verify` (analysis, 20).** Free-form turns only (skips scripted
 mode and player-spoken turns). Runs the envelope classifier over the
-generated text against the learner profile + prescription; on violations,
+generated text against the learner profile and the directive's slate; on violations,
 attempts one LLM repair, re-checks it, and if that fails applies the
 deterministic `autoSimplify` substitution fallback. See "Verify Enforcement
 Scope" below.
@@ -102,8 +118,8 @@ record) triggers the explicit teach beat: one `TeachRecord` is written via
 is written onto the turn. `DialoguePanel` renders the annotation below the
 turn text in the enrichment slot (`enrichmentContainer`, CSS class
 `sm-dialogue-teach-line`). Only one teach-line annotation is written per turn
-(earliest new function wins). Chunk cards are excluded from the prescription,
-probe, and teacher-summary systems.
+(earliest new function wins). Chunk cards are excluded from the probe and
+teacher-summary systems.
 
 ## The Teaching Decision Model (Concept-Opportunity Gating)
 
@@ -120,8 +136,10 @@ The gating ladder, and where each rung lives in the machinery:
 
 | Gating question | Outcome | Machinery |
 |---|---|---|
-| Already learned it? | Skip, next opportunity | Lemma cards + FSRS review state; the budgeter excludes lemmas with `reviewCount > 0` from `introduce` (`runtime/budgeter/lexical-budgeter.ts`) |
-| Too hard, not ready? | Skip, next opportunity | Band envelope: candidates capped at learner band + 1 (`lexical-budgeter.ts`, `getBandIndex`) |
+| Already learned it? | Skip, next opportunity | Lemma cards + FSRS review state, read through `getLearningStatus` (`runtime/learner/learning-status.ts`): `known` and `learning` are neither introduced nor reinforced |
+| Due for review? | Reinforce | `getLearningStatus` returns `due` below `DUE_RETRIEVABILITY_FLOOR` |
+| Too hard, not ready? | Skip, next opportunity | `getLearningStatus` returns `out-of-reach`; the band envelope caps candidates at learner band + 1 |
+| How many at once? | Cap the slate | `getIntroduceCapForBand` (`runtime/teacher/band-envelope.ts`): A1 3, A2 4, B1/B2 5, C1/C2 6 |
 | Brand new? | Fresh introduction | Prescription `introduce` list; scheduler `TeachReason: "introduction"` (`runtime/scheduler/teach-schedule.ts`) |
 | Seen before? | Reinforce -- an in-context opportunity can beat the schedule | Prescription `reinforce` list; scheduler `due` / `debt-service` reasons. (The "great chance even if not quite due" opportunistic case is not yet modeled.) |
 | Probably understood? | Probe for comprehension | Probe floors + `comprehensionCheck` on the directive (`runtime/middlewares/sugar-lang-teacher-middleware.ts`); observe owns probe response classification |
@@ -131,7 +149,7 @@ comes from the compiled scene lexicon
 (`runtime/compile/compile-sugarlang-scene.ts`), which tokenizes authored text
 and resolves English words to target lemmas via the atlas gloss index
 (`resolveFromGloss`). That lexical scan is the AMBIENT layer -- it powers
-hover glosses and gives the budgeter a deterministic candidate pool -- but it
+hover glosses and gives the classifier a deterministic candidate pool -- but it
 only sees literal word matches in authored text. Concept-level opportunity
 detection (an NPC whose character is about cheese making "queso" teachable
 without the literal word "cheese" appearing in a scanned blob) is not part of
@@ -178,10 +196,13 @@ interactionMode), plus the negative cases.
 **Type:** `SugarlangConstraint` (`runtime/contracts/pedagogy.ts`)
 
 Written once per turn by the teacher middleware; read by scripted, verify,
-observe, and the NPC generator. It is the merged, final form of the
-Director's directive + the budgeter's prescription:
+observe, and the NPC generator. It is the Teacher's `PedagogicalDirective`
+re-expressed for the renderer -- where a directive is a DECISION, a constraint
+is INSTRUCTIONS to whatever produces the text:
 
-- `targetVocab` (introduce / reinforce / avoid lemma lists)
+- `targetVocab` (introduce / reinforce / avoid). These hold `TeachableRef`s, not
+  bare lemmas: a teachable is `{kind: "vocabulary", lemmaId}` or
+  `{kind: "competency", competencyId}`.
 - `supportPosture`, `targetLanguageRatio`, `interactionStyle`,
   `glossingStrategy`, `sentenceComplexityCap`
 - `targetLanguage`, `learnerCefr`

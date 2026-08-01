@@ -222,6 +222,56 @@ describe("parseDirective", () => {
     }
   });
 
+  it("090.11: coerces BARE STRING lemmas into the full teachable shape, kind included", () => {
+    // THE BUG THIS PINS. This coercion exists so a Teacher answering
+    // `introduce: ["queso"]` is accepted rather than rejected. It produced
+    // `{lemmaId, lang}` and omitted `kind` -- but 090.4 made a teachable a
+    // discriminated union whose schema requires ["kind", "lemmaId", "lang"]
+    // with no default. So the leniency path built precisely the object
+    // validation rejects: the parse failed and the Teacher silently fell back
+    // to the deterministic policy.
+    //
+    // Nothing caught it because no test exercised the string form at all.
+    const fixture = createDirectiveFixture() as unknown as Record<string, unknown>;
+    fixture.targetVocab = { introduce: ["queso"], reinforce: [], avoid: [] };
+
+    const result = parseDirective(JSON.stringify(fixture), {
+      context: contextWithNoQuestEssential()
+    });
+
+    expect("directive" in result).toBe(true);
+    if ("directive" in result) {
+      expect(result.directive.targetVocab.introduce[0]).toMatchObject({
+        kind: "vocabulary",
+        lemmaId: "queso"
+      });
+    }
+  });
+
+  it("090.11: leaves an already-shaped competency entry alone", () => {
+    // Coercion must only lift BARE STRINGS. A competency has no bare-string
+    // form, so defaulting kind to "vocabulary" cannot swallow one -- but an
+    // object that already declares its kind must pass through untouched.
+    const fixture = createDirectiveFixture() as unknown as Record<string, unknown>;
+    fixture.targetVocab = {
+      introduce: [{ kind: "competency", competencyId: "greet", lang: "es" }],
+      reinforce: [],
+      avoid: []
+    };
+
+    const result = parseDirective(JSON.stringify(fixture), {
+      context: contextWithNoQuestEssential()
+    });
+
+    expect("directive" in result).toBe(true);
+    if ("directive" in result) {
+      expect(result.directive.targetVocab.introduce[0]).toMatchObject({
+        kind: "competency",
+        competencyId: "greet"
+      });
+    }
+  });
+
   it("clamps targetLanguageRatio to the POSTURE's band, not just to [0,1]", () => {
     // 090.4 tightened this. It used to assert 1.5 -> 1.0, i.e. the only bound
     // was the unit interval, so a directive claiming "anchored" could ask for

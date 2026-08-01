@@ -321,6 +321,21 @@ function normalizeInvalidationTrigger(value: unknown): DirectiveLifetime["invali
   return null;
 }
 
+/**
+ * Accepts a Teacher that answered with bare strings -- `introduce: ["queso"]` --
+ * and lifts them into the object shape the schema requires.
+ *
+ * `kind` IS PART OF THAT SHAPE. It was omitted until 2026-07-31, which made this
+ * whole function self-defeating: the schema requires `["kind", "lemmaId",
+ * "lang"]` (090.4 made a teachable a discriminated union, deliberately without a
+ * default), so the leniency path produced precisely the object validation would
+ * reject. A model answering in the simpler form did not get a helpful coercion,
+ * it got a parse failure and a silent fall back to the deterministic policy.
+ *
+ * A bare string is always VOCABULARY. A competency cannot arrive this way --
+ * there is no bare-string form of `{kind: "competency", competencyId}` -- so
+ * defaulting here does not swallow one.
+ */
 function coerceLemmaArrayEntries(
   value: unknown,
   targetLanguage: string
@@ -328,7 +343,7 @@ function coerceLemmaArrayEntries(
   if (!Array.isArray(value)) return undefined;
   return value.map((entry) => {
     if (typeof entry === "string" && entry.trim().length > 0) {
-      return { lemmaId: entry.trim(), lang: targetLanguage };
+      return { kind: "vocabulary", lemmaId: entry.trim(), lang: targetLanguage };
     }
     return entry;
   });

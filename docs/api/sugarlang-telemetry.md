@@ -76,12 +76,16 @@ Grouped by family, with the producing file (all paths relative to
 | `observer.placement-questionnaire-bypass` | `runtime/middlewares/sugar-lang-observe-middleware.ts` |
 | `placement.completed` | `runtime/middlewares/sugar-lang-observe-middleware.ts` |
 
-**Budgeter, classifier, verify**
+**Classifier, verify**
+
+The Budgeter is deleted (Epic 090). `budgeter.prescription-generated` no longer
+exists; the Teacher decides from the situation and the learner directly, so
+there is no prescription to emit.
 
 | Kind | Producer |
 |---|---|
-| `budgeter.prescription-generated` | `sugar-lang-context-middleware.ts` |
 | `classifier.verdict` | `sugar-lang-verify-middleware.ts` (every checked turn) |
+| `verify.ratio-verdict` | `sugar-lang-verify-middleware.ts`. Carries `learnerCefr`, `directedRatio`, `measuredRatio`, `posture`, `denominator` -- the raw numbers, so any ratio threshold can be recomputed after the fact rather than depending on the categorical `conformance`. |
 | `quest-essential.classifier-exempted-lemma` | `sugar-lang-verify-middleware.ts` |
 | `verify.repair-triggered` | `sugar-lang-verify-middleware.ts` (LLM repair accepted) |
 | `verify.auto-simplify-triggered` | `sugar-lang-verify-middleware.ts` (deterministic fallback fired) |

@@ -3,26 +3,43 @@
 ## Purpose
 
 The scripted-mode rendering pipeline adapts authored English NPC dialogue to
-the learner's current level without unconditional LLM calls. The rendering
-ladder has three tiers that compose: deterministic weave (always runs),
-baked variants (compiled assets for deep-end learners), and directed live
-render (wired in 087.5). Every tier
-verifies output before it reaches the player; every tier degrades to the one
-below it on any failure.
+the learner's current level, making ZERO LLM calls at runtime.
+
+**This document described a three-tier ladder until 2026-07-31 and the shape has
+changed.** What actually runs now is two tiers, and one of them is on its way
+out:
+
+1. **Baked variants (primary, every band A1-C2).** The line is pre-rendered per
+   band at authoring time in Studio and read from cache at runtime. Baking is
+   where the LLM call happens; the runtime only reads.
+2. **Weave (fallback, on cache miss).** `applyWeave` in the scripted middleware
+   substitutes target-language words into the authored English via
+   `markGradedText`.
+
+The weave survives ONLY because a missing variant is currently a normal state:
+variants are generated one node at a time from the Studio variants popover, so
+most lines have none. Once bulk baking lands, a missing A1 variant becomes a
+build error and the weave is deleted.
+
+DELETED, despite appearing below: the standalone diglot-weave module, and the
+directed live-render tier (unwired in 090.8c -- `live-render-cache.ts` and
+`verify-live-render.ts` still exist as files but nothing in the middleware
+imports them).
 
 The zero-LLM floor is contractual: authored mode is playable offline with no
-gateway present. Live render requires a gateway but caches aggressively.
+gateway present.
 
 ## Files
 
 | Role | Path |
 |------|------|
 | Scripted middleware | `packages/plugins/src/catalog/sugarlang/runtime/middlewares/sugar-lang-scripted-middleware.ts` |
-| Diglot weave engine | `packages/plugins/src/catalog/sugarlang/runtime/classifier/diglot-weave.ts` |
+| Weave fallback (`applyWeave`) | inside `runtime/middlewares/sugar-lang-scripted-middleware.ts`. The standalone `runtime/classifier/diglot-weave.ts` module is DELETED. |
+| Graded-text marker (what the weave calls) | `packages/plugins/src/catalog/sugarlang/runtime/grading/graded-text-marker.ts` |
 | Bake-time variant generator | `packages/plugins/src/catalog/sugarlang/runtime/compile/generate-variant.ts` |
 | Variant cache (memory + IDB) | `packages/plugins/src/catalog/sugarlang/runtime/compile/variant-cache.ts` |
-| Live-render cache (memory) | `packages/plugins/src/catalog/sugarlang/runtime/compile/live-render-cache.ts` |
-| Runtime live-render verifier | `packages/plugins/src/catalog/sugarlang/runtime/compile/verify-live-render.ts` |
+| Live-render cache (memory) -- UNWIRED, no middleware imports it | `packages/plugins/src/catalog/sugarlang/runtime/compile/live-render-cache.ts` |
+| Runtime live-render verifier -- UNWIRED | `packages/plugins/src/catalog/sugarlang/runtime/compile/verify-live-render.ts` |
 | Intent artifact contracts | `packages/plugins/src/catalog/sugarlang/runtime/contracts/line-intent.ts` |
 | Baked variant contracts | `packages/plugins/src/catalog/sugarlang/runtime/contracts/baked-variant.ts` |
 | Compile scheduler | `packages/plugins/src/catalog/sugarlang/runtime/compile/compile-scheduler.ts` |
@@ -33,7 +50,12 @@ gateway present. Live render requires a gateway but caches aggressively.
 
 ## Rendering Ladder
 
-### Tier A1: Deterministic diglot weave (anchored / supported postures)
+### Tier A1: Deterministic weave -- NOW THE FALLBACK, NOT THE FLOOR
+
+Stale below: this describes the weave as the tier that ALWAYS runs for
+anchored/supported postures. Since 090.11 those postures read a baked variant
+first and only weave on a cache miss. The mechanism described is otherwise
+accurate, and it now lives in `applyWeave` rather than its own module.
 
 The authored English text is used as the frame. Words that resolve via the
 atlas to prescription-introduced lemmas are substituted with their citation
@@ -77,7 +99,12 @@ Revisit when citation-form output reads as grammatically wrong to a learner
 past A2, or when a native reviewer flags weave grammar. (See deferred seam
 comment in `diglot-weave.ts`.)
 
-### Tier B1: Baked variants (target-dominant posture; B1/B2/C1/C2 bands)
+### Tier B1: Baked variants -- NOW EVERY BAND, NOT JUST B1+
+
+`DIALOGUE_VARIANT_BANDS` is A1 through C2 (`runtime/contracts/baked-variant.ts`).
+A1/A2 joined the baked set in 090.11; the blocker had been `GradedTextService`
+defaulting posture to target-dominant, so a beginner bake was verified against a
+B1+ ratio. `generateVariant` now passes posture and directed ratio explicitly.
 
 Full-L2 variants are generated at Studio bake time by `generateVariant`, run
 through four verification gates, and stored in the variant cache. At runtime
@@ -110,7 +137,10 @@ boot payload, `variantCache` is undefined and the middleware degrades silently.
 On a cache miss at runtime, the middleware degrades to the diglot weave (Tier
 A1) so the turn always completes.
 
-### Tier C: Directed live render (wired in 087.5)
+### Tier C: Directed live render -- DELETED (unwired in 090.8c)
+
+Kept below for the record only. Nothing in the scripted middleware imports the
+live-render cache or its verifier any more.
 
 The live-render trigger is deterministic: a scheduled due teachable whose id
 appears in the line's `mustConveyFacts` AND `!schedule.strainSuppressed`. When

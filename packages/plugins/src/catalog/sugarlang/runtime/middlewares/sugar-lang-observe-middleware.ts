@@ -1041,7 +1041,12 @@ export function createSugarLangObserveMiddleware(
           text: normalizedTurn.text,
           targetLanguage: learner.targetLanguage,
           atlas: services.atlas,
-          morphology: new MorphologyLoader(),
+          // The SHARED loader, not a fresh one. `MorphologyLoader` caches per
+          // INSTANCE, so `new MorphologyLoader()` here meant re-running
+          // `assertValidMorphologyData` over the whole morphology file on every
+          // NPC turn -- the same trap `GradedTextService` documents at its own
+          // constructor, and the reason a shared instance exists on services.
+          morphology: services.morphology,
           slateTerms: focusTerms
           // properNouns intentionally omitted: the scene vocabulary model is not
           // resolved on this path, and passing none is the safe direction -- a
