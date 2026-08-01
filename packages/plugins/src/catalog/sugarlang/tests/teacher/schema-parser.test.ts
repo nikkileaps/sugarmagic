@@ -323,33 +323,31 @@ describe("parseDirective", () => {
     );
   });
 
-  it("rejects weak glossing when quest-essential lemmas are present", () => {
+  it("2026-07-31: ACCEPTS glossingStrategy none even with quest-essential lemmas", () => {
+    // THE INVERSION OF THE OLD TEST, and the old one was pinning a bug.
+    //
+    // This used to assert that "none" was REJECTED when the scene had
+    // quest-essential lemmas. But the Teacher prompt offers exactly one value
+    // for glossingStrategy -- "none" -- so the rule rejected the only answer the
+    // Teacher was ever told it could give. Deterministic parse failure for every
+    // quest-essential scene, and because SugarLangTeacher answers a parse
+    // failure with the deterministic fallback, four months of those scenes ran
+    // on the fallback with nothing surfaced.
+    //
+    // Hover is the mechanism now, and the hover is also the signal -- it becomes
+    // a hovered-introduce observation. The old test passed the whole time,
+    // faithfully protecting the thing that was broken.
     const context = createTeacherContext();
-    const telemetry = {
-      emit: vi.fn()
-    };
+    const telemetry = { emit: vi.fn() };
 
     const result = parseDirective(
-      JSON.stringify(
-        createDirectiveFixture({
-          glossingStrategy: "none"
-        })
-      ),
-      {
-        context,
-        telemetry
-      }
+      JSON.stringify(createDirectiveFixture({ glossingStrategy: "none" })),
+      { context, telemetry }
     );
 
-    expect("error" in result).toBe(true);
-    if ("error" in result) {
-      expect(result.error.code).toBe("quest_essential_glossing_required");
+    expect("directive" in result).toBe(true);
+    if ("directive" in result) {
+      expect(result.directive.glossingStrategy).toBe("none");
     }
-    expect(telemetry.emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: "quest-essential.director-forced-glossing",
-        correctedGlossingStrategy: "parenthetical"
-      })
-    );
   });
 });

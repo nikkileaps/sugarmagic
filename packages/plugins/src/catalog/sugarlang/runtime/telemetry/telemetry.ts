@@ -649,16 +649,6 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "quest-essential.director-forced-glossing",
-      {
-        sceneId?: string;
-        originalGlossingStrategy: string;
-        correctedGlossingStrategy: string;
-        questEssentialLemmaCount: number;
-        directorModel?: string | null;
-      }
-    >
-  | TelemetryEventOf<
       "quest-essential.director-targetvocab-contamination",
       {
         sceneId?: string;

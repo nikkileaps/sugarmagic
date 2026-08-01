@@ -234,11 +234,15 @@ export function extractCharacterVoiceReminder(
 // one thing that looked like it enforced inline glossing on quest-critical words
 // checked nothing, which is worse than absent: it reads as covered.
 //
-// What DOES run is `enforceDirectiveRequirements` (teacher/schema-parser.ts),
-// which forces `glossingStrategy: "parenthetical"` when the situation carries a
-// must-comprehend concept. That governs the INSTRUCTION, not the output -- so
-// nothing currently verifies the NPC obeyed. Real gap, predates this epic,
-// belongs with 090.7 (visibility) where the slate-vs-realization split lives.
+// Nothing enforces glossing on quest-critical words any more, and that is
+// deliberate as of 2026-07-31: the rule in `enforceDirectiveRequirements` that
+// rejected "none"/"hover-only" glossing was deleted. It rejected the only value
+// the Teacher prompt ever offers, so it forced every quest-essential scene onto
+// the deterministic fallback for four months.
+//
+// HOVER IS THE MECHANISM NOW, and it is also the SIGNAL: a hover becomes a
+// hovered-introduce observation, so a player who did not know a word tells us
+// so. An inline gloss would have destroyed that evidence.
 
 function normalizeQuestFocusText(text: string): string {
   return text.normalize("NFC").toLocaleLowerCase();
