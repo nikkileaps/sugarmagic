@@ -185,6 +185,18 @@ export interface RuntimeGameplaySessionControllerOptions {
   root: HTMLElement;
   world: World;
   inputManager: RuntimeInputManager;
+  /**
+   * Requests a NAMED camera move. Injected by the host, which owns the live
+   * camera -- the session asks for a framing by name and never sees a camera,
+   * the same shape as claimInput / releaseInput.
+   *
+   * Optional: a host without a camera (tests, headless) simply omits it and
+   * everything else behaves identically.
+   */
+  cameraMoves?: {
+    request: (moveName: string) => void;
+    release: (moveName: string) => void;
+  };
   activeRegion: RegionDocument | null;
   /**
    * Plan 058 §058.1 — the active narrative Scene whose overlay
@@ -352,6 +364,11 @@ const PLAYER_COLLISION_AGENT_ID = "__player__";
 const DEFAULT_AGENT_RADIUS = 0.35;
 
 const DIALOGUE_LOCK_ID = "runtime-dialogue";
+/**
+ * The framing a conversation asks for. A NAME, not a camera: see
+ * packages/runtime-core/src/camera/moves.ts for what it resolves to.
+ */
+const DIALOGUE_CAMERA_MOVE = "dialogue-focus";
 const JOURNAL_LOCK_ID = "runtime-quest-journal";
 const INVENTORY_LOCK_ID = "runtime-inventory";
 const ITEM_VIEW_LOCK_ID = "runtime-item-view";
@@ -1754,6 +1771,11 @@ export function createRuntimeGameplaySessionController(
   ]);
   dialogueManager.setOnStart(() => {
     inputManager.addWorldInputLock(DIALOGUE_LOCK_ID);
+    // Framing the conversation belongs HERE rather than in sugarlang: this seam
+    // already brackets "a conversation is happening" and already owns the input
+    // lock, and putting it here means SCRIPTED dialogue is framed too, not only
+    // agent conversations. A plugin can still ask for a different named move.
+    options.cameraMoves?.request(DIALOGUE_CAMERA_MOVE);
     inputManager.consumeInteract();
     syncInteractionPrompt();
   });
@@ -1762,6 +1784,10 @@ export function createRuntimeGameplaySessionController(
   });
   dialogueManager.setOnEnd((dialogueDefinitionId, reason) => {
     inputManager.removeWorldInputLock(DIALOGUE_LOCK_ID);
+    // Released, not awaited: control comes back NOW and the camera catches up
+    // on its own. Gating input on an animation is what makes a return feel
+    // like lag rather than like grace.
+    options.cameraMoves?.release(DIALOGUE_CAMERA_MOVE);
     inputManager.consumeInteract();
     questDialogueCoordinator.handleDialogueEnd(dialogueDefinitionId, reason);
     syncInteractionPrompt();

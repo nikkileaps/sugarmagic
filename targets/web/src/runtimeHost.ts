@@ -101,6 +101,7 @@ import {
   applyCameraDrag,
   applyCameraZoom,
   computeCameraPosition,
+  createCameraMoveDirector,
   createRuntimeInputManager,
   createRuntimeBootModel,
   createRuntimeDebugHud,
@@ -1200,6 +1201,18 @@ export function createWebRuntimeHost(
   let unsubscribeTexturesUpdated: (() => void) | null = null;
   let currentAssetSources: Record<string, string> = {};
   let cameraState: GameCameraState | null = null;
+  /**
+   * Named camera moves in flight. The HOST owns this because the host owns
+   * cameraState -- runtime-core defines what a move is and where it should be
+   * at time t, but nothing in core owns a camera to move.
+   */
+  const cameraMoveDirector = createCameraMoveDirector();
+  const CAMERA_MOVE_BOUNDS = {
+    pitchMin: DEFAULT_CAMERA_CONFIG.pitchMin,
+    pitchMax: DEFAULT_CAMERA_CONFIG.pitchMax,
+    distanceMin: DEFAULT_CAMERA_CONFIG.distanceMin,
+    distanceMax: DEFAULT_CAMERA_CONFIG.distanceMax
+  };
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
   let playerVisualController: ReturnType<
     typeof createPlayerVisualController
@@ -1759,6 +1772,19 @@ export function createWebRuntimeHost(
         delta,
         isDragging
       );
+    }
+
+    // AFTER follow, and outside the block above: follow owns target and yaw,
+    // a move owns pitch and distance, and the two never write the same field.
+    if (cameraState) {
+      const moveSample = cameraMoveDirector.update(delta * 1000, CAMERA_MOVE_BOUNDS);
+      if (moveSample) {
+        cameraState = {
+          ...cameraState,
+          pitch: moveSample.pitch,
+          distance: moveSample.distance
+        };
+      }
     }
 
     const camPos = computeCameraPosition(cameraState);
@@ -2653,6 +2679,20 @@ export function createWebRuntimeHost(
       root,
       world,
       inputManager,
+      // The session asks for a framing by NAME; the host resolves it against
+      // the live camera. Requesting captures wherever the camera is now as the
+      // framing to give back, so a player who had zoomed gets their own zoom
+      // returned rather than the rig default.
+      cameraMoves: {
+        request: (moveName) => {
+          if (!cameraState) return;
+          cameraMoveDirector.request(moveName, {
+            pitch: cameraState.pitch,
+            distance: cameraState.distance
+          });
+        },
+        release: () => cameraMoveDirector.release()
+      },
       activeRegion,
       activeScene,
       // Plan 069.3 — NPC movement resolves against the same static world.
@@ -2870,6 +2910,10 @@ export function createWebRuntimeHost(
     cameraState = createCameraState(DEFAULT_CAMERA_CONFIG);
     cameraState.targetY = playerEyeHeight;
     inputManager.onRightDrag = (dx, dy) => {
+      // Touching the camera by hand takes it back. Reachable during a move's
+      // RETURN, when the input lock has already been released -- and a move
+      // that kept animating through the player's own input would feel broken.
+      cameraMoveDirector.cancel();
       if (cameraState) {
         cameraState = applyCameraDrag(
           cameraState,
@@ -2880,6 +2924,7 @@ export function createWebRuntimeHost(
       }
     };
     inputManager.onScroll = (delta) => {
+      cameraMoveDirector.cancel();
       if (cameraState) {
         cameraState = applyCameraZoom(
           cameraState,

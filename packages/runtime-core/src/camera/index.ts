@@ -9,6 +9,10 @@
  * preview entry point can compute camera world position without a Three.js rig.
  */
 
+// Named, reusable camera moves. Kept in a sibling file because this one is the
+// rig math and that one is choreography over it.
+export * from "./moves";
+
 export interface GameCameraConfig {
   fov: number;
   pitchMin: number;       // degrees
