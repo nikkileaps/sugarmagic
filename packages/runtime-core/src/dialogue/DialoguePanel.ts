@@ -325,6 +325,14 @@ export function createRuntimeDialoguePanel(
 
   function graduateActive() {
     if (activeContainer.childElementCount === 0) return;
+    // The advance arrow belongs to the card the player is being asked to
+    // advance PAST. `renderActions` only ever clears arrows inside the active
+    // container, so a card carrying one into history kept it forever -- with
+    // chunking that meant every earlier chunk sat in the deck still pulsing
+    // "press Enter", which reads as the card being the live one.
+    activeContainer
+      .querySelectorAll(".sm-dialogue-entry-advance")
+      .forEach((el) => el.remove());
     while (activeContainer.firstChild) {
       historyContainer.appendChild(activeContainer.firstChild);
     }
@@ -1446,22 +1454,25 @@ function injectStyles() {
        it reads as paper tucked under paper, not as clipped text. That only
        holds while each card is WIDER than the one behind it -- see below.
 
-       The card DIRECTLY behind the front one is deliberately generous: 48px is
-       about half of a three-line card and the whole of a one-line one, so the
-       last thing said stays readable rather than being a hint. The two behind
-       it stay peeks -- 17 and 10 -- because they are depth cues, and because
-       every pixel here comes out of the height budget. */
+       THESE REVEAL PAPER, NOT TEXT, AND THAT IS FORCED.
+       A card's own padding-top is 26px, so a reveal beyond that starts showing
+       the first line of text -- and the FRONT card's name chip, which straddles
+       its top edge, hangs 14px above it and is 30px tall. Overlap the cards at
+       all and that chip lands squarely on those 44px. So "the card behind shows
+       readable text" and "the cards actually overlap" cannot both hold while
+       the chip straddles the edge. Overlap wins: a stack of paper edges is what
+       reads as a stack. Raising these past 26 puts text back under the chip. */
     .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(1) {
-      height: 48px;
-      transform: scale(0.985);
+      height: 26px;
+      transform: scale(0.97);
     }
     .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(2) {
-      height: 17px;
-      transform: scale(0.96);
+      height: 16px;
+      transform: scale(0.945);
     }
     .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(3) {
       height: 10px;
-      transform: scale(0.935);
+      transform: scale(0.92);
     }
 
     /* THREE BEHIND THE FRONT CARD, AND NO MORE.
@@ -1474,15 +1485,15 @@ function injectStyles() {
     }
     .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(1)
       .sm-dialogue-entry-card {
-      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.30)) brightness(0.97);
+      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.30)) brightness(0.88);
     }
     .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(2)
       .sm-dialogue-entry-card {
-      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.30)) brightness(0.90);
+      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.30)) brightness(0.80);
     }
     .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(3)
       .sm-dialogue-entry-card {
-      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.30)) brightness(0.83);
+      filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.30)) brightness(0.72);
     }
 
     /* The chip names a card you cannot read; at 14px it is noise, and it costs
@@ -1507,10 +1518,30 @@ function injectStyles() {
       pointer-events: none;
     }
 
-    /* The current turn is unscaled and paints over the whole deck. */
+    /* THE FRONT CARD SITS ON TOP OF THE DECK, NOT BELOW IT.
+       The name chip used to sit IN FLOW above the card, pushing it down 23px,
+       so the deck's clipped edge and the front card never met -- 24px of bare
+       scene showed between them and the stack read as separate floating cards.
+       Taking the chip out of flow lets the front card rise to the deck, and the
+       -14px then tucks the deck's cut edge underneath it.
+
+       Scoped to the active entry: history chips are hidden and the input card
+       has none, so this is the only chip that needs to leave the flow. */
     .sm-dialogue-panel-active {
       position: relative;
       z-index: 1;
+      margin-top: -14px;
+    }
+
+    .sm-dialogue-panel-active .sm-dialogue-entry {
+      position: relative;
+    }
+
+    .sm-dialogue-panel-active .sm-dialogue-entry-speaker {
+      position: absolute;
+      top: -14px;
+      left: 18px;
+      margin: 0;
     }
 
     .sm-dialogue-entry-speaker {
@@ -1594,7 +1625,34 @@ function injectStyles() {
       display: none;
     }
 
+    /* THE INPUT CARD IS THE FRONT OF THE DECK.
+       It is the newest card in the conversation, so the message above it tucks
+       underneath exactly like any other pair in the stack, instead of floating
+       in its own separate box.
+
+       This works despite the input living OUTSIDE the scrolling thread. The
+       scroll clips its own content, which is why a message card can never spill
+       DOWN over the input -- but the input is a later, positioned sibling, so
+       it paints over the scroll's box freely. The overlap only had to run in
+       this direction.
+
+       The 18px is bounded by the card's 20px bottom padding: it swallows the
+       scroll's 4px pad and 14px of empty card, and stops short of the text. */
+    /* No name chip on the input card. It sits IN FLOW above the card and pushes
+       it down ~23px, which is what kept the two cards apart -- with the chip
+       there the deepest tuck available before the chip starts covering the
+       NPC's last line of text is about 6px, which does not read as a stack.
+       The deck already hides chips on tucked cards, so this is consistent: only
+       the focal NPC card is named. The placeholder ("Reply to Finnick Thorn")
+       and the caret already say whose card this is. */
+    .sm-dialogue-entry-player-input .sm-dialogue-entry-speaker {
+      display: none;
+    }
+
     .sm-dialogue-panel-input {
+      position: relative;
+      z-index: 1;
+      margin-top: -22px;
       /* Horizontal insets MUST match ".sm-dialogue-panel-scroll" or the input
          card's left edge steps away from the message cards above it. The
          bottom inset only has to clear the card's drop-shadow; the panel's
