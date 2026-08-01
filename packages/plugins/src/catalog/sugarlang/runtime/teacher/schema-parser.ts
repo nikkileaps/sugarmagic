@@ -238,8 +238,7 @@ export interface DirectiveParseError {
   code:
     | "invalid_json"
     | "schema_validation_failed"
-    | "hard_floor_violated"
-    | "quest_essential_glossing_required";
+    | "hard_floor_violated";
   message: string;
   details: DirectiveFieldError[];
   partial: unknown | null;
@@ -665,42 +664,28 @@ function enforceDirectiveRequirements(
   context: TeacherContext,
   telemetry: TelemetrySink
 ): DirectiveParseError | null {
-  const questEssentialLemmas = resolveQuestEssentialLemmaRefs(
-    context.situation,
-    context.atlas,
-    context.lang
-  );
-  if (
-    questEssentialLemmas.length > 0 &&
-    (directive.glossingStrategy === "hover-only" ||
-      directive.glossingStrategy === "none")
-  ) {
-    maybeEmit(
-      createTelemetryEvent("quest-essential.director-forced-glossing", {
-        conversationId: context.conversationId,
-        sessionId: context.telemetryContext?.sessionId,
-        turnId: context.telemetryContext?.turnId,
-        timestamp: Date.now(),
-        sceneId: context.situation?.sceneId ?? "unknown-scene",
-        originalGlossingStrategy: directive.glossingStrategy,
-        correctedGlossingStrategy: "parenthetical",
-        questEssentialLemmaCount: questEssentialLemmas.length
-      }),
-      telemetry
-    );
-    return {
-      code: "quest_essential_glossing_required",
-      message:
-        "Quest-essential lemmas require inline or parenthetical glossing from the Director.",
-      details: [
-        {
-          path: "/glossingStrategy",
-          message: "quest-essential context forbids hover-only/none glossing"
-        }
-      ],
-      partial: directive
-    };
-  }
+  // DELETED 2026-07-31: the quest-essential GLOSSING rule.
+  //
+  // It rejected a directive whose glossingStrategy was "none" or "hover-only"
+  // whenever the scene had quest-essential lemmas. The Teacher prompt offers
+  // exactly ONE value for that field -- "none" -- so this rejected the only
+  // answer the Teacher was ever told it could give: a deterministic parse
+  // failure for every scene with a mustComprehend concept, from the day both
+  // landed (same commit, 2026-04-12).
+  //
+  // Because SugarLangTeacher answers a TeacherInvocationError with the
+  // deterministic fallback, that meant four months of quest-essential scenes
+  // running on the fallback instead of the LLM Teacher, with nothing surfaced
+  // anywhere. The build-time teach plan has no fallback, which is the only
+  // reason it was ever noticed.
+  //
+  // HOVER IS SUFFICIENT (nikki, 2026-07-31). The parenthetical-gloss era is
+  // over. Hovering is also the SIGNAL -- it becomes a hovered-introduce
+  // observation, so a player who did not know a word tells us so. An inline
+  // gloss would destroy that evidence as well as the prose.
+  //
+  // Quest-essential lemmas still matter everywhere else: still resolved, still
+  // kept off the avoid list, still tracked. Only the glossing rule is gone.
 
   const probeFloorState = pacingSignals(context).probeFloorState;
   if (probeFloorState.hardFloorReached && !directive.comprehensionCheck.trigger) {

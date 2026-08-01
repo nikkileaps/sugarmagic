@@ -220,11 +220,16 @@ describe("ClaudeTeacherPolicy", () => {
     const policy = new ClaudeTeacherPolicy({
       client: {
         generateStructuredDirective: vi.fn(async () => ({
-          text: JSON.stringify(
-            createDirectiveFixture({
-              glossingStrategy: "none"
-            })
-          ),
+          // Malformed JSON: an unrepairable failure, which is what this test
+          // is actually about.
+          //
+          // It used to provoke the failure with glossingStrategy "none",
+          // relying on the quest-essential glossing rule to reject it. That rule
+          // was deleted 2026-07-31 -- it rejected the only value the Teacher
+          // prompt ever offers, forcing every quest-essential scene onto the
+          // deterministic fallback for four months. "none" is now valid, so it
+          // can no longer stand in for a rejection.
+          text: "{ not valid json",
           requestId: "request-rejected"
         }))
       },
@@ -238,7 +243,7 @@ describe("ClaudeTeacherPolicy", () => {
     expect(logger.warn).toHaveBeenCalledWith(
       "Teacher response rejected before repair; falling back.",
       expect.objectContaining({
-        errorCode: "quest_essential_glossing_required",
+        errorCode: "invalid_json",
         rawResponseText: expect.any(String),
         activeQuestEssentialLemmaCount: 1
       })
