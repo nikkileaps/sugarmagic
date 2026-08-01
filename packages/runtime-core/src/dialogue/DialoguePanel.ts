@@ -291,6 +291,9 @@ export function createRuntimeDialoguePanel(
     currentTurnMetadata = undefined;
   }
 
+  /** Held at its typing height until it recedes -- see settleFrontInputCard. */
+  let frozenFrontCard: HTMLElement | null = null;
+
   /** Every card in the conversation, oldest first. The stack is a window on it. */
   const cards: StackEntry[] = [];
   /** Which card is at the front. Equals the last index unless browsing history. */
@@ -338,6 +341,10 @@ export function createRuntimeDialoguePanel(
         "sm-dialogue-depth-3"
       );
       entry.el.classList.add(`sm-dialogue-depth-${slot.depth}`);
+      if (slot.depth > 0 && frozenFrontCard && entry.el.contains(frozenFrontCard)) {
+        frozenFrontCard.style.height = "";
+        frozenFrontCard = null;
+      }
       // The advance arrow belongs to the card being advanced PAST. Any card
       // that is no longer the front one must not keep pulsing "press Enter".
       if (slot.depth > 0) {
@@ -433,6 +440,10 @@ export function createRuntimeDialoguePanel(
   }
 
   function clearStack(): void {
+    if (frozenFrontCard) {
+      frozenFrontCard.style.height = "";
+      frozenFrontCard = null;
+    }
     cards.length = 0;
     frontIndex = -1;
     stackContainer.replaceChildren();
@@ -440,6 +451,68 @@ export function createRuntimeDialoguePanel(
 
   function frontIsPendingEntry(): boolean {
     return frontCard()?.kind === "pending";
+  }
+
+  /**
+   * HOLDING THE FRONT CARD SO THE CELEBRATION CAN BE SEEN.
+   *
+   * The player's card celebrates every focus term they produced -- the reward
+   * loop for actually using the language. It played the instant the card
+   * rendered, and the card was then pushed back the moment the model answered,
+   * which on a fast reply was well under a second. The animation was running on
+   * a card already receding into the stack, and it read as a flicker.
+   *
+   * So the card simply STAYS at the front until the celebration finishes, and
+   * whatever comes next waits its turn. No apex, no choreography: the delay is
+   * on the next card's arrival, not on this card's movement.
+   *
+   * Must track the longest celebrate animation in the sheet below --
+   * "sm-dialogue-focus-burst" at 1320ms. A little tail so the last frame is
+   * seen rather than cut.
+   */
+  const CELEBRATE_HOLD_MS = 1420;
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
+  let deferredWhileHeld: Array<() => void> = [];
+
+  function releaseFrontHold(): void {
+    if (holdTimer) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+    const queued = deferredWhileHeld;
+    deferredWhileHeld = [];
+    for (const run of queued) run();
+  }
+
+  /** Drops queued work without running it -- the conversation has moved on. */
+  function cancelFrontHold(): void {
+    if (holdTimer) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+    deferredWhileHeld = [];
+  }
+
+  /**
+   * Holds only if the card actually has something to celebrate, so an ordinary
+   * reply still moves at conversation speed.
+   */
+  function holdFrontForCelebration(entry: HTMLElement): void {
+    if (!entry.querySelector(".sm-dialogue-focus-term-celebrate")) return;
+    if (holdTimer) clearTimeout(holdTimer);
+    // A TIMER, not "animationend". If the animation never fires -- reduced
+    // motion, a term that failed to match, a browser that drops it -- an
+    // event-driven hold would stall the conversation permanently. The runtime
+    // has to keep the player playing.
+    holdTimer = setTimeout(releaseFrontHold, CELEBRATE_HOLD_MS);
+  }
+
+  function whenFrontReleased(run: () => void): void {
+    if (!holdTimer) {
+      run();
+      return;
+    }
+    deferredWhileHeld.push(run);
   }
 
   /**
@@ -614,10 +687,62 @@ export function createRuntimeDialoguePanel(
     renderActions();
   }
 
-  function createEntry(turn: ConversationTurnEnvelope): HTMLDivElement {
+  function decorateTurn(turn: ConversationTurnEnvelope): ConversationTurnEnvelope {
     for (const decorator of entryDecorators) {
       turn = decorator(turn);
     }
+    return turn;
+  }
+
+  /**
+   * Shared with the scripted box so both presentations render identical
+   * language enrichment (focus terms, glosses, bursts, hover telemetry).
+   */
+  function createEntryText(turn: ConversationTurnEnvelope): HTMLDivElement {
+    return createTurnTextElement(turn, {
+      onTermHover: onTermHover ?? undefined,
+      onSelectionLookup: onSelectionLookup ? handleSelectionLookup : undefined
+    });
+  }
+
+  /**
+   * Turns the live player card INTO the message it holds, in place.
+   *
+   * The card the player typed in keeps its element, its paper and its position:
+   * only the form is swapped for the settled text. Building a fresh card and
+   * pushing it instead -- which is what this did first -- regenerates the paper
+   * with a different deckled edge and renders as a card ARRIVING, so the
+   * player's own words appeared to jump to a new card at the moment they
+   * pressed Enter.
+   */
+  function settleFrontInputCard(turn: ConversationTurnEnvelope): HTMLElement | null {
+    const front = frontCard();
+    if (front?.kind !== "input") return null;
+    const card = front.el.querySelector<HTMLElement>(".sm-dialogue-entry-card");
+    if (!card) return null;
+
+    // FREEZE THE HEIGHT while the card is still in front. The settled text is
+    // shorter than a textarea plus its hint row, and the stack is anchored at
+    // the BOTTOM -- so left to itself the card shrinks and the player's own
+    // words drop ~18px at the exact moment they press Enter. Held at its typing
+    // height, nothing moves at all. Released again in renderStack once the card
+    // has receded, where the change is hidden by the transition.
+    frozenFrontCard = card;
+    card.style.height = `${Math.round(card.getBoundingClientRect().height)}px`;
+
+    card.querySelector(".sm-dialogue-input-form")?.remove();
+    card.appendChild(createEntryText(decorateTurn(turn)));
+    // The class only ever meant "this card holds a textarea". Dropping it also
+    // un-hides the name chip, which is absolutely positioned and so costs no
+    // layout shift -- the card does not move.
+    front.el.classList.remove("sm-dialogue-entry-player-input");
+    front.kind = "player";
+    textInput = null;
+    return front.el;
+  }
+
+  function createEntry(turn: ConversationTurnEnvelope): HTMLDivElement {
+    turn = decorateTurn(turn);
 
     const entry = document.createElement("div");
     entry.className = "sm-dialogue-entry";
@@ -641,14 +766,7 @@ export function createRuntimeDialoguePanel(
     // can overlap the card's top-left corner without the paper painting over it.
     const card = attachPaperCard(entry);
 
-    // Shared with the scripted box so both presentations render identical
-    // language enrichment (focus terms, glosses, bursts, hover telemetry).
-    card.appendChild(
-      createTurnTextElement(turn, {
-        onTermHover: onTermHover ?? undefined,
-        onSelectionLookup: onSelectionLookup ? handleSelectionLookup : undefined
-      })
-    );
+    card.appendChild(createEntryText(turn));
     return entry;
   }
 
@@ -691,10 +809,7 @@ export function createRuntimeDialoguePanel(
     if (input.kind === "free_text") {
       const trimmed = input.text.trim();
       if (!trimmed) return;
-      // The live input card becomes a settled message. A brief purple pulse
-      // confirms the send -- the same colour family as the name chip, so it
-      // reads as "your card committed" rather than as an alert.
-      const sentEntry = createEntry({
+      const sentTurn: ConversationTurnEnvelope = {
         turnId: `player:${crypto.randomUUID()}`,
         providerId: "runtime:player-input",
         conversationKind: "free-form",
@@ -702,18 +817,22 @@ export function createRuntimeDialoguePanel(
         speakerLabel: PLAYER_SPEAKER.displayName,
         text: trimmed,
         choices: []
-      });
+      };
+      // The card the player typed in BECOMES the message, in place. Only if
+      // there is no live input card -- a submit from somewhere else -- does a
+      // new card get pushed.
+      const sentEntry =
+        settleFrontInputCard(sentTurn) ??
+        pushCard(createEntry(sentTurn), "player").el;
+      // A brief purple pulse confirms the send -- the same colour family as the
+      // name chip, so it reads as "your card committed" rather than as an alert.
       sentEntry.classList.add("sm-dialogue-entry-sent");
       sentEntry.addEventListener(
         "animationend",
         () => sentEntry.classList.remove("sm-dialogue-entry-sent"),
         { once: true }
       );
-      // The live input card IS this card -- it settles rather than being
-      // replaced, so the player's words stay in the same place in the stack
-      // instead of vanishing and reappearing.
-      removeFrontCardIf("input");
-      pushCard(sentEntry, "player");
+      holdFrontForCelebration(sentEntry);
       stopCurrent();
       handler?.({ kind: "free_text", text: trimmed });
       return;
@@ -1014,7 +1133,9 @@ export function createRuntimeDialoguePanel(
     }
   }
 
-  return {
+  // Named so the two deferred paths below can re-enter the public method after
+  // the celebration hold releases, rather than duplicating their bodies.
+  const panelApi: RuntimeDialoguePanel = {
     getElement() {
       return container;
     },
@@ -1035,6 +1156,7 @@ export function createRuntimeDialoguePanel(
       scriptedBox.hide();
       scriptedActive = false;
       container.classList.remove("visible");
+      cancelFrontHold();
       actionsContainer.innerHTML = "";
       enrichmentContainer.innerHTML = "";
       stopCurrent();
@@ -1050,12 +1172,20 @@ export function createRuntimeDialoguePanel(
     },
     clearHistory() {
       scriptedBox.hide();
+      cancelFrontHold();
       clearStack();
       actionsContainer.innerHTML = "";
       enrichmentContainer.innerHTML = "";
       uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
     },
     showPending(options) {
+      // Deferred WHOLE, not just the card: applying this turn's state while the
+      // player's card is still at the front would render the next turn's
+      // actions against a card that has not moved yet.
+      if (holdTimer) {
+        whenFrontReleased(() => panelApi.showPending(options));
+        return;
+      }
       pendingSpeakerLabel = options?.speakerLabel ?? null;
       onCancel = options?.onCancel ?? null;
       // Decide the presentation up front so the pending state does not flash
@@ -1087,6 +1217,10 @@ export function createRuntimeDialoguePanel(
       container.classList.add("visible");
     },
     showTurn(turn, handleTurnInput, handleCancel) {
+      if (holdTimer) {
+        whenFrontReleased(() => panelApi.showTurn(turn, handleTurnInput, handleCancel));
+        return;
+      }
       // conversationKind is stable for the session; inputMode is NOT a valid
       // switch (an agent's closing turn reports "advance", which would snap a
       // chat into the scripted box and drop its visible history).
@@ -1162,6 +1296,8 @@ export function createRuntimeDialoguePanel(
       parentContainer.removeChild(container);
     }
   };
+
+  return panelApi;
 }
 
 function injectStyles() {
