@@ -23,8 +23,7 @@ import {
 import type {
   ConversationPlayerInput,
   ConversationQuestFormResponse,
-  ConversationTurnEnvelope,
-  QuestFormDefinition
+  ConversationTurnEnvelope
 } from "../conversation";
 import { isQuestFormDefinition } from "../conversation";
 import { findTermMatches, readDialogueHighlight, readDialogueTeachLine } from "./highlight";
@@ -976,18 +975,15 @@ export function createRuntimeDialoguePanel(
     if (currentInputMode === "quest_form") {
       // 081.8 -- form renders in the full-screen QuestFormOverlay React component.
       // Signal UIStateStore to open it; actions area stays empty.
-      const formDef = isQuestFormDefinition(
-        currentTurnMetadata?.["sugarlang.placementQuestionnaire"]
-      )
-        ? {
-            ...(currentTurnMetadata!["sugarlang.placementQuestionnaire"] as QuestFormDefinition),
-            formId:
-              typeof currentTurnMetadata?.["sugarlang.placementQuestionnaireVersion"] ===
-              "string"
-                ? (currentTurnMetadata["sugarlang.placementQuestionnaireVersion"] as string)
-                : "quest-form"
-          }
-        : null;
+      //
+      // READ AND PASS THROUGH, nothing more. This used to reach into two
+      // sugarlang-namespaced metadata keys and ASSEMBLE the definition from
+      // them, which put a branch that only ever fired for one plugin's
+      // placement flow inside the generic conversation layer -- and left any
+      // other plugin no way to show a quest form at all. The key is generic
+      // now and the writer supplies a complete definition.
+      const rawForm = currentTurnMetadata?.["questForm"];
+      const formDef = isQuestFormDefinition(rawForm) ? rawForm : null;
       uiStateStore?.setState({ questFormOpen: true, questFormDefinition: formDef });
       return;
     }

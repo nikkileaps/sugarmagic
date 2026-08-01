@@ -131,8 +131,18 @@ function buildPlacementQuestionnaireEnvelope(
     inputMode: "quest_form",
     proposedActions: [],
     metadata: {
-      "sugarlang.placementQuestionnaire": effectiveQuestionnaire,
-      "sugarlang.placementQuestionnaireVersion": `${effectiveQuestionnaire.lang}-placement-v${effectiveQuestionnaire.schemaVersion}`
+      // GENERIC key: runtime-core renders whatever quest form it finds here and
+      // must not know which plugin authored it. It was two sugarlang-namespaced
+      // keys -- misleading as well as wrong, since THIS plugin writes them --
+      // and runtime-core assembled the definition from both.
+      //
+      // formId is folded in HERE so the conversation layer only reads and
+      // passes through. It identifies the form to whoever scores it, which is
+      // this plugin's concern, not the panel's.
+      questForm: {
+        ...effectiveQuestionnaire,
+        formId: `${effectiveQuestionnaire.lang}-placement-v${effectiveQuestionnaire.schemaVersion}`
+      }
     },
     annotations: input.execution.annotations,
     diagnostics: {

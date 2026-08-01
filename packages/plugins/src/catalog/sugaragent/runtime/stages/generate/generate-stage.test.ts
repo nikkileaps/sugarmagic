@@ -494,7 +494,7 @@ describe("GenerateStage", () => {
     expect(result.output.usedLlm).toBe(false);
     expect(result.output.envelopeOverride?.inputMode).toBe("quest_form");
     expect(
-      result.output.envelopeOverride?.metadata?.["sugarlang.placementQuestionnaire"]
+      result.output.envelopeOverride?.metadata?.["questForm"]
     ).toMatchObject({
       lang: "es",
       minAnswersForValid: 4
