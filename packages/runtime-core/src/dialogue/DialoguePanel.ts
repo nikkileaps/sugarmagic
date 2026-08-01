@@ -29,6 +29,7 @@ import type {
 import { isQuestFormDefinition } from "../conversation";
 import { findTermMatches, readDialogueHighlight, readTeachLine } from "./highlight";
 import { splitTextIntoChunks, type UnbreakableRange } from "./chunk-text";
+import { DEFAULT_STACK_DEPTH, stackWindow, stepFrontIndex } from "./card-stack";
 import { createTurnTextElement } from "./turn-text";
 import { createPaperPanel } from "./paper-panel";
 import {
@@ -43,6 +44,18 @@ export interface RuntimeDialoguePanel extends DialoguePresenter {
   submitQuestFormResponse: (response: ConversationQuestFormResponse) => void;
   /** 081.8 -- cancels the active quest_form conversation and closes the overlay. */
   cancelQuestForm: () => void;
+}
+
+/**
+ * A card in the stack.
+ *
+ * `input` is the live player card -- the one holding a textarea. It becomes a
+ * settled `player` card once sent, which is why the kind is tracked rather than
+ * inferred from the speaker: the same card is both, at different moments.
+ */
+interface StackEntry {
+  el: HTMLElement;
+  kind: "response" | "player" | "pending" | "input";
 }
 
 export type DialogueEntryDecorator = (
@@ -173,23 +186,24 @@ export function createRuntimeDialoguePanel(
     onCancel?.();
   });
 
-  const scrollArea = document.createElement("div");
-  scrollArea.className = "sm-dialogue-panel-scroll";
-
-  const historyContainer = document.createElement("div");
-  historyContainer.className = "sm-dialogue-panel-history";
-  scrollArea.appendChild(historyContainer);
-
-  const activeContainer = document.createElement("div");
-  activeContainer.className = "sm-dialogue-panel-active";
-  scrollArea.appendChild(activeContainer);
+  /**
+   * THE STACK. One container, one card list, one pointer at the front card.
+   *
+   * This replaced a scrolling thread built from three containers (history,
+   * active, and an input box outside the scroller). The conversation is not a
+   * document that scrolls -- it is a deck, and scrolling is an INPUT that moves
+   * the front pointer over it. Native overflow scrolling is gone with it.
+   */
+  const stackContainer = document.createElement("div");
+  stackContainer.className = "sm-dialogue-stack";
+  panel.appendChild(stackContainer);
 
   /**
    * Off-screen twin of a message card, used to measure how many lines a
-   * candidate chunk wraps to. It lives INSIDE the scroll area and carries the
-   * real card classes on purpose: the answer depends on the card's exact
-   * content width and typography, so anything measured somewhere else is
-   * measuring a different box.
+   * candidate chunk wraps to. A SIBLING of the stack rather than a child,
+   * because the stack's children are replaced wholesale on every render -- but
+   * it carries the same padding so its card is exactly as wide as a real one.
+   * Measure a different box and the answer is about a different box.
    */
   const measureEntry = document.createElement("div");
   measureEntry.className = "sm-dialogue-entry sm-dialogue-measure";
@@ -197,22 +211,7 @@ export function createRuntimeDialoguePanel(
   const measureCard = document.createElement("div");
   measureCard.className = "sm-dialogue-entry-card";
   measureEntry.appendChild(measureCard);
-  scrollArea.appendChild(measureEntry);
-
-  panel.appendChild(scrollArea);
-
-  // Shown only when the player has scrolled up and something new arrived.
-  const jumpButton = document.createElement("button");
-  jumpButton.type = "button";
-  jumpButton.className = "sm-dialogue-panel-jump";
-  jumpButton.textContent = "New message \u2193";
-  jumpButton.addEventListener("click", () => scrollToBottom(true));
-  panel.appendChild(jumpButton);
-
-  // Scrolling back down on their own dismisses it; no need to click.
-  scrollArea.addEventListener("scroll", () => {
-    if (isPinnedToBottom()) setJumpVisible(false);
-  });
+  panel.appendChild(measureEntry);
 
   const enrichmentContainer = document.createElement("div");
   enrichmentContainer.className = "sm-dialogue-panel-enrichment";
@@ -221,10 +220,6 @@ export function createRuntimeDialoguePanel(
   const actionsContainer = document.createElement("div");
   actionsContainer.className = "sm-dialogue-panel-actions";
   panel.appendChild(actionsContainer);
-
-  const inputContainer = document.createElement("div");
-  inputContainer.className = "sm-dialogue-panel-input";
-  panel.appendChild(inputContainer);
 
   container.appendChild(panel);
   parentContainer.appendChild(container);
@@ -288,58 +283,206 @@ export function createRuntimeDialoguePanel(
     currentInputPlaceholder = "";
     actionsContainer.innerHTML = "";
     enrichmentContainer.innerHTML = "";
-    inputContainer.innerHTML = "";
+    // The live player card is a card in the stack, so ending the turn has to
+    // take it OUT of the stack -- clearing a container no longer does it.
+    removeFrontCardIf("input");
     textInput = null;
     pendingSpeakerLabel = null;
     currentTurnMetadata = undefined;
   }
 
+  /** Every card in the conversation, oldest first. The stack is a window on it. */
+  const cards: StackEntry[] = [];
+  /** Which card is at the front. Equals the last index unless browsing history. */
+  let frontIndex = -1;
+  /** Guards the transition so a fast flick cannot re-enter mid-render. */
+  let stackAnimation = 0;
+
+  function frontCard(): StackEntry | null {
+    return cards[frontIndex] ?? null;
+  }
+
+  function isBrowsingHistory(): boolean {
+    return frontIndex >= 0 && frontIndex < cards.length - 1;
+  }
+
   /**
-   * Anchors to the newest message -- UNLESS the player has scrolled up to
-   * reread something.
+   * Applies the window to the DOM, animating cards from wherever they were to
+   * wherever they now belong.
    *
-   * Yanking the view back down mid-read is the single most annoying thing a
-   * chat stack can do, so a new message while scrolled up surfaces the jump
-   * control instead and leaves the view where the player put it.
+   * FLIP, because the depth change is a LAYOUT change -- a card moves between
+   * slots of different height and scale, and CSS cannot transition an element
+   * across that. So: record where everything is, re-render, then start each
+   * card from an inverse transform and let it play back to zero.
    */
-  function scrollToBottom(force = false) {
-    if (!force && !isPinnedToBottom()) {
-      setJumpVisible(true);
+  function renderStack(animate = true): void {
+    const slots = stackWindow({
+      total: cards.length,
+      frontIndex,
+      depth: DEFAULT_STACK_DEPTH
+    });
+
+    const before = new Map<HTMLElement, DOMRect>();
+    if (animate) {
+      for (const child of Array.from(stackContainer.children)) {
+        before.set(child as HTMLElement, child.getBoundingClientRect());
+      }
+    }
+
+    const next = slots.map((slot) => {
+      const entry = cards[slot.index]!;
+      entry.el.classList.remove(
+        "sm-dialogue-depth-0",
+        "sm-dialogue-depth-1",
+        "sm-dialogue-depth-2",
+        "sm-dialogue-depth-3"
+      );
+      entry.el.classList.add(`sm-dialogue-depth-${slot.depth}`);
+      // The advance arrow belongs to the card being advanced PAST. Any card
+      // that is no longer the front one must not keep pulsing "press Enter".
+      if (slot.depth > 0) {
+        entry.el
+          .querySelectorAll(".sm-dialogue-entry-advance")
+          .forEach((el) => el.remove());
+      }
+      return entry.el;
+    });
+    stackContainer.replaceChildren(...next);
+
+    if (!animate) return;
+    const generation = ++stackAnimation;
+    for (const el of next) {
+      const prev = before.get(el);
+      const now = el.getBoundingClientRect();
+      // The depth class supplies the resting transform; the animation has to
+      // END on it, not on "none", or every card snaps to unscaled at the last
+      // frame.
+      const resting = getComputedStyle(el).transform;
+      const restingTransform = resting === "none" ? "" : resting;
+
+      if (!prev) {
+        // A card that was not on screen a moment ago: rise into place.
+        el.animate(
+          [
+            { transform: `translateY(16px) ${restingTransform}`, opacity: 0 },
+            { transform: restingTransform || "none", opacity: 1 }
+          ],
+          { duration: 200, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+        );
+        continue;
+      }
+
+      const dy = prev.top - now.top;
+      const scale = now.width > 0 ? prev.width / now.width : 1;
+      if (Math.abs(dy) < 0.5 && Math.abs(scale - 1) < 0.005) continue;
+      const animation = el.animate(
+        [
+          { transform: `translateY(${dy}px) scale(${scale}) ${restingTransform}` },
+          { transform: restingTransform || "none" }
+        ],
+        { duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+      );
+      // A newer transition supersedes this one rather than fighting it, so a
+      // fast flick walks the stack instead of queueing a backlog of animations.
+      animation.onfinish = () => {
+        if (generation !== stackAnimation) animation.cancel();
+      };
+    }
+  }
+
+  /** Adds a card at the front, pushing the stack back one place. */
+  function pushCard(el: HTMLElement, kind: StackEntry["kind"]): StackEntry {
+    const entry: StackEntry = { el, kind };
+    cards.push(entry);
+    frontIndex = cards.length - 1;
+    renderStack();
+    return entry;
+  }
+
+  /** Swaps the front card in place -- the thinking card becoming its answer. */
+  function replaceFrontCard(el: HTMLElement, kind: StackEntry["kind"]): void {
+    if (frontIndex < 0) {
+      pushCard(el, kind);
       return;
     }
-    scrollArea.scrollTop = scrollArea.scrollHeight;
-    setJumpVisible(false);
+    cards[frontIndex] = { el, kind };
+    renderStack(false);
   }
 
-  /** Within a line's slack of the bottom counts as pinned. */
-  function isPinnedToBottom(): boolean {
-    const slack = 48;
-    return (
-      scrollArea.scrollHeight - scrollArea.scrollTop - scrollArea.clientHeight <= slack
-    );
+  function removeFrontCardIf(kind: StackEntry["kind"]): void {
+    if (frontCard()?.kind !== kind) return;
+    cards.splice(frontIndex, 1);
+    frontIndex = cards.length - 1;
+    renderStack(false);
   }
 
-  function setJumpVisible(visible: boolean): void {
-    jumpButton.classList.toggle("is-visible", visible);
+  /** Returns the player to the newest card. */
+  function goToPresent(): void {
+    if (cards.length === 0 || frontIndex === cards.length - 1) return;
+    frontIndex = cards.length - 1;
+    renderStack();
   }
 
-  function graduateActive() {
-    if (activeContainer.childElementCount === 0) return;
-    // The advance arrow belongs to the card the player is being asked to
-    // advance PAST. `renderActions` only ever clears arrows inside the active
-    // container, so a card carrying one into history kept it forever -- with
-    // chunking that meant every earlier chunk sat in the deck still pulsing
-    // "press Enter", which reads as the card being the live one.
-    activeContainer
-      .querySelectorAll(".sm-dialogue-entry-advance")
-      .forEach((el) => el.remove());
-    while (activeContainer.firstChild) {
-      historyContainer.appendChild(activeContainer.firstChild);
+  function stepStack(delta: number): void {
+    if (cards.length === 0) return;
+    const next = stepFrontIndex({ total: cards.length, frontIndex, delta });
+    if (next === frontIndex) return;
+    frontIndex = next;
+    renderStack();
+    syncInputFocusToStack();
+  }
+
+  function clearStack(): void {
+    cards.length = 0;
+    frontIndex = -1;
+    stackContainer.replaceChildren();
+  }
+
+  function frontIsPendingEntry(): boolean {
+    return frontCard()?.kind === "pending";
+  }
+
+  /**
+   * Scrolling walks the stack. Scrolling DOWN pulls older cards forward, which
+   * is the physical reading of the metaphor -- you are dragging the deck toward
+   * you -- and the opposite of a chat log, where up means older.
+   *
+   * A trackpad fires dozens of events per flick, so deltas accumulate to a
+   * threshold and each threshold is one card. The per-event cap keeps a hard
+   * flick to a few cards instead of teleporting to the start of the
+   * conversation, while still letting repeated flicks get there quickly.
+   */
+  const WHEEL_STEP_PX = 40;
+  const MAX_CARDS_PER_FLICK = 4;
+  let wheelAccumulator = 0;
+
+  stackContainer.addEventListener(
+    "wheel",
+    (event: WheelEvent) => {
+      if (cards.length <= 1) return;
+      event.preventDefault();
+      wheelAccumulator += event.deltaY;
+      const steps = Math.trunc(wheelAccumulator / WHEEL_STEP_PX);
+      if (steps === 0) return;
+      wheelAccumulator -= steps * WHEEL_STEP_PX;
+      const capped = Math.max(-MAX_CARDS_PER_FLICK, Math.min(MAX_CARDS_PER_FLICK, steps));
+      stepStack(-capped);
+    },
+    { passive: false }
+  );
+
+  /**
+   * Browsing history takes the keyboard away from the input card.
+   *
+   * The live player card is a card in the stack like any other, so scrolling
+   * back leaves it sitting behind the front card WITH FOCUS -- and typing into
+   * a card you cannot see is worse than not being able to type at all.
+   */
+  function syncInputFocusToStack(): void {
+    if (!isBrowsingHistory()) return;
+    if (textInput && document.activeElement === textInput) {
+      textInput.blur();
     }
-  }
-
-  function activeContainsPendingEntry(): boolean {
-    return activeContainer.querySelector(".sm-dialogue-entry-pending") !== null;
   }
 
   function getSpeakerClass(speakerId: string | undefined): string | null {
@@ -467,10 +610,8 @@ export function createRuntimeDialoguePanel(
   function advanceChunk(): void {
     const next = pendingChunks.shift();
     if (next === undefined || !currentChunkTurn) return;
-    graduateActive();
-    activeContainer.appendChild(createEntry({ ...currentChunkTurn, text: next }));
+    pushCard(createEntry({ ...currentChunkTurn, text: next }), "response");
     renderActions();
-    scrollToBottom(true);
   }
 
   function createEntry(turn: ConversationTurnEnvelope): HTMLDivElement {
@@ -568,10 +709,11 @@ export function createRuntimeDialoguePanel(
         () => sentEntry.classList.remove("sm-dialogue-entry-sent"),
         { once: true }
       );
-      activeContainer.appendChild(sentEntry);
-      // Force: the player just acted, so following their own message down is
-      // wanted even if they had scrolled up.
-      scrollToBottom(true);
+      // The live input card IS this card -- it settles rather than being
+      // replaced, so the player's words stay in the same place in the stack
+      // instead of vanishing and reappearing.
+      removeFrontCardIf("input");
+      pushCard(sentEntry, "player");
       stopCurrent();
       handler?.({ kind: "free_text", text: trimmed });
       return;
@@ -587,7 +729,9 @@ export function createRuntimeDialoguePanel(
 
   function renderActions() {
     actionsContainer.innerHTML = "";
-    inputContainer.innerHTML = "";
+    // Any live player card is rebuilt below if it is still wanted; leaving the
+    // old one in the stack would put two textareas in the conversation.
+    removeFrontCardIf("input");
     textInput = null;
 
     function createFooterRow(hintText: string, includeSubmit: boolean): HTMLDivElement {
@@ -643,8 +787,8 @@ export function createRuntimeDialoguePanel(
     // the player types keeps telling them to press Enter to continue, which is
     // now the wrong instruction.
     if (!inReadingBeat()) {
-      activeContainer
-        .querySelectorAll(".sm-dialogue-entry-advance")
+      frontCard()
+        ?.el.querySelectorAll(".sm-dialogue-entry-advance")
         .forEach((el) => el.remove());
     }
 
@@ -652,9 +796,8 @@ export function createRuntimeDialoguePanel(
       // Beat one: the NPC card alone, with the advance arrow. No input yet --
       // and no CHOICES either while chunks remain, because the turn has not
       // finished saying what it has to say.
-      const newest = activeContainer.querySelector<HTMLElement>(
-        ".sm-dialogue-entry .sm-dialogue-entry-card"
-      );
+      const newest =
+        frontCard()?.el.querySelector<HTMLElement>(".sm-dialogue-entry-card") ?? null;
       if (newest && !newest.querySelector(".sm-dialogue-entry-advance")) {
         const arrow = document.createElement("div");
         arrow.className = "sm-dialogue-entry-advance is-ready";
@@ -721,7 +864,7 @@ export function createRuntimeDialoguePanel(
         )
       );
       playerCard.appendChild(form);
-      inputContainer.appendChild(playerEntry);
+      pushCard(playerEntry, "input");
       queueMicrotask(() => textInput?.focus());
       return;
     }
@@ -808,6 +951,15 @@ export function createRuntimeDialoguePanel(
           // input card must not appear while the NPC is still talking. Safe
           // ahead of the free-text check because no textarea exists yet --
           // `renderActions` withholds it for as long as chunks remain.
+          // Browsing history owns Enter first: it returns the player to the
+          // newest card. Advancing a conversation they have scrolled away from
+          // would act on a card that is not in front of them.
+          if (isBrowsingHistory()) {
+            event.preventDefault();
+            goToPresent();
+            queueMicrotask(() => textInput?.focus());
+            return;
+          }
           if (pendingChunks.length > 0) {
             event.preventDefault();
             advanceChunk();
@@ -819,7 +971,6 @@ export function createRuntimeDialoguePanel(
             event.preventDefault();
             awaitingReadAdvance = false;
             renderActions();
-            scrollToBottom(true);
             return;
           }
           // Free-text mode owns Enter via its own input element.
@@ -884,10 +1035,8 @@ export function createRuntimeDialoguePanel(
       scriptedBox.hide();
       scriptedActive = false;
       container.classList.remove("visible");
-      activeContainer.innerHTML = "";
       actionsContainer.innerHTML = "";
       enrichmentContainer.innerHTML = "";
-      inputContainer.innerHTML = "";
       stopCurrent();
       uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
       // Story 50.5 — restore the in-game mode. If something else
@@ -901,11 +1050,9 @@ export function createRuntimeDialoguePanel(
     },
     clearHistory() {
       scriptedBox.hide();
-      historyContainer.innerHTML = "";
-      activeContainer.innerHTML = "";
+      clearStack();
       actionsContainer.innerHTML = "";
       enrichmentContainer.innerHTML = "";
-      inputContainer.innerHTML = "";
       uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
     },
     showPending(options) {
@@ -928,12 +1075,16 @@ export function createRuntimeDialoguePanel(
         return;
       }
       scriptedBox.hide();
-      graduateActive();
       stopCurrent();
-      activeContainer.innerHTML = "";
-      activeContainer.appendChild(createPendingEntry(pendingSpeakerLabel));
+      // Replace a thinking card rather than stacking a second one: showPending
+      // is called on every submit, and two dots cards in a row is not history.
+      const pendingEntry = createPendingEntry(pendingSpeakerLabel);
+      if (frontIsPendingEntry()) {
+        replaceFrontCard(pendingEntry, "pending");
+      } else {
+        pushCard(pendingEntry, "pending");
+      }
       container.classList.add("visible");
-      scrollToBottom();
     },
     showTurn(turn, handleTurnInput, handleCancel) {
       // conversationKind is stable for the session; inputMode is NOT a valid
@@ -948,11 +1099,6 @@ export function createRuntimeDialoguePanel(
         return;
       }
       scriptedBox.hide();
-      if (activeContainsPendingEntry()) {
-        activeContainer.innerHTML = "";
-      } else {
-        graduateActive();
-      }
       onInput = handleTurnInput;
       onCancel = handleCancel ?? null;
       currentChoices = turn.choices;
@@ -963,16 +1109,22 @@ export function createRuntimeDialoguePanel(
       currentInputPlaceholder = turn.inputPlaceholder ?? "";
       // Re-armed per NPC turn: every new line gets read before it gets answered.
       awaitingReadAdvance = currentInputMode === "free_text";
-      activeContainer.innerHTML = "";
       // A turn longer than the card is read a chunk at a time rather than being
       // clipped mid-sentence at the panel's bottom edge. The envelope is
       // untouched; only the number of cards drawn for it changes.
       currentChunkTurn = turn;
       const chunks = chunkTurnText(turn);
       pendingChunks = chunks.slice(1);
-      activeContainer.appendChild(
-        createEntry(chunks.length > 1 ? { ...turn, text: chunks[0]! } : turn)
+      const firstEntry = createEntry(
+        chunks.length > 1 ? { ...turn, text: chunks[0]! } : turn
       );
+      // The answer takes the thinking card's PLACE. Pushing instead would
+      // leave the dots sitting in the stack as if they were something said.
+      if (frontIsPendingEntry()) {
+        replaceFrontCard(firstEntry, "response");
+      } else {
+        pushCard(firstEntry, "response");
+      }
       renderActions();
 
       // 085.5: Render the teach-line annotation in the enrichment slot if present.
@@ -986,7 +1138,6 @@ export function createRuntimeDialoguePanel(
       }
 
       container.classList.add("visible");
-      scrollToBottom();
     },
     submitQuestFormResponse(response: ConversationQuestFormResponse) {
       uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
@@ -1350,47 +1501,21 @@ function injectStyles() {
       border-color: rgba(255,255,255,0.24);
     }
 
-    .sm-dialogue-panel-scroll {
-      flex: 1 1 auto;
-      /* A floor, so a growing input cannot squeeze the messages to nothing --
-         which is exactly what happened at rows=3 (38px left for the thread). */
-      min-height: 96px;
-      overflow-y: auto;
-      overflow-x: visible;
-      /* Top room is for the chips, which hang ABOVE their cards. The left and
-         right insets must stay EQUAL, and equal to the input/enrichment/actions
-         insets below -- they are what centres the cards under the panel, and
-         the panel is what is centred on screen. */
-      padding: 34px 8px 4px;
-      /* Without this, a platform with classic (space-taking) scrollbars steals
-         width from the right of the thread only, shifting every message card
-         left of the input card. A no-op where scrollbars overlay, e.g. macOS. */
-      scrollbar-gutter: stable both-edges;
-      /* Softens the top edge when the deck is tall enough to scroll. Short --
-         22px used to be right when a full card could be guillotined here, but
-         the deck's slivers are only 14px each, so a long fade washed out the
-         top two into smudges rather than reading as stacked paper. */
-      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 100%);
-      mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 100%);
-      scrollbar-width: thin;
-      scrollbar-color: rgba(217, 178, 100, 0.35) transparent;
-    }
-    .sm-dialogue-panel-scroll::-webkit-scrollbar { width: 6px; }
-    .sm-dialogue-panel-scroll::-webkit-scrollbar-thumb {
-      background: rgba(217, 178, 100, 0.30);
-      border-radius: 3px;
-    }
-    .sm-dialogue-panel-scroll::-webkit-scrollbar-track { background: transparent; }
-
-    .sm-dialogue-panel-history,
-    .sm-dialogue-panel-active {
+    /* ---- THE STACK ----
+       One container, cards receding in Z, the front card at the bottom. There
+       is no scrolling viewport: scrolling is an INPUT that moves the front
+       pointer, so nothing here may clip or pan. */
+    .sm-dialogue-stack {
+      position: relative;
+      flex: 0 0 auto;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      /* Top room is for the front card's chip, which hangs above it. Left and
+         right must stay EQUAL and match the enrichment/actions insets below --
+         they are what centres the cards under the panel. */
+      padding: 34px 8px 0;
       overflow: visible;
     }
-
-    /* ---- the stack: paper cards, newest at the bottom ---- */
 
     .sm-dialogue-entry {
       display: flex;
@@ -1428,120 +1553,104 @@ function injectStyles() {
          behind. Scale must therefore grow monotonically toward the front; the
          active card, unscaled, is widest and covers the last sliver. Reversing
          these numbers exposes every cut edge at once. */
-    .sm-dialogue-panel-history {
-      /* The deck sets its own spacing via the sliver height. */
-      gap: 0;
-    }
-
-    .sm-dialogue-panel-history .sm-dialogue-entry {
-      overflow: hidden;
+    .sm-dialogue-stack .sm-dialogue-entry {
+      position: relative;
       transform-origin: center top;
-      /* "transform" alone makes each entry its own stacking context, so a later
-         sibling paints over an earlier one -- which is what puts newer cards in
-         FRONT without hand-managing z-index per card. */
-      transition: transform 0.25s ease-out, height 0.25s ease-out;
+      /* The rise keyframe is for a card ARRIVING. Depth changes are animated
+         by the panel with FLIP, because a card moving between slots changes
+         both height and scale and CSS cannot transition across that. */
       animation: none;
     }
 
-    /* THE REVEAL IS GRADUATED, NOT CONSTANT.
-       An equal sliver for every card is a STACK; a carousel shows the card just
-       behind the front one nearly whole, and hides each one further back a
-       little more. These heights are what is left VISIBLE of each card -- the
-       rest runs on underneath, covered by the card in front.
-
-       Cutting through a line of text is fine here and is the whole effect: the
-       cut itself is always hidden behind the next card's deckled top edge, so
-       it reads as paper tucked under paper, not as clipped text. That only
-       holds while each card is WIDER than the one behind it -- see below.
-
-       THESE REVEAL PAPER, NOT TEXT, AND THAT IS FORCED.
-       A card's own padding-top is 26px, so a reveal beyond that starts showing
-       the first line of text -- and the FRONT card's name chip, which straddles
-       its top edge, hangs 14px above it and is 30px tall. Overlap the cards at
-       all and that chip lands squarely on those 44px. So "the card behind shows
-       readable text" and "the cards actually overlap" cannot both hold while
-       the chip straddles the edge. Overlap wins: a stack of paper edges is what
-       reads as a stack. Raising these past 26 puts text back under the chip. */
-    .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(1) {
-      height: 26px;
-      transform: scale(0.97);
-    }
-    .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(2) {
-      height: 16px;
-      transform: scale(0.945);
-    }
-    .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(3) {
-      height: 10px;
-      transform: scale(0.92);
+    /* Depth 0 is the front card: full size, unscaled, and therefore the widest
+       thing in the stack -- which is what hides the clipped edge of the card
+       behind it. The -14px is the tuck: without it the cards merely sit next to
+       each other and the stack reads as separate floating boxes. */
+    .sm-dialogue-depth-0 {
+      z-index: 1;
+      margin-top: -14px;
     }
 
-    /* THREE BEHIND THE FRONT CARD, AND NO MORE.
-       Not just visual tidiness: this is what BOUNDS the deck. Without it the
-       deck grows by one card per turn and a long conversation walks back out of
-       the height budget the whole layout exists to respect. Three reveals sum
-       to 81px no matter how long the thread gets. */
-    .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(n + 4) {
-      display: none;
+    /* The front card's chip must NOT be in flow. In flow it pushes the card
+       down ~23px, and that gap is exactly what stopped the front card and the
+       deck from ever meeting. */
+    .sm-dialogue-depth-0 .sm-dialogue-entry-speaker {
+      position: absolute;
+      top: -14px;
+      left: 18px;
+      margin: 0;
     }
-    .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(1)
-      .sm-dialogue-entry-card {
+
+    /* THE CARDS BEHIND: a peeking edge, the rest running on underneath.
+
+       WHY A FIXED HEIGHT AND NOT A NEGATIVE MARGIN
+         The peek must be identical for every card, and cards are 1-3 lines
+         tall. A negative margin would have to know each card's height, which
+         CSS cannot do. Fixing the height makes the peek constant and lets the
+         card overflow.
+
+       WHY THE OVERFLOW IS CLIPPED
+         Left visible, a tall old card runs PAST a short card in front of it and
+         pokes out the bottom. Clipping cuts it flat -- and the flat cut is
+         exactly what the next card covers, so it is never seen. The deckled TOP
+         edge, which is the part on show, is untouched.
+
+       WHY EACH CARD IS WIDER THAN THE ONE BEHIND IT
+         That cut is only hidden while the card in front is wider. Scale must
+         grow monotonically toward the front. Reversing these numbers exposes
+         every cut edge at once.
+
+       THESE REVEAL PAPER, NOT TEXT, AND THAT IS FORCED
+         A card's padding-top is 26px, so revealing more starts showing text --
+         and the front card's chip hangs 14px above it and is 30px tall, so any
+         overlap lands the chip on those 44px. "The card behind shows readable
+         text" and "the cards actually overlap" cannot both hold while the chip
+         straddles the edge. Overlap wins: a stack of edges reads as a stack. */
+    .sm-dialogue-depth-1,
+    .sm-dialogue-depth-2,
+    .sm-dialogue-depth-3 {
+      overflow: hidden;
+    }
+
+    /* The -2px is not spacing, it is a SEAM FIX. "height" reserves the layout
+       box, but "scale" shrinks what gets painted into it -- by height*(1-scale),
+       around 1px at these sizes -- so each card was leaving a hairline of bare
+       scene above the next one. Pulling the following card up by 2px covers it. */
+    .sm-dialogue-depth-1 { height: 26px; transform: scale(0.97); margin-bottom: -2px; }
+    .sm-dialogue-depth-2 { height: 16px; transform: scale(0.945); margin-bottom: -2px; }
+    .sm-dialogue-depth-3 { height: 10px; transform: scale(0.92); margin-bottom: -2px; }
+
+    /* DEPTH IS BRIGHTNESS, NOT OPACITY. Dimming with opacity makes the paper
+       TRANSLUCENT, and what shows through is the dark scene behind the panel --
+       so the stack renders as dark bars rather than receding paper. Each rule
+       sets "filter" in full: a card's normal shadow is offset 9px and blurred
+       16, which would land squarely on the card in front of it. */
+    .sm-dialogue-depth-1 .sm-dialogue-entry-card {
       filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.30)) brightness(0.88);
     }
-    .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(2)
-      .sm-dialogue-entry-card {
+    .sm-dialogue-depth-2 .sm-dialogue-entry-card {
       filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.30)) brightness(0.80);
     }
-    .sm-dialogue-panel-history .sm-dialogue-entry:nth-last-child(3)
-      .sm-dialogue-entry-card {
+    .sm-dialogue-depth-3 .sm-dialogue-entry-card {
       filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.30)) brightness(0.72);
     }
 
-    /* The chip names a card you cannot read; at 14px it is noise, and it costs
-       more height than the sliver it would sit on. */
-    .sm-dialogue-panel-history .sm-dialogue-entry-speaker {
+    /* A chip names a card you cannot read, and costs more height than the peek
+       it would sit on. */
+    .sm-dialogue-depth-1 .sm-dialogue-entry-speaker,
+    .sm-dialogue-depth-2 .sm-dialogue-entry-speaker,
+    .sm-dialogue-depth-3 .sm-dialogue-entry-speaker {
       display: none;
     }
 
-    /* NOTE: the per-depth rules below each set "filter" in full, shadow
-       included. A card's normal shadow is offset 9px and blurred 16, which
-       lands it squarely on the 14px sliver in front of it; stacked, that buries
-       the deck. Each sliver needs only enough shadow to separate it from its
-       neighbour, so every depth rule carries the same tight drop-shadow. */
-
     /* The line-measuring twin. It must LAY OUT (that is the entire point, and
        why this is not "display: none") while occupying no visible space and
-       taking no part in the deck. */
+       taking no part in the stack. */
     .sm-dialogue-measure {
       visibility: hidden;
       height: 0;
       overflow: hidden;
       pointer-events: none;
-    }
-
-    /* THE FRONT CARD SITS ON TOP OF THE DECK, NOT BELOW IT.
-       The name chip used to sit IN FLOW above the card, pushing it down 23px,
-       so the deck's clipped edge and the front card never met -- 24px of bare
-       scene showed between them and the stack read as separate floating cards.
-       Taking the chip out of flow lets the front card rise to the deck, and the
-       -14px then tucks the deck's cut edge underneath it.
-
-       Scoped to the active entry: history chips are hidden and the input card
-       has none, so this is the only chip that needs to leave the flow. */
-    .sm-dialogue-panel-active {
-      position: relative;
-      z-index: 1;
-      margin-top: -14px;
-    }
-
-    .sm-dialogue-panel-active .sm-dialogue-entry {
-      position: relative;
-    }
-
-    .sm-dialogue-panel-active .sm-dialogue-entry-speaker {
-      position: absolute;
-      top: -14px;
-      left: 18px;
-      margin: 0;
     }
 
     .sm-dialogue-entry-speaker {
@@ -1608,21 +1717,18 @@ function injectStyles() {
     }
 
     /* Both of these sit in the same column as the message cards, so their
-       horizontal insets match ".sm-dialogue-panel-scroll" too. */
+       horizontal insets match ".sm-dialogue-stack" too. */
     .sm-dialogue-panel-enrichment {
       padding: 0 8px 8px;
     }
 
     .sm-dialogue-panel-actions {
       padding: 8px 8px 6px;
-      /* No border-top, same reason as ".sm-dialogue-panel-input". */
+      /* No border-top: on a transparent panel a divider reads as a
+         hairline drawn across the scene. */
       display: flex;
       flex-direction: column;
       gap: 8px;
-    }
-
-    .sm-dialogue-panel-input:empty {
-      display: none;
     }
 
     /* THE INPUT CARD IS THE FRONT OF THE DECK.
@@ -1647,19 +1753,6 @@ function injectStyles() {
        and the caret already say whose card this is. */
     .sm-dialogue-entry-player-input .sm-dialogue-entry-speaker {
       display: none;
-    }
-
-    .sm-dialogue-panel-input {
-      position: relative;
-      z-index: 1;
-      margin-top: -22px;
-      /* Horizontal insets MUST match ".sm-dialogue-panel-scroll" or the input
-         card's left edge steps away from the message cards above it. The
-         bottom inset only has to clear the card's drop-shadow; the panel's
-         own "bottom" lifts the stack off the viewport edge. */
-      padding: 4px 8px 6px;
-      /* No border-top. That was the chat panel's divider, and on a
-         transparent panel it read as a hairline drawn across the scene. */
     }
 
     /* The old chat-panel rules for ".sm-dialogue-entry" and
@@ -1945,32 +2038,6 @@ function injectStyles() {
       45%  { filter: drop-shadow(0 0 14px rgba(150, 92, 190, 0.75))
                      drop-shadow(0 9px 16px rgba(0,0,0,0.40)); }
       100% { filter: drop-shadow(0 9px 16px rgba(0,0,0,0.40)); }
-    }
-
-    /* ---- "jump to newest" when the player has scrolled up ---- */
-    .sm-dialogue-panel-jump {
-      position: absolute;
-      left: 50%;
-      bottom: -14px;
-      transform: translateX(-50%) translateY(6px);
-      padding: 6px 14px;
-      border-radius: 999px;
-      border: 2px solid #d9b264;
-      background: linear-gradient(180deg, #5d2a55, #4a2145);
-      color: #f7ead9;
-      font-family: ui-rounded, "Nunito", "Quicksand", system-ui, sans-serif;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.18s ease-out, transform 0.18s ease-out;
-      z-index: 5;
-    }
-    .sm-dialogue-panel-jump.is-visible {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-      pointer-events: auto;
     }
 
     /* ── Sugarlang focus-term highlighting ── */
