@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Paper dialogue box v5 -- name chip border</title>
+<style>
+  /* ------------------------------------------------------------------
+     v5. Paper is FROZEN at E1 (the v4 pick). The only variable here is
+     the NAME CHIP border, which the reference has and v1-v4 did not.
+
+     Worth noting the reference keeps the chip edge CLEAN against the
+     rough paper. That contrast reads as deliberate -- a printed label
+     pinned to a torn sheet -- so none of these roughen the chip.
+     ------------------------------------------------------------------ */
+  :root{--ink:#2f2620;--chip-bg:#4a2145;--chip-bg-2:#5d2a55;--chip-ink:#f7ead9;
+    --gold:#b5762a;--olive:#9a8440;--pad:28px;--chip-overlap:14px;--ui-scale:1}
+  *{box-sizing:border-box}
+  body{margin:0;padding:26px 26px 70px;
+    font-family:ui-rounded,"Nunito","Quicksand",system-ui,sans-serif;
+    background:radial-gradient(120% 90% at 30% 10%,#6d5a34 0%,#4a3a22 45%,#2b2115 100%);color:#f0e6d6}
+  h1{font-size:19px;margin:0 0 4px;color:#f0d9a8}
+  .sub{font-size:13px;opacity:.72;margin:0 0 22px;max-width:84ch;line-height:1.5}
+  h2{font-size:13.5px;letter-spacing:.10em;text-transform:uppercase;color:#e0b869;margin:28px 0 3px}
+  .note{font-size:12.5px;opacity:.66;margin:0 0 12px;max-width:86ch;line-height:1.5}
+  .row{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+  .caption{font-size:11px;opacity:.5;margin-top:6px}
+
+  .dialogue{display:inline-flex;flex-direction:column;align-items:flex-start;
+    max-width:calc(430px * var(--ui-scale));overflow:visible;font-size:calc(17px * var(--ui-scale))}
+  .chip{position:relative;z-index:2;width:fit-content;margin-left:calc(18px * var(--ui-scale));
+    margin-bottom:calc(var(--chip-overlap) * -1 * var(--ui-scale));
+    padding:calc(7px * var(--ui-scale)) calc(15px * var(--ui-scale));
+    border-radius:calc(13px * var(--ui-scale));
+    background:linear-gradient(180deg,var(--chip-bg-2),var(--chip-bg));
+    color:var(--chip-ink);font-weight:600;display:flex;align-items:center;gap:8px;white-space:nowrap;
+    box-shadow:0 3px 10px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.13)}
+  .chip .leaf{color:#c9a3c2;font-size:.85em}
+
+  /* ---- the variable ---- */
+  /* G1: thin gold hairline */
+  .g1{border:1.5px solid #c9a24a}
+  /* G2: heavier soft gold */
+  .g2{border:2.5px solid #d9b264}
+  /* G3: cut from the same paper -- border takes the parchment colour */
+  .g3{border:2px solid #efdcb4}
+  /* G4: gold border + inner highlight + faint outer warmth */
+  .g4{border:1.5px solid #cda751;
+      box-shadow:0 3px 10px rgba(0,0,0,.38),
+                 inset 0 1px 0 rgba(255,255,255,.20),
+                 inset 0 0 0 1px rgba(255,214,140,.16),
+                 0 0 12px rgba(201,162,74,.18)}
+  /* G5: two-tone -- gold outer, dark inner, for a struck-metal read */
+  .g5{border:2px solid #c9a24a;
+      box-shadow:0 3px 10px rgba(0,0,0,.38),
+                 inset 0 0 0 1.5px rgba(40,16,36,.75),
+                 inset 0 2px 0 rgba(255,255,255,.14)}
+
+  .panel{position:relative;z-index:1;width:100%;min-height:calc(86px * var(--ui-scale));
+    padding:calc(var(--pad) * var(--ui-scale));padding-top:calc((var(--pad) + 6px) * var(--ui-scale));
+    color:var(--ink);line-height:1.5;filter:drop-shadow(0 9px 16px rgba(0,0,0,.40))}
+  .panel .text{position:relative;z-index:1}
+  .introduce{color:#8a5a00;font-weight:700}
+  .reinforce{color:#1f5f86;font-weight:700}
+  .corner{position:absolute;right:calc(16px * var(--ui-scale));bottom:calc(10px * var(--ui-scale));
+    display:flex;align-items:center;gap:6px;z-index:1}
+  .corner .arrow{color:var(--gold);font-size:calc(15px * var(--ui-scale))}
+  .corner .flourish{color:var(--olive);font-size:calc(19px * var(--ui-scale));opacity:.75}
+  .paper > svg{position:absolute;inset:0;width:100%;height:100%;z-index:0;overflow:visible}
+  .scaled{--ui-scale:1.5}
+  .zoomwrap{height:250px;overflow:hidden}
+  .zoom{transform:scale(2.4);transform-origin:top left}
+</style>
+</head>
+<body>
+
+<h1>v5 &mdash; name chip border</h1>
+<p class="sub">
+  Paper frozen at E1. Only the chip border changes. The reference keeps the chip edge clean against the
+  rough paper &mdash; a printed label pinned to a torn sheet &mdash; so none of these roughen it.
+</p>
+
+<h2>Side by side, same name</h2>
+<div class="row" id="rowAll"></div>
+
+<h2>At 2.4x zoom</h2>
+<div class="row zoomwrap" id="rowZoom"></div>
+
+<h2>Chip width still adapts (G4)</h2>
+<div class="row" id="rowWidths"></div>
+
+<h2>Scale 1.0x vs 1.5x (G4)</h2>
+<div class="row" id="rowScale"></div>
+
+<script>
+const LINE = `You may want to go to the <span class="introduce">estaci&oacute;n</span> while I look into it &mdash;
+  <span class="reinforce">hola</span>, the usual crowd seems to have wandered off somewhere today.`;
+
+/* --- E1, frozen from v4 --- */
+const FINE=[[2,1],[5,.55],[11,.3],[23,.16],[47,.09]];
+const E1={amp:2.4, rad:30, harm:FINE, step:2.5, rim:.16, rich:false};
+
+function makeEdgeNoise(seed,h){
+  const ph=h.map((_,i)=>(Math.sin(seed*12.9898+i*78.233)*43758.5453)%(Math.PI*2));
+  return t=>{let v=0,n=0;h.forEach(([k,a],i)=>{v+=a*Math.sin(2*Math.PI*k*t+ph[i]);n+=a;});return v/n;};
+}
+function deckledPath(w,h,rad,amp,seed,harm,step){
+  const raw=[];
+  const line=(x0,y0,x1,y1)=>{const len=Math.hypot(x1-x0,y1-y0);if(!len)return;
+    const k=Math.max(2,Math.round(len/step)),nx=(y1-y0)/len,ny=-(x1-x0)/len;
+    for(let i=0;i<k;i++){const t=i/k;raw.push([x0+(x1-x0)*t,y0+(y1-y0)*t,nx,ny]);}};
+  const arc=(cx,cy,a0,a1)=>{const k=Math.max(4,Math.round(Math.abs(a1-a0)*rad/step));
+    for(let i=0;i<k;i++){const a=a0+(a1-a0)*(i/k);
+      raw.push([cx+Math.cos(a)*rad,cy+Math.sin(a)*rad,Math.cos(a),Math.sin(a)]);}};
+  const P=Math.PI;
+  line(rad,0,w-rad,0);arc(w-rad,rad,-P/2,0);line(w,rad,w,h-rad);arc(w-rad,h-rad,0,P/2);
+  line(w-rad,h,rad,h);arc(rad,h-rad,P/2,P);line(0,h-rad,0,rad);arc(rad,rad,P,1.5*P);
+  const noise=makeEdgeNoise(seed,harm);
+  const pts=raw.map(([x,y,nx,ny],i)=>{const d=noise(i/raw.length);return [x+nx*d*amp,y+ny*d*amp];});
+  let d=`M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+  for(let i=1;i<pts.length;i++){const [x0,y0]=pts[i-1],[x1,y1]=pts[i];
+    d+=` Q ${x0.toFixed(2)} ${y0.toFixed(2)} ${((x0+x1)/2).toFixed(2)} ${((y0+y1)/2).toFixed(2)}`;}
+  return d+" Z";
+}
+function paperSvg(id){
+  return `<svg aria-hidden="true" data-id="${id}"><defs>
+    <linearGradient id="fl${id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f9eeda"/><stop offset=".55" stop-color="#f0dcb6"/>
+      <stop offset="1" stop-color="#e6cda0"/></linearGradient>
+    <filter id="mot${id}" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.010 0.026" numOctaves="5" seed="${id+5}"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.12"/></feComponentTransfer></filter>
+    <clipPath id="cp${id}"><path d=""/></clipPath></defs>
+    <path class="fill" d="" fill="url(#fl${id})"/>
+    <g clip-path="url(#cp${id})"><rect width="100%" height="100%" filter="url(#mot${id})" style="mix-blend-mode:multiply"/></g>
+    <path class="rim" d="" fill="none" stroke="#a8814a" stroke-opacity="${E1.rim}" stroke-width="1.5"/></svg>`;
+}
+function box(name,chipClass,id,body=LINE,cls=""){
+  return `<div><div class="dialogue ${cls}">
+    <div class="chip ${chipClass}">${name}<span class="leaf">&#127807;</span></div>
+    <div class="panel paper">${paperSvg(id)}<div class="text">${body}</div>
+      <div class="corner"><span class="arrow">&#9654;</span><span class="flourish">&#127807;</span></div>
+    </div></div><div class="caption">${chipClass.toUpperCase()}</div></div>`;
+}
+
+const VARIANTS=[["g1","thin gold hairline"],["g2","heavier soft gold"],
+                ["g3","cut from the paper"],["g4","gold + inner highlight"],["g5","two-tone struck"]];
+document.getElementById("rowAll").innerHTML =
+  VARIANTS.map(([c],i)=>box("Professor Slake",c,i+1)).join("");
+document.getElementById("rowZoom").innerHTML =
+  VARIANTS.slice(0,3).map(([c],i)=>`<div class="zoom" style="margin-right:150px">${box("Racky",c,i+21,"Short text.")}</div>`).join("");
+document.getElementById("rowWidths").innerHTML =
+  ["Al","Mim","Professor Slake","The Great Eloise of Wordlark Hollow"]
+    .map((n,i)=>box(n,"g4",i+41,"Short text.")).join("");
+document.getElementById("rowScale").innerHTML =
+  box("Professor Slake","g4",61) + box("Professor Slake","g4",62,LINE,"scaled");
+
+function layout(){
+  document.querySelectorAll(".paper > svg").forEach(svg=>{
+    const id=+svg.dataset.id, r=svg.parentElement.getBoundingClientRect();
+    const w=Math.max(1,r.width), h=Math.max(1,r.height);
+    const d=deckledPath(w,h,E1.rad,E1.amp,id,E1.harm,E1.step);
+    svg.setAttribute("viewBox",`0 0 ${w} ${h}`);
+    svg.querySelector("path.fill").setAttribute("d",d);
+    svg.querySelector("clipPath path").setAttribute("d",d);
+    svg.querySelector("path.rim").setAttribute("d",d);
+  });
+}
+layout(); new ResizeObserver(layout).observe(document.body);
+window.addEventListener("load",layout);
+document.fonts && document.fonts.ready.then(layout);
+</script>
+</body>
+</html>

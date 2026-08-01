@@ -31,18 +31,35 @@ all native CSS. The design sheet's recommendation to rebuild this in three.js
 would solve the easy half (shader-driven edges) by making the hard half -- text
 layout, wrapping, reflow -- dramatically worse.
 
-### CHOSEN: E1, in `paper-dialogue-box-v4.html`
+### SETTLED: `paper-dialogue-box-FINAL.html`
 
-nikki, 2026-08-01: *"I actually like E1 the best -- it maintains the shape of the
-box the best while still having the rough edges and a slightly hand worn look."*
+Port from that file. It carries the spec in its source and prints it at the top
+of the page. The versioned files below are kept only for the reasoning trail.
+
+**Paper E1** -- nikki, 2026-08-01: *"I actually like E1 the best -- it maintains
+the shape of the box the best while still having the rough edges and a slightly
+hand worn look."*
+
+**Chip G2** -- 2.5px solid `#d9b264`. The reference keeps the chip edge CLEAN
+against the rough paper; that contrast is deliberate, so the chip is not
+roughened to match.
+
+**Corner flourish removed.** Advance arrow only. The leaf in the NAME CHIP
+stays -- only the bottom-right one went.
 
 ```js
+// paper
 amp:  2.4    // displacement in px along the outward normal
 rad:  30     // corner radius
 step: 2.5    // perimeter sampling -- see the Nyquist note below
 rim:  0.16   // edge stroke opacity; the paper-thickness read
 mottle: 0.12 // parchment turbulence alpha (the "rich" variant is 0.22)
 harmonics: [[2,1],[5,.55],[11,.3],[23,.16],[47,.09]]
+
+// chip
+border: 2.5px solid #d9b264, radius 13, overlap 14, inset 18, padding 7/15
+// panel
+padding 28 (top 34), min-height 86, max-width 430
 ```
 
 The harmonics are INTEGERS on purpose. They are harmonics of the perimeter, so
@@ -74,6 +91,14 @@ started.
   **D1 and E1 have nearly the same displacement (2.6 vs 2.4px) and read
   completely differently.** That is the whole finding: spread over long waves it
   looks tidy; broken into fibre-scale octaves it looks hand-worn.
+- **v5** -- name chip border, paper frozen at E1. G2 chosen. Also surfaced a
+  layout edge case: with a long name and short text the chip overflows the
+  panel's right edge. The design sheet avoids this by wrapping the chip to two
+  lines. NOT HANDLED, deliberately -- nikki, 2026-08-01: *"don't worry about
+  that, I will make sure not to give anyone a name that will wrap."* If that
+  constraint ever slips, the options are wrap the chip, give the panel a
+  min-width tied to the chip, or truncate.
+- **FINAL** -- E1 + G2, corner flourish removed. The port target.
 
 ### Still open before this lands in the product
 

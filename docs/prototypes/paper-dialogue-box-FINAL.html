@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Paper dialogue box -- FINAL</title>
+<style>
+  /* ==================================================================
+     FINAL SPEC. Everything settled across v1-v5.
+
+       PAPER   E1  -- vector deckled path, fibre-scale fBm
+       CHIP    G2  -- 2.5px soft gold border
+       CORNER  advance arrow only; the leaf flourish is removed
+
+     This page is the reference for porting into ScriptedDialogueBox.
+     The values marked SPEC below are the ones that matter; everything
+     else is scaffolding for the demo page.
+
+     WHY THIS SHAPE (the short version -- full trail in README.md):
+       - Layout is plain CSS. The existing ScriptedDialogueBox DOM tree
+         already matches the design sheet 1:1, so this is a restyle.
+       - The deckled edge is a real SVG <path>, NOT an feDisplacementMap
+         filter. Filters displace a rasterised buffer on a pixel grid,
+         which stair-steps; vector geometry antialiases at full device
+         resolution at any size.
+       - The edge noise is periodic fBm over arc length with INTEGER
+         harmonics, so it closes exactly -- no seam at the start point.
+       - Roughness comes from FREQUENCY, not amplitude. 2.4px spread over
+         fibre-scale octaves reads hand-worn; the same 2.4px over long
+         waves reads tidy.
+     ================================================================== */
+
+  :root{
+    /* SPEC -- palette */
+    --paper-hi:#f9eeda; --paper-mid:#f0dcb6; --paper-lo:#e6cda0;
+    --paper-rim:#a8814a;                 /* edge stroke, 0.16 alpha */
+    --ink:#2f2620;
+    --chip-bg:#4a2145; --chip-bg-2:#5d2a55; --chip-ink:#f7ead9;
+    --chip-border:#d9b264;               /* SPEC G2 gold */
+    --gold:#b5762a;
+
+    /* SPEC -- metrics, all multiplied by --ui-scale */
+    --pad:28px;            /* panel padding; +6px on top for the chip overlap */
+    --chip-overlap:14px;
+    --chip-inset:18px;     /* chip offset from the panel's left edge */
+    --ui-scale:1;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:26px 26px 60px;
+    font-family:ui-rounded,"Nunito","Quicksand",system-ui,sans-serif;
+    background:radial-gradient(120% 90% at 30% 10%,#6d5a34 0%,#4a3a22 45%,#2b2115 100%);
+    color:#f0e6d6}
+  h1{font-size:19px;margin:0 0 4px;color:#f0d9a8}
+  .sub{font-size:13px;opacity:.72;margin:0 0 6px;max-width:86ch;line-height:1.5}
+  .spec{font-size:12px;opacity:.6;margin:0 0 22px;font-family:ui-monospace,monospace}
+  h2{font-size:13.5px;letter-spacing:.10em;text-transform:uppercase;color:#e0b869;margin:30px 0 10px}
+  .row{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+  .zoomwrap{height:260px;overflow:hidden}
+  .zoom{transform:scale(2.6);transform-origin:top left}
+
+  /* ---------------- SPEC: the component ---------------- */
+  .dialogue{
+    display:inline-flex; flex-direction:column; align-items:flex-start;
+    max-width:calc(430px * var(--ui-scale));
+    overflow:visible;                     /* the chip overlaps; never clip */
+    font-size:calc(17px * var(--ui-scale));
+  }
+  .chip{
+    position:relative; z-index:2; width:fit-content;
+    margin-left:calc(var(--chip-inset) * var(--ui-scale));
+    margin-bottom:calc(var(--chip-overlap) * -1 * var(--ui-scale));
+    padding:calc(7px * var(--ui-scale)) calc(15px * var(--ui-scale));
+    border-radius:calc(13px * var(--ui-scale));
+    border:calc(2.5px * var(--ui-scale)) solid var(--chip-border);   /* SPEC G2 */
+    background:linear-gradient(180deg,var(--chip-bg-2),var(--chip-bg));
+    color:var(--chip-ink); font-weight:600; white-space:nowrap;
+    display:flex; align-items:center; gap:8px;
+    box-shadow:0 3px 10px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.13);
+  }
+  .chip .leaf{color:#c9a3c2;font-size:.85em}
+  .panel{
+    position:relative; z-index:1; width:100%;
+    min-height:calc(86px * var(--ui-scale));
+    padding:calc(var(--pad) * var(--ui-scale));
+    /* NOTE the spaces around + . CSS calc requires them, and a var()
+       substitution failure falls back to the INITIAL value (0), not to
+       the shorthand above -- which silently kills the top padding. */
+    padding-top:calc((var(--pad) + 6px) * var(--ui-scale));
+    color:var(--ink); line-height:1.5;
+    filter:drop-shadow(0 9px 16px rgba(0,0,0,.40));
+  }
+  .panel .text{position:relative;z-index:1}
+  .paper > svg{position:absolute;inset:0;width:100%;height:100%;z-index:0;overflow:visible}
+
+  /* Advance arrow only. The leaf flourish is gone. */
+  .corner{position:absolute;right:calc(18px * var(--ui-scale));bottom:calc(12px * var(--ui-scale));z-index:1}
+  .corner .arrow{color:var(--gold);font-size:calc(15px * var(--ui-scale))}
+
+  /* UNCHANGED FROM THE EXISTING GAME -- do not restyle without a decision.
+     gold = introduce (new), blue = reinforce (review). The celebrate
+     animation keys off the same annotation. */
+  .introduce{color:#8a5a00;font-weight:700}
+  .reinforce{color:#1f5f86;font-weight:700}
+
+  .scaled{--ui-scale:1.5}
+</style>
+</head>
+<body>
+
+<h1>Paper dialogue box &mdash; FINAL</h1>
+<p class="sub">Paper E1, chip G2, corner flourish removed. This is the sheet to port from.</p>
+<p class="spec">
+  paper: amp 2.4 &middot; rad 30 &middot; step 2.5 &middot; rim 0.16 &middot; mottle 0.12 &middot;
+  harmonics [[2,1],[5,.55],[11,.3],[23,.16],[47,.09]]<br>
+  chip: 2.5px solid #d9b264 &middot; radius 13 &middot; overlap 14 &middot; inset 18 &middot; pad 7/15<br>
+  panel: pad 28 (top 34) &middot; min-height 86 &middot; max-width 430
+</p>
+
+<h2>Text lengths</h2>
+<div class="row" id="rowLen"></div>
+
+<h2>Chip widths</h2>
+<div class="row" id="rowChip"></div>
+
+<h2>Scale 1.0x / 1.5x</h2>
+<div class="row" id="rowScale"></div>
+
+<h2>Edge at 2.6x</h2>
+<div class="row zoomwrap" id="rowZoom"></div>
+
+<script>
+/* ============ SPEC: deckled path generation ============ */
+const PAPER = { amp:2.4, rad:30, step:2.5, rim:0.16, mottle:0.12,
+                harm:[[2,1],[5,.55],[11,.3],[23,.16],[47,.09]] };
+
+/* Integer harmonics of the perimeter -> periodic -> closes with no seam. */
+function makeEdgeNoise(seed, harm){
+  const ph = harm.map((_,i)=>(Math.sin(seed*12.9898 + i*78.233)*43758.5453) % (Math.PI*2));
+  return t => { let v=0,n=0; harm.forEach(([k,a],i)=>{ v+=a*Math.sin(2*Math.PI*k*t+ph[i]); n+=a; }); return v/n; };
+}
+
+function deckledPath(w, h, seed, P = PAPER){
+  const raw = [];
+  const line = (x0,y0,x1,y1) => {
+    const len = Math.hypot(x1-x0, y1-y0); if (!len) return;
+    const k = Math.max(2, Math.round(len/P.step)), nx=(y1-y0)/len, ny=-(x1-x0)/len;
+    for (let i=0;i<k;i++){ const t=i/k; raw.push([x0+(x1-x0)*t, y0+(y1-y0)*t, nx, ny]); }
+  };
+  // Corner ARCS must be walked. Skipping them makes closePath cut the
+  // corners off with straight diagonals.
+  const arc = (cx,cy,a0,a1) => {
+    const k = Math.max(4, Math.round(Math.abs(a1-a0)*P.rad/P.step));
+    for (let i=0;i<k;i++){ const a=a0+(a1-a0)*(i/k);
+      raw.push([cx+Math.cos(a)*P.rad, cy+Math.sin(a)*P.rad, Math.cos(a), Math.sin(a)]); }
+  };
+  const R = P.rad, PI = Math.PI;
+  line(R,0,w-R,0);   arc(w-R,R,-PI/2,0);
+  line(w,R,w,h-R);   arc(w-R,h-R,0,PI/2);
+  line(w-R,h,R,h);   arc(R,h-R,PI/2,PI);
+  line(0,h-R,0,R);   arc(R,R,PI,1.5*PI);
+
+  const noise = makeEdgeNoise(seed, P.harm);
+  const pts = raw.map(([x,y,nx,ny],i)=>{ const d = noise(i/raw.length); return [x+nx*d*P.amp, y+ny*d*P.amp]; });
+
+  // Light quadratic smoothing through midpoints -- enough to avoid a
+  // sawtooth, not enough to erase the fibre octaves.
+  let d = `M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+  for (let i=1;i<pts.length;i++){
+    const [x0,y0]=pts[i-1], [x1,y1]=pts[i];
+    d += ` Q ${x0.toFixed(2)} ${y0.toFixed(2)} ${((x0+x1)/2).toFixed(2)} ${((y0+y1)/2).toFixed(2)}`;
+  }
+  return d + " Z";
+}
+
+function paperSvg(id){
+  return `<svg aria-hidden="true" data-id="${id}"><defs>
+    <linearGradient id="fl${id}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="var(--paper-hi)"/>
+      <stop offset=".55" stop-color="var(--paper-mid)"/>
+      <stop offset="1" stop-color="var(--paper-lo)"/>
+    </linearGradient>
+    <filter id="mot${id}" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.010 0.026" numOctaves="5" seed="${id+5}"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer><feFuncA type="linear" slope="${PAPER.mottle}"/></feComponentTransfer>
+    </filter>
+    <clipPath id="cp${id}"><path d=""/></clipPath></defs>
+    <path class="fill" d="" fill="url(#fl${id})"/>
+    <g clip-path="url(#cp${id})">
+      <rect width="100%" height="100%" filter="url(#mot${id})" style="mix-blend-mode:multiply"/>
+    </g>
+    <path class="rim" d="" fill="none" stroke="var(--paper-rim)"
+          stroke-opacity="${PAPER.rim}" stroke-width="1.5"/></svg>`;
+}
+
+function box(name, body, id, cls=""){
+  return `<div class="dialogue ${cls}">
+    <div class="chip">${name}<span class="leaf">&#127807;</span></div>
+    <div class="panel paper">${paperSvg(id)}
+      <div class="text">${body}</div>
+      <div class="corner"><span class="arrow">&#9654;</span></div>
+    </div></div>`;
+}
+
+const TAUGHT = `You may want to go to the <span class="introduce">estaci&oacute;n</span> while I look into it &mdash;
+  <span class="reinforce">hola</span>, the usual crowd seems to have wandered off somewhere today.`;
+
+document.getElementById("rowLen").innerHTML = [
+  box("Racky","Short text.",1),
+  box("Racky","I'll wander around and see if any folks need help!",2),
+  box("Professor Slake",TAUGHT,3),
+  box("Racky",`And here's a really, really long message that keeps going and going across many lines
+    without any weird overflow or layout breaks, so we can see exactly what the edge does when the
+    panel grows tall.`,4)
+].join("");
+
+document.getElementById("rowChip").innerHTML =
+  ["Al","Mim","Professor Slake"].map((n,i)=>box(n,"Short text.",i+11)).join("");
+
+document.getElementById("rowScale").innerHTML = box("Professor Slake",TAUGHT,21) +
+  box("Professor Slake",TAUGHT,22,"scaled");
+
+document.getElementById("rowZoom").innerHTML =
+  `<div class="zoom">${box("Racky","Short text.",31)}</div>`;
+
+function layout(){
+  document.querySelectorAll(".paper > svg").forEach(svg=>{
+    const r = svg.parentElement.getBoundingClientRect();
+    const w = Math.max(1,r.width), h = Math.max(1,r.height);
+    const d = deckledPath(w, h, +svg.dataset.id);
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.querySelector("path.fill").setAttribute("d", d);
+    svg.querySelector("clipPath path").setAttribute("d", d);
+    svg.querySelector("path.rim").setAttribute("d", d);
+  });
+}
+layout();
+new ResizeObserver(layout).observe(document.body);
+window.addEventListener("load", layout);
+document.fonts && document.fonts.ready.then(layout);
+</script>
+</body>
+</html>
