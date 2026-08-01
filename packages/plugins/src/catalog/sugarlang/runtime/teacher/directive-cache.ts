@@ -16,9 +16,6 @@
  */
 
 import {
-  ENTITY_LOCATION_FACT,
-  QUEST_ACTIVE_STAGE_FACT,
-  type BlackboardChangeEvent,
   type RuntimeBlackboard
 } from "@sugarmagic/runtime-core";
 import type { PedagogicalDirective } from "../types";
@@ -53,19 +50,30 @@ export class DirectiveCache {
   private readonly now: () => number;
   private readonly telemetry: TelemetrySink | undefined;
   private readonly cachedConversationIds = new Set<string>();
-  private readonly unsubscribe: (() => void) | null;
 
+  /**
+   * rf6.4.1: NO BLACKBOARD SUBSCRIPTION.
+   *
+   * This used to subscribe, filter to two fact keys, and then do nothing --
+   * `// Intentionally no invalidation here.` So it held a live listener that
+   * could not affect anything, and told every reader that blackboard events
+   * drive cache lifetime. They do not.
+   *
+   * Invalidation happens on READ instead: `peek` compares the situation key and
+   * the learner key per conversation, with a max-turns backstop. That is
+   * strictly better than the events were -- the old subscription called
+   * `invalidateAll`, dropping EVERY conversation's directive on ANY quest-stage
+   * or location event while watching only those two facts, so it
+   * over-invalidated and under-covered at the same time. The situation key
+   * subsumes both: it carries scene, quest, stage, objective nodes and time of
+   * day.
+   *
+   * `dispose()` went with it -- there was nothing left to dispose and no caller.
+   */
   constructor(options: DirectiveCacheOptions) {
     this.blackboard = options.blackboard;
     this.now = options.now ?? (() => Date.now());
     this.telemetry = options.telemetry;
-    this.unsubscribe = this.blackboard.subscribe((event) => {
-      this.handleBlackboardEvent(event);
-    });
-  }
-
-  dispose(): void {
-    this.unsubscribe?.();
   }
 
   /**
@@ -212,33 +220,5 @@ export class DirectiveCache {
     }
   }
 
-  private invalidateAll(reason: InvalidationReason): void {
-    for (const conversationId of [...this.cachedConversationIds]) {
-      this.invalidate(conversationId, reason);
-    }
-  }
 
-  /**
-   * 090.3b: these events no longer invalidate anything by themselves.
-   *
-   * They used to call `invalidateAll`, dropping EVERY conversation's directive
-   * on ANY quest-stage or location event, comparing nothing -- so it
-   * over-invalidated (an unrelated quest advancing elsewhere retired a perfectly
-   * good decision) while also under-covering, since only these two facts were
-   * watched and nothing re-slated on a time-of-day change.
-   *
-   * The situation key subsumes both: it contains scene, quest, stage, objective
-   * nodes and time of day, and is compared per conversation at read time. A
-   * subscription is kept only so the cache still learns when the blackboard
-   * moves; deciding is `peek`'s job now.
-   */
-  private handleBlackboardEvent(event: BlackboardChangeEvent): void {
-    if (
-      event.key !== QUEST_ACTIVE_STAGE_FACT.key &&
-      event.key !== ENTITY_LOCATION_FACT.key
-    ) {
-      return;
-    }
-    // Intentionally no invalidation here.
-  }
 }
