@@ -24,19 +24,18 @@ import type {
   ConversationPlayerInput,
   ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
-import { PLAYER_SPEAKER, PLAYER_VO_SPEAKER } from "@sugarmagic/domain";
+import { isPlayerSpeaker, resolveDialogueSpeaker } from "@sugarmagic/domain";
 import type {
   ActiveQuestEssentialLemma,
-  TeacherContext,
   LearnerProfile,
   LemmaObservation,
   LemmaRef,
-  LexicalPrescription,
   PendingProvisional,
   PlacementScoreResult,
   ProbeFloorState,
   SugarlangConstraint
 } from "../types";
+import type { TeacherNpcContext } from "../situation";
 export type { SugarlangLoggerLike } from "../logger";
 
 export interface LearnerSnapshot {
@@ -70,7 +69,7 @@ export interface StoredComprehensionCheck {
   triggerReason: string;
 }
 
-export const SUGARLANG_PRESCRIPTION_ANNOTATION = "sugarlang.prescription";
+// 090.10: SUGARLANG_PRESCRIPTION_ANNOTATION deleted with the budgeter that wrote it.
 export const SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION = "sugarlang.learnerSnapshot";
 export const SUGARLANG_PENDING_PROVISIONAL_ANNOTATION =
   "sugarlang.pendingProvisionalLemmas";
@@ -141,10 +140,11 @@ export function isPlayerSpokenTurn(
     return false;
   }
 
+  // playerDefinitionId is a RUNTIME-supplied id (the player's own definition),
+  // not an authored built-in, so it stays a separate check.
   return (
     speakerId === playerDefinitionId ||
-    speakerId === PLAYER_SPEAKER.speakerId ||
-    speakerId === PLAYER_VO_SPEAKER.speakerId
+    isPlayerSpeaker(resolveDialogueSpeaker(speakerId, null))
   );
 }
 
@@ -160,71 +160,19 @@ export function buildLearnerSnapshot(profile: LearnerProfile): LearnerSnapshot {
   };
 }
 
-export function computePendingProvisionalLemmas(
-  learner: LearnerProfile
-): PendingProvisional[] {
-  const currentTurn = learner.currentSession?.turns ?? 0;
-  return Object.values(learner.lemmaCards)
-    .filter((card) => !card.lemmaId.startsWith("chunk:") && card.provisionalEvidence > 0)
-    .map((card) => ({
-      lemmaRef: {
-        lemmaId: card.lemmaId,
-        lang: learner.targetLanguage
-      },
-      evidenceAmount: card.provisionalEvidence,
-      turnsPending:
-        card.provisionalEvidenceFirstSeenTurn === null
-          ? 0
-          : Math.max(0, currentTurn - card.provisionalEvidenceFirstSeenTurn)
-    }))
-    .sort((left, right) => {
-      if (left.turnsPending !== right.turnsPending) {
-        return right.turnsPending - left.turnsPending;
-      }
-      return left.lemmaRef.lemmaId.localeCompare(right.lemmaRef.lemmaId);
-    });
-}
+// 090.4: `computePendingProvisionalLemmas` and `computeProbeFloorState` moved to
+// learner/pacing-signals.ts and are re-exported below for existing callers.
+// They are learner-derived signals, and living here meant the teacher could not
+// derive them without depending on middleware -- so they were computed once and
+// carried as data instead, which is what put two non-learner fields on the
+// Teacher's learner door.
+export {
+  computePacingSignals,
+  computePendingProvisionalLemmas,
+  computeProbeFloorState
+} from "../learner";
 
-export function computeProbeFloorState(
-  pending: PendingProvisional[],
-  turnsSinceLastProbe: number
-): ProbeFloorState {
-  const oldestPending = pending[0]?.turnsPending ?? 0;
-  const hardFloorReached =
-    turnsSinceLastProbe >= 25 || oldestPending >= 25;
-  const hardFloorReason =
-    turnsSinceLastProbe >= 25
-      ? "turns-since-probe"
-      : oldestPending >= 25
-        ? "lemma-age"
-        : undefined;
-
-  return {
-    turnsSinceLastProbe,
-    totalPendingLemmas: pending.length,
-    softFloorReached: turnsSinceLastProbe >= 15 && pending.length >= 5,
-    hardFloorReached,
-    ...(hardFloorReason ? { hardFloorReason } : {})
-  };
-}
-
-export function buildEmptyPrescription(summary: string): LexicalPrescription {
-  return {
-    introduce: [],
-    reinforce: [],
-    avoid: [],
-    budget: {
-      newItemsAllowed: 0
-    },
-    rationale: {
-      summary,
-      candidateSetSize: 0,
-      envelopeSurvivorCount: 0,
-      priorityScores: [],
-      reasons: []
-    }
-  };
-}
+// 090.10: `buildEmptyPrescription` deleted -- nothing produces a prescription now.
 
 export function getTurnsSinceLastProbe(execution: ConversationExecutionContext): number {
   const value = execution.state[SUGARLANG_TURNS_SINCE_LAST_PROBE_STATE];
@@ -263,41 +211,34 @@ export function setStoredComprehensionCheck(
   execution.state[SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE] = value;
 }
 
+/**
+ * 090.4: takes just the NPC slice, not a whole TeacherContext -- this was the
+ * only reader of npc.metadata/displayName in its caller, so building a full
+ * (mostly fake) context to satisfy the old signature was pure overhead.
+ */
 export function extractCharacterVoiceReminder(
-  context: TeacherContext
+  npc: TeacherNpcContext | undefined
 ): string {
-  if (typeof context.npc.metadata?.voice === "string" && context.npc.metadata.voice.trim()) {
-    return context.npc.metadata.voice.trim();
+  if (typeof npc?.metadata?.voice === "string" && npc.metadata.voice.trim()) {
+    return npc.metadata.voice.trim();
   }
-  if (context.npc.displayName) {
-    return `Stay in ${context.npc.displayName}'s voice.`;
+  if (npc?.displayName) {
+    return `Stay in ${npc.displayName}'s voice.`;
   }
   return "Stay in the NPC's established voice.";
 }
 
-export function findQuestEssentialUses(
-  text: string,
-  constraint: SugarlangConstraint
-): Array<{
-  lemmaId: string;
-  supportLanguageGloss: string;
-  hasParentheticalGloss: boolean;
-}> {
-  const normalized = text.normalize("NFC");
-  return (constraint.questEssentialLemmas ?? []).map((entry) => {
-    const pattern = new RegExp(
-      `\\b${escapeRegExp(entry.lemmaRef.lemmaId)}\\b\\s*\\([^)]*${escapeRegExp(
-        entry.supportLanguageGloss
-      )}[^)]*\\)`,
-      "i"
-    );
-    return {
-      lemmaId: entry.lemmaRef.lemmaId,
-      supportLanguageGloss: entry.supportLanguageGloss,
-      hasParentheticalGloss: pattern.test(normalized)
-    };
-  });
-}
+// 090.2d: `findQuestEssentialUses` DELETED. It regex-matched a rendered line for
+// `billete (ticket)` and reported `hasParentheticalGloss` per quest-essential
+// lemma -- and it was imported by the verify middleware and never called. So the
+// one thing that looked like it enforced inline glossing on quest-critical words
+// checked nothing, which is worse than absent: it reads as covered.
+//
+// What DOES run is `enforceDirectiveRequirements` (teacher/schema-parser.ts),
+// which forces `glossingStrategy: "parenthetical"` when the situation carries a
+// must-comprehend concept. That governs the INSTRUCTION, not the output -- so
+// nothing currently verifies the NPC obeyed. Real gap, predates this epic,
+// belongs with 090.7 (visibility) where the slate-vs-realization split lives.
 
 function normalizeQuestFocusText(text: string): string {
   return text.normalize("NFC").toLocaleLowerCase();

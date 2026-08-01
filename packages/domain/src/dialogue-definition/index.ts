@@ -43,6 +43,72 @@ export const BUILT_IN_DIALOGUE_SPEAKERS: DialogueBuiltInSpeaker[] = [
   EXCERPT_SPEAKER
 ];
 
+/**
+ * Whose voice a dialogue node is, resolved.
+ *
+ * A node stores only a bare `speakerId: string`, so "is this the player, the
+ * narrator, or an NPC?" was previously answered by comparing that id against
+ * the built-in constants at each call site. That produced several DIFFERENT
+ * partitions of the same four-value enum across the repo. This union is the
+ * resolved view; it is not a persisted shape and requires no data migration.
+ *
+ * Consumers should switch on `kind` rather than compare ids, so adding a
+ * built-in speaker becomes a compile error at every site that cares.
+ */
+export type DialogueSpeakerRef =
+  | { kind: "npc"; npcDefinitionId: string }
+  | { kind: DialogueBuiltInSpeakerKind };
+
+const BUILT_IN_SPEAKER_KIND_BY_ID = new Map<string, DialogueBuiltInSpeakerKind>(
+  BUILT_IN_DIALOGUE_SPEAKERS.map((speaker) => [speaker.speakerId, speaker.kind])
+);
+
+/**
+ * The single answer to "whose voice is this node?".
+ *
+ * Resolution order, which was previously folklore spread across call sites:
+ *
+ *   a built-in speaker id  -> that built-in kind
+ *   any other id           -> an NPC, by that id
+ *   no id at all           -> the dialogue's bound NPC (the authoring default:
+ *                             an unset speaker on an NPC dialogue means the NPC
+ *                             is talking)
+ *
+ * Returns `null` only when there is no speaker AND no bound NPC to fall back
+ * to -- an unbound dialogue's unattributed line, which belongs to nobody.
+ */
+export function resolveDialogueSpeaker(
+  speakerId: string | undefined | null,
+  boundNpcId: string | undefined | null
+): DialogueSpeakerRef | null {
+  if (!speakerId) {
+    return boundNpcId ? { kind: "npc", npcDefinitionId: boundNpcId } : null;
+  }
+  const builtInKind = BUILT_IN_SPEAKER_KIND_BY_ID.get(speakerId);
+  return builtInKind
+    ? { kind: builtInKind }
+    : { kind: "npc", npcDefinitionId: speakerId };
+}
+
+/** Convenience for the common "which NPC, if any, said this?" question. */
+export function speakerNpcDefinitionId(
+  speaker: DialogueSpeakerRef | null
+): string | undefined {
+  return speaker?.kind === "npc" ? speaker.npcDefinitionId : undefined;
+}
+
+/**
+ * Did the PLAYER say this? True for both the player and their voice-over.
+ *
+ * Note this is not the complement of `speakerNpcDefinitionId` -- narrator and
+ * excerpt are neither the player nor an NPC. Callers that also honour a
+ * runtime-supplied player id must check that separately; this covers the
+ * authored built-ins only.
+ */
+export function isPlayerSpeaker(speaker: DialogueSpeakerRef | null): boolean {
+  return speaker?.kind === "player" || speaker?.kind === "player-vo";
+}
+
 export type DialogueCondition =
   | { type: "flag"; key: string; value?: unknown }
   | { type: "hasItem"; itemId: string; count?: number }

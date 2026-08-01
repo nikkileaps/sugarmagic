@@ -182,24 +182,11 @@ export function deserializeLearnerProfile(json: string): LearnerProfile {
             typeof parsed.currentSession.startedAt === "number"
               ? parsed.currentSession.startedAt
               : 0,
+          // 090.5: hoverRate / probeFailRate / fatigueScore / avgResponseLatencyMs
+          // are no longer read back. Older saves may still carry them; extra keys
+          // are simply ignored here, so no migration is needed.
           turns:
-            typeof parsed.currentSession.turns === "number" ? parsed.currentSession.turns : 0,
-          avgResponseLatencyMs:
-            typeof parsed.currentSession.avgResponseLatencyMs === "number"
-              ? parsed.currentSession.avgResponseLatencyMs
-              : 0,
-          hoverRate:
-            typeof parsed.currentSession.hoverRate === "number"
-              ? parsed.currentSession.hoverRate
-              : 0,
-          probeFailRate:
-            typeof parsed.currentSession.probeFailRate === "number"
-              ? parsed.currentSession.probeFailRate
-              : 0,
-          fatigueScore:
-            typeof parsed.currentSession.fatigueScore === "number"
-              ? parsed.currentSession.fatigueScore
-              : 0
+            typeof parsed.currentSession.turns === "number" ? parsed.currentSession.turns : 0
         }
       : null,
     sessionHistory: parsed.sessionHistory

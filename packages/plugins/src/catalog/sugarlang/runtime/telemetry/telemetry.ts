@@ -49,8 +49,6 @@ import type {
   EnvelopeVerdict,
   LearnerProfile,
   LemmaRef,
-  LexicalPrescription,
-  LexicalRationale,
   ObservationEvent,
   PedagogicalDirective,
   PlacementScoreResult,
@@ -122,22 +120,9 @@ type TelemetryEventOf<TKind extends string, TPayload> = TelemetryEventBase & {
 } & TPayload;
 
 export type TelemetryEvent =
-  | TelemetryEventOf<
-      "budgeter.prescription-generated",
-      {
-        sceneId: string;
-        learnerSnapshot: LearnerSnapshot;
-        prescription: LexicalPrescription;
-        rationale: LexicalRationale;
-        pendingProvisionalSnapshot: Array<{
-          lemmaRef: LemmaRef;
-          evidenceAmount: number;
-          turnsPending: number;
-        }>;
-        probeFloorState: ProbeFloorState;
-        questEssentialState: QuestEssentialTelemetryState;
-      }
-    >
+  // 090.5: `budgeter.prescription-generated` deleted. 090.10 removed the only
+  // emitter; the event type outlived it, so the debug surfaces still declared a
+  // shape nothing could ever produce.
   | TelemetryEventOf<
       "director.invocation-started",
       {
@@ -213,7 +198,6 @@ export type TelemetryEvent =
       {
         sceneId: string | null;
         learnerSnapshot: LearnerSnapshot;
-        prescription: LexicalPrescription;
         verdict: EnvelopeVerdict;
         inputText: string;
         constraint?: SugarlangConstraint;
@@ -225,7 +209,7 @@ export type TelemetryEvent =
         sceneId: string;
         contentHash: string;
         lang: string;
-        extractorModel: string;
+        extractorPurpose: string;
         extractorPromptVersion: string;
       }
     >
@@ -241,7 +225,7 @@ export type TelemetryEvent =
           input: number;
           output: number;
         };
-        extractorModel: string;
+        extractorPurpose: string;
       }
     >
   | TelemetryEventOf<
@@ -254,7 +238,7 @@ export type TelemetryEvent =
           code: string;
           message: string;
         };
-        extractorModel: string;
+        extractorPurpose: string;
       }
     >
   | TelemetryEventOf<
@@ -267,6 +251,92 @@ export type TelemetryEvent =
         previousExtractorModel: string;
         newExtractorModel: string;
         changedChunks: string[];
+      }
+    >
+  // Plan 090.1 -- the scene-context pass: what authored content is ABOUT.
+  // Keyed on supportLanguage, not target: concepts are English, so the same
+  // scene shares one extraction across every target language.
+  | TelemetryEventOf<
+      "scene-context.extraction-started",
+      {
+        sceneId: string;
+        contentHash: string;
+        supportLanguage: string;
+        sourceCount: number;
+        extractorPurpose: string;
+        extractorPromptVersion: string;
+      }
+    >
+  | TelemetryEventOf<
+      "scene-context.extraction-completed",
+      {
+        sceneId: string;
+        contentHash: string;
+        supportLanguage: string;
+        conceptCount: number;
+        /**
+         * Concepts discarded because every sourceId they cited was one we never
+         * sent -- i.e. the model invented its provenance. Non-zero is a prompt
+         * or model problem, not a content problem, so it is counted separately
+         * from conceptCount rather than being silently absent.
+         */
+        droppedForBadProvenance: number;
+        latencyMs: number;
+        tokenCost: {
+          input: number;
+          output: number;
+        };
+      }
+    >
+  | TelemetryEventOf<
+      "scene-context.extraction-failed",
+      {
+        sceneId: string;
+        contentHash: string;
+        supportLanguage: string;
+        error: {
+          code: string;
+          message: string;
+        };
+      }
+    >
+  // Plan 090.1 -- line intent. Its own events rather than borrowing
+  // `chunk.extraction-*`, which it did until now: three unrelated passes sharing
+  // one event name made per-pass cost and failure rates unreadable.
+  | TelemetryEventOf<
+      "line-intent.extraction-started",
+      {
+        nodeId: string;
+        dialogueDefinitionId: string;
+        contentHash: string;
+        extractorPurpose: string;
+        extractorPromptVersion: string;
+      }
+    >
+  | TelemetryEventOf<
+      "line-intent.extraction-completed",
+      {
+        nodeId: string;
+        dialogueDefinitionId: string;
+        contentHash: string;
+        factCount: number;
+        latencyMs: number;
+        tokenCost: {
+          input: number;
+          output: number;
+        };
+      }
+    >
+  | TelemetryEventOf<
+      "line-intent.extraction-failed",
+      {
+        nodeId: string;
+        dialogueDefinitionId: string;
+        contentHash: string;
+        error: {
+          code: string;
+          message: string;
+        };
       }
     >
   | TelemetryEventOf<
@@ -657,7 +727,6 @@ export type TelemetryEvent =
         teachableCount: number;
         isColdStart: boolean;
         learnerBand: string;
-        fatigueScore: number;
         dueItemCount: number;
         debtServiceCount: number;
         introductionCount: number;
@@ -672,14 +741,13 @@ export type TelemetryEvent =
         /** 087.3: True when stretch allowance gate was triggered this turn. */
         stretchAllowanceActive: boolean;
         /** 087.4: True when fatigueScore >= STRAIN_SUPPRESS_THRESHOLD; introductions suppressed. */
-        strainSuppressed: boolean;
       }
     >
   | TelemetryEventOf<
       "debt.created",
       {
         itemId: string;
-        itemKind: "lemma" | "function";
+        itemKind: "vocabulary" | "competency";
         createdDayIndex: number | null;
         targetEncounters: number;
       }
@@ -688,7 +756,7 @@ export type TelemetryEvent =
       "debt.encounter",
       {
         itemId: string;
-        itemKind: "lemma" | "function";
+        itemKind: "vocabulary" | "competency";
         npcDefinitionId: string | null;
         sceneId: string | null;
         dayIndex: number | null;

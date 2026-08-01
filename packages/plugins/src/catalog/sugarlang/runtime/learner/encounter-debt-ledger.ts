@@ -55,7 +55,7 @@ export interface EncounterEntry {
 /** Per-item debt record persisted in IDB. */
 export interface DebtRecord {
   itemId: string;
-  itemKind: "lemma" | "function";
+  itemKind: "vocabulary" | "competency";
   createdDayIndex: number | null;
   encounters: EncounterEntry[];
   targetEncounters: number;
@@ -67,10 +67,10 @@ export interface DebtRecord {
  */
 export interface DebtStatus {
   /** Carried from DebtRecord so the scheduler can classify the teachable
-   *  correctly -- a function debt scheduled as kind "lemma" is unrealizable
-   *  (realizeFunctionChunksFromSchedule only expands kind "function") and
-   *  leaks its functionId into lemma-only surfaces like retrieveBiasTerms. */
-  itemKind: "lemma" | "function";
+   *  correctly -- a competency debt scheduled as kind "vocabulary" is unrealizable
+   *  (realizeCompetencyChunksFromSchedule only expands kind "competency") and
+   *  leaks its competencyId into lemma-only surfaces like retrieveBiasTerms. */
+  itemKind: "vocabulary" | "competency";
   diverseEncounterCount: number;
   targetEncounters: number;
 }
@@ -95,7 +95,7 @@ export interface EncounterDebtLedger {
    */
   createDebt(
     itemId: string,
-    itemKind: "lemma" | "function",
+    itemKind: "vocabulary" | "competency",
     createdDayIndex: number | null
   ): Promise<void>;
 
@@ -127,7 +127,7 @@ export class MemoryEncounterDebtLedger implements EncounterDebtLedger {
 
   async createDebt(
     itemId: string,
-    itemKind: "lemma" | "function",
+    itemKind: "vocabulary" | "competency",
     createdDayIndex: number | null
   ): Promise<void> {
     if (this.records.has(itemId)) return;
@@ -214,7 +214,7 @@ export class IndexedDBEncounterDebtLedger implements EncounterDebtLedger {
 
   async createDebt(
     itemId: string,
-    itemKind: "lemma" | "function",
+    itemKind: "vocabulary" | "competency",
     createdDayIndex: number | null
   ): Promise<void> {
     const db = await this.openDb();

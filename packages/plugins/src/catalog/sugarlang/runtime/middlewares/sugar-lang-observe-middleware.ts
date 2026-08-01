@@ -27,10 +27,14 @@ import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
 import {
-  getFunctionForChunk as getInventoryFunctionForChunk,
+  getCompetencyForChunk as getInventoryCompetencyForChunk,
   getAllInventoryChunks
-} from "../inventory/function-inventory-loader";
-import { countDiverseEncounters } from "../learner/encounter-debt-ledger";
+} from "../inventory/competency-inventory-loader";
+import { countDiverseEncounters } from "../learner";
+import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
+import { findAmbientSpans } from "../grading/ambient-spans";
+import { traceRealization } from "../teacher/teacher-trace";
+import { MorphologyLoader } from "../classifier/morphology-loader";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
@@ -84,11 +88,27 @@ function collectLemmasFromText(
     }));
 }
 
+/**
+ * 090.4: observe records evidence about WORDS -- a hover, an encounter, a
+ * production -- and its card store is keyed by lemmaId. So it narrows to the
+ * vocabulary half, explicitly.
+ *
+ * COMPETENCIES ARE NOT SERVED HERE AND THAT IS A KNOWN GAP, not a decision that
+ * they do not matter. A competency is evidenced by its exponents appearing in a
+ * turn, which is what the chunk matcher finds and what `chunk:` cards used to
+ * approximate by smuggling competencies through this lemma channel. Recording
+ * competency evidence properly needs the realization output (090.11) so observe
+ * can read what was actually taught rather than re-deriving it.
+ *
+ * Named narrowing rather than an inline `kind === "vocabulary"` so this gap is
+ * visible at every call site instead of looking like ordinary list handling.
+ */
 function buildTargetLemmaSet(constraint: SugarlangConstraint): Set<string> {
   return new Set(
-    [...constraint.targetVocab.introduce, ...constraint.targetVocab.reinforce].map(
-      (lemma) => lemma.lemmaId
-    )
+    [
+      ...vocabularyRefs(constraint.targetVocab.introduce),
+      ...vocabularyRefs(constraint.targetVocab.reinforce)
+    ].map((lemma) => lemma.lemmaId)
   );
 }
 
@@ -407,10 +427,10 @@ export function createSugarLangObserveMiddleware(
         return normalizedTurn;
       }
 
-      // 085.3: Build chunk matcher from the hand-curated function inventory so dynamic
+      // 085.3: Build chunk matcher from the hand-curated competency inventory so dynamic
       // NPC greetings are detected even when the phrase never appears in authored scene text.
       if (!chunkMatcherCache.has(learner.targetLanguage)) {
-        let inventoryChunks: import("../contracts/function-inventory").InventoryChunk[] = [];
+        let inventoryChunks: import("../contracts/competency-inventory").InventoryChunk[] = [];
         try {
           inventoryChunks = getAllInventoryChunks(learner.targetLanguage);
         } catch {
@@ -539,7 +559,7 @@ export function createSugarLangObserveMiddleware(
         // Distinguish introduce hover (positive first exposure) from reinforce
         // hover (needed help remembering). See observations.ts for the
         // pedagogical rationale behind the different FSRS grades.
-        const isIntroduceHover = constraint.targetVocab.introduce.some(
+        const isIntroduceHover = vocabularyRefs(constraint.targetVocab.introduce).some(
           (l) => l.lemmaId === hoverLemma.lemma.lemmaId
         );
         const observationEvent = createObservationEvent({
@@ -564,7 +584,7 @@ export function createSugarLangObserveMiddleware(
       const debtDayIndex = blackboardForDebt ? getWorldDay(blackboardForDebt) : null;
       const debtNpcId = execution.selection.npcDefinitionId ?? null;
 
-      for (const introduce of constraint.targetVocab.introduce) {
+      for (const introduce of vocabularyRefs(constraint.targetVocab.introduce)) {
         if (!turnLemmas.some((entry) => entry.lemmaId === introduce.lemmaId)) {
           continue;
         }
@@ -586,7 +606,7 @@ export function createSugarLangObserveMiddleware(
         // The learner snapshot pre-dates this turn, so absence from lemmaCards = new card.
         if (!(introduce.lemmaId in learner.lemmaCards)) {
           try {
-            await services.ledgerStore.createDebt(introduce.lemmaId, "lemma", debtDayIndex);
+            await services.ledgerStore.createDebt(introduce.lemmaId, "vocabulary", debtDayIndex);
             const debt = await services.ledgerStore.getDebt(introduce.lemmaId);
             if (debt) {
               void emitTelemetry(
@@ -597,7 +617,7 @@ export function createSugarLangObserveMiddleware(
                   sessionId,
                   turnId: traceTurnId,
                   itemId: introduce.lemmaId,
-                  itemKind: "lemma",
+                  itemKind: "vocabulary",
                   createdDayIndex: debtDayIndex,
                   targetEncounters: debt.targetEncounters
                 })
@@ -616,7 +636,7 @@ export function createSugarLangObserveMiddleware(
       // encounter paydown for the outer-loop debt tracker.
       const isNpcTurn = !isPlayerSpokenTurn(normalizedTurn, deps.services.getPlayerDefinitionId());
       if (isNpcTurn) {
-        const introduceIds = new Set(constraint.targetVocab.introduce.map((l) => l.lemmaId));
+        const introduceIds = new Set(vocabularyRefs(constraint.targetVocab.introduce).map((l) => l.lemmaId));
         for (const { lemmaId } of turnLemmas) {
           if (!lemmaId) continue;
           // Skip introduce-list lemmas (handled above) and chunk: pseudo-ids.
@@ -637,7 +657,7 @@ export function createSugarLangObserveMiddleware(
                   sessionId,
                   turnId: traceTurnId,
                   itemId: lemmaId,
-                  itemKind: "lemma",
+                  itemKind: "vocabulary",
                   npcDefinitionId: debtNpcId,
                   sceneId,
                   dayIndex: debtDayIndex,
@@ -708,15 +728,15 @@ export function createSugarLangObserveMiddleware(
           // 085.5: First-teach beat -- write teach-record and annotate the turn once.
           // 087.2: Also create function-level debt at introduction and record encounter paydown
           //   for every NPC chunk match (not just first-teach).
-          const fnEntry = getInventoryFunctionForChunk(
+          const fnEntry = getInventoryCompetencyForChunk(
             match.chunk.chunkId,
             learner.targetLanguage
           );
           if (isNewCard && !teachLineWritten && fnEntry) {
-            const alreadyTaught = await services.teachRecordStore.has(fnEntry.functionId);
+            const alreadyTaught = await services.teachRecordStore.has(fnEntry.competencyId);
             if (!alreadyTaught) {
               await services.teachRecordStore.write({
-                functionId: fnEntry.functionId,
+                competencyId: fnEntry.competencyId,
                 taughtAtMs: observedAtMs,
                 realizingChunkId: match.chunk.chunkId
               });
@@ -729,8 +749,8 @@ export function createSugarLangObserveMiddleware(
 
               // 087.2: Create function-level debt at introduction.
               try {
-                await services.ledgerStore.createDebt(fnEntry.functionId, "function", debtDayIndex);
-                const debt = await services.ledgerStore.getDebt(fnEntry.functionId);
+                await services.ledgerStore.createDebt(fnEntry.competencyId, "competency", debtDayIndex);
+                const debt = await services.ledgerStore.getDebt(fnEntry.competencyId);
                 if (debt) {
                   void emitTelemetry(
                     telemetry,
@@ -739,8 +759,8 @@ export function createSugarLangObserveMiddleware(
                       conversationId,
                       sessionId,
                       turnId: traceTurnId,
-                      itemId: fnEntry.functionId,
-                      itemKind: "function",
+                      itemId: fnEntry.competencyId,
+                      itemKind: "competency",
                       createdDayIndex: debtDayIndex,
                       targetEncounters: debt.targetEncounters
                     })
@@ -757,8 +777,8 @@ export function createSugarLangObserveMiddleware(
           if (!isPlayerTurn && fnEntry) {
             try {
               const entry = { npcDefinitionId: debtNpcId, sceneId, dayIndex: debtDayIndex };
-              await services.ledgerStore.recordEncounter(fnEntry.functionId, entry);
-              const debt = await services.ledgerStore.getDebt(fnEntry.functionId);
+              await services.ledgerStore.recordEncounter(fnEntry.competencyId, entry);
+              const debt = await services.ledgerStore.getDebt(fnEntry.competencyId);
               if (debt) {
                 const diverseCount = countDiverseEncounters(debt.encounters);
                 void emitTelemetry(
@@ -768,8 +788,8 @@ export function createSugarLangObserveMiddleware(
                     conversationId,
                     sessionId,
                     turnId: traceTurnId,
-                    itemId: fnEntry.functionId,
-                    itemKind: "function",
+                    itemId: fnEntry.competencyId,
+                    itemKind: "competency",
                     npcDefinitionId: debtNpcId,
                     sceneId,
                     dayIndex: debtDayIndex,
@@ -910,29 +930,156 @@ export function createSugarLangObserveMiddleware(
       const reinforceTerms: string[] = [];
       const glosses: Record<string, string> = {};
 
-      for (const lemma of constraint.targetVocab.introduce) {
+      // 090.4: the highlight is built from words; competency exponents come
+      // from the chunk matcher below (090.11 item 4).
+      for (const lemma of vocabularyRefs(constraint.targetVocab.introduce)) {
         const surface = lemma.lemmaId.replace(/_/g, " ");
         introduceTerms.push(surface);
         const gloss = services.atlas.getGloss(lemma.lemmaId, learner.targetLanguage, supportLang);
         if (gloss) glosses[surface] = gloss;
       }
-      for (const lemma of constraint.targetVocab.reinforce) {
+      for (const lemma of vocabularyRefs(constraint.targetVocab.reinforce)) {
         const surface = lemma.lemmaId.replace(/_/g, " ");
         reinforceTerms.push(surface);
         const gloss = services.atlas.getGloss(lemma.lemmaId, learner.targetLanguage, supportLang);
         if (gloss) glosses[surface] = gloss;
       }
 
+      // 090.11 item 4: SPANS, NOT WORDS. A competency is an ACT and its exponent
+      // is a PHRASE, so `buenos dias` has to be ONE span with one hover -- not
+      // `buenos` and `dias` lit separately, which reads as two unrelated words
+      // and offers two tooltips for one idea.
+      //
+      // Until now `vocabularyRefs()` above dropped every competency on the
+      // slate, so an exponent the NPC actually said was never highlighted at all.
+      //
+      // MATCHED AGAINST THE TEXT, NOT LISTED FROM THE INVENTORY. A competency
+      // has several exponents and the line used at most one; pushing all of them
+      // would name phrases that are not on screen. The matcher's longest-match
+      // trie also settles overlaps between exponents, and `findTermMatches`
+      // downstream sorts by length so the phrase claims its characters before
+      // any single word inside it can.
+      //
+      // Reuses the matcher built above rather than constructing a second one
+      // over the same inventory.
+      //
+      // AN EXPONENT CAN REACH `introduceTerms` BY TWO ROUTES, and they answer
+      // different questions, so this is not a duplicated enforcer:
+      //   - the 085.5 FIRST-TEACH BEAT (`teachLineSurface`, below) fires the
+      //     first time a learner ever meets a competency-realizing chunk,
+      //     independent of the slate -- "you have not seen this before"
+      //   - this block fires whenever the competency is ON THE SLATE -- "the
+      //     Teacher wants this taught now"
+      // They overlap on a first encounter of a slated competency. This runs
+      // first and the beat's own `includes` check then skips, so the term is
+      // pushed once. If either side ever stops de-duplicating, the phrase gets
+      // listed twice and is highlighted once, which reads as a lost term.
+      const introduceCompetencyIds = new Set(
+        competencyRefs(constraint.targetVocab.introduce).map((ref) => ref.competencyId)
+      );
+      const reinforceCompetencyIds = new Set(
+        competencyRefs(constraint.targetVocab.reinforce).map((ref) => ref.competencyId)
+      );
+
+      if (
+        chunkMatcher &&
+        (introduceCompetencyIds.size > 0 || reinforceCompetencyIds.size > 0)
+      ) {
+        try {
+          const turnTokens = tokenize(normalizedTurn.text, learner.targetLanguage);
+          for (const chunkMatch of chunkMatcher.match(turnTokens, normalizedTurn.text)) {
+            const competency = getInventoryCompetencyForChunk(
+              chunkMatch.chunk.chunkId,
+              learner.targetLanguage
+            );
+            if (!competency) continue;
+
+            const target = introduceCompetencyIds.has(competency.competencyId)
+              ? introduceTerms
+              : reinforceCompetencyIds.has(competency.competencyId)
+                ? reinforceTerms
+                : null;
+            // A chunk the Teacher did not ask for is not a focus term. It may
+            // still surface as ambient, which is the correct home for target
+            // language nobody asked to teach.
+            if (!target) continue;
+
+            const surface = chunkMatch.surfaceMatched.trim();
+            if (surface.length === 0 || target.includes(surface)) continue;
+
+            target.push(surface);
+            // The can-do descriptor, because what the learner is being shown is
+            // the ACT, not a word. "Can greet people in a simple way" is the
+            // useful hover for `buenos dias`; a word gloss would not be.
+            if (!glosses[surface]) glosses[surface] = competency.cefrDescriptor;
+          }
+        } catch {
+          // Phrase detection is an affordance. A failure must not cost the
+          // player their line, and the vocabulary half of the highlight above
+          // is already built and unaffected.
+        }
+      }
+
       if (teachLineSurface && !introduceTerms.includes(teachLineSurface)) {
         introduceTerms.push(teachLineSurface);
       }
       const focusTerms = [...introduceTerms, ...reinforceTerms];
-      if (focusTerms.length > 0) {
+
+      // 090.11/090.12: AMBIENT -- target language the slate never asked for.
+      //
+      // Everything above is derived from `constraint.targetVocab`, which is why
+      // only the Teacher's chosen words were ever known to the system. A line
+      // could be half Spanish and the annotation would describe two words of it.
+      // This is the rest of it: found by lemmatizing the finished text against
+      // the atlas and subtracting what the slate already explains.
+      //
+      // Not styled -- see the note on `ambientSpans`. It exists so a SELECTED
+      // span can be resolved, and so the realized ratio becomes measurable.
+      let ambientSpans: ReturnType<typeof findAmbientSpans> = [];
+      try {
+        ambientSpans = findAmbientSpans({
+          text: normalizedTurn.text,
+          targetLanguage: learner.targetLanguage,
+          atlas: services.atlas,
+          // The SHARED loader, not a fresh one. `MorphologyLoader` caches per
+          // INSTANCE, so `new MorphologyLoader()` here meant re-running
+          // `assertValidMorphologyData` over the whole morphology file on every
+          // NPC turn -- the same trap `GradedTextService` documents at its own
+          // constructor, and the reason a shared instance exists on services.
+          morphology: services.morphology,
+          slateTerms: focusTerms
+          // properNouns intentionally omitted: the scene vocabulary model is not
+          // resolved on this path, and passing none is the safe direction -- a
+          // name may appear as an ambient span, but `lookupSelection` refuses to
+          // gloss anything the atlas cannot answer, so no card is offered for it.
+          // Wire the real list through when the marker owns this (090.11).
+        });
+      } catch {
+        // Detection is an affordance, not a turn requirement. A failure here
+        // must not cost the player their line.
+      }
+
+      // 090.7: the realization half of the trace. The teacher trace shows the
+      // DECISION and runs before any text exists; this shows what the text
+      // actually did with it, and calls out DISJOINT explicitly.
+      traceRealization({
+        npcDisplayName: execution.selection.npcDisplayName ?? null,
+        text: normalizedTurn.text,
+        slateTerms: focusTerms,
+        ambientSurfaces: ambientSpans.map((span) => span.surface)
+      });
+
+      // The annotation is written when there is ANYTHING to say -- taught terms
+      // OR ambient spans. Previously it required focus terms, so a line that was
+      // all unrequested Spanish produced no annotation at all, which is exactly
+      // the line a player most needs to be able to interrogate.
+      if (focusTerms.length > 0 || ambientSpans.length > 0) {
         normalizedTurn.annotations!["dialogueHighlight"] = {
           focusTerms,
           introduceTerms,
           celebrateTerms: [],
-          glosses
+          glosses,
+          ...(ambientSpans.length > 0 ? { ambientSpans } : {})
         };
       }
 

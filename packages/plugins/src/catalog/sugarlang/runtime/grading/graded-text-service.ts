@@ -113,14 +113,25 @@
  */
 
 import Ajv from "ajv";
-import type { CEFRBand, LearnerId } from "../contracts/learner-profile";
+import type { CEFRBand } from "../cefr";
+import type { LearnerId } from "../learner";
 import type { VariantVerdict } from "../contracts/baked-variant";
 import type { SupportPosture } from "../contracts/pedagogy";
 import type { SugarlangLLMClient } from "../llm/types";
 import type { LexicalAtlasProvider } from "../types";
-import type { InventoryChunk } from "../contracts/function-inventory";
+import type { InventoryChunk } from "../contracts/competency-inventory";
+import type { CompetencyRef, TeachableRef } from "../contracts/teachable-ref";
 import { applyMixedTextEnvelopePredicate } from "../classifier/envelope-rule";
 import { computeLanguageRatioVerdict } from "../classifier/language-ratio";
+import {
+  describeLanguageMix,
+  getIntroduceCapForBand
+} from "../teacher/band-envelope";
+import {
+  MAX_PROMPT_REINFORCE,
+  renderTeachableList
+} from "../teacher/slate-prompt";
+import { createCompetencyDescriber } from "../inventory/describe-competency";
 import { computeVoiceRetentionScore } from "../classifier/envelope-classifier";
 import { computeCoverage } from "../classifier/coverage";
 import { tokenize } from "../classifier/tokenize";
@@ -128,12 +139,23 @@ import { createChunkMatcher } from "../classifier/chunk-matcher";
 import { MorphologyLoader } from "../classifier/morphology-loader";
 
 /**
- * Bumped to 086.3.1 when the prompt stopped saying "dialogue line" and started
- * taking the register from the caller. This string is a leg of the variant
- * cache key, so every previously baked variant re-grades on the next run --
- * intended, and cheap at current content volume.
+ * A LEG OF THE VARIANT CACHE KEY. Bumping it re-grades every previously baked
+ * variant on the next run -- intended, and cheap at current content volume.
+ *
+ * BUMP IT WHENEVER `buildAdaptationPrompt` CHANGES MATERIALLY. Forgetting is
+ * silent and looks like the change did not work: the prompt is new, but every
+ * existing variant stays cached under the old key and is served unchanged.
+ *
+ * History:
+ *   086.3.1  the prompt stopped saying "dialogue line" and took the register
+ *            from the caller.
+ *   090.11.0 the prompt gained a Teach section carrying the Teacher's slate.
+ *            This one was nearly missed -- the slate only appears when a caller
+ *            passes `teach`, so the no-slate prompt is byte-identical and no
+ *            snapshot moved. Without the bump, every already-baked variant would
+ *            have stayed cached and never picked up slate steering at all.
  */
-export const GRADED_TEXT_PROMPT_VERSION = "086.3.1";
+export const GRADED_TEXT_PROMPT_VERSION = "090.11.0";
 
 /** Minimum voice-retention score for the voice gate to pass. */
 export const VOICE_RETENTION_PASS_THRESHOLD = 0.5;
@@ -180,6 +202,38 @@ export interface GradedTextGuidance {
   notes?: string[];
 }
 
+/**
+ * WHAT THIS LINE SHOULD TRY TO TEACH -- the Teacher's slate, at build time.
+ *
+ * WHY THIS FIELD HAD TO EXIST BEFORE A BUILD-TIME TEACHER CALL WAS WORTH MAKING
+ *   Until 2026-07-31 the bake accepted `posture` and nothing else directive-
+ *   shaped. That made "call the Teacher at build time and pass
+ *   `directive.supportPosture` into `generateVariant`" a behavioral no-op:
+ *   posture is the one directive field the bake could consume, and
+ *   `postureForBand(band)` already returns it deterministically, for free. The
+ *   Teacher's actual contribution -- WHICH TEACHABLES this line should carry --
+ *   had nowhere to go.
+ *
+ *   So this is the prerequisite, not a refinement of one. It is also why
+ *   `postureForBand` is NOT dead code and must not be deleted "because posture
+ *   now comes from a directive": it is correct, and it stays correct until the
+ *   directive carries something the bake cannot compute itself. That something
+ *   is this.
+ *
+ * OPTIONAL ON PURPOSE. Item text and any caller without a scene has no slate,
+ * and a bake with no slate is a valid bake -- it grades for level without
+ * steering vocabulary, which is exactly what it did before this field existed.
+ * Absent must therefore mean "no steer", never "steer toward nothing".
+ */
+export interface GradedTextSlate {
+  /** New teachables this line should try to work in. */
+  introduce: readonly TeachableRef[];
+  /** Already-met teachables worth re-exposing. */
+  reinforce: readonly TeachableRef[];
+  /** Out of reach right now -- prefer simpler synonyms. */
+  avoid: readonly TeachableRef[];
+}
+
 export interface GradedTextRequest {
   /** Authored source-language text. English today. */
   sourceText: string;
@@ -192,6 +246,8 @@ export interface GradedTextRequest {
    */
   mustConveyFacts?: string[];
   guidance?: GradedTextGuidance;
+  /** What to teach. Omit for a level-graded bake with no vocabulary steer. */
+  teach?: GradedTextSlate;
   /** Verifier knobs. Omit for the dialogue-calibrated defaults. */
   posture?: SupportPosture;
   directedRatio?: number;
@@ -215,9 +271,58 @@ export interface GradedTextServiceDeps {
   morphology?: MorphologyLoader;
 }
 
+/**
+ * Renders the slate into the user prompt, or returns nothing at all.
+ *
+ * THE EMPTY CASE IS LOAD-BEARING. When there is no slate -- item text, any
+ * caller without a scene -- this must contribute ZERO characters, so the prompt
+ * is byte-identical to the one that existed before slates. A "Teach: (none)"
+ * line would look harmless and would change every previously baked variant's
+ * output for callers that never asked to teach anything.
+ *
+ * Caps are the AGENT PATH'S caps, deliberately: `getIntroduceCapForBand` and
+ * `MAX_PROMPT_REINFORCE`. A single baked line and a single generated line are
+ * the same unit of text facing the same learner, so a beginner's line does not
+ * get to carry more teachables just because it was written at build time.
+ */
+function renderSlateSection(
+  slate: GradedTextSlate,
+  band: CEFRBand,
+  targetLang: string,
+  describeCompetency?: (ref: CompetencyRef) => string
+): string[] {
+  const introduce = renderTeachableList(
+    slate.introduce.slice(0, getIntroduceCapForBand(band)),
+    describeCompetency
+  );
+  const reinforce = renderTeachableList(
+    slate.reinforce.slice(0, MAX_PROMPT_REINFORCE),
+    describeCompetency
+  );
+  const avoid = renderTeachableList(slate.avoid.slice(0, 12), describeCompetency);
+
+  const sections = [
+    introduce
+      ? `Work these in naturally, in ${targetLang} -- not their English equivalents:${introduce}`
+      : null,
+    reinforce ? `Re-use these if they fit naturally:${reinforce}` : null,
+    avoid ? `Avoid these -- use simpler synonyms:${avoid}` : null
+  ].filter((part): part is string => Boolean(part));
+
+  if (sections.length === 0) {
+    return [];
+  }
+
+  return [
+    `\nTeach:\n${sections.join("\n")}`,
+    `Do not force every item in. A line that carries one of them naturally beats a line that lists all of them.`
+  ];
+}
+
 /** Pure prompt construction -- no model call, so it is snapshot-testable. */
 export function buildAdaptationPrompt(
-  request: GradedTextRequest
+  request: GradedTextRequest,
+  describeCompetency?: (ref: CompetencyRef) => string
 ): { system: string; user: string } {
   const bandDesc = BAND_DESCRIPTIONS[request.band];
   const register = request.guidance?.register ?? "line";
@@ -229,11 +334,30 @@ export function buildAdaptationPrompt(
     ...notes
   ].filter((part): part is string => Boolean(part));
 
+  const slateLines = request.teach
+    ? renderSlateSection(
+        request.teach,
+        request.band,
+        request.targetLang,
+        describeCompetency
+      )
+    : [];
+
   const system = [
     `You are a writer for a language-learning game.`,
     `Adapt the given English ${register} into ${request.targetLang} for a ${bandDesc} learner.`,
     `Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a ${bandDesc} learner.`,
-    `The output must be predominantly or entirely in ${request.targetLang}, grammatically natural for the learner level.`,
+    // 090.11: WAS "predominantly or entirely in ${targetLang}", unconditionally.
+    // That single sentence is why an A1 bake came back 100% Spanish while the
+    // envelope directed 30%: posture and ratio were passed to the VERIFIER and
+    // never to the generator, so the model was told to write full target
+    // language and then measured against a rule it had never seen.
+    describeLanguageMix(
+      request.posture ?? DEFAULT_POSTURE,
+      request.targetLang,
+      request.directedRatio
+    ),
+    `Keep it grammatically natural for the learner level.`,
     `Preserve the length and shape of the original -- a one-line ${register} stays one line, a paragraph stays a paragraph.`,
     `Do not add glosses, translations, or explanations inline.`,
     `Return only the adapted text, nothing else.`
@@ -243,6 +367,7 @@ export function buildAdaptationPrompt(
     `Target language: ${request.targetLang}`,
     `Learner level: ${request.band} (${bandDesc})`,
     ...(context.length > 0 ? [`\nContext:\n${context.join("\n")}`] : []),
+    ...slateLines,
     `\nOriginal English ${register}:\n${request.sourceText}`
   ].join("\n");
 
@@ -306,11 +431,34 @@ export class GradedTextService {
     this.morphology = deps.morphology ?? SHARED_MORPHOLOGY;
   }
 
+  /**
+   * Competency describers are built from the inventory file, so they are
+   * cached per language rather than per call -- `generateVariantsForNode` fans
+   * out over every band at once and would otherwise reload the inventory once
+   * per variant, the same trap the shared MorphologyLoader above exists for.
+   */
+  private describerByLang = new Map<string, (ref: CompetencyRef) => string>();
+
+  private describerFor(lang: string): (ref: CompetencyRef) => string {
+    let describer = this.describerByLang.get(lang);
+    if (!describer) {
+      describer = createCompetencyDescriber(lang);
+      this.describerByLang.set(lang, describer);
+    }
+    return describer;
+  }
+
   async adapt(request: GradedTextRequest): Promise<GradedTextResult> {
     const promptVersion = GRADED_TEXT_PROMPT_VERSION;
     const generatedByModel = "graded-text-adapt";
 
-    const prompt = buildAdaptationPrompt(request);
+    // Only resolved when there is a slate: a competency on the slate is an ACT,
+    // and telling a writer to "use introduce-self" is meaningless -- it has to
+    // be told what the act is and how this language performs it.
+    const prompt = buildAdaptationPrompt(
+      request,
+      request.teach ? this.describerFor(request.targetLang) : undefined
+    );
 
     let generatedText: string;
     try {
@@ -397,7 +545,7 @@ export class GradedTextService {
     // strings, not target lemma ids. The structural allowance + ceiling checks
     // are the meaningful part.
     const envelopePasses = applyMixedTextEnvelopePredicate(profile, request.band, {
-      prescription: null
+      taughtLemmaIds: null
     }).passes;
 
     // Gate 2: language ratio.

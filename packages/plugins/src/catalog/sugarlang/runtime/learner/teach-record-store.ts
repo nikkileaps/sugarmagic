@@ -2,7 +2,7 @@
  * packages/plugins/src/catalog/sugarlang/runtime/learner/teach-record-store.ts
  *
  * Purpose: Persists per-function teach-records beside the FSRS card store.
- *   A teach-record is written exactly once per functionId (the no-rewrite guard).
+ *   A teach-record is written exactly once per competencyId (the no-rewrite guard).
  *   It is the data source for any future phrasebook/journal UI (deferred to epic 089).
  *
  * Exports:
@@ -34,13 +34,13 @@ export const TEACH_RECORD_DB_NAME_PREFIX = `${CARD_STORE_DB_NAME_PREFIX}:teach:`
 const TEACH_RECORD_STORE_NAME = "teach-records";
 
 export interface TeachRecord {
-  functionId: string;
+  competencyId: string;
   taughtAtMs: number;
   realizingChunkId: string;
 }
 
 export interface TeachRecordStore {
-  has: (functionId: string) => Promise<boolean>;
+  has: (competencyId: string) => Promise<boolean>;
   write: (record: TeachRecord) => Promise<void>;
   list: () => Promise<TeachRecord[]>;
   close?: () => Promise<void>;
@@ -51,19 +51,19 @@ export interface TeachRecordStore {
 export class MemoryTeachRecordStore implements TeachRecordStore {
   private readonly records = new Map<string, TeachRecord>();
 
-  async has(functionId: string): Promise<boolean> {
-    return this.records.has(functionId);
+  async has(competencyId: string): Promise<boolean> {
+    return this.records.has(competencyId);
   }
 
   async write(record: TeachRecord): Promise<void> {
-    if (!this.records.has(record.functionId)) {
-      this.records.set(record.functionId, { ...record });
+    if (!this.records.has(record.competencyId)) {
+      this.records.set(record.competencyId, { ...record });
     }
   }
 
   async list(): Promise<TeachRecord[]> {
     return Array.from(this.records.values()).sort((a, b) =>
-      a.functionId.localeCompare(b.functionId)
+      a.competencyId.localeCompare(b.competencyId)
     );
   }
 }
@@ -82,7 +82,7 @@ export class IndexedDBTeachRecordStore implements TeachRecordStore {
       request.onupgradeneeded = (event) => {
         const db = (event.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains(TEACH_RECORD_STORE_NAME)) {
-          db.createObjectStore(TEACH_RECORD_STORE_NAME, { keyPath: "functionId" });
+          db.createObjectStore(TEACH_RECORD_STORE_NAME, { keyPath: "competencyId" });
         }
       };
       request.onsuccess = () => resolve(request.result);
@@ -91,19 +91,19 @@ export class IndexedDBTeachRecordStore implements TeachRecordStore {
     return this.dbPromise;
   }
 
-  async has(functionId: string): Promise<boolean> {
+  async has(competencyId: string): Promise<boolean> {
     const db = await this.openDb();
     return new Promise<boolean>((resolve, reject) => {
       const tx = db.transaction(TEACH_RECORD_STORE_NAME, "readonly");
       const store = tx.objectStore(TEACH_RECORD_STORE_NAME);
-      const req = store.count(functionId);
+      const req = store.count(competencyId);
       req.onsuccess = () => resolve(req.result > 0);
       req.onerror = () => reject(req.error);
     });
   }
 
   async write(record: TeachRecord): Promise<void> {
-    const alreadyWritten = await this.has(record.functionId);
+    const alreadyWritten = await this.has(record.competencyId);
     if (alreadyWritten) return;
     const db = await this.openDb();
     return new Promise<void>((resolve, reject) => {

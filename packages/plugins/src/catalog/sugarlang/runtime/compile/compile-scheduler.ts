@@ -19,7 +19,7 @@
  */
 
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
-import type { CompiledSceneLexicon } from "../types";
+import type { SceneVocabularyModel } from "../types";
 import type { MorphologyLoader } from "../classifier/morphology-loader";
 import type { LexicalAtlasProvider } from "../types";
 import {
@@ -31,23 +31,21 @@ import {
 import { compileSugarlangScene } from "./compile-sugarlang-scene";
 import { collectSceneText, type SceneAuthoringContext } from "./scene-traversal";
 import type { SugarlangChunkCache } from "./chunk-cache";
-import type { ExtractChunksResult } from "./extract-chunks";
+import type { MultiWordExpressionExtractionResult } from "./multi-word-expression-extractor";
 import type { SugarlangCompileCache } from "./sugarlang-compile-cache";
 import type { SugarlangIntentCache, LineIntentCacheEntry } from "./intent-cache";
 import { buildIntentContentHash } from "./intent-cache";
-import type { ExtractIntentResult } from "./extract-intent";
+import type { LineIntentExtractionResult } from "./line-intent-extractor";
+import type { SceneContextExtractionResult } from "./scene-context-extractor";
+import type { SugarlangSceneContextCache } from "./scene-context-cache";
 import type { DialogueDefinition } from "@sugarmagic/domain";
-import type { CEFRBand } from "../contracts/learner-profile";
-import type { SugarlangVariantCache } from "./variant-cache";
-import type { GenerateVariantInput, GenerateVariantResult } from "./generate-variant";
-import type { BakedLineVariant } from "../contracts/baked-variant";
 
 export interface SugarlangAuthoringChunkPipelineOptions {
   cache: SugarlangChunkCache;
   extractSceneChunks: (
     scene: SceneAuthoringContext,
     contentHash: string
-  ) => Promise<ExtractChunksResult>;
+  ) => Promise<MultiWordExpressionExtractionResult>;
   promptVersion: string;
   debounceMs?: number;
   telemetry?: TelemetrySink;
@@ -67,22 +65,33 @@ export interface SugarlangAuthoringIntentPipelineOptions {
     dialogueDefinitionId: string,
     node: { nodeId: string; text: string; intent?: import("@sugarmagic/domain").DialogueLineIntent },
     contentHash: string
-  ) => Promise<ExtractIntentResult>;
+  ) => Promise<LineIntentExtractionResult>;
   promptVersion: string;
   debounceMs?: number;
   telemetry?: TelemetrySink;
 }
 
-export interface SugarlangAuthoringVariantPipelineOptions {
-  cache: SugarlangVariantCache;
-  generateVariant: (input: GenerateVariantInput) => Promise<GenerateVariantResult>;
+/**
+ * The scene-context build pass: what each scene's authored content is ABOUT.
+ *
+ * Deliberately has NO `debounceMs`. The other passes carry one and it is dead --
+ * `notifySceneChanged` and `scheduleDialogue` have zero callers repo-wide, and
+ * the only real entry point sets `debounceMs: 0` and flushes synchronously. A
+ * fourth unused timer would be three too many; see docs/backlog/007, which owns
+ * removing the rest.
+ */
+export interface SugarlangAuthoringSceneContextPassOptions {
+  cache: SugarlangSceneContextCache;
+  extractSceneContext: (
+    scene: SceneAuthoringContext,
+    contentHash: string
+  ) => Promise<SceneContextExtractionResult>;
   promptVersion: string;
-  /** Which bands to bake; default ["B1","B2","C1","C2"] */
-  bands?: CEFRBand[];
-  /** Which languages to bake for */
-  languages: string[];
-  debounceMs?: number;
-  onVariantBaked?: (variant: BakedLineVariant) => void;
+  /**
+   * Language concepts are written in. NOT the target language: concepts are
+   * English, so one extraction serves every target language.
+   */
+  supportLanguage: string;
 }
 
 export interface SugarlangAuthoringCompileSchedulerOptions {
@@ -94,39 +103,40 @@ export interface SugarlangAuthoringCompileSchedulerOptions {
   debounceMs?: number;
   chunkPipeline?: SugarlangAuthoringChunkPipelineOptions;
   intentPipeline?: SugarlangAuthoringIntentPipelineOptions;
-  variantPipeline?: SugarlangAuthoringVariantPipelineOptions;
+  /**
+   * STUDIO ONLY. Never wired on the runtime path: `ensureScene` runs in the
+   * deployed game, and extraction is a gateway call -- a player's machine must
+   * not do authoring work. The runtime receives models by seeding.
+   */
+  sceneContextPass?: SugarlangAuthoringSceneContextPassOptions;
   onLog?: (message: string, detail?: Record<string, unknown>) => void;
 }
 
-const DEFAULT_VARIANT_BANDS: CEFRBand[] = ["B1", "B2", "C1", "C2"];
 
 export class SugarlangAuthoringCompileScheduler {
   private readonly pendingSceneIds = new Set<string>();
   private readonly pendingChunkSceneIds = new Set<string>();
   private readonly pendingIntentDialogueIds = new Set<string>();
-  private readonly pendingVariantDialogueIds = new Set<string>();
+  private readonly pendingSceneContextSceneIds = new Set<string>();
   private timer: ReturnType<typeof setTimeout> | null = null;
   private chunkTimer: ReturnType<typeof setTimeout> | null = null;
   private intentTimer: ReturnType<typeof setTimeout> | null = null;
-  private variantTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly debounceMs: number;
   private readonly chunkDebounceMs: number;
   private readonly intentDebounceMs: number;
-  private readonly variantDebounceMs: number;
   private readonly onLog?: SugarlangAuthoringCompileSchedulerOptions["onLog"];
   private readonly chunkPipeline: SugarlangAuthoringChunkPipelineOptions | null;
   private readonly intentPipeline: SugarlangAuthoringIntentPipelineOptions | null;
-  private readonly variantPipeline: SugarlangAuthoringVariantPipelineOptions | null;
+  private readonly sceneContextPass: SugarlangAuthoringSceneContextPassOptions | null;
   private readonly telemetry: TelemetrySink;
 
   constructor(private readonly options: SugarlangAuthoringCompileSchedulerOptions) {
     this.debounceMs = options.debounceMs ?? 250;
     this.chunkPipeline = options.chunkPipeline ?? null;
     this.intentPipeline = options.intentPipeline ?? null;
-    this.variantPipeline = options.variantPipeline ?? null;
+    this.sceneContextPass = options.sceneContextPass ?? null;
     this.chunkDebounceMs = this.chunkPipeline?.debounceMs ?? 5000;
     this.intentDebounceMs = this.intentPipeline?.debounceMs ?? 5000;
-    this.variantDebounceMs = this.variantPipeline?.debounceMs ?? 10000;
     this.onLog = options.onLog;
     this.telemetry = this.chunkPipeline?.telemetry ?? createNoOpTelemetrySink();
   }
@@ -150,11 +160,10 @@ export class SugarlangAuthoringCompileScheduler {
         this.pendingIntentDialogueIds.add(dialogue.definitionId);
       }
     }
-    if (this.variantPipeline && this.options.getDialogues) {
-      for (const dialogue of this.options.getDialogues()) {
-        this.pendingVariantDialogueIds.add(dialogue.definitionId);
+    if (this.sceneContextPass) {
+      for (const scene of this.options.getScenes()) {
+        this.pendingSceneContextSceneIds.add(scene.sceneId);
       }
-      this.armVariantTimer();
     }
   }
 
@@ -196,20 +205,6 @@ export class SugarlangAuthoringCompileScheduler {
     }, this.intentDebounceMs);
   }
 
-  private armVariantTimer(): void {
-    if (!this.variantPipeline || this.pendingVariantDialogueIds.size === 0) {
-      return;
-    }
-
-    if (this.variantTimer) {
-      clearTimeout(this.variantTimer);
-    }
-
-    this.variantTimer = setTimeout(() => {
-      void this.flushVariants();
-    }, this.variantDebounceMs);
-  }
-
   private getRequestedScenes(requestedSceneIds: string[]): SceneAuthoringContext[] {
     const requested = new Set(requestedSceneIds);
     return this.options
@@ -221,7 +216,7 @@ export class SugarlangAuthoringCompileScheduler {
   private async writeChunksIntoCompileCache(
     sceneId: string,
     contentHash: string,
-    chunks: NonNullable<CompiledSceneLexicon["chunks"]>
+    chunks: NonNullable<SceneVocabularyModel["chunks"]>
   ): Promise<void> {
     for (const profile of ["runtime-preview", "authoring-preview"] as const) {
       const existing = await this.options.cache.get(sceneId, contentHash, profile);
@@ -236,7 +231,7 @@ export class SugarlangAuthoringCompileScheduler {
     }
   }
 
-  async flush(): Promise<CompiledSceneLexicon[]> {
+  async flush(): Promise<SceneVocabularyModel[]> {
     if (this.timer) {
       clearTimeout(this.timer);
       this.timer = null;
@@ -246,7 +241,7 @@ export class SugarlangAuthoringCompileScheduler {
     this.pendingSceneIds.clear();
     const scenes = this.getRequestedScenes(requested);
 
-    const compiled: CompiledSceneLexicon[] = [];
+    const compiled: SceneVocabularyModel[] = [];
     for (const scene of scenes) {
       for (const profile of ["runtime-preview", "authoring-preview"] as const) {
         const lexicon = compileSugarlangScene(
@@ -271,10 +266,95 @@ export class SugarlangAuthoringCompileScheduler {
 
     this.armChunkTimer();
     this.armIntentTimer();
-    // Variant pipeline arms when dialogues are explicitly scheduled (via rebuildAll or
-    // scheduleDialogue). Flush here only arms if pendingVariantDialogueIds is non-empty.
-    this.armVariantTimer();
     return compiled;
+  }
+
+  /**
+   * Builds a SceneContextModel per pending scene -- what its content is ABOUT.
+   *
+   * Studio only. Cache-hit skips the gateway; a content change between the call
+   * starting and returning discards the result rather than writing a model that
+   * describes text the author has already replaced.
+   */
+  async flushSceneContext(): Promise<void> {
+    if (!this.sceneContextPass) {
+      return;
+    }
+
+    const requested = [...this.pendingSceneContextSceneIds].sort((left, right) =>
+      left.localeCompare(right)
+    );
+    this.pendingSceneContextSceneIds.clear();
+    const scenes = this.getRequestedScenes(requested);
+
+    for (const scene of scenes) {
+      const contentHash = compileSugarlangScene(
+        scene,
+        this.options.atlas,
+        this.options.morphology,
+        "runtime-preview"
+      ).contentHash;
+
+      const cacheKey = {
+        contentHash,
+        supportLanguage: this.sceneContextPass.supportLanguage,
+        promptVersion: this.sceneContextPass.promptVersion
+      };
+
+      const cached = await this.sceneContextPass.cache.get(cacheKey);
+      if (cached) {
+        this.onLog?.("scene-context-cache-hit", {
+          sceneId: scene.sceneId,
+          conceptCount: cached.model.concepts.length
+        });
+        continue;
+      }
+
+      const result = await this.sceneContextPass.extractSceneContext(
+        scene,
+        contentHash
+      );
+      if (result.failure) {
+        // Fail-soft: a scene with no context model is a worse build, not a
+        // broken one. The extractor already degraded to authored prose.
+        this.onLog?.("scene-context-extraction-failed", {
+          sceneId: scene.sceneId,
+          reason: result.failure.message
+        });
+        continue;
+      }
+
+      const latestScene = this.options
+        .getScenes()
+        .find((entry) => entry.sceneId === scene.sceneId);
+      if (!latestScene) {
+        continue;
+      }
+
+      const latestHash = compileSugarlangScene(
+        latestScene,
+        this.options.atlas,
+        this.options.morphology,
+        "runtime-preview"
+      ).contentHash;
+      if (latestHash !== contentHash) {
+        this.onLog?.("scene-context-stale-discarded", {
+          sceneId: scene.sceneId,
+          contentHash
+        });
+        continue;
+      }
+
+      await this.sceneContextPass.cache.set({
+        key: cacheKey,
+        sceneId: scene.sceneId,
+        model: result.model
+      });
+      this.onLog?.("scene-context-built", {
+        sceneId: scene.sceneId,
+        conceptCount: result.model.concepts.length
+      });
+    }
   }
 
   async flushChunks(): Promise<void> {
@@ -463,102 +543,6 @@ export class SugarlangAuthoringCompileScheduler {
     }
   }
 
-  async flushVariants(): Promise<void> {
-    if (!this.variantPipeline || !this.options.getDialogues) {
-      return;
-    }
-
-    if (this.variantTimer) {
-      clearTimeout(this.variantTimer);
-      this.variantTimer = null;
-    }
-
-    const requestedIds = [...this.pendingVariantDialogueIds].sort((left, right) =>
-      left.localeCompare(right)
-    );
-    this.pendingVariantDialogueIds.clear();
-
-    const allDialogues = this.options.getDialogues();
-    const requestedSet = new Set(requestedIds);
-    const dialogues = allDialogues
-      .filter((d) => requestedSet.has(d.definitionId))
-      .sort((left, right) => left.definitionId.localeCompare(right.definitionId));
-
-    const bands = this.variantPipeline.bands ?? DEFAULT_VARIANT_BANDS;
-    const languages = this.variantPipeline.languages;
-
-    for (const dialogue of dialogues) {
-      for (const node of dialogue.nodes) {
-        // Intent excluded from variant contentHash: intent is embedded in the LLM
-        // prompt and the runtime lookup (buildVariantContentHash) has no access to
-        // the authored intent. Using {} here aligns bake and runtime key computation.
-        const contentHash = [
-          node.nodeId,
-          node.text,
-          JSON.stringify({})
-        ].join("|");
-
-        for (const lang of languages) {
-          for (const band of bands) {
-            const cacheKey = {
-              lang,
-              band,
-              contentHash,
-              variantPromptVersion: this.variantPipeline.promptVersion
-            };
-
-            const cached = await this.variantPipeline.cache.get(cacheKey);
-            if (cached) {
-              this.onLog?.("variant-cache-hit", {
-                dialogueDefinitionId: dialogue.definitionId,
-                nodeId: node.nodeId,
-                lang,
-                band
-              });
-              continue;
-            }
-
-            const result = await this.variantPipeline.generateVariant({
-              authoredText: node.text,
-              targetLang: lang,
-              band,
-              intent: null,
-              contentHash,
-              dialogueDefinitionId: dialogue.definitionId,
-              nodeId: node.nodeId
-            });
-
-            if (!result.variant) {
-              this.onLog?.("variant-generation-failed", {
-                dialogueDefinitionId: dialogue.definitionId,
-                nodeId: node.nodeId,
-                lang,
-                band,
-                reason: result.failure?.message
-              });
-              continue;
-            }
-
-            await this.variantPipeline.cache.set({
-              key: cacheKey,
-              variant: result.variant
-            });
-
-            this.variantPipeline.onVariantBaked?.(result.variant);
-
-            this.onLog?.("variant-baked", {
-              dialogueDefinitionId: dialogue.definitionId,
-              nodeId: node.nodeId,
-              lang,
-              band,
-              reviewFlag: result.variant.reviewFlag
-            });
-          }
-        }
-      }
-    }
-  }
-
   start(): void {
     this.onLog?.("scheduler-started");
   }
@@ -576,14 +560,9 @@ export class SugarlangAuthoringCompileScheduler {
       clearTimeout(this.intentTimer);
       this.intentTimer = null;
     }
-    if (this.variantTimer) {
-      clearTimeout(this.variantTimer);
-      this.variantTimer = null;
-    }
     this.pendingSceneIds.clear();
     this.pendingChunkSceneIds.clear();
     this.pendingIntentDialogueIds.clear();
-    this.pendingVariantDialogueIds.clear();
     this.onLog?.("scheduler-stopped");
   }
 }
@@ -599,7 +578,7 @@ export interface RuntimeCompileSchedulerOptions {
 export class RuntimeCompileScheduler {
   constructor(private readonly options: RuntimeCompileSchedulerOptions) {}
 
-  async ensureScene(sceneId: string): Promise<CompiledSceneLexicon> {
+  async ensureScene(sceneId: string): Promise<SceneVocabularyModel> {
     const scene = this.options.getScene(sceneId);
     if (!scene) {
       throw new Error(`Unknown sugarlang scene "${sceneId}".`);
@@ -624,8 +603,8 @@ export class RuntimeCompileScheduler {
     return lexicon;
   }
 
-  async prime(sceneIds: Iterable<string>): Promise<CompiledSceneLexicon[]> {
-    const compiled: CompiledSceneLexicon[] = [];
+  async prime(sceneIds: Iterable<string>): Promise<SceneVocabularyModel[]> {
+    const compiled: SceneVocabularyModel[] = [];
     for (const sceneId of [...sceneIds].sort((left, right) =>
       left.localeCompare(right)
     )) {

@@ -59,9 +59,6 @@ export interface SugarLangPluginConfig {
   debugBandOverride: SugarlangDebugBandOverride;
 }
 
-export const SUGARLANG_TARGET_LANGUAGE_ENV =
-  "SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE";
-
 export const SUGARLANG_PROXY_BASE_URL_ENV =
   "SUGARMAGIC_SUGARLANG_PROXY_BASE_URL";
 
@@ -127,6 +124,11 @@ export function normalizeSugarLangPluginConfig(
   const chunkConfig = isRecord(config?.chunkExtraction) ? config.chunkExtraction : null;
 
   return {
+    // Config is the AUTHORED DEFAULT rung only -- it deliberately does not
+    // consult the environment here. Env is a lower-precedence fallback resolved
+    // by resolveSugarLangTargetLanguage, and folding it in at normalize time
+    // would let a deploy variable masquerade as an authored value and outrank
+    // the player. This field is a default, not the answer.
     targetLanguage: normalizeTargetLanguage(config?.targetLanguage),
     supportLanguage: "en",
     debugLogging:
@@ -168,15 +170,93 @@ export function normalizeSugarLangPluginConfig(
   };
 }
 
-export function resolveSugarLangTargetLanguage(
-  environment: RuntimePluginEnvironment | undefined
-): string | null {
-  const value = environment?.[SUGARLANG_TARGET_LANGUAGE_ENV];
-  if (typeof value !== "string" || value.trim().length === 0) {
-    return null;
-  }
+/**
+ * THE single place target language is decided. Do not add a second one.
+ *
+ * NOT AN ENVIRONMENT VARIABLE, EVER. Target language is a PLAYER's choice, not
+ * a property of a deployment: a player picks Spanish or Italian in Settings, and
+ * two players of the same build must be able to choose differently. An env var
+ * cannot express that -- it is one value per deployment, decided by whoever ran
+ * the deploy. `SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE` was removed 2026-07-29 for
+ * that reason, and because it had already caused the bug it was always going to:
+ * the preview boot payload read env ONLY, so setting the language in Studio left
+ * preview silently shipping nothing. The gateway never read it either.
+ *
+ * Precedence, and the reason for each rung:
+ *
+ *   1. player   the learner's own choice. Highest because it is the only rung
+ *               that belongs to a person. The Settings-menu picker writes here
+ *               and nothing else in the system needs to know it exists.
+ *   2. config   the authored default for this project (Studio's Language
+ *               panel). What a new player gets before choosing.
+ *
+ * THERE IS NO THIRD RUNG. If neither is set this returns null.
+ *
+ * IT RETURNS NULL RATHER THAN THROWING, AND THAT IS THE WHOLE DESIGN.
+ *   This threw for a while, on the reasoning that a language-learning system
+ *   with no language is misconfigured rather than degraded. That reasoning is
+ *   right about the RUNTIME and wrong as a property of this function, because
+ *   THIS FUNCTION CANNOT KNOW WHERE IT IS RUNNING. The same lookup is called
+ *   from Studio, from the preview boot builder, and from a shipped game, and
+ *   those three want different things from the same answer:
+ *
+ *     Studio           null is NORMAL. The plugin was just installed and nobody
+ *                      has opened the Language panel yet. Studio must come up so
+ *                      they can go set one.
+ *     preview          null is FATAL, loudly. Refuse to launch and say so.
+ *     shipped runtime  null is FATAL, loudly. If sugarlang is enabled the game
+ *                      must not run without a language.
+ *
+ *   Baking the throw in here forced Studio to have the runtime's opinion: an
+ *   unconfigured project could not open its own Build panel. So the lookup stays
+ *   TOTAL and each caller applies its own rule. `SugarlangMissingTargetLanguageError`
+ *   is still exported for the callers that choose to fail loudly.
+ *
+ *   The failure this replaced is still worth avoiding: returning null once let a
+ *   misconfigured preview boot "successfully" with an empty payload for months.
+ *   The fix for that is the PREVIEW refusing to launch -- a decision only the
+ *   preview caller can make -- not a leaf lookup deciding for everyone.
+ *
+ * Both rungs are optional so callers pass only what they have: a compile-time
+ * caller has no player, a runtime caller has both.
+ */
+export function resolveSugarLangTargetLanguage(sources: {
+  /** The learner's selection, e.g. LearnerProfile.targetLanguage. */
+  player?: string | null | undefined;
+  /** The project's authored default, e.g. SugarLangPluginConfig.targetLanguage. */
+  config?: string | null | undefined;
+}): string | null {
+  return (
+    normalizeLanguageValue(sources.player) ??
+    normalizeLanguageValue(sources.config) ??
+    null
+  );
+}
 
-  return value.trim().toLowerCase();
+/**
+ * Raised when no target language is configured anywhere.
+ *
+ * Its own type so callers can distinguish "misconfigured" from any other
+ * failure, and so a catch-all handler cannot quietly absorb it as a generic
+ * error. The message names the two places that can fix it, because the previous
+ * failure mode was a blank screen with no clue which knob was missing.
+ */
+export class SugarlangMissingTargetLanguageError extends Error {
+  constructor() {
+    super(
+      "Sugarlang has no target language. Set it in Studio's Language panel " +
+        "(project default), or via the player's language selection. This is a " +
+        "configuration error, not a runtime condition: every downstream " +
+        "decision -- atlas, lexicon, cards, variants -- requires a language."
+    );
+    this.name = "SugarlangMissingTargetLanguageError";
+  }
+}
+
+function normalizeLanguageValue(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 /**

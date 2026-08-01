@@ -14,6 +14,14 @@
  * Status: active
  */
 
+import {
+  vocabularyRefs,
+  type TeachableRef
+} from "../../contracts/teachable-ref";
+import { isAvailable, EMPTY_NPC_CONTEXT } from "../../situation";
+import { computePacingSignals, getLearningStatus } from "../../learner";
+import { resolveSceneTeachables } from "../../inventory/scene-teachable-resolver";
+import { resolveQuestEssentialLemmaRefs } from "../quest-essential";
 import type {
   CEFRBand,
   TeacherContext,
@@ -23,27 +31,26 @@ import type {
 } from "../../types";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
-  getSentenceComplexityCap
+  getSentenceComplexityCap,
+  getIntroduceCapForBand
 } from "../band-envelope";
 
 export interface FallbackTeacherPolicyOptions {
   triggerReasonOverride?: PedagogicalDirective["comprehensionCheck"]["triggerReason"];
 }
 
-function getIntroduceLevelCap(cefrBand: CEFRBand): number {
-  switch (cefrBand) {
-    case "A1":
-      return 1;
-    case "A2":
-      return 2;
-    case "B1":
-      return 3;
-    case "B2":
-      return 4;
-    case "C1":
-    case "C2":
-      return 5;
-  }
+// 090.10: `getIntroduceLevelCap` deleted -- it was a second, disagreeing answer
+// to the same question. See `getIntroduceCapForBand` in ../band-envelope.
+
+/**
+ * 090.4: probe-pacing signals, derived rather than carried. See
+ * learner/pacing-signals.ts.
+ */
+function pacingSignals(context: TeacherContext) {
+  return computePacingSignals(
+    context.learner,
+    context.situation?.turnsSinceLastProbe ?? 0
+  );
 }
 
 function pickFallbackPosture(
@@ -75,7 +82,9 @@ function pickGlossingStrategy(
   context: TeacherContext,
   introduce: LemmaRef[]
 ): PedagogicalDirective["glossingStrategy"] {
-  if (context.activeQuestEssentialLemmas.length > 0) {
+  if (
+    resolveQuestEssentialLemmaRefs(context.situation, context.atlas, context.lang).length > 0
+  ) {
     return "parenthetical";
   }
   if (introduce.length > 0) {
@@ -85,7 +94,7 @@ function pickGlossingStrategy(
 }
 
 function takeOldestPending(context: TeacherContext): LemmaRef[] {
-  return [...context.pendingProvisionalLemmas]
+  return [...pacingSignals(context).pendingProvisionalLemmas]
     .sort((left, right) => {
       if (left.turnsPending !== right.turnsPending) {
         return right.turnsPending - left.turnsPending;
@@ -103,15 +112,97 @@ function pickTriggerReason(
   if (options?.triggerReasonOverride) {
     return options.triggerReasonOverride;
   }
-  if (context.probeFloorState.hardFloorReached) {
-    return context.probeFloorState.hardFloorReason === "lemma-age"
+  const probeFloorState = pacingSignals(context).probeFloorState;
+  if (probeFloorState.hardFloorReached) {
+    return probeFloorState.hardFloorReason === "lemma-age"
       ? "hard-floor-lemma-age"
       : "hard-floor-turns";
   }
-  if (context.probeFloorState.softFloorReached) {
+  if (probeFloorState.softFloorReached) {
     return "soft-floor";
   }
   return undefined;
+}
+
+/**
+ * 090.4b: the fallback's slate, derived from the SITUATION and the learner --
+ * not from the prescription.
+ *
+ * It used to be `context.prescription.introduce.slice(0, cap)`, which made the
+ * budgeter the author of every fallback directive and meant `prescription` could
+ * never leave `TeacherContext`. Worse, the fallback fires exactly when the
+ * gateway is unavailable -- so the path taken during an outage was the one most
+ * tightly coupled to the machinery the epic is deleting.
+ *
+ * The replacement uses what the epic already built: concepts from the situation,
+ * resolved against the atlas (090.2), then sorted by where the learner stands on
+ * each (090.9). No LLM, fully deterministic, which is the whole point of a
+ * fallback.
+ *
+ *   unseen        -> introduce, capped by band
+ *   due           -> reinforce
+ *   out-of-reach  -> avoid
+ *   learning/known-> neither; nothing to do about them this turn
+ *
+ * Returns empty lists when there is no situation or the scene was never built.
+ * That is a legitimate answer -- "teach nothing this turn" -- and far better
+ * than inventing a slate from a scan the Teacher is no longer bound by.
+ */
+function deriveFallbackSlate(context: TeacherContext): {
+  introduce: TeachableRef[];
+  reinforce: TeachableRef[];
+  avoid: TeachableRef[];
+} {
+  const empty = { introduce: [], reinforce: [], avoid: [] };
+  const situation = context.situation;
+  if (!situation || !isAvailable(situation.sceneContext)) {
+    return empty;
+  }
+
+  const targetLanguage = context.lang.targetLanguage;
+  const { teachables } = resolveSceneTeachables({
+    concepts: situation.sceneContext.value.concepts,
+    atlas: context.atlas,
+    targetLanguage,
+    supportLanguage: context.lang.supportLanguage
+  });
+
+  const introduce: TeachableRef[] = [];
+  const reinforce: TeachableRef[] = [];
+  const avoid: TeachableRef[] = [];
+
+  for (const teachable of teachables) {
+    if (teachable.kind !== "vocabulary") {
+      // Competencies are nameable on the slate (090.4a) but the fallback has no
+      // deterministic way to choose between them -- that judgment is the
+      // Teacher's. Skipping is honest; guessing would put an unjustified act in
+      // front of the learner during an outage.
+      continue;
+    }
+    const ref: TeachableRef = {
+      kind: "vocabulary",
+      lemmaId: teachable.id,
+      lang: targetLanguage
+    };
+    const status = getLearningStatus({
+      card: context.learner.lemmaCards[teachable.id],
+      itemBand: context.atlas.getBand(teachable.id, targetLanguage),
+      learnerBand: context.learner.estimatedCefrBand
+    });
+
+    if (status === "unseen") introduce.push(ref);
+    else if (status === "due") reinforce.push(ref);
+    else if (status === "out-of-reach") avoid.push(ref);
+  }
+
+  return {
+    introduce: introduce.slice(
+      0,
+      getIntroduceCapForBand(context.learner.estimatedCefrBand)
+    ),
+    reinforce,
+    avoid
+  };
 }
 
 export class FallbackTeacherPolicy implements TeacherPolicy {
@@ -121,14 +212,15 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
   ): Promise<PedagogicalDirective> {
     const confidence = context.learner.assessment.cefrConfidence;
     const supportPosture = pickFallbackPosture(confidence);
-    const introduce = context.prescription.introduce.slice(
-      0,
-      getIntroduceLevelCap(context.learner.estimatedCefrBand)
+    const slate = deriveFallbackSlate(context);
+    const glossingStrategy = pickGlossingStrategy(
+      context,
+      vocabularyRefs(slate.introduce)
     );
-    const glossingStrategy = pickGlossingStrategy(context, introduce);
+    const probeFloorState = pacingSignals(context).probeFloorState;
     const shouldTriggerProbe =
-      context.probeFloorState.hardFloorReached ||
-      (context.probeFloorState.softFloorReached && confidence >= 0.3);
+      probeFloorState.hardFloorReached ||
+      (probeFloorState.softFloorReached && confidence >= 0.3);
     const targetLemmas = shouldTriggerProbe ? takeOldestPending(context) : [];
     const triggerReason = shouldTriggerProbe
       ? pickTriggerReason(context, options)
@@ -140,11 +232,7 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
     }
 
     return {
-      targetVocab: {
-        introduce,
-        reinforce: [...context.prescription.reinforce],
-        avoid: [...context.prescription.avoid]
-      },
+      targetVocab: slate,
       supportPosture,
       targetLanguageRatio: TARGET_LANGUAGE_RATIO_BY_POSTURE[supportPosture],
       interactionStyle: pickInteractionStyle(context, confidence),
@@ -159,8 +247,8 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
             targetLemmas,
             triggerReason,
             characterVoiceReminder:
-              context.npc.displayName != null
-                ? `Stay in ${context.npc.displayName}'s established character voice.`
+              (context.situation?.npc ?? EMPTY_NPC_CONTEXT).displayName != null
+                ? `Stay in ${(context.situation?.npc ?? EMPTY_NPC_CONTEXT).displayName}'s established character voice.`
                 : "Stay in the NPC's established character voice.",
             acceptableResponseForms: "short-phrase"
           }

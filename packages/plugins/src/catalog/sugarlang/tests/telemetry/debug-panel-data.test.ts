@@ -22,52 +22,8 @@ import { DebugPanelDataSource } from "../../runtime/telemetry/debug-panel-data";
 describe("DebugPanelDataSource", () => {
   it("lists conversations, turns, and rationale traces from the same event stream", async () => {
     const sink = new MemoryTelemetrySink();
-    sink.emit(
-      createTelemetryEvent("budgeter.prescription-generated", {
-        conversationId: "conversation-1",
-        sessionId: "session-1",
-        turnId: "turn-1",
-        timestamp: 1,
-        sceneId: "scene-1",
-        learnerSnapshot: {
-          learnerId: "learner-1",
-          cefrBand: "A2",
-          cefrConfidence: 0.6,
-          targetLanguage: "es",
-          supportLanguage: "en",
-          currentSessionTurns: 1,
-          knownLemmaCount: 10
-        },
-        prescription: {
-          introduce: [],
-          reinforce: [],
-          avoid: [],
-          budget: { newItemsAllowed: 0 },
-          rationale: {
-            candidateSetSize: 0,
-            envelopeSurvivorCount: 0,
-            priorityScores: [],
-            reasons: []
-          }
-        },
-        rationale: {
-          candidateSetSize: 0,
-          envelopeSurvivorCount: 0,
-          priorityScores: [],
-          reasons: []
-        },
-        pendingProvisionalSnapshot: [],
-        probeFloorState: {
-          turnsSinceLastProbe: 0,
-          totalPendingLemmas: 0,
-          softFloorReached: false,
-          hardFloorReached: false
-        },
-        questEssentialState: {
-          activeQuestEssentialLemmas: []
-        }
-      })
-    );
+    // 090.5: the `budgeter.prescription-generated` emission this started with
+    // is gone -- 090.10 deleted its only producer and 090.5 the event type.
     sink.emit(
       createTelemetryEvent("director.invocation-completed", {
         conversationId: "conversation-1",

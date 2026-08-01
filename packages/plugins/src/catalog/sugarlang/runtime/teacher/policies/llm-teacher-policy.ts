@@ -16,6 +16,7 @@
 
 import type { SugarlangLLMClient } from "../../llm/types";
 import { buildPostPlacementCalibrationHint, isInPostPlacementCalibration } from "../calibration-mode";
+import { traceTeacherCall } from "../teacher-trace";
 import {
   buildTeacherPrompt,
   estimatePromptTokens
@@ -32,8 +33,16 @@ import {
   emitTelemetry,
   type TelemetrySink
 } from "../../telemetry/telemetry";
+import { EMPTY_NPC_CONTEXT } from "../../situation";
+import { computePacingSignals } from "../../learner";
+import { resolveQuestEssentialLemmaRefs } from "../quest-essential";
 
-const DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6";
+// NO DEFAULT MODEL ON PURPOSE (2026-07-28). This used to be
+// `DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6"`, which was inert: the gateway
+// client never forwarded it, so the Teacher silently ran on the sugaragent
+// DIALOGUE model. The model is now resolved server-side from
+// `purpose: "teacher"` -> SUGARMAGIC_SUGARLANG_TEACHER_MODEL. A local constant
+// here would just re-create a lie that reads as configuration.
 const DEFAULT_MAX_TOKENS = 900;
 
 export interface DirectorClaudeClientResult {
@@ -46,7 +55,8 @@ export interface DirectorClaudeClientResult {
 }
 
 export interface DirectorClaudeClientRequest {
-  model: string;
+  /** null => the gateway resolves the model from `purpose: "teacher"`. */
+  model: string | null;
   systemPrompt: string;
   userPrompt: string;
   maxTokens: number;
@@ -63,6 +73,9 @@ export interface ClaudeTeacherPolicyOptions {
   client: DirectorClaudeClient;
   telemetry?: TelemetrySink;
   logger?: TeacherPolicyLogger;
+  /** Escape hatch for tooling/tests. Leave unset in production: the gateway
+   *  resolves the model from `purpose: "teacher"` so model choice is a
+   *  deploy-time decision, not a client-side one (Plan 073.2). */
   model?: string;
   maxTokens?: number;
   now?: () => number;
@@ -105,7 +118,10 @@ export function createGatewayTeacherClient(
   return {
     async generateStructuredDirective(request): Promise<DirectorClaudeClientResult> {
       const response = await gateway.generate({
-        model: request.model,
+        // Server-side model routing. Without this the gateway falls through to
+        // the sugaragent dialogue model — which is exactly the bug this fixes.
+        purpose: "teacher",
+        ...(request.model === null ? {} : { model: request.model }),
         systemPrompt: request.systemPrompt,
         userPrompt: request.userPrompt,
         maxTokens: request.maxTokens
@@ -123,7 +139,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
   private readonly client: DirectorClaudeClient;
   private readonly telemetry: TelemetrySink;
   private readonly logger: TeacherPolicyLogger;
-  private readonly model: string;
+  private readonly model: string | null;
   private readonly maxTokens: number;
   private readonly now: () => number;
 
@@ -131,7 +147,8 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     this.client = options.client;
     this.telemetry = options.telemetry ?? createNoOpTelemetrySink();
     this.logger = options.logger ?? NO_OP_LOGGER;
-    this.model = options.model ?? DEFAULT_DIRECTOR_MODEL;
+    // null unless a caller explicitly overrides; the gateway picks otherwise.
+    this.model = options.model ?? null;
     this.maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
     this.now = options.now ?? (() => Date.now());
   }
@@ -139,6 +156,13 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
   async invoke(
     context: TeacherContext
   ): Promise<PedagogicalDirective> {
+    const sceneId = context.situation?.sceneId ?? "unknown-scene";
+    const npc = context.situation?.npc ?? EMPTY_NPC_CONTEXT;
+    // 090.4: derived, not carried -- see learner/pacing-signals.ts.
+    const { pendingProvisionalLemmas, probeFloorState } = computePacingSignals(
+      context.learner,
+      context.situation?.turnsSinceLastProbe ?? 0
+    );
     const prompt = buildTeacherPrompt(context);
     const shouldAppendCalibrationHint =
       context.calibrationActive || isInPostPlacementCalibration(context.learner);
@@ -149,9 +173,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
 
     this.logger.info("Teacher prompt constructed.", {
       conversationId: context.conversationId,
-      sceneId: context.scene.sceneId,
-      npcDefinitionId: context.npc.npcDefinitionId ?? null,
-      npcDisplayName: context.npc.displayName ?? null,
+      sceneId,
+      npcDefinitionId: npc.npcDefinitionId ?? null,
+      npcDisplayName: npc.displayName ?? null,
       learnerBand: context.learner.estimatedCefrBand,
       calibrationActive: shouldAppendCalibrationHint,
       model: this.model,
@@ -166,20 +190,24 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: startedAt,
-        sceneId: context.scene.sceneId,
-        npcId: context.npc.npcDefinitionId,
-        npcDisplayName: context.npc.displayName,
+        sceneId,
+        npcId: npc.npcDefinitionId,
+        npcDisplayName: npc.displayName,
         directorContext: {
           calibrationActive: context.calibrationActive,
-          citedQuestEssentialCount: context.activeQuestEssentialLemmas.length,
-          pendingProvisionalCount: context.pendingProvisionalLemmas.length,
+          citedQuestEssentialCount: resolveQuestEssentialLemmaRefs(
+            context.situation,
+            context.atlas,
+            context.lang
+          ).length,
+          pendingProvisionalCount: pendingProvisionalLemmas.length,
           learnerBand: context.learner.estimatedCefrBand
         },
         cacheHit: false,
         model: this.model,
         cacheMarkers: prompt.cacheMarkers,
-        pendingProvisionalSnapshot: context.pendingProvisionalLemmas,
-        probeFloorState: context.probeFloorState
+        pendingProvisionalSnapshot: pendingProvisionalLemmas,
+        probeFloorState
       })
     );
 
@@ -195,9 +223,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     } catch (error) {
       this.logger.warn("Teacher invocation failed.", {
         conversationId: context.conversationId,
-        sceneId: context.scene.sceneId,
-        npcDefinitionId: context.npc.npcDefinitionId ?? null,
-        npcDisplayName: context.npc.displayName ?? null,
+        sceneId: sceneId,
+        npcDefinitionId: npc.npcDefinitionId ?? null,
+        npcDisplayName: npc.displayName ?? null,
         model: this.model,
         reason: error instanceof Error ? error.message : "Claude request failed"
       });
@@ -208,14 +236,23 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
           sessionId: context.telemetryContext?.sessionId,
           turnId: context.telemetryContext?.turnId,
           timestamp: this.now(),
-          sceneId: context.scene.sceneId,
-          npcId: context.npc.npcDefinitionId,
-          npcDisplayName: context.npc.displayName,
+          sceneId: sceneId,
+          npcId: npc.npcDefinitionId,
+          npcDisplayName: npc.displayName,
           model: this.model,
           latencyMs: this.now() - startedAt,
           reason: error instanceof Error ? error.message : "Claude request failed"
         })
       );
+      // Trace BEFORE throwing. A failed call that prints nothing looks exactly
+      // like a call that never happened, and the fallback directive that
+      // follows would then appear to come from nowhere.
+      traceTeacherCall({
+        context,
+        systemPrompt: prompt.system,
+        userPrompt,
+        errorText: error instanceof Error ? error.message : "Claude request failed"
+      });
       throw new TeacherInvocationError(
         error instanceof Error ? error.message : "Claude request failed",
         undefined,
@@ -240,9 +277,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     ) {
       this.logger.warn("Teacher response failed schema validation; applying repair.", {
         conversationId: context.conversationId,
-        sceneId: context.scene.sceneId,
-        npcDefinitionId: context.npc.npcDefinitionId ?? null,
-        npcDisplayName: context.npc.displayName ?? null,
+        sceneId: sceneId,
+        npcDefinitionId: npc.npcDefinitionId ?? null,
+        npcDisplayName: npc.displayName ?? null,
         model: this.model,
         requestId: response.requestId ?? null,
         errorCode: parseResult.error.code,
@@ -251,16 +288,16 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         partialResponse: parseResult.error.partial,
         rawResponseText: response.text
       });
-      directive = repairDirective(parseResult.error.partial, context.prescription, context, {
+      directive = repairDirective(parseResult.error.partial, context, {
         telemetry: this.telemetry
       });
       parseMode = "repaired";
     } else {
       this.logger.warn("Teacher response rejected before repair; falling back.", {
         conversationId: context.conversationId,
-        sceneId: context.scene.sceneId,
-        npcDefinitionId: context.npc.npcDefinitionId ?? null,
-        npcDisplayName: context.npc.displayName ?? null,
+        sceneId: sceneId,
+        npcDefinitionId: npc.npcDefinitionId ?? null,
+        npcDisplayName: npc.displayName ?? null,
         model: this.model,
         requestId: response.requestId ?? null,
         errorCode: parseResult.error.code,
@@ -268,7 +305,17 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         errorDetails: parseResult.error.details,
         partialResponse: parseResult.error.partial,
         rawResponseText: response.text,
-        activeQuestEssentialLemmaCount: context.activeQuestEssentialLemmas.length
+        activeQuestEssentialLemmaCount: resolveQuestEssentialLemmaRefs(
+          context.situation,
+          context.atlas,
+          context.lang
+        ).length
+      });
+      traceTeacherCall({
+        context,
+        systemPrompt: prompt.system,
+        userPrompt,
+        errorText: `parse failed: ${parseResult.error.message}`
       });
       throw new TeacherInvocationError(
         parseResult.error.message,
@@ -281,9 +328,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
 
     this.logger.info("Teacher response received.", {
       conversationId: context.conversationId,
-      sceneId: context.scene.sceneId,
-      npcDefinitionId: context.npc.npcDefinitionId ?? null,
-      npcDisplayName: context.npc.displayName ?? null,
+      sceneId: sceneId,
+      npcDefinitionId: npc.npcDefinitionId ?? null,
+      npcDisplayName: npc.displayName ?? null,
       model: this.model,
       requestId: response.requestId ?? null,
       rawResponseText: response.text,
@@ -299,9 +346,9 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: endedAt,
-        sceneId: context.scene.sceneId,
-        npcId: context.npc.npcDefinitionId,
-        npcDisplayName: context.npc.displayName,
+        sceneId: sceneId,
+        npcId: npc.npcDefinitionId,
+        npcDisplayName: npc.displayName,
         directive,
         model: this.model,
         latencyMs: endedAt - startedAt,
@@ -319,6 +366,16 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         }
       })
     );
+
+    // Console trace: situation + full prompt + directive, for the browser
+    // console. Placed on the success path AFTER the directive exists so all
+    // three are real; the throw paths above trace separately.
+    traceTeacherCall({
+      context,
+      systemPrompt: prompt.system,
+      userPrompt,
+      directive
+    });
 
     return directive;
   }

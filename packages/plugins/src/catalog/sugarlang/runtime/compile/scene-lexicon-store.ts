@@ -16,16 +16,16 @@
  * Status: active
  */
 
-import type { CompiledSceneLexicon } from "../types";
+import type { SceneVocabularyModel } from "../types";
 import type { RuntimeCompileScheduler } from "./compile-scheduler";
 
 export interface SugarlangSceneLexiconStore {
-  get: (sceneId: string) => CompiledSceneLexicon | undefined;
-  ensure: (sceneId: string) => Promise<CompiledSceneLexicon>;
+  get: (sceneId: string) => SceneVocabularyModel | undefined;
+  ensure: (sceneId: string) => Promise<SceneVocabularyModel>;
   mergeChunks: (
     sceneId: string,
     contentHash: string,
-    chunks: NonNullable<CompiledSceneLexicon["chunks"]>
+    chunks: NonNullable<SceneVocabularyModel["chunks"]>
   ) => boolean;
   onInvalidate: (listener: (sceneId: string) => void) => () => void;
 }
@@ -33,12 +33,12 @@ export interface SugarlangSceneLexiconStore {
 export class DefaultSugarlangSceneLexiconStore
   implements SugarlangSceneLexiconStore
 {
-  private readonly lexicons = new Map<string, CompiledSceneLexicon>();
+  private readonly lexicons = new Map<string, SceneVocabularyModel>();
   private readonly listeners = new Set<(sceneId: string) => void>();
 
   constructor(private readonly scheduler: RuntimeCompileScheduler) {}
 
-  seed(lexicons: CompiledSceneLexicon[]): void {
+  seed(lexicons: SceneVocabularyModel[]): void {
     for (const lexicon of lexicons) {
       this.lexicons.set(lexicon.sceneId, lexicon);
     }
@@ -52,14 +52,14 @@ export class DefaultSugarlangSceneLexiconStore
     }
   }
 
-  get(sceneId: string): CompiledSceneLexicon | undefined {
+  get(sceneId: string): SceneVocabularyModel | undefined {
     return this.lexicons.get(sceneId);
   }
 
   mergeChunks(
     sceneId: string,
     contentHash: string,
-    chunks: NonNullable<CompiledSceneLexicon["chunks"]>
+    chunks: NonNullable<SceneVocabularyModel["chunks"]>
   ): boolean {
     const current = this.lexicons.get(sceneId);
     if (!current || current.contentHash !== contentHash) {
@@ -73,7 +73,7 @@ export class DefaultSugarlangSceneLexiconStore
     return true;
   }
 
-  async ensure(sceneId: string): Promise<CompiledSceneLexicon> {
+  async ensure(sceneId: string): Promise<SceneVocabularyModel> {
     const cached = this.lexicons.get(sceneId);
     if (cached) {
       return cached;

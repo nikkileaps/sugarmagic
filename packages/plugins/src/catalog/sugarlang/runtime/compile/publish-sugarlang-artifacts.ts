@@ -21,10 +21,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
-import type { LexicalAtlasProvider, CompiledSceneLexicon } from "../types";
+import type { LexicalAtlasProvider, SceneVocabularyModel } from "../types";
 import type { MorphologyLoader } from "../classifier/morphology-loader";
 import { compileSugarlangScene } from "./compile-sugarlang-scene";
-import type { ExtractChunksResult } from "./extract-chunks";
+import type { MultiWordExpressionExtractionResult } from "./multi-word-expression-extractor";
 import type { SceneAuthoringContext } from "./scene-traversal";
 
 export interface SugarlangPublishedArtifact {
@@ -44,7 +44,7 @@ export interface SugarlangPublishArtifactsRequest {
   extractSceneChunks: (
     scene: SceneAuthoringContext,
     contentHash: string
-  ) => Promise<ExtractChunksResult>;
+  ) => Promise<MultiWordExpressionExtractionResult>;
 }
 
 async function runWithConcurrency<TInput, TOutput>(
@@ -101,7 +101,7 @@ export async function publishSugarlangArtifacts(
         );
       }
 
-      const finalLexicon: CompiledSceneLexicon = {
+      const finalLexicon: SceneVocabularyModel = {
         ...baseLexicon,
         chunks: extraction.chunks
       };
@@ -129,8 +129,8 @@ export async function publishSugarlangArtifacts(
 
 export async function loadPublishedSugarlangLexiconArtifact(
   artifactPath: string
-): Promise<CompiledSceneLexicon> {
+): Promise<SceneVocabularyModel> {
   const compressed = await readFile(artifactPath);
   const json = gunzipSync(compressed).toString("utf8");
-  return JSON.parse(json) as CompiledSceneLexicon;
+  return JSON.parse(json) as SceneVocabularyModel;
 }

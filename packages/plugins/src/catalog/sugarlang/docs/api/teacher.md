@@ -49,7 +49,7 @@ splice.
 Budget split:
 
 - cacheable system prompt: role, pedagogical rubric, CEFR descriptors, output schema, hard constraints, comprehension guidance
-- dynamic user prompt: learner state, relationship state, scene snapshot, NPC context, moment metadata, recent turns, prescription, pending provisional state, and turn-shaping hints
+- dynamic user prompt: the SITUATION (scene concepts, runtime facts, NPC, recent turns) and the LEARNER (state, derived pacing signals), plus turn-shaping hints. These are the two content doors on `TeacherContext`; there is no prescription.
 
 The builder now renders a canonical template from `prompt-template.ts` so the
 prompt wording has one editable source of truth. The current Teacher prompt
@@ -61,12 +61,11 @@ is being debugged.
 `parseDirective(json, { context, telemetry })` performs strict JSON parsing and
 schema validation.
 
-`repairDirective(partial, prescription, context)` is deterministic:
+`repairDirective(partial, context, options)` is deterministic:
 
-- fills missing required fields from prescription-safe defaults
+- fills missing required fields from safe defaults
 - clamps `targetLanguageRatio` to `[0, 1]`
 - drops unknown or malformed fields
-- enforces the no-invention rule by filtering `targetVocab` to prescription subsets
 - strips any quest-essential lemma that leaked into `targetVocab`
 - repairs invalid comprehension-check target lemmas back to the pending list
 
@@ -86,8 +85,26 @@ telemetry for:
 - request id
 - parse mode (`validated` or `repaired`)
 
-The default model is `claude-sonnet-4-6`, but the constructor allows an
-override for cheaper runs such as Haiku.
+### Model selection
+
+The model is resolved **server-side** by the gateway, from the `purpose` the
+client sends (Plan 073.2). `createGatewayTeacherClient` sends
+`purpose: "teacher"`, which the gateway maps to
+`SUGARMAGIC_SUGARLANG_TEACHER_MODEL`, defaulting to `claude-sonnet-4-6`.
+
+Sugarlang declares that env var in its own `gatewayRuntimeConfigKeys`
+(`catalog/sugarlang/manifest.ts`), surfaced in Studio as the "Teacher Model"
+setting. It is deliberately sugarlang's own key rather than a
+`SUGARMAGIC_SUGARAGENT_*` one, so sugarlang's model choice does not depend on
+sugaragent's config.
+
+`ClaudeTeacherPolicy` sends **no model id** by default — `options.model` exists
+as a tooling/test escape hatch and is omitted from the request when unset.
+There is intentionally no client-side default constant: the previous
+`DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6"` was never forwarded over the
+wire, so the Teacher silently ran on the sugaragent *dialogue* model while the
+constant read like configuration. Telemetry records `model: null` when the
+gateway resolved it.
 
 ## Fallback Policy
 

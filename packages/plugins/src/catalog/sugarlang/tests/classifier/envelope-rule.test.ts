@@ -19,7 +19,6 @@ import { describe, expect, it } from "vitest";
 import type {
   CoverageProfile,
   LemmaRef,
-  LexicalPrescription,
   LexicalChunk
 } from "../../runtime/types";
 import {
@@ -78,22 +77,9 @@ function createChunk(normalizedForm: string): LexicalChunk {
   };
 }
 
-function createPrescription(lemmaIds: string[]): LexicalPrescription {
-  return {
-    introduce: lemmaIds.map((lemmaId) => ({ lemmaId, lang: "es" })),
-    reinforce: [],
-    avoid: [],
-    budget: {
-      newItemsAllowed: lemmaIds.length
-    },
-    rationale: {
-      candidateSetSize: lemmaIds.length,
-      envelopeSurvivorCount: lemmaIds.length,
-      priorityScores: [],
-      reasons: []
-    }
-  };
-}
+// 090.10: was `createPrescription`, which wrapped a lemma-id list in a fake
+// budget and rationale purely to satisfy the old option type. The exemption
+// only ever read `introduce`, so the wrapper is gone with the budgeter.
 
 describe("applyEnvelopeRule", () => {
   it("passes fully in-envelope profiles", () => {
@@ -155,7 +141,7 @@ describe("applyEnvelopeRule", () => {
       }),
       "A1",
       {
-        prescription: createPrescription(["andar", "barco", "carta"])
+        taughtLemmaIds: ["andar", "barco", "carta"]
       }
     );
 
@@ -194,7 +180,7 @@ describe("applyEnvelopeRule", () => {
       }),
       "A1",
       {
-        prescription: createPrescription([]),
+        taughtLemmaIds: [],
         questEssentialLemmas: new Set(["altar", "etéreo"])
       }
     );
@@ -214,7 +200,7 @@ describe("applyEnvelopeRule", () => {
       }),
       "A1",
       {
-        prescription: createPrescription([]),
+        taughtLemmaIds: [],
         questEssentialLemmas: new Set(["altar", "etéreo"])
       }
     );
@@ -259,7 +245,7 @@ describe("applyEnvelopeRule", () => {
       }),
       "A1",
       {
-        prescription: createPrescription(["vez"])
+        taughtLemmaIds: ["vez"]
       }
     );
 
@@ -329,7 +315,7 @@ describe("applyEnvelopeRule", () => {
       }),
       "A1",
       {
-        prescription: createPrescription(["ay"]),
+        taughtLemmaIds: ["ay"],
         voiceInterjections: new Set(["ay"])
       }
     );
@@ -345,7 +331,7 @@ describe("applyEnvelopeRule", () => {
       }),
       "A1",
       {
-        prescription: createPrescription(["altar"]),
+        taughtLemmaIds: ["altar"],
         questEssentialLemmas: new Set(["altar"])
       }
     );

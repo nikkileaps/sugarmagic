@@ -22,7 +22,7 @@ import { OuterLoopScheduler, DUE_RETRIEVABILITY_FLOOR } from "../../runtime/sche
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import type { SchedulerBoardView, SchedulerCurriculumView } from "../../runtime/scheduler/scheduler-board-view";
 import type { LemmaCard } from "../../runtime/types";
-import type { FunctionEntry } from "../../runtime/contracts/function-inventory";
+import type { Competency } from "../../runtime/contracts/competency-inventory";
 
 // ---------- fixture builders ----------
 
@@ -50,8 +50,8 @@ function emptyBoard(
   } = {}
 ): SchedulerBoardView {
   const baseCurriculum: SchedulerCurriculumView = {
-    introducedFunctionIds: new Set<string>(),
-    availableFunctions: [],
+    introducedCompetencyIds: new Set<string>(),
+    availableCompetencies: [],
     activeDebts: new Map<string, import("../../runtime/learner/encounter-debt-ledger").DebtStatus>()
   };
   return {
@@ -59,11 +59,9 @@ function emptyBoard(
       cefrBand: "A2",
       cefrConfidence: 0.7,
       lemmaCards: {},
-      fatigueScore: 0
     },
     scene: {
       sceneId: "scene-1",
-      functionTags: { sceneFunctions: [], npcFunctions: {} },
       dayIndex: null,
       sceneLemmaIds: []
     },
@@ -80,9 +78,9 @@ function emptyBoard(
 }
 
 const FIXTURE_FUNCTIONS = [
-  { functionId: "greet", displayName: "Greet", cefrDescriptor: "", band: "A1" as const, chunks: {} },
-  { functionId: "farewell", displayName: "Farewell", cefrDescriptor: "", band: "A1" as const, chunks: {} },
-  { functionId: "buy", displayName: "Buy", cefrDescriptor: "", band: "B1" as const, chunks: {} }
+  { competencyId: "greet", displayName: "Greet", cefrDescriptor: "", band: "A1" as const, chunks: {} },
+  { competencyId: "farewell", displayName: "Farewell", cefrDescriptor: "", band: "A1" as const, chunks: {} },
+  { competencyId: "buy", displayName: "Buy", cefrDescriptor: "", band: "B1" as const, chunks: {} }
 ];
 
 // ---------- tests ----------
@@ -117,7 +115,6 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A2",
           cefrConfidence: 0.7,
           lemmaCards: { comer: makeCard("comer", 0.9) },
-          fatigueScore: 0
         }
       });
       const schedule = scheduler.compute(board);
@@ -127,8 +124,8 @@ describe("OuterLoopScheduler", () => {
     it("is NOT cold start when functions have been introduced", () => {
       const board = emptyBoard({
         curriculum: {
-          introducedFunctionIds: new Set(["greet"]),
-          availableFunctions: FIXTURE_FUNCTIONS
+          introducedCompetencyIds: new Set(["greet"]),
+          availableCompetencies: FIXTURE_FUNCTIONS
         }
       });
       expect(scheduler.compute(board).isColdStart).toBe(false);
@@ -145,7 +142,6 @@ describe("OuterLoopScheduler", () => {
             comer: makeCard("comer", DUE_RETRIEVABILITY_FLOOR - 0.01),
             hablar: makeCard("hablar", DUE_RETRIEVABILITY_FLOOR + 0.01)
           },
-          fatigueScore: 0
         }
       });
       const schedule = scheduler.compute(board);
@@ -160,11 +156,10 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "B1",
           cefrConfidence: 0.8,
           lemmaCards: { comer: makeCard("comer", 0.3) },
-          fatigueScore: 0
         }
       });
       const teachable = scheduler.compute(board).teachables[0];
-      expect(teachable).toMatchObject({ id: "comer", kind: "lemma", teachReason: "due" });
+      expect(teachable).toMatchObject({ id: "comer", kind: "vocabulary", teachReason: "due" });
     });
 
     it("excludes chunk: cards from due-ness (handled at function level)", () => {
@@ -173,7 +168,6 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A1",
           cefrConfidence: 0.9,
           lemmaCards: { "chunk:buenos_dias": makeCard("chunk:buenos_dias", 0.1) },
-          fatigueScore: 0
         }
       });
       const schedule = scheduler.compute(board);
@@ -192,7 +186,6 @@ describe("OuterLoopScheduler", () => {
             comer: makeCard("comer", 0.2),    // more overdue
             hablar: makeCard("hablar", 0.55)  // less overdue, but still below floor
           },
-          fatigueScore: 0
         }
       });
       const teachables = scheduler.compute(board).teachables;
@@ -206,15 +199,15 @@ describe("OuterLoopScheduler", () => {
     it("schedules unintroduced functions in band order (A1 before B1)", () => {
       const board = emptyBoard({
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: FIXTURE_FUNCTIONS
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: FIXTURE_FUNCTIONS
         }
       });
       const schedule = scheduler.compute(board);
       const a1Items = schedule.teachables.filter(
-        (t) => t.kind === "function" && (t.id === "greet" || t.id === "farewell")
+        (t) => t.kind === "competency" && (t.id === "greet" || t.id === "farewell")
       );
-      const b1Items = schedule.teachables.filter((t) => t.kind === "function" && t.id === "buy");
+      const b1Items = schedule.teachables.filter((t) => t.kind === "competency" && t.id === "buy");
       const a1Priorities = a1Items.map((t) => t.priority);
       const b1Priority = b1Items[0]?.priority ?? 0;
       expect(a1Priorities.every((p) => p > b1Priority)).toBe(true);
@@ -223,8 +216,8 @@ describe("OuterLoopScheduler", () => {
     it("skips already-introduced functions", () => {
       const board = emptyBoard({
         curriculum: {
-          introducedFunctionIds: new Set(["greet"]),
-          availableFunctions: FIXTURE_FUNCTIONS
+          introducedCompetencyIds: new Set(["greet"]),
+          availableCompetencies: FIXTURE_FUNCTIONS
         }
       });
       const ids = scheduler.compute(board).teachables.map((t) => t.id);
@@ -241,83 +234,24 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A2",
           cefrConfidence: 0.7,
           lemmaCards: { hola: makeCard("hola", 0.95) }, // well-known, not due
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: [FIXTURE_FUNCTIONS[0]]  // greet (A1) -- within learner band, no scene affinity
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: [FIXTURE_FUNCTIONS[0]]  // greet (A1) -- within learner band, no scene affinity
         }
       });
       const teachable = scheduler.compute(board).teachables[0];
-      expect(teachable).toMatchObject({ id: "greet", kind: "function", teachReason: "introduction" });
+      expect(teachable).toMatchObject({ id: "greet", kind: "competency", teachReason: "introduction" });
     });
   });
 
-  describe("scene affinity boost", () => {
-    it("function present in scene gets higher priority and teachReason=function-affinity", () => {
-      const board = emptyBoard({
-        learner: {
-          cefrBand: "B1",
-          cefrConfidence: 0.7,
-          lemmaCards: { hola: makeCard("hola", 0.95) }, // non-cold-start seed
-          fatigueScore: 0
-        },
-        curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: FIXTURE_FUNCTIONS
-        },
-        scene: {
-          sceneId: "market",
-          functionTags: {
-            sceneFunctions: ["buy"],
-            npcFunctions: {}
-          },
-          dayIndex: null,
-          sceneLemmaIds: []
-        }
-      });
-      const schedule = scheduler.compute(board);
-      const buyItem = schedule.teachables.find((t) => t.id === "buy");
-      const greetItem = schedule.teachables.find((t) => t.id === "greet");
-      expect(buyItem?.teachReason).toBe("function-affinity");
-      // buy (B1 + affinity) should beat a non-affinity A1 function
-      expect(buyItem!.priority).toBeGreaterThan(greetItem!.priority);
-    });
-
-    it("current NPC affinity adds extra boost", () => {
-      const board = emptyBoard({
-        learner: {
-          cefrBand: "B1",
-          cefrConfidence: 0.7,
-          lemmaCards: { hola: makeCard("hola", 0.95) }, // non-cold-start seed
-          fatigueScore: 0
-        },
-        curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: [FIXTURE_FUNCTIONS[0], FIXTURE_FUNCTIONS[2]]  // greet + buy
-        },
-        scene: {
-          sceneId: "market",
-          functionTags: {
-            sceneFunctions: ["greet", "buy"],
-            npcFunctions: { "npc-market": ["buy"] }
-          },
-          dayIndex: null,
-          sceneLemmaIds: []
-        },
-        npcDefinitionId: "npc-market"
-      });
-      const schedule = scheduler.compute(board);
-      const buyItem = schedule.teachables.find((t) => t.id === "buy");
-      // buy has scene + NPC affinity, so the current NPC is recorded on the
-      // teachable. NOTE: this does NOT pin priority ORDER -- greet (A1) still
-      // outranks buy (B1) here because the band term dominates the affinity
-      // boost; asserting buy > greet fails today. Whether NPC affinity should
-      // outweigh band ordering is a 090.3 question (opportunity signals).
-      expect(buyItem).toBeDefined();
-      expect(buyItem!.affinityNpcIds).toContain("npc-market");
-    });
-  });
+  // 090.2 DELETED the scene-affinity and NPC-affinity boost tests along with the
+  // behavior. Both read `SchedulerSceneView.competencyTags`, which was scene-
+  // content ranking computed BEFORE the Teacher runs -- the budgeter's shape --
+  // and it sourced from a chunk intersection that reported an empty scene almost
+  // always, so the boosts were dead in practice as well as wrong in principle.
+  // Whether a scene calls for a competency is now the Teacher's call against the
+  // situation (090.3 composes it, 090.4 decides).
 
   describe("schedule ordering", () => {
     it("is deterministic: same board produces identical schedule twice", () => {
@@ -329,11 +263,10 @@ describe("OuterLoopScheduler", () => {
             comer: makeCard("comer", 0.4),
             beber: makeCard("beber", 0.5)
           },
-          fatigueScore: 0.1
         },
         curriculum: {
-          introducedFunctionIds: new Set(["greet"]),
-          availableFunctions: FIXTURE_FUNCTIONS
+          introducedCompetencyIds: new Set(["greet"]),
+          availableCompetencies: FIXTURE_FUNCTIONS
         }
       });
       const schedule1 = scheduler.compute(board);
@@ -352,11 +285,10 @@ describe("OuterLoopScheduler", () => {
             comer: makeCard("comer", 0.3),
             beber: makeCard("beber", 0.6)
           },
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: FIXTURE_FUNCTIONS
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: FIXTURE_FUNCTIONS
         }
       });
       const priorities = scheduler.compute(board).teachables.map((t) => t.priority);
@@ -373,9 +305,8 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A1",
           cefrConfidence: 0.9,
           lemmaCards: { hola: makeCard("hola", 0.5) },
-          fatigueScore: 0
         },
-        scene: { sceneId: "my-scene", functionTags: { sceneFunctions: [], npcFunctions: {} }, dayIndex: null, sceneLemmaIds: [] }
+        scene: { sceneId: "my-scene", dayIndex: null, sceneLemmaIds: [] }
       });
       expect(scheduler.compute(board).sceneId).toBe("my-scene");
     });
@@ -386,7 +317,6 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A1",
           cefrConfidence: 0.9,
           lemmaCards: { hola: makeCard("hola", 0.5) },
-          fatigueScore: 0
         },
         conversationId: "conv-xyz"
       });
@@ -401,11 +331,10 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "B1",
           cefrConfidence: 0.7,
           lemmaCards: { comer: makeCard("comer", 0.4) },
-          fatigueScore: 0.2
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: FIXTURE_FUNCTIONS
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: FIXTURE_FUNCTIONS
         }
       });
       scheduler.compute(board);
@@ -431,12 +360,11 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A2",
           cefrConfidence: 0.7,
           lemmaCards: { hola: makeCard("hola", 0.95) },
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: FIXTURE_FUNCTIONS,
-          activeDebts: new Map([["adios", { itemKind: "lemma" as const, diverseEncounterCount: 2, targetEncounters: 10 }]])
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: FIXTURE_FUNCTIONS,
+          activeDebts: new Map([["adios", { itemKind: "vocabulary" as const, diverseEncounterCount: 2, targetEncounters: 10 }]])
         }
       });
       const schedule = scheduler.compute(board);
@@ -451,12 +379,11 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A2",
           cefrConfidence: 0.7,
           lemmaCards: { hola: makeCard("hola", 0.95) },
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: FIXTURE_FUNCTIONS,
-          activeDebts: new Map([["adios", { itemKind: "lemma" as const, diverseEncounterCount: 0, targetEncounters: 10 }]])
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: FIXTURE_FUNCTIONS,
+          activeDebts: new Map([["adios", { itemKind: "vocabulary" as const, diverseEncounterCount: 0, targetEncounters: 10 }]])
         }
       });
       const schedule = scheduler.compute(board);
@@ -471,7 +398,6 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A2",
           cefrConfidence: 0.7,
           lemmaCards: { hola: makeCard("hola", 0.95) },
-          fatigueScore: 0
         }
       });
       const schedule = scheduler.compute(board);
@@ -484,15 +410,14 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A2",
           cefrConfidence: 0.7,
           lemmaCards: { hola: makeCard("hola", 0.95) },
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: FIXTURE_FUNCTIONS,
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: FIXTURE_FUNCTIONS,
           // "greet" appears as active debt AND as an available function.
           // The observe middleware creates function debts with itemKind
-          // "function" (createDebt(fnEntry.functionId, "function", ...)).
-          activeDebts: new Map([["greet", { itemKind: "function" as const, diverseEncounterCount: 3, targetEncounters: 10 }]])
+          // "function" (createDebt(fnEntry.competencyId, "competency", ...)).
+          activeDebts: new Map([["greet", { itemKind: "competency" as const, diverseEncounterCount: 3, targetEncounters: 10 }]])
         }
       });
       const schedule = scheduler.compute(board);
@@ -501,9 +426,9 @@ describe("OuterLoopScheduler", () => {
       expect(greetItems).toHaveLength(1);
       expect(greetItems[0].teachReason).toBe("debt-service");
       // The debt carries its itemKind through: a function debt stays kind
-      // "function" so realizeFunctionChunksFromSchedule can expand it to chunk
+      // "competency" so realizeCompetencyChunksFromSchedule can expand it to chunk
       // refs, and it never reaches lemma-only consumers as a bogus lemmaId.
-      expect(greetItems[0].kind).toBe("function");
+      expect(greetItems[0].kind).toBe("competency");
     });
 
     it("debt telemetry includes debtServiceCount, dayAxisDegraded, and new 087.3 fields", async () => {
@@ -512,14 +437,13 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A2",
           cefrConfidence: 0.7,
           lemmaCards: { hola: makeCard("hola", 0.95) },
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: [],
-          activeDebts: new Map([["adios", { itemKind: "lemma" as const, diverseEncounterCount: 5, targetEncounters: 10 }]])
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: [],
+          activeDebts: new Map([["adios", { itemKind: "vocabulary" as const, diverseEncounterCount: 5, targetEncounters: 10 }]])
         },
-        scene: { sceneId: null, functionTags: { sceneFunctions: [], npcFunctions: {} }, dayIndex: null, sceneLemmaIds: [] }
+        scene: { sceneId: null, dayIndex: null, sceneLemmaIds: [] }
       });
       scheduler.compute(board);
       await telemetry.flush();
@@ -535,19 +459,19 @@ describe("OuterLoopScheduler", () => {
 
   describe("comprehension rate + stretch allowance (087.3)", () => {
     const A2_FN = {
-      functionId: "order-food",
+      competencyId: "order-food",
       displayName: "Order food",
       cefrDescriptor: "",
       band: "A2" as const,
       chunks: {} as Record<string, { chunkId: string }[]>
-    } as unknown as FunctionEntry;
+    } as unknown as Competency;
     const B1_FN = {
-      functionId: "negotiate",
+      competencyId: "negotiate",
       displayName: "Negotiate price",
       cefrDescriptor: "",
       band: "B1" as const,
       chunks: {} as Record<string, { chunkId: string }[]>
-    } as unknown as FunctionEntry;
+    } as unknown as Competency;
 
     it("sceneComprehensionRate is 1.0 when sceneLemmaIds is empty", () => {
       const board = emptyBoard({
@@ -555,7 +479,6 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A1",
           cefrConfidence: 0.9,
           lemmaCards: { hola: makeCard("hola", 0.95) },
-          fatigueScore: 0
         }
       });
       const schedule = scheduler.compute(board);
@@ -571,12 +494,10 @@ describe("OuterLoopScheduler", () => {
             hola: makeCard("hola", 0.95),    // known
             adios: makeCard("adios", 0.30)   // not known
           },
-          fatigueScore: 0
         },
         scene: {
           sceneId: "test",
-          functionTags: { sceneFunctions: [], npcFunctions: {} },
-          dayIndex: null,
+              dayIndex: null,
           sceneLemmaIds: ["hola", "adios", "gracias"] // gracias has no card = 0 retrievability
         }
       });
@@ -591,15 +512,13 @@ describe("OuterLoopScheduler", () => {
           cefrBand: "A1",
           cefrConfidence: 0.9,
           lemmaCards: { hola: makeCard("hola", 0.95) },
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: [FIXTURE_FUNCTIONS[0], A2_FN]
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: [FIXTURE_FUNCTIONS[0], A2_FN]
         },
         scene: {
           sceneId: "test",
-          functionTags: { sceneFunctions: ["order-food"], npcFunctions: {} },
           dayIndex: null,
           sceneLemmaIds: ["hola", "adios", "gracias"] // 1/3 known -- below 0.80
         }
@@ -609,7 +528,7 @@ describe("OuterLoopScheduler", () => {
       expect(schedule.teachables.some((t) => t.teachReason === "stretch")).toBe(false);
     });
 
-    it("stretch allowance triggered when comprehensionRate >= 0.80 and above-band function has scene affinity", () => {
+    it("stretch allowance triggered when comprehensionRate >= 0.80", () => {
       const board = emptyBoard({
         learner: {
           cefrBand: "A1",
@@ -620,15 +539,13 @@ describe("OuterLoopScheduler", () => {
             gracias: makeCard("gracias", 0.85),
             perdon: makeCard("perdon", 0.88)
           },
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: [FIXTURE_FUNCTIONS[0], A2_FN]
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: [FIXTURE_FUNCTIONS[0], A2_FN]
         },
         scene: {
           sceneId: "test",
-          functionTags: { sceneFunctions: ["order-food"], npcFunctions: {} },
           dayIndex: null,
           sceneLemmaIds: ["hola", "adios", "gracias", "perdon"] // 4/4 = 1.0 >= 0.80
         }
@@ -640,7 +557,13 @@ describe("OuterLoopScheduler", () => {
       expect(stretchItem!.id).toBe("order-food");
     });
 
-    it("above-band function with NO scene affinity is NOT added even when comprehension floor met", () => {
+    it("an above-band function IS now offered when the comprehension floor is met", () => {
+      // 090.2 REVERSED this case. It previously asserted that `negotiate` was
+      // withheld for lacking scene affinity -- but affinity came from a chunk
+      // intersection that reported an empty scene almost always, so the real
+      // effect was that above-band competencies were withheld unconditionally.
+      // The comprehension floor is the honest gate; what a scene calls for is
+      // the Teacher's judgment, made later against the situation.
       const board = emptyBoard({
         learner: {
           cefrBand: "A1",
@@ -649,46 +572,42 @@ describe("OuterLoopScheduler", () => {
             hola: makeCard("hola", 0.95),
             adios: makeCard("adios", 0.90)
           },
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: [FIXTURE_FUNCTIONS[0], B1_FN]
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: [FIXTURE_FUNCTIONS[0], B1_FN]
         },
         scene: {
           sceneId: "test",
-          functionTags: { sceneFunctions: [], npcFunctions: {} }, // negotiate NOT in scene
           dayIndex: null,
           sceneLemmaIds: ["hola", "adios"] // 2/2 = 1.0 >= 0.80
         }
       });
       const schedule = scheduler.compute(board);
-      expect(schedule.stretchAllowanceActive).toBe(false);
-      expect(schedule.teachables.some((t) => t.id === "negotiate")).toBe(false);
+      expect(schedule.stretchAllowanceActive).toBe(true);
+      expect(schedule.teachables.some((t) => t.id === "negotiate")).toBe(true);
     });
 
-    it("only one stretch item is added even when multiple above-band functions have scene affinity", () => {
+    it("only one stretch item is added even when multiple above-band functions qualify", () => {
       const B1_FN_2 = {
-        functionId: "ask-directions",
+        competencyId: "ask-directions",
         displayName: "Ask directions",
         cefrDescriptor: "",
         band: "B1" as const,
         chunks: {} as Record<string, { chunkId: string }[]>
-      } as unknown as FunctionEntry;
+      } as unknown as Competency;
       const board = emptyBoard({
         learner: {
           cefrBand: "A1",
           cefrConfidence: 0.9,
           lemmaCards: { hola: makeCard("hola", 0.95), adios: makeCard("adios", 0.90) },
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: [FIXTURE_FUNCTIONS[0], A2_FN, B1_FN_2]
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: [FIXTURE_FUNCTIONS[0], A2_FN, B1_FN_2]
         },
         scene: {
           sceneId: "test",
-          functionTags: { sceneFunctions: ["order-food", "ask-directions"], npcFunctions: {} },
           dayIndex: null,
           sceneLemmaIds: ["hola", "adios"] // 2/2 = 1.0 >= 0.80
         }
@@ -700,19 +619,19 @@ describe("OuterLoopScheduler", () => {
 
     it("familiarityBoost increases priority when some chunks are already known", () => {
       const fnWithChunks = {
-        functionId: "greet-formal",
+        competencyId: "greet-formal",
         displayName: "Formal greeting",
         cefrDescriptor: "",
         band: "A1" as const,
         chunks: { es: [{ chunkId: "buenos_dias" }, { chunkId: "buenas_tardes" }] }
-      } as unknown as FunctionEntry;
+      } as unknown as Competency;
       const fnNoChunks = {
-        functionId: "farewell-simple",
+        competencyId: "farewell-simple",
         displayName: "Simple farewell",
         cefrDescriptor: "",
         band: "A1" as const,
         chunks: {} as Record<string, { chunkId: string }[]>
-      } as unknown as FunctionEntry;
+      } as unknown as Competency;
       const board = emptyBoard({
         learner: {
           cefrBand: "A1",
@@ -721,11 +640,10 @@ describe("OuterLoopScheduler", () => {
             hola: makeCard("hola", 0.90),
             "chunk:buenos_dias": makeCard("chunk:buenos_dias", 0.90) // 1/2 chunks known
           },
-          fatigueScore: 0
         },
         curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: [fnWithChunks, fnNoChunks]
+          introducedCompetencyIds: new Set(),
+          availableCompetencies: [fnWithChunks, fnNoChunks]
         },
         targetLanguage: "es"
       });
@@ -743,162 +661,9 @@ describe("OuterLoopScheduler", () => {
     });
   });
 
-  describe("strain curve + fluency valleys (087.4)", () => {
-    function highStrainBoard(fatigueScore: number, overrides: Parameters<typeof emptyBoard>[0] = {}): SchedulerBoardView {
-      return emptyBoard({
-        learner: {
-          cefrBand: "A1",
-          cefrConfidence: 0.9,
-          lemmaCards: { hola: makeCard("hola", 0.95) },
-          fatigueScore
-        },
-        curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: FIXTURE_FUNCTIONS
-        },
-        ...overrides
-      });
-    }
-
-    it("strainSuppressed is false when fatigueScore is below STRAIN_SUPPRESS_THRESHOLD", () => {
-      const board = highStrainBoard(0.50);
-      const schedule = scheduler.compute(board);
-      expect(schedule.strainSuppressed).toBe(false);
-    });
-
-    it("strainSuppressed is true when fatigueScore >= STRAIN_SUPPRESS_THRESHOLD", () => {
-      const board = highStrainBoard(0.70);
-      const schedule = scheduler.compute(board);
-      expect(schedule.strainSuppressed).toBe(true);
-    });
-
-    it("introductions are suppressed when strain is high", () => {
-      const board = highStrainBoard(0.80);
-      const schedule = scheduler.compute(board);
-      const hasIntro = schedule.teachables.some(
-        (t) => t.teachReason === "introduction" || t.teachReason === "function-affinity" || t.teachReason === "stretch"
-      );
-      expect(hasIntro).toBe(false);
-    });
-
-    it("due items still appear in strain-suppressed mode", () => {
-      const board = emptyBoard({
-        learner: {
-          cefrBand: "A1",
-          cefrConfidence: 0.9,
-          lemmaCards: {
-            hola: makeCard("hola", 0.95),
-            adios: makeCard("adios", 0.30) // overdue
-          },
-          fatigueScore: 0.80
-        },
-        curriculum: {
-          introducedFunctionIds: new Set(),
-          availableFunctions: FIXTURE_FUNCTIONS
-        }
-      });
-      const schedule = scheduler.compute(board);
-      const dueItems = schedule.teachables.filter((t) => t.teachReason === "due");
-      expect(dueItems.length).toBeGreaterThan(0);
-      expect(dueItems.some((t) => t.id === "adios")).toBe(true);
-    });
-
-    it("fluency items appear when strain is suppressed (well-known lemmas recycled)", () => {
-      const board = emptyBoard({
-        learner: {
-          cefrBand: "A1",
-          cefrConfidence: 0.9,
-          lemmaCards: {
-            hola: makeCard("hola", 0.95),
-            gracias: makeCard("gracias", 0.92),
-            adios: makeCard("adios", 0.91)
-          },
-          fatigueScore: 0.75
-        }
-      });
-      const schedule = scheduler.compute(board);
-      const fluencyItems = schedule.teachables.filter((t) => t.teachReason === "fluency");
-      expect(fluencyItems.length).toBeGreaterThan(0);
-      fluencyItems.forEach((f) => {
-        expect(f.kind).toBe("lemma");
-        expect(f.id).not.toMatch(/^chunk:/);
-      });
-    });
-
-    it("fluency items are capped at 3 per turn", () => {
-      const board = emptyBoard({
-        learner: {
-          cefrBand: "A1",
-          cefrConfidence: 0.9,
-          lemmaCards: {
-            hola: makeCard("hola", 0.95),
-            gracias: makeCard("gracias", 0.94),
-            adios: makeCard("adios", 0.93),
-            bueno: makeCard("bueno", 0.92),
-            vale: makeCard("vale", 0.91)
-          },
-          fatigueScore: 0.80
-        }
-      });
-      const schedule = scheduler.compute(board);
-      const fluencyItems = schedule.teachables.filter((t) => t.teachReason === "fluency");
-      expect(fluencyItems.length).toBeLessThanOrEqual(3);
-    });
-
-    it("chunk: cards are excluded from fluency recycling", () => {
-      const board = emptyBoard({
-        learner: {
-          cefrBand: "A1",
-          cefrConfidence: 0.9,
-          lemmaCards: {
-            hola: makeCard("hola", 0.95),
-            "chunk:buenos_dias": makeCard("chunk:buenos_dias", 0.99)
-          },
-          fatigueScore: 0.80
-        }
-      });
-      const schedule = scheduler.compute(board);
-      const fluencyItems = schedule.teachables.filter((t) => t.teachReason === "fluency");
-      expect(fluencyItems.every((f) => !f.id.startsWith("chunk:"))).toBe(true);
-    });
-
-    it("no fluency items appear below the FLUENCY_RETRIEVABILITY_FLOOR", () => {
-      const board = emptyBoard({
-        learner: {
-          cefrBand: "A1",
-          cefrConfidence: 0.9,
-          lemmaCards: {
-            hola: makeCard("hola", 0.85) // below 0.90 floor
-          },
-          fatigueScore: 0.80
-        }
-      });
-      const schedule = scheduler.compute(board);
-      const fluencyItems = schedule.teachables.filter((t) => t.teachReason === "fluency");
-      expect(fluencyItems).toHaveLength(0);
-    });
-
-    it("below-threshold fatigue degrades to 087.3 behavior (no strainSuppressed, no fluency)", () => {
-      const board = highStrainBoard(0.30);
-      const schedule = scheduler.compute(board);
-      expect(schedule.strainSuppressed).toBe(false);
-      expect(schedule.teachables.some((t) => t.teachReason === "fluency")).toBe(false);
-      // Function candidates should appear normally
-      expect(schedule.teachables.some((t) => t.kind === "function")).toBe(true);
-    });
-
-    it("telemetry includes strainSuppressed flag", async () => {
-      const board = highStrainBoard(0.80);
-      scheduler.compute(board);
-      await telemetry.flush();
-      const events = await telemetry.query({ eventKinds: ["scheduler.computed"] });
-      const event = events[0] as unknown as Record<string, unknown>;
-      expect(event.strainSuppressed).toBe(true);
-    });
-
-    it("schedule always contains strainSuppressed", () => {
-      const schedule = scheduler.compute(emptyBoard());
-      expect(schedule).toHaveProperty("strainSuppressed");
-    });
-  });
+  // 090.5: the "strain curve + fluency valleys (087.4)" block is deleted with
+  // the mechanism it covered. Every test in it drove `fatigueScore` directly
+  // into the scheduler -- which nothing in production ever did, because
+  // `currentSession` is only created by a `session-start` event and only tests
+  // emit one. The suite was green and the feature had never run.
 });

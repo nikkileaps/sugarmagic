@@ -17,26 +17,64 @@
  */
 
 import type { SugarlangConstraint } from "../types";
-import type { LemmaRef } from "../contracts/lexical-prescription";
+import type { CompetencyRef } from "../contracts/teachable-ref";
 import { languageDisplayName } from "../language-names";
+import {
+  describeLanguageMix,
+  getIntroduceCapForBand
+} from "../teacher/band-envelope";
+import {
+  MAX_PROMPT_REINFORCE,
+  renderTeachableList
+} from "../teacher/slate-prompt";
 
-function listLemmaIds(lemmas: LemmaRef[]): string {
-  return lemmas.map((l) => l.lemmaId).join(", ");
-}
+/**
+ * 090.4: the slate holds TeachableRefs, so rendering it means rendering BOTH
+ * kinds. Vocabulary is a word; a competency is an act, and telling an NPC to
+ * "use ask-where" is meaningless -- it has to be told what the act IS.
+ *
+ * The competency's realizing exponents live in the inventory, which this module
+ * does not have. So the caller resolves them and passes them in; absent a
+ * lookup, the competency still appears by id rather than vanishing. Silent
+ * omission here is precisely how competency teaching disappeared before.
+ */
+/**
+ * 090.4: THE PROMPT-SHAPING CAP.
+ *
+ * The slate is a working set for a whole situation and may hold several items;
+ * a single NPC line cannot carry them all, and handing a generator a long list
+ * of words to "use naturally" produces a sentence that is a list.
+ *
+ * So the cap lives HERE, at the point where the slate becomes an instruction,
+ * rather than on what the Teacher may choose.
+ *
+ * 090.10: the flat number is gone -- how much a learner can take is a property
+ * of the LEARNER, so it reads `getIntroduceCapForBand` (band-envelope.ts),
+ * which is now the single enforcer. A flat 2 was giving an A1 beginner and a
+ * C2 near-native the same budget, while a per-band curve one file over
+ * disagreed with both.
+ *
+ * A competency's EXPONENTS do not count against this. They are how the act is
+ * performed, not additional things to teach, and are capped inside
+ * `describeCompetency`.
+ *
+ * 090.11: `MAX_PROMPT_REINFORCE` and the list renderer moved to
+ * `teacher/slate-prompt.ts` when the build-time bake gained a slate input and
+ * needed the same rendering. This module keeps the CAPS-and-composition policy;
+ * the shared module owns only how a list of teachables becomes text.
+ */
 
 function formatTargetLanguageGuidance(constraint: SugarlangConstraint): string {
-  const ratioPercent = Math.round(constraint.targetLanguageRatio * 100);
-  const lang = languageDisplayName(constraint.targetLanguage);
-  switch (constraint.supportPosture) {
-    case "anchored":
-      return `Language constraint: Reply mostly in the support language (English). Sprinkle in a few ${lang} words — about ${ratioPercent}% of the reply.`;
-    case "supported":
-      return `Language constraint: Use a mixed reply. Keep roughly ${ratioPercent}% of the reply in ${lang} and the rest in the support language so meaning stays easy to follow.`;
-    case "target-dominant":
-      return `Language constraint: Reply mostly in ${lang}, with brief support-language anchoring only when it helps comprehension. Aim for about ${ratioPercent}% ${lang}.`;
-    case "target-only":
-      return `Language constraint: Reply entirely in ${lang}.`;
-  }
+  // 090.11: one wording, shared with the build-time bake. These two prompts had
+  // drifted until they contradicted each other -- the bake told the model to
+  // write "predominantly or entirely" in the target language at every band,
+  // including A1. Same posture must mean the same instruction wherever the text
+  // is written.
+  return `Language constraint: ${describeLanguageMix(
+    constraint.supportPosture,
+    languageDisplayName(constraint.targetLanguage),
+    constraint.targetLanguageRatio
+  )}`;
 }
 
 /**
@@ -46,13 +84,14 @@ function formatTargetLanguageGuidance(constraint: SugarlangConstraint): string {
  * path no longer uses a generator prompt overlay).
  */
 export function buildGeneratorPromptOverlay(
-  constraint: SugarlangConstraint
+  constraint: SugarlangConstraint,
+  describeCompetency?: (ref: CompetencyRef) => string
 ): string {
   const lines = [
     formatTargetLanguageGuidance(constraint),
-    `Reinforce vocabulary (weave naturally into your reply, not their English translations): ${listLemmaIds(constraint.targetVocab.reinforce) || "(none)"}.`,
-    `Introduce vocabulary (try to use naturally this turn, not their English translations): ${listLemmaIds(constraint.targetVocab.introduce) || "(none)"}. Do not substitute their English equivalents. These words do NOT need to be about you or your current activity. You can mention them in passing, as an observation, a rumor, a memory, a question, or just ambient scene description. Do not invent actions or goals for yourself to justify using these words.`,
-    `Forbidden vocabulary (use simpler synonyms): ${listLemmaIds(constraint.targetVocab.avoid.slice(0, 12)) || "(none)"}.`,
+    `Reinforce (weave naturally into your reply, not their English translations):${renderTeachableList(constraint.targetVocab.reinforce.slice(0, MAX_PROMPT_REINFORCE), describeCompetency) || " (none)"}`,
+    `Introduce (try to use naturally this turn, not their English translations):${renderTeachableList(constraint.targetVocab.introduce.slice(0, getIntroduceCapForBand(constraint.learnerCefr)), describeCompetency) || " (none)"}\nDo not substitute their English equivalents. These do NOT need to be about you or your current activity. You can mention them in passing, as an observation, a rumor, a memory, a question, or just ambient scene description. Do not invent actions or goals for yourself to justify using them.`,
+    `Forbidden vocabulary (use simpler synonyms):${renderTeachableList(constraint.targetVocab.avoid.slice(0, 12), describeCompetency) || " (none)"}`,
     `CEFR envelope: learner is ${constraint.learnerCefr}; keep >=95% of lemmas at or below ${constraint.learnerCefr}+1 band.`,
     `Support posture: ${constraint.supportPosture}. Target-language ratio: ${constraint.targetLanguageRatio}. Sentence complexity: ${constraint.sentenceComplexityCap}.`,
     `Do NOT add parenthetical translations or inline glosses. The UI handles vocabulary glossing via hover tooltips. Let the NPC speak naturally.`
@@ -64,7 +103,7 @@ export function buildGeneratorPromptOverlay(
       "COMPREHENSION CHECK - THIS TURN MUST INCLUDE A PROBE:",
       "",
       "After speaking naturally in character, include a short in-character question that elicits a response demonstrating comprehension of one or more of these lemmas:",
-      `  ${listLemmaIds(constraint.comprehensionCheckInFlight.targetLemmas)}`,
+      `  ${constraint.comprehensionCheckInFlight.targetLemmas.map((l) => l.lemmaId).join(", ")}`,
       "",
       `Probe style: ${constraint.comprehensionCheckInFlight.probeStyle}`,
       `Character voice reminder: ${constraint.comprehensionCheckInFlight.characterVoiceReminder}`,

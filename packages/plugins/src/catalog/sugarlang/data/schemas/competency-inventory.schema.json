@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sugarmagic.dev/sugarlang/schemas/competency-inventory.schema.json",
+  "title": "Sugarlang Function Inventory",
+  "description": "Hand-curated communicative competency inventory keyed to CEFR can-do descriptors.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "lang", "competencies"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "lang": {
+      "type": "string",
+      "minLength": 2
+    },
+    "competencies": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/competency" }
+    }
+  },
+  "$defs": {
+    "cefrBand": {
+      "type": "string",
+      "enum": ["A1", "A2", "B1", "B2", "C1", "C2"]
+    },
+    "inventoryChunk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["chunkId", "normalizedForm", "surfaceForms", "cefrBand", "constituentLemmas"],
+      "properties": {
+        "chunkId": { "type": "string", "minLength": 1 },
+        "normalizedForm": { "type": "string", "minLength": 1 },
+        "surfaceForms": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "cefrBand": { "$ref": "#/$defs/cefrBand" },
+        "constituentLemmas": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "competency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["competencyId", "displayName", "cefrDescriptor", "band", "chunks"],
+      "properties": {
+        "competencyId": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1 },
+        "cefrDescriptor": { "type": "string", "minLength": 1 },
+        "band": { "$ref": "#/$defs/cefrBand" },
+        "placementGateBand": { "$ref": "#/$defs/cefrBand" },
+        "isItemZero": { "type": "boolean" },
+        "interpretLexiconCategory": {
+          "type": "string",
+          "enum": ["farewell", "greeting", "gratitude", "acknowledgement"]
+        },
+        "chunks": {
+          "type": "object",
+          "description": "Realizing chunks per language (BCP-47 key).",
+          "propertyNames": { "type": "string", "minLength": 2 },
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/inventoryChunk" }
+          }
+        }
+      }
+    }
+  }
+}

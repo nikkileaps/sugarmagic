@@ -17,9 +17,16 @@
 
 import type { GameProject, RegionDocument, Scene } from "@sugarmagic/domain";
 import { PanelSection } from "@sugarmagic/ui";
-import { useEffect, useState, type ReactElement } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement
+} from "react";
 import type { CEFRBand } from "../../runtime/types";
-import type { CompiledSceneLexicon, SceneLemmaInfo } from "../../runtime/types";
+import type { SceneVocabularyModel } from "../../runtime/types";
+import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
 import {
   compileAuthoringSceneLexicon,
   summarizeSceneDensity
@@ -33,7 +40,7 @@ export interface SceneDensityHistogramProps {
    *  compiled density has zero NPC-sourced lemmas. */
   activeScene?: Scene | null;
   targetLanguage: string;
-  lexicon?: CompiledSceneLexicon | null;
+  lexicon?: SceneVocabularyModel | null;
 }
 
 function formatPercent(value: number): string {
@@ -43,7 +50,7 @@ function formatPercent(value: number): string {
 export function SceneDensityHistogram(
   props: SceneDensityHistogramProps
 ): ReactElement {
-  const [computedLexicon, setComputedLexicon] = useState<CompiledSceneLexicon | null>(
+  const [computedLexicon, setComputedLexicon] = useState<SceneVocabularyModel | null>(
     props.lexicon ?? null
   );
 
@@ -82,14 +89,32 @@ export function SceneDensityHistogram(
   const [hoveredBand, setHoveredBand] = useState<CEFRBand | null>(null);
 
   const lexicon = props.lexicon ?? computedLexicon;
-  const density = summarizeSceneDensity(lexicon);
+  // 090.2c: band and frequency come from the atlas by lemmaId. The provider
+  // caches its own data per language, so constructing it here is a map lookup
+  // rather than a load.
+  const atlas = useMemo(() => new CefrLexAtlasProvider(), []);
+  const atlasEntryFor = useCallback(
+    (lemmaId: string) => atlas.getLemma(lemmaId, props.targetLanguage),
+    [atlas, props.targetLanguage]
+  );
+  const getBand = useCallback(
+    (lemmaId: string) => atlas.getBand(lemmaId, props.targetLanguage),
+    [atlas, props.targetLanguage]
+  );
+  const density = summarizeSceneDensity(lexicon, getBand);
   const maxCount = Math.max(1, ...density.bandCounts.map((entry) => entry.count));
 
-  function lemmasForBand(band: CEFRBand): SceneLemmaInfo[] {
+  // 090.2d: the artifact stores lemma IDS now, so this is a string list. Band
+  // and frequency were already atlas lookups (090.2c); nothing was lost.
+  function lemmasForBand(band: CEFRBand): string[] {
     if (!lexicon) return [];
-    return Object.values(lexicon.lemmas)
-      .filter((lemma) => lemma.cefrPriorBand === band)
-      .sort((a, b) => (a.frequencyRank ?? Infinity) - (b.frequencyRank ?? Infinity));
+    return lexicon.lemmaIds
+      .filter((lemmaId) => getBand(lemmaId) === band)
+      .sort(
+        (a, b) =>
+          (atlas.getFrequencyRank(a, props.targetLanguage) ?? Infinity) -
+          (atlas.getFrequencyRank(b, props.targetLanguage) ?? Infinity)
+      );
   }
 
   if (!props.activeRegion) {
@@ -242,17 +267,17 @@ export function SceneDensityHistogram(
                       gap: "0.3rem"
                     }}
                   >
-                    {bandLemmas.map((lemma) => (
+                    {bandLemmas.map((lemmaId) => (
                       <span
-                        key={lemma.lemmaId}
+                        key={lemmaId}
                         title={[
-                          lemma.partsOfSpeech.length > 0
-                            ? lemma.partsOfSpeech.join(", ")
-                            : null,
-                          lemma.frequencyRank != null
-                            ? `freq #${lemma.frequencyRank}`
-                            : null,
-                          lemma.isQuestCritical ? "quest-critical" : null
+                          atlasEntryFor(lemmaId)?.partsOfSpeech.join(", ") || null,
+                          atlasEntryFor(lemmaId)?.frequencyRank != null
+                            ? `freq #${atlasEntryFor(lemmaId)?.frequencyRank}`
+                            : null
+                          // 090.2d: `isQuestCritical` was shown here and is gone
+                          // -- the compiler set it and nothing read it. Quest
+                          // essentials reach consumers via questEssentialLemmas.
                         ]
                           .filter(Boolean)
                           .join(" · ")}
@@ -261,16 +286,14 @@ export function SceneDensityHistogram(
                           padding: "0.1rem 0.4rem",
                           borderRadius: "0.2rem",
                           fontSize: "0.7rem",
-                          background: lemma.isQuestCritical
-                            ? "rgba(249, 226, 175, 0.22)"
-                            : "rgba(137, 180, 250, 0.14)",
-                          border: lemma.isQuestCritical
-                            ? "1px solid rgba(249, 226, 175, 0.4)"
-                            : "1px solid transparent",
+                          // 090.2d: the quest-critical highlight went with
+                          // `isQuestCritical`, which nothing set meaningfully.
+                          background: "rgba(137, 180, 250, 0.14)",
+                          border: "1px solid transparent",
                           color: "var(--sm-color-text, #cdd6f4)"
                         }}
                       >
-                        {lemma.lemmaId}
+                        {lemmaId}
                       </span>
                     ))}
                   </div>

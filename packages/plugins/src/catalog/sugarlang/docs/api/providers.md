@@ -16,7 +16,7 @@ This document records the ADR 010 provider boundaries:
 
 Epic 3 also wires an architectural test that checks:
 
-- `runtime/contracts/providers.ts` does not import from `runtime/teacher/`, `runtime/budgeter/`, or `runtime/learner/`
+- `runtime/contracts/providers.ts` does not import from `runtime/teacher/` or `runtime/learner/`
 - files under `runtime/providers/impls/` do not import from `runtime/teacher/` or `runtime/middlewares/`
 
 ## Public Types

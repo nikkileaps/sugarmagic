@@ -24,6 +24,7 @@
     "lint:plugin-catalog": "node tooling/check-plugin-catalog-boundary.mjs",
     "lint:viewport": "node tooling/check-viewport-imperative.mjs",
     "test": "vitest run --passWithNoTests",
+    "test:e2e": "SUGARMAGIC_E2E=1 vitest run --passWithNoTests e2e.test",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "verify": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },

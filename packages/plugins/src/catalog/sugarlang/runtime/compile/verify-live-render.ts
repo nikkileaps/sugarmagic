@@ -21,10 +21,10 @@
  * Status: active
  */
 
-import type { CEFRBand } from "../contracts/learner-profile";
+import type { CEFRBand } from "../cefr";
 import type { SupportPosture } from "../contracts/pedagogy";
 import type { VariantVerdict } from "../contracts/baked-variant";
-import type { InventoryChunk } from "../contracts/function-inventory";
+import type { InventoryChunk } from "../contracts/competency-inventory";
 import type { LexicalAtlasProvider } from "../types";
 import { applyMixedTextEnvelopePredicate } from "../classifier/envelope-rule";
 import { computeLanguageRatioVerdict } from "../classifier/language-ratio";
@@ -34,7 +34,7 @@ import { computeCoverage } from "../classifier/coverage";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
 import { tokenize } from "../classifier/tokenize";
 import { MorphologyLoader } from "../classifier/morphology-loader";
-import type { LearnerId } from "../contracts/learner-profile";
+import type { LearnerId } from "../learner";
 
 const morphologyLoader = new MorphologyLoader();
 
@@ -100,7 +100,7 @@ export function verifyLiveRender(input: VerifyLiveRenderInput): VariantVerdict {
 
   // Gate 1: Mixed-text envelope predicate (allowance + ceiling; no coverage floor).
   const envelopeResult = applyMixedTextEnvelopePredicate(profile, band, {
-    prescription: null
+    taughtLemmaIds: null
   });
   const envelopePasses = envelopeResult.passes;
 

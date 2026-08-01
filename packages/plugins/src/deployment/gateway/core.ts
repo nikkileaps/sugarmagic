@@ -813,23 +813,40 @@ export async function handleSugarAgentGenerate(
 
   const body = await readJsonBody(req);
   // Plan 073.2 — model selection stays SERVER-SIDE. The browser sends a
-  // `purpose` category ("dialogue" | "summary"), never a model id, so model
-  // choice is a deploy-time env decision the player can't see or tamper with.
-  // "summary" (the cheap end-of-conversation memory pass) resolves from its
-  // own env var so it can differ from the dialogue model. An explicit
-  // `body.model` is still honored for back-compat / tooling, but the runtime
-  // no longer sends one.
+  // `purpose` category, never a model id, so model choice is a deploy-time env
+  // decision the player can't see or tamper with. An explicit `body.model` is
+  // still honored for back-compat / tooling, but the runtime no longer sends one.
+  //
+  // This route is a GENERIC Claude proxy, not a sugaragent-private one:
+  // sugarlang posts here too. Each purpose therefore resolves from the env var
+  // owned by the PLUGIN that makes the call, declared in that plugin's own
+  // `gatewayRuntimeConfigKeys` — which is why "teacher" reads a
+  // SUGARMAGIC_SUGARLANG_* name while the sugaragent purposes read
+  // SUGARMAGIC_SUGARAGENT_*. Adding a purpose here means adding it there too,
+  // or it silently falls through to the dialogue model.
   const purpose =
     typeof body["purpose"] === "string" ? body["purpose"].trim() : "";
-  const model =
-    purpose === "summary"
-      ? resolveEnv("SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL", "claude-haiku-4-5")
-      : purpose === "regen"
-        ? resolveEnv(
-            "SUGARMAGIC_SUGARAGENT_REGEN_MODEL",
-            resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5")
-          )
-        : resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5");
+  const dialogueModel = (): string =>
+    resolveEnv("SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL", "claude-haiku-4-5");
+  // Table, not a ternary chain — a fourth purpose made the nesting unreadable.
+  // Each entry is (env var, fallback). Unknown purpose => dialogue.
+  const PURPOSE_MODELS: Record<string, () => string> = {
+    // sugaragent: the cheap end-of-conversation memory pass.
+    summary: () => resolveEnv("SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL", "claude-haiku-4-5"),
+    // sugaragent: regenerating a reply that failed the judge.
+    regen: () => resolveEnv("SUGARMAGIC_SUGARAGENT_REGEN_MODEL", dialogueModel()),
+    // sugarlang: the Teacher's pedagogical judgment call. Deliberately its own
+    // env var — this is the most reasoning-heavy call in the product and must
+    // not silently ride the cheap dialogue model (which it did until 2026-07-28).
+    teacher: () => resolveEnv("SUGARMAGIC_SUGARLANG_TEACHER_MODEL", "claude-sonnet-4-6"),
+    // sugarlang: COMPILE-time extraction over authored content — multi-word
+    // expressions, line intent, and scene concepts. Authoring-time and cached
+    // by content hash, so it is paid once per content change rather than per
+    // turn; that budget buys a stronger model than the dialogue default.
+    extraction: () =>
+      resolveEnv("SUGARMAGIC_SUGARLANG_EXTRACTION_MODEL", "claude-sonnet-4-6")
+  };
+  const model = (PURPOSE_MODELS[purpose] ?? dialogueModel)();
   // The ground-truth record of which model each call used — grep it in
   // `docker compose logs` to verify a model config change actually landed.
   logInfo("sugaragent.generate", { purpose: purpose || "dialogue", model });
@@ -1263,6 +1280,24 @@ export async function handleSugarAgentSearch(
       ? Math.max(1, Math.min(8, Math.floor(body["maxResults"])))
       : 4;
 
+  // RELEVANCE FLOOR. Search used to return `max_num_results` regardless of how
+  // well anything matched, so a query with one good hit came back with one good
+  // hit and three pieces of whatever else was in the store -- which is how
+  // orphaned "smprobe_*" test files ended up handed to an NPC as world context.
+  //
+  // This is the principled fix rather than filtering by filename: junk got in
+  // because nothing asked whether a result was RELEVANT, and a name-based guard
+  // would leave the same hole open for the next irrelevant document.
+  //
+  // `ranking_options.score_threshold` is an OpenAI vector-store search parameter
+  // (verified against openai-node's VectorStoreSearchParams.RankingOptions).
+  // Callers may override; 0.3 is deliberately low -- the goal is excluding
+  // near-zero noise, not second-guessing the ranker.
+  const scoreThreshold =
+    typeof body["scoreThreshold"] === "number" && Number.isFinite(body["scoreThreshold"])
+      ? Math.max(0, Math.min(1, body["scoreThreshold"]))
+      : 0.3;
+
   if (!query || !vectorStoreId) {
     sendJson(res, 400, {
       ok: false,
@@ -1283,6 +1318,7 @@ export async function handleSugarAgentSearch(
       body: JSON.stringify({
         query,
         max_num_results: maxResults,
+        ranking_options: { score_threshold: scoreThreshold },
         filters:
           body["filters"] && typeof body["filters"] === "object" && !Array.isArray(body["filters"])
             ? body["filters"]
@@ -1776,6 +1812,40 @@ export async function handleSugarAgentLoreProbe(
     return;
   }
 
+  /**
+   * CLEANUP ALWAYS RUNS FROM HERE ON.
+   *
+   * It used to be step 5, in tail position -- so a probe that failed at attach,
+   * index or search returned early and left its file PERMANENTLY attached to the
+   * vector store. Three such orphans (2026-07-24 x2, 2026-07-27) were found being
+   * retrieved as real world context and handed to an NPC mid-conversation.
+   *
+   * A `finally` is the fix rather than a cleanup call before each early return:
+   * the latter is correct only until someone adds a sixth exit.
+   */
+  let hitFound = false;
+  let cleanupDone = false;
+  const cleanupProbeFile = async (): Promise<void> => {
+    if (cleanupDone || !uploadedFileId) return;
+    cleanupDone = true;
+    try {
+      await fetch(
+        "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/files/" + uploadedFileId,
+        { method: "DELETE", headers: authHeader }
+      );
+      await fetch("https://api.openai.com/v1/files/" + uploadedFileId, {
+        method: "DELETE",
+        headers: authHeader
+      });
+      steps["cleanup"] = { ok: true };
+    } catch (err) {
+      // Best effort on the DELETEs themselves -- but the ATTEMPT is now
+      // guaranteed, which is the part that was missing.
+      steps["cleanup"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+
+  try {
   // Step 2: attach to vector store
   try {
     const attachRes = await fetch(
@@ -1823,7 +1893,6 @@ export async function handleSugarAgentLoreProbe(
   }
 
   // Step 4: search for the probe phrase
-  let hitFound = false;
   try {
     const searchRes = await fetch(
       "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/search",
@@ -1850,19 +1919,9 @@ export async function handleSugarAgentLoreProbe(
     return;
   }
 
-  // Step 5: cleanup (best effort -- don't fail the probe if cleanup blows up)
-  try {
-    await fetch(
-      "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/files/" + uploadedFileId,
-      { method: "DELETE", headers: authHeader }
-    );
-    await fetch("https://api.openai.com/v1/files/" + uploadedFileId, {
-      method: "DELETE",
-      headers: authHeader
-    });
-    steps["cleanup"] = { ok: true };
-  } catch (err) {
-    steps["cleanup"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+
+  } finally {
+    await cleanupProbeFile();
   }
 
   const durationMs = Date.now() - startMs;

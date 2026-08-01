@@ -24,26 +24,52 @@ import type {
   QuestNodeDefinition,
   RegionDocument
 } from "@sugarmagic/domain";
-import { compareCefrBands } from "../../runtime/classifier/cefr-band-utils";
+import { compareCefrBands } from "../../runtime/cefr";
+import { CEFR_BAND_ORDER as SCENE_BANDS } from "../../runtime/learner";
 import { MorphologyLoader } from "../../runtime/classifier/morphology-loader";
 import { IndexedDBChunkCache } from "../../runtime/compile/chunk-cache";
 import { IndexedDBCompileCache } from "../../runtime/compile/cache-indexeddb";
-import { extractChunks } from "../../runtime/compile/extract-chunks";
+import { MultiWordExpressionExtractor } from "../../runtime/compile/multi-word-expression-extractor";
 import { SUGARLANG_COMPILE_PIPELINE_VERSION } from "../../runtime/compile/content-hash";
 import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
 import { IndexedDBVariantCache } from "../../runtime/compile/variant-cache";
 import { IndexedDBIntentCache } from "../../runtime/compile/intent-cache";
-import { extractIntent, INTENT_EXTRACTOR_PROMPT_VERSION } from "../../runtime/compile/extract-intent";
+import {
+  LINE_INTENT_PROMPT_VERSION,
+  LineIntentExtractor
+} from "../../runtime/compile/line-intent-extractor";
+import {
+  SCENE_CONTEXT_PROMPT_VERSION,
+  SceneContextExtractor
+} from "../../runtime/compile/scene-context-extractor";
+import { IndexedDBSceneContextCache } from "../../runtime/compile/scene-context-cache";
+import { planSceneTeaching } from "../../runtime/compile/scene-teach-plan";
+import {
+  getSugarlangTeachPlan,
+  seedSugarlangTeachPlan,
+  serializeTeachPlans,
+  type SugarlangTeachPlanDocument
+} from "../../runtime/compile/teach-plan-state";
+import {
+  ClaudeTeacherPolicy,
+  createGatewayTeacherClient
+} from "../../runtime/teacher/policies/llm-teacher-policy";
 import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 import { GradedTextService } from "../../runtime/grading/graded-text-service";
 import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
-import { getAllInventoryChunks } from "../../runtime/inventory/function-inventory-loader";
+import { buildDialogueNodeContentHash } from "../../runtime/grading/sources/dialogue-node-source";
+import { getAllInventoryChunks } from "../../runtime/inventory/competency-inventory-loader";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
+import {
+  DIALOGUE_VARIANT_BANDS,
+  ITEM_VARIANT_BANDS
+} from "../../runtime/contracts/baked-variant";
 import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-scene";
 import { computeSceneContentHash } from "../../runtime/compile/content-hash";
 import {
   collectSceneText,
+  projectSceneContextSources,
   type SceneAuthoringContext
 } from "../../runtime/compile/scene-traversal";
 import {
@@ -56,7 +82,7 @@ import { SUGARLANG_PLACEMENT_COMPLETED_EVENT } from "../../runtime/quest-integra
 import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
 import type {
   CEFRBand,
-  CompiledSceneLexicon,
+  SceneVocabularyModel,
   PlacementQuestionnaire
 } from "../../runtime/types";
 
@@ -79,6 +105,32 @@ export interface SugarlangCompileStatusSummary {
   chunkCachedScenes: number;
 }
 
+/**
+ * What went wrong during a rebuild, as things the AUTHOR can act on.
+ *
+ * WHY THIS EXISTS. A rebuild used to report success unconditionally: it caught
+ * nothing, and a missing gateway merely `console.warn`ed and left every pass
+ * undefined. So "Sugarlang lexicons rebuilt successfully" printed while NOTHING
+ * was built -- which is precisely the failure that presents later as "the
+ * Teacher made a boring choice" and sends someone debugging the wrong layer.
+ *
+ * A rebuild that builds nothing is not a successful rebuild.
+ */
+export interface SugarlangRebuildProblem {
+  /** Which pass. */
+  pass: "gateway" | "scene-context" | "teach-plan";
+  /** One line, addressed to the author, saying what is now not built. */
+  message: string;
+  /** What to do about it, when there is a useful answer. */
+  detail?: string;
+}
+
+export interface SugarlangRebuildResult {
+  status: SugarlangCompileStatusSummary;
+  /** Empty means the rebuild genuinely built everything it was asked to. */
+  problems: SugarlangRebuildProblem[];
+}
+
 export interface SugarlangRebuildProgress {
   completedScenes: number;
   totalScenes: number;
@@ -87,7 +139,7 @@ export interface SugarlangRebuildProgress {
 
 const atlas = new CefrLexAtlasProvider();
 const morphology = new MorphologyLoader();
-const SCENE_BANDS: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
+// 090.9: was a local copy named SCENE_BANDS, one of six.
 
 export function isAssessmentObjectiveNode(node: QuestNodeDefinition | null | undefined): boolean {
   return node?.objectiveSubtype === "assessment";
@@ -162,7 +214,7 @@ export async function compileAuthoringSceneLexicon(
   regions: RegionDocument[],
   targetLanguage: string,
   activeScene: Scene | null
-) : Promise<CompiledSceneLexicon | null> {
+) : Promise<SceneVocabularyModel | null> {
   if (!gameProject || !activeRegion) {
     return null;
   }
@@ -183,18 +235,21 @@ export async function compileAuthoringSceneLexicon(
 }
 
 export function summarizeSceneDensity(
-  lexicon: CompiledSceneLexicon | null
+  lexicon: SceneVocabularyModel | null,
+  // 090.2c: bands are atlas facts now, not stored on the scene artifact, so the
+  // caller supplies the lookup. Undefined means "atlas unavailable" and every
+  // band reads zero rather than silently mis-binning lemmas into one band.
+  getBand?: (lemmaId: string) => CEFRBand | undefined
 ): SceneDensitySummary {
-  const totalLemmas = lexicon ? Object.keys(lexicon.lemmas).length : 0;
+  const totalLemmas = lexicon ? lexicon.lemmaIds.length : 0;
 
   return {
     totalLemmas,
     bandCounts: SCENE_BANDS.map((band) => {
-      const count = lexicon
-        ? Object.values(lexicon.lemmas).filter(
-            (lemma) => lemma.cefrPriorBand === band
-          ).length
-        : 0;
+      const count =
+        lexicon && getBand
+          ? lexicon.lemmaIds.filter((lemmaId) => getBand(lemmaId) === band).length
+          : 0;
 
       return {
         band,
@@ -239,6 +294,32 @@ async function collectChunkCacheEntries(
   }));
 }
 
+/**
+ * Current content hash per scene. Exported so the teach-plan hydrator can tell
+ * a stored plan from a stale one -- a plan derives from a scene's concepts, and
+ * nothing else about it notices when that scene is edited.
+ */
+export async function readCurrentSceneContentHashes(
+  gameProject: GameProject | null,
+  regions: RegionDocument[],
+  targetLanguage: string,
+  activeScene: Scene | null
+): Promise<Map<string, string>> {
+  if (!targetLanguage || targetLanguage.trim().length === 0) {
+    // Studio tolerates a null language; hashing needs the atlas for that
+    // language, so there is nothing to compare against yet.
+    return new Map();
+  }
+  return computeCurrentSceneHashes(
+    await createSugarlangSceneContexts(
+      gameProject,
+      regions,
+      targetLanguage,
+      activeScene
+    )
+  );
+}
+
 function computeCurrentSceneHashes(
   scenes: SceneAuthoringContext[]
 ): Map<string, string> {
@@ -260,6 +341,23 @@ export async function readSugarlangCompileStatus(
   activeScene: Scene | null,
   workspaceId: string
 ): Promise<SugarlangCompileStatusSummary> {
+  // STUDIO TOLERATES A NULL LANGUAGE. A freshly installed plugin has none, and
+  // the author needs the Build panel to open so they can go and set one.
+  //
+  // Without this, `computeCurrentSceneHashes` -> `atlas.getAtlasVersion("")`
+  // throws `Missing sugarlang cefrlex data for language ""`, and the Build
+  // panel's status read is a `.then()` with no `.catch` -- so merely OPENING the
+  // panel on an unconfigured project produced an unhandled rejection.
+  if (!targetLanguage || targetLanguage.trim().length === 0) {
+    return {
+      totalScenes: 0,
+      cachedScenes: 0,
+      staleScenes: 0,
+      missingScenes: 0,
+      chunkCachedScenes: 0
+    };
+  }
+
   const scenes = await createSugarlangSceneContexts(
     gameProject,
     regions,
@@ -302,6 +400,135 @@ export async function readSugarlangCompileStatus(
   };
 }
 
+/**
+ * Asks the Teacher what each scene's lines should teach, at every baked band,
+ * and files the answer under the dialogues reachable from that scene.
+ *
+ * ONE CALL PER (SCENE, BAND). Not per line -- the build-time situation is
+ * scene-level, so a per-line call would ask an identical question and pay a
+ * gateway round-trip for an identical answer. A 50-node scene across 6 bands is
+ * 6 calls.
+ *
+ * This pass does NOT bake variants. Baking is per node and expensive, and it
+ * stays where it already is (on demand, from the variants popover). This pass
+ * only makes the SLATE available for whenever a bake happens.
+ *
+ * Silent when there is no gateway: without one there is no Teacher to ask, and
+ * the outer function has already warned loudly about the gateway being absent.
+ */
+async function runTeachPlanPass(args: {
+  scenes: SceneAuthoringContext[];
+  gatewayClient: SugarlangGatewayClient | null;
+  sceneContextCache: IndexedDBSceneContextCache | null;
+  targetLanguage: string;
+  problems: SugarlangRebuildProblem[];
+}): Promise<SugarlangTeachPlanDocument | null> {
+  const { scenes, gatewayClient, sceneContextCache, targetLanguage, problems } =
+    args;
+  // No gateway is already reported by the caller as one gateway-level problem;
+  // repeating it per scene would bury the real message under noise.
+  if (!gatewayClient || !sceneContextCache) return null;
+
+  const teacher = new ClaudeTeacherPolicy({
+    client: createGatewayTeacherClient(gatewayClient)
+  });
+  const currentHashes = computeCurrentSceneHashes(scenes);
+  const seeds: Parameters<typeof seedSugarlangTeachPlan>[0] = [];
+  const planned: Parameters<typeof serializeTeachPlans>[0]["scenes"] = [];
+
+  for (const scene of scenes) {
+    const contentHash = currentHashes.get(scene.sceneId);
+    // Read back what the scene-context pass just wrote. A miss is not fatal:
+    // planSceneTeaching still asks, from a situation whose facts are all
+    // unavailable, which is a weak directive rather than a wrong one.
+    const cached = contentHash
+      ? await sceneContextCache
+          .get({
+            contentHash,
+            supportLanguage: scene.supportLanguage,
+            promptVersion: SCENE_CONTEXT_PROMPT_VERSION
+          })
+          .catch(() => null)
+      : null;
+
+    const plan = await planSceneTeaching({
+      sceneId: scene.sceneId,
+      sceneContext: cached?.model ?? null,
+      bands: DIALOGUE_VARIANT_BANDS,
+      targetLanguage,
+      supportLanguage: scene.supportLanguage,
+      teacher,
+      atlas,
+      onLog: (message: string, detail?: Record<string, unknown>) =>
+        console.info(`[sugarlang build] ${message}`, detail ?? {})
+    });
+
+    const fromSceneContext = cached?.model != null;
+
+    // A plan built from no scene context is the quiet failure this whole story
+    // is downstream of: the bake still runs, the line still renders, and it
+    // teaches nothing the scene is about.
+    if (!fromSceneContext) {
+      problems.push({
+        pass: "scene-context",
+        message: `Scene "${scene.sceneId}" has no built context, so its lines were planned with nothing to teach.`,
+        detail:
+          "Its concepts are missing or stale. Rebuild again; if it persists, the scene-context pass is failing for this scene."
+      });
+    }
+
+    const failedBands = DIALOGUE_VARIANT_BANDS.filter(
+      (band) => !plan.byBand.has(band)
+    );
+    if (failedBands.length > 0) {
+      problems.push({
+        pass: "teach-plan",
+        message: `Scene "${scene.sceneId}": the Teacher failed for ${failedBands.join(", ")}.`,
+        detail:
+          "Lines baked at those bands will be graded for level but will not be steered toward any vocabulary."
+      });
+    }
+
+    // Fan the scene's answer out to every dialogue reachable from it, because
+    // the consumer (the variants popover) holds a dialogue id and no scene.
+    for (const dialogue of scene.dialogues) {
+      for (const [band, { directive, slate }] of plan.byBand) {
+        seeds.push({
+          dialogueDefinitionId: dialogue.definitionId,
+          lang: targetLanguage,
+          band,
+          entry: { slate, posture: directive.supportPosture, fromSceneContext }
+        });
+      }
+    }
+
+    // Stored per SCENE -- one entry per (scene, band) rather than one per
+    // (dialogue, band), because the Teacher answered per scene and duplicating
+    // it across a scene's dialogues would bloat the project document for no
+    // information gain. The dialogue index below is what makes per-dialogue
+    // reads work after hydration.
+    planned.push({
+      sceneId: scene.sceneId,
+      contentHash: contentHash ?? null,
+      fromSceneContext,
+      dialogueDefinitionIds: scene.dialogues.map((d) => d.definitionId),
+      bands: [...plan.byBand].map(([band, { directive, slate }]) => ({
+        band,
+        slate,
+        posture: directive.supportPosture
+      }))
+    });
+  }
+
+  seedSugarlangTeachPlan(seeds);
+  console.info("[sugarlang build] teach-plan-seeded", {
+    entries: seeds.length,
+    scenes: scenes.length
+  });
+
+  return serializeTeachPlans({ lang: targetLanguage, scenes: planned });
+}
+
 export async function rebuildSugarlangCompileCache(
   gameProject: GameProject | null,
   regions: RegionDocument[],
@@ -309,8 +536,48 @@ export async function rebuildSugarlangCompileCache(
   activeScene: Scene | null,
   workspaceId: string,
   onProgress?: (progress: SugarlangRebuildProgress) => void,
-  options?: { chunkExtractionEnabled?: boolean }
-): Promise<SugarlangCompileStatusSummary> {
+  options?: {
+    chunkExtractionEnabled?: boolean;
+    /**
+     * Receives the teach plan so the caller can persist it into the project's
+     * sugarlang config slot. Omitted means the plan lives only in memory for
+     * this session, which is a valid (if forgetful) mode.
+     */
+    onTeachPlanDocument?: (document: SugarlangTeachPlanDocument) => void;
+  }
+): Promise<SugarlangRebuildResult> {
+  // VALIDATE BEFORE DESTROYING ANYTHING (nikki, 2026-07-31).
+  //
+  // `cache.invalidate()` below wipes the compile cache, and until this guard
+  // existed a project with no target language got as far as that wipe and THEN
+  // threw -- `atlas.getAtlasVersion("")` raises `Missing sugarlang cefrlex data
+  // for language ""`. So pressing Rebuild on an unconfigured project destroyed
+  // the cache and failed, which is the worst possible order.
+  //
+  // A null language in STUDIO is normal, not an error: the plugin was just
+  // installed and nobody has opened the Language panel yet. So this is a refusal
+  // with an explanation, not a crash -- Studio has to stay usable so the author
+  // can go and set one.
+  if (!targetLanguage || targetLanguage.trim().length === 0) {
+    return {
+      status: await readSugarlangCompileStatus(
+        gameProject,
+        regions,
+        targetLanguage,
+        activeScene,
+        workspaceId
+      ),
+      problems: [
+        {
+          pass: "gateway",
+          message: "No target language set, so nothing was built.",
+          detail:
+            "Set one in the Sugarlang workspace's Language panel, then rebuild. Nothing was changed or invalidated."
+        }
+      ]
+    };
+  }
+
   const scenes = await createSugarlangSceneContexts(
     gameProject,
     regions,
@@ -335,6 +602,28 @@ export async function rebuildSugarlangCompileCache(
     ? new SugarlangGatewayClient(proxyBaseUrl)
     : null;
 
+  const problems: SugarlangRebuildProblem[] = [];
+
+  // Say so loudly when a pass cannot run. Without a gateway the scene-context
+  // pass is simply absent, which is indistinguishable from "ran and found
+  // nothing" -- the HUD shows "(not built)" either way.
+  //
+  // This used to be console-only, so the button still said "rebuilt
+  // successfully". It now reaches the author.
+  if (!gatewayClient) {
+    console.warn(
+      "[sugarlang build] scene-context and chunk passes SKIPPED: no gateway base URL resolved. " +
+        "Scene context can never be built until the sugarlang gateway URL is set."
+    );
+    problems.push({
+      pass: "gateway",
+      message:
+        "Build incomplete: no sugarlang gateway URL, so scene concepts, chunks and teaching plans were NOT built.",
+      detail:
+        "NPCs will still talk, but they will not teach what your scenes are about. Set the sugarlang gateway URL and rebuild."
+    });
+  }
+
   const dialogueDefinitions = gameProject?.dialogueDefinitions ?? [];
   const scheduler = new SugarlangAuthoringCompileScheduler({
     getScenes: () => scenes,
@@ -349,11 +638,12 @@ export async function rebuildSugarlangCompileCache(
             cache: new IndexedDBChunkCache({ workspaceId }),
             extractSceneChunks: async (scene, contentHash) => {
               const blobs = collectSceneText(scene);
-              return extractChunks({
+              return new MultiWordExpressionExtractor({
+                atlas,
+                llmClient: gatewayClient
+              }).extract({
                 sceneText: blobs,
                 lang: scene.targetLanguage,
-                atlas,
-                llmClient: gatewayClient,
                 promptVersion: SUGARLANG_COMPILE_PIPELINE_VERSION,
                 sceneId: scene.sceneId,
                 contentHash
@@ -366,22 +656,50 @@ export async function rebuildSugarlangCompileCache(
       ? {
           cache: new IndexedDBIntentCache({ workspaceId }),
           extractNodeIntent: async (dialogueDefinitionId, node, contentHash) => {
-            return extractIntent({
+            return new LineIntentExtractor({
+              llmClient: gatewayClient
+            }).extract({
               nodeId: node.nodeId,
               nodeText: node.text,
               authoredIntent: node.intent,
-              targetLanguage,
               contentHash,
               dialogueDefinitionId,
-              llmClient: gatewayClient,
-              promptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+              promptVersion: LINE_INTENT_PROMPT_VERSION
             });
           },
-          promptVersion: INTENT_EXTRACTOR_PROMPT_VERSION
+          promptVersion: LINE_INTENT_PROMPT_VERSION
+        }
+      : undefined,
+    // STUDIO ONLY, deliberately. The runtime's lazy path (`ensureScene`) runs in
+    // the deployed game, and this is a gateway call -- a player's machine must
+    // not do authoring work. The runtime receives models by seeding.
+    sceneContextPass: gatewayClient
+      ? {
+          cache: new IndexedDBSceneContextCache({ workspaceId }),
+          extractSceneContext: async (scene, contentHash) => {
+            return new SceneContextExtractor({
+              llmClient: gatewayClient
+            }).extract({
+              sources: projectSceneContextSources(scene),
+              // Support language, NOT target: concepts are English, so one
+              // extraction serves every target language.
+              supportLanguage: scene.supportLanguage,
+              sceneId: scene.sceneId,
+              contentHash
+            });
+          },
+          promptVersion: SCENE_CONTEXT_PROMPT_VERSION,
+          supportLanguage: scenes[0]?.supportLanguage ?? "en"
         }
       : undefined,
     onLog(message, detail) {
+      // Every pass logs through here, and only "compiled-scene" drives the
+      // progress bar. The rest used to be dropped on the floor, which meant a
+      // pass that silently did nothing looked identical to one that worked --
+      // exactly the state that cost an hour on 2026-07-29. Console is the
+      // cheapest honest surface until the Build panel grows a real readout.
       if (message !== "compiled-scene") {
+        console.info(`[sugarlang build] ${message}`, detail ?? {});
         return;
       }
 
@@ -399,15 +717,40 @@ export async function rebuildSugarlangCompileCache(
   await scheduler.flush();
   await scheduler.flushChunks();
   await scheduler.flushIntents();
+  await scheduler.flushSceneContext();
   scheduler.stop();
 
-  return readSugarlangCompileStatus(
-    gameProject,
-    regions,
+  // TEACH PLAN PASS -- runs LAST, because it reads what the scene-context pass
+  // just wrote. Cheap by construction: ONE Teacher call per (scene, band), not
+  // per line, because the build-time situation is scene-level. It does NOT bake
+  // variants; baking is per-node and stays where it is.
+  const teachPlanDocument = await runTeachPlanPass({
+    scenes,
+    gatewayClient,
+    sceneContextCache: gatewayClient
+      ? new IndexedDBSceneContextCache({ workspaceId })
+      : null,
     targetLanguage,
-    activeScene,
-    workspaceId
-  );
+    problems
+  });
+
+  // Handed OUT rather than written here. This module has no command channel and
+  // should not grow one -- persisting into the project is a Studio command, and
+  // the caller is the piece that already holds the dispatcher.
+  if (teachPlanDocument) {
+    options?.onTeachPlanDocument?.(teachPlanDocument);
+  }
+
+  return {
+    status: await readSugarlangCompileStatus(
+      gameProject,
+      regions,
+      targetLanguage,
+      activeScene,
+      workspaceId
+    ),
+    problems
+  };
 }
 
 export function loadPlacementQuestionBank(
@@ -422,11 +765,19 @@ export function loadPlacementQuestionBank(
 
 // --- Variant authoring client (086.3) ---
 
-const DISPLAY_BANDS: CEFRBand[] = ["B1", "B2", "C1", "C2"];
+// 090.11: the baked band set lives in the baked-variant contract now -- it was
+// spelled independently here and in two Studio panels, so turning A1/A2 on in
+// one place left the others showing the old four.
+const DISPLAY_BANDS = DIALOGUE_VARIANT_BANDS;
 
-function buildVariantContentHash(nodeId: string, nodeText: string): string {
-  return [nodeId, nodeText, JSON.stringify({})].join("|");
-}
+/**
+ * MERGED 2026-07-31. This was the THIRD byte-identical copy of the variant
+ * cache key's content leg (bake source, scripted middleware, here). The Studio
+ * popover writes variants under it and the runtime reads them under it, so a
+ * drift between any two copies is a silent, total cache miss. See the rule at
+ * the definition.
+ */
+const buildVariantContentHash = buildDialogueNodeContentHash;
 
 export interface VariantAuthoringClient {
   /** Returns null when the gateway URL is not configured. */
@@ -513,7 +864,7 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       if (!llmClient) return {};
       const cache = getCache(workspaceId);
       const contentHash = buildVariantContentHash(nodeId, nodeText);
-      let inventoryChunks: import("../../runtime/contracts/function-inventory").InventoryChunk[] = [];
+      let inventoryChunks: import("../../runtime/contracts/competency-inventory").InventoryChunk[] = [];
       try {
         inventoryChunks = getAllInventoryChunks(targetLanguage);
       } catch {
@@ -523,8 +874,23 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       await Promise.all(
         DISPLAY_BANDS.map(async (band) => {
           try {
+            // 090.11: the Teacher's answer for this dialogue's scene, if the
+            // rebuild pass has run this session. Absent means no slate and the
+            // band's own posture -- exactly what this call did before slates
+            // existed, which is why a missing plan degrades safely rather than
+            // blocking the bake.
+            const plan = getSugarlangTeachPlan(dialogueDefinitionId, targetLanguage, band);
             const generated = await generateVariant(
-              { authoredText: nodeText, targetLang: targetLanguage, band, intent: null, contentHash, dialogueDefinitionId, nodeId },
+              {
+                authoredText: nodeText,
+                targetLang: targetLanguage,
+                band,
+                intent: null,
+                contentHash,
+                dialogueDefinitionId,
+                nodeId,
+                ...(plan ? { teach: plan.slate, posture: plan.posture } : {})
+              },
               { llmClient, atlas, inventoryChunks }
             );
             if (generated.variant) {
@@ -543,7 +909,7 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       const contentHash = buildItemViewContentHash(itemDefinitionId, field, text);
       const result: Partial<Record<CEFRBand, BakedLineVariant>> = {};
       await Promise.all(
-        DISPLAY_BANDS.map(async (band) => {
+        ITEM_VARIANT_BANDS.map(async (band) => {
           const entry = await cache.get({
             lang: targetLanguage,
             band,
@@ -559,7 +925,7 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       if (!llmClient) return {};
       const cache = getCache(workspaceId);
       const contentHash = buildItemViewContentHash(itemDefinitionId, field, text);
-      let inventoryChunks: import("../../runtime/contracts/function-inventory").InventoryChunk[] = [];
+      let inventoryChunks: import("../../runtime/contracts/competency-inventory").InventoryChunk[] = [];
       try {
         inventoryChunks = getAllInventoryChunks(targetLanguage);
       } catch {
@@ -568,7 +934,7 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       const service = new GradedTextService({ llmClient, atlas, inventoryChunks });
       const result: Partial<Record<CEFRBand, BakedLineVariant>> = {};
       await Promise.all(
-        DISPLAY_BANDS.map(async (band) => {
+        ITEM_VARIANT_BANDS.map(async (band) => {
           try {
             const graded = await service.adapt({
               sourceText: text,

@@ -1,8 +1,6 @@
 # Sugarmagic Instructions
 
-Sugarmagic is the clean successor to Sugarbuilder and Sugarengine for region authoring and runtime playback.
-
-This repo exists to replace a split architecture that created repeated parity bugs, duplicated behavior, and wasted time.
+Sugarmagic strives to be an all in one game creation studio for FoxLeapMoon. Specifically narrative focused games. It is not meant to make multiplayer games or combat games.
 
 ## Mission
 
@@ -27,16 +25,13 @@ If a proposed change weakens one of these, stop and rethink it.
 
 ## Product Direction
 
-- Sugarmagic is the host product.
-- Sugarbuilder is legacy and migration-only.
-- Sugarengine is an input to Sugarmagic, not a sibling product to preserve forever.
-- The goal is not coexistence. The goal is consolidation.
-- The goal is not compatibility at all costs. The goal is a clean long-term home.
+- Sugarmagic Studio is the main product.
+- Plugins are installed independently and should specify their dependency on other plugins or be able to operate independently.
+
 
 ## Hard Architecture Rules
 
 - Runtime-visible behavior must be implemented once.
-- Editor tooling may sit on top of runtime systems.
 - Runtime systems must not depend on editor UI code.
 - Do not maintain separate editor-render and runtime-render behavior for the same authored content.
 - Do not preserve old code paths “for safety” unless explicitly required and approved.
@@ -44,57 +39,16 @@ If a proposed change weakens one of these, stop and rethink it.
 - Prefer deletion over coexistence.
 - Prefer explicit domain modules over cross-cutting convenience code.
 
-## Migration Bias
-
-This repo is a migration project as much as a product project.
-
-That means:
-
-- every migrated capability must land in a clear permanent home
-- every migration should identify what old code or old concept it makes obsolete
-- every major port should reduce duplication, not move duplication around
-- no “temporary bridge” unless it has a clear removal condition
-
-When migrating from Sugarbuilder or Sugarengine, always state:
-
-- what is being kept
-- what is being rewritten
-- what is being deleted
-- what becomes the new source of truth
 
 ## Source of Truth Rules
 
-For each important concept, there must be one authoritative owner.
-
-Examples:
-
-- region document
-- placed asset
-- landscape document
-- environment document
-- material graph document
-- region workspace state
+For each important concept, there must be one authoritative owner. This concept with an authoratitive owner should be in the Domain.
 
 Do not allow multiple persisted models to overlap in meaning.
 
 Editor-only state is allowed.
 Duplicate authored-scene truth is not.
 
-## Single Enforcer Rules
-
-Each core behavior must have one implementation.
-
-Examples:
-
-- one region loader
-- one renderer path
-- one landscape runtime
-- one material graph compiler/runtime
-- one sky/cloud system
-- one environment application path
-- one save/load path for authored regions
-
-If two systems appear to enforce the same behavior, that is a bug, not flexibility.
 
 ## Rendering Rules
 
@@ -107,7 +61,6 @@ If two systems appear to enforce the same behavior, that is a bug, not flexibili
 
 ## UI / UX Rules
 
-- Adopt Sugarengine-style shell discipline.
 - Do not paste Sugarbuilder wholesale into Sugarmagic.
 - Preserve strong workflows from Sugarbuilder, but re-home them intentionally.
 - Prefer mode-based editing over giant overloaded screens.
@@ -126,6 +79,23 @@ If two systems appear to enforce the same behavior, that is a bug, not flexibili
 - Prefer narrow modules with obvious ownership.
 - Make names reflect domain meaning, not implementation details.
 - If a helper erases important meaning, it is too generic.
+- Each core behavior gets exactly one implementation. Two systems enforcing the
+  same behavior is a bug, not flexibility.
+- Source-of-truth is about DATA: one owner per concept. Single-enforcer is
+    about BEHAVIOR: one implementation per decision. A codebase can satisfy the
+    first and still violate the second.
+- Before adding a rule, threshold, table, or resolver, grep for one that
+    already exists — repo-wide, including `apps/` and `targets/`, not just
+    `packages/`.
+- Precedence belongs in one function, not spread across its callers. If two
+    call sites consult the same sources in different orders, that is already
+    the bug.
+- A duplicate is not always literal. A copied constant, an inlined ternary of
+    a shared table, or a second prompt asking the same question all count.
+- When you find a second enforcer, do not just delete it. It has almost
+    certainly drifted and now handles a case the other one does not, so
+    deleting it loses behavior silently. They need to be merged -- stop and
+    confirm the merged behavior with a human before choosing what survives.
 
 ## Tech Debt Rules
 

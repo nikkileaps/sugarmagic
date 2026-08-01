@@ -20,21 +20,20 @@
  */
 
 import type {
-  CompiledSceneLexicon,
+  SceneVocabularyModel,
   EnvelopeRule,
   EnvelopeViolation,
   EnvelopeVerdict,
   LanguageRatioVerdict,
   LearnerProfile,
   LexicalAtlasProvider,
-  LexicalPrescription,
   SupportPosture
 } from "../types";
 import { MorphologyLoader } from "./morphology-loader";
 import { CefrLexAtlasProvider } from "../providers/impls/cefr-lex-atlas-provider";
 import { computeCoverage } from "./coverage";
 import { applyEnvelopeRule } from "./envelope-rule";
-import { compareCefrBands } from "./cefr-band-utils";
+import { compareCefrBands } from "../cefr";
 import { createChunkMatcher, type ChunkMatcher } from "./chunk-matcher";
 import { tokenize } from "./tokenize";
 import {
@@ -82,13 +81,20 @@ export interface EnvelopeClassifierOptions {
 }
 
 export interface EnvelopeClassifierCheckOptions {
-  prescription?: LexicalPrescription | null;
+  /**
+   * 090.10: lemma ids the TEACHER chose to introduce this situation, exempt
+   * from the band ceiling because teaching them is the point. Was
+   * `prescription: LexicalPrescription` -- the budgeter's shortlist -- so the
+   * exemption tracked what a lexical scan had picked rather than what the
+   * Teacher decided.
+   */
+  taughtLemmaIds?: string[] | null;
   knownEntities?: Set<string>;
   questEssentialLemmas?: Set<string>;
   /** NPC-authored interjection tokens whitelisted from envelope enforcement. See Plan 083 story 083.3. */
   voiceInterjections?: Set<string>;
   lang?: string;
-  sceneLexicon?: Pick<CompiledSceneLexicon, "sceneId" | "contentHash" | "chunks"> | null;
+  sceneLexicon?: Pick<SceneVocabularyModel, "sceneId" | "contentHash" | "chunks"> | null;
   conversationId?: string;
   turnId?: string;
   sessionId?: string;
@@ -157,7 +163,7 @@ export class EnvelopeClassifier {
 
   private resolveChunkMatcher(
     lang: string,
-    sceneLexicon: Pick<CompiledSceneLexicon, "contentHash" | "chunks"> | null | undefined
+    sceneLexicon: Pick<SceneVocabularyModel, "contentHash" | "chunks"> | null | undefined
   ): ChunkMatcher | null {
     if (!sceneLexicon?.chunks?.length) {
       return null;
@@ -206,7 +212,7 @@ export class EnvelopeClassifier {
       text
     );
     const ruleResult = this.rule(profile, learner.estimatedCefrBand, {
-      prescription: options.prescription,
+      taughtLemmaIds: options.taughtLemmaIds,
       knownEntities: options.knownEntities,
       questEssentialLemmas: options.questEssentialLemmas,
       voiceInterjections: options.voiceInterjections

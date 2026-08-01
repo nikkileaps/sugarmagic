@@ -105,10 +105,38 @@ describe("computeLanguageRatioVerdict", () => {
     expect(verdict.conformance).toBe("conformant");
   });
 
-  it("returns conformant for full Spanish at anchored posture", () => {
-    // anchored floor = max(0.1, 0.3 * 0.4) = 0.12; 10/10 = 1.0 >= 0.12 -> conformant
+  it("returns OVER-RATIO for full Spanish at anchored posture", () => {
+    // 090.4 INVERTED THIS TEST, and the old version is why the bug shipped.
+    //
+    // It read "returns conformant for full Spanish at anchored posture" -- an
+    // A1 learner receiving a 100% Spanish reply against a directed 0.3, asserted
+    // as CORRECT. The reasoning was sound at the time: the only failure being
+    // chased was English-only output, so the check had a floor and no ceiling,
+    // and this test documented that faithfully.
+    //
+    // Observed in play: a beginner got a full-Spanish, multi-clause explanation
+    // of seasonal cheese and every gate passed it.
+    //
+    // anchored ceiling = max(0.35, 0.3 * 2) = 0.6; 10/10 = 1.0 > 0.6 -> over-ratio
     const profile = makeProfile(10, 10);
     const verdict = computeLanguageRatioVerdict(profile, 0.3, "anchored");
+    expect(verdict.conformance).toBe("over-ratio");
+  });
+
+  it("still allows a reply that leans target-heavy without drowning the learner", () => {
+    // The ceiling has to be looser than the directed ratio or ordinary prose
+    // trips it -- text is lumpy and one Spanish clause is a big fraction of a
+    // short reply. 0.5 against a directed 0.3 is enthusiasm, not a failure.
+    const profile = makeProfile(10, 5);
+    const verdict = computeLanguageRatioVerdict(profile, 0.3, "anchored");
+    expect(verdict.conformance).toBe("conformant");
+  });
+
+  it("does not flag a target-dominant reply for being mostly target language", () => {
+    // At 0.85 directed the learner is expected to swim; the ceiling scales with
+    // what was asked for rather than being a fixed distance from it.
+    const profile = makeProfile(10, 10);
+    const verdict = computeLanguageRatioVerdict(profile, 0.85, "target-dominant");
     expect(verdict.conformance).toBe("conformant");
   });
 

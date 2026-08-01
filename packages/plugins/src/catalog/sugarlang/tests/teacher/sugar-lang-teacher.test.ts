@@ -91,17 +91,12 @@ describe("SugarLangTeacher", () => {
       cache
     });
 
-    const directive = await teacher.invoke(
-      createTeacherContext({
-        probeFloorState: {
-          turnsSinceLastProbe: 30,
-          totalPendingLemmas: 3,
-          softFloorReached: true,
-          hardFloorReached: true,
-          hardFloorReason: "turns-since-probe"
-        }
-      })
-    );
+    // 090.4: hard floor is derived from turnsSinceLastProbe >= 25.
+    const base = createTeacherContext();
+    const directive = await teacher.invoke({
+      ...base,
+      situation: { ...base.situation!, turnsSinceLastProbe: 30 }
+    });
 
     expect(directive.isFallbackDirective).toBe(true);
     expect(directive.comprehensionCheck.triggerReason).toBe(

@@ -48,7 +48,7 @@ import { createSugarlangLogger } from "../../runtime/logger";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import { SUGARLANG_CONSTRAINT_ANNOTATION } from "../../runtime/middlewares/shared";
 import { createTestRegion, createTestActiveScene } from "../compile/test-helpers";
-import { createBudgeterSceneLexicon } from "../budgeter/test-helpers";
+import { createBudgeterSceneLexicon } from "./scene-lexicon-fixture";
 import { clearSugarlangRuntimeCompileCache } from "../../runtime/compile/runtime-cache-state";
 import { installFetchGuard, uninstallFetchGuard, jsonResponse } from "./fetch-guard";
 import { MemoryVariantCache } from "../../runtime/compile/variant-cache";
@@ -341,7 +341,7 @@ describe("end-to-end conversation golden", () => {
   it("scripted target-dominant posture: zero LLM calls -- degrades to weave when no baked variant", async () => {
     // 086.4: scripted target-dominant no longer calls the LLM gateway at all.
     // When no variant cache is seeded (cold cache), the scripted middleware
-    // degrades to diglotWeave. The fetch guard enforces zero /generate traffic.
+    // degrades to markGradedText. The fetch guard enforces zero /generate traffic.
     // debugBandOverride:"B1" puts the learner at target-dominant posture.
     const authoredLine = "Welcome to the station, traveler.";
     // Allow nothing -- the scripted path must make zero gateway calls.
@@ -507,16 +507,19 @@ describe("end-to-end conversation golden", () => {
     // Turn 1: advance (fires a new directive -- cache miss).
     await host.submitInput({ kind: "advance" });
 
-    // Turn 2: advance -- schedule-driven (isColdStart=false after greeting observed a
-    // lemma card), so teacher.invoke() is never called and the directive cache is not
-    // consulted. No cache hits; still only one teacher invocation (from the greeting).
+    // Turn 2: advance. 090.4 deleted the 087.6 bypass, so the teacher path is
+    // taken and the directive cache IS consulted -- and hits, because the
+    // situation has not changed. The test name promises "only one teacher
+    // invocation fired", and that is still true; what changed is that the second
+    // turn now demonstrably REUSES the first decision rather than never having
+    // asked for one.
     await host.submitInput({ kind: "advance" });
 
     const cacheHits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
     const newDirectives = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
 
     expect(newDirectives.length).toBe(1);
-    expect(cacheHits.length).toBe(0);
+    expect(cacheHits.length).toBeGreaterThan(0);
   });
 
   it("verify pass: NPC text within the envelope passes through verify unchanged", async () => {
@@ -645,7 +648,7 @@ describe("end-to-end conversation golden", () => {
   });
 
   it("scripted anchored posture: zero LLM calls -- weave produces woven text", async () => {
-    // A1 learner -> anchored posture -> diglotWeave path fires, no /generate call.
+    // A1 learner -> anchored posture -> markGradedText path fires, no /generate call.
     // The prescription includes "hola" so any authored word that resolves to
     // "hola" in the gloss index gets substituted. We assert no gateway calls and
     // that the scripted middleware ran (turn text is not the authored English
@@ -850,7 +853,7 @@ describe("end-to-end conversation golden", () => {
       "../../runtime/providers/impls/cefr-lex-atlas-provider"
     );
     const { getAllInventoryChunks } = await import(
-      "../../runtime/inventory/function-inventory-loader"
+      "../../runtime/inventory/competency-inventory-loader"
     );
 
     const atlas = new CefrLexAtlasProvider();

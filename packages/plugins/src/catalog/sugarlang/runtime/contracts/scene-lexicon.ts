@@ -11,7 +11,7 @@
  *   - SceneLemmaInfo
  *   - QuestEssentialLemma
  *   - LexicalChunk
- *   - CompiledSceneLexicon
+ *   - SceneVocabularyModel
  *
  * Relationships:
  *   - Depends on runtime compile-profile and learner-profile types.
@@ -23,7 +23,7 @@
  */
 
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
-import type { CEFRBand } from "./learner-profile";
+import type { CEFRBand } from "../cefr";
 
 /**
  * Canonical cache-key shape for compiled scene lexicons.
@@ -67,23 +67,36 @@ export interface SceneAuthorWarning {
 /**
  * Per-lemma scene artifact entry used by the Budgeter and Director.
  *
+ * 090.2c DELETED `cefrPriorBand`, `frequencyRank` and `partsOfSpeech` from this
+ * type. All three were verbatim copies of atlas data written by
+ * `createSceneLemmaInfo(entry: AtlasLemmaEntry)` -- the atlas already owns them,
+ * and a second stored copy is the one-source-of-truth rule broken in the small.
+ * Readers look them up by `lemmaId` instead.
+ *
+ * WHAT IS STILL HERE, AND WHEN IT GOES (090.10)
+ *   `sceneWeight` and `npcSourceIds` exist ONLY to rank candidates inside the
+ *   budgeter (scoring.ts). The model hands ranking to the Teacher, so they die
+ *   when `prescribe()` does -- and not before, because the budgeter is still on
+ *   the live path (`sugar-lang-context-middleware.ts` calls
+ *   `services.budgeter.prescribe`). `SceneVocabularyModel.anchors` is in the
+ *   same position.
+ *
+ *   REVISIT TRIGGER: when 090.10 deletes `prescribe()`, this whole type goes
+ *   with it. `lemmas: Record<string, SceneLemmaInfo>` collapses to
+ *   `lemmaIds: string[]` and the artifact becomes an INDEX INTO the atlas rather
+ *   than a subset OF it -- which is when it earns the name
+ *   `SceneVocabularyModel`. Do not attempt that collapse earlier: three of these
+ *   fields have a live consumer until then.
+ *
  * Implements: Proposal 001 §Scene Lexicon Compilation: One Compiler, Three Profiles, Preview-First
+ *   + Plan 090 story 090.2c
  */
-export interface SceneLemmaInfo {
-  lemmaId: string;
-  cefrPriorBand: CEFRBand;
-  frequencyRank: number | null;
-  partsOfSpeech: string[];
-  isQuestCritical: boolean;
-  /** Accumulated scene relevance weight. Higher values mean the lemma appears
-   *  more often and/or in higher-weight sources (dialogue, quest objectives, NPC lore).
-   *  Used by the budgeter to prioritize contextually relevant vocabulary. */
-  sceneWeight: number;
-  /** NPC definition IDs whose lore/bio contributed to this lemma's scene weight.
-   *  Used by the budgeter to boost words from the NPC the player is currently
-   *  talking to over words from other NPCs in the scene. */
-  npcSourceIds: string[];
-}
+// 090.2d: `SceneLemmaInfo` DELETED. Of its five fields, three were verbatim
+// atlas copies (removed in 090.2c), and `sceneWeight` / `npcSourceIds` existed
+// only for budgeter ranking. `isQuestCritical` turned out to be written by the
+// compiler and read by nothing at all. What survives is the lemma id, so the
+// record collapses to a list of them -- an INDEX INTO the atlas rather than a
+// subset OF it, which is the point at which the name stops lying.
 
 /**
  * Quest-objective lemma that bypasses the normal envelope ceiling.
@@ -110,6 +123,12 @@ export interface LexicalChunk {
   surfaceForms: string[];
   cefrBand: CEFRBand;
   constituentLemmas: string[];
+  /**
+   * Routing record, NOT a model id. The gateway resolves the model server-side
+   * from `purpose` and its response carries no model name, so a compile-time
+   * caller cannot know which model ran -- this reads "gateway-resolved". The
+   * ground truth is the gateway's own `sugaragent.generate` log line.
+   */
   extractedByModel: string;
   extractedAtMs: number;
   extractorPromptVersion: string;
@@ -135,15 +154,15 @@ export interface VoiceChannelSpec {
  *
  * Implements: Proposal 001 §Scene Lexicon Compilation: One Compiler, Three Profiles, Preview-First
  */
-export interface CompiledSceneLexicon {
+export interface SceneVocabularyModel {
   sceneId: string;
   contentHash: string;
   pipelineVersion: string;
   atlasVersion: string;
   profile: RuntimeCompileProfile;
-  lemmas: Record<string, SceneLemmaInfo>;
+  /** 090.2d: was `lemmas: Record<string, SceneLemmaInfo>`. */
+  lemmaIds: string[];
   properNouns: string[];
-  anchors: string[];
   questEssentialLemmas: QuestEssentialLemma[];
   sources?: Record<string, SourceLocation[]>;
   diagnostics?: SceneAuthorWarning[];

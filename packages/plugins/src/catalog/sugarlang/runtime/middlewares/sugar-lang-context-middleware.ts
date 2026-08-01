@@ -16,13 +16,14 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
+import { SugarlangMissingTargetLanguageError } from "../../config";
 import { drainPendingHover } from "../dialogue-entry-decorator";
 import {
   SUGARLANG_PLACEMENT_STATUS_FACT,
   SUGARLANG_PLACEMENT_WRITER,
   createSugarlangPlacementStatusScope,
   getSugarlangPlacementStatus
-} from "../learner/fact-definitions";
+} from "../learner";
 import {
   createNoOpTelemetrySink,
   createTelemetryEvent,
@@ -45,11 +46,9 @@ import {
   SUGARLANG_PLACEMENT_PHASE_STATE,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
-  SUGARLANG_PRESCRIPTION_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_QUEST_ESSENTIAL_IDS_ANNOTATION,
   SUGARLANG_SCHEDULE_ANNOTATION,
-  buildEmptyPrescription,
   buildLearnerSnapshot,
   computePendingProvisionalLemmas,
   computeProbeFloorState,
@@ -62,12 +61,11 @@ import {
   type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
-import { loadFunctionInventory } from "../inventory/function-inventory-loader";
-import { resolveFunctionTags } from "../inventory/function-tag-resolver";
+import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
 import type { SchedulerBoardView } from "../scheduler/scheduler-board-view";
 import type { TeachSchedule } from "../scheduler/teach-schedule";
-import { realizeFunctionChunksFromSchedule } from "../scheduler/function-chunk-realizer";
-import type { FunctionEntry } from "../contracts/function-inventory";
+import { realizeCompetencyChunksFromSchedule } from "../scheduler/competency-chunk-realizer";
+import type { Competency } from "../contracts/competency-inventory";
 import { getWorldDay } from "@sugarmagic/runtime-core";
 
 export interface SugarLangContextMiddlewareDeps {
@@ -174,8 +172,23 @@ export function createSugarLangContextMiddleware(
       const targetLanguage =
         execution.selection.targetLanguage ||
         deps.services.getTargetLanguage();
+      // THE RUNTIME DOES NOT RUN WITHOUT A LANGUAGE (nikki, 2026-07-31).
+      //
+      // This used to `return execution` here, so a shipped game with sugarlang
+      // enabled and no target language ran every conversation with sugarlang
+      // silently inert -- nothing graded, nothing taught, nothing said. That is
+      // indistinguishable from "the teaching is bad" and is the worst possible
+      // presentation of a one-field configuration mistake.
+      //
+      // We are past every layer that is allowed to be relaxed about this: Studio
+      // tolerates a null language because a freshly installed plugin has none,
+      // and preview refuses to launch. Reaching HERE with no language means a
+      // BUILT GAME shipped misconfigured, so it fails loudly.
+      //
+      // `shouldRunSugarlangForExecution` above is the enabled-check: if the
+      // plugin is not participating in this conversation we already returned.
       if (!targetLanguage) {
-        return execution;
+        throw new SugarlangMissingTargetLanguageError();
       }
       // Ensure the selection carries targetLanguage for downstream readers.
       execution.selection.targetLanguage = targetLanguage;
@@ -302,9 +315,6 @@ export function createSugarLangContextMiddleware(
       }
 
       if (placementPhase === "questionnaire") {
-        execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = buildEmptyPrescription(
-          "Placement questionnaire phase - no prescription needed."
-        );
         return execution;
       }
 
@@ -312,10 +322,6 @@ export function createSugarLangContextMiddleware(
         const npc = deps.services.findNpcDefinition(
           execution.selection.npcDefinitionId
         );
-        execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] =
-          buildEmptyPrescription(
-            "Pre-placement opening dialog - no prescription needed."
-          );
         execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION] =
           pickPrePlacementOpeningLine({
             npcDisplayName: execution.selection.npcDisplayName,
@@ -362,22 +368,14 @@ export function createSugarLangContextMiddleware(
       // 087.1: outer-loop schedule. Computed from the scene lexicon + learner state
       // that are already in hand. Fail-safe: any error means no annotation, which
       // preserves today's rendering behavior exactly.
-      // availableFunctions is declared here so it's accessible for the post-prescribe
+      // availableCompetencies is declared here so it's accessible for the post-prescribe
       // function-chunk realization step (087.3).
-      let availableFunctions: FunctionEntry[] = [];
+      let availableCompetencies: Competency[] = [];
       try {
-        let functionTags = { sceneFunctions: [] as string[], npcFunctions: {} as Record<string, string[]> };
-        try {
-          const inventory = loadFunctionInventory(targetLanguage);
-          const dialogues = deps.services.getDialogueDefinitions();
-          functionTags = resolveFunctionTags(sceneLexicon?.chunks, inventory, targetLanguage, dialogues);
-        } catch {
-          // Inventory not available for this language or tags failed; schedule degrades.
-        }
         const teachRecords = await services.teachRecordStore.list();
         const activeDebts = await services.ledgerStore.getActiveDebts();
         try {
-          availableFunctions = loadFunctionInventory(targetLanguage).functions;
+          availableCompetencies = loadCompetencyInventory(targetLanguage).competencies;
         } catch {
           // No inventory for this language.
         }
@@ -386,18 +384,16 @@ export function createSugarLangContextMiddleware(
             cefrBand: learner.estimatedCefrBand,
             cefrConfidence: learner.assessment.cefrConfidence,
             lemmaCards: learner.lemmaCards,
-            fatigueScore: learner.currentSession?.fatigueScore ?? 0
           },
           curriculum: {
-            introducedFunctionIds: new Set(teachRecords.map((r) => r.functionId)),
-            availableFunctions,
+            introducedCompetencyIds: new Set(teachRecords.map((r) => r.competencyId)),
+            availableCompetencies,
             activeDebts
           },
           scene: {
             sceneId,
-            functionTags,
             dayIndex: blackboard ? getWorldDay(blackboard) : null,
-            sceneLemmaIds: Object.keys(sceneLexicon?.lemmas ?? {}).filter(
+            sceneLemmaIds: (sceneLexicon?.lemmaIds ?? []).filter(
               (id) => !id.startsWith("chunk:")
             )
           },
@@ -446,67 +442,27 @@ export function createSugarLangContextMiddleware(
             ) ??
             lemma.sourceObjectiveDisplayName
         }));
-      const prescription = await services.budgeter.prescribe({
-        learner: refreshedLearner,
-        sceneLexicon,
-        conversationState: {
-          currentSessionTurn: refreshedLearner.currentSession?.turns ?? 0,
-          turnSeconds: undefined,
-          nowMs: Date.now()
-        },
-        activeQuestEssentialLemmas: activeQuestEssentialLemmas.map((entry) => ({
-          lemmaId: entry.lemmaRef.lemmaId,
-          lang: entry.lemmaRef.lang,
-          cefrBand: entry.cefrBand,
-          sourceQuestId: entry.sourceQuestId,
-          sourceObjectiveNodeId: entry.sourceObjectiveNodeId,
-          sourceObjectiveDisplayName: entry.sourceObjectiveDisplayName
-        })),
-        npcDefinitionId: execution.selection.npcDefinitionId ?? null
-      });
-
-      execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION] = prescription;
-
-      // 087.3: Inject scheduled function chunks into the prescription introduce list.
-      // The schedule may have picked a function teachable; realize its chunk: refs here
-      // so the scripted middleware can use them. Capped at remaining newItemsAllowed budget.
-      const schedule = execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] as TeachSchedule | undefined;
-      if (schedule && availableFunctions.length > 0) {
-        try {
-          const functionChunkRefs = realizeFunctionChunksFromSchedule(
-            schedule,
-            targetLanguage,
-            refreshedLearner.lemmaCards,
-            availableFunctions
-          );
-          if (functionChunkRefs.length > 0) {
-            const cap = Math.max(
-              0,
-              prescription.budget.newItemsAllowed - prescription.introduce.length
-            );
-            const toInject = functionChunkRefs.slice(0, cap);
-            if (toInject.length > 0) {
-              prescription.introduce = [...prescription.introduce, ...toInject];
-            }
-          }
-        } catch {
-          // Non-fatal: function chunk realization failure degrades gracefully.
-        }
-      }
-
-      logger.debug("Budgeter prescription details.", {
-        introduce: prescription.introduce.map((l) => {
-          const info = sceneLexicon.lemmas[l.lemmaId];
-          return {
-            lemmaId: l.lemmaId,
-            freq: info?.frequencyRank ?? null,
-            sceneWeight: info?.sceneWeight ?? 0,
-            isAnchor: sceneLexicon.anchors.includes(l.lemmaId)
-          };
-        }),
-        anchor: prescription.anchor?.lemmaId ?? null,
-        candidateCount: Object.keys(sceneLexicon.lemmas).length
-      });
+      // 090.10: THE PRESCRIBER IS GONE, AND WITH IT THE COMPETENCY SIDE DOOR.
+      //
+      // What used to be here: `budgeter.prescribe()` produced a ranked, capped
+      // shortlist of lemmas; it was annotated for the teacher middleware, and
+      // scheduled competencies were expanded into `chunk:` pseudo-lemmas and
+      // INJECTED into `prescription.introduce` so they could ride the lemma
+      // channel. That shortlist was not an input to the Teacher's decision, it
+      // WAS the decision -- the Teacher could only pick 1-2 items from what a
+      // lexical scan had already chosen.
+      //
+      // It is the motivating bug end to end: `queso` never entered
+      // `sceneLexicon.lemmas` (the sole candidate source) for an agent NPC whose
+      // lines do not exist at compile time, so it never entered the prescription,
+      // and the Teacher was then forbidden from naming it. The Teacher did not
+      // fail to think of cheese; it was structurally prohibited from saying it.
+      //
+      // What replaces it: the SITUATION supplies candidates (concepts resolved
+      // against the atlas, 090.2), LEARNING STATUS supplies eligibility (090.9),
+      // and the Teacher ranks (090.4). Competencies need no side door because
+      // the slate carries teachables directly and the prompt now lists the
+      // inventory the Teacher may choose from (090.10a).
       execution.annotations[SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION] =
         buildLearnerSnapshot(refreshedLearner);
       execution.annotations[SUGARLANG_PENDING_PROVISIONAL_ANNOTATION] =
@@ -521,25 +477,10 @@ export function createSugarLangContextMiddleware(
         execution.annotations[SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION] = true;
       }
 
-      await emitTelemetry(
-        telemetry,
-        createTelemetryEvent("budgeter.prescription-generated", {
-          conversationId: getSugarlangConversationId(execution),
-          sessionId: getSugarAgentSessionId(execution),
-          turnId: getSugarlangTelemetryTurnId(execution, "prepare"),
-          timestamp: Date.now(),
-          sceneId,
-          learnerSnapshot: buildLearnerSnapshot(refreshedLearner),
-          prescription,
-          rationale: prescription.rationale,
-          pendingProvisionalSnapshot: pendingProvisional,
-          probeFloorState,
-          questEssentialState: {
-            activeQuestEssentialLemmas
-          }
-        }),
-        logger
-      );
+      // 090.10: `budgeter.prescription-generated` deleted with the budgeter that
+      // emitted it. `rationale-trace` reads that event optionally and falls back
+      // through `??` chains, so the debug panel degrades rather than breaking;
+      // retargeting the trace onto the slate + realization is 090.7's job.
 
       // Drain any pending hover observation from the UI layer so the
       // observer middleware can process it during finalize.

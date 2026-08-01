@@ -58,8 +58,12 @@ export interface GatewaySystemBlock {
 export interface GatewayGenerateRequest {
   model?: string;
   /** Plan 073.2 — server-side model selector; the gateway maps it to a model
-   *  env var. See LLMGenerateRequest.purpose. */
-  purpose?: "dialogue" | "summary";
+   *  env var. See LLMGenerateRequest.purpose. Kept in sync with the gateway's
+   *  PURPOSE_MODELS table (deployment/gateway/core.ts); "regen" was missing
+   *  here until 2026-07-28, so a regen request typed through this interface
+   *  silently lost its routing. "teacher" is sugarlang's and is not reachable
+   *  from a sugaragent client. */
+  purpose?: "dialogue" | "summary" | "regen";
   /** Legacy string form (sugarlang). Prefer systemBlocks for caching. */
   systemPrompt?: string;
   /** Plan 072.5 — structured system with a cache breakpoint (sugaragent). */

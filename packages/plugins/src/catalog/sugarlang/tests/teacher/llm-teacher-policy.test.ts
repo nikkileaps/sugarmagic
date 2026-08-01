@@ -16,13 +16,78 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import type { DirectorClaudeClientRequest } from "../../runtime/teacher/policies/llm-teacher-policy";
 import {
   ClaudeTeacherPolicy,
-  TeacherInvocationError
+  TeacherInvocationError,
+  createGatewayTeacherClient
 } from "../../runtime/teacher/policies/llm-teacher-policy";
+import type { SugarlangLLMRequest } from "../../runtime/llm/types";
 import { createDirectiveFixture, createTeacherContext } from "./test-helpers";
 
+describe("createGatewayTeacherClient (090 -- server-side model routing)", () => {
+  it("sends purpose:\"teacher\" so the gateway does not fall through to the dialogue model", async () => {
+    // THE regression. The plumbing existed but `purpose` never reached the
+    // wire, so every Teacher call silently ran on the cheap sugaragent
+    // dialogue model. Assert the field on the actual request object.
+    const generate = vi.fn(async (_request: SugarlangLLMRequest) => ({ text: "{}", requestId: null }));
+    await createGatewayTeacherClient({ generate }).generateStructuredDirective({
+      model: null,
+      systemPrompt: "s",
+      userPrompt: "u",
+      maxTokens: 10,
+      cacheMarkers: []
+    });
+
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(generate.mock.calls[0]![0]).toMatchObject({ purpose: "teacher" });
+  });
+
+  it("omits `model` entirely when null so the gateway owns the choice", async () => {
+    const generate = vi.fn(async (_request: SugarlangLLMRequest) => ({ text: "{}", requestId: null }));
+    await createGatewayTeacherClient({ generate }).generateStructuredDirective({
+      model: null,
+      systemPrompt: "s",
+      userPrompt: "u",
+      maxTokens: 10,
+      cacheMarkers: []
+    });
+
+    expect(generate.mock.calls[0]![0]).not.toHaveProperty("model");
+  });
+
+  it("still forwards an explicit model override for tooling", async () => {
+    const generate = vi.fn(async (_request: SugarlangLLMRequest) => ({ text: "{}", requestId: null }));
+    await createGatewayTeacherClient({ generate }).generateStructuredDirective({
+      model: "override-model",
+      systemPrompt: "s",
+      userPrompt: "u",
+      maxTokens: 10,
+      cacheMarkers: []
+    });
+
+    expect(generate.mock.calls[0]![0]).toMatchObject({
+      purpose: "teacher",
+      model: "override-model"
+    });
+  });
+});
+
 describe("ClaudeTeacherPolicy", () => {
+  it("defaults to no client-side model so the gateway resolves it (090)", async () => {
+    const generateStructuredDirective = vi.fn(
+      async (_request: DirectorClaudeClientRequest) => ({
+        text: JSON.stringify(createDirectiveFixture()),
+        requestId: null
+      })
+    );
+    await new ClaudeTeacherPolicy({
+      client: { generateStructuredDirective }
+    }).invoke(createTeacherContext());
+
+    expect(generateStructuredDirective.mock.calls[0]![0].model).toBeNull();
+  });
+
   it("returns a directive for a valid mocked Claude response", async () => {
     const policy = new ClaudeTeacherPolicy({
       client: {
@@ -55,14 +120,15 @@ describe("ClaudeTeacherPolicy", () => {
       }
     });
 
-    const directive = await policy.invoke(
-      createTeacherContext({
-        activeQuestEssentialLemmas: []
-      })
-    );
+    const directive = await policy.invoke(createTeacherContext());
 
-    expect(directive.targetLanguageRatio).toBe(1);
-    expect(directive.targetVocab.introduce).toEqual([{ lemmaId: "queso", lang: "es" }]);
+    // 090.4: the repaired ratio is now governed by the posture's band rather
+    // than only by [0,1] -- `supported` centres on 0.65, so an out-of-range
+    // request lands at 0.75.
+    expect(directive.targetLanguageRatio).toBe(0.75);
+    expect(directive.targetVocab.introduce).toEqual([
+      { kind: "vocabulary", lemmaId: "queso", lang: "es" }
+    ]);
   });
 
   it("throws TeacherInvocationError when the Claude client fails", async () => {

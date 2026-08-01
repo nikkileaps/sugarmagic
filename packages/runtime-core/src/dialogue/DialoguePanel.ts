@@ -16,11 +16,7 @@
  * Status: active
  */
 
-import {
-  EXCERPT_SPEAKER,
-  PLAYER_SPEAKER,
-  PLAYER_VO_SPEAKER
-} from "@sugarmagic/domain";
+import { PLAYER_SPEAKER, resolveDialogueSpeaker } from "@sugarmagic/domain";
 import {
   type DialoguePresenter
 } from "./DialogueManager";
@@ -56,11 +52,23 @@ export type DialogueTermHoverCallback = (event: {
   dwellMs: number;
 }) => void;
 
+/**
+ * 090.12: resolves a selected span to something worth showing. Returning null
+ * means "nothing to say", and the panel shows NO card -- not an error, not
+ * "translation unavailable". Most misses are expected (support-language words,
+ * names, punctuation), so silence is the honest response.
+ */
+export type DialogueSelectionLookup = (
+  selection: string
+) => { surface: string; gloss: string } | null;
+
 export function createRuntimeDialoguePanel(
   parentContainer: HTMLElement,
   options?: {
     entryDecorators?: DialogueEntryDecorator[];
     onTermHover?: DialogueTermHoverCallback;
+    /** 090.12: select-to-translate. Absent means the gesture is simply inert. */
+    onSelectionLookup?: DialogueSelectionLookup;
     /**
      * Story 50.5 — central keyboard action registry. The
      * dialogue panel registers its Escape (cancel) + Enter
@@ -82,9 +90,71 @@ export function createRuntimeDialoguePanel(
 ): RuntimeDialoguePanel {
   const entryDecorators = options?.entryDecorators ?? [];
   const onTermHover = options?.onTermHover ?? null;
+  const onSelectionLookup = options?.onSelectionLookup ?? null;
   const actionRegistry = options?.actionRegistry;
   const uiStateStore = options?.uiStateStore;
   injectStyles();
+
+  // ONE popover, reused. Creating a card per lookup leaks nodes over a long
+  // conversation and makes "is a card open" unanswerable.
+  let lookupCard: HTMLDivElement | null = null;
+
+  function hideLookupCard(): void {
+    if (lookupCard) {
+      lookupCard.remove();
+      lookupCard = null;
+    }
+  }
+
+  function showLookupCard(
+    result: { surface: string; gloss: string },
+    anchor: DOMRect | null
+  ): void {
+    hideLookupCard();
+    const card = document.createElement("div");
+    card.className = "sm-dialogue-lookup-card";
+    const term = document.createElement("span");
+    term.className = "sm-dialogue-lookup-card-term";
+    term.textContent = result.surface;
+    const gloss = document.createElement("span");
+    gloss.className = "sm-dialogue-lookup-card-gloss";
+    gloss.textContent = result.gloss;
+    card.append(term, gloss);
+    if (anchor) {
+      card.style.left = `${Math.round(anchor.left)}px`;
+      card.style.top = `${Math.round(anchor.bottom + 6)}px`;
+    }
+    document.body.appendChild(card);
+    lookupCard = card;
+  }
+
+  function handleSelectionLookup(event: {
+    selection: string;
+    anchor: DOMRect | null;
+  }): void {
+    if (!onSelectionLookup) return;
+    const result = onSelectionLookup(event.selection);
+    if (!result) {
+      hideLookupCard();
+      return;
+    }
+    showLookupCard(result, event.anchor);
+  }
+
+  // Any click that is not itself a new selection dismisses the card.
+  //
+  // NAMED AND REMOVED IN `dispose()`. This was an anonymous listener with the
+  // comment "registered once, not per card, so it cannot outlive the panel" --
+  // which had it backwards: registering once on `document` is precisely what
+  // made it outlive the panel, because nothing ever took it off. Every
+  // conversation left another listener holding `lookupCard` and `hideLookupCard`
+  // alive, and after dispose they fired against a panel that was gone.
+  function handleDocumentMouseDown(mouseEvent: MouseEvent): void {
+    if (lookupCard && !lookupCard.contains(mouseEvent.target as Node)) {
+      hideLookupCard();
+    }
+  }
+  document.addEventListener("mousedown", handleDocumentMouseDown);
 
   const container = document.createElement("div");
   container.className = "sm-dialogue-panel-container";
@@ -135,7 +205,10 @@ export function createRuntimeDialoguePanel(
   // duplicate ids), so the two presentations cannot each register their own.
   const scriptedBox: ScriptedDialogueBox = createScriptedDialogueBox(
     parentContainer,
-    { onTermHover: onTermHover ?? undefined }
+    {
+      onTermHover: onTermHover ?? undefined,
+      onSelectionLookup: onSelectionLookup ? handleSelectionLookup : undefined
+    }
   );
   let scriptedActive = false;
 
@@ -179,10 +252,23 @@ export function createRuntimeDialoguePanel(
   }
 
   function getSpeakerClass(speakerId: string | undefined): string | null {
-    if (speakerId === PLAYER_SPEAKER.speakerId) return "player";
-    if (speakerId === PLAYER_VO_SPEAKER.speakerId) return "player-vo";
-    if (speakerId === EXCERPT_SPEAKER.speakerId) return "excerpt";
-    return null;
+    const speaker = resolveDialogueSpeaker(speakerId, null);
+    if (!speaker) return null;
+    switch (speaker.kind) {
+      case "player":
+        return "player";
+      case "player-vo":
+        return "player-vo";
+      case "excerpt":
+        return "excerpt";
+      // Narrator deliberately has no modifier class: narration renders with the
+      // default entry styling. Called out explicitly because the previous
+      // if-chain simply fell through, which read as an omission rather than a
+      // decision. NPC lines likewise use the default.
+      case "narrator":
+      case "npc":
+        return null;
+    }
   }
 
   function createEntry(turn: ConversationTurnEnvelope): HTMLDivElement {
@@ -210,7 +296,10 @@ export function createRuntimeDialoguePanel(
     // Shared with the scripted box so both presentations render identical
     // language enrichment (focus terms, glosses, bursts, hover telemetry).
     entry.appendChild(
-      createTurnTextElement(turn, { onTermHover: onTermHover ?? undefined })
+      createTurnTextElement(turn, {
+        onTermHover: onTermHover ?? undefined,
+        onSelectionLookup: onSelectionLookup ? handleSelectionLookup : undefined
+      })
     );
     return entry;
   }
@@ -605,6 +694,12 @@ export function createRuntimeDialoguePanel(
     dispose() {
       for (const unregister of unregisterActions) unregister();
       stopCurrent();
+      // Both halves of select-to-translate: the document listener, and a card
+      // that is parented to document.body rather than to this panel -- so
+      // removing the container below would NOT take it with it, and a lookup
+      // card left open at dispose would simply stay on screen forever.
+      document.removeEventListener("mousedown", handleDocumentMouseDown);
+      hideLookupCard();
       scriptedBox.dispose();
       parentContainer.removeChild(container);
     }
@@ -1054,6 +1149,34 @@ function injectStyles() {
     }
 
     /* Introduce: gold with underline — "pay attention, this is new" */
+    /* 090.12: the select-to-translate card. Deliberately NOT gold or blue --
+       those two colours mean "the Teacher chose this word", and a lookup card
+       is the player asking, not the curriculum telling. */
+    .sm-dialogue-lookup-card {
+      position: fixed;
+      z-index: 60;
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      padding: 0.4rem 0.6rem;
+      border-radius: 0.35rem;
+      background: rgba(24, 24, 37, 0.97);
+      border: 1px solid rgba(205, 214, 244, 0.18);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+      pointer-events: auto;
+      max-width: 18rem;
+    }
+
+    .sm-dialogue-lookup-card-term {
+      font-size: 0.75rem;
+      color: rgba(205, 214, 244, 0.65);
+    }
+
+    .sm-dialogue-lookup-card-gloss {
+      font-size: 0.95rem;
+      color: #cdd6f4;
+    }
+
     .sm-dialogue-focus-term-introduce {
       color: #f5c35b;
       text-shadow: 0 0 10px rgba(245, 195, 91, 0.2);

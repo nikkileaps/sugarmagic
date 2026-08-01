@@ -10,8 +10,8 @@
  *
  * 087.1 floor:
  *   1. Due items:   lemma cards with retrievability < DUE_RETRIEVABILITY_FLOOR.
- *   2. Unintroduced functions: ordered by CEFR band (A1 highest priority).
- *   3. Scene affinity boost: unintroduced functions present in the scene get a bump;
+ *   2. Unintroduced competencies: ordered by CEFR band (A1 highest priority).
+ *   3. Scene affinity boost: unintroduced competencies present in the scene get a bump;
  *      the current NPC having authored lines for the function gets an extra bump.
  *
  * 087.2 extends:
@@ -21,7 +21,6 @@
  *   Priority formula: 0.80 * (1 - diverseCount / targetCount) -> [0.08, 0.80].
  *
  * 087.3 extends: ZPDES-shaped packing + per-scene comprehension-rate target.
- * 087.4 extends: strain curve + fluency valley scheduling.
  *
  * Exports:
  *   - DUE_RETRIEVABILITY_FLOOR
@@ -47,30 +46,46 @@ import {
 import type { SchedulerBoardView } from "./scheduler-board-view";
 import type { ScheduledTeachable, TeachReason, TeachSchedule } from "./teach-schedule";
 import { estimateSceneComprehensionRate, STRETCH_COMPREHENSION_FLOOR } from "./comprehension-rate";
-
-/** Retrievability below this = the learner is overdue on this item. */
-export const DUE_RETRIEVABILITY_FLOOR = 0.7;
+import { CEFR_BAND_ORDER } from "../learner";
 
 /**
- * 087.4: When fatigueScore reaches this threshold, the scheduler enters strain-suppressed
- * mode: introductions, function-affinity, and stretch candidates are dropped and fluency
- * items (well-known lemmas) are surfaced instead. Modeled on L4D's tension-relief curve.
- *
- * At 0.70 the learner needs (e.g.) 35 turns + heavy hovering or 3/4 probes failed.
- * The valley ends naturally as hoverRate drops with familiar material.
+ * 090.9: `DUE_RETRIEVABILITY_FLOOR` moved to `../learner/learning-status` -- it
+ * answers "is this card due", a learner fact that lived here only because the
+ * scheduler needed it first. Re-exported so existing importers keep working.
+ * (Its sibling `KNOWN_RETRIEVABILITY_FLOOR` lives there too -- it survived 090.5
+ * and was renamed from `FLUENCY_RETRIEVABILITY_FLOOR`, since it always really
+ * meant "the learner knows this" rather than anything about fluency recycling.)
  */
-export const STRAIN_SUPPRESS_THRESHOLD = 0.70;
+export { DUE_RETRIEVABILITY_FLOOR } from "../learner";
+import { DUE_RETRIEVABILITY_FLOOR } from "../learner";
 
-/**
- * 087.4: Lemmas at or above this retrievability are "well known" for fluency recycling.
- * Surfaces items the learner already has to create the at-ease consolidation experience.
- */
-export const FLUENCY_RETRIEVABILITY_FLOOR = 0.90;
+// 090.5: STRAIN_SUPPRESS_THRESHOLD and the whole fatigue/strain mechanism are
+// DELETED (nikki, 2026-07-30). It modelled an L4D-style tension-relief valley:
+// once `fatigueScore` crossed 0.70 the scheduler stopped introducing new items
+// and surfaced well-known ones instead.
+//
+// THIS WAS LIVE CODE, NOT DEAD CODE. An earlier reading of this claimed it never
+// ran, on the grounds that `fatigueScore` hangs off `profile.currentSession` and
+// only a `session-start` event creates one -- which no production code emits.
+// That was wrong and is recorded here so nobody re-derives it: `applyObservation`
+// LAZILY CREATES `currentSession`, the observe middleware drives the reducer
+// every turn, and fatigue was recomputed on each observation. Strain could and
+// did fire. Tracing one writer of a field is not tracing all of them.
+//
+// Deleted anyway, for the reason that outlasts the mechanism: this was the
+// SCHEDULER deciding what should be taught -- suppressing introductions, picking
+// comfort vocabulary -- which is the second-authority condition this epic exists
+// to remove. If pacing-for-strain returns, it arrives as LEARNER state the
+// Teacher reads (the capacity half of the two doors), not as a branch here that
+// overrides the Teacher's slate after the fact. Whether players want it at all
+// is unproven, so it is not being rebuilt speculatively.
+//
+// Deleted with it: fluency recycling, which only ran inside the suppressed
+// branch. Due-based resurfacing is untouched and unrelated -- that is FSRS decay
+// through `getLearningStatus` (learner/learning-status.ts), section 1 below.
 
-/** Max fluency items surfaced per turn in strain-suppressed mode. */
-const FLUENCY_ITEM_CAP = 3;
 
-const CEFR_BAND_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
+// 090.9: was a local copy, one of six. The order lives in contracts now.
 
 function bandIndex(band: string): number {
   const idx = (CEFR_BAND_ORDER as readonly string[]).indexOf(band);
@@ -96,15 +111,14 @@ export class OuterLoopScheduler {
     const { learner, curriculum, scene, conversationId, npcDefinitionId, targetLanguage } = board;
     const now = Date.now();
 
-    // Cold start: no card history AND no introduced functions means the learner
+    // Cold start: no card history AND no introduced competencies means the learner
     // has not started yet. Return empty schedule so rendering behavior is unchanged.
     const isColdStart =
       Object.keys(learner.lemmaCards).length === 0 &&
-      curriculum.introducedFunctionIds.size === 0;
+      curriculum.introducedCompetencyIds.size === 0;
 
     const dayAxisDegraded = scene.dayIndex === null;
     const sceneComprehensionRate = estimateSceneComprehensionRate(learner.lemmaCards, scene.sceneLemmaIds);
-    const strainSuppressed = learner.fatigueScore >= STRAIN_SUPPRESS_THRESHOLD;
 
     if (isColdStart) {
       void emitTelemetry(
@@ -116,7 +130,6 @@ export class OuterLoopScheduler {
           teachableCount: 0,
           isColdStart: true,
           learnerBand: learner.cefrBand,
-          fatigueScore: learner.fatigueScore,
           dueItemCount: 0,
           debtServiceCount: 0,
           introductionCount: 0,
@@ -127,7 +140,6 @@ export class OuterLoopScheduler {
           dayAxisDegraded,
           sceneComprehensionRate,
           stretchAllowanceActive: false,
-          strainSuppressed: false
         })
       );
       return {
@@ -137,7 +149,6 @@ export class OuterLoopScheduler {
         conversationId,
         sceneComprehensionRate,
         stretchAllowanceActive: false,
-        strainSuppressed: false
       };
     }
 
@@ -150,7 +161,7 @@ export class OuterLoopScheduler {
       if (card.retrievability < DUE_RETRIEVABILITY_FLOOR) {
         candidates.push({
           id: card.lemmaId,
-          kind: "lemma",
+          kind: "vocabulary",
           priority: clamp01(1.0 - card.retrievability),
           teachReason: "due",
           affinityNpcIds: []
@@ -177,29 +188,33 @@ export class OuterLoopScheduler {
       });
     }
 
-    // --- 3. Unintroduced functions, band ordering as the floor ---
-    // Skipped entirely in strain-suppressed mode (087.4). When strain is high the
-    // scheduler surfaces fluency items (section 4) instead of new introductions.
+    // --- 3. Unintroduced competencies, band ordering as the floor ---
     //
-    // Above-band (band+1) functions are gated behind the stretch allowance:
+    // Above-band (band+1) competencies are gated behind the stretch allowance:
     // only one is included per turn, only when scene comprehension >= STRETCH_COMPREHENSION_FLOOR,
     // and only when the function has scene affinity.
     const learnerBandIdx = bandIndex(learner.cefrBand);
     let stretchCandidateAdded = false;
 
-    if (!strainSuppressed) for (const fn of curriculum.availableFunctions) {
-      if (curriculum.introducedFunctionIds.has(fn.functionId)) continue;
-      if (curriculum.activeDebts.has(fn.functionId)) continue;
+    for (const fn of curriculum.availableCompetencies) {
+      if (curriculum.introducedCompetencyIds.has(fn.competencyId)) continue;
+      if (curriculum.activeDebts.has(fn.competencyId)) continue;
 
       const fnBandIdx = bandIndex(fn.band);
       const isAboveBand = fnBandIdx > learnerBandIdx;
 
-      // Stretch gate: above-band functions require comprehension floor + scene affinity,
-      // and only one is allowed per turn.
+      // Stretch gate: above-band functions require a comprehension floor, and
+      // only one is allowed per turn.
+      //
+      // 090.2 removed a third condition here -- scene affinity. It asked whether
+      // the scene's compiled chunks intersected the competency's target-language
+      // forms, which could only be true if Spanish had leaked into English
+      // authored text, so it was gating on a question that answered "no" almost
+      // always. Whether a scene calls for a competency is the Teacher's call
+      // against the situation, not a precondition applied before it runs.
       if (isAboveBand) {
         if (stretchCandidateAdded) continue;
         if (sceneComprehensionRate < STRETCH_COMPREHENSION_FLOOR) continue;
-        if (!scene.functionTags.sceneFunctions.includes(fn.functionId)) continue;
       }
 
       // familiarityBoost (087.3): fraction of constituent chunks already in card store × 0.05.
@@ -211,66 +226,28 @@ export class OuterLoopScheduler {
       // Band-derived base priority: A1 = 0.50, decreasing to C2 = 0.20.
       const basePriority = 0.50 - (fnBandIdx / CEFR_BAND_ORDER.length) * 0.30;
 
-      let affinityBoost = 0;
-      const affinityNpcIds: string[] = [];
-      const isInScene = scene.functionTags.sceneFunctions.includes(fn.functionId);
-
-      if (isInScene) {
-        affinityBoost += 0.15;
-        for (const [npcId, npcFns] of Object.entries(scene.functionTags.npcFunctions)) {
-          if (npcFns.includes(fn.functionId)) {
-            affinityNpcIds.push(npcId);
-          }
-        }
-        if (
-          npcDefinitionId &&
-          scene.functionTags.npcFunctions[npcDefinitionId]?.includes(fn.functionId)
-        ) {
-          affinityBoost += 0.10;
-        }
-      }
-
-      const teachReason: TeachReason = isAboveBand
-        ? "stretch"
-        : isInScene
-        ? "function-affinity"
-        : "introduction";
+      // 090.2: scene-affinity boosts (+0.15 in-scene, +0.10 for the bound NPC)
+      // were removed with the field they read. They were scene-content ranking
+      // computed before the Teacher runs -- the budgeter's shape -- and they
+      // sourced from a gate that reported an empty scene almost always, so the
+      // boosts were dead in practice as well as wrong in principle.
+      const teachReason: TeachReason = isAboveBand ? "stretch" : "introduction";
 
       if (isAboveBand) stretchCandidateAdded = true;
 
       candidates.push({
-        id: fn.functionId,
-        kind: "function",
-        priority: clamp01(basePriority + affinityBoost + familiarityBoost),
+        id: fn.competencyId,
+        kind: "competency",
+        priority: clamp01(basePriority + familiarityBoost),
         teachReason,
-        affinityNpcIds
+        affinityNpcIds: []
       });
     }
 
     const stretchAllowanceActive = stretchCandidateAdded;
 
-    // --- 4. Fluency recycling (087.4, strain-suppressed mode only) ---
-    // Surface well-known lemmas (retrievability >= FLUENCY_RETRIEVABILITY_FLOOR) as positive
-    // reinforcement. These are things the learner already knows, included so NPCs use familiar
-    // phrases during the valley period. Capped at FLUENCY_ITEM_CAP per turn.
-    // Mentor-line delivery timing: deferred to when a mentor NPC ships in authored content.
-    // Revisit at this section when a mentor NPC exists (see plan 087 deferred list).
-    if (strainSuppressed) {
-      let fluencyAdded = 0;
-      for (const [lemmaId, card] of Object.entries(learner.lemmaCards)) {
-        if (fluencyAdded >= FLUENCY_ITEM_CAP) break;
-        if (lemmaId.startsWith("chunk:")) continue;
-        if (card.retrievability < FLUENCY_RETRIEVABILITY_FLOOR) continue;
-        candidates.push({
-          id: lemmaId,
-          kind: "lemma",
-          priority: card.retrievability * 0.20, // low band: below due/debt but present
-          teachReason: "fluency",
-          affinityNpcIds: []
-        });
-        fluencyAdded += 1;
-      }
-    }
+    // 090.5: fluency recycling deleted with strain -- it only ran inside the
+    // suppressed branch, which never fired.
 
     // Sort descending by priority; break ties alphabetically by id for determinism.
     candidates.sort((a, b) => b.priority - a.priority || a.id.localeCompare(b.id));
@@ -290,7 +267,6 @@ export class OuterLoopScheduler {
         teachableCount: candidates.length,
         isColdStart: false,
         learnerBand: learner.cefrBand,
-        fatigueScore: learner.fatigueScore,
         dueItemCount: dueCount,
         debtServiceCount,
         introductionCount: introCount,
@@ -301,7 +277,6 @@ export class OuterLoopScheduler {
         dayAxisDegraded,
         sceneComprehensionRate,
         stretchAllowanceActive,
-        strainSuppressed
       })
     );
 
@@ -312,7 +287,6 @@ export class OuterLoopScheduler {
       conversationId,
       sceneComprehensionRate,
       stretchAllowanceActive,
-      strainSuppressed
     };
   }
 }

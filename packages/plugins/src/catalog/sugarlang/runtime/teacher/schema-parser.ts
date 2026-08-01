@@ -18,6 +18,14 @@
  * Status: active
  */
 
+import { clampRatioToPosture } from "./band-envelope";
+import {
+  isVocabularyRef,
+  teachableRefKey,
+  toVocabularyRefs,
+  vocabularyRefs,
+  type TeachableRef
+} from "../contracts/teachable-ref";
 import Ajv from "ajv";
 import type { ErrorObject } from "ajv";
 import type {
@@ -25,7 +33,6 @@ import type {
   TeacherContext,
   GlossingStrategy,
   LemmaRef,
-  LexicalPrescription,
   PedagogicalDirective
 } from "../types";
 import {
@@ -35,6 +42,21 @@ import {
   type TelemetryEvent,
   type TelemetrySink
 } from "../telemetry/telemetry";
+import { EMPTY_NPC_CONTEXT } from "../situation";
+import { computePacingSignals } from "../learner";
+import { resolveQuestEssentialLemmaRefs } from "./quest-essential";
+
+/**
+ * 090.4: the probe-pacing signals, derived rather than carried. See
+ * learner/pacing-signals.ts -- both are pure functions of the learner's cards
+ * plus the conversation's turn count, so a stored copy could only drift.
+ */
+function pacingSignals(context: TeacherContext) {
+  return computePacingSignals(
+    context.learner,
+    context.situation?.turnsSinceLastProbe ?? 0
+  );
+}
 
 const ajv = new Ajv({
   allErrors: true,
@@ -98,6 +120,45 @@ const lemmaRefSchema = {
   }
 } as const;
 
+/**
+ * 090.4: what the Teacher may name on the slate -- a word OR a competency.
+ *
+ * This schema is the thing that makes "introduce ask-where" expressible. While
+ * `targetVocab` accepted only `lemmaRefSchema`, a competency could reach
+ * teaching in exactly one way: flattened into a `chunk:` pseudo-lemma and
+ * smuggled through the lemma channel. The union closes that side door by
+ * opening a front one.
+ *
+ * `kind` is REQUIRED on both branches rather than defaulted to "vocabulary".
+ * A default would mean a malformed competency silently parses as a word with a
+ * missing lemmaId, and the failure would surface much later as an atlas miss.
+ */
+const teachableRefSchema = {
+  anyOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "lemmaId", "lang"],
+      properties: {
+        kind: { const: "vocabulary" },
+        lemmaId: { type: "string", minLength: 1 },
+        lang: { type: "string", minLength: 1 },
+        surfaceForm: { type: "string" }
+      }
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "competencyId", "lang"],
+      properties: {
+        kind: { const: "competency" },
+        competencyId: { type: "string", minLength: 1 },
+        lang: { type: "string", minLength: 1 }
+      }
+    }
+  ]
+} as const;
+
 const pedagogicalDirectiveSchema = {
   type: "object",
   additionalProperties: false,
@@ -121,9 +182,9 @@ const pedagogicalDirectiveSchema = {
       additionalProperties: false,
       required: ["introduce", "reinforce", "avoid"],
       properties: {
-        introduce: { type: "array", items: lemmaRefSchema },
-        reinforce: { type: "array", items: lemmaRefSchema },
-        avoid: { type: "array", items: lemmaRefSchema }
+        introduce: { type: "array", items: teachableRefSchema },
+        reinforce: { type: "array", items: teachableRefSchema },
+        avoid: { type: "array", items: teachableRefSchema }
       }
     },
     supportPosture: { enum: [...SUPPORT_POSTURES] },
@@ -260,6 +321,21 @@ function normalizeInvalidationTrigger(value: unknown): DirectiveLifetime["invali
   return null;
 }
 
+/**
+ * Accepts a Teacher that answered with bare strings -- `introduce: ["queso"]` --
+ * and lifts them into the object shape the schema requires.
+ *
+ * `kind` IS PART OF THAT SHAPE. It was omitted until 2026-07-31, which made this
+ * whole function self-defeating: the schema requires `["kind", "lemmaId",
+ * "lang"]` (090.4 made a teachable a discriminated union, deliberately without a
+ * default), so the leniency path produced precisely the object validation would
+ * reject. A model answering in the simpler form did not get a helpful coercion,
+ * it got a parse failure and a silent fall back to the deterministic policy.
+ *
+ * A bare string is always VOCABULARY. A competency cannot arrive this way --
+ * there is no bare-string form of `{kind: "competency", competencyId}` -- so
+ * defaulting here does not swallow one.
+ */
 function coerceLemmaArrayEntries(
   value: unknown,
   targetLanguage: string
@@ -267,7 +343,7 @@ function coerceLemmaArrayEntries(
   if (!Array.isArray(value)) return undefined;
   return value.map((entry) => {
     if (typeof entry === "string" && entry.trim().length > 0) {
-      return { lemmaId: entry.trim(), lang: targetLanguage };
+      return { kind: "vocabulary", lemmaId: entry.trim(), lang: targetLanguage };
     }
     return entry;
   });
@@ -349,6 +425,32 @@ function normalizeDirectiveShape(
   return normalized;
 }
 
+/**
+ * 090.4: sanitizes EITHER kind of teachable.
+ *
+ * A test caught this on its first run: repair silently dropped every competency,
+ * because this function only understood the word shape and anything it did not
+ * recognize returned null. That is the same disappearance the whole story is
+ * about, reintroduced one layer down -- the slate could carry a competency, the
+ * schema accepted it, and then repair quietly removed it again.
+ */
+function sanitizeTeachableRef(value: unknown): TeachableRef | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (value.kind === "competency") {
+    const competencyId =
+      typeof value.competencyId === "string" ? value.competencyId.trim() : "";
+    const lang = typeof value.lang === "string" ? value.lang.trim() : "";
+    if (!competencyId || !lang) {
+      return null;
+    }
+    return { kind: "competency", competencyId, lang };
+  }
+  const lemma = sanitizeLemmaRef(value);
+  return lemma ? { ...lemma, kind: "vocabulary" } : null;
+}
+
 function sanitizeLemmaRef(value: unknown): LemmaRef | null {
   if (!isRecord(value)) {
     return null;
@@ -378,30 +480,51 @@ function getPrescriptionSet(lemmas: LemmaRef[]): Set<string> {
 
 function buildQuestEssentialSet(context: TeacherContext): Set<string> {
   return new Set(
-    context.activeQuestEssentialLemmas.map(
-      (lemma) => `${lemma.lemmaRef.lang}:${lemma.lemmaRef.lemmaId}`
+    resolveQuestEssentialLemmaRefs(context.situation, context.atlas, context.lang).map(
+      (lemma) => `${lemma.lang}:${lemma.lemmaId}`
     )
   );
 }
 
+function hasQuestEssential(context: TeacherContext): boolean {
+  return (
+    resolveQuestEssentialLemmaRefs(context.situation, context.atlas, context.lang).length > 0
+  );
+}
+
+/**
+ * Sanitizes a lemma array, dropping quest-essential lemmas and duplicates.
+ *
+ * `allowed` is a membership gate that is now almost always `null` -- 090.4
+ * removed prescription membership as a constraint on what the Teacher may name.
+ * It is kept as a parameter rather than deleted because the contamination
+ * telemetry below still needs to ask "which of these WOULD a given set have
+ * excluded", and because a future caller may legitimately gate on something
+ * else. `null` means "no membership constraint", which is deliberately NOT the
+ * same as an empty set -- an empty set would exclude everything, and that
+ * distinction is exactly the kind that has bitten this codebase repeatedly.
+ */
 function filterLemmaArray(
   value: unknown,
-  allowed: Set<string>,
+  allowed: Set<string> | null,
   questEssential: Set<string>
-): LemmaRef[] {
+): TeachableRef[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
-  const result: LemmaRef[] = [];
+  const result: TeachableRef[] = [];
   const seen = new Set<string>();
   for (const entry of value) {
-    const lemma = sanitizeLemmaRef(entry);
+    const lemma = sanitizeTeachableRef(entry);
     if (!lemma) {
       continue;
     }
-    const key = `${lemma.lang}:${lemma.lemmaId}`;
-    if (!allowed.has(key) || questEssential.has(key) || seen.has(key)) {
+    const key = teachableRefKey(lemma);
+    if (allowed !== null && !allowed.has(key)) {
+      continue;
+    }
+    if (questEssential.has(key) || seen.has(key)) {
       continue;
     }
     seen.add(key);
@@ -412,15 +535,16 @@ function filterLemmaArray(
 
 function filterPendingTargets(value: unknown, context: TeacherContext): LemmaRef[] {
   const allowed = new Set(
-    context.pendingProvisionalLemmas.map(
+    pacingSignals(context).pendingProvisionalLemmas.map(
       (pending) => `${pending.lemmaRef.lang}:${pending.lemmaRef.lemmaId}`
     )
   );
-  return filterLemmaArray(value, allowed, new Set<string>());
+  // Probe targets are word-only -- you probe a word, not an act.
+  return vocabularyRefs(filterLemmaArray(value, allowed, new Set<string>()));
 }
 
 function takeOldestPendingTargets(context: TeacherContext): LemmaRef[] {
-  return [...context.pendingProvisionalLemmas]
+  return [...pacingSignals(context).pendingProvisionalLemmas]
     .sort((left, right) => {
       if (left.turnsPending !== right.turnsPending) {
         return right.turnsPending - left.turnsPending;
@@ -487,7 +611,7 @@ function getDefaultGlossingStrategy(
   context: TeacherContext,
   introduce: LemmaRef[]
 ): GlossingStrategy {
-  if (context.activeQuestEssentialLemmas.length > 0) {
+  if (hasQuestEssential(context)) {
     return "parenthetical";
   }
   if (introduce.length > 0) {
@@ -512,9 +636,22 @@ function getDefaultSentenceComplexityCap(
   }
 }
 
+/**
+ * 090.3b raised `maxTurns` from 3 to 20, because it stopped being the policy.
+ *
+ * At 3 it WAS the invalidation policy -- the Teacher re-ran every 3-4 turns
+ * regardless of whether anything had changed. The situation key governs that
+ * now, so a short countdown would just reintroduce the churn the key removes.
+ *
+ * It survives as a BACKSTOP for one specific failure: if the key is subtly
+ * wrong and never moves, the Teacher silently stops running and the player
+ * receives one directive forever, with no test failing and nothing logged. 20
+ * bounds that without re-creating turn-based re-slating. Once the key is proven
+ * in play this can go to zero meaning "never", or go entirely.
+ */
 function getDefaultDirectiveLifetime(): DirectiveLifetime {
   return {
-    maxTurns: 3,
+    maxTurns: 20,
     invalidateOn: ["quest_stage_change", "location_change"]
   };
 }
@@ -528,8 +665,13 @@ function enforceDirectiveRequirements(
   context: TeacherContext,
   telemetry: TelemetrySink
 ): DirectiveParseError | null {
+  const questEssentialLemmas = resolveQuestEssentialLemmaRefs(
+    context.situation,
+    context.atlas,
+    context.lang
+  );
   if (
-    context.activeQuestEssentialLemmas.length > 0 &&
+    questEssentialLemmas.length > 0 &&
     (directive.glossingStrategy === "hover-only" ||
       directive.glossingStrategy === "none")
   ) {
@@ -539,10 +681,10 @@ function enforceDirectiveRequirements(
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: context.scene.sceneId,
+        sceneId: context.situation?.sceneId ?? "unknown-scene",
         originalGlossingStrategy: directive.glossingStrategy,
         correctedGlossingStrategy: "parenthetical",
-        questEssentialLemmaCount: context.activeQuestEssentialLemmas.length
+        questEssentialLemmaCount: questEssentialLemmas.length
       }),
       telemetry
     );
@@ -560,15 +702,16 @@ function enforceDirectiveRequirements(
     };
   }
 
-  if (context.probeFloorState.hardFloorReached && !directive.comprehensionCheck.trigger) {
+  const probeFloorState = pacingSignals(context).probeFloorState;
+  if (probeFloorState.hardFloorReached && !directive.comprehensionCheck.trigger) {
     maybeEmit(
       createTelemetryEvent("comprehension.director-hard-floor-violated", {
         conversationId: context.conversationId,
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: context.scene.sceneId,
-        hardFloorReason: context.probeFloorState.hardFloorReason ?? null
+        sceneId: context.situation?.sceneId ?? "unknown-scene",
+        hardFloorReason: probeFloorState.hardFloorReason ?? null
       }),
       telemetry
     );
@@ -631,6 +774,20 @@ export function parseDirective(
   }
 
   const directive = parsed as PedagogicalDirective;
+
+  // 090.4: the ratio is GOVERNED, not merely validated.
+  //
+  // The schema accepts any number in [0,1], so a model answering "anchored" with
+  // 0.4 passed straight through -- observed in play, against a table that says
+  // anchored means 0.3. The old `clampRatio` only ran on the REPAIR path, so a
+  // well-formed directive was never checked against the posture it claimed.
+  //
+  // One arithmetic, in band-envelope: see `clampRatioToPosture`.
+  directive.targetLanguageRatio = clampRatioToPosture(
+    directive.targetLanguageRatio,
+    directive.supportPosture
+  );
+
   if (options.context) {
     const enforcementError = enforceDirectiveRequirements(
       directive,
@@ -645,9 +802,13 @@ export function parseDirective(
   return { directive };
 }
 
+/**
+ * 090.4b: `prescription` is no longer a parameter. Once the membership filter
+ * and the snap-back were removed, nothing in here read it -- keeping it would
+ * have advertised an influence that no longer exists.
+ */
 export function repairDirective(
   partial: unknown,
-  prescription: LexicalPrescription,
   context: TeacherContext,
   options: RepairDirectiveOptions = {}
 ): PedagogicalDirective {
@@ -655,27 +816,29 @@ export function repairDirective(
   const record = isRecord(partial) ? partial : {};
   const targetVocab = isRecord(record.targetVocab) ? record.targetVocab : {};
   const questEssential = buildQuestEssentialSet(context);
-  const introduceAllowed = getPrescriptionSet(prescription.introduce);
-  const reinforceAllowed = getPrescriptionSet(prescription.reinforce);
-  const avoidAllowed = getPrescriptionSet(prescription.avoid);
 
-  const introduce = filterLemmaArray(
-    targetVocab.introduce,
-    introduceAllowed,
-    questEssential
-  );
-  const reinforce = filterLemmaArray(
-    targetVocab.reinforce,
-    reinforceAllowed,
-    questEssential
-  );
-  const avoid = filterLemmaArray(targetVocab.avoid, avoidAllowed, questEssential);
+  // 090.4: PRESCRIPTION MEMBERSHIP NO LONGER FILTERS THE REPAIR.
+  //
+  // This was the SECOND fence, and the dangerous one. The prompt's version was
+  // visible -- an instruction the model could be seen obeying. This one was
+  // code: it filtered targetVocab against the prescription and then, if the
+  // filter emptied the list, DEFAULTED BACK to the prescription's own lemmas.
+  // So removing the prompt line alone would have changed nothing here; a
+  // directive needing repair would silently snap back to the old pool and look
+  // like the Teacher had simply agreed with the budgeter.
+  //
+  // Sanitization stays. What goes is membership: the Teacher may now name a
+  // lemma the prescription never contained, which is the entire point.
+  const introduce = filterLemmaArray(targetVocab.introduce, null, questEssential);
+  const reinforce = filterLemmaArray(targetVocab.reinforce, null, questEssential);
+  const avoid = filterLemmaArray(targetVocab.avoid, null, questEssential);
 
   const contaminatedLemmaIds = [
-    ...filterLemmaArray(targetVocab.introduce, introduceAllowed, new Set<string>()),
-    ...filterLemmaArray(targetVocab.reinforce, reinforceAllowed, new Set<string>()),
-    ...filterLemmaArray(targetVocab.avoid, avoidAllowed, new Set<string>())
+    ...filterLemmaArray(targetVocab.introduce, null, new Set<string>()),
+    ...filterLemmaArray(targetVocab.reinforce, null, new Set<string>()),
+    ...filterLemmaArray(targetVocab.avoid, null, new Set<string>())
   ]
+    .filter(isVocabularyRef)
     .filter((lemma) => questEssential.has(`${lemma.lang}:${lemma.lemmaId}`))
     .map((lemma) => lemma.lemmaId);
   if (contaminatedLemmaIds.length > 0) {
@@ -685,31 +848,45 @@ export function repairDirective(
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: context.scene.sceneId,
+        sceneId: context.situation?.sceneId ?? "unknown-scene",
         contaminatedLemmas: contaminatedLemmaIds
       }),
       telemetry
     );
   }
 
-  const repairedIntroduce = introduce.length > 0 ? introduce : [...prescription.introduce];
-  const repairedReinforce =
-    reinforce.length > 0 ? reinforce : [...prescription.reinforce];
-  const repairedAvoid = avoid.length > 0 ? avoid : [...prescription.avoid];
+  // 090.4: THE SNAP-BACK IS GONE.
+  //
+  // These three lines used to read `introduce.length > 0 ? introduce :
+  // [...prescription.introduce]` -- when repair emptied a list, it refilled from
+  // the prescription. Combined with the membership filter above, that made the
+  // prescription the true author of every repaired directive while looking like
+  // the Teacher's own output.
+  //
+  // An empty list is now an empty list. It means the Teacher named nothing
+  // usable for this turn, which is a legitimate answer and must be legible as
+  // one; refilling it invents a decision nobody made. The prescription is still
+  // gone entirely from this function.
+  const repairedIntroduce = introduce;
+  const repairedReinforce = reinforce;
+  const repairedAvoid = avoid;
 
   const supportPosture = isOneOf(record.supportPosture, SUPPORT_POSTURES)
     ? record.supportPosture
     : getDefaultSupportPosture(context);
-  const targetLanguageRatio = clampRatio(
-    record.targetLanguageRatio,
-    getDefaultTargetLanguageRatio(supportPosture)
+  // 090.4: same governor as the validated path -- one arithmetic, one table.
+  const targetLanguageRatio = clampRatioToPosture(
+    typeof record.targetLanguageRatio === "number"
+      ? record.targetLanguageRatio
+      : Number.NaN,
+    supportPosture
   );
   const interactionStyle = isOneOf(record.interactionStyle, INTERACTION_STYLES)
     ? record.interactionStyle
     : getDefaultInteractionStyle(context);
   const glossingStrategy = isOneOf(record.glossingStrategy, GLOSSING_STRATEGIES)
     ? record.glossingStrategy
-    : getDefaultGlossingStrategy(context, repairedIntroduce);
+    : getDefaultGlossingStrategy(context, vocabularyRefs(repairedIntroduce));
   const sentenceComplexityCap = isOneOf(
     record.sentenceComplexityCap,
     SENTENCE_COMPLEXITY_CAPS
@@ -720,17 +897,18 @@ export function repairDirective(
   const rawComprehension = isRecord(record.comprehensionCheck)
     ? record.comprehensionCheck
     : {};
+  const probeFloorState = pacingSignals(context).probeFloorState;
   const shouldTriggerProbe =
     typeof rawComprehension.trigger === "boolean"
-      ? rawComprehension.trigger || context.probeFloorState.hardFloorReached
-      : context.probeFloorState.hardFloorReached;
+      ? rawComprehension.trigger || probeFloorState.hardFloorReached
+      : probeFloorState.hardFloorReached;
   let targetLemmas = shouldTriggerProbe
     ? filterPendingTargets(rawComprehension.targetLemmas, context)
     : [];
   if (
     shouldTriggerProbe &&
     targetLemmas.length === 0 &&
-    (context.probeFloorState.softFloorReached || context.probeFloorState.hardFloorReached)
+    (probeFloorState.softFloorReached || probeFloorState.hardFloorReached)
   ) {
     targetLemmas = takeOldestPendingTargets(context);
   }
@@ -744,11 +922,11 @@ export function repairDirective(
   const triggerReason = shouldTriggerProbe
     ? isOneOf(rawComprehension.triggerReason, PROBE_REASONS)
       ? rawComprehension.triggerReason
-      : context.probeFloorState.hardFloorReached
-        ? context.probeFloorState.hardFloorReason === "lemma-age"
+      : probeFloorState.hardFloorReached
+        ? probeFloorState.hardFloorReason === "lemma-age"
           ? "hard-floor-lemma-age"
           : "hard-floor-turns"
-        : context.probeFloorState.softFloorReached
+        : probeFloorState.softFloorReached
           ? "soft-floor"
           : "director-discretion"
     : undefined;
@@ -776,6 +954,9 @@ export function repairDirective(
 
   return {
     targetVocab: {
+      // 090.4: repair still parses word-shaped refs from the model. Competency
+      // parsing is the next piece; lifting here keeps the union honest rather
+      // than leaving a LemmaRef masquerading as a TeachableRef.
       introduce: repairedIntroduce,
       reinforce: repairedReinforce,
       avoid: repairedAvoid
@@ -784,7 +965,7 @@ export function repairDirective(
     targetLanguageRatio,
     interactionStyle,
     glossingStrategy:
-      context.activeQuestEssentialLemmas.length > 0 &&
+      hasQuestEssential(context) &&
       (glossingStrategy === "hover-only" || glossingStrategy === "none")
         ? "parenthetical"
         : glossingStrategy,
@@ -799,8 +980,8 @@ export function repairDirective(
             typeof rawComprehension.characterVoiceReminder === "string" &&
             rawComprehension.characterVoiceReminder.trim()
               ? rawComprehension.characterVoiceReminder.trim()
-              : context.npc.displayName != null
-                ? `Stay in ${context.npc.displayName}'s character voice.`
+              : (context.situation?.npc ?? EMPTY_NPC_CONTEXT).displayName != null
+                ? `Stay in ${(context.situation?.npc ?? EMPTY_NPC_CONTEXT).displayName}'s character voice.`
                 : "Stay in the NPC's character voice.",
           acceptableResponseForms: isOneOf(
             rawComprehension.acceptableResponseForms,

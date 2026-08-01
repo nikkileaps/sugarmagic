@@ -14,6 +14,8 @@
  * Status: active
  */
 
+import { traceTeacherDirective } from "./teacher-trace";
+import { learnerKey } from "../learner";
 import { isInPostPlacementCalibration } from "./calibration-mode";
 import { DirectiveCache } from "./directive-cache";
 import { FallbackTeacherPolicy } from "./policies/fallback-teacher-policy";
@@ -28,6 +30,7 @@ import {
   emitTelemetry,
   type TelemetrySink
 } from "../telemetry/telemetry";
+import { EMPTY_NPC_CONTEXT } from "../situation";
 import { TeacherInvocationError } from "./policies/llm-teacher-policy";
 
 export interface SugarLangTeacherOptions {
@@ -57,7 +60,18 @@ export class SugarLangTeacher {
       ...context,
       calibrationActive
     };
-    const cached = this.cache.get(effectiveContext.conversationId);
+    const sceneId = effectiveContext.situation?.sceneId ?? "unknown-scene";
+    const npc = effectiveContext.situation?.npc ?? EMPTY_NPC_CONTEXT;
+    // 090.4: the learner key is computed HERE rather than carried on the
+    // context, because it must reflect the learner as of THIS turn -- the whole
+    // point is catching a change that happened since the last decision.
+    const keysNow = {
+      ...(effectiveContext.situationKey === undefined
+        ? {}
+        : { situationKey: effectiveContext.situationKey }),
+      learnerKey: learnerKey(effectiveContext.learner)
+    };
+    const cached = this.cache.get(effectiveContext.conversationId, keysNow);
     if (cached) {
       await emitTelemetry(
         this.telemetry,
@@ -66,9 +80,9 @@ export class SugarLangTeacher {
           sessionId: effectiveContext.telemetryContext?.sessionId,
           turnId: effectiveContext.telemetryContext?.turnId,
           timestamp: Date.now(),
-          sceneId: effectiveContext.scene.sceneId,
-          npcId: effectiveContext.npc.npcDefinitionId,
-          npcDisplayName: effectiveContext.npc.displayName,
+          sceneId: sceneId,
+          npcId: npc.npcDefinitionId,
+          npcDisplayName: npc.displayName,
           fallback: cached.isFallbackDirective
         })
       );
@@ -79,9 +93,9 @@ export class SugarLangTeacher {
           sessionId: effectiveContext.telemetryContext?.sessionId,
           turnId: effectiveContext.telemetryContext?.turnId,
           timestamp: Date.now(),
-          sceneId: effectiveContext.scene.sceneId,
-          npcId: effectiveContext.npc.npcDefinitionId,
-          npcDisplayName: effectiveContext.npc.displayName,
+          sceneId: sceneId,
+          npcId: npc.npcDefinitionId,
+          npcDisplayName: npc.displayName,
           directive: cached,
           cacheHit: true,
           fallback: cached.isFallbackDirective,
@@ -89,6 +103,11 @@ export class SugarLangTeacher {
           parseMode: "cached"
         })
       );
+      traceTeacherDirective({
+        context: effectiveContext,
+        directive: cached,
+        source: "cache"
+      });
       return cached;
     }
 
@@ -105,9 +124,14 @@ export class SugarLangTeacher {
       directive = await this.fallbackPolicy.invoke(effectiveContext, {
         triggerReasonOverride: error.fallbackTriggerReason
       });
+      traceTeacherDirective({
+        context: effectiveContext,
+        directive,
+        source: "fallback"
+      });
     }
 
-    this.cache.set(effectiveContext.conversationId, directive);
+    this.cache.set(effectiveContext.conversationId, directive, keysNow);
     await emitTelemetry(
       this.telemetry,
       createTelemetryEvent("director.invocation-resolved", {
@@ -115,9 +139,9 @@ export class SugarLangTeacher {
         sessionId: effectiveContext.telemetryContext?.sessionId,
         turnId: effectiveContext.telemetryContext?.turnId,
         timestamp: Date.now(),
-        sceneId: effectiveContext.scene.sceneId,
-        npcId: effectiveContext.npc.npcDefinitionId,
-        npcDisplayName: effectiveContext.npc.displayName,
+        sceneId: sceneId,
+        npcId: npc.npcDefinitionId,
+        npcDisplayName: npc.displayName,
         outcome,
         fallback: directive.isFallbackDirective,
         calibrationActive

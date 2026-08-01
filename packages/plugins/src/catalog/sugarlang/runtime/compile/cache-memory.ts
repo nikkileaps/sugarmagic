@@ -17,7 +17,7 @@
  */
 
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
-import type { CompiledSceneLexicon } from "../types";
+import type { SceneVocabularyModel } from "../types";
 import {
   BaseSugarlangCompileCache,
   createCompileCacheKey,
@@ -25,7 +25,7 @@ import {
 } from "./sugarlang-compile-cache";
 
 interface MemoryCacheRecord {
-  lexicon: CompiledSceneLexicon;
+  lexicon: SceneVocabularyModel;
   estimatedBytes: number;
   accessOrdinal: number;
 }
@@ -86,7 +86,7 @@ export class MemoryCompileCache extends BaseSugarlangCompileCache {
     sceneId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
-  ): Promise<CompiledSceneLexicon | null> {
+  ): Promise<SceneVocabularyModel | null> {
     const key = createCompileCacheKey(sceneId, contentHash, profile);
     const record = this.records.get(key);
     if (!record) {
@@ -97,7 +97,7 @@ export class MemoryCompileCache extends BaseSugarlangCompileCache {
     return record.lexicon;
   }
 
-  override async set(lexicon: CompiledSceneLexicon): Promise<void> {
+  override async set(lexicon: SceneVocabularyModel): Promise<void> {
     const key = createCompileCacheKey(
       lexicon.sceneId,
       lexicon.contentHash,

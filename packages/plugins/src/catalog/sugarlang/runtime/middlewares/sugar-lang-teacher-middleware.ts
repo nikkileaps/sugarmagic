@@ -15,6 +15,7 @@
  * Status: active
  */
 
+import { teachableRefKey, toVocabularyRefs } from "../contracts/teachable-ref";
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
 import {
   buildGeneratorPromptOverlay,
@@ -29,14 +30,15 @@ import {
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type {
   ActiveQuestEssentialLemma,
-  TeacherRecentTurn,
+  LemmaRef,
   PedagogicalDirective,
   ProbeFloorState,
   SugarlangConstraint
 } from "../types";
 import { createSugarlangLogger } from "../logger";
 import { languageDisplayName } from "../language-names";
-import { buildInterpretLexiconFromInventory } from "../inventory/function-inventory-loader";
+import { buildInterpretLexiconFromInventory } from "../inventory/competency-inventory-loader";
+import { createCompetencyDescriber } from "../inventory/describe-competency";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
   SUGARLANG_COMPREHENSION_IN_FLIGHT_ANNOTATION,
@@ -46,21 +48,22 @@ import {
   SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION,
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
-  SUGARLANG_PRESCRIPTION_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_SCHEDULE_ANNOTATION,
   extractCharacterVoiceReminder,
-  buildEmptyPrescription,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
   getSceneId,
+  getTurnsSinceLastProbe,
   isQuestObjectiveInFocus,
   isScriptedMode,
   shouldRunSugarlangForExecution,
   type SugarlangLoggerLike
 } from "./shared";
 import type { TeachSchedule } from "../scheduler/teach-schedule";
+import { composeSituation, situationKey } from "../situation";
+import type { TeacherNpcContext, TeacherRecentTurn } from "../situation";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
   getSentenceComplexityCap,
@@ -92,6 +95,13 @@ function buildConstraintReminder(
   return `Language constraint: ~${pct}% ${langName}, learner at ${learnerCefr} level.`;
 }
 
+// NAMING HAZARD: this is NOT a lexicon. "Lexicon" elsewhere here means the atlas
+// -- the whole word stock of a language. This is four keyword lists (greeting /
+// farewell / gratitude / acknowledgement) of target-language surface forms, sent
+// to sugaragent so detectSocialMove can recognize a player typing "adios" when
+// its own patterns are English-only. Player INPUT recognition, not teaching.
+// Rename to socialMoveCues when the sugaragent contribution contract is next
+// touched -- docs/backlog/006-sugarlang-naming-cleanups.md has the blast radius.
 function buildInterpretLexicon(targetLanguage: string): Record<string, string[]> | undefined {
   try {
     const lexicon = buildInterpretLexiconFromInventory(targetLanguage);
@@ -209,31 +219,27 @@ export function createSugarLangTeacherMiddleware(
         return execution;
       }
 
-      const prescription = execution.annotations[
-        SUGARLANG_PRESCRIPTION_ANNOTATION
-      ] as SugarlangConstraint["rawPrescription"] | undefined;
-
       const learner = await services.learnerStore.getCurrentProfile();
 
       // Scripted mode: skip the teacher LLM call. Build a lightweight
       // constraint with posture/ratio based on the learner's level.
       // The authored text IS the curriculum — we only control language mix.
-      // Runs even without a prescription (prescription-less scripted dialogue
-      // still needs a constraint so the scripted middleware can adapt the text).
       // 086.4: scripted branch no longer sets generatorPromptOverlay or writes a
       // sugaragent contribution -- the scripted middleware reads baked variants
-      // (target-dominant) or runs diglotWeave (anchored/supported), zero LLM.
+      // (target-dominant) or runs markGradedText (anchored/supported), zero LLM.
       if (isScriptedMode(execution)) {
         const targetLanguage =
           execution.selection.targetLanguage ?? learner.targetLanguage;
-        const posture =
-          learner.estimatedCefrBand === "A1" ? "anchored" as const
-            : learner.estimatedCefrBand === "A2" ? "supported" as const
-            : "target-dominant" as const;
-        const ratio =
-          posture === "anchored" ? 0.2
-            : posture === "supported" ? 0.5
-            : 0.8;
+        // 090.8b: was an inlined band ternary plus its own 0.2/0.5/0.8 table --
+        // a second answer to "how much target language at this band", living
+        // alongside band-envelope's 0.3/0.65/0.85. Both were real and they
+        // disagreed. 087.6 recorded the divergence and deferred the fold until
+        // "scripted rendering next changes"; this is that change.
+        //
+        // PLAYER-VISIBLE: A1 scripted lines move from 20% to 30% target
+        // language. nikki's call, 2026-07-30.
+        const posture = postureForBand(learner.estimatedCefrBand);
+        const ratio = TARGET_LANGUAGE_RATIO_BY_POSTURE[posture];
         // anchored/supported: "hover-only" because the weave places bare citation
         // forms and the observe middleware delivers gloss data via dialogueHighlight.
         // target-dominant: "none" -- the baked variant text is target-language already.
@@ -242,33 +248,36 @@ export function createSugarLangTeacherMiddleware(
         const constraint: SugarlangConstraint = {
           generatorPromptOverlay: "",
           minimalGreetingMode: false,
-          targetVocab: {
-            introduce: prescription?.introduce ?? [],
-            reinforce: prescription?.reinforce ?? [],
-            avoid: prescription?.avoid ?? []
-          },
+          // 090.10: was seeded from the prescription. A scripted line's text is
+          // already decided, so the slate only ever narrowed which already-present
+          // words the weave substituted -- and the weave now draws the whole band
+          // (090.8). Empty is the honest value: scripted mode teaches from the
+          // authored text, not from a slate.
+          targetVocab: { introduce: [], reinforce: [], avoid: [] },
           supportPosture: posture,
           targetLanguageRatio: ratio,
           interactionStyle: "natural_dialogue",
           glossingStrategy,
           sentenceComplexityCap: "free",
           targetLanguage,
-          learnerCefr: learner.estimatedCefrBand,
-          rawPrescription: prescription ?? buildEmptyPrescription("scripted-mode-no-prescription")
+          learnerCefr: learner.estimatedCefrBand
         };
         execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
         logger.debug("Scripted mode: lightweight constraint built.", {
           learnerCefr: learner.estimatedCefrBand,
           posture,
-          ratio,
-          hadPrescription: Boolean(prescription)
+          ratio
         });
         return execution;
       }
 
-      if (!prescription) {
-        return execution;
-      }
+      // 090.10: THE PRESCRIPTION GATE IS GONE.
+      //
+      // This read `if (!prescription) return execution;` -- harmless while the
+      // budgeter always wrote one, and fatal the moment it stopped: the guard
+      // would be true every turn, the middleware would return early every turn,
+      // and the Teacher would never run again. Nothing would fail; NPCs would
+      // just quietly go back to ungraded output.
       const schedule = execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] as
         | TeachSchedule
         | undefined;
@@ -280,11 +289,40 @@ export function createSugarLangTeacherMiddleware(
         prePlacementOpeningLine || sceneId == null
           ? null
           : await services.sceneLexiconStore.ensure(sceneId);
+      const npc: TeacherNpcContext = {
+        npcDefinitionId: execution.selection.npcDefinitionId ?? null,
+        displayName: execution.selection.npcDisplayName ?? null,
+        lorePageId: execution.selection.lorePageId ?? null,
+        metadata: execution.selection.metadata
+      };
+      const recentTurns = buildRecentTurns(execution.state);
+      // 090.3d: composed once per turn from the seeded compile half plus the
+      // runtime context. Null only when there is no scene at all -- a situation
+      // needs somewhere to BE, but needs nothing else.
+      const situation =
+        sceneId == null
+          ? null
+          : composeSituation({
+              sceneId,
+              sceneContext: deps.services.getSceneContext(sceneId),
+              runtimeContext: execution.runtimeContext,
+              npc,
+              recentTurns,
+              // 090.4: conversation state, and the one non-learner input to the
+              // probe-floor signals the Teacher derives.
+              turnsSinceLastProbe: getTurnsSinceLastProbe(execution)
+            });
+
       let directive: PedagogicalDirective;
       const conversationId = getSugarlangConversationId(execution);
       const sessionId = getSugarAgentSessionId(execution);
       const traceTurnId = getSugarlangTelemetryTurnId(execution, "prepare");
       const currentSceneId = getSceneId(execution);
+      // 090.4: this annotation-fed set still drives the VERIFIER's
+      // parenthetical-gloss check (constraint.questEssentialLemmas below) --
+      // that consumer is unchanged. The Teacher itself no longer reads it; it
+      // derives its own quest-essential set from the situation (see
+      // resolveQuestEssentialLemmaRefs at the invoke call below).
       const annotatedQuestEssentialLemmas =
         (execution.annotations[SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION] as
           | ActiveQuestEssentialLemma[]
@@ -296,25 +334,12 @@ export function createSugarLangTeacherMiddleware(
       const teacherQuestEssentialLemmas = questObjectiveInFocus
         ? annotatedQuestEssentialLemmas
         : [];
-      const pendingProvisional = (
-        execution.annotations[SUGARLANG_PENDING_PROVISIONAL_ANNOTATION] as
-          | Array<{
-              lemmaRef: { lemmaId: string; lang: string };
-              evidenceAmount: number;
-              turnsPending: number;
-            }>
-          | undefined
-      ) ?? [];
-      const probeFloorState = (
-        execution.annotations[SUGARLANG_PROBE_FLOOR_ANNOTATION] as
-          | ProbeFloorState
-          | undefined
-      ) ?? {
-        turnsSinceLastProbe: 0,
-        totalPendingLemmas: 0,
-        softFloorReached: false,
-        hardFloorReached: false
-      };
+      // 090.4: the pending-provisional and probe-floor ANNOTATIONS are no
+      // longer read here. Both are signals derived from the learner's own cards
+      // plus `turnsSinceLastProbe` (learner/pacing-signals.ts), so the Teacher
+      // derives them itself rather than being handed a copy that could disagree
+      // with the learner it was also handed. The annotations still exist for
+      // the observe/verify middlewares, which is a different consumer.
 
       if (prePlacementOpeningLine) {
         directive = createPrePlacementDirective();
@@ -330,71 +355,24 @@ export function createSugarLangTeacherMiddleware(
           }),
           logger
         );
-      } else if (schedule && !schedule.isColdStart) {
-        // 087.6: schedule-driven realization. The outer loop has already determined
-        // what to teach; derive the directive deterministically without an LLM call.
-        // Directive lifetime is maxTurns=1 (free to recompute every turn since this
-        // path is deterministic and cheap). Fall through to the LLM path below when
-        // no schedule is present (cold-start or first-session) -- that path amortizes
-        // the LLM call over 3 turns.
-        const targetLanguage = execution.selection.targetLanguage ?? learner.targetLanguage;
-        // Envelope values come from the shared band-envelope table -- NOT inlined.
-        // A divergent copy here silently loosens the level control 083 enforces.
-        const posture = postureForBand(learner.estimatedCefrBand);
-        const ratio = TARGET_LANGUAGE_RATIO_BY_POSTURE[posture];
-        const glossingStrategy =
-          posture === "target-dominant" ? "none" as const : "hover-only" as const;
-        // A probe needs something to probe ABOUT: hardFloorReached can fire on the
-        // turns-since-probe clause alone (25 turns) with zero pending lemmas, which
-        // would arm the probe machinery with an empty target list -- and observe
-        // would then vacuously score it passed (0 of 0) into the strain model.
-        const probeTargets = pendingProvisional.slice(0, 2).map((p) => p.lemmaRef);
-        const probeTrigger =
-          probeTargets.length > 0 &&
-          (probeFloorState.hardFloorReached ||
-            (probeFloorState.softFloorReached && pendingProvisional.length >= 5));
-        directive = {
-          targetVocab: {
-            introduce: prescription.introduce,
-            reinforce: prescription.reinforce,
-            avoid: prescription.avoid
-          },
-          supportPosture: posture,
-          targetLanguageRatio: ratio,
-          interactionStyle: "natural_dialogue",
-          glossingStrategy,
-          sentenceComplexityCap: getSentenceComplexityCap(learner.estimatedCefrBand),
-          comprehensionCheck: {
-            trigger: probeTrigger,
-            probeStyle: probeTrigger ? "recall" : "none",
-            targetLemmas: probeTrigger ? probeTargets : [],
-            ...(probeTrigger
-              ? {
-                  triggerReason: probeFloorState.hardFloorReached
-                    ? ("hard-floor-turns" as const)
-                    : ("soft-floor" as const)
-                }
-              : {})
-          },
-          directiveLifetime: { maxTurns: 1, invalidateOn: [] },
-          citedSignals: ["schedule-driven"],
-          rationale: `Schedule-driven: ${schedule.teachables.length} teachable(s) paced by outer loop.`,
-          confidenceBand: "high",
-          isFallbackDirective: false
-        };
-        logger.debug("Schedule-driven directive built without teacher LLM.", {
-          conversationId,
-          sessionId,
-          turnId: traceTurnId,
-          sceneId: currentSceneId,
-          targetLanguage,
-          posture,
-          ratio,
-          scheduleTeachableCount: schedule.teachables.length,
-          introduceCount: prescription.introduce.length,
-          probeTrigger
-        });
       } else {
+        // 090.4 DELETED THE 087.6 SCHEDULE-DRIVEN BRANCH THAT USED TO SIT HERE.
+        //
+        // It caught every learner with any card history -- `schedule &&
+        // !schedule.isColdStart` -- and built the directive deterministically
+        // from `prescription.introduce/reinforce/avoid`, never calling
+        // `services.teacher.invoke` at all. So in steady state the Teacher did
+        // not run, and the thing named "teacher middleware" was a passthrough
+        // for the budgeter's output.
+        //
+        // It was added when the Teacher cost an LLM call per turn and that was
+        // too expensive. The situation key (090.3b) removes the reason: the
+        // Teacher now runs once per SITUATION rather than once per turn, so the
+        // cost it was avoiding is already gone.
+        //
+        // This is the deletion the epic's closing invariant requires -- two
+        // systems answering "what should be taught" is the condition it exists
+        // to remove.
         if (!scene) {
           logger.warn("Skipping Sugarlang teacher middleware - no scene id.");
           return execution;
@@ -406,24 +384,19 @@ export function createSugarLangTeacherMiddleware(
             sessionId
           },
           learner,
-          scene,
-          prescription,
-          npc: {
-            npcDefinitionId: execution.selection.npcDefinitionId ?? null,
-            displayName: execution.selection.npcDisplayName ?? null,
-            lorePageId: execution.selection.lorePageId ?? null,
-            metadata: execution.selection.metadata
-          },
-          recentTurns: buildRecentTurns(execution.state),
+          atlas: services.atlas,
+          // 090.3d: the live half. Composed here because this is where the
+          // runtime context arrives on the execution object; `composeSituation`
+          // is total, so an absent context yields a situation whose every field
+          // says "unavailable" rather than no situation at all.
+          ...(situation === null
+            ? {}
+            : { situation, situationKey: situationKey(situation) }),
           lang: {
             targetLanguage: execution.selection.targetLanguage ?? learner.targetLanguage,
             supportLanguage: execution.selection.supportLanguage ?? learner.supportLanguage
           },
-          calibrationActive: false,
-          pendingProvisionalLemmas: pendingProvisional,
-          probeFloorState,
-          activeQuestEssentialLemmas: teacherQuestEssentialLemmas,
-          selectionMetadata: execution.selection.metadata
+          calibrationActive: false
         });
       }
 
@@ -438,7 +411,6 @@ export function createSugarLangTeacherMiddleware(
         sentenceComplexityCap: directive.sentenceComplexityCap,
         targetLanguage: execution.selection.targetLanguage ?? learner.targetLanguage,
         learnerCefr: learner.estimatedCefrBand,
-        rawPrescription: prescription,
         ...(directive.comprehensionCheck.trigger
           ? {
               comprehensionCheckInFlight: {
@@ -450,50 +422,7 @@ export function createSugarLangTeacherMiddleware(
                 targetLemmas: directive.comprehensionCheck.targetLemmas,
                 characterVoiceReminder:
                   directive.comprehensionCheck.characterVoiceReminder ??
-                  extractCharacterVoiceReminder({
-                    conversationId:
-                      execution.selection.npcDefinitionId ??
-                      execution.selection.dialogueDefinitionId ??
-                      "conversation",
-                    learner,
-                    scene:
-                      scene ??
-                      {
-                        sceneId: "unknown-scene",
-                        contentHash: "unknown",
-                        pipelineVersion: "unknown",
-                        atlasVersion: "unknown",
-                        profile: "runtime-preview",
-                        lemmas: {},
-                        properNouns: [],
-                        anchors: [],
-                        questEssentialLemmas: []
-                      },
-                    prescription,
-                    npc: {
-                      npcDefinitionId: execution.selection.npcDefinitionId ?? null,
-                      displayName: execution.selection.npcDisplayName ?? null,
-                      lorePageId: execution.selection.lorePageId ?? null,
-                      metadata: execution.selection.metadata
-                    },
-                    recentTurns: buildRecentTurns(execution.state),
-                    lang: {
-                      targetLanguage:
-                        execution.selection.targetLanguage ?? learner.targetLanguage,
-                      supportLanguage:
-                        execution.selection.supportLanguage ?? learner.supportLanguage
-                    },
-                    calibrationActive: false,
-                    pendingProvisionalLemmas: [],
-                    probeFloorState: {
-                      turnsSinceLastProbe: 0,
-                      totalPendingLemmas: 0,
-                      softFloorReached: false,
-                      hardFloorReached: false
-                    },
-                    activeQuestEssentialLemmas: [],
-                    selectionMetadata: execution.selection.metadata
-                  }),
+                  extractCharacterVoiceReminder(npc),
                 triggerReason:
                   directive.comprehensionCheck.triggerReason ??
                   "director-discretion"
@@ -503,8 +432,11 @@ export function createSugarLangTeacherMiddleware(
         ...(teacherQuestEssentialLemmas.length
           ? {
               questEssentialLemmas: teacherQuestEssentialLemmas.map(
+                // 090.4: quest-essential entries are genuinely word-shaped --
+                // an objective names a lemma, not an act -- so the annotation
+                // keeps LemmaRef and this stays a LemmaRef mapping.
                 (entry: {
-                  lemmaRef: SugarlangConstraint["targetVocab"]["introduce"][number];
+                  lemmaRef: LemmaRef;
                   sourceObjectiveDisplayName: string;
                   supportLanguageGloss: string;
                 }) => ({
@@ -518,7 +450,12 @@ export function createSugarLangTeacherMiddleware(
         ...(prePlacementOpeningLine ? { prePlacementOpeningLine } : {})
       };
 
-      constraint.generatorPromptOverlay = buildGeneratorPromptOverlay(constraint);
+      // 090.4: the describer was an unwired parameter until now, so every
+      // competency reached the NPC as a bare id it could not act on.
+      constraint.generatorPromptOverlay = buildGeneratorPromptOverlay(
+        constraint,
+        createCompetencyDescriber(constraint.targetLanguage)
+      );
       // Plan 073.4 — minimalGreetingMode is a PEDAGOGICAL brevity signal only
       // (short opening for a conservative beginner). First-meeting vs
       // repeat-visit semantics belong to SugarAgent's memory mechanic, not
@@ -553,7 +490,7 @@ export function createSugarLangTeacherMiddleware(
       const scheduledBiasTerms: string[] =
         schedule && !schedule.isColdStart
           ? schedule.teachables
-              .filter((t) => t.kind === "lemma" && t.teachReason !== "fluency")
+              .filter((t) => t.kind === "vocabulary")
               .slice(0, 3)
               .map((t) => t.id)
           : [];
@@ -581,9 +518,13 @@ export function createSugarLangTeacherMiddleware(
           interactionStyle: constraint.interactionStyle,
           glossingStrategy: constraint.glossingStrategy,
           sentenceComplexityCap: constraint.sentenceComplexityCap,
-          introduce: constraint.targetVocab.introduce.map((lemma) => lemma.lemmaId),
-          reinforce: constraint.targetVocab.reinforce.map((lemma) => lemma.lemmaId),
-          avoid: constraint.targetVocab.avoid.map((lemma) => lemma.lemmaId),
+          // 090.4: teachableRefKey rather than lemmaId -- telemetry logs
+          // identity, and a competency has one too. Narrowing to words here
+          // would make competency decisions invisible in the traces, which is
+          // the opposite of what telemetry is for.
+          introduce: constraint.targetVocab.introduce.map(teachableRefKey),
+          reinforce: constraint.targetVocab.reinforce.map(teachableRefKey),
+          avoid: constraint.targetVocab.avoid.map(teachableRefKey),
           comprehensionCheckActive:
             constraint.comprehensionCheckInFlight?.active ?? false,
           prePlacementOpeningLine: constraint.prePlacementOpeningLine ?? null

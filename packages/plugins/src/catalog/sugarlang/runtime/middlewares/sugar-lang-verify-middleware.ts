@@ -28,12 +28,13 @@ import type { SugarlangLLMClient } from "../llm/types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import type { SugarlangConstraint } from "../types";
 import { createSugarlangLogger } from "../logger";
+import { vocabularyRefs } from "../contracts/teachable-ref";
 import { languageDisplayName } from "../language-names";
+import { exceedsReadabilityCeiling } from "../teacher/band-envelope";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   buildLearnerSnapshot,
-  findQuestEssentialUses,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
@@ -46,6 +47,19 @@ import {
   textMentionsLemma,
   type SugarlangLoggerLike
 } from "./shared";
+
+/**
+ * The lemma ids the Teacher chose to introduce, for the band-ceiling exemption.
+ *
+ * 090.10: was `constraint.rawPrescription` -- the budgeter's shortlist. The
+ * exemption means "we are deliberately teaching this word, so do not flag it as
+ * above the learner's band", which is a statement about the Teacher's decision,
+ * not about what a lexical scan surfaced. Competency refs carry no lemmaId and
+ * are filtered out by `vocabularyRefs`.
+ */
+function taughtLemmaIds(constraint: SugarlangConstraint): string[] {
+  return vocabularyRefs(constraint.targetVocab.introduce).map((ref) => ref.lemmaId);
+}
 
 export interface SugarLangVerifyMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -76,14 +90,29 @@ interface RepairResult {
 
 function scoreCandidateVerdict(verdict: EnvelopeVerdict): Omit<CandidateScore, "voiceRetentionScore"> {
   const directed = verdict.languageRatioVerdict.directedRatio;
-  const ratioFraction = directed > 0
-    ? Math.min(verdict.languageRatioVerdict.measuredRatio / directed, 1)
-    : 1;
+  const measured = verdict.languageRatioVerdict.measuredRatio;
+
+  // 090.4: SCORED ON DISTANCE FROM THE TARGET, not on "did we reach it".
+  //
+  // This was `Math.min(measured / directed, 1)`, which caps at 1 -- so a reply
+  // three times over the directed ratio scored EXACTLY the same as one that hit
+  // it. Overshoot was invisible to selection as well as to the pass gate, so
+  // among several candidates the most over-the-top one could win on coverage
+  // with nothing pulling the other way.
+  const ratioFraction =
+    directed > 0 ? Math.max(0, 1 - Math.abs(measured - directed) / directed) : 1;
+
   return {
     score: verdict.profile.coverageRatio * 0.5 + ratioFraction * 0.5,
-    passes: verdict.withinEnvelope && verdict.languageRatioVerdict.conformance !== "under-ratio",
+    // Both directions fail. `over-ratio` did not exist as a verdict until 090.4,
+    // so "too much target language" was unrejectable -- an A1 learner could be
+    // handed a full-Spanish paragraph and every gate passed it.
+    passes:
+      verdict.withinEnvelope &&
+      verdict.languageRatioVerdict.conformance !== "under-ratio" &&
+      verdict.languageRatioVerdict.conformance !== "over-ratio",
     coverageRatio: verdict.profile.coverageRatio,
-    measuredRatio: verdict.languageRatioVerdict.measuredRatio,
+    measuredRatio: measured,
     conformance: verdict.languageRatioVerdict.conformance
   };
 }
@@ -157,11 +186,16 @@ async function repairWithBestOfN(
 
   const targetLang = languageDisplayName(constraint.targetLanguage);
   const pct = Math.round(constraint.targetLanguageRatio * 100);
+  // 090.4: the repair prompt talks about WORDS, so it narrows to the vocabulary
+  // half explicitly. `vocabularyRefs` rather than an inline kind check, so this
+  // reads as a decision -- a competency is an act and has no place in "use these
+  // words if natural"; its exponents reach the model through the generator
+  // overlay instead.
   const vocabContext = [
-    `Forbidden words (use simpler synonyms): ${constraint.targetVocab.avoid.map((l) => l.lemmaId).join(", ") || "(none)"}.`,
+    `Forbidden words (use simpler synonyms): ${vocabularyRefs(constraint.targetVocab.avoid).map((l) => l.lemmaId).join(", ") || "(none)"}.`,
     `Use these words if natural: ${[
-      ...constraint.targetVocab.introduce.map((l) => l.lemmaId),
-      ...constraint.targetVocab.reinforce.map((l) => l.lemmaId)
+      ...vocabularyRefs(constraint.targetVocab.introduce).map((l) => l.lemmaId),
+      ...vocabularyRefs(constraint.targetVocab.reinforce).map((l) => l.lemmaId)
     ].join(", ") || "(none)"}. Do not force them.`
   ].join("\n");
   const voiceRubricLine = voiceSpec ? buildVoiceRubricLine(voiceSpec) : null;
@@ -330,7 +364,7 @@ export function createSugarLangVerifyMiddleware(
           ? new Set(voiceSpec.interjections)
           : undefined;
       const verdict = services.classifier.check(normalizedTurn.text, learner, {
-        prescription: scene ? constraint.rawPrescription : null,
+        taughtLemmaIds: scene ? taughtLemmaIds(constraint) : null,
         knownEntities: scene ? new Set(scene.properNouns) : new Set(),
         questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
         voiceInterjections,
@@ -351,7 +385,6 @@ export function createSugarLangVerifyMiddleware(
           timestamp: Date.now(),
           sceneId: sceneId ?? null,
           learnerSnapshot: buildLearnerSnapshot(learner),
-          prescription: constraint.rawPrescription,
           verdict,
           inputText: normalizedTurn.text,
           constraint
@@ -369,6 +402,19 @@ export function createSugarLangVerifyMiddleware(
           measuredRatio: verdict.languageRatioVerdict.measuredRatio,
           directedRatio: verdict.languageRatioVerdict.directedRatio,
           posture: verdict.languageRatioVerdict.posture,
+          // THE GROUPING KEY FOR RATIO ANALYSIS (nikki, 2026-07-31).
+          //
+          // "at band X the intended ratio was Y and we got Z" is the question
+          // worth asking, and it could not be answered from this event: posture
+          // was here but band was not, and posture does not invert -- B1, B2, C1
+          // and C2 all map to `target-dominant`, so grouping by posture merges
+          // four bands into one bucket.
+          //
+          // With band + directed + measured the categorical `conformance` below
+          // stops being the analysis surface and becomes what it should be: a
+          // derived convenience. Any threshold can be recomputed after the fact
+          // from the raw numbers, including ones we have not thought of.
+          learnerCefr: constraint.learnerCefr,
           conformance: verdict.languageRatioVerdict.conformance,
           denominator: verdict.profile.ratioCheckTokens,
           degradedExclusion: !sceneId
@@ -430,7 +476,31 @@ export function createSugarLangVerifyMiddleware(
       // glossing via hover tooltips. The NPC speaks naturally.
 
       const ratioVerdict = verdict.languageRatioVerdict;
-      if (verdict.withinEnvelope && ratioVerdict.conformance !== "under-ratio") {
+
+      // TOO DENSE TO READ -> REPAIR. This gate previously only caught
+      // `under-ratio`, so "too much target language" was unrepairable: an A1
+      // learner could be handed a full-Spanish paragraph and every gate passed
+      // it. `over-ratio` was added as a verdict to name that, but the verdict
+      // alone changed nothing here -- `"over-ratio" !== "under-ratio"` is true,
+      // so those turns still returned before repair could start.
+      //
+      // DELIBERATELY NOT `conformance !== "over-ratio"` (nikki, 2026-07-31).
+      // `over-ratio` means "off the directed ratio", which at A1 fires from 0.45
+      // -- off-target and perfectly readable. Repairing every one of those buys
+      // a second LLM call on most turns to correct a tuning miss.
+      //
+      // The trigger is the READABILITY CEILING instead: far above the directed
+      // ratio, per band, and null (no guard) at C1/C2 where a fully
+      // target-language line is the goal. Rare by construction.
+      const tooDenseToRead = exceedsReadabilityCeiling(
+        ratioVerdict.measuredRatio,
+        constraint.learnerCefr
+      );
+      if (
+        verdict.withinEnvelope &&
+        ratioVerdict.conformance !== "under-ratio" &&
+        !tooDenseToRead
+      ) {
         return normalizedTurn;
       }
 
@@ -464,6 +534,15 @@ export function createSugarLangVerifyMiddleware(
           `Rewrite this reply so about ${pct}% of it is in ${languageDisplayName(constraint.targetLanguage)}; keep the meaning.`
         );
       }
+      // The other direction. Without this the ceiling triggered a repair whose
+      // violation list was EMPTY -- the model was asked to fix a line and never
+      // told what was wrong with it, which is worse than not repairing at all.
+      if (tooDenseToRead) {
+        const pct = Math.round(constraint.targetLanguageRatio * 100);
+        violationLabels.push(
+          `This is too dense to read at ${constraint.learnerCefr}. Rewrite it with about ${pct}% ${languageDisplayName(constraint.targetLanguage)} and the rest in plain English; keep the meaning.`
+        );
+      }
       violationLabels.push(
         ...verdict.violations.map(
           (violation) => `Remove or simplify "${violation.lemmaRef.lemmaId}".`
@@ -475,7 +554,7 @@ export function createSugarLangVerifyMiddleware(
 
       const checkCandidate = (text: string): EnvelopeVerdict =>
         services.classifier.check(text, learner, {
-          prescription: scene ? constraint.rawPrescription : null,
+          taughtLemmaIds: scene ? taughtLemmaIds(constraint) : null,
           knownEntities: scene ? new Set(scene.properNouns) : new Set(),
           questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
           voiceInterjections,

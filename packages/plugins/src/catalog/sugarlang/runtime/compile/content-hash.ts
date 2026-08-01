@@ -18,13 +18,29 @@
 
 import type { TextBlob } from "./scene-traversal";
 
-export const SUGARLANG_COMPILE_PIPELINE_VERSION = "1";
+/**
+ * Bump this whenever compilation OUTPUT changes for input the seed below does
+ * not cover. The seed hashes blob text and ids, not blob metadata, so a change
+ * to what we DERIVE from a blob is invisible to it -- every persisted artifact
+ * (IndexedDB compile cache, published lexicon) would keep serving stale output
+ * against an identical hash, silently and forever.
+ *
+ * "2" (Plan 090.1): dialogue blobs now carry `npcDefinitionId`, which changes
+ * emitted `npcSourceIds` and therefore the `w_npc` ranking boost. `npcDefinitionId`
+ * is deliberately NOT added to the seed -- attribution is derived, not authored,
+ * so it belongs to the pipeline version rather than the content identity.
+ */
+export const SUGARLANG_COMPILE_PIPELINE_VERSION = "2";
 
 function rightRotate(value: number, amount: number): number {
   return (value >>> amount) | (value << (32 - amount));
 }
 
-function sha256Hex(input: string): string {
+/**
+ * Exported 090.4 so the learner key can reuse it. A second hash implementation
+ * for the same job is the duplication this epic keeps deleting.
+ */
+export function sha256Hex(input: string): string {
   const encoder = new TextEncoder();
   const bytes = Array.from(encoder.encode(input));
   const bitLength = bytes.length * 8;

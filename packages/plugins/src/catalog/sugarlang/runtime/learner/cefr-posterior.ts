@@ -23,8 +23,11 @@
  */
 
 import type { CEFRBand, CefrPosterior } from "../types";
+import { CEFR_BAND_ORDER } from "../cefr";
 
-export const CEFR_BAND_ORDER = ["A1", "A2", "B1", "B2", "C1", "C2"] as const satisfies readonly CEFRBand[];
+// 090.9: re-exported, not declared. This was one of six identical copies; the
+// declaration now lives beside the CEFRBand type in contracts/learner-profile.
+export { CEFR_BAND_ORDER } from "../cefr";
 
 const SELF_REPORT_ALPHA = 2;
 const SELF_REPORT_BETA = 1;

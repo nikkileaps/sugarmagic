@@ -63,6 +63,28 @@ export interface ActiveDirectiveFactValue {
   issuedAtMs: number;
   lifetime: DirectiveLifetime;
   turnsConsumed: number;
+  /**
+   * 090.3b: the situation this decision was made FOR.
+   *
+   * The cache compares it against the situation now, and a mismatch retires the
+   * directive however few turns it has consumed -- a decision made for a
+   * different situation is wrong, not merely old.
+   *
+   * Optional because a directive written before this shipped, or by a caller
+   * that has no situation in hand, has none. Absent means "cannot be checked",
+   * which must NOT read as "matches" -- the cache treats it as unverifiable and
+   * falls through to the turn backstop rather than assuming the decision still
+   * applies.
+   */
+  situationKey?: string;
+  /**
+   * 090.4: what the learner knew when this was decided.
+   *
+   * SEPARATE from situationKey on purpose -- the world and the person change for
+   * unrelated reasons, and collapsing them into one key would mean a quest
+   * advancing looked the same as a word being learned.
+   */
+  learnerKey?: string;
 }
 
 export const DEFAULT_SUGARLANG_PLACEMENT_STATUS: SugarlangPlacementStatus = {

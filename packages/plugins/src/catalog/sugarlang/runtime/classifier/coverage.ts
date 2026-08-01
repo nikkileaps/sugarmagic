@@ -24,7 +24,7 @@ import type {
 } from "../types";
 import type { MorphologyDataFile } from "./morphology-loader";
 import { MorphologyLoader } from "./morphology-loader";
-import { compareCefrBands, isBandAbove } from "./cefr-band-utils";
+import { compareCefrBands, isBandAbove } from "../cefr";
 import type { ChunkMatcher, ChunkSpec } from "./chunk-matcher";
 import { lemmatize } from "./lemmatize";
 import type { Token } from "./tokenize";

@@ -21,7 +21,7 @@
 // window. The teacher outer loop (Strategy 002 epic E) reads the same posterior
 // continuously, making a separate late-recalibration mechanism redundant once
 // E lands; do not add one here in the meantime.
-export { isInPostPlacementCalibration } from "../learner/calibration-window";
+export { isInPostPlacementCalibration } from "../learner";
 
 export function buildPostPlacementCalibrationHint(): string {
   return "NOTE: This learner just completed their placement assessment but has not yet built up session history. Lean slightly toward the cautious side - prefer supported posture over target-dominant, prefer inline glossing on any new word, keep sentences at one or two clauses. This is a brief settling-in window, not a permanent constraint.";

@@ -111,9 +111,8 @@ describe("DefaultSugarlangSceneLexiconStore", () => {
         pipelineVersion: "1",
         atlasVersion: "atlas",
         profile: "runtime-preview",
-        lemmas: {},
+        lemmaIds: [],
         properNouns: [],
-        anchors: [],
         questEssentialLemmas: []
       }
     ]);
@@ -135,9 +134,8 @@ describe("DefaultSugarlangSceneLexiconStore", () => {
         pipelineVersion: "1",
         atlasVersion: "atlas",
         profile: "runtime-preview",
-        lemmas: {},
+        lemmaIds: [],
         properNouns: [],
-        anchors: [],
         questEssentialLemmas: []
       }
     ]);

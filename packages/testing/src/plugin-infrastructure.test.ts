@@ -375,7 +375,10 @@ describe("plugin infrastructure", () => {
       "sugardeploy-set-secret-value",
       "sugardeploy-setup-github-workflow",
       "sugardeploy-tag-patch-version",
-      "sugardeploy-template-version"
+      "sugardeploy-template-version",
+      // Added 2026-07-30: shipped in host/middleware.ts without being listed
+      // here, which is exactly what this assertion exists to catch.
+      "sugardeploy-update-blocklist"
     ]);
   });
 

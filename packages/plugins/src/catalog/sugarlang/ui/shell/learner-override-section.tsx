@@ -20,8 +20,11 @@
 import { useState, useEffect, type ReactElement } from "react";
 import { PanelSection } from "@sugarmagic/ui";
 import type { SugarlangDebugState } from "../../runtime/runtime-services";
+// 090.9: a seventh copy of the band order, rendering the picker in order.
+// Folded into the canonical declaration so a band change reaches the UI too.
+import { CEFR_BAND_ORDER as BANDS } from "../../runtime/learner";
 
-const BANDS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
+
 
 interface DebugHandle {
   setBand: (band: string, pin?: boolean) => Promise<void>;
@@ -204,7 +207,7 @@ export function LearnerOverrideSection(): ReactElement {
               </summary>
               <div style={{ fontFamily: "var(--sm-font-mono, monospace)", display: "grid", gap: "0.15rem", paddingLeft: "0.5rem" }}>
                 {state.teachRecords.map((r) => (
-                  <div key={r.functionId}>{r.functionId} via {r.realizingChunkId}</div>
+                  <div key={r.competencyId}>{r.competencyId} via {r.realizingChunkId}</div>
                 ))}
               </div>
             </details>

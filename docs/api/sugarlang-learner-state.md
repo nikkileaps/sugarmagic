@@ -34,7 +34,7 @@ provisional-evidence pair (`provisionalEvidence`, capped at 5, and
 **Chunk cards (085.3):** `lemmaCards` also holds chunk cards alongside
 vocabulary cards. Chunk cards have `lemmaId` prefixed with `"chunk:"` (e.g.
 `"chunk:buenos-dias"`). They track receptive and productive exposure to
-formulaic chunks tied to communicative functions (greetings, farewells, etc.)
+formulaic chunks tied to competencies (greetings, farewells, etc.)
 using the same FSRS fields as vocabulary cards. Because the `"chunk:"` colon
 is unreachable by the normalizer, there is no DB version bump -- chunk cards
 live in the same `lemma-cards` IDB object store as vocabulary cards.
@@ -75,9 +75,9 @@ Two storage tiers, split in
    (`runtime/learner/teach-record-store.ts`), IDB database
    `sugarlang-card-store:teach:<learnerId>` (prefix starts with
    `CARD_STORE_DB_NAME_PREFIX`, so the reset enforcer auto-covers it).
-   Holds one `{ functionId, taughtAtMs, realizingChunkId }` record per
-   communicative function the learner has encountered for the first time.
-   The no-rewrite guard (`write` is idempotent on `functionId`) makes the
+   Holds one `{ competencyId, taughtAtMs, realizingChunkId }` record per
+   competency the learner has encountered for the first time.
+   The no-rewrite guard (`write` is idempotent on `competencyId`) makes the
    record a permanent first-teach timestamp. Teach records are the data
    source for any future phrasebook/journal UI (deferred to epic 089).
 

@@ -26,32 +26,30 @@
  */
 
 import type { LemmaCard } from "../types";
-import type { FunctionEntry } from "../contracts/function-inventory";
-import type { FunctionTagResult } from "../inventory/function-tag-resolver";
-import type { DebtStatus } from "../learner/encounter-debt-ledger";
+import type { Competency } from "../contracts/competency-inventory";
+import type { DebtStatus } from "../learner";
 
 export interface SchedulerLearnerView {
   cefrBand: string;
   cefrConfidence: number;
   /** All lemma cards from the learner profile (keyed by lemmaId; includes chunk: cards). */
   lemmaCards: Record<string, LemmaCard>;
-  /** 0-1 fatigue signal from session-signals (hoverRate, probeFailRate, latency, turns). */
-  fatigueScore: number;
+  // 090.5: `fatigueScore` deleted with the strain mechanism it fed.
 }
 
 export interface SchedulerCurriculumView {
-  /** FunctionIds the learner has formally been taught (from teach-record-store). */
-  introducedFunctionIds: Set<string>;
+  /** CompetencyIds the learner has formally been taught (from teach-record-store). */
+  introducedCompetencyIds: Set<string>;
   /**
    * All available functions for this language in declaration order.
    * The scheduler uses band ordering as its ordering floor.
    * Prerequisite edges are added in 087.3 (no edges in the inventory schema today --
-   * contracts/function-inventory.ts:53-80).
+   * contracts/competency-inventory.ts:53-80).
    * Revisit: when authored prerequisite data ships, wire it here.
    */
-  availableFunctions: FunctionEntry[];
+  availableCompetencies: Competency[];
   /**
-   * 087.2: Unpaid encounter debts by itemId (lemmaId or functionId).
+   * 087.2: Unpaid encounter debts by itemId (lemmaId or competencyId).
    * Only debts with diverseEncounterCount < targetEncounters are included.
    * Built from EncounterDebtLedger.getActiveDebts() in the context middleware.
    */
@@ -61,11 +59,14 @@ export interface SchedulerCurriculumView {
 export interface SchedulerSceneView {
   sceneId: string | null;
   /**
-   * Function tag results for the current scene and its NPCs.
-   * Empty (sceneFunctions: [], npcFunctions: {}) when the scene lexicon is not yet
-   * compiled or the function inventory does not cover this language.
+   * 090.2: there is deliberately NO scene-competency field here.
+   *
+   * The scheduler ranks on LEARNER state -- what is due, introduced, in debt,
+   * and fatigue -- which is spaced-repetition bookkeeping and not a judgment.
+   * Whether a scene calls for a given competency is scene-content ranking, which
+   * is the budgeter's job wearing the scheduler's clothes, and it belongs to the
+   * Teacher reading the situation (090.3 composes it, 090.4 decides).
    */
-  functionTags: FunctionTagResult;
   /**
    * WORLD_DAY_FACT value (in-game days elapsed since start).
    * Null when authored quests have not yet advanced the world day counter.

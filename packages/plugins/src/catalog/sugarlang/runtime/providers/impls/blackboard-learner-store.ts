@@ -24,12 +24,12 @@ import type {
   LearnerProfile,
   LemmaCard
 } from "../../types";
-import type { CardStore } from "../../learner/card-store";
+import type { CardStore } from "../../learner";
 import {
   cloneLearnerProfile,
   createEmptyLearnerProfile,
   loadLearnerProfile
-} from "../../learner/persistence";
+} from "../../learner";
 
 export interface BlackboardLearnerStoreOptions {
   blackboard: RuntimeBlackboard;

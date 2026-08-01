@@ -92,10 +92,6 @@ describe("learner persistence", () => {
         sessionId: "session-1",
         startedAt: 1_000,
         turns: 4,
-        avgResponseLatencyMs: 800,
-        hoverRate: 0.25,
-        probeFailRate: 0.1,
-        fatigueScore: 0.3
       },
       sessionHistory: [
         {

@@ -27,6 +27,7 @@ import {
 } from "@sugarmagic/domain";
 import type {
   ConversationMiddlewareContribution,
+  DebugHudCardContribution,
   DialogueEntryDecoratorContribution,
   DisplayTextResolverContribution,
   RuntimePluginInstance
@@ -49,18 +50,21 @@ import {
 } from "./runtime/middlewares/sugar-lang-scripted-middleware";
 import {
   extractSugarlangPreviewBootLexicons,
+  extractSugarlangPreviewBootSceneContexts,
   extractSugarlangStudioWorkspaceId
 } from "./runtime/compile/preview-boot";
 import {
-  seedSugarlangRuntimeCompileCache
+  seedSugarlangRuntimeCompileCache,
+  seedSugarlangRuntimeSceneContext
 } from "./runtime/compile/runtime-cache-state";
 import {
   SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
-} from "./runtime/learner/fact-definitions";
+} from "./runtime/learner";
 import { createDisplayTextResolver } from "./runtime/grading/display-text-resolver";
 import { GRADED_TEXT_PROMPT_VERSION } from "./runtime/grading/graded-text-service";
 import { createSugarlangLogger } from "./runtime/logger";
 import { createSugarlangDialogueContribution } from "./runtime/dialogue-entry-decorator";
+import { createSceneContextHudCard } from "./runtime/scene-context-hud-card";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
 import {
   flushTelemetry,
@@ -122,7 +126,10 @@ export function createSugarlangPlugin(
     payload: {
       summary: "Highlights focus vocabulary, celebrates player production, and tracks hover observations.",
       decorate: dialogueContribution.decorate,
-      onTermHover: dialogueContribution.onTermHover
+      onTermHover: dialogueContribution.onTermHover,
+      // 090.12: select-to-translate. The panel calls this on a mouseup inside a
+      // turn; null means show nothing.
+      lookupSelection: dialogueContribution.lookupSelection
     }
   };
 
@@ -150,12 +157,21 @@ export function createSugarlangPlugin(
     }
   };
 
+  // Studio-preview-only readout of what the runtime was seeded with. The first
+  // thing that makes scene context visible at all -- everything else about it
+  // lives in IndexedDB and memory.
+  const sceneContextCardContribution = createSceneContextHudCard({
+    pluginId: context.configuration.pluginId,
+    getSceneContext: (sceneId) => services.getSceneContext(sceneId)
+  });
+
   const contributions: (
     | ConversationMiddlewareContribution
     | DialogueEntryDecoratorContribution
     | DisplayTextResolverContribution
+    | DebugHudCardContribution
   )[] =
-    [decoratorContribution, displayTextContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
+    [decoratorContribution, displayTextContribution, sceneContextCardContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
       const middleware = factory({ services, logger, telemetry });
       return {
         pluginId: context.configuration.pluginId,
@@ -183,6 +199,17 @@ export function createSugarlangPlugin(
       const bootPayload = runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID];
       const lexicons = extractSugarlangPreviewBootLexicons(bootPayload);
       await seedSugarlangRuntimeCompileCache(lexicons);
+      // The runtime cannot build these -- extraction is a gateway call and a
+      // Studio-only pass -- so a boot seed is the only way it ever has them.
+      const seededContexts = extractSugarlangPreviewBootSceneContexts(bootPayload);
+      seedSugarlangRuntimeSceneContext(seededContexts);
+      console.info(
+        `[sugarlang runtime] seeded ${seededContexts.length} scene context model(s)`,
+        seededContexts.map((model) => ({
+          sceneId: model.sceneId,
+          concepts: model.concepts.length
+        }))
+      );
       services.seedPreviewLexicons(bootPayload);
       const studioWorkspaceId = extractSugarlangStudioWorkspaceId(bootPayload);
       if (studioWorkspaceId) {
@@ -249,6 +276,24 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       default: ""
     },
     {
+      configKey: "teacherModel",
+      label: "Teacher Model",
+      type: "text",
+      description:
+        "Anthropic model for the Teacher's pedagogical judgment call. Blank uses the gateway default (claude-sonnet-4-6). This is the most reasoning-heavy call sugarlang makes -- it decides what to teach -- so it is deliberately separate from the NPC dialogue model.",
+      placeholder: "claude-sonnet-4-6",
+      default: ""
+    },
+    {
+      configKey: "extractionModel",
+      label: "Extraction Model",
+      type: "text",
+      description:
+        "Anthropic model for the compile-time extraction passes: multi-word expressions, line intent, and scene concepts. Blank uses the gateway default (claude-sonnet-4-6). These run while authoring and are cached by content hash, so the cost is per content change rather than per turn.",
+      placeholder: "claude-sonnet-4-6",
+      default: ""
+    },
+    {
       configKey: "debugBandOverride",
       label: "Band Override (dev)",
       type: "select",
@@ -265,17 +310,27 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       default: ""
     }
   ],
-  // Story 46.15 — Sugarlang's targetLanguage is a non-secret
-  // per-game config value the gateway reads at request time
-  // (e.g., to bias generation toward the player's target
-  // language). Plumbed through deploy.sh + GHA workflow's
-  // deploy-backend env block via SugarDeploy's collection step.
+  // NOTE (2026-07-29): `targetLanguage` used to be declared here, plumbed to
+  // the gateway as SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE. It was removed for two
+  // reasons. First, the gateway never read it -- grep core.ts, there is no such
+  // lookup -- so it was shipping a variable nothing consumed. Second and more
+  // importantly, target language is a PLAYER's choice: two players of the same
+  // deployment must be able to pick differently, which one env var per
+  // deployment cannot express. It now resolves player -> project config, in
+  // resolveSugarLangTargetLanguage and nowhere else.
   gatewayRuntimeConfigKeys: [
     {
-      configKey: "targetLanguage",
-      envVarName: "SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE",
+      configKey: "teacherModel",
+      envVarName: "SUGARMAGIC_SUGARLANG_TEACHER_MODEL",
       description:
-        "Target language code (e.g. `es`, `fr`) the Sugarlang gateway uses to bias generation + verification. Pure config, never a credential.",
+        "Anthropic model the gateway uses for sugarlang's Teacher judgment call, resolved server-side from purpose:\"teacher\". Sugarlang owns this key rather than borrowing a SUGARMAGIC_SUGARAGENT_* one, so sugarlang's model choice does not depend on sugaragent's config (AGENTS.md one-way dependencies). Unset => gateway default claude-sonnet-4-6.",
+      nonSecretAttestation: "safe-to-expose-publicly"
+    },
+    {
+      configKey: "extractionModel",
+      envVarName: "SUGARMAGIC_SUGARLANG_EXTRACTION_MODEL",
+      description:
+        "Anthropic model the gateway uses for sugarlang's COMPILE-time extraction passes (multi-word expressions, line intent, scene concepts), resolved server-side from purpose:\"extraction\". These run at authoring time and are cached by content hash, so the cost is per content change rather than per turn. Unset => gateway default claude-sonnet-4-6.",
       nonSecretAttestation: "safe-to-expose-publicly"
     }
   ],

@@ -39,12 +39,13 @@ import { IndexedDBIntentCache, type SugarlangIntentCache } from "./compile/inten
 import { LiveRenderCache } from "./compile/live-render-cache";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
 import type { SugarlangLLMClient } from "./llm/types";
-import { LexicalBudgeter } from "./budgeter/lexical-budgeter";
 import { EnvelopeClassifier } from "./classifier/envelope-classifier";
 import { MorphologyLoader } from "./classifier/morphology-loader";
 import { RuntimeCompileScheduler } from "./compile/compile-scheduler";
 import { getSugarlangRuntimeCompileCache } from "./compile/runtime-cache-state";
 import { DefaultSugarlangSceneLexiconStore } from "./compile/scene-lexicon-store";
+import type { SceneContextModel } from "./contracts/scene-context";
+import { getSugarlangRuntimeSceneContext } from "./compile/runtime-cache-state";
 import { createSceneAuthoringContext } from "./compile/scene-traversal";
 import {
   ClaudeTeacherPolicy,
@@ -52,22 +53,21 @@ import {
   createGatewayTeacherClient
 } from "./teacher/policies/llm-teacher-policy";
 import { DirectiveCache } from "./teacher/directive-cache";
+import { SlateStore } from "./situation";
 import { FallbackTeacherPolicy } from "./teacher/policies/fallback-teacher-policy";
 import { SugarLangTeacher } from "./teacher/sugar-lang-teacher";
-import { IndexedDBCardStore, MemoryCardStore, type CardStore } from "./learner/card-store";
 import {
-  createTeachRecordStore,
-  type TeachRecordStore
-} from "./learner/teach-record-store";
-import {
+  IndexedDBCardStore,
+  LearnerStateReducer,
+  MemoryCardStore,
   createEncounterDebtLedger,
-  type EncounterDebtLedger
-} from "./learner/encounter-debt-ledger";
-import {
+  createTeachRecordStore,
   resetSugarlangLearnerDatabases,
-  type SugarlangLearnerDataResetResult
-} from "./learner/reset-learner-data";
-import { LearnerStateReducer } from "./learner/learner-state-reducer";
+  type CardStore,
+  type EncounterDebtLedger,
+  type SugarlangLearnerDataResetResult,
+  type TeachRecordStore
+} from "./learner";
 import {
   PlacementQuestionnaireLoader
 } from "./placement/placement-questionnaire-loader";
@@ -90,10 +90,10 @@ import {
   SUGARLANG_PLACEMENT_WRITER,
   createLearnerProfileFactScope,
   createSugarlangPlacementStatusScope,
-  getSugarlangPlacementStatus
-} from "./learner/fact-definitions";
-import { isInPostPlacementCalibration } from "./learner/calibration-window";
-import type { PlacementCompletionEvent } from "./learner/learner-state-reducer";
+  getSugarlangPlacementStatus,
+  isInPostPlacementCalibration,
+  type PlacementCompletionEvent
+} from "./learner";
 
 export interface SugarlangExecutionServices {
   profileId: string;
@@ -101,7 +101,6 @@ export interface SugarlangExecutionServices {
   atlas: CefrLexAtlasProvider;
   morphology: MorphologyLoader;
   classifier: EnvelopeClassifier;
-  budgeter: LexicalBudgeter;
   placementQuestionnaireLoader: PlacementQuestionnaireLoader;
   placementScoreEngine: PlacementScoreEngine;
   learnerStore: BlackboardLearnerStore;
@@ -136,11 +135,11 @@ export interface SugarlangDebugState {
   pinned: boolean;
   pinnedBand: CEFRBand | null;
   /** 085.3: lemma cards in the learner store (excludes chunk cards). */
-  lemmaCards: import("./contracts/learner-profile").LemmaCard[];
+  lemmaCards: import("./learner").LemmaCard[];
   /** 085.3: chunk cards (lemmaId starts with "chunk:") in the learner store. */
-  chunkCards: import("./contracts/learner-profile").LemmaCard[];
-  /** 085.5: teach records written for realized communicative functions. */
-  teachRecords: import("./learner/teach-record-store").TeachRecord[];
+  chunkCards: import("./learner").LemmaCard[];
+  /** 085.5: teach records written for realized competencies. */
+  teachRecords: import("./learner").TeachRecord[];
 }
 
 export interface SugarlangRuntimeServicesOptions {
@@ -154,7 +153,6 @@ interface LanguageBundle {
   atlas: CefrLexAtlasProvider;
   morphology: MorphologyLoader;
   classifier: EnvelopeClassifier;
-  budgeter: LexicalBudgeter;
   placementQuestionnaireLoader: PlacementQuestionnaireLoader;
   placementScoreEngine: PlacementScoreEngine;
   sceneLexiconStore: DefaultSugarlangSceneLexiconStore;
@@ -178,15 +176,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * The selection wins when the host set one -- it is the per-conversation
+ * override -- and otherwise this falls through to the single resolver rather
+ * than reading the environment on its own. It used to skip config entirely, so
+ * a project language set in Studio was invisible here.
+ */
 function getSelectionLanguages(
   execution: ConversationExecutionContext,
-  environment: RuntimePluginEnvironment | undefined
+  resolveFallbackTargetLanguage: () => string | null
 ): { targetLanguage: string; supportLanguage: string } | null {
   const targetLanguage =
-    execution.selection.targetLanguage?.trim().toLowerCase() ??
-    resolveSugarLangTargetLanguage(environment);
+    execution.selection.targetLanguage?.trim().toLowerCase() ||
+    resolveFallbackTargetLanguage();
   const supportLanguage =
-    execution.selection.supportLanguage?.trim().toLowerCase() ?? "en";
+    execution.selection.supportLanguage?.trim().toLowerCase() || "en";
   if (!targetLanguage) {
     return null;
   }
@@ -227,6 +231,12 @@ export class SugarlangRuntimeServices {
   /** WorkspaceId the Studio used when baking variants; wired from boot payload in manifest init. */
   private studioWorkspaceId: string | null = null;
   private _standaloneVariantCache: SugarlangVariantCache | undefined;
+  /**
+   * 090.3: session-scoped, deliberately not persisted -- a slate is a decision
+   * about right now, and restoring one would resurrect a judgment made against a
+   * world state that no longer exists.
+   */
+  private readonly _slateStore = new SlateStore();
 
   constructor(options: SugarlangRuntimeServicesOptions) {
     this.config = options.config;
@@ -317,8 +327,30 @@ export class SugarlangRuntimeServices {
     return this.config;
   }
 
-  getTargetLanguage(): string | null {
-    return this.config.targetLanguage || null;
+  /**
+   * The runtime's single answer for "which language are we teaching?".
+   *
+   * Delegates to `resolveSugarLangTargetLanguage`, which owns the precedence
+   * (player -> config). Callers must not re-derive it: reading config directly
+   * is what produced four sources resolved in three different orders. There is
+   * no env rung -- `SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE` was removed 2026-07-29
+   * because one value per deployment cannot express a per-player choice.
+   *
+   * NULL IS A REAL ANSWER HERE, and it does NOT mean "carry on without one".
+   * The resolver is total because Studio legitimately has no language yet; the
+   * RUNTIME does not get to be relaxed about it. The conversation context
+   * middleware turns a null into a thrown
+   * `SugarlangMissingTargetLanguageError`, because a shipped game with sugarlang
+   * enabled and no language is misconfigured, not degraded.
+   *
+   * `player` is threaded from the learner profile once a Settings-menu picker
+   * exists; until then it is simply absent and config wins.
+   */
+  getTargetLanguage(player?: string | null): string | null {
+    return resolveSugarLangTargetLanguage({
+      player,
+      config: this.config.targetLanguage
+    });
   }
 
   private getFirstExecutionServices(): SugarlangExecutionServices | null {
@@ -352,6 +384,35 @@ export class SugarlangRuntimeServices {
    * pinning a band then opening an item before any conversation used to return
    * null here, so the override silently did not apply outside dialogue.
    */
+  /**
+   * What a scene's authored content is ABOUT, if it was built and seeded.
+   *
+   * NOT the situation. This is the cached, scene-scoped half; 090.3 overlays the
+   * live half -- who is ACTUALLY present, met/unmet, quest stage, time of day --
+   * to produce what the Teacher reads. Treating this as the situation will
+   * describe NPCs who are not standing there, because presence conditions are
+   * runtime facts this cannot know.
+   *
+   * Undefined is a legal, quiet state: the scene was never built, or the author
+   * edited it since the last Rebuild so its content hash no longer matches.
+   */
+  getSceneContext(sceneId: string): SceneContextModel | undefined {
+    return getSugarlangRuntimeSceneContext(sceneId);
+  }
+
+  /**
+   * The slate store, keyed on the situation rather than a conversation.
+   *
+   * Deliberately reachable from here rather than from execution services: the
+   * item path renders with no conversation in scope, and a conversation-keyed
+   * lookup cannot serve it. Same reason `getLearnerBand` reads ambient services.
+   *
+   * Implements: Plan 090 story 090.3
+   */
+  get slateStore(): SlateStore {
+    return this._slateStore;
+  }
+
   async getLearnerBand(): Promise<CEFRBand | null> {
     // The pin is the single source of truth for a debug band override. It is
     // seeded from `config.debugBandOverride` at bind and by the Learner
@@ -516,7 +577,9 @@ export class SugarlangRuntimeServices {
   async resolveForExecution(
     execution: ConversationExecutionContext
   ): Promise<SugarlangExecutionServices | null> {
-    const languages = getSelectionLanguages(execution, this.environment);
+    const languages = getSelectionLanguages(execution, () =>
+      this.getTargetLanguage()
+    );
     if (!languages) {
       return null;
     }
@@ -690,10 +753,6 @@ export class SugarlangRuntimeServices {
       telemetry: this.telemetry
     });
     const learnerPriorProvider = new FsrsLearnerPriorProvider(atlas);
-    const budgeter = new LexicalBudgeter({
-      atlas,
-      learnerPriorProvider
-    });
     const placementQuestionnaireLoader = new PlacementQuestionnaireLoader();
     const placementScoreEngine = new PlacementScoreEngine(atlas, morphology);
     const compileCache = getSugarlangRuntimeCompileCache();
@@ -738,7 +797,6 @@ export class SugarlangRuntimeServices {
       atlas,
       morphology,
       classifier,
-      budgeter,
       placementQuestionnaireLoader,
       placementScoreEngine,
       sceneLexiconStore

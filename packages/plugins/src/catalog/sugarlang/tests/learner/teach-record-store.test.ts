@@ -32,7 +32,7 @@ describe("MemoryTeachRecordStore", () => {
   it("write persists a record and has returns true afterward", async () => {
     const store = new MemoryTeachRecordStore();
     await store.write({
-      functionId: "fn-greeting",
+      competencyId: "fn-greeting",
       taughtAtMs: 1000,
       realizingChunkId: "buenos-dias"
     });
@@ -44,25 +44,25 @@ describe("MemoryTeachRecordStore", () => {
     expect(await store.list()).toEqual([]);
   });
 
-  it("list returns all records sorted by functionId", async () => {
+  it("list returns all records sorted by competencyId", async () => {
     const store = new MemoryTeachRecordStore();
-    await store.write({ functionId: "fn-farewell", taughtAtMs: 2000, realizingChunkId: "adios" });
-    await store.write({ functionId: "fn-greeting", taughtAtMs: 1000, realizingChunkId: "hola" });
+    await store.write({ competencyId: "fn-farewell", taughtAtMs: 2000, realizingChunkId: "adios" });
+    await store.write({ competencyId: "fn-greeting", taughtAtMs: 1000, realizingChunkId: "hola" });
     const records = await store.list();
     expect(records).toHaveLength(2);
-    expect(records[0]!.functionId).toBe("fn-farewell");
-    expect(records[1]!.functionId).toBe("fn-greeting");
+    expect(records[0]!.competencyId).toBe("fn-farewell");
+    expect(records[1]!.competencyId).toBe("fn-greeting");
   });
 
-  it("write is idempotent: second write for same functionId is a no-op", async () => {
+  it("write is idempotent: second write for same competencyId is a no-op", async () => {
     const store = new MemoryTeachRecordStore();
     await store.write({
-      functionId: "fn-greeting",
+      competencyId: "fn-greeting",
       taughtAtMs: 1000,
       realizingChunkId: "hola"
     });
     await store.write({
-      functionId: "fn-greeting",
+      competencyId: "fn-greeting",
       taughtAtMs: 9999,
       realizingChunkId: "buenos-dias"
     });
@@ -72,9 +72,9 @@ describe("MemoryTeachRecordStore", () => {
     expect(records[0]!.realizingChunkId).toBe("hola");
   });
 
-  it("has is independent per functionId", async () => {
+  it("has is independent per competencyId", async () => {
     const store = new MemoryTeachRecordStore();
-    await store.write({ functionId: "fn-greeting", taughtAtMs: 1, realizingChunkId: "hola" });
+    await store.write({ competencyId: "fn-greeting", taughtAtMs: 1, realizingChunkId: "hola" });
     expect(await store.has("fn-greeting")).toBe(true);
     expect(await store.has("fn-farewell")).toBe(false);
   });

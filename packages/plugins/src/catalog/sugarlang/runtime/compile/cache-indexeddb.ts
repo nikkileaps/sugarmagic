@@ -17,7 +17,7 @@
  */
 
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
-import type { CompiledSceneLexicon } from "../types";
+import type { SceneVocabularyModel } from "../types";
 import {
   BaseSugarlangCompileCache,
   createCompileCacheKey,
@@ -30,7 +30,7 @@ const STORE_NAME = "scene-lexicons";
 
 interface IndexedDbCacheRecord extends CacheEntryMeta {
   workspaceId: string;
-  lexicon: CompiledSceneLexicon;
+  lexicon: SceneVocabularyModel;
 }
 
 export interface IndexedDBCompileCacheOptions extends MemoryCompileCacheOptions {
@@ -158,7 +158,7 @@ export class IndexedDBCompileCache extends BaseSugarlangCompileCache {
     sceneId: string,
     contentHash: string,
     profile: RuntimeCompileProfile
-  ): Promise<CompiledSceneLexicon | null> {
+  ): Promise<SceneVocabularyModel | null> {
     const cacheKey = createCompileCacheKey(sceneId, contentHash, profile);
     const db = await this.openDb();
     if (!db) {
@@ -178,7 +178,7 @@ export class IndexedDBCompileCache extends BaseSugarlangCompileCache {
     return record.lexicon;
   }
 
-  override async set(lexicon: CompiledSceneLexicon): Promise<void> {
+  override async set(lexicon: SceneVocabularyModel): Promise<void> {
     const db = await this.openDb();
     if (!db) {
       return this.fallback.set(lexicon);

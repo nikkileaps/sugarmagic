@@ -23,6 +23,7 @@ import {
   createAuthoringSession,
   createDefaultGameProject,
   createDefaultScene,
+  createPluginConfigurationRecord,
   createRegionNPCPresence
 } from "@sugarmagic/domain";
 import type { NPCDefinition } from "@sugarmagic/domain";
@@ -48,6 +49,16 @@ describe("preview boot composes the active Scene overlay", () => {
     const region = createTestRegion();
     const gameProject = {
       ...createDefaultGameProject("Test Game", "project-preview-boot-test"),
+      // The language lives in PROJECT CONFIG, where Studio's Language panel
+      // writes it -- not in an environment variable. This test used to pass
+      // SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE, which was the only way the old
+      // env-only read could ever succeed and therefore hid the fact that a
+      // language set in Studio did nothing.
+      pluginConfigurations: [
+        createPluginConfigurationRecord("sugarlang", true, {
+          targetLanguage: "es"
+        })
+      ],
       npcDefinitions: [CHEESE_NPC],
       scenes: [
         createDefaultScene({
@@ -72,7 +83,7 @@ describe("preview boot composes the active Scene overlay", () => {
     const payload = await buildSugarlangPreviewBootPayloadForSession(
       session,
       "ws-preview-boot-test",
-      { SUGARMAGIC_SUGARLANG_TARGET_LANGUAGE: "es" }
+      {}
     );
 
     expect(payload).not.toBeNull();
@@ -81,11 +92,19 @@ describe("preview boot composes the active Scene overlay", () => {
     );
     expect(lexicon).toBeDefined();
 
-    // "cheese" in the NPC bio resolves to "queso" via the atlas gloss
-    // reverse lookup, attributed to the overlay-placed NPC. Before the fix
-    // this was undefined: no activeScene -> no npcPresences -> no NPC blobs.
-    const queso = lexicon!.lemmas["queso"];
-    expect(queso).toBeDefined();
-    expect(queso!.npcSourceIds).toContain("npc-finnick");
+    // "cheese" in the NPC bio resolves to "queso" via the atlas gloss reverse
+    // lookup. Before the fix this was absent: no activeScene -> no npcPresences
+    // -> no NPC blobs, so the overlay-placed NPC's bio was never traversed.
+    //
+    // 090.2d NARROWED THIS PIN, and it is worth stating rather than hiding.
+    // It used to also assert `npcSourceIds` contained "npc-finnick" -- WHICH
+    // npc contributed the word. That field existed only so the budgeter could
+    // boost words from the NPC being spoken to, and it died with the budgeter;
+    // nothing reads per-lemma NPC attribution now. Presence of `queso` still
+    // guards the traversal regression, because the bio is its only source in
+    // this fixture. Per-source attribution lives on scene-context concept
+    // provenance (`npc:<id>`), which is a different artifact and pinned
+    // separately.
+    expect(lexicon!.lemmaIds).toContain("queso");
   });
 });

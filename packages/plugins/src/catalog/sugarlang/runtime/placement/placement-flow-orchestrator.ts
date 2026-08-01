@@ -22,7 +22,7 @@ import type {
   PlacementQuestionnaire,
   SugarlangPlacementFlowPhase
 } from "../types";
-import type { PlacementCompletionEvent } from "../learner/learner-state-reducer";
+import type { PlacementCompletionEvent } from "../learner";
 
 export type { SugarlangPlacementFlowPhase } from "../types";
 

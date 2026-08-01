@@ -61,10 +61,6 @@ export function createTestLearnerProfile(
       sessionId: "session-1",
       startedAt: 1,
       turns: 2,
-      avgResponseLatencyMs: 500,
-      hoverRate: 0,
-      probeFailRate: 0,
-      fatigueScore: 0
     },
     sessionHistory: [],
     ...overrides
@@ -107,7 +103,6 @@ export function createBaseConstraint(
     sentenceComplexityCap: "two-clause",
     targetLanguage: "es",
     learnerCefr: "A2",
-    rawPrescription: createEmptyPrescription(),
     ...overrides
   };
 }
@@ -235,6 +230,13 @@ export function createServicesStub(overrides: Record<string, unknown> = {}) {
       }
     }),
     findNpcDefinition: () => null,
+    /**
+     * 090.3d: the teacher middleware composes a Situation every turn and reads
+     * the seeded compile half from here. Undefined is the honest default -- a
+     * scene that was never built -- and `composeSituation` handles it, so tests
+     * that do not care about scene context need no change.
+     */
+    getSceneContext: () => undefined,
     ...remainingOverrides
   };
 }

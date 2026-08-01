@@ -17,7 +17,7 @@
 
 import type { PluginShellContributionDefinition } from "../../../../shell";
 import { createElement } from "react";
-import { resetSugarlangLearnerDatabases } from "../../runtime/learner/reset-learner-data";
+import { resetSugarlangLearnerDatabases } from "../../runtime/learner";
 import { ComprehensionCheckMonitor } from "./comprehension-check-monitor";
 import { LanguageConfigSection } from "./language-config-section";
 import { ManualRebuildButton } from "./manual-rebuild-button";
@@ -31,6 +31,7 @@ import { VariantReport } from "./variant-report";
 import { VariantsPopoverConnected } from "./variant-popover-connected";
 import { ItemViewVariantsConnected } from "./item-view-variants-connected";
 import { resolveStudioCompileWorkspaceId } from "./editor-support";
+import { SUGARLANG_TEACH_PLAN_CONFIG_KEY } from "../../runtime/compile/teach-plan-state";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
 
@@ -108,6 +109,61 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
               })
             : null
       },
+      // FIRST on the Sugarlang workspace, deliberately: this is the only way to
+      // build anything. Nothing rebuilds on save or on a timer, so content edits
+      // are invisible until this runs. Section order here IS render order.
+      {
+        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
+        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
+        sectionId: "compile-status",
+        label: "Build",
+        summary:
+          "Builds Sugarlang's derived artifacts for the whole project -- scene vocabulary, multi-word expressions, line intent and scene concepts -- and shows cache status.",
+        render: (props) => {
+          const configuration = props.pluginConfigurations.find(
+            (entry) => entry.pluginId === SUGARLANG_SHELL_PLUGIN_ID
+          );
+          const config = configuration?.config as Record<string, unknown> | undefined;
+
+          return createElement(ManualRebuildButton, {
+            gameProjectId: props.gameProjectId,
+            gameProject: props.gameProject,
+            regions: props.regions,
+            activeScene: props.activeScene ?? null,
+            targetLanguage: props.targetLanguage,
+            chunkExtractionEnabled: sugarlangChunkExtractionEnabled,
+            storedTeachPlan: config?.[SUGARLANG_TEACH_PLAN_CONFIG_KEY],
+            // Written through the same UpdatePluginConfiguration command the
+            // Language panel uses. Without a configuration record there is
+            // nothing to patch, so the plan stays in memory for this session --
+            // the same degradation as before it was persisted at all.
+            onPersistTeachPlan: configuration
+              ? (document) =>
+                  props.onCommand({
+                    kind: "UpdatePluginConfiguration",
+                    target: {
+                      aggregateKind: "plugin-config",
+                      aggregateId: configuration.identity.id
+                    },
+                    subject: {
+                      subjectKind: "plugin-configuration",
+                      subjectId: configuration.identity.id
+                    },
+                    payload: {
+                      configuration: {
+                        ...configuration,
+                        enabled: true,
+                        config: {
+                          ...(configuration.config ?? {}),
+                          [SUGARLANG_TEACH_PLAN_CONFIG_KEY]: document
+                        }
+                      }
+                    }
+                  })
+              : undefined
+          });
+        }
+      },
       {
         pluginId: SUGARLANG_SHELL_PLUGIN_ID,
         workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
@@ -160,22 +216,6 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
             onResetLearner: () => resetSugarlangLearnerData()
           });
         }
-      },
-      {
-        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
-        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
-        sectionId: "compile-status",
-        label: "Compile Status",
-        summary: "Shows project-wide Sugarlang compile cache status and allows manual rebuilds.",
-        render: (props) =>
-          createElement(ManualRebuildButton, {
-            gameProjectId: props.gameProjectId,
-            gameProject: props.gameProject,
-            regions: props.regions,
-            activeScene: props.activeScene ?? null,
-            targetLanguage: props.targetLanguage,
-            chunkExtractionEnabled: sugarlangChunkExtractionEnabled
-          })
       },
       {
         pluginId: SUGARLANG_SHELL_PLUGIN_ID,

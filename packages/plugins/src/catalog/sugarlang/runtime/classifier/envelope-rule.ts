@@ -68,9 +68,7 @@ function resolveExemption(
   const normalizedSurfaceForm = lemma.surfaceForm
     ?.normalize("NFC")
     .toLocaleLowerCase();
-  const prescriptionIntroduce = normalizeLookup(
-    options.prescription?.introduce.map((entry) => entry.lemmaId) ?? []
-  );
+  const taughtLemmaIds = normalizeLookup(options.taughtLemmaIds ?? []);
   const knownEntities = normalizeLookup(options.knownEntities ?? []);
   const questEssentialLemmas = normalizeLookup(options.questEssentialLemmas ?? []);
   const voiceInterjections = normalizeLookup(options.voiceInterjections ?? []);
@@ -80,9 +78,9 @@ function resolveExemption(
   );
 
   if (
-    prescriptionIntroduce.has(normalizedLemmaId) ||
+    taughtLemmaIds.has(normalizedLemmaId) ||
     matchedChunk?.constituentLemmaIds.some((lemmaId) =>
-      prescriptionIntroduce.has(lemmaId.normalize("NFC").toLocaleLowerCase())
+      taughtLemmaIds.has(lemmaId.normalize("NFC").toLocaleLowerCase())
     )
   ) {
     return "prescription-introduce";

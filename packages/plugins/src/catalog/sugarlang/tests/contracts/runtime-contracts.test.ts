@@ -17,6 +17,10 @@
 
 import type { RuntimeCompileProfile } from "@sugarmagic/runtime-core/materials";
 import { describe, expect, expectTypeOf, it } from "vitest";
+import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
+import { toVocabularyRefs } from "../../runtime/contracts/teachable-ref";
+import { unavailable, type Situation } from "../../runtime/situation";
+import { computeProbeFloorState } from "../../runtime/learner";
 import {
   INITIAL_PRODUCTIVE_STRENGTH,
   INITIAL_PROVISIONAL_EVIDENCE,
@@ -25,7 +29,7 @@ import {
   type AtlasLemmaEntry,
   type CEFRBand,
   type CefrPosterior,
-  type CompiledSceneLexicon,
+  type SceneVocabularyModel,
   type ComprehensionCheckSpec,
   type CoverageProfile,
   type TeacherContext,
@@ -37,7 +41,6 @@ import {
   type LemmaCard,
   type LexicalAtlasProvider,
   type LexicalChunk,
-  type LexicalPrescription,
   type ObservationKind,
   type ObservationOutcome,
   type PedagogicalDirective,
@@ -50,7 +53,6 @@ import {
   type ProbeTriggerReason,
   type ProducedObservationKind,
   type QuestEssentialLemma,
-  type SceneLemmaInfo,
   type SugarlangConstraint
 } from "../../runtime/types";
 
@@ -173,9 +175,9 @@ describe("sugarlang runtime contracts", () => {
   it("accepts the full pedagogical directive and constraint shapes", () => {
     const directive: PedagogicalDirective = {
       targetVocab: {
-        introduce: [{ lemmaId: "hola", lang: "es" }],
-        reinforce: [{ lemmaId: "tren", lang: "es" }],
-        avoid: [{ lemmaId: "ferrocarril", lang: "es" }]
+        introduce: [{ kind: "vocabulary", lemmaId: "hola", lang: "es" }],
+        reinforce: [{ kind: "vocabulary", lemmaId: "tren", lang: "es" }],
+        avoid: [{ kind: "vocabulary", lemmaId: "ferrocarril", lang: "es" }]
       },
       supportPosture: "supported",
       targetLanguageRatio: 0.7,
@@ -229,18 +231,6 @@ describe("sugarlang runtime contracts", () => {
         text: "Welcome to Wordlark Hollow.",
         lang: "en",
         lineId: "opening-1"
-      },
-      rawPrescription: {
-        introduce: [],
-        reinforce: [],
-        avoid: [],
-        budget: { newItemsAllowed: 0 },
-        rationale: {
-          candidateSetSize: 0,
-          envelopeSurvivorCount: 0,
-          priorityScores: [],
-          reasons: []
-        }
       }
     };
 
@@ -297,27 +287,8 @@ describe("sugarlang runtime contracts", () => {
       currentSession: null,
       sessionHistory: []
     };
-    const prescription: LexicalPrescription = {
-      introduce: [{ lemmaId: "hola", lang: "es" }],
-      reinforce: [{ lemmaId: "tren", lang: "es" }],
-      avoid: [{ lemmaId: "ferrocarril", lang: "es" }],
-      anchor: { lemmaId: "estacion", lang: "es" },
-      budget: { newItemsAllowed: 1, turnSeconds: 20 },
-      rationale: {
-        summary: "One new station word, one due review.",
-        candidateSetSize: 20,
-        envelopeSurvivorCount: 14,
-        priorityScores: [
-          {
-            lemmaRef: { lemmaId: "hola", lang: "es" },
-            score: 0.9,
-            reasons: ["scene-anchor", "new-item-slot"]
-          }
-        ],
-        reasons: ["one anchor selected"],
-        questEssentialExclusionLemmaIds: ["billete"]
-      }
-    };
+    // 090.5: the LexicalPrescription fixture is gone with the type. The lemma
+    // lists it fed into the directive below are now written inline.
     const chunk: LexicalChunk = {
       chunkId: "chunk-1",
       normalizedForm: "de_vez_en_cuando",
@@ -329,15 +300,6 @@ describe("sugarlang runtime contracts", () => {
       extractorPromptVersion: "v1",
       source: "llm-extracted"
     };
-    const sceneLemma: SceneLemmaInfo = {
-      lemmaId: "hola",
-      cefrPriorBand: "A1",
-      frequencyRank: 10,
-      partsOfSpeech: ["interjection"],
-      isQuestCritical: false,
-      sceneWeight: 1,
-      npcSourceIds: []
-    };
     const questEssential: QuestEssentialLemma = {
       lemmaId: "billete",
       lang: "es",
@@ -346,15 +308,14 @@ describe("sugarlang runtime contracts", () => {
       sourceObjectiveNodeId: "objective-1",
       sourceObjectiveDisplayName: "Ask for a ticket"
     };
-    const lexicon: CompiledSceneLexicon = {
+    const lexicon: SceneVocabularyModel = {
       sceneId: "scene-1",
       contentHash: "hash-1",
       pipelineVersion: "pipeline-1",
       atlasVersion: "atlas-1",
       profile: "authoring-preview",
-      lemmas: { hola: sceneLemma },
+      lemmaIds: ["hola"],
       properNouns: ["Orrin"],
-      anchors: ["hola"],
       questEssentialLemmas: [questEssential],
       sources: {
         hola: [
@@ -428,25 +389,20 @@ describe("sugarlang runtime contracts", () => {
         conformance: "conformant"
       }
     };
-    const pendingLemma: ActiveQuestEssentialLemma = {
-      lemmaRef: { lemmaId: "billete", lang: "es" },
-      sourceObjectiveNodeId: "objective-1",
-      sourceObjectiveDisplayName: "Ask for a ticket",
-      sourceQuestId: "quest-1",
-      cefrBand: "B1",
-      supportLanguageGloss: "ticket"
-    };
-    const probeFloorState: ProbeFloorState = {
-      turnsSinceLastProbe: 16,
-      totalPendingLemmas: 5,
-      softFloorReached: true,
-      hardFloorReached: false
-    };
-    const teacherContext: TeacherContext = {
-      conversationId: "conversation-1",
-      learner,
-      prescription,
-      scene: lexicon,
+    // 090.4: npc / recentTurns / turnsSinceLastProbe fold into situation, per
+    // TeacherContext's two content doors -- see contracts/providers.ts's own
+    // note on the collapse.
+    const situation: Situation = {
+      sceneId: lexicon.sceneId,
+      sceneContext: unavailable(),
+      runtime: {
+        questObjectives: unavailable(),
+        questStage: unavailable(),
+        trackedQuest: unavailable(),
+        timeOfDay: unavailable(),
+        knownFacts: unavailable(),
+        recentWorldEvents: unavailable()
+      },
       npc: {
         npcDefinitionId: "npc-orinn",
         displayName: "Orrin",
@@ -461,21 +417,18 @@ describe("sugarlang runtime contracts", () => {
           lang: "es"
         }
       ],
+      turnsSinceLastProbe: 16
+    };
+    const teacherContext: TeacherContext = {
+      conversationId: "conversation-1",
+      learner,
+      atlas: new CefrLexAtlasProvider(),
+      situation,
       lang: {
         targetLanguage: "es",
         supportLanguage: "en"
       },
-      calibrationActive: false,
-      pendingProvisionalLemmas: [
-        {
-          lemmaRef: { lemmaId: "hola", lang: "es" },
-          evidenceAmount: 1,
-          turnsPending: 3
-        }
-      ],
-      probeFloorState,
-      activeQuestEssentialLemmas: [pendingLemma],
-      selectionMetadata: {}
+      calibrationActive: false
     };
     const atlas: LexicalAtlasProvider = {
       getLemma: () =>
@@ -499,7 +452,13 @@ describe("sugarlang runtime contracts", () => {
     };
     const teacherPolicy: TeacherPolicy = {
       invoke: async () => ({
-        targetVocab: prescription,
+        // 090.4: the directive's slate is TeachableRefs, not bare LemmaRefs.
+        // Lifting rather than casting keeps the difference real.
+        targetVocab: {
+          introduce: toVocabularyRefs([{ lemmaId: "hola", lang: "es" }]),
+          reinforce: toVocabularyRefs([{ lemmaId: "tren", lang: "es" }]),
+          avoid: toVocabularyRefs([{ lemmaId: "ferrocarril", lang: "es" }])
+        },
         supportPosture: "supported",
         targetLanguageRatio: 0.7,
         interactionStyle: "natural_dialogue",
@@ -596,7 +555,17 @@ describe("sugarlang runtime contracts", () => {
     };
 
     expect(verdict.withinEnvelope).toBe(false);
-    expect(teacherContext.probeFloorState.softFloorReached).toBe(true);
+    // 090.4: derived, not carried. 16 turns since the last probe with 5 pending
+    // lemmas is exactly the soft floor (>= 15 turns AND >= 5 pending).
+    const derivedProbeFloor: ProbeFloorState = computeProbeFloorState(
+      Array.from({ length: 5 }, (_, index) => ({
+        lemmaRef: { lemmaId: `pending-${index}`, lang: "es" },
+        evidenceAmount: 1,
+        turnsPending: 3
+      })),
+      teacherContext.situation?.turnsSinceLastProbe ?? 0
+    );
+    expect(derivedProbeFloor.softFloorReached).toBe(true);
     expect(atlas.getAtlasVersion("es")).toBe("atlas-1");
     expect(priorProvider.getCefrInitialPosterior("A2").A2.alpha).toBe(1);
     expectTypeOf(teacherPolicy.invoke(teacherContext)).toEqualTypeOf<
@@ -616,7 +585,7 @@ describe("sugarlang runtime contracts", () => {
       | "produced-unprompted"
       | "produced-incorrect"
     >();
-    expectTypeOf<CompiledSceneLexicon["profile"]>().toEqualTypeOf<RuntimeCompileProfile>();
+    expectTypeOf<SceneVocabularyModel["profile"]>().toEqualTypeOf<RuntimeCompileProfile>();
     expectTypeOf<PlacementScoreResult["perBandScores"]>().toEqualTypeOf<
       Record<CEFRBand, { correct: number; total: number }>
     >();
@@ -663,19 +632,7 @@ const noProbeConstraint: SugarlangConstraint = {
   glossingStrategy: "inline",
   sentenceComplexityCap: "free",
   targetLanguage: "es",
-  learnerCefr: "A1",
-  rawPrescription: {
-    introduce: [],
-    reinforce: [],
-    avoid: [],
-    budget: { newItemsAllowed: 0 },
-    rationale: {
-      candidateSetSize: 0,
-      envelopeSurvivorCount: 0,
-      priorityScores: [],
-      reasons: []
-    }
-  }
+  learnerCefr: "A1"
 };
 void noProbeConstraint;
 
@@ -739,38 +696,36 @@ mapObservationKind("hovered");
 
 // Quest-essential lemmas are required on the compiled scene lexicon.
 // @ts-expect-error missing questEssentialLemmas
-const invalidLexicon: CompiledSceneLexicon = {
+const invalidLexicon: SceneVocabularyModel = {
   sceneId: "scene-1",
   contentHash: "hash",
   pipelineVersion: "pipeline",
   atlasVersion: "atlas",
   profile: "runtime-preview",
-  lemmas: {},
-  properNouns: [],
-  anchors: []
+  lemmaIds: [],
+  properNouns: []
 };
 void invalidLexicon;
 
-const lexiconWithoutChunks: CompiledSceneLexicon = {
+const lexiconWithoutChunks: SceneVocabularyModel = {
   sceneId: "scene-2",
   contentHash: "hash-2",
   pipelineVersion: "pipeline",
   atlasVersion: "atlas",
   profile: "runtime-preview",
-  lemmas: {},
+  lemmaIds: [],
   properNouns: [],
-  anchors: [],
   questEssentialLemmas: []
 };
 void lexiconWithoutChunks;
 
-const lexiconWithEmptyChunks: CompiledSceneLexicon = {
+const lexiconWithEmptyChunks: SceneVocabularyModel = {
   ...lexiconWithoutChunks,
   chunks: []
 };
 void lexiconWithEmptyChunks;
 
-const lexiconWithChunks: CompiledSceneLexicon = {
+const lexiconWithChunks: SceneVocabularyModel = {
   ...lexiconWithoutChunks,
   chunks: [
     {

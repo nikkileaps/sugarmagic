@@ -25,7 +25,6 @@ import {
 import {
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
-  SUGARLANG_PRESCRIPTION_ANNOTATION
 } from "../../runtime/middlewares/shared";
 import {
   createServicesStub,
@@ -33,6 +32,7 @@ import {
   createTestLearnerProfile
 } from "./test-helpers";
 import { createLearnerBlackboard } from "../learner/test-helpers";
+import { SugarlangMissingTargetLanguageError } from "../../config";
 
 describe("SugarLangContextMiddleware", () => {
   it("runs sugarlang context for scripted NPC conversations", async () => {
@@ -129,11 +129,8 @@ describe("SugarLangContextMiddleware", () => {
     expect(execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION]).toEqual({
       phase: "opening-dialog"
     });
-    expect(execution.annotations[SUGARLANG_PRESCRIPTION_ANNOTATION]).toMatchObject({
-      introduce: [],
-      reinforce: [],
-      avoid: []
-    });
+    // 090.10: the empty-prescription annotation this used to assert went with
+    // the budgeter. The opening-dialog line is the part that mattered.
     expect(execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION]).toEqual({
       text: "Welcome to the placement check.",
       lang: "en",
@@ -246,19 +243,6 @@ describe("SugarLangContextMiddleware", () => {
       anchors: [],
       questEssentialLemmas: []
     });
-    const prescribe = vi.fn().mockResolvedValue({
-      introduce: [],
-      reinforce: [],
-      avoid: [],
-      budget: { newItemsAllowed: 0 },
-      rationale: {
-        summary: "normal runtime",
-        candidateSetSize: 0,
-        envelopeSurvivorCount: 0,
-        priorityScores: [],
-        reasons: []
-      }
-    });
     const services = createServicesStub({
       getBlackboard: () => blackboard,
       resolveForExecution: () => ({
@@ -270,9 +254,6 @@ describe("SugarLangContextMiddleware", () => {
         },
         sceneLexiconStore: {
           ensure
-        },
-        budgeter: {
-          prescribe
         },
         atlas: {
           getLemma: vi.fn().mockReturnValue(undefined)
@@ -316,25 +297,14 @@ describe("SugarLangContextMiddleware", () => {
     await middleware.prepare?.(execution);
 
     expect(execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION]).toBeUndefined();
-    expect(prescribe).toHaveBeenCalledTimes(1);
+    // 090.10: was `expect(prescribe).toHaveBeenCalledTimes(1)`. The budgeter is
+    // gone; `ensure` below proves the same thing -- the middleware fell through
+    // to the normal runtime path rather than short-circuiting on placement.
     expect(ensure).toHaveBeenCalledTimes(1);
   });
 
   it("treats the placement role as inert when placement is globally disabled", async () => {
     const learner = createTestLearnerProfile();
-    const prescribe = vi.fn().mockResolvedValue({
-      introduce: [],
-      reinforce: [],
-      avoid: [],
-      budget: { newItemsAllowed: 0 },
-      rationale: {
-        summary: "normal runtime",
-        candidateSetSize: 0,
-        envelopeSurvivorCount: 0,
-        priorityScores: [],
-        reasons: []
-      }
-    });
     const services = createServicesStub({
       getConfig: () => ({
         debugLogging: false,
@@ -366,9 +336,6 @@ describe("SugarLangContextMiddleware", () => {
             questEssentialLemmas: []
           })
         },
-        budgeter: {
-          prescribe
-        },
         atlas: {
           getLemma: vi.fn().mockReturnValue(undefined)
         }
@@ -411,6 +378,56 @@ describe("SugarLangContextMiddleware", () => {
     await middleware.prepare?.(execution);
 
     expect(execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION]).toBeUndefined();
-    expect(prescribe).toHaveBeenCalledTimes(1);
+    // 090.10: was `expect(prescribe).toHaveBeenCalledTimes(1)`. The budgeter is
+    // gone; `ensure` below proves the same thing -- the middleware fell through
+    // to the normal runtime path rather than short-circuiting on placement.
+  });
+  it("090.11: THROWS in the runtime when no target language is configured", async () => {
+    // THE RUNTIME DOES NOT RUN WITHOUT A LANGUAGE (nikki, 2026-07-31).
+    //
+    // This used to `return execution`, so a shipped game with sugarlang enabled
+    // and no language ran every conversation with sugarlang silently inert --
+    // nothing graded, nothing taught. That is indistinguishable from "the
+    // teaching is bad" and is the worst possible presentation of a one-field
+    // configuration mistake.
+    //
+    // Studio and preview are the layers allowed to be relaxed about this, and
+    // they each handle it their own way. Reaching HERE means a BUILT GAME
+    // shipped misconfigured.
+    const middleware = createSugarLangContextMiddleware({
+      services: createServicesStub({
+        getTargetLanguage: () => null
+      }) as never
+    });
+    const execution = createTestExecution();
+    execution.selection.targetLanguage = "";
+
+    await expect(middleware.prepare?.(execution)).rejects.toThrow(
+      SugarlangMissingTargetLanguageError
+    );
+  });
+
+  it("090.11: does NOT throw for a conversation sugarlang is not part of", async () => {
+    // The enabled-check is `shouldRunSugarlangForExecution`, which returns
+    // before the language is ever read. A project that never uses sugarlang must
+    // not be crashed by sugarlang's configuration.
+    const middleware = createSugarLangContextMiddleware({
+      services: createServicesStub({
+        getTargetLanguage: () => null
+      }) as never
+    });
+    const execution = createTestExecution({
+      selection: {
+        conversationKind: "free-form",
+        npcDefinitionId: null,
+        npcDisplayName: null,
+        interactionMode: "agent",
+        targetLanguage: "",
+        supportLanguage: "en",
+        metadata: {}
+      } as never
+    });
+
+    await expect(middleware.prepare?.(execution)).resolves.toBeDefined();
   });
 });
