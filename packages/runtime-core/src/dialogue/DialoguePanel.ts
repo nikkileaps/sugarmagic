@@ -732,7 +732,10 @@ function injectStyles() {
       width: min(680px, calc(100vw - 64px));
       display: flex;
       flex-direction: column;
-      align-items: center;
+      /* flex-start, not center: the name chip is LEFT-anchored and overlaps
+         the panel's top-left corner. The panel stretches back to full width
+         below. */
+      align-items: flex-start;
       pointer-events: none;
       opacity: 0;
       transition: opacity 0.18s ease-out, transform 0.18s ease-out;
@@ -745,44 +748,86 @@ function injectStyles() {
       pointer-events: auto;
     }
 
-    /* Speaker rides ABOVE the box as a pill, so the box itself stays short. */
+    /* NAME CHIP. Rides above the paper and overlaps its top-left corner.
+       Spec settled in docs/prototypes/paper-dialogue-box-FINAL.html.
+       Deliberately CLEAN-edged against the rough paper -- a printed label
+       pinned to a torn sheet. Do not roughen it to match. */
     .sm-dialogue-box-speaker {
       position: relative;
-      z-index: 1;
-      margin-bottom: -10px;
-      padding: 4px 16px;
-      border-radius: 999px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      background: linear-gradient(180deg, rgba(36, 34, 56, 0.98), rgba(26, 24, 42, 0.98));
-      color: #85c1e9;
-      font-size: 13px;
+      z-index: 2;
+      width: fit-content;
+      margin-left: 18px;
+      margin-bottom: -14px;
+      padding: 7px 15px;
+      border-radius: 13px;
+      border: 2.5px solid #d9b264;
+      background: linear-gradient(180deg, #5d2a55, #4a2145);
+      color: #f7ead9;
+      font-size: 15px;
       font-weight: 600;
-      letter-spacing: 0.02em;
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.13);
     }
 
     .sm-dialogue-box-speaker.is-empty {
       display: none;
     }
 
+    /* PAPER PANEL. The background is an SVG layer (paper-panel.ts), NOT a CSS
+       background -- a deckled edge cannot be expressed as border-radius. So
+       this element is transparent and the paper is painted behind it.
+       drop-shadow (not box-shadow) so the shadow follows the torn silhouette
+       rather than a rectangle. */
     .sm-dialogue-box {
       position: relative;
+      align-self: stretch;
       width: 100%;
-      min-height: 84px;
-      padding: 18px 46px 16px 22px;
-      border-radius: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: linear-gradient(180deg, rgba(24, 24, 37, 0.94), rgba(17, 17, 27, 0.96));
-      box-shadow: 0 18px 54px rgba(0, 0, 0, 0.38);
-      backdrop-filter: blur(20px);
+      min-height: 86px;
+      /* NOTE the spaces around + . CSS calc requires them, and a var()
+         substitution failure falls back to the property's INITIAL value, not
+         to the shorthand -- which silently zeroes the top padding and slides
+         the first line of text under the name chip. */
+      padding: 28px 28px 28px 28px;
+      padding-top: 34px;
+      background: transparent;
+      border: none;
+      filter: drop-shadow(0 9px 16px rgba(0, 0, 0, 0.40));
       /* NOT overflow:hidden -- unlike the chat panel, this box is short and
          hover glosses open upward, so clipping would swallow them. */
     }
 
+    .sm-dialogue-box-paper {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    /* Everything above the paper. */
+    .sm-dialogue-box-body,
+    .sm-dialogue-box-enrichment,
+    .sm-dialogue-box-choices,
+    .sm-dialogue-box-advance {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Ink on paper: the scripted box flipped from light-on-dark to
+       dark-on-cream, so text colours are re-specified here rather than
+       inherited from the chat panel's palette. */
     .sm-dialogue-box .sm-dialogue-entry-text {
-      color: rgba(240, 232, 223, 0.9);
-      font-size: 16px;
-      line-height: 1.6;
+      color: #2f2620;
+      font-family: ui-rounded, "Nunito", "Quicksand", system-ui, sans-serif;
+      font-size: 17px;
+      line-height: 1.5;
+    }
+
+    .sm-dialogue-box-speaker {
+      font-family: ui-rounded, "Nunito", "Quicksand", system-ui, sans-serif;
     }
 
     .sm-dialogue-box-enrichment:empty {
@@ -800,6 +845,8 @@ function injectStyles() {
       margin-top: 12px;
     }
 
+    /* Choices sit ON the paper, so these are dark-on-cream. The chat panel
+       keeps its own light-on-dark choice styling. */
     .sm-dialogue-box-choice {
       display: flex;
       align-items: baseline;
@@ -807,9 +854,10 @@ function injectStyles() {
       width: 100%;
       padding: 8px 12px;
       border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(255, 255, 255, 0.03);
-      color: rgba(240, 232, 223, 0.92);
+      border: 1px solid rgba(90, 62, 24, 0.22);
+      background: rgba(120, 84, 32, 0.06);
+      color: #33291f;
+      font-family: ui-rounded, "Nunito", "Quicksand", system-ui, sans-serif;
       font-size: 15px;
       text-align: left;
       cursor: pointer;
@@ -817,14 +865,14 @@ function injectStyles() {
     }
 
     .sm-dialogue-box-choice:hover {
-      background: rgba(137, 180, 250, 0.12);
-      border-color: rgba(137, 180, 250, 0.35);
+      background: rgba(120, 84, 32, 0.14);
+      border-color: rgba(90, 62, 24, 0.45);
     }
 
     .sm-dialogue-box-choice .choice-number {
-      color: rgba(249, 226, 175, 0.9);
+      color: #8a5a12;
       font-variant-numeric: tabular-nums;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     /* Advance chevron, bottom-right, pulsing only when a press would advance. */
@@ -832,8 +880,8 @@ function injectStyles() {
       position: absolute;
       right: 18px;
       bottom: 12px;
-      color: rgba(240, 232, 223, 0.35);
-      font-size: 13px;
+      color: #b5762a;
+      font-size: 15px;
       opacity: 0;
       transition: opacity 0.15s ease-out;
     }
@@ -844,8 +892,42 @@ function injectStyles() {
     }
 
     @keyframes sm-dialogue-box-advance-pulse {
-      0%, 100% { opacity: 0.35; transform: translateX(0); }
-      50% { opacity: 0.85; transform: translateX(2px); }
+      0%, 100% { opacity: 0.55; transform: translateX(0); }
+      50% { opacity: 1; transform: translateX(2px); }
+    }
+
+    /* HIGHLIGHTS ON PAPER -- scoped to .sm-dialogue-box ONLY.
+       MEANING IS UNCHANGED and must stay that way: gold = introduce (new),
+       blue = reinforce (review), and the celebrate animation is the same
+       keyframes. Only the VALUES move, because the originals are tuned for the
+       dark chat panel and wash out on cream.
+       The free-form DialoguePanel keeps the originals untouched.
+
+       Colour alone was not enough -- three other properties carry light-on-dark
+       values and all three had to move too, or the word renders dark with a
+       pale halo and an invisible underline:
+         text-shadow   a light glow that hazes the ink on cream
+         border-bottom the underline, light gold on light paper
+         box-shadow    the inset "highlighter" bar behind the word */
+    .sm-dialogue-box .sm-dialogue-focus-term-introduce {
+      color: #8a5a00;
+      text-shadow: none;
+    }
+
+    .sm-dialogue-box .sm-dialogue-focus-term-introduce .sm-dialogue-focus-term-text {
+      border-bottom: 1px solid rgba(138, 90, 0, 0.45);
+      box-shadow: inset 0 -0.18em 0 rgba(176, 120, 0, 0.16);
+    }
+
+    .sm-dialogue-box .sm-dialogue-focus-term-reinforce {
+      color: #1f5f86;
+      text-shadow: none;
+    }
+
+    /* Celebrate: same keyframes, paper-appropriate colours. */
+    .sm-dialogue-box .sm-dialogue-focus-term-celebrate .sm-dialogue-focus-term-text {
+      border-bottom-color: rgba(176, 120, 0, 0.9);
+      box-shadow: inset 0 -0.2em 0 rgba(214, 158, 40, 0.34);
     }
 
     /* Referenced by both presentations since 085.5 but never defined. */
@@ -858,6 +940,13 @@ function injectStyles() {
       color: rgba(240, 232, 223, 0.78);
       font-size: 13px;
       line-height: 1.5;
+    }
+
+    /* Same element on paper: the chat-panel colours above are invisible here. */
+    .sm-dialogue-box .sm-dialogue-teach-line {
+      border-left-color: rgba(138, 90, 18, 0.55);
+      background: rgba(138, 90, 18, 0.08);
+      color: #4a3c2a;
     }
 
     .sm-dialogue-panel-container.visible {
