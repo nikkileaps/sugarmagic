@@ -1528,6 +1528,10 @@ export function createWebRuntimeHost(
     inputManager?.detach();
     inputManager = null;
     cameraState = null;
+    // The director is a const in this closure and outlives a reboot, so a move
+    // still in flight at teardown would drive the NEXT session's camera from a
+    // baseline belonging to the last one.
+    cameraMoveDirector.cancel();
     world = null;
 
     playerVisualController?.dispose();
@@ -1774,20 +1778,26 @@ export function createWebRuntimeHost(
       );
     }
 
-    // AFTER follow, and outside the block above: follow owns target and yaw,
-    // a move owns pitch and distance, and the two never write the same field.
-    if (cameraState) {
-      const moveSample = cameraMoveDirector.update(delta * 1000, CAMERA_MOVE_BOUNDS);
-      if (moveSample) {
-        cameraState = {
-          ...cameraState,
-          pitch: moveSample.pitch,
-          distance: moveSample.distance
-        };
-      }
-    }
+    // A move is composed for RENDERING ONLY and never written back.
+    //
+    // Persisting it (which this did at first) gave pitch and distance two
+    // writers -- the player, and the move -- and since `request` captures
+    // cameraState as the framing to give back, a second request mid-move
+    // captured the MOVE's own output as the player's resting framing and the
+    // real one was gone for the session. Reachable on ordinary flows:
+    // DialogueManager ends and starts in one synchronous block, and a scripted
+    // follow-up starts on a microtask, both long before the next frame.
+    //
+    // cameraState stays the player's framing; the move is an overlay on top.
+    const moveSample = cameraState
+      ? cameraMoveDirector.update(delta * 1000, CAMERA_MOVE_BOUNDS)
+      : null;
+    const framedCamera =
+      moveSample && cameraState
+        ? { ...cameraState, pitch: moveSample.pitch, distance: moveSample.distance }
+        : cameraState;
 
-    const camPos = computeCameraPosition(cameraState);
+    const camPos = computeCameraPosition(framedCamera);
     camera.position.set(camPos.x, camPos.y, camPos.z);
     camera.lookAt(camPos.lookAtX, camPos.lookAtY, camPos.lookAtZ);
 
@@ -2691,7 +2701,7 @@ export function createWebRuntimeHost(
             distance: cameraState.distance
           });
         },
-        release: () => cameraMoveDirector.release()
+        release: (moveName) => cameraMoveDirector.release(moveName, CAMERA_MOVE_BOUNDS)
       },
       activeRegion,
       activeScene,

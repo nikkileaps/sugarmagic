@@ -169,7 +169,7 @@ describe("createCameraMoveDirector", () => {
     expect(arrived?.phase).toBe("held");
     expect(arrived!.distance).toBeLessThan(BASELINE.distance);
 
-    director.release();
+    director.release("dialogue-focus", BOUNDS);
     const returned = drive(director, DIALOGUE_FOCUS_MOVE.exitMs + 32);
     expect(returned?.phase).toBe("done");
     expect(returned!.pitch).toBeCloseTo(BASELINE.pitch, 3);
@@ -180,7 +180,7 @@ describe("createCameraMoveDirector", () => {
     const director = createCameraMoveDirector();
     director.request("dialogue-focus", BASELINE);
     drive(director, DIALOGUE_FOCUS_MOVE.enterMs + 32);
-    director.release();
+    director.release("dialogue-focus", BOUNDS);
     drive(director, DIALOGUE_FOCUS_MOVE.exitMs + 32);
 
     expect(director.update(16, BOUNDS)).toBeNull();
@@ -192,7 +192,7 @@ describe("createCameraMoveDirector", () => {
     director.request("dialogue-focus", BASELINE);
     const partial = drive(director, DIALOGUE_FOCUS_MOVE.enterMs * 0.25)!;
 
-    director.release();
+    director.release("dialogue-focus", BOUNDS);
     const firstExitFrame = director.update(1, BOUNDS)!;
 
     // Within a frame of where it was, not jumped to the target and back.
@@ -217,11 +217,67 @@ describe("createCameraMoveDirector", () => {
 
     const moved = { pitch: 38, distance: 18 };
     director.request("dialogue-focus", moved);
-    director.release();
+    director.release("dialogue-focus", BOUNDS);
     const returned = drive(director, DIALOGUE_FOCUS_MOVE.exitMs + 32)!;
 
     // Returns to the SECOND baseline, not the first.
     expect(returned.pitch).toBeCloseTo(moved.pitch, 3);
     expect(returned.distance).toBeCloseTo(moved.distance, 3);
+  });
+});
+
+describe("regressions found in review", () => {
+  const drive = (director: ReturnType<typeof createCameraMoveDirector>, ms: number, step = 16) => {
+    let last: ReturnType<typeof director.update> = null;
+    for (let t = 0; t < ms; t += step) last = director.update(step, BOUNDS) ?? last;
+    return last;
+  };
+
+  it("never leaves the rig limits when releasing from a CLAMPED hold", () => {
+    // The move wants pitch 30 from this baseline, which clamps to 35. Sampling
+    // the release without bounds reported 31.5 -- a position the camera was
+    // never in -- and the whole return then ran below pitchMin.
+    const director = createCameraMoveDirector();
+    director.request("dialogue-focus", { pitch: 40, distance: 20 });
+    drive(director, DIALOGUE_FOCUS_MOVE.enterMs + 32);
+
+    director.release("dialogue-focus", BOUNDS);
+    for (let t = 0; t < DIALOGUE_FOCUS_MOVE.exitMs + 32; t += 16) {
+      const frame = director.update(16, BOUNDS);
+      if (!frame) break;
+      expect(frame.pitch).toBeGreaterThanOrEqual(BOUNDS.pitchMin);
+      expect(frame.pitch).toBeLessThanOrEqual(BOUNDS.pitchMax);
+      expect(frame.distance).toBeGreaterThanOrEqual(BOUNDS.distanceMin);
+      expect(frame.distance).toBeLessThanOrEqual(BOUNDS.distanceMax);
+    }
+  });
+
+  it("releases only the move that is actually in flight", () => {
+    const director = createCameraMoveDirector();
+    director.request("dialogue-focus", BASELINE);
+    drive(director, DIALOGUE_FOCUS_MOVE.enterMs + 32);
+
+    // Someone else's move name must not hand back this one's framing.
+    director.release("some-other-move", BOUNDS);
+    expect(drive(director, 200)!.phase).toBe("held");
+
+    director.release("dialogue-focus", BOUNDS);
+    expect(drive(director, DIALOGUE_FOCUS_MOVE.exitMs + 32)!.phase).toBe("done");
+  });
+
+  it("re-requesting off the PLAYER's framing returns there, however many times", () => {
+    // The host no longer writes the move into camera state, so the framing a
+    // request captures is the player's own and cannot ratchet inward.
+    const director = createCameraMoveDirector();
+    const resting = { pitch: 45, distance: 25 };
+
+    for (let round = 0; round < 3; round++) {
+      director.request("dialogue-focus", resting);
+      drive(director, DIALOGUE_FOCUS_MOVE.enterMs + 32);
+      director.release("dialogue-focus", BOUNDS);
+      const settled = drive(director, DIALOGUE_FOCUS_MOVE.exitMs + 32)!;
+      expect(settled.pitch).toBeCloseTo(resting.pitch, 3);
+      expect(settled.distance).toBeCloseTo(resting.distance, 3);
+    }
   });
 });

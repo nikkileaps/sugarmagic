@@ -205,9 +205,12 @@ export class DialogueManager {
         dialogueDefinitionId: selection.dialogueDefinitionId ?? null,
         conversationKind: selection.conversationKind
       });
-      this.presenter.hide();
-      this.currentDialogueId = null;
-      this.currentNodeId = null;
+      // END it rather than just hiding the panel. onDialogueEnd is what
+      // releases the world-input lock and the camera framing, so hiding alone
+      // left the player unable to move, with the camera pinned in the
+      // conversation framing, and no way back.
+      this.conversationHost = host;
+      this.end("cancelled");
       return false;
     }
 

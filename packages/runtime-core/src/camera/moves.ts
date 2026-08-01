@@ -132,8 +132,15 @@ export interface CameraMoveDirector {
    * exist must not take the camera hostage.
    */
   request: (name: string, current: { pitch: number; distance: number }) => void;
-  /** Begin handing the framing back, from wherever the camera is now. */
-  release: () => void;
+  /**
+   * Begin handing the framing back, from wherever the camera is now.
+   *
+   * Takes the SAME bounds the caller has been passing to update: sampling with
+   * different limits reports a position the camera was never actually in.
+   * Ignores a name that is not the move in flight, so one requester cannot
+   * release another's framing.
+   */
+  release: (moveName: string, bounds: CameraMoveBounds) => void;
   /** Drop the move immediately, leaving the camera where it stands. */
   cancel: () => void;
   /**
@@ -172,23 +179,14 @@ export function createCameraMoveDirector(): CameraMoveDirector {
       elapsedMs = 0;
       exit = null;
     },
-    release() {
+    release(moveName, bounds) {
       if (!move || exit) return;
-      // Sampled at release so the return starts where the camera actually is.
-      // Bounds do not matter for this read: the current framing is already
-      // inside them, whatever they are.
-      const now = sampleCameraMove({
-        move,
-        baseline,
-        bounds: {
-          pitchMin: -Infinity,
-          pitchMax: Infinity,
-          distanceMin: -Infinity,
-          distanceMax: Infinity
-        },
-        elapsedMs,
-        exit: null
-      });
+      if (move.name !== moveName) return;
+      // Sampled with the REAL bounds. Sampling unbounded (which this did at
+      // first) reports where the move would have gone if the rig had no
+      // limits, not where the camera is -- so the return began by snapping
+      // OUTSIDE the rig, several degrees past pitchMin, before easing back.
+      const now = sampleCameraMove({ move, baseline, bounds, elapsedMs, exit: null });
       exit = { fromPitch: now.pitch, fromDistance: now.distance, elapsedMs: 0 };
     },
     cancel() {
@@ -266,9 +264,19 @@ export function sampleCameraMove(input: SampleCameraMoveInput): CameraMoveSample
 
   const t = move.exitMs > 0 ? exit.elapsedMs / move.exitMs : 1;
   const eased = ease(t);
+  // Clamped as well as the entry: a return is still a framing, and nothing this
+  // module produces may sit outside the rig's limits.
   return {
-    pitch: lerp(exit.fromPitch, baseline.pitch, eased),
-    distance: lerp(exit.fromDistance, baseline.distance, eased),
+    pitch: clamp(
+      lerp(exit.fromPitch, baseline.pitch, eased),
+      bounds.pitchMin,
+      bounds.pitchMax
+    ),
+    distance: clamp(
+      lerp(exit.fromDistance, baseline.distance, eased),
+      bounds.distanceMin,
+      bounds.distanceMax
+    ),
     phase: t >= 1 ? "done" : "exiting"
   };
 }
