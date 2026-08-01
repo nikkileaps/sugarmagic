@@ -1,7 +1,7 @@
 /**
  * packages/runtime-core/src/dialogue/highlight.test.ts
  *
- * Purpose: Unit tests for readTeachLine and findTermMatches.
+ * Purpose: Unit tests for readDialogueTeachLine and findTermMatches.
  *
  * Exports:
  *   - none
@@ -9,50 +9,50 @@
  * Relationships:
  *   - Tests ./highlight.ts
  *
- * Implements: Plan 085 story 085.5 (readTeachLine), pre-existing (findTermMatches)
+ * Implements: Plan 085 story 085.5 (readDialogueTeachLine), pre-existing (findTermMatches)
  *
  * Status: active
  */
 
 import { describe, expect, it } from "vitest";
-import { findTermMatches, readTeachLine } from "./highlight";
+import { findTermMatches, readDialogueTeachLine } from "./highlight";
 
-describe("readTeachLine", () => {
+describe("readDialogueTeachLine", () => {
   it("returns null when annotations is undefined", () => {
-    expect(readTeachLine(undefined)).toBeNull();
+    expect(readDialogueTeachLine(undefined)).toBeNull();
   });
 
   it("returns null when the teach-line key is absent", () => {
-    expect(readTeachLine({})).toBeNull();
+    expect(readDialogueTeachLine({})).toBeNull();
   });
 
   it("returns null when the value is not an object", () => {
-    expect(readTeachLine({ "sugarlang.teachLine": "not an object" })).toBeNull();
+    expect(readDialogueTeachLine({ "dialogueTeachLine": "not an object" })).toBeNull();
   });
 
   it("returns null when label is missing", () => {
-    expect(readTeachLine({ "sugarlang.teachLine": { text: '"Hola" is a greeting.' } })).toBeNull();
+    expect(readDialogueTeachLine({ "dialogueTeachLine": { text: '"Hola" is a greeting.' } })).toBeNull();
   });
 
   it("returns null when text is missing", () => {
-    expect(readTeachLine({ "sugarlang.teachLine": { label: "Greeting" } })).toBeNull();
+    expect(readDialogueTeachLine({ "dialogueTeachLine": { label: "Greeting" } })).toBeNull();
   });
 
   it("returns null when the value is null", () => {
-    expect(readTeachLine({ "sugarlang.teachLine": null })).toBeNull();
+    expect(readDialogueTeachLine({ "dialogueTeachLine": null })).toBeNull();
   });
 
   it("returns the annotation when both label and text are present", () => {
-    const result = readTeachLine({
-      "sugarlang.teachLine": { label: "Greeting", text: '"Hola" is a greeting.' }
+    const result = readDialogueTeachLine({
+      "dialogueTeachLine": { label: "Greeting", text: '"Hola" is a greeting.' }
     });
     expect(result).toEqual({ label: "Greeting", text: '"Hola" is a greeting.' });
   });
 
   it("ignores unrelated annotation keys", () => {
-    const result = readTeachLine({
+    const result = readDialogueTeachLine({
       dialogueHighlight: { focusTerms: ["hola"] },
-      "sugarlang.teachLine": { label: "Farewell", text: '"Adios" is a farewell.' }
+      "dialogueTeachLine": { label: "Farewell", text: '"Adios" is a farewell.' }
     });
     expect(result).toEqual({ label: "Farewell", text: '"Adios" is a farewell.' });
   });

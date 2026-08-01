@@ -741,7 +741,14 @@ export function createSugarLangObserveMiddleware(
                 taughtAtMs: observedAtMs,
                 realizingChunkId: match.chunk.chunkId
               });
-              normalizedTurn.annotations!["sugarlang.teachLine"] = {
+              // THE FIRST-TEACH BEAT (085.5): the first classifier-matched
+              // encounter of a chunk that realizes a communicative function.
+              // That reasoning lives HERE, with the writer -- runtime-core
+              // renders a label and a line of text and knows nothing about
+              // functions, chunks or first encounters. The key is generic
+              // ("dialogueTeachLine", not "sugarlang.teachLine") so the
+              // conversation layer holds no plugin knowledge.
+              normalizedTurn.annotations!["dialogueTeachLine"] = {
                 label: fnEntry.displayName,
                 text: `"${match.surfaceMatched}" is a ${fnEntry.displayName.toLowerCase()}.`
               };

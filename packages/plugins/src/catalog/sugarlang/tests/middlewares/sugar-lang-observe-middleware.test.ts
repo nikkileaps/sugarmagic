@@ -447,8 +447,8 @@ describe("SugarLangObserveMiddleware", () => {
       })
     );
     // Teach-line annotation should be present on the result turn.
-    expect(result?.annotations?.["sugarlang.teachLine"]).toBeDefined();
-    expect((result?.annotations?.["sugarlang.teachLine"] as { label: string }).label).toBe("Greet");
+    expect(result?.annotations?.["dialogueTeachLine"]).toBeDefined();
+    expect((result?.annotations?.["dialogueTeachLine"] as { label: string }).label).toBe("Greet");
   });
 
   it("085.5: re-encounter of a chunk with an existing teach-record writes no second record or annotation", async () => {
@@ -476,7 +476,7 @@ describe("SugarLangObserveMiddleware", () => {
     const result = await middleware.finalize?.(execution, createTestTurn("Buenos dias viajero!"));
 
     expect(writeRecord).not.toHaveBeenCalled();
-    expect(result?.annotations?.["sugarlang.teachLine"]).toBeUndefined();
+    expect(result?.annotations?.["dialogueTeachLine"]).toBeUndefined();
   });
 
   it("085.5: no teach-record when chunk card already exists (not a first teach)", async () => {
@@ -524,7 +524,7 @@ describe("SugarLangObserveMiddleware", () => {
 
     // Card was not new, so no teach-record or annotation even if store has no record.
     expect(writeRecord).not.toHaveBeenCalled();
-    expect(result?.annotations?.["sugarlang.teachLine"]).toBeUndefined();
+    expect(result?.annotations?.["dialogueTeachLine"]).toBeUndefined();
   });
 
   it("085.3: chunk cards filtered from computePendingProvisionalLemmas probe floor", () => {

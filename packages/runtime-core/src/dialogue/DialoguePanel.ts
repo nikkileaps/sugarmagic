@@ -27,7 +27,7 @@ import type {
   QuestFormDefinition
 } from "../conversation";
 import { isQuestFormDefinition } from "../conversation";
-import { findTermMatches, readDialogueHighlight, readTeachLine } from "./highlight";
+import { findTermMatches, readDialogueHighlight, readDialogueTeachLine } from "./highlight";
 import { splitTextIntoChunks, type UnbreakableRange } from "./chunk-text";
 import {
   DEFAULT_STACK_DEPTH,
@@ -1365,7 +1365,7 @@ export function createRuntimeDialoguePanel(
       renderActions();
 
       // 085.5: Render the teach-line annotation in the enrichment slot if present.
-      const teachLine = readTeachLine(turn.annotations);
+      const teachLine = readDialogueTeachLine(turn.annotations);
       enrichmentContainer.innerHTML = "";
       if (teachLine) {
         const el = document.createElement("p");

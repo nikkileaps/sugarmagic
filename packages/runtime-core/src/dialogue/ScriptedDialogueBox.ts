@@ -16,7 +16,7 @@
  */
 
 import type { ConversationPlayerInput, ConversationTurnEnvelope } from "../conversation";
-import { readTeachLine } from "./highlight";
+import { readDialogueTeachLine } from "./highlight";
 import { createTurnTextElement } from "./turn-text";
 import { createPaperPanel } from "./paper-panel";
 
@@ -153,7 +153,7 @@ export function createScriptedDialogueBox(
         })
       );
 
-      const teachLine = readTeachLine(turn.annotations);
+      const teachLine = readDialogueTeachLine(turn.annotations);
       if (teachLine) {
         const line = document.createElement("p");
         line.className = "sm-dialogue-teach-line";
