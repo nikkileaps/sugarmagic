@@ -47,7 +47,7 @@ describe("teach plan project round-trip", () => {
   beforeEach(() => clearSugarlangTeachPlan());
 
   it("survives serialize -> hydrate with the slate intact", () => {
-    const hydrated = hydrateTeachPlans(docWithOneScene());
+    const { hydrated } = hydrateTeachPlans(docWithOneScene());
 
     // 2 dialogues x 2 bands.
     expect(hydrated).toBe(4);
@@ -62,8 +62,58 @@ describe("teach plan project round-trip", () => {
     // survive the in-process test above and vanish here.
     const throughJson = JSON.parse(JSON.stringify(docWithOneScene()));
 
-    expect(hydrateTeachPlans(throughJson)).toBe(4);
+    expect(hydrateTeachPlans(throughJson).hydrated).toBe(4);
     expect(getSugarlangTeachPlan("dlg-finnick", "es", "A1")?.slate).toEqual(SLATE);
+  });
+
+  it("090.11: DROPS a plan whose scene has been edited since the build", () => {
+    // THE READER THIS FIELD WAS MISSING. `contentHash` was persisted so
+    // staleness would be DETECTABLE, and then nothing compared it -- a plan
+    // built before an edit kept being used afterwards.
+    //
+    // A teach plan derives from a scene's CONCEPTS, so editing that scene
+    // invalidates it. Unlike a baked variant, whose key includes the line's
+    // text, nothing about a plan notices on its own.
+    //
+    // Dropping is the safe direction: a MISSING plan means "no vocabulary
+    // steer", which is what every bake did before slates existed. A STALE plan
+    // means "steer toward what this scene used to be about" -- a wrong answer
+    // wearing a right answer's clothes.
+    const result = hydrateTeachPlans(
+      docWithOneScene(),
+      new Map([["scene-dock", "hash-CHANGED"]])
+    );
+
+    expect(result.hydrated).toBe(0);
+    expect(result.staleScenes).toEqual(["scene-dock"]);
+    expect(getSugarlangTeachPlan("dlg-finnick", "es", "A1")).toBeUndefined();
+  });
+
+  it("090.11: keeps a plan whose scene is unchanged", () => {
+    const result = hydrateTeachPlans(
+      docWithOneScene(),
+      new Map([["scene-dock", "hash-1"]])
+    );
+
+    expect(result.hydrated).toBe(4);
+    expect(result.staleScenes).toEqual([]);
+  });
+
+  it("090.11: a scene we cannot currently hash is NOT treated as stale", () => {
+    // An absent hash means the scene is not loaded right now, not that the plan
+    // is wrong. Treating unknown as stale would discard every plan whenever the
+    // hash map came back empty -- which is exactly what happens before a target
+    // language is set.
+    const result = hydrateTeachPlans(docWithOneScene(), new Map());
+
+    expect(result.hydrated).toBe(4);
+    expect(result.staleScenes).toEqual([]);
+  });
+
+  it("090.11: omitting the hashes loads everything unchecked", () => {
+    // The escape hatch for callers that genuinely cannot compute hashes. It must
+    // not silently become the strict path.
+    expect(hydrateTeachPlans(docWithOneScene()).hydrated).toBe(4);
   });
 
   it("stores per SCENE, not per dialogue", () => {
@@ -88,15 +138,15 @@ describe("teach plan project round-trip", () => {
     // and a bake with no plan is a valid bake.
     const stale = { ...docWithOneScene(), version: "000.0.0" };
 
-    expect(hydrateTeachPlans(stale)).toBe(0);
+    expect(hydrateTeachPlans(stale).hydrated).toBe(0);
     expect(getSugarlangTeachPlan("dlg-finnick", "es", "A1")).toBeUndefined();
   });
 
   it("hydrates NOTHING from junk rather than throwing", () => {
-    expect(hydrateTeachPlans(undefined)).toBe(0);
-    expect(hydrateTeachPlans(null)).toBe(0);
-    expect(hydrateTeachPlans("nonsense")).toBe(0);
-    expect(hydrateTeachPlans({ version: TEACH_PLAN_DOCUMENT_VERSION })).toBe(0);
+    expect(hydrateTeachPlans(undefined).hydrated).toBe(0);
+    expect(hydrateTeachPlans(null).hydrated).toBe(0);
+    expect(hydrateTeachPlans("nonsense").hydrated).toBe(0);
+    expect(hydrateTeachPlans({ version: TEACH_PLAN_DOCUMENT_VERSION }).hydrated).toBe(0);
   });
 
   it("ignores a dialogue pointing at a scene the document does not carry", () => {
@@ -106,7 +156,7 @@ describe("teach plan project round-trip", () => {
       sceneId: "scene-that-left"
     });
 
-    expect(hydrateTeachPlans(doc)).toBe(4);
+    expect(hydrateTeachPlans(doc).hydrated).toBe(4);
     expect(getSugarlangTeachPlan("dlg-orphan", "es", "A1")).toBeUndefined();
   });
 

@@ -20,6 +20,7 @@ import type { GameProject, RegionDocument, Scene } from "@sugarmagic/domain";
 import { ErrorToast, PanelSection, ProgressToast } from "@sugarmagic/ui";
 import type { ReactElement } from "react";
 import {
+  readCurrentSceneContentHashes,
   readSugarlangCompileStatus,
   rebuildSugarlangCompileCache,
   resolveStudioCompileWorkspaceId,
@@ -85,16 +86,59 @@ export function ManualRebuildButton(
     message: string;
     detail?: string;
   } | null>(null);
+  /** Scenes whose stored teach plan was dropped as stale. Rendered as a nudge,
+   *  NOT an error toast -- an out-of-date plan is a normal consequence of
+   *  editing, and the fix is simply to rebuild. */
+  const [stalePlanScenes, setStalePlanScenes] = useState<string[]>([]);
 
   // Load the project's stored plan into the in-memory lookup. Without this a
   // bake right after opening Studio would be un-steered until someone pressed
   // Rebuild, which is exactly the silent gap persisting the plan exists to close.
+  //
+  // Hashes are passed so a plan belonging to a scene that has since been edited
+  // is DROPPED rather than used. Stale steering is worse than none: a bake would
+  // aim at what the scene used to be about and look entirely deliberate.
   useEffect(() => {
-    const hydrated = hydrateTeachPlans(props.storedTeachPlan);
-    if (hydrated > 0) {
-      console.info("[sugarlang build] teach-plan-hydrated", { entries: hydrated });
-    }
-  }, [props.storedTeachPlan]);
+    let cancelled = false;
+
+    void readCurrentSceneContentHashes(
+      props.gameProject,
+      props.regions,
+      props.targetLanguage,
+      props.activeScene ?? null
+    )
+      .then((currentHashes) => {
+        if (cancelled) return;
+        const { hydrated, staleScenes } = hydrateTeachPlans(
+          props.storedTeachPlan,
+          currentHashes
+        );
+        if (hydrated > 0 || staleScenes.length > 0) {
+          console.info("[sugarlang build] teach-plan-hydrated", {
+            entries: hydrated,
+            staleScenes
+          });
+        }
+        setStalePlanScenes(staleScenes);
+      })
+      .catch((error: unknown) => {
+        // Hydration is best-effort. Failing to load a plan means bakes are
+        // un-steered, which is the pre-090.11 behaviour -- not a broken Studio.
+        if (!cancelled) {
+          console.error("[sugarlang build] teach-plan hydration failed", error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    props.storedTeachPlan,
+    props.gameProject,
+    props.regions,
+    props.targetLanguage,
+    props.activeScene
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +213,8 @@ export function ManualRebuildButton(
       }
 
       setFailure(null);
+      // A successful rebuild is exactly what un-stales a plan.
+      setStalePlanScenes([]);
       setMessage("Sugarlang artifacts rebuilt successfully.");
     } catch (error) {
       // A THROW is different from a reported problem: the rebuild did not
@@ -273,6 +319,24 @@ export function ManualRebuildButton(
             }}
           >
             {message}
+          </div>
+        ) : null}
+
+        {stalePlanScenes.length > 0 ? (
+          <div
+            style={{
+              borderRadius: 10,
+              border: "1px solid rgba(249, 226, 175, 0.4)",
+              background: "rgba(249, 226, 175, 0.08)",
+              padding: "0.75rem",
+              fontSize: "0.85rem"
+            }}
+          >
+            {stalePlanScenes.length} scene
+            {stalePlanScenes.length === 1 ? " has" : "s have"} changed since the
+            last build, so their teaching plans were discarded. Lines baked now
+            will be graded for level but not steered toward any vocabulary.
+            Rebuild to refresh them.
           </div>
         ) : null}
 

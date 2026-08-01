@@ -294,6 +294,32 @@ async function collectChunkCacheEntries(
   }));
 }
 
+/**
+ * Current content hash per scene. Exported so the teach-plan hydrator can tell
+ * a stored plan from a stale one -- a plan derives from a scene's concepts, and
+ * nothing else about it notices when that scene is edited.
+ */
+export async function readCurrentSceneContentHashes(
+  gameProject: GameProject | null,
+  regions: RegionDocument[],
+  targetLanguage: string,
+  activeScene: Scene | null
+): Promise<Map<string, string>> {
+  if (!targetLanguage || targetLanguage.trim().length === 0) {
+    // Studio tolerates a null language; hashing needs the atlas for that
+    // language, so there is nothing to compare against yet.
+    return new Map();
+  }
+  return computeCurrentSceneHashes(
+    await createSugarlangSceneContexts(
+      gameProject,
+      regions,
+      targetLanguage,
+      activeScene
+    )
+  );
+}
+
 function computeCurrentSceneHashes(
   scenes: SceneAuthoringContext[]
 ): Map<string, string> {
