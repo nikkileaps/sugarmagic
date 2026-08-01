@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Paper dialogue box v2 -- tuned edges</title>
+<style>
+  /* ------------------------------------------------------------------
+     v2. v1 established that SVG turbulence (B) and canvas (C) both flex
+     correctly and 9-slice does not. This iterates on the two survivors:
+
+       B: kill the stair-stepping. feDisplacementMap samples at integer
+          offsets, so the displaced edge is jagged. Displace -> small
+          blur -> re-sharpen alpha gives a smooth organic boundary.
+          Also: harder deckle, richer parchment.
+
+       C: fix the chopped corners. v1's edge walker traced only the four
+          straight sides and skipped the corner arcs, so closePath joined
+          them with diagonals. Walk the arcs.
+     ------------------------------------------------------------------ */
+
+  :root {
+    --paper-light:#f7ead2; --paper-mid:#eddbb6; --paper-deep:#dcc79b;
+    --ink:#2f2620;
+    --chip-bg:#4a2145; --chip-bg-2:#5d2a55; --chip-ink:#f7ead9;
+    --accent-red:#a02c24; --gold:#b5762a; --olive:#9a8440;
+    --pad:28px; --chip-overlap:14px; --ui-scale:1;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:26px 26px 70px;
+    font-family:ui-rounded,"Nunito","Quicksand",system-ui,sans-serif;
+    background:radial-gradient(120% 90% at 30% 10%,#6d5a34 0%,#4a3a22 45%,#2b2115 100%);
+    color:#f0e6d6;
+  }
+  h1{font-size:19px;margin:0 0 4px;color:#f0d9a8}
+  .sub{font-size:13px;opacity:.72;margin:0 0 24px;max-width:80ch;line-height:1.5}
+  h2{font-size:13.5px;letter-spacing:.10em;text-transform:uppercase;color:#e0b869;margin:32px 0 4px}
+  .note{font-size:12.5px;opacity:.68;margin:0 0 14px;max-width:84ch;line-height:1.55}
+  .row{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+  .caption{font-size:11px;opacity:.5;margin-top:6px}
+
+  .dialogue{
+    display:inline-flex;flex-direction:column;align-items:flex-start;
+    max-width:calc(430px * var(--ui-scale)); overflow:visible;
+    font-size:calc(17px * var(--ui-scale));
+  }
+  .chip{
+    position:relative;z-index:2;width:fit-content;
+    margin-left:calc(18px * var(--ui-scale));
+    margin-bottom:calc(var(--chip-overlap) * -1 * var(--ui-scale));
+    padding:calc(7px * var(--ui-scale)) calc(15px * var(--ui-scale));
+    border-radius:calc(13px * var(--ui-scale));
+    background:linear-gradient(180deg,var(--chip-bg-2),var(--chip-bg));
+    color:var(--chip-ink);font-weight:600;
+    display:flex;align-items:center;gap:8px;white-space:nowrap;
+    box-shadow:0 3px 10px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.13);
+  }
+  .chip .leaf{color:#c9a3c2;font-size:.85em}
+  .panel{
+    position:relative;z-index:1;width:100%;
+    min-height:calc(86px * var(--ui-scale));
+    padding:calc(var(--pad) * var(--ui-scale));
+    padding-top:calc((var(--pad) + 6px) * var(--ui-scale));
+    color:var(--ink);line-height:1.5;
+    filter:drop-shadow(0 10px 18px rgba(0,0,0,.42));
+  }
+  .panel .text{position:relative;z-index:1}
+  .introduce{color:#8a5a00;font-weight:700}
+  .reinforce{color:#1f5f86;font-weight:700}
+  .corner{position:absolute;right:calc(16px * var(--ui-scale));bottom:calc(10px * var(--ui-scale));
+          display:flex;align-items:center;gap:6px;z-index:1}
+  .corner .arrow{color:var(--gold);font-size:calc(15px * var(--ui-scale))}
+  .corner .flourish{color:var(--olive);font-size:calc(19px * var(--ui-scale));opacity:.75}
+
+  .paper-svg > svg{position:absolute;inset:0;width:100%;height:100%;z-index:0;overflow:visible}
+  .paper-canvas > canvas{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+  .scaled{--ui-scale:1.5}
+</style>
+</head>
+<body>
+
+<h1>v2 &mdash; tuned edges</h1>
+<p class="sub">
+  Only the two survivors from v1. B gets a de-jagging pass and a harder deckle; C gets its corner arcs
+  walked properly. Same layout, same gold/blue highlights, unchanged.
+</p>
+
+<h2>B1 &mdash; SVG, de-jagged, subtle deckle</h2>
+<p class="note">Displace &rarr; blur &rarr; re-sharpen alpha. Same softness as v1 but without the stair-stepping.</p>
+<div class="row" id="rowB1"></div>
+
+<h2>B2 &mdash; SVG, de-jagged, stronger deckle + richer parchment</h2>
+<p class="note">Pushes the torn silhouette toward the reference, and layers two turbulence passes for mottling plus edge darkening so the paper has depth.</p>
+<div class="row" id="rowB2"></div>
+
+<h2>C &mdash; canvas, corner arcs fixed</h2>
+<p class="note">v1 skipped the corner arcs entirely. Now walked, with the deckle riding the whole perimeter. Drawn at device pixel ratio, so it should be the crispest of the three.</p>
+<div class="row" id="rowC"></div>
+
+<h2>Scale 1.0x vs 1.5x</h2>
+<div class="row" id="rowScale"></div>
+
+<script>
+const SAMPLES = [
+  { name:"Al", html:`Short text.` },
+  { name:"Racky", html:`I'll wander around and see if any folks need help!` },
+  { name:"Professor Slake", html:
+    `You may want to go to the <span class="introduce">estaci&oacute;n</span> while I look into it &mdash;
+     <span class="reinforce">hola</span>, the usual crowd seems to have wandered off somewhere today.` },
+  { name:"The Great Eloise of Wordlark Hollow", html:
+    `And here's a really, really long message that keeps going and going across many lines without any
+     weird overflow or layout breaks, so we can see exactly what the edge does when the panel grows tall.` }
+];
+
+/* ---------------- B: de-jagged SVG paper ---------------------------- */
+function svgPaper(id, opts) {
+  const { disp, freqX, freqY, oct, blur, slope, rich } = opts;
+  const mottle = rich ? `
+      <filter id="mot${id}" x="0" y="0" width="100%" height="100%" primitiveUnits="userSpaceOnUse">
+        <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="5" seed="${id+3}"/>
+        <feColorMatrix type="saturate" values="0"/>
+        <feComponentTransfer><feFuncA type="linear" slope="0.22"/></feComponentTransfer>
+      </filter>` : ``;
+  return `
+  <svg preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <!-- displace, then blur, then re-sharpen the alpha ramp. The blur
+           smooths the integer-offset stair-stepping; the steep alpha slope
+           pulls it back to a crisp but ORGANIC boundary. -->
+      <filter id="dk${id}" x="-14%" y="-16%" width="128%" height="132%"
+              filterUnits="objectBoundingBox" primitiveUnits="userSpaceOnUse">
+        <feTurbulence type="fractalNoise" baseFrequency="${freqX} ${freqY}"
+                      numOctaves="${oct}" seed="${id}" result="n"/>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="${disp}"
+                           xChannelSelector="R" yChannelSelector="G" result="d"/>
+        <feGaussianBlur in="d" stdDeviation="${blur}" result="b"/>
+        <feComponentTransfer in="b">
+          <feFuncA type="linear" slope="${slope}" intercept="-${(slope-1)/2}"/>
+        </feComponentTransfer>
+      </filter>
+      ${mottle}
+      <linearGradient id="fl${id}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f8ecd6"/>
+        <stop offset="0.55" stop-color="#f0dcb6"/>
+        <stop offset="1" stop-color="#e7cfa4"/>
+      </linearGradient>
+      <radialGradient id="vg${id}" cx="50%" cy="45%" r="72%">
+        <stop offset="0.55" stop-color="#000" stop-opacity="0"/>
+        <stop offset="1" stop-color="#7a5a2a" stop-opacity="${rich ? 0.22 : 0.10}"/>
+      </radialGradient>
+    </defs>
+    <g filter="url(#dk${id})">
+      <rect x="4" y="4" width="calc(100% - 8px)" height="calc(100% - 8px)" rx="30" fill="url(#fl${id})"/>
+      ${rich ? `<rect x="4" y="4" width="calc(100% - 8px)" height="calc(100% - 8px)" rx="30"
+                 filter="url(#mot${id})" style="mix-blend-mode:multiply"/>` : ``}
+      <rect x="4" y="4" width="calc(100% - 8px)" height="calc(100% - 8px)" rx="30" fill="url(#vg${id})"/>
+    </g>
+  </svg>`;
+}
+
+const B1 = { disp:8,  freqX:0.018, freqY:0.045, oct:4, blur:1.1, slope:11, rich:false };
+const B2 = { disp:15, freqX:0.013, freqY:0.030, oct:5, blur:1.5, slope:13, rich:true  };
+
+function box(sample, kind, id, extraClass="") {
+  const inner = kind === "canvas" ? `<canvas></canvas>` : svgPaper(id, kind);
+  const cls   = kind === "canvas" ? "paper-canvas" : "paper-svg";
+  return `<div>
+    <div class="dialogue ${extraClass}">
+      <div class="chip">${sample.name}<span class="leaf">&#127807;</span></div>
+      <div class="panel ${cls}">${inner}
+        <div class="text">${sample.html}</div>
+        <div class="corner"><span class="arrow">&#9654;</span><span class="flourish">&#127807;</span></div>
+      </div>
+    </div><div class="caption">${sample.name}</div></div>`;
+}
+
+document.getElementById("rowB1").innerHTML = SAMPLES.map((s,i)=>box(s,B1,i+1)).join("");
+document.getElementById("rowB2").innerHTML = SAMPLES.map((s,i)=>box(s,B2,i+21)).join("");
+document.getElementById("rowC").innerHTML  = SAMPLES.map(s=>box(s,"canvas",0)).join("");
+document.getElementById("rowScale").innerHTML =
+  box(SAMPLES[2],B2,41) + box(SAMPLES[2],B2,42,"scaled");
+
+/* ---------------- C: canvas with CORNER ARCS WALKED ------------------ */
+function drawCanvasPaper(cv){
+  const r = cv.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1,Math.round(r.width)), h = Math.max(1,Math.round(r.height));
+  cv.width = w*dpr; cv.height = h*dpr;
+  const g = cv.getContext("2d");
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+
+  const rad = 28, wob = 3.6, step = 5;
+  // Smooth, non-repeating displacement along the perimeter.
+  const noise = (x,y) =>
+    (Math.sin(x*0.19 + y*0.11) + Math.sin(x*0.061 - y*0.27) + Math.sin((x+y)*0.083)
+     + 0.5*Math.sin(x*0.41 + y*0.37)) / 3.5;
+
+  const pts=[];
+  const push=(x,y,nx,ny)=>{const d=noise(x,y);pts.push([x+nx*d*wob, y+ny*d*wob]);};
+  const line=(x0,y0,x1,y1)=>{
+    const len=Math.hypot(x1-x0,y1-y0), n=Math.max(2,Math.round(len/step));
+    const nx=(y1-y0)/len, ny=-(x1-x0)/len;
+    for(let i=0;i<n;i++){const t=i/n;push(x0+(x1-x0)*t, y0+(y1-y0)*t, nx, ny);}
+  };
+  // THE v1 BUG: these arcs were missing, so closePath cut the corners off
+  // with straight diagonals. Walking them is the whole fix.
+  const arc=(cx,cy,a0,a1)=>{
+    const n=Math.max(4,Math.round((Math.abs(a1-a0)*rad)/step));
+    for(let i=0;i<=n;i++){
+      const a=a0+(a1-a0)*(i/n), x=cx+Math.cos(a)*rad, y=cy+Math.sin(a)*rad;
+      push(x,y,Math.cos(a),Math.sin(a));
+    }
+  };
+  const P=Math.PI;
+  line(rad,0,w-rad,0);        arc(w-rad,rad,-P/2,0);
+  line(w,rad,w,h-rad);        arc(w-rad,h-rad,0,P/2);
+  line(w-rad,h,rad,h);        arc(rad,h-rad,P/2,P);
+  line(0,h-rad,0,rad);        arc(rad,rad,P,1.5*P);
+
+  g.beginPath();
+  pts.forEach(([x,y],i)=> i?g.lineTo(x,y):g.moveTo(x,y));
+  g.closePath();
+
+  const grad=g.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,"#f8ecd6"); grad.addColorStop(.55,"#f0dcb6"); grad.addColorStop(1,"#e7cfa4");
+  g.fillStyle=grad; g.fill();
+
+  // soft mottling instead of v1's hard horizontal fibre lines
+  g.save(); g.clip();
+  for(let i=0;i<190;i++){
+    const x=Math.random()*w, y=Math.random()*h, rr=6+Math.random()*26;
+    const rg=g.createRadialGradient(x,y,0,x,y,rr);
+    const warm=Math.random()>.5;
+    rg.addColorStop(0, warm?"rgba(140,105,55,.045)":"rgba(255,248,232,.05)");
+    rg.addColorStop(1,"rgba(0,0,0,0)");
+    g.fillStyle=rg; g.beginPath(); g.arc(x,y,rr,0,P*2); g.fill();
+  }
+  // inner edge darkening for depth
+  const vg=g.createRadialGradient(w/2,h*0.45,Math.min(w,h)*0.25,w/2,h*0.45,Math.max(w,h)*0.72);
+  vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(122,90,42,.20)");
+  g.fillStyle=vg; g.fillRect(0,0,w,h);
+  g.restore();
+}
+const paint=()=>document.querySelectorAll(".paper-canvas canvas").forEach(drawCanvasPaper);
+paint(); new ResizeObserver(paint).observe(document.body);
+</script>
+</body>
+</html>

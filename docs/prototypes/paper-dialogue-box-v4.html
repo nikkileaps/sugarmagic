@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Paper dialogue box v4 -- fibre roughness</title>
+<style>
+  /* ------------------------------------------------------------------
+     v4. WHY v3 READ AS "WOBBLY" RATHER THAN "TORN".
+
+     The reference's edge is HIGH frequency and LOW amplitude -- many
+     small nicks, fibre-scale. v3's was the opposite: a few long smooth
+     undulations. Three things capped the detail:
+
+       1. perimeter step of 6px -- Nyquist means nothing finer than ~12px
+          can be represented at all.
+       2. the noise was 4 sines all at low frequency, so amplitude was
+          dominated by the long waves.
+       3. quadratic midpoint smoothing then flattened what survived.
+
+     v4: periodic fBm parameterised by ARC LENGTH (so it closes exactly
+     with no seam at the start point), 5 octaves with doubling frequency
+     and halving amplitude, sampled at 2.5px, plus a darker rim for the
+     paper-thickness read the reference has.
+     ------------------------------------------------------------------ */
+  :root{--ink:#2f2620;--chip-bg:#4a2145;--chip-bg-2:#5d2a55;--chip-ink:#f7ead9;
+    --gold:#b5762a;--olive:#9a8440;--pad:28px;--chip-overlap:14px;--ui-scale:1}
+  *{box-sizing:border-box}
+  body{margin:0;padding:26px 26px 70px;
+    font-family:ui-rounded,"Nunito","Quicksand",system-ui,sans-serif;
+    background:radial-gradient(120% 90% at 30% 10%,#6d5a34 0%,#4a3a22 45%,#2b2115 100%);color:#f0e6d6}
+  h1{font-size:19px;margin:0 0 4px;color:#f0d9a8}
+  .sub{font-size:13px;opacity:.72;margin:0 0 24px;max-width:84ch;line-height:1.5}
+  h2{font-size:13.5px;letter-spacing:.10em;text-transform:uppercase;color:#e0b869;margin:30px 0 4px}
+  .note{font-size:12.5px;opacity:.68;margin:0 0 14px;max-width:86ch;line-height:1.55}
+  .row{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+  .caption{font-size:11px;opacity:.5;margin-top:6px}
+
+  .dialogue{display:inline-flex;flex-direction:column;align-items:flex-start;
+    max-width:calc(430px * var(--ui-scale));overflow:visible;font-size:calc(17px * var(--ui-scale))}
+  .chip{position:relative;z-index:2;width:fit-content;margin-left:calc(18px * var(--ui-scale));
+    margin-bottom:calc(var(--chip-overlap) * -1 * var(--ui-scale));
+    padding:calc(7px * var(--ui-scale)) calc(15px * var(--ui-scale));
+    border-radius:calc(13px * var(--ui-scale));
+    background:linear-gradient(180deg,var(--chip-bg-2),var(--chip-bg));
+    color:var(--chip-ink);font-weight:600;display:flex;align-items:center;gap:8px;white-space:nowrap;
+    box-shadow:0 3px 10px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.13)}
+  .chip .leaf{color:#c9a3c2;font-size:.85em}
+  .panel{position:relative;z-index:1;width:100%;min-height:calc(86px * var(--ui-scale));
+    padding:calc(var(--pad) * var(--ui-scale));padding-top:calc((var(--pad) + 6px) * var(--ui-scale));
+    color:var(--ink);line-height:1.5;filter:drop-shadow(0 9px 16px rgba(0,0,0,.40))}
+  .panel .text{position:relative;z-index:1}
+  .introduce{color:#8a5a00;font-weight:700}
+  .reinforce{color:#1f5f86;font-weight:700}
+  .corner{position:absolute;right:calc(16px * var(--ui-scale));bottom:calc(10px * var(--ui-scale));
+    display:flex;align-items:center;gap:6px;z-index:1}
+  .corner .arrow{color:var(--gold);font-size:calc(15px * var(--ui-scale))}
+  .corner .flourish{color:var(--olive);font-size:calc(19px * var(--ui-scale));opacity:.75}
+  .paper > svg{position:absolute;inset:0;width:100%;height:100%;z-index:0;overflow:visible}
+  .scaled{--ui-scale:1.5}
+  .zoomwrap{height:360px;overflow:hidden}
+  .zoom{transform:scale(2.8);transform-origin:top left}
+</style>
+</head>
+<body>
+
+<h1>v4 &mdash; fibre-scale roughness</h1>
+<p class="sub">
+  Periodic fBm along arc length: 5 octaves, doubling frequency, halving amplitude, sampled at 2.5px so
+  fine detail survives Nyquist. Closes exactly at the start point, so there is no seam. Plus a darker rim
+  for the paper-thickness read the reference has.
+</p>
+
+<h2>E1 &mdash; fine fibre, low amplitude</h2>
+<div class="row" id="rowE1"></div>
+
+<h2>E2 &mdash; fine fibre, medium (closest to reference, I think)</h2>
+<div class="row" id="rowE2"></div>
+
+<h2>E3 &mdash; rough, torn</h2>
+<div class="row" id="rowE3"></div>
+
+<h2>Zoom 2.8x &mdash; v3's smooth wave (left) vs E2 (right)</h2>
+<p class="note">This time the comparison is actually wired: left uses v3's low-frequency settings, right uses E2's fBm.</p>
+<div class="row zoomwrap" id="rowZoom"></div>
+
+<h2>Scale 1.0x vs 1.5x (E2)</h2>
+<div class="row" id="rowScale"></div>
+
+<script>
+const SAMPLES=[
+  {name:"Al",html:`Short text.`},
+  {name:"Racky",html:`I'll wander around and see if any folks need help!`},
+  {name:"Professor Slake",html:
+    `You may want to go to the <span class="introduce">estaci&oacute;n</span> while I look into it &mdash;
+     <span class="reinforce">hola</span>, the usual crowd seems to have wandered off somewhere today.`},
+  {name:"The Great Eloise of Wordlark Hollow",html:
+    `And here's a really, really long message that keeps going and going across many lines without any
+     weird overflow or layout breaks, so we can see exactly what the edge does when the panel grows tall.`}
+];
+
+/* Periodic fBm over arc length. Integer harmonics of the perimeter mean
+   the noise CLOSES exactly -- no seam where the walk started. Octaves
+   roughly double in frequency and halve in amplitude, which is what
+   gives large undulation AND fibre-scale nicks at the same time. */
+function makeEdgeNoise(seed, harmonics){
+  const ph = harmonics.map((_,i)=> (Math.sin(seed*12.9898 + i*78.233)*43758.5453) % (Math.PI*2));
+  return (t /*0..1 around the perimeter*/) => {
+    let v = 0, norm = 0;
+    harmonics.forEach(([n,a],i)=>{ v += a*Math.sin(2*Math.PI*n*t + ph[i]); norm += a; });
+    return v / norm;
+  };
+}
+
+function deckledPath(w,h,rad,amp,seed,harmonics,step){
+  const raw=[];
+  const line=(x0,y0,x1,y1)=>{
+    const len=Math.hypot(x1-x0,y1-y0); if(!len) return;
+    const k=Math.max(2,Math.round(len/step)), nx=(y1-y0)/len, ny=-(x1-x0)/len;
+    for(let i=0;i<k;i++){const t=i/k;raw.push([x0+(x1-x0)*t,y0+(y1-y0)*t,nx,ny]);}
+  };
+  const arc=(cx,cy,a0,a1)=>{
+    const k=Math.max(4,Math.round(Math.abs(a1-a0)*rad/step));
+    for(let i=0;i<k;i++){const a=a0+(a1-a0)*(i/k);
+      raw.push([cx+Math.cos(a)*rad,cy+Math.sin(a)*rad,Math.cos(a),Math.sin(a)]);}
+  };
+  const P=Math.PI;
+  line(rad,0,w-rad,0);  arc(w-rad,rad,-P/2,0);
+  line(w,rad,w,h-rad);  arc(w-rad,h-rad,0,P/2);
+  line(w-rad,h,rad,h);  arc(rad,h-rad,P/2,P);
+  line(0,h-rad,0,rad);  arc(rad,rad,P,1.5*P);
+
+  const noise = makeEdgeNoise(seed, harmonics);
+  const pts = raw.map(([x,y,nx,ny],i)=>{
+    const d = noise(i/raw.length);
+    return [x+nx*d*amp, y+ny*d*amp];
+  });
+
+  // Light smoothing only -- enough to avoid a sawtooth, not so much that
+  // it erases the fibre octaves we just went to the trouble of adding.
+  let d=`M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+  for(let i=1;i<pts.length;i++){
+    const [x0,y0]=pts[i-1],[x1,y1]=pts[i];
+    d+=` Q ${x0.toFixed(2)} ${y0.toFixed(2)} ${((x0+x1)/2).toFixed(2)} ${((y0+y1)/2).toFixed(2)}`;
+  }
+  return d+" Z";
+}
+
+/* [harmonic, amplitude] -- integer n keeps it periodic. */
+const FINE   = [[2,1],[5,.55],[11,.3],[23,.16],[47,.09]];
+const SMOOTH = [[2,1],[3,.5],[5,.22]];               // v3-ish, for the comparison
+const E1={amp:2.4, rad:30, harm:FINE,   step:2.5, rim:.16, rich:false};
+const E2={amp:4.2, rad:28, harm:FINE,   step:2.5, rim:.22, rich:true };
+const E3={amp:7.0, rad:24, harm:FINE,   step:2.5, rim:.26, rich:true };
+const V3={amp:5.0, rad:26, harm:SMOOTH, step:6.0, rim:0,   rich:true };
+
+function paperSvg(id,o){
+  return `<svg aria-hidden="true" data-id="${id}">
+    <defs>
+      <linearGradient id="fl${id}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f9eeda"/><stop offset=".55" stop-color="#f0dcb6"/>
+        <stop offset="1" stop-color="#e6cda0"/>
+      </linearGradient>
+      <filter id="mot${id}" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.010 0.026" numOctaves="5" seed="${id+5}"/>
+        <feColorMatrix type="saturate" values="0"/>
+        <feComponentTransfer><feFuncA type="linear" slope="${o.rich?0.22:0.12}"/></feComponentTransfer>
+      </filter>
+      <clipPath id="cp${id}"><path d=""/></clipPath>
+    </defs>
+    <path class="fill" d="" fill="url(#fl${id})"/>
+    <g clip-path="url(#cp${id})">
+      <rect width="100%" height="100%" filter="url(#mot${id})" style="mix-blend-mode:multiply"/>
+    </g>
+    <!-- rim: the paper-thickness read. Stroked on the same path so it
+         follows every nick rather than tracing a clean rect. -->
+    <path class="rim" d="" fill="none" stroke="#a8814a" stroke-opacity="${o.rim}" stroke-width="1.5"/>
+  </svg>`;
+}
+
+const OPTS={};
+function box(s,o,id,cls=""){
+  OPTS[id]=o;
+  return `<div><div class="dialogue ${cls}">
+    <div class="chip">${s.name}<span class="leaf">&#127807;</span></div>
+    <div class="panel paper">${paperSvg(id,o)}<div class="text">${s.html}</div>
+      <div class="corner"><span class="arrow">&#9654;</span><span class="flourish">&#127807;</span></div>
+    </div></div><div class="caption">${s.name}</div></div>`;
+}
+
+document.getElementById("rowE1").innerHTML=SAMPLES.map((s,i)=>box(s,E1,i+1)).join("");
+document.getElementById("rowE2").innerHTML=SAMPLES.map((s,i)=>box(s,E2,i+21)).join("");
+document.getElementById("rowE3").innerHTML=SAMPLES.map((s,i)=>box(s,E3,i+41)).join("");
+document.getElementById("rowZoom").innerHTML=
+  `<div class="zoom">${box(SAMPLES[0],V3,61)}</div>
+   <div class="zoom" style="margin-left:130px">${box(SAMPLES[0],E2,62)}</div>`;
+document.getElementById("rowScale").innerHTML=box(SAMPLES[2],E2,71)+box(SAMPLES[2],E2,72,"scaled");
+
+function layout(){
+  document.querySelectorAll(".paper > svg").forEach(svg=>{
+    const id=+svg.dataset.id, o=OPTS[id];
+    const r=svg.parentElement.getBoundingClientRect();
+    const w=Math.max(1,r.width), h=Math.max(1,r.height);
+    const d=deckledPath(w,h,o.rad,o.amp,id,o.harm,o.step);
+    svg.setAttribute("viewBox",`0 0 ${w} ${h}`);
+    svg.querySelector("path.fill").setAttribute("d",d);
+    svg.querySelector("clipPath path").setAttribute("d",d);
+    svg.querySelector("path.rim").setAttribute("d",d);
+  });
+}
+layout(); new ResizeObserver(layout).observe(document.body);
+window.addEventListener("load",layout);
+document.fonts && document.fonts.ready.then(layout);
+</script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Paper dialogue box v3 -- vector deckle</title>
+<style>
+  /* ------------------------------------------------------------------
+     v3. WHY THE EDGE WAS STILL PIXELATED IN v2.
+
+     feDisplacementMap does not displace geometry -- it displaces a
+     RASTERISED buffer, sampling on the filter's pixel grid. So the edge
+     is quantised before anything else happens. Worse, my fix made it
+     visible: blur smoothed the steps, then a steep alpha ramp (slope
+     11-13) pulled them back into hard transitions. The two were fighting.
+
+     THE FIX: stop using a filter for the SHAPE. Generate the deckled
+     outline as a real SVG <path>. Vector geometry is antialiased by the
+     rasteriser at full device resolution -- there is no pixel grid to
+     quantise to, at any size or DPR.
+
+     Turbulence is still fine for the FILL (a texture has no silhouette
+     to stair-step), so the parchment stays.
+     ------------------------------------------------------------------ */
+  :root{
+    --ink:#2f2620; --chip-bg:#4a2145; --chip-bg-2:#5d2a55; --chip-ink:#f7ead9;
+    --gold:#b5762a; --olive:#9a8440; --pad:28px; --chip-overlap:14px; --ui-scale:1;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:26px 26px 70px;
+    font-family:ui-rounded,"Nunito","Quicksand",system-ui,sans-serif;
+    background:radial-gradient(120% 90% at 30% 10%,#6d5a34 0%,#4a3a22 45%,#2b2115 100%);
+    color:#f0e6d6}
+  h1{font-size:19px;margin:0 0 4px;color:#f0d9a8}
+  .sub{font-size:13px;opacity:.72;margin:0 0 24px;max-width:82ch;line-height:1.5}
+  h2{font-size:13.5px;letter-spacing:.10em;text-transform:uppercase;color:#e0b869;margin:32px 0 4px}
+  .note{font-size:12.5px;opacity:.68;margin:0 0 14px;max-width:84ch;line-height:1.55}
+  .row{display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap}
+  .caption{font-size:11px;opacity:.5;margin-top:6px}
+
+  .dialogue{display:inline-flex;flex-direction:column;align-items:flex-start;
+    max-width:calc(430px * var(--ui-scale));overflow:visible;font-size:calc(17px * var(--ui-scale))}
+  .chip{position:relative;z-index:2;width:fit-content;
+    margin-left:calc(18px * var(--ui-scale));
+    margin-bottom:calc(var(--chip-overlap) * -1 * var(--ui-scale));
+    padding:calc(7px * var(--ui-scale)) calc(15px * var(--ui-scale));
+    border-radius:calc(13px * var(--ui-scale));
+    background:linear-gradient(180deg,var(--chip-bg-2),var(--chip-bg));
+    color:var(--chip-ink);font-weight:600;display:flex;align-items:center;gap:8px;white-space:nowrap;
+    box-shadow:0 3px 10px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.13)}
+  .chip .leaf{color:#c9a3c2;font-size:.85em}
+  .panel{position:relative;z-index:1;width:100%;min-height:calc(86px * var(--ui-scale));
+    padding:calc(var(--pad) * var(--ui-scale));
+    padding-top:calc((var(--pad) + 6px) * var(--ui-scale));
+    color:var(--ink);line-height:1.5;filter:drop-shadow(0 9px 16px rgba(0,0,0,.40))}
+  .panel .text{position:relative;z-index:1}
+  .introduce{color:#8a5a00;font-weight:700}
+  .reinforce{color:#1f5f86;font-weight:700}
+  .corner{position:absolute;right:calc(16px * var(--ui-scale));bottom:calc(10px * var(--ui-scale));
+    display:flex;align-items:center;gap:6px;z-index:1}
+  .corner .arrow{color:var(--gold);font-size:calc(15px * var(--ui-scale))}
+  .corner .flourish{color:var(--olive);font-size:calc(19px * var(--ui-scale));opacity:.75}
+  .paper > svg{position:absolute;inset:0;width:100%;height:100%;z-index:0;overflow:visible}
+  .scaled{--ui-scale:1.5}
+  .zoom{transform:scale(2.6);transform-origin:top left}
+  .zoomwrap{height:330px;overflow:hidden}
+</style>
+</head>
+<body>
+
+<h1>v3 &mdash; vector deckle (no displacement filter)</h1>
+<p class="sub">
+  The edge is now a real SVG <code>&lt;path&gt;</code> walked with smooth noise, not a rasterised buffer
+  pushed around by <code>feDisplacementMap</code>. Vector geometry gets full-resolution antialiasing, so
+  there is no pixel grid to stair-step against. Turbulence still supplies the parchment fill.
+</p>
+
+<h2>D1 &mdash; soft deckle</h2>
+<div class="row" id="rowD1"></div>
+
+<h2>D2 &mdash; stronger deckle, closer to the reference</h2>
+<div class="row" id="rowD2"></div>
+
+<h2>Edge at 2.6x zoom &mdash; the actual test</h2>
+<p class="note">Left is v2's displacement filter, right is v3's vector path. Blown up, the difference is the whole point.</p>
+<div class="row zoomwrap" id="rowZoom"></div>
+
+<h2>Scale 1.0x vs 1.5x</h2>
+<div class="row" id="rowScale"></div>
+
+<script>
+const SAMPLES=[
+  {name:"Al",html:`Short text.`},
+  {name:"Racky",html:`I'll wander around and see if any folks need help!`},
+  {name:"Professor Slake",html:
+    `You may want to go to the <span class="introduce">estaci&oacute;n</span> while I look into it &mdash;
+     <span class="reinforce">hola</span>, the usual crowd seems to have wandered off somewhere today.`},
+  {name:"The Great Eloise of Wordlark Hollow",html:
+    `And here's a really, really long message that keeps going and going across many lines without any
+     weird overflow or layout breaks, so we can see exactly what the edge does when the panel grows tall.`}
+];
+
+/* Smooth, non-repeating perimeter noise. Deterministic per seed so a
+   given box always looks the same rather than shimmering on reflow. */
+function makeNoise(seed){
+  const s = seed * 12.9898;
+  return (x,y) =>
+    ( Math.sin(x*0.0181 + y*0.0113 + s)
+    + Math.sin(x*0.0071 - y*0.0257 + s*1.7)
+    + Math.sin((x+y)*0.0093 + s*2.3)
+    + 0.45*Math.sin(x*0.0402 + y*0.0331 + s*3.1) ) / 3.45;
+}
+
+/* Walk the rounded-rect perimeter, offsetting each sample along the
+   outward normal. Corners are ARCS, not skipped -- that was v1's bug. */
+function deckledPath(w,h,rad,amp,seed){
+  const n = makeNoise(seed), step = 6, pts = [];
+  const push=(x,y,nx,ny)=>{const d=n(x,y);pts.push([x+nx*d*amp, y+ny*d*amp]);};
+  const line=(x0,y0,x1,y1)=>{
+    const len=Math.hypot(x1-x0,y1-y0); if(!len) return;
+    const k=Math.max(2,Math.round(len/step)), nx=(y1-y0)/len, ny=-(x1-x0)/len;
+    for(let i=0;i<k;i++){const t=i/k;push(x0+(x1-x0)*t,y0+(y1-y0)*t,nx,ny);}
+  };
+  const arc=(cx,cy,a0,a1)=>{
+    const k=Math.max(4,Math.round(Math.abs(a1-a0)*rad/step));
+    for(let i=0;i<=k;i++){const a=a0+(a1-a0)*(i/k);
+      push(cx+Math.cos(a)*rad, cy+Math.sin(a)*rad, Math.cos(a), Math.sin(a));}
+  };
+  const P=Math.PI;
+  line(rad,0,w-rad,0);   arc(w-rad,rad,-P/2,0);
+  line(w,rad,w,h-rad);   arc(w-rad,h-rad,0,P/2);
+  line(w-rad,h,rad,h);   arc(rad,h-rad,P/2,P);
+  line(0,h-rad,0,rad);   arc(rad,rad,P,1.5*P);
+
+  // Quadratic smoothing through midpoints: turns the sampled polyline
+  // into soft torn fibre rather than a spiky sawtooth.
+  let d=`M ${pts[0][0].toFixed(2)} ${pts[0][1].toFixed(2)}`;
+  for(let i=1;i<pts.length;i++){
+    const [x0,y0]=pts[i-1], [x1,y1]=pts[i];
+    d+=` Q ${x0.toFixed(2)} ${y0.toFixed(2)} ${((x0+x1)/2).toFixed(2)} ${((y0+y1)/2).toFixed(2)}`;
+  }
+  return d+" Z";
+}
+
+function paperSvg(id,{amp,rad,rich}){
+  return `<svg aria-hidden="true" data-amp="${amp}" data-rad="${rad}" data-seed="${id}" data-rich="${rich?1:0}">
+    <defs>
+      <linearGradient id="fl${id}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f8ecd6"/><stop offset=".55" stop-color="#f0dcb6"/>
+        <stop offset="1" stop-color="#e7cfa4"/>
+      </linearGradient>
+      <filter id="mot${id}" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="5" seed="${id+5}"/>
+        <feColorMatrix type="saturate" values="0"/>
+        <feComponentTransfer><feFuncA type="linear" slope="${rich?0.20:0.11}"/></feComponentTransfer>
+      </filter>
+      <clipPath id="cp${id}"><path d=""/></clipPath>
+    </defs>
+    <path class="fill" d="" fill="url(#fl${id})"/>
+    <g clip-path="url(#cp${id})">
+      <rect width="100%" height="100%" filter="url(#mot${id})" style="mix-blend-mode:multiply"/>
+    </g>
+  </svg>`;
+}
+
+const D1={amp:2.6, rad:30, rich:false};
+const D2={amp:5.0, rad:26, rich:true};
+
+function box(s,opts,id,cls=""){
+  return `<div><div class="dialogue ${cls}">
+    <div class="chip">${s.name}<span class="leaf">&#127807;</span></div>
+    <div class="panel paper">${paperSvg(id,opts)}
+      <div class="text">${s.html}</div>
+      <div class="corner"><span class="arrow">&#9654;</span><span class="flourish">&#127807;</span></div>
+    </div></div><div class="caption">${s.name}</div></div>`;
+}
+
+document.getElementById("rowD1").innerHTML = SAMPLES.map((s,i)=>box(s,D1,i+1)).join("");
+document.getElementById("rowD2").innerHTML = SAMPLES.map((s,i)=>box(s,D2,i+31)).join("");
+document.getElementById("rowScale").innerHTML = box(SAMPLES[2],D2,61)+box(SAMPLES[2],D2,62,"scaled");
+
+// zoom comparison: v2-style filter on the left, v3 vector on the right
+document.getElementById("rowZoom").innerHTML = `
+  <div class="zoom">${box(SAMPLES[0],D2,71).replace('class="panel paper"','class="panel paper v2mode"')}</div>
+  <div class="zoom" style="margin-left:120px">${box(SAMPLES[0],D2,72)}</div>`;
+
+function layout(){
+  document.querySelectorAll(".paper > svg").forEach(svg=>{
+    const p = svg.parentElement.getBoundingClientRect();
+    const w = Math.max(1,p.width), h = Math.max(1,p.height);
+    const amp=+svg.dataset.amp, rad=+svg.dataset.rad, seed=+svg.dataset.seed;
+    const d = deckledPath(w,h,rad,amp,seed);
+    svg.setAttribute("viewBox",`0 0 ${w} ${h}`);
+    svg.querySelector("path.fill").setAttribute("d",d);
+    svg.querySelector("clipPath path").setAttribute("d",d);
+  });
+}
+layout();
+new ResizeObserver(layout).observe(document.body);
+window.addEventListener("load",layout);
+document.fonts && document.fonts.ready.then(layout);
+</script>
+</body>
+</html>
