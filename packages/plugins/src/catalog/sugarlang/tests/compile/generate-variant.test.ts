@@ -90,6 +90,53 @@ describe("generateVariant", () => {
     expect(result.variant!.contentHash).toBe("hash-abc");
   });
 
+  it("rf6.5.2: bakes the MARKS onto the variant when a slate steered the generation", async () => {
+    // WHY THE MARKS ARE COMPUTED HERE AND NOT AT RUNTIME. Scripted mode never
+    // calls the Teacher -- the teacher middleware early-returns with an empty
+    // targetVocab -- so at runtime there is no slate to derive highlight terms
+    // from. The slate exists at BAKE time, right here, alongside the text it
+    // just produced.
+    //
+    // Without this a correctly baked line reached the player with NO
+    // highlighting, while a weave fallback line highlighted fine.
+    const llmClient = createStubLLMClient({ variantText: "Hola. Quiere queso?" });
+    const atlas = createTestAtlasProvider("es", [
+      { lemmaId: "queso", cefrPriorBand: "A1", gloss: "cheese" }
+    ]);
+
+    const result = await generateVariant(
+      {
+        ...baseInput,
+        teach: {
+          introduce: [{ kind: "vocabulary", lemmaId: "queso", lang: "es" }],
+          reinforce: [],
+          avoid: []
+        }
+      },
+      { llmClient, atlas, inventoryChunks: emptyInventoryChunks }
+    );
+
+    expect(result.variant!.highlight?.focusTerms).toContain("queso");
+    expect(result.variant!.highlight?.introduceTerms).toContain("queso");
+    expect(result.variant!.highlight?.glosses["queso"]).toBe("cheese");
+  });
+
+  it("rf6.5.2: bakes NO marks when there is no slate", async () => {
+    // A caller with no scene -- and therefore no plan -- bakes a level-graded
+    // line with no vocabulary steer. Absent marks must stay absent rather than
+    // becoming an empty highlight, which would claim the line was examined and
+    // found to teach nothing.
+    const llmClient = createStubLLMClient({ variantText: "Hola viajero." });
+
+    const result = await generateVariant(baseInput, {
+      llmClient,
+      atlas: emptyAtlas,
+      inventoryChunks: emptyInventoryChunks
+    });
+
+    expect(result.variant!.highlight).toBeUndefined();
+  });
+
   it("returns reviewFlag=true and variant=null on LLM generation failure", async () => {
     const llmClient = createStubLLMClient({ failGeneration: true });
 

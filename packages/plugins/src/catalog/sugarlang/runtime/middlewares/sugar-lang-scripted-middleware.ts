@@ -8,18 +8,21 @@
  *          backwards. It is harmless only because verify returns early in
  *          scripted mode; if that early return ever goes, the order matters.
  *
- * For anchored/supported postures: diglot weave (zero LLM calls).
- * For target-dominant posture: reads baked variant from variant cache; degrades
- *   to markGradedText when cache miss or no variant cache wired (zero LLM calls).
+ * ZERO LLM CALLS, EVERY BAND. This serves a variant baked in Studio, or it
+ * serves the authored English. It does not adapt text itself.
  *
- * For scripted dialogue:
- *   1. Reads the authored English turn text
- *   2. Reads the sugarlang constraint (posture/ratio)
- *   3a. anchored/supported: calls markGradedText; updates constraint.targetVocab.introduce
- *       from woven forms (supplemented by intent artifact teachables when available)
- *   3b. target-dominant: reads baked variant from cache; updates constraint.targetVocab.introduce
- *       from intent artifact teachables; degrades to weave on cache miss
- *   4. Replaces turn.text with the adapted version
+ *   1. Read the authored English turn text and the sugarlang constraint
+ *   2. Look up the variant baked for this line at the learner's band
+ *   3. HIT  -> replace turn.text, and attach the MARKS baked alongside it so the
+ *              line highlights its teachables exactly as an agent line does
+ *      MISS -> leave the authored English alone
+ *
+ * THE WEAVE IS GONE (rf6.5.2, nikki 2026-07-31). Anchored/supported postures
+ * used to substitute target words into the authored line on a cache miss. It is
+ * deleted: a line with no baked variant is untaught but correct and readable,
+ * which beats a line half-rewritten by a mechanism that made no pedagogical
+ * decision. Its removal also fixed an inversion where the FALLBACK highlighted
+ * and the correctly BAKED line did not.
  *
  * Skips: agent mode turns, player VO turns, turns without a constraint.
  *
@@ -31,29 +34,20 @@
 
 import type { ConversationMiddleware, ConversationTurnEnvelope } from "@sugarmagic/runtime-core";
 import { resolveDialogueSpeaker } from "@sugarmagic/domain";
-import type { LemmaRef, SugarlangConstraint } from "../types";
-import type { SugarlangRuntimeServices, SugarlangExecutionServices } from "../runtime-services";
-import { markGradedText } from "../grading/graded-text-marker";
+import type { SugarlangConstraint } from "../types";
+import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildDialogueNodeContentHash } from "../grading/sources/dialogue-node-source";
-import { vocabularyRefs, type TeachableRef } from "../contracts/teachable-ref";
-import { getAllInventoryChunks } from "../inventory/competency-inventory-loader";
 import { createSugarlangLogger } from "../logger";
 import type { SugarlangLoggerLike } from "./shared";
 import {
   isScriptedMode,
   normalizeTurn,
   shouldRunSugarlangForExecution,
-  SUGARLANG_CONSTRAINT_ANNOTATION,
-  SUGARLANG_SCHEDULE_ANNOTATION
+  SUGARLANG_CONSTRAINT_ANNOTATION
 } from "./shared";
-import type { TeachSchedule } from "../scheduler/teach-schedule";
 import type { VariantCacheKey } from "../compile/variant-cache";
 import { VARIANT_PROMPT_VERSION } from "../compile/generate-variant";
-import { LINE_INTENT_PROMPT_VERSION } from "../compile/line-intent-extractor";
-import type { LineIntentCacheKey } from "../compile/intent-cache";
-import { buildIntentContentHash } from "../compile/intent-cache";
 import type { CEFRBand } from "../cefr";
-import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
 // 090.8c: the live-render cache and its verifier are no longer imported here.
 // They remain in compile/ because the BUILD path still needs them (090.11);
 // what left is the runtime caller.
@@ -116,83 +110,45 @@ function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
 const buildVariantContentHash = buildDialogueNodeContentHash;
 
 /**
- * Runs markGradedText on the authored text using the prescription's introduce list,
- * then updates constraint.targetVocab.introduce with the woven forms.
- * Shared between anchored/supported and the target-dominant degradation path.
+ * Attaches the marks BAKED ONTO THE VARIANT to the turn, so a scripted line gets
+ * the same highlighting an agent line gets.
+ *
+ * WHY THE MARKS COME FROM THE VARIANT AND NOT FROM A SLATE.
+ *   Scripted mode never calls the Teacher -- the teacher middleware early-returns
+ *   with an empty `targetVocab` -- so at runtime there IS no slate to derive
+ *   terms from. The slate existed at BAKE time, which is where the terms were
+ *   computed, against the very text being served here.
+ *
+ *   Until rf6.5.2 this was missing and the two paths were BACKWARDS: a weave
+ *   FALLBACK line highlighted (because the weave repopulated `targetVocab` as a
+ *   side effect) while a correctly BAKED line highlighted nothing at all. No
+ *   test caught it, because the scripted tests pin the TEXT and not the
+ *   annotation.
+ *
+ * `celebrateTerms` is empty here on purpose: the dialogue entry decorator fills
+ * it on PLAYER turns from what the player actually typed.
  */
-function applyWeave(
-  authoredText: string,
-  constraint: SugarlangConstraint,
-  execution: ConversationExecutionContext,
-  normalizedTurn: ConversationTurnEnvelope,
-  services: SugarlangExecutionServices,
-  targetLanguage: string,
-  supportLanguage: string,
-  logger: SugarlangLoggerLike,
-  posture: string
-): void {
-  // 090.4: the marker substitutes WORDS, so it takes the vocabulary half.
-  // Competencies on the slate are realized as exponents by the chunk matcher
-  // inside the marker, not by word substitution -- narrowing here is explicit so
-  // that "competencies do not flow through this argument" is a stated fact
-  // rather than an accident of the type.
-  const vocabularyIntroduce = vocabularyRefs(constraint.targetVocab.introduce);
-  let inventoryChunks: import("../contracts/competency-inventory").InventoryChunk[] = [];
-  try {
-    inventoryChunks = getAllInventoryChunks(targetLanguage);
-  } catch {
-    // Missing inventory for this language -- weave proceeds with no chunk substitutions.
-  }
-  const markResult = markGradedText(
-    authoredText,
-    vocabularyIntroduce,
-    inventoryChunks,
-    services.atlas,
-    targetLanguage,
-    supportLanguage
-  );
-
-  if (markResult.markedForms.length > 0) {
-    normalizedTurn.text = markResult.text;
-    // THIS IS THE LAST WRITER OF `constraint.targetVocab` BESIDES THE TEACHER,
-    // and unlike the two 090.4 deleted it is NOT a second decision -- it is a
-    // REPORT. It narrows introduce to the forms that were actually placed in
-    // this text, so observe highlights and cards what the learner really saw
-    // rather than what was merely intended.
-    //
-    // But it is reporting through the intent channel, which is why it looks like
-    // a writer. Under the model these are two different facts:
-    //
-    //   targetVocab      what the Teacher DECIDED to teach  (intent)
-    //   realized forms   what this text ACTUALLY teaches    (realization)
-    //
-    // Conflating them means the Teacher's decision is unrecoverable after
-    // rendering, and it is why the narrowing has to be conditional on
-    // `markedForms.length > 0` -- overwriting with an empty list would erase the
-    // intent entirely on the common A1 turn where nothing was placed.
-    //
-    // REVISIT with 090.11: realization output gets its own field, observe reads
-    // THAT for card creation, and `targetVocab` stops being rewritten at render
-    // time. Then the Teacher is the only writer, full stop.
-    const wovenLemmaRefs: TeachableRef[] = markResult.markedForms.map((wf) => ({
-      kind: "vocabulary" as const,
-      lemmaId: wf.lemmaId,
-      lang: targetLanguage
-    }));
-    constraint.targetVocab = {
-      introduce: wovenLemmaRefs,
-      reinforce: constraint.targetVocab.reinforce,
-      avoid: constraint.targetVocab.avoid
+function attachBakedHighlight(
+  variant: {
+    highlight?: {
+      focusTerms: string[];
+      introduceTerms: string[];
+      glosses: Record<string, string>;
     };
-    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
-  }
-
-  logger.debug("Scripted line woven (zero LLM).", {
-    authoredText,
-    wovenText: normalizedTurn.text,
-    weavedCount: markResult.markedForms.length,
-    posture
-  });
+  },
+  normalizedTurn: ConversationTurnEnvelope
+): void {
+  const highlight = variant.highlight;
+  if (!highlight || highlight.focusTerms.length === 0) return;
+  normalizedTurn.annotations = {
+    ...(normalizedTurn.annotations ?? {}),
+    dialogueHighlight: {
+      focusTerms: highlight.focusTerms,
+      introduceTerms: highlight.introduceTerms,
+      celebrateTerms: [],
+      glosses: highlight.glosses
+    }
+  };
 }
 
 /**
@@ -203,13 +159,27 @@ function applyWeave(
  * scene never built, a bake that failed its gates -- because the caller's answer
  * is the same for all of them: fall back rather than fail the turn.
  */
+/**
+ * `ServedVariant` carries the BAKED MARKS alongside the text. It was `{text}`
+ * only, which is how a baked line reached the player with no highlighting: the
+ * narrowing silently discarded the field the presentation layer needs.
+ */
+type ServedVariant = {
+  text: string;
+  highlight?: {
+    focusTerms: string[];
+    introduceTerms: string[];
+    glosses: Record<string, string>;
+  };
+};
+
 async function readBakedVariant(
-  services: { variantCache?: { get: (key: VariantCacheKey) => Promise<{ variant: { text: string } } | null> } },
+  services: { variantCache?: { get: (key: VariantCacheKey) => Promise<{ variant: ServedVariant } | null> } },
   nodeId: string,
   authoredText: string,
   targetLanguage: string,
   band: CEFRBand
-): Promise<{ text: string } | null> {
+): Promise<ServedVariant | null> {
   if (!services.variantCache) return null;
   try {
     const cached = await services.variantCache.get({
@@ -218,7 +188,10 @@ async function readBakedVariant(
       contentHash: buildVariantContentHash(nodeId, authoredText),
       variantPromptVersion: VARIANT_PROMPT_VERSION
     });
-    return cached ? { text: cached.variant.text } : null;
+    // The WHOLE variant, not `{text}`. Rebuilding a narrowed object here is
+    // what dropped the baked marks on the floor -- the type said `{text}` and
+    // the code obligingly made one, so the highlight never reached the turn.
+    return cached ? cached.variant : null;
   } catch {
     // A cache read failure is not a turn failure.
     return null;
@@ -251,7 +224,6 @@ export function createSugarLangScriptedMiddleware(
 
       const authoredText = normalizedTurn.text;
       const targetLanguage = constraint.targetLanguage;
-      const supportLanguage = execution.selection.supportLanguage ?? "en";
 
       // 090.11: ANCHORED/SUPPORTED READ THE BAKED VARIANT FIRST.
       //
@@ -291,6 +263,7 @@ export function createSugarLangScriptedMiddleware(
 
         if (beginnerVariant) {
           normalizedTurn.text = beginnerVariant.text;
+          attachBakedHighlight(beginnerVariant, normalizedTurn);
           logger.debug("Scripted beginner line read from baked variant.", {
             posture: constraint.supportPosture,
             band: constraint.learnerCefr,
@@ -299,17 +272,15 @@ export function createSugarLangScriptedMiddleware(
           return normalizedTurn;
         }
 
-        applyWeave(
-          authoredText,
-          constraint,
-          execution,
-          normalizedTurn,
-          services,
-          targetLanguage,
-          supportLanguage,
-          logger,
-          constraint.supportPosture
-        );
+        // NO VARIANT -> THE AUTHORED ENGLISH, UNCHANGED (nikki, 2026-07-31).
+        // The weave used to run here, substituting target words into the
+        // authored line. It is deleted: a line with no baked variant is untaught
+        // but correct and readable, which is a better failure than a line
+        // half-rewritten by a mechanism that made no pedagogical decision.
+        logger.debug("Scripted beginner line has no baked variant -- serving authored text.", {
+          band: constraint.learnerCefr,
+          nodeId: beginnerNodeId
+        });
 
         // 090.4 DELETED AN UNOWNED WRITER OF constraint.targetVocab HERE.
         //
@@ -333,7 +304,7 @@ export function createSugarLangScriptedMiddleware(
       }
 
       // target-dominant posture: read baked variant from variant cache (086.4).
-      // Degrades gracefully to markGradedText when the cache is cold or unavailable.
+      // Serves the authored English when the cache is cold or unavailable.
       const services = await deps.services.resolveForExecution(execution);
       if (!services) return normalizedTurn;
 
@@ -359,13 +330,9 @@ export function createSugarLangScriptedMiddleware(
       // production-reachable and NEVER TESTED -- 087's own outstanding list
       // records that no test ever fired the trigger. Nothing will fail loudly if
       // removing it was wrong. The zero-gateway-call pin below is the guard.
-      const dialogueDefinitionId = execution.selection.dialogueDefinitionId ?? "";
-      const nodeIntent = dialogueDefinitionId && nodeId
-        ? services.dialogueDefinitions
-            .find((d) => d.definitionId === dialogueDefinitionId)
-            ?.nodes.find((n) => n.nodeId === nodeId)?.intent
-        : undefined;
-      const intentContentHash = buildIntentContentHash(nodeId, authoredText, nodeIntent);
+      // rf6.5.1: the per-turn dialogue-definition lookup and its intent hash are
+      // GONE. Both were computed on every scripted turn and read by nothing --
+      // they fed the live-render path deleted in 090.8c.
 
       // Only consult the baked variant when the live render did NOT produce the
       // line. Without the !usedVariant gate a baked-variant cache hit overwrites
@@ -382,6 +349,7 @@ export function createSugarLangScriptedMiddleware(
           const cached = await services.variantCache.get(cacheKey);
           if (cached) {
             normalizedTurn.text = cached.variant.text;
+            attachBakedHighlight(cached.variant, normalizedTurn);
             usedVariant = true;
 
             // 090.4 DELETED THE SECOND UNOWNED WRITER HERE.
@@ -406,26 +374,15 @@ export function createSugarLangScriptedMiddleware(
       }
 
       if (!usedVariant) {
-        // Degrade: no variant cache, cache miss, or lookup error.
-        // Run markGradedText to at least produce introduce highlights.
-        logger.debug("Scripted line (target-dominant): variant cache miss -- degrading to weave.", {
+        // NO VARIANT -> THE AUTHORED ENGLISH, UNCHANGED. See the note on the
+        // beginner path above; the weave is deleted on both.
+        logger.debug("Scripted line (target-dominant): no baked variant -- serving authored text.", {
           authoredText,
           band,
           lang: targetLanguage,
           hasVariantCache: Boolean(services.variantCache),
           nodeId: nodeId || "(none)"
         });
-        applyWeave(
-          authoredText,
-          constraint,
-          execution,
-          normalizedTurn,
-          services,
-          targetLanguage,
-          supportLanguage,
-          logger,
-          "target-dominant"
-        );
       }
 
       return normalizedTurn;

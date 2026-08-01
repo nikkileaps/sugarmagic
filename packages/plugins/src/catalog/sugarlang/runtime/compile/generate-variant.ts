@@ -46,6 +46,11 @@ import type { LexicalAtlasProvider } from "../types";
 import type { InventoryChunk } from "../contracts/competency-inventory";
 import type { GradedTextSlate } from "../grading/graded-text-service";
 import {
+  buildHighlightTerms,
+  focusTermsOf
+} from "../grading/highlight-terms";
+import { createChunkMatcher } from "../classifier/chunk-matcher";
+import {
   GRADED_TEXT_PROMPT_VERSION,
   GradedTextService,
   VOICE_RETENTION_PASS_THRESHOLD
@@ -71,6 +76,8 @@ export interface GenerateVariantInput {
   contentHash: string;
   dialogueDefinitionId: string;
   nodeId: string;
+  /** Support language for the baked glosses. Defaults to "en". */
+  supportLang?: string;
   /**
    * 090.11: posture for this line. Absent falls back to the band's posture --
    * the same derivation the runtime scripted path uses today. Present is how a
@@ -149,6 +156,28 @@ export async function generateVariant(
     };
   }
 
+  // BAKE THE MARKS (rf6.5.2). The slate that steered this generation is right
+  // here; at runtime it is not -- scripted mode never calls the Teacher and
+  // carries an empty targetVocab. So the terms are computed once, now, against
+  // the text that was just produced, and ride on the variant.
+  //
+  // Same builder the observe middleware uses for agent turns, so a word cannot
+  // highlight differently depending on whether its line was baked.
+  const highlight = input.teach
+    ? buildHighlightTerms({
+        text: result.text,
+        introduce: input.teach.introduce,
+        reinforce: input.teach.reinforce,
+        atlas: deps.atlas,
+        targetLanguage: input.targetLang,
+        supportLanguage: input.supportLang ?? "en",
+        chunkMatcher:
+          deps.inventoryChunks.length > 0
+            ? createChunkMatcher(deps.inventoryChunks, input.targetLang)
+            : null
+      })
+    : null;
+
   return {
     variant: {
       source: {
@@ -159,6 +188,15 @@ export async function generateVariant(
       lang: input.targetLang,
       band: input.band,
       text: result.text,
+      ...(highlight
+        ? {
+            highlight: {
+              focusTerms: focusTermsOf(highlight),
+              introduceTerms: highlight.introduceTerms,
+              glosses: highlight.glosses
+            }
+          }
+        : {}),
       verdict: result.verdict,
       reviewFlag: !result.verdict.overallPasses,
       generatedAtMs: Date.now(),

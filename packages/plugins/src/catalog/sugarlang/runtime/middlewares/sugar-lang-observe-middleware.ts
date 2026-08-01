@@ -31,7 +31,8 @@ import {
   getAllInventoryChunks
 } from "../inventory/competency-inventory-loader";
 import { countDiverseEncounters } from "../learner";
-import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
+import { vocabularyRefs } from "../contracts/teachable-ref";
+import { buildHighlightTerms, focusTermsOf } from "../grading/highlight-terms";
 import { findAmbientSpans } from "../grading/ambient-spans";
 import { traceRealization } from "../teacher/teacher-trace";
 import { MorphologyLoader } from "../classifier/morphology-loader";
@@ -926,104 +927,34 @@ export function createSugarLangObserveMiddleware(
       // dialogue renderer can highlight target vocabulary and fire the star
       // celebration animation when the player produces a target lemma.
       const supportLang = execution.selection.supportLanguage ?? "en";
-      const introduceTerms: string[] = [];
-      const reinforceTerms: string[] = [];
-      const glosses: Record<string, string> = {};
 
-      // 090.4: the highlight is built from words; competency exponents come
-      // from the chunk matcher below (090.11 item 4).
-      for (const lemma of vocabularyRefs(constraint.targetVocab.introduce)) {
-        const surface = lemma.lemmaId.replace(/_/g, " ");
-        introduceTerms.push(surface);
-        const gloss = services.atlas.getGloss(lemma.lemmaId, learner.targetLanguage, supportLang);
-        if (gloss) glosses[surface] = gloss;
-      }
-      for (const lemma of vocabularyRefs(constraint.targetVocab.reinforce)) {
-        const surface = lemma.lemmaId.replace(/_/g, " ");
-        reinforceTerms.push(surface);
-        const gloss = services.atlas.getGloss(lemma.lemmaId, learner.targetLanguage, supportLang);
-        if (gloss) glosses[surface] = gloss;
-      }
+      // ONE BUILDER, shared with the build-time bake (grading/highlight-terms.ts).
+      // Scripted lines carry precomputed terms on their variant; agent lines
+      // compute them here. Same question, so it must not be two answers -- the
+      // drift would be "this word highlights differently depending on whether
+      // the line was baked", which nobody would think to test for.
+      const highlightTerms = buildHighlightTerms({
+        text: normalizedTurn.text,
+        introduce: constraint.targetVocab.introduce,
+        reinforce: constraint.targetVocab.reinforce,
+        atlas: services.atlas,
+        targetLanguage: learner.targetLanguage,
+        supportLanguage: supportLang,
+        chunkMatcher
+      });
+      const { introduceTerms, glosses } = highlightTerms;
 
-      // 090.11 item 4: SPANS, NOT WORDS. A competency is an ACT and its exponent
-      // is a PHRASE, so `buenos dias` has to be ONE span with one hover -- not
-      // `buenos` and `dias` lit separately, which reads as two unrelated words
-      // and offers two tooltips for one idea.
-      //
-      // Until now `vocabularyRefs()` above dropped every competency on the
-      // slate, so an exponent the NPC actually said was never highlighted at all.
-      //
-      // MATCHED AGAINST THE TEXT, NOT LISTED FROM THE INVENTORY. A competency
-      // has several exponents and the line used at most one; pushing all of them
-      // would name phrases that are not on screen. The matcher's longest-match
-      // trie also settles overlaps between exponents, and `findTermMatches`
-      // downstream sorts by length so the phrase claims its characters before
-      // any single word inside it can.
-      //
-      // Reuses the matcher built above rather than constructing a second one
-      // over the same inventory.
-      //
-      // AN EXPONENT CAN REACH `introduceTerms` BY TWO ROUTES, and they answer
-      // different questions, so this is not a duplicated enforcer:
-      //   - the 085.5 FIRST-TEACH BEAT (`teachLineSurface`, below) fires the
-      //     first time a learner ever meets a competency-realizing chunk,
-      //     independent of the slate -- "you have not seen this before"
-      //   - this block fires whenever the competency is ON THE SLATE -- "the
-      //     Teacher wants this taught now"
-      // They overlap on a first encounter of a slated competency. This runs
-      // first and the beat's own `includes` check then skips, so the term is
-      // pushed once. If either side ever stops de-duplicating, the phrase gets
-      // listed twice and is highlighted once, which reads as a lost term.
-      const introduceCompetencyIds = new Set(
-        competencyRefs(constraint.targetVocab.introduce).map((ref) => ref.competencyId)
-      );
-      const reinforceCompetencyIds = new Set(
-        competencyRefs(constraint.targetVocab.reinforce).map((ref) => ref.competencyId)
-      );
-
-      if (
-        chunkMatcher &&
-        (introduceCompetencyIds.size > 0 || reinforceCompetencyIds.size > 0)
-      ) {
-        try {
-          const turnTokens = tokenize(normalizedTurn.text, learner.targetLanguage);
-          for (const chunkMatch of chunkMatcher.match(turnTokens, normalizedTurn.text)) {
-            const competency = getInventoryCompetencyForChunk(
-              chunkMatch.chunk.chunkId,
-              learner.targetLanguage
-            );
-            if (!competency) continue;
-
-            const target = introduceCompetencyIds.has(competency.competencyId)
-              ? introduceTerms
-              : reinforceCompetencyIds.has(competency.competencyId)
-                ? reinforceTerms
-                : null;
-            // A chunk the Teacher did not ask for is not a focus term. It may
-            // still surface as ambient, which is the correct home for target
-            // language nobody asked to teach.
-            if (!target) continue;
-
-            const surface = chunkMatch.surfaceMatched.trim();
-            if (surface.length === 0 || target.includes(surface)) continue;
-
-            target.push(surface);
-            // The can-do descriptor, because what the learner is being shown is
-            // the ACT, not a word. "Can greet people in a simple way" is the
-            // useful hover for `buenos dias`; a word gloss would not be.
-            if (!glosses[surface]) glosses[surface] = competency.cefrDescriptor;
-          }
-        } catch {
-          // Phrase detection is an affordance. A failure must not cost the
-          // player their line, and the vocabulary half of the highlight above
-          // is already built and unaffected.
-        }
-      }
-
+      // 085.5 first-teach beat: fires the first time a learner meets a
+      // competency-realizing chunk, INDEPENDENT of the slate. Different question
+      // from the builder above ("you have not seen this") vs ("the Teacher wants
+      // this now"), so it is not a duplicate enforcer -- but both push here, and
+      // the `includes` check is what keeps a phrase from being listed twice and
+      // highlighted once, which would read as a lost term.
       if (teachLineSurface && !introduceTerms.includes(teachLineSurface)) {
         introduceTerms.push(teachLineSurface);
       }
-      const focusTerms = [...introduceTerms, ...reinforceTerms];
+      // Assembled AFTER the beat's push, so a term added there is scanned for.
+      const focusTerms = focusTermsOf(highlightTerms);
 
       // 090.11/090.12: AMBIENT -- target language the slate never asked for.
       //

@@ -126,4 +126,26 @@ export interface GradedTextRecord {
   /** Hash of the authored text (and whatever else the source seeds in). */
   contentHash: string;
   promptVersion: string;
+  /**
+   * THE MARKS, COMPUTED AT BAKE TIME (story rf6.5.2).
+   *
+   * Scripted dialogue needs the same highlighting agent turns get, and the
+   * presentation layer only needs the text plus a list of TERMS -- markup
+   * reaches it as a turn annotation, so nothing requires the terms to be
+   * computed at render time. Carrying them here means the scripted middleware
+   * can attach them when it serves the variant, instead of re-deriving a slate
+   * the runtime does not have (scripted mode never calls the Teacher).
+   *
+   * Absent on variants baked before this existed, and on any source that does
+   * not teach. Absent means "no marks", which renders as plain text -- the same
+   * safe direction the slate itself uses.
+   *
+   * `celebrateTerms` is deliberately NOT here: it depends on what the player
+   * typed, so it stays a runtime concern of the dialogue entry decorator.
+   */
+  highlight?: {
+    focusTerms: string[];
+    introduceTerms: string[];
+    glosses: Record<string, string>;
+  };
 }

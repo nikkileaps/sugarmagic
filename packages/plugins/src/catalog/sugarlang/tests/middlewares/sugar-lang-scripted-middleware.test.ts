@@ -136,6 +136,10 @@ function dueSchedule() {
 }
 
 describe("scripted rendering costs nothing", () => {
+  function execution_forMarks() {
+    return scriptedExecution("anchored");
+  }
+
   it("090.11: an A1 line reads the baked variant instead of weaving", async () => {
     // THE BEHAVIOUR CHANGE. Beginner lines were the last ones realized at
     // runtime; every other band already read a bake. This is the pin that the
@@ -168,11 +172,16 @@ describe("scripted rendering costs nothing", () => {
     expect(llmClient.generate).not.toHaveBeenCalled();
   });
 
-  it("090.11: falls back to the weave when no variant is baked", async () => {
-    // The fallback is deliberate, not vestigial. A cold cache, an unbuilt scene
-    // or a bake that failed its gates all land here, and a woven line beats an
-    // untouched English one. Asserting the turn still renders rather than
-    // asserting exact text, because the weave's output depends on the atlas.
+  it("rf6.5.2: with no baked variant the AUTHORED ENGLISH is served unchanged", async () => {
+    // THE WEAVE IS GONE (nikki, 2026-07-31). A line with no variant is untaught
+    // but correct and readable, which beats a line half-rewritten by a mechanism
+    // that made no pedagogical decision.
+    //
+    // THIS TEST USED TO ASSERT `expect(turn?.text).toBeTruthy()`, which passes
+    // whether the line was woven OR left alone -- so it could not tell the two
+    // apart, and deleting the weave broke nothing. Asserting the EXACT authored
+    // text is what makes the behaviour pinned instead of merely exercised.
+    const authored = "Good morning. Would you like some cheese?";
     const llmClient = forbiddenGateway();
     const middleware = createSugarLangScriptedMiddleware({
       services: scriptedServices(llmClient) as never
@@ -181,13 +190,85 @@ describe("scripted rendering costs nothing", () => {
 
     const turn = await middleware.finalize?.(execution, {
       speakerId: "npc-orrin",
+      text: authored,
+      metadata: { nodeId: "node-1" }
+    } as never);
+
+    expect(turn?.text).toBe(authored);
+    expect(llmClient.generate).not.toHaveBeenCalled();
+  });
+
+  it("rf6.5.2: a baked line carries its MARKS to the turn annotation", async () => {
+    // THE REGRESSION THIS CLOSES. Serving a baked variant set turn.text and
+    // returned, never touching targetVocab -- which scripted mode leaves empty
+    // because it never calls the Teacher. So observe built focusTerms from
+    // nothing and a correctly baked line highlighted NOTHING, while a weave
+    // FALLBACK line highlighted fine. Exactly backwards.
+    //
+    // Pinning the ANNOTATION, not the text. Every other scripted test asserts
+    // text, which is why this shipped unnoticed.
+    const llmClient = forbiddenGateway();
+    const services = scriptedServices(llmClient) as unknown as {
+      resolveForExecution: () => Promise<unknown>;
+    };
+    const resolved = await services.resolveForExecution();
+    (resolved as { variantCache: unknown }).variantCache = {
+      get: async () => ({
+        variant: {
+          text: "Buenos dias. Quiere queso?",
+          highlight: {
+            focusTerms: ["queso", "buenos dias"],
+            introduceTerms: ["queso"],
+            glosses: { queso: "cheese" }
+          }
+        }
+      })
+    };
+
+    const middleware = createSugarLangScriptedMiddleware({
+      services: services as never
+    });
+
+    const turn = await middleware.finalize?.(execution_forMarks(), {
+      speakerId: "npc-orrin",
       text: "Good morning. Would you like some cheese?",
       metadata: { nodeId: "node-1" }
     } as never);
 
-    expect(turn).toBeDefined();
-    expect(turn?.text).toBeTruthy();
-    expect(llmClient.generate).not.toHaveBeenCalled();
+    const highlight = turn?.annotations?.["dialogueHighlight"] as
+      | { focusTerms: string[]; introduceTerms: string[]; glosses: Record<string, string> }
+      | undefined;
+
+    expect(highlight?.focusTerms).toEqual(["queso", "buenos dias"]);
+    expect(highlight?.introduceTerms).toEqual(["queso"]);
+    expect(highlight?.glosses).toEqual({ queso: "cheese" });
+  });
+
+  it("rf6.5.2: a variant with no marks writes no annotation rather than an empty one", async () => {
+    // Variants baked before marks existed have no `highlight`. An empty
+    // annotation would claim the line was examined and found to teach nothing,
+    // which is a different statement from "this line was never marked".
+    const llmClient = forbiddenGateway();
+    const services = scriptedServices(llmClient) as unknown as {
+      resolveForExecution: () => Promise<unknown>;
+    };
+    const resolved = await services.resolveForExecution();
+    (resolved as { variantCache: unknown }).variantCache = {
+      get: async () => ({ variant: { text: "Buenos dias." } })
+    };
+
+    const middleware = createSugarLangScriptedMiddleware({
+      services: services as never
+    });
+
+    const turn = await middleware.finalize?.(execution_forMarks(), {
+      speakerId: "npc-orrin",
+      text: "Good morning.",
+      metadata: { nodeId: "node-1" }
+    } as never);
+
+    expect(turn?.text).toBe("Buenos dias.");
+    expect(turn?.annotations?.["dialogueHighlight"]).toBeUndefined();
   });
 
   it("renders an authored line without calling the gateway", async () => {
