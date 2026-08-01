@@ -101,6 +101,7 @@ import {
   applyCameraDrag,
   applyCameraZoom,
   computeCameraPosition,
+  createCameraMoveDirector,
   createRuntimeInputManager,
   createRuntimeBootModel,
   createRuntimeDebugHud,
@@ -1200,6 +1201,18 @@ export function createWebRuntimeHost(
   let unsubscribeTexturesUpdated: (() => void) | null = null;
   let currentAssetSources: Record<string, string> = {};
   let cameraState: GameCameraState | null = null;
+  /**
+   * Named camera moves in flight. The HOST owns this because the host owns
+   * cameraState -- runtime-core defines what a move is and where it should be
+   * at time t, but nothing in core owns a camera to move.
+   */
+  const cameraMoveDirector = createCameraMoveDirector();
+  const CAMERA_MOVE_BOUNDS = {
+    pitchMin: DEFAULT_CAMERA_CONFIG.pitchMin,
+    pitchMax: DEFAULT_CAMERA_CONFIG.pitchMax,
+    distanceMin: DEFAULT_CAMERA_CONFIG.distanceMin,
+    distanceMax: DEFAULT_CAMERA_CONFIG.distanceMax
+  };
   let inputManager: ReturnType<typeof createRuntimeInputManager> | null = null;
   let playerVisualController: ReturnType<
     typeof createPlayerVisualController
@@ -1515,6 +1528,10 @@ export function createWebRuntimeHost(
     inputManager?.detach();
     inputManager = null;
     cameraState = null;
+    // The director is a const in this closure and outlives a reboot, so a move
+    // still in flight at teardown would drive the NEXT session's camera from a
+    // baseline belonging to the last one.
+    cameraMoveDirector.cancel();
     world = null;
 
     playerVisualController?.dispose();
@@ -1761,7 +1778,26 @@ export function createWebRuntimeHost(
       );
     }
 
-    const camPos = computeCameraPosition(cameraState);
+    // A move is composed for RENDERING ONLY and never written back.
+    //
+    // Persisting it (which this did at first) gave pitch and distance two
+    // writers -- the player, and the move -- and since `request` captures
+    // cameraState as the framing to give back, a second request mid-move
+    // captured the MOVE's own output as the player's resting framing and the
+    // real one was gone for the session. Reachable on ordinary flows:
+    // DialogueManager ends and starts in one synchronous block, and a scripted
+    // follow-up starts on a microtask, both long before the next frame.
+    //
+    // cameraState stays the player's framing; the move is an overlay on top.
+    const moveSample = cameraState
+      ? cameraMoveDirector.update(delta * 1000, CAMERA_MOVE_BOUNDS)
+      : null;
+    const framedCamera =
+      moveSample && cameraState
+        ? { ...cameraState, pitch: moveSample.pitch, distance: moveSample.distance }
+        : cameraState;
+
+    const camPos = computeCameraPosition(framedCamera);
     camera.position.set(camPos.x, camPos.y, camPos.z);
     camera.lookAt(camPos.lookAtX, camPos.lookAtY, camPos.lookAtZ);
 
@@ -2653,6 +2689,20 @@ export function createWebRuntimeHost(
       root,
       world,
       inputManager,
+      // The session asks for a framing by NAME; the host resolves it against
+      // the live camera. Requesting captures wherever the camera is now as the
+      // framing to give back, so a player who had zoomed gets their own zoom
+      // returned rather than the rig default.
+      cameraMoves: {
+        request: (moveName) => {
+          if (!cameraState) return;
+          cameraMoveDirector.request(moveName, {
+            pitch: cameraState.pitch,
+            distance: cameraState.distance
+          });
+        },
+        release: (moveName) => cameraMoveDirector.release(moveName, CAMERA_MOVE_BOUNDS)
+      },
       activeRegion,
       activeScene,
       // Plan 069.3 — NPC movement resolves against the same static world.
@@ -2870,6 +2920,10 @@ export function createWebRuntimeHost(
     cameraState = createCameraState(DEFAULT_CAMERA_CONFIG);
     cameraState.targetY = playerEyeHeight;
     inputManager.onRightDrag = (dx, dy) => {
+      // Touching the camera by hand takes it back. Reachable during a move's
+      // RETURN, when the input lock has already been released -- and a move
+      // that kept animating through the player's own input would feel broken.
+      cameraMoveDirector.cancel();
       if (cameraState) {
         cameraState = applyCameraDrag(
           cameraState,
@@ -2880,6 +2934,7 @@ export function createWebRuntimeHost(
       }
     };
     inputManager.onScroll = (delta) => {
+      cameraMoveDirector.cancel();
       if (cameraState) {
         cameraState = applyCameraZoom(
           cameraState,
