@@ -20,6 +20,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createSugarLangObserveMiddleware } from "../../runtime/middlewares/sugar-lang-observe-middleware";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
+  SUGARLANG_HOVER_LEMMA_ANNOTATION,
   SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE,
   computePendingProvisionalLemmas
 } from "../../runtime/middlewares/shared";
@@ -491,5 +492,69 @@ describe("SugarLangObserveMiddleware", () => {
     // Only the real lemma (hola) appears; the chunk card is excluded.
     expect(pending.map((p) => p.lemmaRef.lemmaId)).not.toContain("chunk:buenos_dias");
     expect(pending.map((p) => p.lemmaRef.lemmaId)).toContain("hola");
+  });
+});
+
+describe("hover observations are guarded by the dictionary", () => {
+  // A LemmaCard is a persisted flashcard, and its key is either an atlas lemma
+  // or a chunk id (`chunk:<id>`). The hover term is whatever the presentation
+  // layer highlighted, and it reaches the reducer as `lemmaId` unchecked -- so
+  // without a guard a competency exponent surface writes a card under a key in
+  // neither space. 45 of the 56 shipped competency surfaces are not lemmas.
+
+  function setup(hoverTerm: string, knownLemmas: string[]) {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile())
+        },
+        learnerStateReducer: { apply },
+        atlas: {
+          getLemma: (lemmaId: string) =>
+            knownLemmas.includes(lemmaId)
+              ? { lemmaId, lang: "es", cefrPriorBand: "A1" }
+              : undefined
+        }
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({
+      services: services as never
+    });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+    execution.annotations[SUGARLANG_HOVER_LEMMA_ANNOTATION] = {
+      lemmaId: hoverTerm,
+      lang: "es",
+      dwellMs: 900
+    };
+    return { middleware, execution, apply };
+  }
+
+  const hoverEvents = (apply: ReturnType<typeof vi.fn>) =>
+    (
+      apply.mock.calls as Array<
+        [{ type: string; observationEvent?: { observation: { kind: string } } }]
+      >
+    ).filter(([e]) => e.observationEvent?.observation.kind.startsWith("hovered"));
+
+  it("records a hover on a word the dictionary knows", async () => {
+    const { middleware, execution, apply } = setup("queso", ["queso"]);
+    await middleware.finalize?.(execution, createTestTurn("Hay queso aqui."));
+    expect(hoverEvents(apply)).toHaveLength(1);
+  });
+
+  it("IGNORES a hover on a competency surface, which is not a lemma", async () => {
+    // `buenos dias` is a competency exponent. Before the guard this wrote
+    // profile.lemmaCards["buenos dias"] -- a key nothing reads back.
+    const { middleware, execution, apply } = setup("buenos dias", ["queso"]);
+    await middleware.finalize?.(execution, createTestTurn("Buenos dias!"));
+    expect(hoverEvents(apply)).toHaveLength(0);
+  });
+
+  it("records a hover on a chunk id, which is the other valid key space", async () => {
+    const { middleware, execution, apply } = setup("chunk:buenos_dias", []);
+    await middleware.finalize?.(execution, createTestTurn("Buenos dias!"));
+    expect(hoverEvents(apply)).toHaveLength(1);
   });
 });
