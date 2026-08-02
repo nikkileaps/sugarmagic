@@ -44,7 +44,6 @@ import {
   getSceneId,
   getTurnsSinceLastProbe,
   shouldRunSugarlangForExecution,
-  type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";

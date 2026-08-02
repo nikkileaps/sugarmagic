@@ -83,7 +83,9 @@ import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider"
 import { FsrsLearnerPriorProvider } from "./providers/impls/fsrs-learner-prior-provider";
 import {
   createNoOpTelemetrySink,
-  type TelemetrySink
+  type TelemetrySink,
+  emitTelemetry,
+  createTelemetryEvent
 } from "./telemetry/telemetry";
 import { OuterLoopScheduler } from "./scheduler/outer-loop-scheduler";
 import type { SugarlangLoggerLike } from "./logger";
@@ -682,6 +684,29 @@ export class SugarlangRuntimeServices {
     await services.learnerStateReducer.apply(
       buildPlacementCompletionEvent(scoreResult, learner)
     );
+
+    // Telemetry and the confidence-floor warning came with the scoring when it
+    // left the observe middleware -- they describe the PLACEMENT, not the turn
+    // it used to arrive on.
+    await emitTelemetry(
+      this.telemetry,
+      createTelemetryEvent("placement.completed", {
+        timestamp: Date.now(),
+        finalBand: scoreResult.cefrBand,
+        confidence: scoreResult.confidence,
+        questionnaireVersion: scoreResult.questionnaireVersion,
+        result: scoreResult
+      }),
+      this.logger
+    );
+    const confidenceFloor = this.config.placement.confidenceFloor;
+    if (scoreResult.confidence < confidenceFloor) {
+      this.logger.warn("Placement completed below configured confidence floor.", {
+        confidence: scoreResult.confidence,
+        confidenceFloor
+      });
+    }
+
     // The quest flags and the completion event, for the host to apply. These
     // used to ride on the conversation turn's proposedActions.
     return emitPlacementCompleted(scoreResult);

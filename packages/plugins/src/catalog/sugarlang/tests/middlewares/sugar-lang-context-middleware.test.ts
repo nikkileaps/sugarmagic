@@ -23,7 +23,6 @@ import {
   createSugarlangPlacementStatusScope
 } from "../../runtime/learner/fact-definitions";
 import {
-  SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
 } from "../../runtime/middlewares/shared";
 import {
@@ -143,7 +142,6 @@ describe("SugarLangContextMiddleware", () => {
 
     await middleware.prepare?.(execution);
 
-    expect(execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION]).toBeUndefined();
     // 090.10: was `expect(prescribe).toHaveBeenCalledTimes(1)`. The budgeter is
     // gone; `ensure` below proves the same thing -- the middleware fell through
     // to the normal runtime path rather than short-circuiting on placement.
@@ -224,7 +222,6 @@ describe("SugarLangContextMiddleware", () => {
 
     await middleware.prepare?.(execution);
 
-    expect(execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION]).toBeUndefined();
     // 090.10: was `expect(prescribe).toHaveBeenCalledTimes(1)`. The budgeter is
     // gone; `ensure` below proves the same thing -- the middleware fell through
     // to the normal runtime path rather than short-circuiting on placement.

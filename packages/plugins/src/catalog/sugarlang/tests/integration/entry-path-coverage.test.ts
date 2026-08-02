@@ -77,7 +77,6 @@ import { createSugarlangLogger } from "../../runtime/logger";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
-  SUGARLANG_PLACEMENT_FLOW_ANNOTATION
 } from "../../runtime/middlewares/shared";
 import { createTestRegion, createTestActiveScene } from "../compile/test-helpers";
 import { createBudgeterSceneLexicon } from "./scene-lexicon-fixture";
