@@ -58,4 +58,3 @@ From the repo root:
 - `pnpm exec tsx scripts/data-prep/build-italian-morphology.ts`
 - `pnpm exec tsx scripts/data-prep/build-italian-simplifications.ts`
 - `pnpm exec tsx scripts/data-prep/build-placement-questionnaires.ts`
-- `pnpm exec tsx scripts/data-prep/claude-classify-italian-lemmas.ts`

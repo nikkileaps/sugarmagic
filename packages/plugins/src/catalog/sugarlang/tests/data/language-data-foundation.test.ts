@@ -23,13 +23,11 @@ import esPlacementQuestionnaire from "../../data/languages/es/placement-question
 import esSimplifications from "../../data/languages/es/simplifications.json";
 import itCefrlex from "../../data/languages/it/cefrlex.json";
 import itFrequency from "../../data/languages/it/frequency.json";
-import itKellySubset from "../../data/languages/it/kelly-subset.json";
 import itMorphology from "../../data/languages/it/morphology.json";
 import itPlacementQuestionnaire from "../../data/languages/it/placement-questionnaire.json";
 import itSimplifications from "../../data/languages/it/simplifications.json";
 import cefrlexSchema from "../../data/schemas/cefrlex.schema.json";
 import frequencySchema from "../../data/schemas/frequency.schema.json";
-import kellySubsetSchema from "../../data/schemas/kelly-subset.schema.json";
 import morphologySchema from "../../data/schemas/morphology.schema.json";
 import placementQuestionnaireSchema from "../../data/schemas/placement-questionnaire.schema.json";
 import simplificationsSchema from "../../data/schemas/simplifications.schema.json";
@@ -72,7 +70,6 @@ describe("Epic 4 language-data schemas", () => {
     expect(() => compileSchema(simplificationsSchema)).not.toThrow();
     expect(() => compileSchema(placementQuestionnaireSchema)).not.toThrow();
     expect(() => compileSchema(frequencySchema)).not.toThrow();
-    expect(() => compileSchema(kellySubsetSchema)).not.toThrow();
   });
 
   it("accept minimal valid examples for every schema", () => {
@@ -81,7 +78,6 @@ describe("Epic 4 language-data schemas", () => {
     const validateSimplifications = compileSchema(simplificationsSchema);
     const validatePlacement = compileSchema(placementQuestionnaireSchema);
     const validateFrequency = compileSchema(frequencySchema);
-    const validateKelly = compileSchema(kellySubsetSchema);
 
     expect(
       validateCefrlex({
@@ -166,19 +162,6 @@ describe("Epic 4 language-data schemas", () => {
       })
     ).toBe(true);
 
-    expect(
-      validateKelly({
-        lang: "it",
-        sourceVersion: "kelly-dev",
-        lemmas: {
-          ciao: {
-            lemmaId: "ciao",
-            lang: "it",
-            cefrBand: "A1"
-          }
-        }
-      })
-    ).toBe(true);
   });
 
   it("reject invalid examples for every schema", () => {
@@ -187,7 +170,6 @@ describe("Epic 4 language-data schemas", () => {
     const validateSimplifications = compileSchema(simplificationsSchema);
     const validatePlacement = compileSchema(placementQuestionnaireSchema);
     const validateFrequency = compileSchema(frequencySchema);
-    const validateKelly = compileSchema(kellySubsetSchema);
 
     expect(
       validateCefrlex({
@@ -256,19 +238,6 @@ describe("Epic 4 language-data schemas", () => {
       })
     ).toBe(false);
 
-    expect(
-      validateKelly({
-        lang: "it",
-        sourceVersion: "kelly-dev",
-        lemmas: {
-          ciao: {
-            lemmaId: "ciao",
-            lang: "it",
-            cefrBand: "Z9"
-          }
-        }
-      })
-    ).toBe(false);
   });
 
   it("validate the shipped Spanish and Italian data files", () => {
@@ -285,7 +254,6 @@ describe("Epic 4 language-data schemas", () => {
       compileSchema(placementQuestionnaireSchema)(itPlacementQuestionnaire)
     ).toBe(true);
     expect(compileSchema(frequencySchema)(itFrequency)).toBe(true);
-    expect(compileSchema(kellySubsetSchema)(itKellySubset)).toBe(true);
   });
 });
 

@@ -16,7 +16,6 @@ and YAML files checked into
 - Italian merged atlas snapshot: `build-italian-cefrlex.ts`
 - Italian morphology snapshot: `build-italian-morphology.ts`
 - Italian simplifications snapshot: `build-italian-simplifications.ts`
-- Italian review queue: `claude-classify-italian-lemmas.ts`
 - Shared placement banks: `build-placement-questionnaires.ts`
 
 ## Re-Run

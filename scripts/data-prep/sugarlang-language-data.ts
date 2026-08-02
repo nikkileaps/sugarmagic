@@ -103,13 +103,6 @@ interface PlacementQuestionnaire {
   minAnswersForValid: number;
 }
 
-interface ParsedSpanishLemma {
-  lemmaId: string;
-  band: CEFRBand;
-  totalFrequency: number;
-  partsOfSpeech: Set<string>;
-}
-
 interface ParsedItalianLemma {
   lemmaId: string;
   partsOfSpeech: Set<string>;
@@ -117,15 +110,12 @@ interface ParsedItalianLemma {
   cefrBand: CEFRBand | null;
 }
 
-const ELELEX_DOWNLOAD_URL =
-  "https://cental.uclouvain.be/cefrlex/static/resources/es/ELELex.tsv";
 const ITALIAN_KELLY_URL = "https://ssharoff.github.io/kelly/it_m3.xls";
 const DATA_BUILD_DATE = "2026-04-09";
 
 const CEFR_ORDER: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 const SPANISH_SOURCE_BANDS: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1"];
 const SPANISH_ATLAS_LIMIT = 11000;
-const ITALIAN_REVIEW_QUEUE_LIMIT = 50;
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(SCRIPT_DIR, "..", "..");
@@ -176,18 +166,6 @@ async function downloadToCache(url: string, filename: string): Promise<string> {
   const arrayBuffer = await response.arrayBuffer();
   writeFileSync(path, Buffer.from(arrayBuffer));
   return path;
-}
-
-async function downloadTextToCache(
-  url: string,
-  filename: string
-): Promise<string> {
-  const path = await downloadToCache(url, filename);
-  return readFileSync(path, "utf8");
-}
-
-function parseDelimitedRow(line: string): string[] {
-  return line.split("\t").map((cell) => cell.replace(/^"|"$/g, ""));
 }
 
 function mapSpanishPos(tag: string): string[] {
@@ -259,71 +237,6 @@ function mapItalianPos(pos: string): string[] {
     default:
       return ["other"];
   }
-}
-
-function guessSpanishBand(levelFrequencies: number[]): CEFRBand {
-  const index = levelFrequencies.findIndex((value) => value > 0);
-  if (index === -1) {
-    return "C1";
-  }
-
-  return SPANISH_SOURCE_BANDS[index] ?? "C1";
-}
-
-async function loadSpanishSourceEntries(): Promise<ParsedSpanishLemma[]> {
-  const tsv = await downloadTextToCache(ELELEX_DOWNLOAD_URL, "ELELex.tsv");
-  const lines = tsv.trim().split(/\r?\n/);
-  const grouped = new Map<string, ParsedSpanishLemma>();
-
-  for (const line of lines.slice(1)) {
-    const [
-      rawWord,
-      rawTag,
-      rawA1,
-      rawA2,
-      rawB1,
-      rawB2,
-      rawC1,
-      rawTotalFrequency
-    ] = parseDelimitedRow(line);
-    const lemmaId = normalizeLemma(rawWord ?? "");
-    if (!lemmaId) {
-      continue;
-    }
-
-    const entryBand = guessSpanishBand([
-      Number(rawA1),
-      Number(rawA2),
-      Number(rawB1),
-      Number(rawB2),
-      Number(rawC1)
-    ]);
-    const totalFrequency = Number(rawTotalFrequency);
-    const partsOfSpeech = mapSpanishPos(rawTag ?? "");
-    const existing = grouped.get(lemmaId);
-
-    if (existing) {
-      existing.band = pickLowerBand(existing.band, entryBand);
-      existing.totalFrequency += Number.isFinite(totalFrequency)
-        ? totalFrequency
-        : 0;
-      partsOfSpeech.forEach((partOfSpeech) =>
-        existing.partsOfSpeech.add(partOfSpeech)
-      );
-      continue;
-    }
-
-    grouped.set(lemmaId, {
-      lemmaId,
-      band: entryBand,
-      totalFrequency: Number.isFinite(totalFrequency) ? totalFrequency : 0,
-      partsOfSpeech: new Set(partsOfSpeech)
-    });
-  }
-
-  return [...grouped.values()]
-    .sort((left, right) => right.totalFrequency - left.totalFrequency)
-    .slice(0, SPANISH_ATLAS_LIMIT);
 }
 
 async function loadItalianSourceEntries(): Promise<ParsedItalianLemma[]> {
@@ -411,25 +324,6 @@ function finalizeAtlasEntries(
   );
 }
 
-export async function buildSpanishCefrlexData(): Promise<CefrLexDataFile> {
-  const entries = await loadSpanishSourceEntries();
-
-  return {
-    lang: "es",
-    atlasVersion: "es-elelex-2026-04-09",
-    lemmas: finalizeAtlasEntries(
-      entries.map((entry, index) => ({
-        lemmaId: entry.lemmaId,
-        lang: "es",
-        cefrPriorBand: entry.band,
-        frequencyRank: index + 1,
-        partsOfSpeech: [...entry.partsOfSpeech],
-        cefrPriorSource: "cefrlex"
-      }))
-    )
-  };
-}
-
 export async function buildItalianFrequencyData(): Promise<FrequencyDataFile> {
   const entries = await loadItalianSourceEntries();
   const total = entries.length;
@@ -447,48 +341,6 @@ export async function buildItalianFrequencyData(): Promise<FrequencyDataFile> {
           corpusFrequency: total - index
         }
       ])
-    )
-  };
-}
-
-export async function buildItalianKellySubsetData(): Promise<KellySubsetDataFile> {
-  const entries = await loadItalianSourceEntries();
-  const filtered = entries.filter(
-    (entry): entry is ParsedItalianLemma & { cefrBand: CEFRBand } =>
-      entry.cefrBand !== null
-  );
-
-  return {
-    lang: "it",
-    sourceVersion: "it-kelly-2014",
-    lemmas: Object.fromEntries(
-      filtered.map((entry) => [
-        entry.lemmaId,
-        {
-          lemmaId: entry.lemmaId,
-          lang: "it",
-          cefrBand: entry.cefrBand
-        }
-      ])
-    )
-  };
-}
-
-export async function buildItalianCefrlexData(): Promise<CefrLexDataFile> {
-  const entries = await loadItalianSourceEntries();
-
-  return {
-    lang: "it",
-    atlasVersion: "it-kelly-2026-04-09",
-    lemmas: finalizeAtlasEntries(
-      entries.map((entry, index) => ({
-        lemmaId: entry.lemmaId,
-        lang: "it",
-        cefrPriorBand: entry.cefrBand ?? rankToBand(index + 1),
-        frequencyRank: index + 1,
-        partsOfSpeech: [...entry.partsOfSpeech],
-        cefrPriorSource: entry.cefrBand ? "kelly" : "frequency-derived"
-      }))
     )
   };
 }
@@ -699,24 +551,6 @@ export function buildItalianSimplificationsData(
   atlas: CefrLexDataFile
 ): SimplificationsDataFile {
   return buildSimplificationsData(atlas);
-}
-
-export function buildItalianReviewQueueYaml(atlas: CefrLexDataFile): string {
-  const lowConfidence = Object.values(atlas.lemmas)
-    .filter((entry) => entry.cefrPriorSource === "frequency-derived")
-    .slice(0, ITALIAN_REVIEW_QUEUE_LIMIT);
-
-  const lines = [
-    "# Frequency-derived Italian CEFR assignments for optional human review"
-  ];
-  for (const entry of lowConfidence) {
-    lines.push(`- lemmaId: ${entry.lemmaId}`);
-    lines.push(`  assignedBand: ${entry.cefrPriorBand}`);
-    lines.push(`  frequencyRank: ${entry.frequencyRank}`);
-    lines.push("  reviewReason: kelly-band-missing");
-  }
-
-  return lines.join("\n");
 }
 
 function buildSpanishQuestionnaire(): PlacementQuestionnaire {
@@ -959,11 +793,6 @@ export function readJsonFile<T>(path: string): T {
 export function writeJsonFile(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-export function writeTextFile(path: string, value: string): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${value}\n`, "utf8");
 }
 
 export function sugarlangDataPath(...segments: string[]): string {
