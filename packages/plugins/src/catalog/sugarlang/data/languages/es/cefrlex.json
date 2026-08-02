@@ -122,7 +122,6 @@
       "partsOfSpeech": [
         "determiner",
         "pronoun",
-        "verb",
         "conjunction"
       ],
       "cefrPriorSource": "cefrlex",
@@ -1177,8 +1176,7 @@
       "cefrPriorBand": "A1",
       "frequencyRank": 50,
       "partsOfSpeech": [
-        "determiner",
-        "verb"
+        "determiner"
       ],
       "cefrPriorSource": "cefrlex",
       "glosses": {
@@ -7721,8 +7719,7 @@
       "cefrPriorBand": "A1",
       "frequencyRank": 319,
       "partsOfSpeech": [
-        "pronoun",
-        "verb"
+        "pronoun"
       ],
       "cefrPriorSource": "cefrlex",
       "glosses": {
@@ -14793,8 +14790,7 @@
       "cefrPriorBand": "A1",
       "frequencyRank": 610,
       "partsOfSpeech": [
-        "pronoun",
-        "verb"
+        "pronoun"
       ],
       "cefrPriorSource": "cefrlex",
       "glosses": {
@@ -49793,19 +49789,6 @@
         "pl": "funcionamientos"
       },
       "formsSource": "generated"
-    },
-    "oir": {
-      "lemmaId": "oir",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2076,
-      "partsOfSpeech": [
-        "verb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "hear"
-      }
     },
     "informático": {
       "lemmaId": "informático",
@@ -112730,19 +112713,6 @@
       },
       "formsSource": "generated"
     },
-    "va": {
-      "lemmaId": "va",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 4835,
-      "partsOfSpeech": [
-        "verb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "goes"
-      }
-    },
     "incorrecto": {
       "lemmaId": "incorrecto",
       "lang": "es",
@@ -157561,19 +157531,6 @@
         "pl": "ecotasas"
       },
       "formsSource": "generated"
-    },
-    "es": {
-      "lemmaId": "es",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7003,
-      "partsOfSpeech": [
-        "verb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "is"
-      }
     },
     "metereológico": {
       "lemmaId": "metereológico",
@@ -227465,19 +227422,6 @@
       },
       "formsSource": "generated"
     },
-    "inﬂuenciable": {
-      "lemmaId": "inﬂuenciable",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10811,
-      "partsOfSpeech": [
-        "adjective"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "easily influenced"
-      }
-    },
     "irreductible": {
       "lemmaId": "irreductible",
       "lang": "es",
@@ -228167,19 +228111,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "milk"
-      }
-    },
-    "oﬁcina": {
-      "lemmaId": "oﬁcina",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10852,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "office"
       }
     },
     "pajarero": {
@@ -229093,19 +229024,6 @@
         "pl": "solideces"
       },
       "formsSource": "generated"
-    },
-    "superﬂuo": {
-      "lemmaId": "superﬂuo",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10906,
-      "partsOfSpeech": [
-        "adjective"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "superfluous"
-      }
     },
     "talle": {
       "lemmaId": "talle",

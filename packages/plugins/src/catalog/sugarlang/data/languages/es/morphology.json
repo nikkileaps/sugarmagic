@@ -56,7 +56,6 @@
       "partsOfSpeech": [
         "determiner",
         "pronoun",
-        "verb",
         "conjunction"
       ]
     },
@@ -357,8 +356,7 @@
     "tu": {
       "lemmaId": "tu",
       "partsOfSpeech": [
-        "determiner",
-        "verb"
+        "determiner"
       ]
     },
     "ya": {
@@ -2047,8 +2045,7 @@
     "ti": {
       "lemmaId": "ti",
       "partsOfSpeech": [
-        "pronoun",
-        "verb"
+        "pronoun"
       ]
     },
     "vender": {
@@ -3850,8 +3847,7 @@
     "te": {
       "lemmaId": "te",
       "partsOfSpeech": [
-        "pronoun",
-        "verb"
+        "pronoun"
       ]
     },
     "comunidad": {
@@ -12848,12 +12844,6 @@
       "lemmaId": "funcionamiento",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "oir": {
-      "lemmaId": "oir",
-      "partsOfSpeech": [
-        "verb"
       ]
     },
     "informático": {
@@ -29653,12 +29643,6 @@
         "noun"
       ]
     },
-    "va": {
-      "lemmaId": "va",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "incorrecto": {
       "lemmaId": "incorrecto",
       "partsOfSpeech": [
@@ -42779,12 +42763,6 @@
       "lemmaId": "ecotasa",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "es": {
-      "lemmaId": "es",
-      "partsOfSpeech": [
-        "verb"
       ]
     },
     "metereológico": {
@@ -65726,12 +65704,6 @@
         "noun"
       ]
     },
-    "inﬂuenciable": {
-      "lemmaId": "inﬂuenciable",
-      "partsOfSpeech": [
-        "adjective"
-      ]
-    },
     "irreductible": {
       "lemmaId": "irreductible",
       "partsOfSpeech": [
@@ -65970,12 +65942,6 @@
       "lemmaId": "ordeñar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "oﬁcina": {
-      "lemmaId": "oﬁcina",
-      "partsOfSpeech": [
-        "noun"
       ]
     },
     "pajarero": {
@@ -66294,12 +66260,6 @@
       "lemmaId": "solidez",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "superﬂuo": {
-      "lemmaId": "superﬂuo",
-      "partsOfSpeech": [
-        "adjective"
       ]
     },
     "talle": {
@@ -67127,6 +67087,13 @@
         "noun"
       ]
     },
+    "es": {
+      "lemmaId": "ser",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
     "somos": {
       "lemmaId": "ser",
       "partsOfSpeech": [
@@ -67698,6 +67665,12 @@
       ]
     },
     "voy": {
+      "lemmaId": "ir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "va": {
       "lemmaId": "ir",
       "partsOfSpeech": [
         "verb"
