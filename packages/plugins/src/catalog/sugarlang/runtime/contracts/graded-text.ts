@@ -147,5 +147,11 @@ export interface GradedTextRecord {
     focusTerms: string[];
     introduceTerms: string[];
     glosses: Record<string, string>;
+    /**
+     * term -> what the player gets credit for. Absent on records baked before
+     * this existed; the scripted middleware passes undefined straight through
+     * and the annotation simply lacks the field, which readers tolerate.
+     */
+    creditByTerm?: Record<string, string>;
   };
 }

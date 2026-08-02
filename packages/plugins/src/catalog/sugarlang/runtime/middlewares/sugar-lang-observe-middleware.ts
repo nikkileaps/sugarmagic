@@ -901,7 +901,7 @@ export function createSugarLangObserveMiddleware(
         supportLanguage: supportLang,
         chunkMatcher
       });
-      const { introduceTerms, glosses } = highlightTerms;
+      const { introduceTerms, glosses, creditByTerm } = highlightTerms;
 
       // 085.5 first-teach beat: fires the first time a learner meets a
       // competency-realizing chunk, INDEPENDENT of the slate. Different question
@@ -979,7 +979,8 @@ export function createSugarLangObserveMiddleware(
           focusTerms,
           introduceTerms,
           celebrateTerms: [],
-          glosses
+          glosses,
+          creditByTerm
         };
       }
 

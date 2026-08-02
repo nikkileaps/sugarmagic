@@ -210,20 +210,16 @@ describe("EnvelopeClassifier", () => {
     expect(italianVerdict.withinEnvelope).toBe(true);
   });
 
-  it("stays within the performance budget for repeated checks", () => {
-    const classifier = new EnvelopeClassifier();
-    const learner = createLearnerProfile("A1");
-    const text = Array.from({ length: 20 }, () => "hola buenos días").join(" ");
+  // DELETED a wall-clock performance assertion (2026-08-02).
+  //
+  // It asserted a millisecond budget while vitest runs test files in PARALLEL,
+  // so it measured whatever else the machine was doing as much as the code. It
+  // passed every run in isolation and failed intermittently in the suite, which
+  // is the worst kind of test: it teaches you to ignore a red run.
+  //
+  // Nothing replaces it here. A latency bar needs a harness that controls what
+  // else is running; asserting one from inside the unit suite cannot work.
 
-    const iterations = 100;
-    const startedAt = performance.now();
-    for (let index = 0; index < iterations; index += 1) {
-      classifier.check(text, learner, { lang: "es" });
-    }
-    const durationMs = performance.now() - startedAt;
-
-    expect(durationMs).toBeLessThan(500);
-  });
 
   it("is deterministic for repeated identical inputs", () => {
     const classifier = new EnvelopeClassifier();

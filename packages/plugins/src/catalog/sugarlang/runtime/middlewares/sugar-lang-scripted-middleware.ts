@@ -36,6 +36,7 @@
 import type { ConversationMiddleware, ConversationTurnEnvelope } from "@sugarmagic/runtime-core";
 import { resolveDialogueSpeaker } from "@sugarmagic/domain";
 import type { SugarlangConstraint } from "../types";
+import type { GradedTextRecord } from "../contracts/graded-text";
 import type { SugarlangRuntimeServices } from "../runtime-services";
 import { buildDialogueNodeContentHash } from "../grading/sources/dialogue-node-source";
 import { createSugarlangLogger } from "../logger";
@@ -130,13 +131,10 @@ const buildVariantContentHash = buildDialogueNodeContentHash;
  * it on PLAYER turns from what the player actually typed.
  */
 function attachBakedHighlight(
-  variant: {
-    highlight?: {
-      focusTerms: string[];
-      introduceTerms: string[];
-      glosses: Record<string, string>;
-    };
-  },
+  // TAKE THE SHAPE FROM THE RECORD, do not restate it. This parameter used to
+  // spell the highlight out inline, so a field added to `GradedTextRecord` was
+  // silently invisible here -- which is exactly what happened to `creditByTerm`.
+  variant: Pick<GradedTextRecord, "highlight">,
   normalizedTurn: ConversationTurnEnvelope
 ): void {
   const highlight = variant.highlight;
@@ -147,7 +145,8 @@ function attachBakedHighlight(
       focusTerms: highlight.focusTerms,
       introduceTerms: highlight.introduceTerms,
       celebrateTerms: [],
-      glosses: highlight.glosses
+      glosses: highlight.glosses,
+      creditByTerm: highlight.creditByTerm
     }
   };
 }
@@ -161,18 +160,15 @@ function attachBakedHighlight(
  * is the same for all of them: fall back rather than fail the turn.
  */
 /**
- * `ServedVariant` carries the BAKED MARKS alongside the text. It was `{text}`
- * only, which is how a baked line reached the player with no highlighting: the
- * narrowing silently discarded the field the presentation layer needs.
+ * `ServedVariant` carries the BAKED MARKS alongside the text.
+ *
+ * DERIVED FROM THE RECORD rather than restated. It was `{text}` only once,
+ * which is how a baked line reached the player with no highlighting at all --
+ * the narrowing silently discarded the field the presentation layer needs. Then
+ * it restated `highlight` inline and did the same thing again to `creditByTerm`.
+ * A `Pick` cannot fall behind.
  */
-type ServedVariant = {
-  text: string;
-  highlight?: {
-    focusTerms: string[];
-    introduceTerms: string[];
-    glosses: Record<string, string>;
-  };
-};
+type ServedVariant = Pick<GradedTextRecord, "text" | "highlight">;
 
 async function readBakedVariant(
   services: { variantCache?: { get: (key: VariantCacheKey) => Promise<{ variant: ServedVariant } | null> } },
