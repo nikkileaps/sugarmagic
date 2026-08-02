@@ -27,7 +27,14 @@ import type {
   Scene
 } from "@sugarmagic/domain";
 import type { RuntimePluginEnvironment } from "../../../runtime";
-import type { RuntimePluginContext } from "@sugarmagic/runtime-core";
+import { buildPlacementCompletionEvent } from "./placement/placement-flow-orchestrator";
+import { emitPlacementCompleted } from "./quest-integration/placement-completion";
+import type {
+  ConversationActionProposal,
+  ConversationQuestFormResponse,
+  QuestFormDefinition,
+  RuntimePluginContext
+} from "@sugarmagic/runtime-core";
 import type {
   ConversationExecutionContext,
   RuntimeBlackboard
@@ -227,6 +234,12 @@ export class SugarlangRuntimeServices {
   private readonly gatewayClient: SugarlangLLMClient | null;
   private readonly llmModel: string;
   private _debugPinnedBand: CEFRBand | null = null;
+  /**
+   * Owns its own loader so the placement form can be produced before any
+   * conversation exists. The loader has no dependencies -- it is the shipped
+   * questionnaire bank.
+   */
+  private readonly placementFormLoader = new PlacementQuestionnaireLoader();
   /** WorkspaceId the Studio used when baking variants; wired from boot payload in manifest init. */
   private studioWorkspaceId: string | null = null;
   private _standaloneVariantCache: SugarlangVariantCache | undefined;
@@ -596,6 +609,84 @@ export class SugarlangRuntimeServices {
    *
    * Returns null before `bindRuntime`, or with no target language configured.
    */
+  /**
+   * The placement questionnaire, as a quest form.
+   *
+   * SELF-SUFFICIENT ON PURPOSE. This answers a keypress on a COLD game, before
+   * any conversation has happened -- so it must not depend on execution
+   * services, which only exist once a conversation has resolved. That is
+   * exactly the bug this replaced: on a fresh game the form came back null,
+   * the quest layer fell through to a conversation, and placement limped back
+   * onto the old dialogue path.
+   *
+   * The questionnaire loader has no dependencies, and the learner id is
+   * derivable from the bound player definition plus the configured languages.
+   *
+   * Returns null for "not mine" -- placement disabled, already completed, or
+   * no questionnaire for this language. Null is a fall-through, not an error.
+   */
+  getPlacementQuestForm(): QuestFormDefinition | null {
+    if (!this.config.placement.enabled) return null;
+    const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
+    if (!targetLanguage || !this.boundContext) return null;
+
+    const learnerId = buildLearnerId(
+      this.boundContext.playerDefinition.definitionId,
+      targetLanguage,
+      this.config.supportLanguage?.trim().toLowerCase() || "en"
+    );
+    if (
+      getSugarlangPlacementStatus(this.boundContext.blackboard, learnerId)
+        .status === "completed"
+    ) {
+      return null;
+    }
+
+    const questionnaire = this.placementFormLoader.getQuestionnaire(targetLanguage);
+    if (!questionnaire) return null;
+    const minAnswersForValid =
+      typeof this.config.placement.minAnswersForValid === "number"
+        ? this.config.placement.minAnswersForValid
+        : questionnaire.minAnswersForValid;
+    return {
+      ...questionnaire,
+      minAnswersForValid,
+      formId: `${questionnaire.lang}-placement-v${questionnaire.schemaVersion}`
+    } as unknown as QuestFormDefinition;
+  }
+
+  /**
+   * Scores a submitted placement form and records the result.
+   *
+   * This is the work the observe middleware used to do off a conversation
+   * turn. With placement no longer a conversation there is no turn to hang it
+   * on, so it lives here -- one place, whoever opened the form.
+   */
+  async submitPlacementQuestForm(
+    response: ConversationQuestFormResponse
+  ): Promise<ConversationActionProposal[]> {
+    const services =
+      this.getFirstExecutionServices() ?? (await this.getAmbientServices());
+    if (!services) {
+      this.logger.warn("Placement submitted with no services available.");
+      return [];
+    }
+    const questionnaire = services.placementQuestionnaireLoader.getQuestionnaire(
+      this.config.targetLanguage
+    );
+    const scoreResult = services.placementScoreEngine.scoreResponses(
+      response,
+      questionnaire
+    );
+    const learner = await services.learnerStore.getCurrentProfile();
+    await services.learnerStateReducer.apply(
+      buildPlacementCompletionEvent(scoreResult, learner)
+    );
+    // The quest flags and the completion event, for the host to apply. These
+    // used to ride on the conversation turn's proposedActions.
+    return emitPlacementCompleted(scoreResult);
+  }
+
   async getAmbientServices(): Promise<SugarlangExecutionServices | null> {
     const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
     if (!targetLanguage) return null;

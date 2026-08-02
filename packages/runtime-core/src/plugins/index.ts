@@ -20,7 +20,10 @@ import type { RuntimeBootModel, RuntimeHostKind } from "../index";
 import type {
   ConversationMiddleware,
   ConversationProvider,
-  ConversationTurnEnvelope
+  ConversationTurnEnvelope,
+  QuestFormDefinition,
+  ConversationQuestFormResponse,
+  ConversationActionProposal
 } from "../conversation";
 import type { UserIdentityProvider } from "../identity";
 import type { UserProfileStore } from "../profile";
@@ -49,6 +52,7 @@ export type RuntimePluginContributionKind =
   | "conversation.provider"
   | "conversation.middleware"
   | "dialogue.entryDecorator"
+  | "quest.assessment"
   | "displayText.resolver"
   | "debug.hudCard"
   | "debug.entityBillboard"
@@ -331,8 +335,49 @@ export type ProfileStoreContribution = RuntimePluginContributionBase<
   }
 >;
 
+/**
+ * Supplies the form behind an ASSESSMENT quest objective, and takes its answers
+ * back.
+ *
+ * The quest layer knows an objective is an assessment and which NPC it targets.
+ * It does not know what a placement questionnaire is, how to score one, or what
+ * a CEFR band means -- and must not. It asks whoever owns assessments for a
+ * form, renders it, and hands the answers back.
+ *
+ * This exists because placement used to be a CONVERSATION: the form was built
+ * as a dialogue turn by one plugin's generate stage, which meant it could only
+ * appear for free-form NPCs, needed a turn counter to decide when, and rendered
+ * its intro as dialogue. An assessment is a form, not a chat.
+ */
+export type QuestAssessmentContribution = RuntimePluginContributionBase<
+  "quest.assessment",
+  {
+    summary: string;
+    /**
+     * The form for this objective, or null if this plugin does not own it --
+     * null means "not mine", not "error".
+     */
+    getForm: (objective: {
+      objectiveNodeId: string;
+      targetId: string | null;
+    }) => QuestFormDefinition | null;
+    /**
+     * Score the answers and record whatever completing the assessment means.
+     *
+     * Returns quest action proposals for the host to apply -- setting flags and
+     * notifying events is the QUEST layer's job, and the plugin has no handle
+     * on the quest manager. These used to ride on a conversation turn's
+     * proposedActions; with no turn they come back here instead.
+     */
+    submit: (
+      response: ConversationQuestFormResponse
+    ) => Promise<ConversationActionProposal[]> | ConversationActionProposal[];
+  }
+>;
+
 export type RuntimePluginContribution =
   | ConversationProviderContribution
+  | QuestAssessmentContribution
   | ConversationMiddlewareContribution
   | DialogueEntryDecoratorContribution
   | DisplayTextResolverContribution

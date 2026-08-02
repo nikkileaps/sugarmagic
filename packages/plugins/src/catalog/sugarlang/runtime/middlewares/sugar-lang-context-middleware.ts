@@ -34,7 +34,6 @@ import {
   SUGARLANG_HOVER_LEMMA_ANNOTATION,
   SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION,
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
-  SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_QUEST_ESSENTIAL_IDS_ANNOTATION,
   SUGARLANG_SCHEDULE_ANNOTATION,
@@ -124,123 +123,12 @@ export function createSugarLangContextMiddleware(
       const placementStatus = blackboard
         ? getSugarlangPlacementStatus(blackboard, learner.learnerId)
         : null;
-      // DEFERRED (081 wrap): activeQuestObjectives carries only the TRACKED
-      // quest's objectives, so placement triggers only while the assessment
-      // quest is tracked. Accepted 2026-07-26: the dock area will contain
-      // the player until placement completes, making the assessment quest
-      // the only meaningful track there. Revisit if dock containment does
-      // not ship, or if placement ever moves past the first playable area.
-      const isPlacementNpc =
-        config.placement.enabled &&
-        (execution.runtimeContext?.activeQuestObjectives?.objectives.some(
-          (o) => o.objectiveSubtype === "assessment" && o.targetId === execution.selection.npcDefinitionId
-        ) ?? false);
-
-      // THE QUEST GRAPH DECIDES WHEN, NOT A TURN COUNTER.
-      //
-      // This used to run its own phase machine -- opening-dialog ->
-      // questionnaire -> closing-dialog -- advanced by counting turns out of
-      // execution.state, with openingDialogTurns defaulting to 2 and clamped
-      // to a minimum of 1. That was a SECOND sequencer competing with the
-      // quest graph, and the graph always lost: an assessment objective could
-      // not fire on the turn the author placed it, and an NPC whose
-      // interaction is a single exchange never produced the second turn the
-      // counter demanded, so the form was unreachable rather than merely late.
-      //
-      // Ordering belongs to the graph. Reaching an assessment objective for
-      // this NPC IS the trigger. Want the NPC to speak first? Author a talk
-      // node in front of it.
-      // Deliberately NOT gated on conversation kind: placement runs through
-      // scripted conversations too (see the cold-start placement golden test,
-      // which drives the whole flow through a scripted NPC).
-      const placementActive = isPlacementNpc && placementStatus?.status !== "completed";
-      let placementPhase: PlacementFlowAnnotation["phase"] = placementActive
-        ? "questionnaire"
-        : "not-active";
-      let placementFlowAnnotation: PlacementFlowAnnotation | null = null;
-
-      if (placementActive && execution.input?.kind === "quest_form") {
-        const questionnaire = services.placementQuestionnaireLoader.getQuestionnaire(
-          execution.selection.targetLanguage ?? learner.targetLanguage
-        );
-        const scoreResult = services.placementScoreEngine.scoreResponses(
-          execution.input.response,
-          questionnaire
-        );
-        // "closing-dialog" on the SUBMIT TURN is load-bearing and stays: it is
-        // how the score reaches the observe middleware, which applies the
-        // completion event and emits the quest flags. It is a one-turn signal
-        // now, not a turn-counted phase that lingers.
-        placementPhase = "closing-dialog";
-        placementFlowAnnotation = {
-          phase: "closing-dialog",
-          questionnaireVersion: getPlacementQuestionnaireVersion(questionnaire),
-          scoreResult
-        };
-      }
-
-      if (placementPhase !== "not-active") {
-        const questionnaire =
-          placementPhase === "questionnaire"
-            ? services.placementQuestionnaireLoader.getQuestionnaire(
-                execution.selection.targetLanguage ?? learner.targetLanguage
-              )
-            : null;
-        if (placementFlowAnnotation) {
-          execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] =
-            placementFlowAnnotation;
-        } else if (questionnaire) {
-          const resolvedMinAnswers = resolvePlacementMinAnswersForValid(
-            questionnaire.minAnswersForValid,
-            config.placement.minAnswersForValid
-          );
-          execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
-            phase: placementPhase,
-            questionnaireVersion: getPlacementQuestionnaireVersion(questionnaire),
-            minAnswersForValid: resolvedMinAnswers,
-            questionnaire: { ...questionnaire, minAnswersForValid: resolvedMinAnswers }
-          } satisfies PlacementFlowAnnotation;
-        } else {
-          execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
-            phase: placementPhase
-          } satisfies PlacementFlowAnnotation;
-        }
-      }
-
-      // Marks placement STARTED so a reload mid-questionnaire does not look
-      // like a fresh learner. Completion is written by the observe middleware
-      // when the score comes back.
-      if (placementActive && blackboard) {
-        blackboard.setFact({
-          definition: SUGARLANG_PLACEMENT_STATUS_FACT,
-          scope: createSugarlangPlacementStatusScope(learner.learnerId),
-          value: {
-            status: "in-progress",
-            ...(placementStatus?.cefrBand ? { cefrBand: placementStatus.cefrBand } : {}),
-            ...(placementStatus?.confidence ? { confidence: placementStatus.confidence } : {})
-          },
-          sourceSystem: SUGARLANG_PLACEMENT_WRITER
-        });
-      }
-
-      if (placementPhase === "questionnaire") {
-        return execution;
-      }
-
-      // THE PRE-PLACEMENT OPENING LINE IS GONE WITH THE PHASE MACHINE.
-      //
-      // A canned line was injected here for each opening-dialog turn, which
-      // only existed because placement insisted on chatting before the form.
-      // Under the quest graph the author writes a talk node instead, so the
-      // preamble is authored content rather than something the runtime
-      // improvises.
-      //
-      // NOTE: SUGARLANG_PREPLACEMENT_LINE_ANNOTATION now has no producer.
-      // Its readers (teacher middleware, verify middleware, GenerateStage's
-      // buildPrePlacementEnvelope) are dead until either the annotation is
-      // removed or an authored node re-triggers it -- see
-      // sugarmagic-placement-sequencing-38i.
-
+      // PLACEMENT IS NOT A CONVERSATION. It used to be handled here: an
+      // annotation, a phase, an in-progress write, and a scoring branch on
+      // quest_form input -- all so a form could be delivered as a dialogue
+      // turn. An assessment quest node now opens the form directly through the
+      // "quest.assessment" contribution, and sugarlang scores it there.
+      // See sugarmagic-placement-sequencing-38i.
 
       const sceneId = getSceneId(execution);
       if (!sceneId) {
@@ -388,54 +276,6 @@ export function createSugarLangContextMiddleware(
       }
 
       return execution;
-    },
-
-    /**
-     * PUTS THE PLACEMENT FORM ON THE TURN, WHATEVER PROVIDER MADE IT.
-     *
-     * The form used to be built by sugaragent's GenerateStage, which only runs
-     * for free-form conversations -- so an assessment on a SCRIPTED NPC could
-     * never show one, and it was the only place in the repo that could produce
-     * a quest_form turn. `finalize` runs for every provider, so an authored
-     * scripted NPC keeps its dialogue and still hosts the assessment.
-     *
-     * STAGING POST, NOT THE DESTINATION. Placement should not be a conversation
-     * turn at all -- an assessment quest node should open the overlay directly.
-     * See sugarmagic-placement-sequencing-38i; this exists so the form renders
-     * while that lands.
-     */
-    finalize(execution, turn) {
-      const flow = execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] as
-        | PlacementFlowAnnotation
-        | undefined;
-      if (flow?.phase !== "questionnaire") {
-        return turn;
-      }
-      const questionnaire = flow.questionnaire as
-        | { formIntro: string; lang: string; schemaVersion: number }
-        | undefined;
-      if (!questionnaire || !turn) {
-        // Asked for, but unbuildable. SAY SO: a silently absent form is what
-        // made this cost two debugging sessions.
-        logger.warn(
-          "Placement asked for the questionnaire but no form could be built.",
-          { hasQuestionnaire: Boolean(questionnaire), hasTurn: Boolean(turn) }
-        );
-        return turn;
-      }
-      return {
-        ...turn,
-        text: questionnaire.formIntro,
-        choices: [],
-        inputMode: "quest_form",
-        metadata: {
-          ...(turn.metadata ?? {}),
-          "sugarlang.placementQuestionnaire": questionnaire,
-          "sugarlang.placementQuestionnaireVersion":
-            flow.questionnaireVersion ??
-            `${questionnaire.lang}-placement-v${questionnaire.schemaVersion}`
-        }
-      };
     }
   };
 }

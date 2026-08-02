@@ -558,50 +558,6 @@ describe("081.3 entry-path coverage", () => {
     expect(Object.keys(profile!.lemmaCards).length).toBeGreaterThan(0);
   });
 
-  it("a mid-placement turn short-circuits the chain and asks for the questionnaire", async () => {
-    // Sequencing comes from the quest graph now: an active assessment
-    // objective targeting this NPC IS the trigger, on the FIRST interaction.
-    //
-    // This test used to assert the three-phase machine's pre-placement
-    // semantics -- an opening-dialog phase that let the turn flow through the
-    // whole chain, plus its telemetry. That machine is gone: there is nothing
-    // to teach on a turn whose whole job is to put a form on screen, so the
-    // context middleware stops early.
-    const { host, telemetry, captured, blackboard } = buildHarness({
-      assessment: true,
-      placementEnabled: true
-    });
-
-    const turn = await host.startSession({
-      conversationKind: "scripted-dialogue",
-      dialogueDefinitionId: "dialogue-orrin",
-      npcDefinitionId: "npc-orrin",
-      npcDisplayName: "Orrin",
-      interactionMode: "scripted"
-    });
-    expect(turn).not.toBeNull();
-
-    // Placement has NOT completed.
-    const profile = blackboard
-      .getFact(LEARNER_PROFILE_FACT, createBlackboardScope("entity", "player-1"))
-      ?.value;
-    expect(profile?.assessment?.status).not.toBe("evaluated");
-
-    // The questionnaire is requested immediately -- no turns of preamble.
-    const flow = captured.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] as
-      | { phase?: string }
-      | undefined;
-    expect(flow?.phase).toBe("questionnaire");
-
-    // And the chain stops there: no teaching constraint is built for a turn
-    // that exists to show a form.
-    expect(captured.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).toBeUndefined();
-
-    // Verify never classifies a scripted turn either way.
-    const verdicts = await telemetry.query({ eventKinds: ["classifier.verdict"] });
-    expect(verdicts).toEqual([]);
-  });
-
   it("scripted target-dominant posture: zero LLM calls even with gateway configured (086.4)", async () => {
     // 086.4: the scripted middleware no longer calls the LLM at any posture.
     // With a configured gateway and a B1 learner (target-dominant), the scripted
