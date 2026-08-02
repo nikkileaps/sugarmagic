@@ -178308,6 +178308,636 @@
       "partsOfSpeech": [
         "noun"
       ]
+    },
+    "segar": {
+      "lemmaId": "segar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "segando": {
+      "lemmaId": "segar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "segado": {
+      "lemmaId": "segar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plegar": {
+      "lemmaId": "plegar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plegando": {
+      "lemmaId": "plegar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plegado": {
+      "lemmaId": "plegar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "arrendar": {
+      "lemmaId": "arrendar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "arrendando": {
+      "lemmaId": "arrendar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "arrendado": {
+      "lemmaId": "arrendar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "alentar": {
+      "lemmaId": "alentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "alentando": {
+      "lemmaId": "alentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "alentado": {
+      "lemmaId": "alentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "escarmentar": {
+      "lemmaId": "escarmentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "escarmentando": {
+      "lemmaId": "escarmentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "escarmentado": {
+      "lemmaId": "escarmentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "herrar": {
+      "lemmaId": "herrar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "herrando": {
+      "lemmaId": "herrar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "herrado": {
+      "lemmaId": "herrar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avergonzar": {
+      "lemmaId": "avergonzar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avergonzando": {
+      "lemmaId": "avergonzar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avergonzado": {
+      "lemmaId": "avergonzar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "holgar": {
+      "lemmaId": "holgar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "holgando": {
+      "lemmaId": "holgar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "holgado": {
+      "lemmaId": "holgar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "amoblar": {
+      "lemmaId": "amoblar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "amoblando": {
+      "lemmaId": "amoblar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "amoblado": {
+      "lemmaId": "amoblar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "engrosar": {
+      "lemmaId": "engrosar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "engrosando": {
+      "lemmaId": "engrosar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "engrosado": {
+      "lemmaId": "engrosar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "empedrar": {
+      "lemmaId": "empedrar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "empedrando": {
+      "lemmaId": "empedrar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desplegar": {
+      "lemmaId": "desplegar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desplegando": {
+      "lemmaId": "desplegar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desplegado": {
+      "lemmaId": "desplegar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restregar": {
+      "lemmaId": "restregar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restregando": {
+      "lemmaId": "restregar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restregado": {
+      "lemmaId": "restregar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dentar": {
+      "lemmaId": "dentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dentando": {
+      "lemmaId": "dentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dentado": {
+      "lemmaId": "dentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "salpimentar": {
+      "lemmaId": "salpimentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "salpimentando": {
+      "lemmaId": "salpimentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "salpimentado": {
+      "lemmaId": "salpimentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desalentar": {
+      "lemmaId": "desalentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desalentando": {
+      "lemmaId": "desalentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desalentado": {
+      "lemmaId": "desalentar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desacertar": {
+      "lemmaId": "desacertar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desacertando": {
+      "lemmaId": "desacertar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desacertado": {
+      "lemmaId": "desacertar",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cerner": {
+      "lemmaId": "cerner",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cerniendo": {
+      "lemmaId": "cerner",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cernido": {
+      "lemmaId": "cerner",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "hender": {
+      "lemmaId": "hender",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "hendiendo": {
+      "lemmaId": "hender",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "hendido": {
+      "lemmaId": "hender",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "henchir": {
+      "lemmaId": "henchir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "henchiendo": {
+      "lemmaId": "henchir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "henchido": {
+      "lemmaId": "henchir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "discernir": {
+      "lemmaId": "discernir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "discerniendo": {
+      "lemmaId": "discernir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "discernido": {
+      "lemmaId": "discernir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "concernir": {
+      "lemmaId": "concernir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "concerniendo": {
+      "lemmaId": "concernir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "concernido": {
+      "lemmaId": "concernir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sobrentender": {
+      "lemmaId": "sobrentender",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sobrentendiendo": {
+      "lemmaId": "sobrentender",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sobrentendido": {
+      "lemmaId": "sobrentender",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contender": {
+      "lemmaId": "contender",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contendiendo": {
+      "lemmaId": "contender",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contendido": {
+      "lemmaId": "contender",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "heder": {
+      "lemmaId": "heder",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "hediendo": {
+      "lemmaId": "heder",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "hedido": {
+      "lemmaId": "heder",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desvestir": {
+      "lemmaId": "desvestir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desvestiendo": {
+      "lemmaId": "desvestir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desvestido": {
+      "lemmaId": "desvestir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "revestir": {
+      "lemmaId": "revestir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "revestiendo": {
+      "lemmaId": "revestir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "revestido": {
+      "lemmaId": "revestir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contraponer": {
+      "lemmaId": "contraponer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contraponiendo": {
+      "lemmaId": "contraponer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contraponido": {
+      "lemmaId": "contraponer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrever": {
+      "lemmaId": "entrever",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entreviendo": {
+      "lemmaId": "entrever",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrevido": {
+      "lemmaId": "entrever",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rehacer": {
+      "lemmaId": "rehacer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rehaciendo": {
+      "lemmaId": "rehacer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rehacido": {
+      "lemmaId": "rehacer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desdecir": {
+      "lemmaId": "desdecir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desdeciendo": {
+      "lemmaId": "desdecir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desdecido": {
+      "lemmaId": "desdecir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "reconvenir": {
+      "lemmaId": "reconvenir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "reconveniendo": {
+      "lemmaId": "reconvenir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "reconvenido": {
+      "lemmaId": "reconvenir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desoír": {
+      "lemmaId": "desoír",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "reelegir": {
+      "lemmaId": "reelegir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "reelegiendo": {
+      "lemmaId": "reelegir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "reelegido": {
+      "lemmaId": "reelegir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sobreseer": {
+      "lemmaId": "sobreseer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sobreseiendo": {
+      "lemmaId": "sobreseer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sobreseido": {
+      "lemmaId": "sobreseer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entretejer": {
+      "lemmaId": "entretejer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entretejiendo": {
+      "lemmaId": "entretejer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entretejido": {
+      "lemmaId": "entretejer",
+      "partsOfSpeech": [
+        "verb"
+      ]
     }
   }
 }
