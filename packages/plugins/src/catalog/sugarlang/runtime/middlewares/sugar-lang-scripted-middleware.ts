@@ -17,7 +17,8 @@
  *              line highlights its teachables exactly as an agent line does
  *      MISS -> leave the authored English alone
  *
- * THE WEAVE IS GONE (rf6.5.2, nikki 2026-07-31). Anchored/supported postures
+ * CITATION-FORM SUBSTITUTION IS GONE FROM THIS PATH (rf6.5.2, nikki 2026-07-31).
+ * Anchored/supported postures
  * used to substitute target words into the authored line on a cache miss. It is
  * deleted: a line with no baked variant is untaught but correct and readable,
  * which beats a line half-rewritten by a mechanism that made no pedagogical
@@ -89,7 +90,7 @@ function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
  * target-language lemmaId or a short English fact string." The English facts are
  * for the fidelity gate ONLY -- mapping them verbatim into
  * constraint.targetVocab.introduce would put fake lemmaIds ("the merchant
- * arrives at dawn") into the weave/highlight/observe machinery, which contracts
+ * arrives at dawn") into the substitution/highlight/observe machinery, which contracts
  * LemmaRef.lemmaId as an atlas lemmaId or a chunk: ref.
  *
  * Validation: atlas membership for bare ids, competency-inventory membership for
@@ -105,7 +106,7 @@ function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
  * copies of the function that decides whether the runtime finds what the build
  * wrote is the one duplication in this pipeline that fails silently and totally:
  * if they drift, every scripted line misses cache forever and quietly falls
- * through to the weave. Read the full rule at the definition.
+ * through to substitution. Read the full rule at the definition.
  */
 const buildVariantContentHash = buildDialogueNodeContentHash;
 
@@ -119,8 +120,8 @@ const buildVariantContentHash = buildDialogueNodeContentHash;
  *   terms from. The slate existed at BAKE time, which is where the terms were
  *   computed, against the very text being served here.
  *
- *   Until rf6.5.2 this was missing and the two paths were BACKWARDS: a weave
- *   FALLBACK line highlighted (because the weave repopulated `targetVocab` as a
+ *   Until rf6.5.2 this was missing and the two paths were BACKWARDS: a substituted
+ *   FALLBACK line highlighted (because substitution repopulated `targetVocab` as a
  *   side effect) while a correctly BAKED line highlighted nothing at all. No
  *   test caught it, because the scripted tests pin the TEXT and not the
  *   annotation.
@@ -227,13 +228,13 @@ export function createSugarLangScriptedMiddleware(
 
       // 090.11: ANCHORED/SUPPORTED READ THE BAKED VARIANT FIRST.
       //
-      // These two postures were the last ones realized at RUNTIME -- the weave
+      // These two postures were the last ones realized at RUNTIME -- substitution
       // substituting lemmas into authored English as the line displayed -- while
       // every other band read a variant baked at build. Both are the same
       // operation; only the moment differed, and the split was an accident of
       // which technique arrived first.
       //
-      // The weave stays as the FALLBACK, not the path. A cold cache, a scene
+      // Substitution stays as the FALLBACK, not the path. A cold cache, a scene
       // never built, or a bake that failed its gates all land here, and a woven
       // line is far better than an untouched English one. It is deleted for good
       // once the build-time Teacher call makes a missing A1 variant a build
@@ -273,7 +274,7 @@ export function createSugarLangScriptedMiddleware(
         }
 
         // NO VARIANT -> THE AUTHORED ENGLISH, UNCHANGED (nikki, 2026-07-31).
-        // The weave used to run here, substituting target words into the
+        // Citation-form substitution used to run here, putting target words into the
         // authored line. It is deleted: a line with no baked variant is untaught
         // but correct and readable, which is a better failure than a line
         // half-rewritten by a mechanism that made no pedagogical decision.
@@ -374,13 +375,13 @@ export function createSugarLangScriptedMiddleware(
             });
           }
         } catch {
-          // Variant cache failure is non-fatal -- degrade to weave below
+          // Variant cache failure is non-fatal -- degrade to substitution below
         }
       }
 
       if (!usedVariant) {
         // NO VARIANT -> THE AUTHORED ENGLISH, UNCHANGED. See the note on the
-        // beginner path above; the weave is deleted on both.
+        // beginner path above; substitution is deleted on both.
         logger.debug("Scripted line (target-dominant): no baked variant -- serving authored text.", {
           authoredText,
           band,

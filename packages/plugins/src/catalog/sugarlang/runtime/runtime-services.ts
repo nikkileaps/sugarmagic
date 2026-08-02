@@ -446,9 +446,9 @@ export class SugarlangRuntimeServices {
   }
 
   /**
-   * Inputs for the A1/A2 display-text weave, outside any conversation.
+   * Inputs for the A1/A2 display-text substitution, outside any conversation.
    *
-   * Just the atlas and the learner's band: the weave draws its pool from every
+   * Just the atlas and the learner's band: the substitution draws its pool from every
    * lemma the band admits, so no scene lexicon and no budgeter prescription are
    * involved (see the "WHY ITEM TEXT DOES NOT GO THROUGH THE BUDGETER" block in
    * display-text-resolver.ts).
@@ -460,7 +460,7 @@ export class SugarlangRuntimeServices {
    * Returns null with no resolvable band or no ambient services, and the
    * resolver falls back to authored English.
    */
-  async getWeaveInputs(): Promise<{
+  async getMarkerInputs(): Promise<{
     atlas: CefrLexAtlasProvider;
     band: CEFRBand;
     supportLanguage: string;

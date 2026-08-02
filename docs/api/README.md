@@ -37,7 +37,7 @@ They are architecture-facing developer API documents that explain how the system
 - [Sugarlang Conversation Middlewares](/Users/nikki/projects/sugarmagic/docs/api/sugarlang-middlewares.md) -- the five middlewares (stages/priorities), the conversationKind turn-path guard, the `sugarlang.constraint` seam, and verify's actual enforcement scope (epic 081)
 - [SugarAgent Lifecycle Contributions](/Users/nikki/projects/sugarmagic/docs/api/sugaragent-lifecycle-contributions.md) -- annotation-bus contribution contract (key format, merge semantics, per-surface consumers, cache hygiene, zero-contribution invariant) (epic 084)
 - [Sugarlang Function Inventory](/Users/nikki/projects/sugarmagic/docs/api/sugarlang-competency-inventory.md) -- competencies + chunk sequences, FSRS chunk cards, interpretLexicon contributions, bake-time function tagging (epic 085)
-- [Sugarlang Scripted Rendering](/Users/nikki/projects/sugarmagic/docs/api/sugarlang-scripted-rendering.md) -- rendering: baked variants per band (primary) with the weave as a cache-miss fallback, intent format, four-gate bake verification, degradation order, Studio exception report (epic 086, revised epic 090)
+- [Sugarlang Scripted Rendering](/Users/nikki/projects/sugarmagic/docs/api/sugarlang-scripted-rendering.md) -- rendering: baked variants per band (primary), authored English on a cache miss, intent format, four-gate bake verification, degradation order, Studio exception report (epic 086, revised epic 090)
 
 ## Relationship to Proposals and ADRs
 

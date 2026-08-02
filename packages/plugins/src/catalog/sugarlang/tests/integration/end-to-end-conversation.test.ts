@@ -338,7 +338,7 @@ describe("end-to-end conversation golden", () => {
     expect(initialTurn?.text).toBe("Hola.");
   });
 
-  it("scripted target-dominant posture: zero LLM calls -- degrades to weave when no baked variant", async () => {
+  it("scripted target-dominant posture: zero LLM calls -- degrades to substitution when no baked variant", async () => {
     // 086.4: scripted target-dominant no longer calls the LLM gateway at all.
     // When no variant cache is seeded (cold cache), the scripted middleware
     // degrades to markGradedText. The fetch guard enforces zero /generate traffic.
@@ -362,7 +362,7 @@ describe("end-to-end conversation golden", () => {
     });
 
     // Turn is defined and the authored line passes through (no variant to substitute,
-    // weave may or may not substitute depending on the gloss index -- the invariant
+    // the marker may or may not substitute depending on the gloss index -- the invariant
     // is zero LLM calls, enforced by the guard).
     expect(turn).toBeDefined();
     void authoredLine; // used by makeNpcTurnProvider as initialText
@@ -647,7 +647,7 @@ describe("end-to-end conversation golden", () => {
     expect(turn!.text.toLowerCase()).not.toContain("adelante");
   });
 
-  it("scripted anchored posture: zero LLM calls -- weave produces woven text", async () => {
+  it("scripted anchored posture: zero LLM calls -- substitution produces substituted text", async () => {
     // A1 learner -> anchored posture -> markGradedText path fires, no /generate call.
     // The prescription includes "hola" so any authored word that resolves to
     // "hola" in the gloss index gets substituted. We assert no gateway calls and
@@ -740,7 +740,7 @@ describe("end-to-end conversation golden", () => {
     // Turn must be defined and the middleware chain must have run.
     expect(turn).toBeDefined();
     // capturedText is the text after the scripted middleware ran.
-    // With an empty introduce list (no prescription yet) the weave is a no-op;
+    // With an empty introduce list (no prescription yet) substitution is a no-op;
     // the important invariant is zero /generate calls, enforced by the guard above.
     expect(capturedText).toBeDefined();
 
@@ -900,9 +900,9 @@ describe("end-to-end conversation golden", () => {
     expect(cache.size()).toBe(1);
   });
 
-  it("086.4 pin: prescription-less scripted line still produces introduce highlights from weave", async () => {
+  it("086.4 pin: prescription-less scripted line still produces introduce highlights from substitution", async () => {
     // Pin for 086.4 deletion: the gloss-scan lineIntroduce variable is gone.
-    // For prescription-less scripted lines the weave now runs with whatever
+    // For prescription-less scripted lines substitution now runs with whatever
     // introduce list the teacher built from the seeded lexicon (possibly empty).
     // This confirms the scripted middleware produces a valid turn and the
     // constraint.targetVocab.introduce field is present and is an array --
@@ -910,7 +910,7 @@ describe("end-to-end conversation golden", () => {
     //
     // With the HOLA_PREVIEW_LEXICON seeded, the teacher's FallbackTeacherPolicy
     // (A1 learner) will include "hola" in the introduce list even without an
-    // explicit prescription. The weave then substitutes woven forms from that
+    // explicit prescription. It then substitutes forms from that
     // list. The introduce list in the constraint after the middleware runs must
     // be an array (possibly empty if no forms were woven).
     const authoredLine = "Hello, welcome to the station.";

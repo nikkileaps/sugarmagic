@@ -233,7 +233,7 @@ export function createSugarLangTeacherMiddleware(
         // language. nikki's call, 2026-07-30.
         const posture = postureForBand(learner.estimatedCefrBand);
         const ratio = TARGET_LANGUAGE_RATIO_BY_POSTURE[posture];
-        // anchored/supported: "hover-only" because the weave places bare citation
+        // anchored/supported: "hover-only" because the marker places bare citation
         // forms and the observe middleware delivers gloss data via dialogueHighlight.
         // target-dominant: "none" -- the baked variant text is target-language already.
         const glossingStrategy =
@@ -243,7 +243,7 @@ export function createSugarLangTeacherMiddleware(
           minimalGreetingMode: false,
           // 090.10: was seeded from the prescription. A scripted line's text is
           // already decided, so the slate only ever narrowed which already-present
-          // words the weave substituted -- and the weave now draws the whole band
+          // words the marker substituted -- and the marker now draws the whole band
           // (090.8). Empty is the honest value: scripted mode teaches from the
           // authored text, not from a slate.
           targetVocab: { introduce: [], reinforce: [], avoid: [] },

@@ -580,7 +580,7 @@ describe("081.3 entry-path coverage", () => {
     // The constraint was still written (teacher ran).
     expect(captured.annotations[SUGARLANG_CONSTRAINT_ANNOTATION]).toBeDefined();
 
-    // The authored text passes through (weave degradation, no substitute expected
+    // The authored text passes through (substitution degradation, none expected
     // with the default empty prescription -- the important invariant is zero LLM calls).
     expect(turn!.text).toBe(AUTHORED_LINE_1);
 

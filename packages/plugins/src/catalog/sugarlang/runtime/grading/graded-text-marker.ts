@@ -150,7 +150,7 @@ export interface MarkedForm {
   /** Original English word for UI gloss. */
   englishGloss: string;
   /**
-   * 090.11: what this span IS, pedagogically. Optional while the weave still
+   * 090.11: what this span IS, pedagogically. Optional while the marker still
    * produces forms without one; a span reaching presentation with no role is
    * styled exactly as before, which is what keeps gold/blue/celebrate intact.
    */
@@ -223,7 +223,7 @@ function resolveSubstitution(
   // DEFERRED (086): inflected-form substitution needs a feature-tagged inverse
   // morphology index (lemma + features -> surface form); current data is
   // surface->lemma only. Revisit when citation-form output reads as grammatically
-  // wrong to a learner past A2, or when a native reviewer flags weave grammar.
+  // wrong to a learner past A2, or when a native reviewer flags marker grammar.
   for (const lemmaId of resolvedLemmaIds) {
     if (introduceSet.has(lemmaId)) {
       // Use the first resolved entry whose normalized lemmaId is in introduce.
@@ -280,7 +280,7 @@ function matchLeadingCase(original: string, replacement: string): string {
 }
 
 /**
- * Weaves target-language citation forms into authored English text by
+ * Substitutes target-language citation forms into authored English text by
  * substituting English words that resolve to prescription-introduced lemmas.
  *
  * Citation forms are placed BARE -- no asterisk wrapping. Glossing is delivered
@@ -347,7 +347,7 @@ export function markGradedText(
       substitutedAnyOccurrence = true;
     }
 
-    // Only report a weaved form when one actually landed, otherwise the gloss
+    // Only report a marked form when one actually landed, otherwise the gloss
     // UI would offer a hover for a word still shown in English.
     if (substitutedAnyOccurrence) {
       markedForms.push({

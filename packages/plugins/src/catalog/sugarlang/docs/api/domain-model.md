@@ -282,16 +282,21 @@ The intent is that both paths shape a *generator* -- the target language is
 written by the model that writes the line, at whatever ratio the posture
 directs. Nothing should substitute words into already-finished text.
 
-**One survival, still live.** When the scripted path misses the variant cache it
-falls back to `applyWeave` (`runtime/middlewares/sugar-lang-scripted-middleware.ts`),
-which calls `markGradedText` and assigns the result back to the turn text --
-substitution, on authored English, at runtime. The dedicated
-`runtime/classifier/diglot-weave.ts` module is deleted; this caller is what is
-left of it. It is a fallback, so it only fires on a cache miss, which is exactly
-what makes it easy to miss.
+**Gone from the scripted path (rf6.5.2).** A variant-cache miss now serves the
+authored English unchanged -- untaught but correct and readable. `applyWeave`
+and the dedicated `runtime/classifier/diglot-weave.ts` module are both deleted.
 
-`markGradedText` is doing two jobs here -- marking and substituting -- and only
-the marking half belongs in the finished design.
+**One survival, still live.** `markGradedText`
+(`runtime/grading/graded-text-marker.ts`), called by `display-text-resolver`
+for item-view and dialogue-node sources at A1/A2, rewrites FINISHED TEXT --
+replacing English words with target-language citation forms. That is what the
+weave did, under a new name. Nothing should replace English after the line is
+rendered; it is doing two jobs and only the marking half belongs in the
+finished design.
+
+For a verb the citation form is the INFINITIVE, so this survival is why
+unconjugated verbs reach players. It should be deleted, not taught to
+conjugate. See the conjugation epic.
 
 ---
 

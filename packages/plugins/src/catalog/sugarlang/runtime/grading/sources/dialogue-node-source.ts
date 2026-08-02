@@ -33,7 +33,7 @@ export const DIALOGUE_NODE_SOURCE_KIND = "dialogue-node" as const;
  * `[nodeId, text, "{}"].join("|")` is the exact seed the runtime lookup and the
  * Studio popover already build independently. If this drifts from either of
  * them, every runtime lookup misses and scripted lines silently fall back to
- * the diglot weave -- which looks like "grading stopped working" rather than
+ * citation-form substitution -- which looks like "grading stopped working" rather than
  * like a hash mismatch. Change it in all three places or none.
  *
  * The `"{}"` is a deliberately empty intent slot: intent is excluded from the
@@ -44,7 +44,7 @@ export const DIALOGUE_NODE_SOURCE_KIND = "dialogue-node" as const;
  * THE VARIANT CACHE KEY'S CONTENT LEG. Bake side and runtime side MUST build
  * this identically -- the bake writes under it and the runtime reads under it,
  * so any divergence is a total, permanent, SILENT cache miss: every scripted
- * line falls through to the weave fallback and nothing reports it.
+ * line falls through to the substitution fallback and nothing reports it.
  *
  * It was duplicated (an identical private copy lived in the scripted
  * middleware) until 2026-07-31. One function now, imported by both.

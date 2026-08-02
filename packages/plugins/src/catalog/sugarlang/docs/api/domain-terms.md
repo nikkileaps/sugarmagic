@@ -263,9 +263,16 @@ read mostly English with real target words embedded.
 
 **Gone as of Epic 090.** The target language is now written by the model that
 writes the line, at whatever ratio the posture directs -- so there is nothing
-left to weave in afterwards. Kept in this glossary only because the word still
+left to add afterwards. Kept in this glossary only because the word still
 appears in older commits and comments; if you find code doing substitution on
 finished text, it is a survival and should be deleted.
+
+CONFIRMED STILL PRESENT 2026-08-01: `markGradedText`
+(`runtime/grading/graded-text-marker.ts`) rewrites finished text, replacing
+English words with target-language citation forms, on the display-text path
+(`display-text-resolver`, item-view and dialogue-node sources at A1/A2). It is
+a SURVIVAL of the weave under a new name, not a sanctioned mechanism, and it is
+the reason unconjugated verbs reach players. It should be deleted.
 
 ### Variant
 

@@ -82,12 +82,14 @@ makes ZERO LLM calls. It reads the VARIANT baked for this line at the learner's
 band (`runtime/compile/variant-cache.ts`) and replaces `turn.text` with it.
 Baking happens at authoring time in Studio, not here.
 
-On a cache miss it falls back to `applyWeave`, which substitutes target-language
-words into the authored English via `markGradedText`. That fallback is the last
-survival of the old diglot-weave design and is load-bearing only because a
-missing variant is currently a NORMAL state: variants are generated one node at
-a time from the Studio variants popover, so most lines have none. It goes away
-once bulk baking lands.
+On a cache miss it serves the AUTHORED ENGLISH, unchanged. CORRECTED
+2026-08-01: this described a fallback called `applyWeave` that substituted
+target words into the authored line. It was deleted in rf6.5.2 and no such
+function exists -- an untaught but correct line beats one half-rewritten by a
+mechanism that made no pedagogical decision.
+
+`markGradedText` still performs citation-form substitution, but on the
+display-text path (`display-text-resolver`), not here.
 
 Narrator, player-VO, and excerpt speakers are never adapted.
 

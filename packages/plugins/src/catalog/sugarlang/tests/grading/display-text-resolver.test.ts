@@ -72,7 +72,7 @@ function cacheReturning(variant: GradedTextRecord | null): SugarlangVariantCache
   };
 }
 
-/** B1 is a VARIANT band. A1/A2 take the weave path -- see the weave describe. */
+/** B1 is a VARIANT band. A1/A2 take the substitution path -- see that describe. */
 function resolver(over: Partial<Parameters<typeof createDisplayTextResolver>[0]> = {}) {
   return createDisplayTextResolver({
     getVariantCache: () => cacheReturning(record()),
@@ -158,16 +158,16 @@ describe("display text resolver", () => {
   });
 });
 
-describe("A1/A2 weave path", () => {
+describe("A1/A2 substitution path", () => {
   // The bug this exists to fix: a beginner saw plain English on every item
   // forever, because the resolver only ever looked up baked variants and none
   // are baked below B1.
   /**
    * `atBand` is what the atlas reports as available for the learner's level --
-   * the whole substitution pool, since the demo weave matches against the full
+   * the whole substitution pool, since the demo substitution matches against the full
    * lexicon rather than a teaching shortlist.
    */
-  const weaveInputs = (atBand: Array<{ lemmaId: string; lang: string }>) => async () => ({
+  const markerInputs = (atBand: Array<{ lemmaId: string; lang: string }>) => async () => ({
     band: "A1" as const,
     atlas: {
       listLemmasAtBand: () => atBand,
@@ -180,10 +180,10 @@ describe("A1/A2 weave path", () => {
     supportLanguage: "en"
   });
 
-  it("weaves prescribed words into authored English at A1", async () => {
+  it("substitutes prescribed words into authored English at A1", async () => {
     const text = await resolver({
       getLearnerBand: async () => "A1",
-      getWeaveInputs: weaveInputs([{ lemmaId: "libro", lang: "es" }])
+      getMarkerInputs: markerInputs([{ lemmaId: "libro", lang: "es" }])
     })({ ...request, text: "An old book." });
 
     expect(text).toContain("libro");
@@ -192,21 +192,21 @@ describe("A1/A2 weave path", () => {
 
   it("does not read the variant cache at A1", async () => {
     // Variants below B1 do not exist; looking would be a guaranteed miss and
-    // would mask the weave never running.
+    // would mask the substitution never running.
     const cache = cacheReturning(record());
     await resolver({
       getLearnerBand: async () => "A1",
       getVariantCache: () => cache,
-      getWeaveInputs: weaveInputs([{ lemmaId: "libro", lang: "es" }])
+      getMarkerInputs: markerInputs([{ lemmaId: "libro", lang: "es" }])
     })({ ...request, text: "An old book." });
 
     expect(cache.get).not.toHaveBeenCalled();
   });
 
-  it("weaves at A2 as well", async () => {
+  it("substitutes at A2 as well", async () => {
     const text = await resolver({
       getLearnerBand: async () => "A2",
-      getWeaveInputs: weaveInputs([{ lemmaId: "libro", lang: "es" }])
+      getMarkerInputs: markerInputs([{ lemmaId: "libro", lang: "es" }])
     })({ ...request, text: "An old book." });
     expect(text).toContain("libro");
   });
@@ -220,7 +220,7 @@ describe("A1/A2 weave path", () => {
     // The pool is now everything the learner's level admits.
     const text = await resolver({
       getLearnerBand: async () => "A1",
-      getWeaveInputs: weaveInputs([
+      getMarkerInputs: markerInputs([
         { lemmaId: "estación", lang: "es" },
         { lemmaId: "libro", lang: "es" }
       ])
@@ -232,20 +232,20 @@ describe("A1/A2 weave path", () => {
   it("returns authored text when nothing prescribed appears in the text", async () => {
     const text = await resolver({
       getLearnerBand: async () => "A1",
-      getWeaveInputs: weaveInputs([{ lemmaId: "queso", lang: "es" }])
+      getMarkerInputs: markerInputs([{ lemmaId: "queso", lang: "es" }])
     })({ ...request, text: "An old book." });
     expect(text).toBe("An old book.");
   });
 
-  it("returns authored text when weave inputs are unavailable", async () => {
+  it("returns authored text when marker inputs are unavailable", async () => {
     const text = await resolver({
       getLearnerBand: async () => "A1",
-      getWeaveInputs: async () => null
+      getMarkerInputs: async () => null
     })({ ...request, text: "An old book." });
     expect(text).toBe("An old book.");
   });
 
-  it("returns authored text when no weave inputs are wired at all", async () => {
+  it("returns authored text when no marker inputs are wired at all", async () => {
     const text = await resolver({ getLearnerBand: async () => "A1" })({
       ...request,
       text: "An old book."

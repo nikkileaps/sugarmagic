@@ -57,7 +57,7 @@
  *     hashing live with the callers that own the content.
  *   - It does not decide WHETHER to grade, or at which bands. That is
  *     scheduling.
- *   - It does not gloss, weave, or annotate. Those are runtime concerns.
+ *   - It does not gloss, substitute, or annotate. Those are runtime concerns.
  *
  * WHY IT EXISTS
  *

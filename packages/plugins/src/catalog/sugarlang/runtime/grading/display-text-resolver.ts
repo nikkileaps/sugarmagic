@@ -124,8 +124,8 @@ export interface DisplayTextResolveRequest {
   text: string;
 }
 
-/** Everything the A1/A2 weave path needs, resolved lazily. */
-export interface WeaveInputs {
+/** Everything the A1/A2 substitution path needs, resolved lazily. */
+export interface MarkerInputs {
   atlas: LexicalAtlasProvider;
   /** Learner's band -- the pool is every lemma at or below it. */
   band: CEFRBand;
@@ -139,11 +139,11 @@ export interface DisplayTextResolverDeps {
   getLearnerBand: () => Promise<CEFRBand | null>;
   promptVersion: string;
   /**
-   * Resolves the weave inputs, or null when they are unavailable (no learner,
-   * no scene lexicon yet). Omitting it disables weaving entirely; the resolver
+   * Resolves the marker inputs, or null when they are unavailable (no learner,
+   * no scene lexicon yet). Omitting it disables substitution entirely; the resolver
    * still answers, with authored text.
    */
-  getWeaveInputs?: () => Promise<WeaveInputs | null>;
+  getMarkerInputs?: () => Promise<MarkerInputs | null>;
 }
 
 /**
@@ -236,15 +236,15 @@ async function markText(
   targetLang: string,
   deps: DisplayTextResolverDeps
 ): Promise<string | null> {
-  if (!deps.getWeaveInputs) return null;
-  const inputs = await deps.getWeaveInputs();
+  if (!deps.getMarkerInputs) return null;
+  const inputs = await deps.getMarkerInputs();
   if (!inputs) return null;
 
   let inventoryChunks: ReturnType<typeof getAllInventoryChunks> = [];
   try {
     inventoryChunks = getAllInventoryChunks(targetLang);
   } catch {
-    // No inventory for this language -- weave proceeds without chunk swaps.
+    // No inventory for this language -- substitution proceeds without chunk swaps.
   }
 
   // Every lemma the learner's level admits, as the substitution pool.
@@ -262,6 +262,6 @@ async function markText(
   );
   // No substitution is not a failure -- it means nothing prescribed appears in
   // this text. Returning null keeps the authored English rather than the
-  // identical string the weave just handed back.
+  // identical string the marker just handed back.
   return result.markedForms.length > 0 ? result.text : null;
 }
