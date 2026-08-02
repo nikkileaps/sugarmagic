@@ -24,18 +24,9 @@ import {
   createSugarlangPlacementStatusScope,
   getSugarlangPlacementStatus
 } from "../learner";
-import {
-  createNoOpTelemetrySink,
-  createTelemetryEvent,
-  emitTelemetry,
-  type TelemetrySink
-} from "../telemetry/telemetry";
+import type { TelemetrySink } from "../telemetry/telemetry";
 import type { SugarlangRuntimeServices } from "../runtime-services";
-import {
-  advancePlacementPhase,
-  getPlacementQuestionnaireVersion,
-  type PlacementPhaseStateValue
-} from "../placement/placement-flow-orchestrator";
+import { getPlacementQuestionnaireVersion } from "../placement/placement-flow-orchestrator";
 import { createSugarlangLogger } from "../logger";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
@@ -43,9 +34,6 @@ import {
   SUGARLANG_HOVER_LEMMA_ANNOTATION,
   SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION,
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
-  SUGARLANG_PLACEMENT_PHASE_STATE,
-  SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
-  SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_QUEST_ESSENTIAL_IDS_ANNOTATION,
   SUGARLANG_SCHEDULE_ANNOTATION,
@@ -53,12 +41,9 @@ import {
   computePendingProvisionalLemmas,
   computeProbeFloorState,
   getSugarlangConversationId,
-  getSugarlangTelemetryTurnId,
-  getSugarAgentSessionId,
   getSceneId,
   getTurnsSinceLastProbe,
   shouldRunSugarlangForExecution,
-  type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
@@ -74,53 +59,6 @@ export interface SugarLangContextMiddlewareDeps {
   telemetry?: TelemetrySink;
 }
 
-function readPlacementState(
-  execution: { state: Record<string, unknown> }
-): PlacementPhaseStateValue | null {
-  const value = execution.state[SUGARLANG_PLACEMENT_PHASE_STATE];
-  if (typeof value === "object" && value !== null) {
-    const record = value as Record<string, unknown>;
-    if (
-      (record.phase === "opening-dialog" ||
-        record.phase === "questionnaire" ||
-        record.phase === "closing-dialog") &&
-      typeof record.enteredAtTurn === "number"
-    ) {
-      return {
-        phase: record.phase,
-        enteredAtTurn: record.enteredAtTurn
-      };
-    }
-  }
-  if (
-    value === "opening-dialog" ||
-    value === "questionnaire" ||
-    value === "closing-dialog"
-  ) {
-    return {
-      phase: value,
-      enteredAtTurn: 0
-    };
-  }
-  return null;
-}
-
-function writePlacementState(
-  execution: { state: Record<string, unknown> },
-  phase: "opening-dialog" | "questionnaire" | "closing-dialog" | "not-active",
-  enteredAtTurn: number
-): void {
-  if (phase === "not-active") {
-    delete execution.state[SUGARLANG_PLACEMENT_PHASE_STATE];
-    return;
-  }
-
-  execution.state[SUGARLANG_PLACEMENT_PHASE_STATE] = {
-    phase,
-    enteredAtTurn
-  } satisfies PlacementPhaseStateValue;
-}
-
 function resolvePlacementMinAnswersForValid(
   questionnaireMinAnswersForValid: number,
   configuredMinAnswersForValid: number | "use-bank-default"
@@ -130,30 +68,10 @@ function resolvePlacementMinAnswersForValid(
     : questionnaireMinAnswersForValid;
 }
 
-function pickPrePlacementOpeningLine(executionText: {
-  npcDisplayName?: string;
-  description?: string | null;
-  supportLanguage: string;
-}): { text: string; lang: string; lineId: string } {
-  const raw =
-    executionText.description
-      ?.split(/\n+/)
-      .map((line) => line.trim())
-      .find(Boolean) ??
-    `${executionText.npcDisplayName ?? "Hello"}. Let's figure out the right starting point.`;
-
-  return {
-    text: raw,
-    lang: executionText.supportLanguage,
-    lineId: `opening:${(executionText.npcDisplayName ?? "npc").toLowerCase()}`
-  };
-}
-
 export function createSugarLangContextMiddleware(
   deps: SugarLangContextMiddlewareDeps
 ): ConversationMiddleware {
   const logger = deps.logger ?? createSugarlangLogger({ debugLogging: false });
-  const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
     middlewareId: "sugarlang.context",
@@ -204,149 +122,12 @@ export function createSugarLangContextMiddleware(
       const placementStatus = blackboard
         ? getSugarlangPlacementStatus(blackboard, learner.learnerId)
         : null;
-      const turnCount = execution.state["sugaragent.session"] &&
-        typeof execution.state["sugaragent.session"] === "object" &&
-        execution.state["sugaragent.session"] !== null &&
-        typeof (execution.state["sugaragent.session"] as { turnCount?: unknown }).turnCount ===
-          "number"
-        ? (execution.state["sugaragent.session"] as { turnCount: number }).turnCount
-        : 0;
-      const placementState = readPlacementState(execution);
-      // DEFERRED (081 wrap): activeQuestObjectives carries only the TRACKED
-      // quest's objectives, so placement triggers only while the assessment
-      // quest is tracked. Accepted 2026-07-26: the dock area will contain
-      // the player until placement completes, making the assessment quest
-      // the only meaningful track there. Revisit if dock containment does
-      // not ship, or if placement ever moves past the first playable area.
-      const isPlacementNpc =
-        config.placement.enabled &&
-        (execution.runtimeContext?.activeQuestObjectives?.objectives.some(
-          (o) => o.objectiveSubtype === "assessment" && o.targetId === execution.selection.npcDefinitionId
-        ) ?? false);
-      let placementPhase: PlacementFlowAnnotation["phase"] =
-        !isPlacementNpc || placementStatus?.status === "completed"
-          ? placementState?.phase === "closing-dialog" &&
-            turnCount - placementState.enteredAtTurn < config.placement.closingDialogTurns
-            ? "closing-dialog"
-            : "not-active"
-          : placementState?.phase ?? "opening-dialog";
-      let placementFlowAnnotation: PlacementFlowAnnotation | null = null;
-
-      if (
-        placementPhase === "questionnaire" &&
-        execution.input?.kind === "quest_form"
-      ) {
-        const questionnaire = services.placementQuestionnaireLoader.getQuestionnaire(
-          execution.selection.targetLanguage ?? learner.targetLanguage
-        );
-        const scoreResult = services.placementScoreEngine.scoreResponses(
-          execution.input.response,
-          questionnaire
-        );
-        placementPhase = "closing-dialog";
-        writePlacementState(execution, "closing-dialog", turnCount);
-        placementFlowAnnotation = {
-          phase: "closing-dialog",
-          questionnaireVersion: getPlacementQuestionnaireVersion(questionnaire),
-          scoreResult
-        };
-      } else if (placementPhase !== "not-active") {
-        const advancedPhase = advancePlacementPhase({
-          currentPhase: placementPhase,
-          currentTurnCount: placementState ? turnCount - placementState.enteredAtTurn : turnCount,
-          openingDialogTurns: config.placement.openingDialogTurns,
-          closingDialogTurns: config.placement.closingDialogTurns,
-          questionnaireSubmitted: false
-        });
-        if (advancedPhase !== placementPhase) {
-          writePlacementState(execution, advancedPhase, turnCount);
-          placementPhase = advancedPhase;
-        } else {
-          writePlacementState(execution, placementPhase, placementState?.enteredAtTurn ?? turnCount);
-        }
-      } else {
-        writePlacementState(execution, "not-active", turnCount);
-      }
-
-      if (placementPhase !== "not-active") {
-        const questionnaire =
-          placementPhase === "questionnaire"
-            ? services.placementQuestionnaireLoader.getQuestionnaire(
-                execution.selection.targetLanguage ?? learner.targetLanguage
-              )
-            : null;
-        if (placementFlowAnnotation) {
-          execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] =
-            placementFlowAnnotation;
-        } else if (questionnaire) {
-          const resolvedMinAnswers = resolvePlacementMinAnswersForValid(
-            questionnaire.minAnswersForValid,
-            config.placement.minAnswersForValid
-          );
-          execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
-            phase: placementPhase,
-            questionnaireVersion: getPlacementQuestionnaireVersion(questionnaire),
-            minAnswersForValid: resolvedMinAnswers,
-            questionnaire: { ...questionnaire, minAnswersForValid: resolvedMinAnswers }
-          } satisfies PlacementFlowAnnotation;
-        } else {
-          execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] = {
-            phase: placementPhase
-          } satisfies PlacementFlowAnnotation;
-        }
-      }
-
-      if (
-        isPlacementNpc &&
-        blackboard &&
-        placementStatus?.status !== "completed" &&
-        (placementPhase === "opening-dialog" || placementPhase === "questionnaire")
-      ) {
-        blackboard.setFact({
-          definition: SUGARLANG_PLACEMENT_STATUS_FACT,
-          scope: createSugarlangPlacementStatusScope(learner.learnerId),
-          value: {
-            status: "in-progress",
-            ...(placementStatus?.cefrBand ? { cefrBand: placementStatus.cefrBand } : {}),
-            ...(placementStatus?.confidence ? { confidence: placementStatus.confidence } : {})
-          },
-          sourceSystem: SUGARLANG_PLACEMENT_WRITER
-        });
-      }
-
-      if (placementPhase === "questionnaire") {
-        return execution;
-      }
-
-      if (placementPhase === "opening-dialog") {
-        const npc = deps.services.findNpcDefinition(
-          execution.selection.npcDefinitionId
-        );
-        execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION] =
-          pickPrePlacementOpeningLine({
-            npcDisplayName: execution.selection.npcDisplayName,
-            description: npc?.description ?? null,
-            supportLanguage: execution.selection.supportLanguage ?? "en"
-          });
-        await emitTelemetry(
-          telemetry,
-          createTelemetryEvent("pre-placement.opening-dialog-turn", {
-            conversationId: getSugarlangConversationId(execution),
-            sessionId: getSugarAgentSessionId(execution),
-            turnId: getSugarlangTelemetryTurnId(execution, "prepare"),
-            timestamp: Date.now(),
-            npcDefinitionId: execution.selection.npcDefinitionId ?? null,
-            phase: placementPhase,
-            lineId: (
-              execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION] as {
-                lineId: string;
-              }
-            ).lineId
-          }),
-          logger
-        );
-        return execution;
-      }
+      // PLACEMENT IS NOT A CONVERSATION. It used to be handled here: an
+      // annotation, a phase, an in-progress write, and a scoring branch on
+      // quest_form input -- all so a form could be delivered as a dialogue
+      // turn. An assessment quest node now opens the form directly through the
+      // "quest.assessment" contribution, and sugarlang scores it there.
+      // See sugarmagic-placement-sequencing-38i.
 
       const sceneId = getSceneId(execution);
       if (!sceneId) {

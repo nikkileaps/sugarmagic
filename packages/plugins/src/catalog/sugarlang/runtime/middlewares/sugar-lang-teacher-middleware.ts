@@ -207,13 +207,6 @@ export function createSugarLangTeacherMiddleware(
         return execution;
       }
 
-      const placementFlow = execution.annotations["sugarlang.placementFlow"] as
-        | { phase?: string }
-        | undefined;
-      if (placementFlow?.phase === "questionnaire") {
-        return execution;
-      }
-
       const services = await deps.services.resolveForExecution(execution);
       if (!services) {
         return execution;

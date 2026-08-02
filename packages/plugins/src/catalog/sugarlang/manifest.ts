@@ -29,6 +29,7 @@ import type {
   ConversationMiddlewareContribution,
   DebugHudCardContribution,
   DialogueEntryDecoratorContribution,
+  QuestAssessmentContribution,
   DisplayTextResolverContribution,
   RuntimePluginInstance
 } from "@sugarmagic/runtime-core";
@@ -165,13 +166,38 @@ export function createSugarlangPlugin(
     getSceneContext: (sceneId) => services.getSceneContext(sceneId)
   });
 
+  /**
+   * THE PLACEMENT ASSESSMENT, AS A QUEST FORM.
+   *
+   * The quest layer knows an objective is an assessment and which NPC it
+   * targets. It asks for a form and hands back the answers; it never learns
+   * what a placement questionnaire is or what a CEFR band means.
+   *
+   * Placement used to be a CONVERSATION -- the form was built as a dialogue
+   * turn by sugaragent's generate stage, so it only worked for free-form NPCs
+   * and needed a turn counter to decide when to appear.
+   */
+  const assessmentContribution: QuestAssessmentContribution = {
+    pluginId: context.configuration.pluginId,
+    contributionId: "sugarlang.quest.placement-assessment",
+    kind: "quest.assessment",
+    displayName: "Sugarlang Placement Assessment",
+    priority: 10,
+    payload: {
+      summary: "Supplies the placement questionnaire for assessment objectives and scores it.",
+      getForm: () => services.getPlacementQuestForm(),
+      submit: (response) => services.submitPlacementQuestForm(response)
+    }
+  };
+
   const contributions: (
     | ConversationMiddlewareContribution
     | DialogueEntryDecoratorContribution
     | DisplayTextResolverContribution
     | DebugHudCardContribution
+    | QuestAssessmentContribution
   )[] =
-    [decoratorContribution, displayTextContribution, sceneContextCardContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
+    [decoratorContribution, displayTextContribution, sceneContextCardContribution, assessmentContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
       const middleware = factory({ services, logger, telemetry });
       return {
         pluginId: context.configuration.pluginId,

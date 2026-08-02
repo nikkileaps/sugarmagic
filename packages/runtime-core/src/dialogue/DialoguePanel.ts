@@ -935,6 +935,30 @@ export function createRuntimeDialoguePanel(
     handler?.(input);
   }
 
+  /**
+   * Opens the full-screen QuestFormOverlay for a turn carrying a form.
+   *
+   * Shared by both presentations: the overlay is independent of whether the
+   * conversation is scripted or free-form.
+   *
+   * GENERIC KEY. This read two sugarlang-namespaced keys and ASSEMBLED the
+   * definition from them, which put one plugin's placement flow inside the
+   * generic conversation layer and left any other plugin no way to show a
+   * quest form. Read and pass through: whoever writes "questForm" supplies a
+   * complete definition, and this layer never learns whose it is.
+   *
+   * NO PRODUCER TODAY. Placement -- the only thing that ever wrote it -- now
+   * opens its form through the "quest.assessment" contribution rather than as
+   * a conversation turn. This stays because a quest form on a TURN is part of
+   * the generic conversation contract (`inputMode: "quest_form"`), and the
+   * next plugin to want one should find a key it can actually write.
+   */
+  function openQuestFormOverlay(metadata: Record<string, unknown> | undefined): void {
+    const raw = metadata?.["questForm"];
+    const formDef = isQuestFormDefinition(raw) ? raw : null;
+    uiStateStore?.setState({ questFormOpen: true, questFormDefinition: formDef });
+  }
+
   function renderActions() {
     actionsContainer.innerHTML = "";
     // Any live player card is rebuilt below if it is still wanted; leaving the
@@ -973,18 +997,7 @@ export function createRuntimeDialoguePanel(
     }
 
     if (currentInputMode === "quest_form") {
-      // 081.8 -- form renders in the full-screen QuestFormOverlay React component.
-      // Signal UIStateStore to open it; actions area stays empty.
-      //
-      // READ AND PASS THROUGH, nothing more. This used to reach into two
-      // sugarlang-namespaced metadata keys and ASSEMBLE the definition from
-      // them, which put a branch that only ever fired for one plugin's
-      // placement flow inside the generic conversation layer -- and left any
-      // other plugin no way to show a quest form at all. The key is generic
-      // now and the writer supplies a complete definition.
-      const rawForm = currentTurnMetadata?.["questForm"];
-      const formDef = isQuestFormDefinition(rawForm) ? rawForm : null;
-      uiStateStore?.setState({ questFormOpen: true, questFormDefinition: formDef });
+      openQuestFormOverlay(currentTurnMetadata);
       return;
     }
 
@@ -1145,6 +1158,11 @@ export function createRuntimeDialoguePanel(
         key: "Enter",
         handler: (event) => {
           if (!isVisible()) return;
+          // The quest form owns the keyboard while it is open, whichever
+          // presentation is behind it. Without this, Enter walked the scripted
+          // tree underneath the overlay -- every node showing the same form
+          // intro -- instead of reaching the form.
+          if (uiStateStore?.getState().questFormOpen) return;
           if (scriptedActive) {
             // Scripted lines advance on Enter unless choices are showing.
             if (scriptedBox.getChoiceIds().length > 1) return;
@@ -1322,6 +1340,14 @@ export function createRuntimeDialoguePanel(
       // conversationKind is stable for the session; inputMode is NOT a valid
       // switch (an agent's closing turn reports "advance", which would snap a
       // chat into the scripted box and drop its visible history).
+      // A QUEST FORM IS AN OVERLAY, NOT A BOX. It is not a choice between the
+      // scripted box and the chat panel, so it must not be gated behind that
+      // choice -- which is exactly what happened: the quest_form branch lived
+      // only on the agent path, so an assessment on a scripted NPC rendered its
+      // form intro as an ordinary dialogue line and never opened the form.
+      if (turn.inputMode === "quest_form") {
+        openQuestFormOverlay(turn.metadata);
+      }
       scriptedActive = turn.conversationKind === "scripted-dialogue";
       if (scriptedActive) {
         onCancel = handleCancel ?? null;

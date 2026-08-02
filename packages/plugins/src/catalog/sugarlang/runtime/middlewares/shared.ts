@@ -48,15 +48,6 @@ export interface LearnerSnapshot {
   knownLemmaCount: number;
 }
 
-export interface PlacementFlowAnnotation {
-  phase: "opening-dialog" | "questionnaire" | "closing-dialog" | "not-active";
-  minAnswersForValid?: number;
-  questionnaireVersion?: string;
-  scoreResult?: PlacementScoreResult;
-  /** Full questionnaire payload (phase "questionnaire" only). Opaque to SugarAgent. */
-  questionnaire?: unknown;
-}
-
 export interface StoredComprehensionCheck {
   probeId: string;
   targetLemmas: LemmaRef[];
@@ -80,7 +71,6 @@ export const SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION =
   "sugarlang.activeQuestEssentialLemmas";
 export const SUGARLANG_QUEST_ESSENTIAL_IDS_ANNOTATION =
   "sugarlang.questEssentialLemmaIds";
-export const SUGARLANG_PLACEMENT_FLOW_ANNOTATION = "sugarlang.placementFlow";
 export const SUGARLANG_PREPLACEMENT_LINE_ANNOTATION =
   "sugarlang.prePlacementOpeningLine";
 export const SUGARLANG_CONSTRAINT_ANNOTATION = "sugarlang.constraint";

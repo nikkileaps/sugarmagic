@@ -39,7 +39,7 @@ describe("sugarlang plugin registration", () => {
 
     expect(instance.pluginId).toBe(SUGARLANG_PLUGIN_ID);
     expect(instance.displayName).toBe(SUGARLANG_DISPLAY_NAME);
-    expect(instance.contributions).toHaveLength(8);
+    expect(instance.contributions).toHaveLength(9);
     expect(instance.contributions.map((entry) => entry.kind)).toEqual([
       "dialogue.entryDecorator",
       // Runtime grading seam. Its absence is what makes the game plain English,
@@ -48,6 +48,10 @@ describe("sugarlang plugin registration", () => {
       // Plan 090.1 -- Studio-preview-only readout of the seeded scene context.
       // hostKinds gates it out of published builds; see the card's own tests.
       "debug.hudCard",
+      // The placement assessment as a QUEST FORM. Its presence is what lets an
+      // assessment objective open a form without a conversation -- placement
+      // used to ride on a dialogue turn and so only worked for free-form NPCs.
+      "quest.assessment",
       "conversation.middleware",
       "conversation.middleware",
       "conversation.middleware",

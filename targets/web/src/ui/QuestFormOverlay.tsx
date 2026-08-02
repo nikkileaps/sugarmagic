@@ -184,9 +184,11 @@ const S: Record<string, CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer"
   },
-  submitBtnDisabled: {
-    opacity: 0.35,
-    cursor: "not-allowed"
+  submitNote: {
+    fontSize: 12,
+    opacity: 0.7,
+    marginRight: 12,
+    alignSelf: "center"
   }
 };
 
@@ -197,11 +199,23 @@ export function QuestFormOverlay({ definition, onSubmit, onDismiss }: QuestFormO
     setAnswers((prev) => new Map(prev).set(id, value));
   }, []);
 
-  const canSubmit = countAnswered(answers) >= definition.minAnswersForValid;
+  /**
+   * SUBMIT IS ALWAYS ALLOWED. `minAnswersForValid` shapes the RESULT, it does
+   * not grant permission.
+   *
+   * It used to disable the button below the threshold, which blocked the exact
+   * player this form exists to place: the intro tells a beginner to leave
+   * blanks for anything they do not understand yet, and then the button
+   * refused to accept blanks. The scorer never needed it either -- it treats
+   * sparse answers as a real signal, returning the lowest band with low
+   * confidence, which is what opens the calibration window so the estimate is
+   * corrected during play.
+   */
+  const answeredCount = countAnswered(answers);
+  const belowConfidenceThreshold = answeredCount < definition.minAnswersForValid;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
     onSubmit({
       questionnaireId: definition.formId ?? "quest-form",
       submittedAtMs: Date.now(),
@@ -310,11 +324,13 @@ export function QuestFormOverlay({ definition, onSubmit, onDismiss }: QuestFormO
             );
           })}
           <div style={S.footer}>
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              style={{ ...S.submitBtn, ...(!canSubmit ? S.submitBtnDisabled : {}) }}
-            >
+            {belowConfidenceThreshold ? (
+              <span style={S.submitNote}>
+                {answeredCount} of {definition.minAnswersForValid} answered -- we
+                will keep adjusting as you play.
+              </span>
+            ) : null}
+            <button type="submit" style={S.submitBtn}>
               Submit form
             </button>
           </div>

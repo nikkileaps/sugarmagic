@@ -118,7 +118,8 @@ import type {
   DebugHudGameplaySessionSnapshot,
   EntityBillboardContext,
   MechanicsEmitDispatch,
-  RuntimePluginManager
+  RuntimePluginManager,
+  RuntimePluginContribution
 } from "../plugins";
 import { RuntimePluginSystem } from "../plugins";
 import {
@@ -586,6 +587,13 @@ export function createRuntimeGameplaySessionController(
   });
   const dialogueManager = new DialogueManager(dialoguePanel);
   const questManager = new QuestManager();
+  /**
+   * The contribution whose form is on screen. Held so the submit goes back to
+   * the plugin that produced it rather than being broadcast to all of them.
+   */
+  let activeAssessment:
+    | Extract<RuntimePluginContribution, { kind: "quest.assessment" }>
+    | null = null;
   const interactionSystem = new InteractionSystem();
   const questSystem = new QuestSystem(questManager);
   const audioController = createRuntimeAudioController({
@@ -929,6 +937,54 @@ export function createRuntimeGameplaySessionController(
       }))
     });
     lastTrackedQuestDefinitionId = trackedQuest.questDefinitionId;
+  }
+
+  /**
+   * ASSESSMENT OBJECTIVES OPEN A FORM, NOT A CONVERSATION.
+   *
+   * The quest graph says an objective is an assessment and which NPC it
+   * targets. This layer knows nothing about placement, questionnaires or CEFR
+   * bands -- it asks whoever owns assessments for a form and hands the answers
+   * back.
+   *
+   * Returns false when there is nothing to show, so the caller falls through to
+   * an ordinary conversation. An NPC hosting an assessment keeps their authored
+   * dialogue for every other node in the quest.
+   */
+  function tryOpenAssessmentForm(npcDefinitionId: string): boolean {
+    const contributions =
+      pluginManager?.getContributions("quest.assessment") ?? [];
+    if (contributions.length === 0) return false;
+
+    const objective = questManager
+      .getActiveObjectivesForTrackedQuest()
+      .find(
+        (candidate) =>
+          candidate.objectiveSubtype === "assessment" &&
+          candidate.targetId === npcDefinitionId
+      );
+    if (!objective) return false;
+
+    for (const contribution of contributions) {
+      const form = contribution.payload.getForm({
+        objectiveNodeId: objective.nodeId,
+        targetId: objective.targetId ?? null
+      });
+      if (!form) continue;
+      activeAssessment = contribution;
+      options.uiStateStore?.setState({
+        questFormOpen: true,
+        questFormDefinition: form
+      });
+      return true;
+    }
+    // An assessment objective with no plugin willing to supply a form is a
+    // dead node: the player would walk up and nothing would happen. Say so.
+    console.warn(
+      "[gameplay-session] assessment objective has no form provider; falling back to conversation.",
+      { objectiveNodeId: objective.nodeId, targetId: objective.targetId }
+    );
+    return false;
   }
 
   const runtimeBlackboardConversationMiddleware: ConversationMiddleware = {
@@ -2133,6 +2189,11 @@ export function createRuntimeGameplaySessionController(
         conversationKind: selection.conversationKind,
         interactionMode: selection.interactionMode ?? null
       });
+      // An assessment objective for this NPC opens its form instead of a
+      // conversation -- the node says "run the assessment", not "talk".
+      if (selection.npcDefinitionId && tryOpenAssessmentForm(selection.npcDefinitionId)) {
+        return;
+      }
       void dialogueManager.startConversation(selection);
       return;
     }
@@ -2446,9 +2507,39 @@ export function createRuntimeGameplaySessionController(
     toggleInventory: inventoryUi.toggle,
     toggleCaster: spellMenuUi.toggle,
     submitQuestFormResponse(response) {
+      // A form opened by an ASSESSMENT OBJECTIVE goes back to the plugin that
+      // supplied it -- there is no conversation behind it to submit into.
+      if (activeAssessment) {
+        const contribution = activeAssessment;
+        activeAssessment = null;
+        options.uiStateStore?.setState({
+          questFormOpen: false,
+          questFormDefinition: null
+        });
+        void Promise.resolve(contribution.payload.submit(response))
+          .then((proposals) => {
+            // Same applier the conversation path uses -- one place decides what
+            // a quest action means.
+            for (const proposal of proposals ?? []) {
+              handleConversationActionProposal(proposal);
+            }
+          })
+          .catch((error: unknown) => {
+            console.warn("[gameplay-session] assessment submit failed.", error);
+          });
+        return;
+      }
       dialoguePanel.submitQuestFormResponse(response);
     },
     cancelQuestForm() {
+      if (activeAssessment) {
+        activeAssessment = null;
+        options.uiStateStore?.setState({
+          questFormOpen: false,
+          questFormDefinition: null
+        });
+        return;
+      }
       dialoguePanel.cancelQuestForm();
     },
     dispose() {
