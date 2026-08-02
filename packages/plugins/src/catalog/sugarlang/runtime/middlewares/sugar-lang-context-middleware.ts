@@ -388,6 +388,54 @@ export function createSugarLangContextMiddleware(
       }
 
       return execution;
+    },
+
+    /**
+     * PUTS THE PLACEMENT FORM ON THE TURN, WHATEVER PROVIDER MADE IT.
+     *
+     * The form used to be built by sugaragent's GenerateStage, which only runs
+     * for free-form conversations -- so an assessment on a SCRIPTED NPC could
+     * never show one, and it was the only place in the repo that could produce
+     * a quest_form turn. `finalize` runs for every provider, so an authored
+     * scripted NPC keeps its dialogue and still hosts the assessment.
+     *
+     * STAGING POST, NOT THE DESTINATION. Placement should not be a conversation
+     * turn at all -- an assessment quest node should open the overlay directly.
+     * See sugarmagic-placement-sequencing-38i; this exists so the form renders
+     * while that lands.
+     */
+    finalize(execution, turn) {
+      const flow = execution.annotations[SUGARLANG_PLACEMENT_FLOW_ANNOTATION] as
+        | PlacementFlowAnnotation
+        | undefined;
+      if (flow?.phase !== "questionnaire") {
+        return turn;
+      }
+      const questionnaire = flow.questionnaire as
+        | { formIntro: string; lang: string; schemaVersion: number }
+        | undefined;
+      if (!questionnaire || !turn) {
+        // Asked for, but unbuildable. SAY SO: a silently absent form is what
+        // made this cost two debugging sessions.
+        logger.warn(
+          "Placement asked for the questionnaire but no form could be built.",
+          { hasQuestionnaire: Boolean(questionnaire), hasTurn: Boolean(turn) }
+        );
+        return turn;
+      }
+      return {
+        ...turn,
+        text: questionnaire.formIntro,
+        choices: [],
+        inputMode: "quest_form",
+        metadata: {
+          ...(turn.metadata ?? {}),
+          "sugarlang.placementQuestionnaire": questionnaire,
+          "sugarlang.placementQuestionnaireVersion":
+            flow.questionnaireVersion ??
+            `${questionnaire.lang}-placement-v${questionnaire.schemaVersion}`
+        }
+      };
     }
   };
 }

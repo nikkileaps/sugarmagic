@@ -936,6 +936,26 @@ export function createRuntimeDialoguePanel(
     handler?.(input);
   }
 
+  /**
+   * Opens the full-screen QuestFormOverlay for a turn carrying a form.
+   *
+   * Shared by both presentations: the overlay is independent of whether the
+   * conversation is scripted or free-form.
+   */
+  function openQuestFormOverlay(metadata: Record<string, unknown> | undefined): void {
+    const raw = metadata?.["sugarlang.placementQuestionnaire"];
+    const formDef = isQuestFormDefinition(raw)
+      ? {
+          ...raw,
+          formId:
+            typeof metadata?.["sugarlang.placementQuestionnaireVersion"] === "string"
+              ? (metadata["sugarlang.placementQuestionnaireVersion"] as string)
+              : "quest-form"
+        }
+      : null;
+    uiStateStore?.setState({ questFormOpen: true, questFormDefinition: formDef });
+  }
+
   function renderActions() {
     actionsContainer.innerHTML = "";
     // Any live player card is rebuilt below if it is still wanted; leaving the
@@ -974,21 +994,7 @@ export function createRuntimeDialoguePanel(
     }
 
     if (currentInputMode === "quest_form") {
-      // 081.8 -- form renders in the full-screen QuestFormOverlay React component.
-      // Signal UIStateStore to open it; actions area stays empty.
-      const formDef = isQuestFormDefinition(
-        currentTurnMetadata?.["sugarlang.placementQuestionnaire"]
-      )
-        ? {
-            ...(currentTurnMetadata!["sugarlang.placementQuestionnaire"] as QuestFormDefinition),
-            formId:
-              typeof currentTurnMetadata?.["sugarlang.placementQuestionnaireVersion"] ===
-              "string"
-                ? (currentTurnMetadata["sugarlang.placementQuestionnaireVersion"] as string)
-                : "quest-form"
-          }
-        : null;
-      uiStateStore?.setState({ questFormOpen: true, questFormDefinition: formDef });
+      openQuestFormOverlay(currentTurnMetadata);
       return;
     }
 
@@ -1149,6 +1155,11 @@ export function createRuntimeDialoguePanel(
         key: "Enter",
         handler: (event) => {
           if (!isVisible()) return;
+          // The quest form owns the keyboard while it is open, whichever
+          // presentation is behind it. Without this, Enter walked the scripted
+          // tree underneath the overlay -- every node showing the same form
+          // intro -- instead of reaching the form.
+          if (uiStateStore?.getState().questFormOpen) return;
           if (scriptedActive) {
             // Scripted lines advance on Enter unless choices are showing.
             if (scriptedBox.getChoiceIds().length > 1) return;
@@ -1326,6 +1337,14 @@ export function createRuntimeDialoguePanel(
       // conversationKind is stable for the session; inputMode is NOT a valid
       // switch (an agent's closing turn reports "advance", which would snap a
       // chat into the scripted box and drop its visible history).
+      // A QUEST FORM IS AN OVERLAY, NOT A BOX. It is not a choice between the
+      // scripted box and the chat panel, so it must not be gated behind that
+      // choice -- which is exactly what happened: the quest_form branch lived
+      // only on the agent path, so an assessment on a scripted NPC rendered its
+      // form intro as an ordinary dialogue line and never opened the form.
+      if (turn.inputMode === "quest_form") {
+        openQuestFormOverlay(turn.metadata);
+      }
       scriptedActive = turn.conversationKind === "scripted-dialogue";
       if (scriptedActive) {
         onCancel = handleCancel ?? null;
