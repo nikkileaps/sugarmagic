@@ -17,76 +17,13 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  advancePlacementPhase,
   buildPlacementCompletionEvent,
   getPlacementQuestionnaireVersion
 } from "../../runtime/placement/placement-flow-orchestrator";
 import { createLearnerProfile } from "../learner/test-helpers";
 
 describe("placement-flow-orchestrator", () => {
-  it("advances through the documented phases", () => {
-    expect(
-      advancePlacementPhase({
-        currentPhase: "not-active",
-        currentTurnCount: 0,
-        openingDialogTurns: 2,
-        closingDialogTurns: 2,
-        questionnaireSubmitted: false
-      })
-    ).toBe("opening-dialog");
 
-    expect(
-      advancePlacementPhase({
-        currentPhase: "opening-dialog",
-        currentTurnCount: 1,
-        openingDialogTurns: 2,
-        closingDialogTurns: 2,
-        questionnaireSubmitted: false
-      })
-    ).toBe("opening-dialog");
-
-    expect(
-      advancePlacementPhase({
-        currentPhase: "opening-dialog",
-        currentTurnCount: 2,
-        openingDialogTurns: 2,
-        closingDialogTurns: 2,
-        questionnaireSubmitted: false
-      })
-    ).toBe("questionnaire");
-
-    expect(
-      advancePlacementPhase({
-        currentPhase: "questionnaire",
-        currentTurnCount: 0,
-        openingDialogTurns: 2,
-        closingDialogTurns: 2,
-        questionnaireSubmitted: true
-      })
-    ).toBe("closing-dialog");
-
-    expect(
-      advancePlacementPhase({
-        currentPhase: "closing-dialog",
-        currentTurnCount: 2,
-        openingDialogTurns: 2,
-        closingDialogTurns: 2,
-        questionnaireSubmitted: false
-      })
-    ).toBe("not-active");
-  });
-
-  it("is pure for identical inputs", () => {
-    const input = {
-      currentPhase: "opening-dialog" as const,
-      currentTurnCount: 2,
-      openingDialogTurns: 2,
-      closingDialogTurns: 2,
-      questionnaireSubmitted: false
-    };
-
-    expect(advancePlacementPhase(input)).toBe(advancePlacementPhase(input));
-  });
 
   it("builds the reducer completion event from the score result", () => {
     const event = buildPlacementCompletionEvent(

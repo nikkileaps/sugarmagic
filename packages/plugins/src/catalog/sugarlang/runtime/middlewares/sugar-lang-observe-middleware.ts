@@ -171,21 +171,6 @@ export function createSugarLangObserveMiddleware(
       const placementFlow = execution.annotations[
         SUGARLANG_PLACEMENT_FLOW_ANNOTATION
       ] as PlacementFlowAnnotation | undefined;
-      if (placementFlow?.phase === "opening-dialog") {
-        await emitTelemetry(
-          telemetry,
-          createTelemetryEvent("observer.pre-placement-bypass", {
-            conversationId,
-            sessionId,
-            turnId: traceTurnId,
-            timestamp: now,
-            sceneId
-          }),
-          logger
-        );
-        return normalizedTurn;
-      }
-
       if (placementFlow?.phase === "questionnaire") {
         await emitTelemetry(
           telemetry,

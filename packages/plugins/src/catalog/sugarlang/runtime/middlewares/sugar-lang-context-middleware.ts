@@ -24,18 +24,9 @@ import {
   createSugarlangPlacementStatusScope,
   getSugarlangPlacementStatus
 } from "../learner";
-import {
-  createNoOpTelemetrySink,
-  createTelemetryEvent,
-  emitTelemetry,
-  type TelemetrySink
-} from "../telemetry/telemetry";
+import type { TelemetrySink } from "../telemetry/telemetry";
 import type { SugarlangRuntimeServices } from "../runtime-services";
-import {
-  advancePlacementPhase,
-  getPlacementQuestionnaireVersion,
-  type PlacementPhaseStateValue
-} from "../placement/placement-flow-orchestrator";
+import { getPlacementQuestionnaireVersion } from "../placement/placement-flow-orchestrator";
 import { createSugarlangLogger } from "../logger";
 import {
   SUGARLANG_ACTIVE_QUEST_ESSENTIAL_ANNOTATION,
@@ -43,9 +34,7 @@ import {
   SUGARLANG_HOVER_LEMMA_ANNOTATION,
   SUGARLANG_LEARNER_SNAPSHOT_ANNOTATION,
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
-  SUGARLANG_PLACEMENT_PHASE_STATE,
   SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
-  SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_QUEST_ESSENTIAL_IDS_ANNOTATION,
   SUGARLANG_SCHEDULE_ANNOTATION,
@@ -53,8 +42,6 @@ import {
   computePendingProvisionalLemmas,
   computeProbeFloorState,
   getSugarlangConversationId,
-  getSugarlangTelemetryTurnId,
-  getSugarAgentSessionId,
   getSceneId,
   getTurnsSinceLastProbe,
   shouldRunSugarlangForExecution,
@@ -74,53 +61,6 @@ export interface SugarLangContextMiddlewareDeps {
   telemetry?: TelemetrySink;
 }
 
-function readPlacementState(
-  execution: { state: Record<string, unknown> }
-): PlacementPhaseStateValue | null {
-  const value = execution.state[SUGARLANG_PLACEMENT_PHASE_STATE];
-  if (typeof value === "object" && value !== null) {
-    const record = value as Record<string, unknown>;
-    if (
-      (record.phase === "opening-dialog" ||
-        record.phase === "questionnaire" ||
-        record.phase === "closing-dialog") &&
-      typeof record.enteredAtTurn === "number"
-    ) {
-      return {
-        phase: record.phase,
-        enteredAtTurn: record.enteredAtTurn
-      };
-    }
-  }
-  if (
-    value === "opening-dialog" ||
-    value === "questionnaire" ||
-    value === "closing-dialog"
-  ) {
-    return {
-      phase: value,
-      enteredAtTurn: 0
-    };
-  }
-  return null;
-}
-
-function writePlacementState(
-  execution: { state: Record<string, unknown> },
-  phase: "opening-dialog" | "questionnaire" | "closing-dialog" | "not-active",
-  enteredAtTurn: number
-): void {
-  if (phase === "not-active") {
-    delete execution.state[SUGARLANG_PLACEMENT_PHASE_STATE];
-    return;
-  }
-
-  execution.state[SUGARLANG_PLACEMENT_PHASE_STATE] = {
-    phase,
-    enteredAtTurn
-  } satisfies PlacementPhaseStateValue;
-}
-
 function resolvePlacementMinAnswersForValid(
   questionnaireMinAnswersForValid: number,
   configuredMinAnswersForValid: number | "use-bank-default"
@@ -130,30 +70,10 @@ function resolvePlacementMinAnswersForValid(
     : questionnaireMinAnswersForValid;
 }
 
-function pickPrePlacementOpeningLine(executionText: {
-  npcDisplayName?: string;
-  description?: string | null;
-  supportLanguage: string;
-}): { text: string; lang: string; lineId: string } {
-  const raw =
-    executionText.description
-      ?.split(/\n+/)
-      .map((line) => line.trim())
-      .find(Boolean) ??
-    `${executionText.npcDisplayName ?? "Hello"}. Let's figure out the right starting point.`;
-
-  return {
-    text: raw,
-    lang: executionText.supportLanguage,
-    lineId: `opening:${(executionText.npcDisplayName ?? "npc").toLowerCase()}`
-  };
-}
-
 export function createSugarLangContextMiddleware(
   deps: SugarLangContextMiddlewareDeps
 ): ConversationMiddleware {
   const logger = deps.logger ?? createSugarlangLogger({ debugLogging: false });
-  const telemetry = deps.telemetry ?? createNoOpTelemetrySink();
 
   return {
     middlewareId: "sugarlang.context",
@@ -204,14 +124,6 @@ export function createSugarLangContextMiddleware(
       const placementStatus = blackboard
         ? getSugarlangPlacementStatus(blackboard, learner.learnerId)
         : null;
-      const turnCount = execution.state["sugaragent.session"] &&
-        typeof execution.state["sugaragent.session"] === "object" &&
-        execution.state["sugaragent.session"] !== null &&
-        typeof (execution.state["sugaragent.session"] as { turnCount?: unknown }).turnCount ===
-          "number"
-        ? (execution.state["sugaragent.session"] as { turnCount: number }).turnCount
-        : 0;
-      const placementState = readPlacementState(execution);
       // DEFERRED (081 wrap): activeQuestObjectives carries only the TRACKED
       // quest's objectives, so placement triggers only while the assessment
       // quest is tracked. Accepted 2026-07-26: the dock area will contain
@@ -223,19 +135,31 @@ export function createSugarLangContextMiddleware(
         (execution.runtimeContext?.activeQuestObjectives?.objectives.some(
           (o) => o.objectiveSubtype === "assessment" && o.targetId === execution.selection.npcDefinitionId
         ) ?? false);
-      let placementPhase: PlacementFlowAnnotation["phase"] =
-        !isPlacementNpc || placementStatus?.status === "completed"
-          ? placementState?.phase === "closing-dialog" &&
-            turnCount - placementState.enteredAtTurn < config.placement.closingDialogTurns
-            ? "closing-dialog"
-            : "not-active"
-          : placementState?.phase ?? "opening-dialog";
+
+      // THE QUEST GRAPH DECIDES WHEN, NOT A TURN COUNTER.
+      //
+      // This used to run its own phase machine -- opening-dialog ->
+      // questionnaire -> closing-dialog -- advanced by counting turns out of
+      // execution.state, with openingDialogTurns defaulting to 2 and clamped
+      // to a minimum of 1. That was a SECOND sequencer competing with the
+      // quest graph, and the graph always lost: an assessment objective could
+      // not fire on the turn the author placed it, and an NPC whose
+      // interaction is a single exchange never produced the second turn the
+      // counter demanded, so the form was unreachable rather than merely late.
+      //
+      // Ordering belongs to the graph. Reaching an assessment objective for
+      // this NPC IS the trigger. Want the NPC to speak first? Author a talk
+      // node in front of it.
+      // Deliberately NOT gated on conversation kind: placement runs through
+      // scripted conversations too (see the cold-start placement golden test,
+      // which drives the whole flow through a scripted NPC).
+      const placementActive = isPlacementNpc && placementStatus?.status !== "completed";
+      let placementPhase: PlacementFlowAnnotation["phase"] = placementActive
+        ? "questionnaire"
+        : "not-active";
       let placementFlowAnnotation: PlacementFlowAnnotation | null = null;
 
-      if (
-        placementPhase === "questionnaire" &&
-        execution.input?.kind === "quest_form"
-      ) {
+      if (placementActive && execution.input?.kind === "quest_form") {
         const questionnaire = services.placementQuestionnaireLoader.getQuestionnaire(
           execution.selection.targetLanguage ?? learner.targetLanguage
         );
@@ -243,29 +167,16 @@ export function createSugarLangContextMiddleware(
           execution.input.response,
           questionnaire
         );
+        // "closing-dialog" on the SUBMIT TURN is load-bearing and stays: it is
+        // how the score reaches the observe middleware, which applies the
+        // completion event and emits the quest flags. It is a one-turn signal
+        // now, not a turn-counted phase that lingers.
         placementPhase = "closing-dialog";
-        writePlacementState(execution, "closing-dialog", turnCount);
         placementFlowAnnotation = {
           phase: "closing-dialog",
           questionnaireVersion: getPlacementQuestionnaireVersion(questionnaire),
           scoreResult
         };
-      } else if (placementPhase !== "not-active") {
-        const advancedPhase = advancePlacementPhase({
-          currentPhase: placementPhase,
-          currentTurnCount: placementState ? turnCount - placementState.enteredAtTurn : turnCount,
-          openingDialogTurns: config.placement.openingDialogTurns,
-          closingDialogTurns: config.placement.closingDialogTurns,
-          questionnaireSubmitted: false
-        });
-        if (advancedPhase !== placementPhase) {
-          writePlacementState(execution, advancedPhase, turnCount);
-          placementPhase = advancedPhase;
-        } else {
-          writePlacementState(execution, placementPhase, placementState?.enteredAtTurn ?? turnCount);
-        }
-      } else {
-        writePlacementState(execution, "not-active", turnCount);
       }
 
       if (placementPhase !== "not-active") {
@@ -296,12 +207,10 @@ export function createSugarLangContextMiddleware(
         }
       }
 
-      if (
-        isPlacementNpc &&
-        blackboard &&
-        placementStatus?.status !== "completed" &&
-        (placementPhase === "opening-dialog" || placementPhase === "questionnaire")
-      ) {
+      // Marks placement STARTED so a reload mid-questionnaire does not look
+      // like a fresh learner. Completion is written by the observe middleware
+      // when the score comes back.
+      if (placementActive && blackboard) {
         blackboard.setFact({
           definition: SUGARLANG_PLACEMENT_STATUS_FACT,
           scope: createSugarlangPlacementStatusScope(learner.learnerId),
@@ -318,35 +227,20 @@ export function createSugarLangContextMiddleware(
         return execution;
       }
 
-      if (placementPhase === "opening-dialog") {
-        const npc = deps.services.findNpcDefinition(
-          execution.selection.npcDefinitionId
-        );
-        execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION] =
-          pickPrePlacementOpeningLine({
-            npcDisplayName: execution.selection.npcDisplayName,
-            description: npc?.description ?? null,
-            supportLanguage: execution.selection.supportLanguage ?? "en"
-          });
-        await emitTelemetry(
-          telemetry,
-          createTelemetryEvent("pre-placement.opening-dialog-turn", {
-            conversationId: getSugarlangConversationId(execution),
-            sessionId: getSugarAgentSessionId(execution),
-            turnId: getSugarlangTelemetryTurnId(execution, "prepare"),
-            timestamp: Date.now(),
-            npcDefinitionId: execution.selection.npcDefinitionId ?? null,
-            phase: placementPhase,
-            lineId: (
-              execution.annotations[SUGARLANG_PREPLACEMENT_LINE_ANNOTATION] as {
-                lineId: string;
-              }
-            ).lineId
-          }),
-          logger
-        );
-        return execution;
-      }
+      // THE PRE-PLACEMENT OPENING LINE IS GONE WITH THE PHASE MACHINE.
+      //
+      // A canned line was injected here for each opening-dialog turn, which
+      // only existed because placement insisted on chatting before the form.
+      // Under the quest graph the author writes a talk node instead, so the
+      // preamble is authored content rather than something the runtime
+      // improvises.
+      //
+      // NOTE: SUGARLANG_PREPLACEMENT_LINE_ANNOTATION now has no producer.
+      // Its readers (teacher middleware, verify middleware, GenerateStage's
+      // buildPrePlacementEnvelope) are dead until either the annotation is
+      // removed or an authored node re-triggers it -- see
+      // sugarmagic-placement-sequencing-38i.
+
 
       const sceneId = getSceneId(execution);
       if (!sceneId) {

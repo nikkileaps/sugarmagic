@@ -49,7 +49,7 @@ export interface LearnerSnapshot {
 }
 
 export interface PlacementFlowAnnotation {
-  phase: "opening-dialog" | "questionnaire" | "closing-dialog" | "not-active";
+  phase: "questionnaire" | "closing-dialog" | "not-active";
   minAnswersForValid?: number;
   questionnaireVersion?: string;
   scoreResult?: PlacementScoreResult;

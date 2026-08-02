@@ -23,8 +23,6 @@ export interface SugarLangPlacementConfig {
   enabled: boolean;
   minAnswersForValid: number | "use-bank-default";
   confidenceFloor: number;
-  openingDialogTurns: number;
-  closingDialogTurns: number;
 }
 
 export interface SugarLangChunkExtractionConfig {
@@ -157,14 +155,6 @@ export function normalizeSugarLangPluginConfig(
       confidenceFloor: normalizeConfidenceFloor(
         placementConfig?.confidenceFloor,
         0.3
-      ),
-      openingDialogTurns: normalizePositiveInteger(
-        placementConfig?.openingDialogTurns,
-        2
-      ),
-      closingDialogTurns: normalizePositiveInteger(
-        placementConfig?.closingDialogTurns,
-        2
       )
     }
   };

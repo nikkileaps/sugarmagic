@@ -33,7 +33,6 @@ import { languageDisplayName } from "../language-names";
 import { exceedsReadabilityCeiling } from "../teacher/band-envelope";
 import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
-  SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   buildLearnerSnapshot,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
@@ -314,13 +313,10 @@ export function createSugarLangVerifyMiddleware(
         return normalizedTurn;
       }
 
-      const placementFlow = execution.annotations[
-        SUGARLANG_PLACEMENT_FLOW_ANNOTATION
-      ] as { phase?: string } | undefined;
       const conversationId = getSugarlangConversationId(execution);
       const sessionId = getSugarAgentSessionId(execution);
       const traceTurnId = getSugarlangTelemetryTurnId(execution, "finalize");
-      if (constraint.prePlacementOpeningLine || placementFlow?.phase === "opening-dialog") {
+      if (constraint.prePlacementOpeningLine) {
         await emitTelemetry(
           telemetry,
           createTelemetryEvent("verify.pre-placement-bypass", {

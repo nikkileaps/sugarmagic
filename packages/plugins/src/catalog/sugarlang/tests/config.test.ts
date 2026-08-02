@@ -32,9 +32,7 @@ describe("normalizeSugarLangPluginConfig", () => {
       placement: {
         enabled: true,
         minAnswersForValid: "use-bank-default",
-        confidenceFloor: 0.3,
-        openingDialogTurns: 2,
-        closingDialogTurns: 2
+        confidenceFloor: 0.3
       }
     });
   });
@@ -46,9 +44,7 @@ describe("normalizeSugarLangPluginConfig", () => {
           placement: {
             enabled: false,
             minAnswersForValid: 4.8,
-            confidenceFloor: 1.4,
-            openingDialogTurns: 3.2,
-            closingDialogTurns: 0
+            confidenceFloor: 1.4
           }
         },
         {
@@ -67,9 +63,7 @@ describe("normalizeSugarLangPluginConfig", () => {
       placement: {
         enabled: false,
         minAnswersForValid: 4,
-        confidenceFloor: 0.95,
-        openingDialogTurns: 3,
-        closingDialogTurns: 1
+        confidenceFloor: 0.95
       }
     });
   });
