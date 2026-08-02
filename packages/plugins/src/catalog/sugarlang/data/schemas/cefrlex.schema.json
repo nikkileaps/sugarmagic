@@ -5,7 +5,11 @@
   "description": "Plugin-shipped lexical atlas data keyed by lemma id.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["lang", "atlasVersion", "lemmas"],
+  "required": [
+    "lang",
+    "atlasVersion",
+    "lemmas"
+  ],
   "properties": {
     "lang": {
       "type": "string",
@@ -29,7 +33,14 @@
   "$defs": {
     "cefrBand": {
       "type": "string",
-      "enum": ["A1", "A2", "B1", "B2", "C1", "C2"]
+      "enum": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2"
+      ]
     },
     "atlasLemmaEntry": {
       "type": "object",
@@ -100,6 +111,88 @@
             "claude-classified",
             "human-override",
             "kelly"
+          ]
+        },
+        "forms": {
+          "type": "object",
+          "description": "Inflected forms. Verbs only. Positional arrays -- read them through runtime/classifier/verb-forms.ts, never by bare index.",
+          "additionalProperties": false,
+          "required": [
+            "pres",
+            "pret",
+            "imp",
+            "ger",
+            "part"
+          ],
+          "properties": {
+            "pres": {
+              "type": "array",
+              "minItems": 6,
+              "maxItems": 6,
+              "description": "Six slots in person order: 1s, 2s, 3s, 1p, 2p, 3p. Null where the form does not exist for this verb (llover has no first person).",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "pret": {
+              "type": "array",
+              "minItems": 6,
+              "maxItems": 6,
+              "description": "Six slots in person order: 1s, 2s, 3s, 1p, 2p, 3p. Null where the form does not exist for this verb (llover has no first person).",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "imp": {
+              "type": "array",
+              "minItems": 6,
+              "maxItems": 6,
+              "description": "Six slots in person order: 1s, 2s, 3s, 1p, 2p, 3p. Null where the form does not exist for this verb (llover has no first person).",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "ger": {
+              "type": "string",
+              "minLength": 1
+            },
+            "part": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "formsSource": {
+          "type": "string",
+          "description": "Provenance of `forms`. Only `generated` may be overwritten by a seeding script.",
+          "enum": [
+            "generated",
+            "reviewed",
+            "authored"
           ]
         }
       }
