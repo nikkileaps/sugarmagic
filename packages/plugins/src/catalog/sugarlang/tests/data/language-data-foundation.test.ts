@@ -309,7 +309,15 @@ describe("Epic 4 runtime language-data loaders", () => {
   it("returns the expected band distributions for the shipped atlases", () => {
     const provider = new CefrLexAtlasProvider();
 
-    expect(Object.keys(provider.load("es").lemmas)).toHaveLength(11000);
+    // A FLOOR, NOT AN EXACT COUNT. This pinned 11000 -- the size of the
+    // original import -- which was right while the dictionary was a build
+    // artifact. It is now hand-authored and grows whenever a missing lemma is
+    // added, so an exact assertion fails on every legitimate correction while
+    // catching nothing an import collapse would not also trip. The band
+    // assertions below have always been floors for the same reason.
+    expect(
+      Object.keys(provider.load("es").lemmas).length
+    ).toBeGreaterThanOrEqual(11000);
     expect(provider.listLemmasAtBand("A1", "es").length).toBeGreaterThanOrEqual(
       3000
     );
@@ -327,7 +335,9 @@ describe("Epic 4 runtime language-data loaders", () => {
     );
     expect(provider.listLemmasAtBand("C2", "es")).toHaveLength(0);
 
-    expect(Object.keys(provider.load("it").lemmas)).toHaveLength(6370);
+    expect(
+      Object.keys(provider.load("it").lemmas).length
+    ).toBeGreaterThanOrEqual(6370);
     expect(provider.listLemmasAtBand("A1", "it").length).toBeGreaterThanOrEqual(
       900
     );

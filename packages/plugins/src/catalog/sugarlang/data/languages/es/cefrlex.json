@@ -22555,12 +22555,12 @@
       },
       "forms": {
         "pres": [
-          "hacendo",
-          "hacendas",
-          "hacenda",
+          "haciendo",
+          "haciendas",
+          "hacienda",
           "hacendamos",
           "hacendáis",
-          "hacendan"
+          "haciendan"
         ],
         "pret": [
           "hacendé",
@@ -22581,7 +22581,7 @@
         "ger": "hacendando",
         "part": "hacendado"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "muerto": {
       "lemmaId": "muerto",
@@ -45575,12 +45575,12 @@
       },
       "forms": {
         "pres": [
-          "rego",
-          "regas",
-          "rega",
+          "riego",
+          "riegas",
+          "riega",
           "regamos",
           "regáis",
-          "regan"
+          "riegan"
         ],
         "pret": [
           "regué",
@@ -45601,7 +45601,7 @@
         "ger": "regando",
         "part": "regado"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "regular": {
       "lemmaId": "regular",
@@ -67859,12 +67859,12 @@
       },
       "forms": {
         "pres": [
-          "aposto",
-          "apostas",
-          "aposta",
+          "apuesto",
+          "apuestas",
+          "apuesta",
           "apostamos",
           "apostáis",
-          "apostan"
+          "apuestan"
         ],
         "pret": [
           "aposté",
@@ -67885,7 +67885,7 @@
         "ger": "apostando",
         "part": "apostado"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "preciar": {
       "lemmaId": "preciar",
@@ -80677,12 +80677,12 @@
       },
       "forms": {
         "pres": [
-          "colo",
-          "colas",
-          "cola",
+          "cuelo",
+          "cuelas",
+          "cuela",
           "colamos",
           "coláis",
-          "colan"
+          "cuelan"
         ],
         "pret": [
           "colé",
@@ -80703,7 +80703,7 @@
         "ger": "colando",
         "part": "colado"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "gorro": {
       "lemmaId": "gorro",
@@ -85560,12 +85560,12 @@
       },
       "forms": {
         "pres": [
-          "frego",
-          "fregas",
-          "frega",
+          "friego",
+          "friegas",
+          "friega",
           "fregamos",
           "fregáis",
-          "fregan"
+          "friegan"
         ],
         "pret": [
           "fregué",
@@ -85586,7 +85586,7 @@
         "ger": "fregando",
         "part": "fregado"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "humildad": {
       "lemmaId": "humildad",
@@ -93932,12 +93932,12 @@
       },
       "forms": {
         "pres": [
-          "tropezo",
-          "tropezas",
-          "tropeza",
+          "tropiezo",
+          "tropiezas",
+          "tropieza",
           "tropezamos",
           "tropezáis",
-          "tropezan"
+          "tropiezan"
         ],
         "pret": [
           "tropecé",
@@ -93958,7 +93958,7 @@
         "ger": "tropezando",
         "part": "tropezado"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "contribución": {
       "lemmaId": "contribución",
@@ -111095,12 +111095,12 @@
       },
       "forms": {
         "pres": [
-          "recalento",
-          "recalentas",
-          "recalenta",
+          "recaliento",
+          "recalientas",
+          "recalienta",
           "recalentamos",
           "recalentáis",
-          "recalentan"
+          "recalientan"
         ],
         "pret": [
           "recalenté",
@@ -111121,7 +111121,7 @@
         "ger": "recalentando",
         "part": "recalentado"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "vinculación": {
       "lemmaId": "vinculación",
@@ -184795,6 +184795,1518 @@
       "glosses": {
         "en": "stardom, fame"
       }
+    },
+    "segar": {
+      "lemmaId": "segar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "reap, mow"
+      },
+      "forms": {
+        "pres": [
+          "siego",
+          "siegas",
+          "siega",
+          "segamos",
+          "segáis",
+          "siegan"
+        ],
+        "pret": [
+          "segué",
+          "segaste",
+          "segó",
+          "segamos",
+          "segasteis",
+          "segaron"
+        ],
+        "imp": [
+          "segaba",
+          "segabas",
+          "segaba",
+          "segábamos",
+          "segabais",
+          "segaban"
+        ],
+        "ger": "segando",
+        "part": "segado"
+      },
+      "formsSource": "authored"
+    },
+    "plegar": {
+      "lemmaId": "plegar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "fold"
+      },
+      "forms": {
+        "pres": [
+          "pliego",
+          "pliegas",
+          "pliega",
+          "plegamos",
+          "plegáis",
+          "pliegan"
+        ],
+        "pret": [
+          "plegué",
+          "plegaste",
+          "plegó",
+          "plegamos",
+          "plegasteis",
+          "plegaron"
+        ],
+        "imp": [
+          "plegaba",
+          "plegabas",
+          "plegaba",
+          "plegábamos",
+          "plegabais",
+          "plegaban"
+        ],
+        "ger": "plegando",
+        "part": "plegado"
+      },
+      "formsSource": "authored"
+    },
+    "arrendar": {
+      "lemmaId": "arrendar",
+      "lang": "es",
+      "cefrPriorBand": "B2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "lease, rent out"
+      },
+      "forms": {
+        "pres": [
+          "arriendo",
+          "arriendas",
+          "arrienda",
+          "arrendamos",
+          "arrendáis",
+          "arriendan"
+        ],
+        "pret": [
+          "arrendé",
+          "arrendaste",
+          "arrendó",
+          "arrendamos",
+          "arrendasteis",
+          "arrendaron"
+        ],
+        "imp": [
+          "arrendaba",
+          "arrendabas",
+          "arrendaba",
+          "arrendábamos",
+          "arrendabais",
+          "arrendaban"
+        ],
+        "ger": "arrendando",
+        "part": "arrendado"
+      },
+      "formsSource": "authored"
+    },
+    "alentar": {
+      "lemmaId": "alentar",
+      "lang": "es",
+      "cefrPriorBand": "B2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "encourage"
+      },
+      "forms": {
+        "pres": [
+          "aliento",
+          "alientas",
+          "alienta",
+          "alentamos",
+          "alentáis",
+          "alientan"
+        ],
+        "pret": [
+          "alenté",
+          "alentaste",
+          "alentó",
+          "alentamos",
+          "alentasteis",
+          "alentaron"
+        ],
+        "imp": [
+          "alentaba",
+          "alentabas",
+          "alentaba",
+          "alentábamos",
+          "alentabais",
+          "alentaban"
+        ],
+        "ger": "alentando",
+        "part": "alentado"
+      },
+      "formsSource": "authored"
+    },
+    "escarmentar": {
+      "lemmaId": "escarmentar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "learn one's lesson"
+      },
+      "forms": {
+        "pres": [
+          "escarmiento",
+          "escarmientas",
+          "escarmienta",
+          "escarmentamos",
+          "escarmentáis",
+          "escarmientan"
+        ],
+        "pret": [
+          "escarmenté",
+          "escarmentaste",
+          "escarmentó",
+          "escarmentamos",
+          "escarmentasteis",
+          "escarmentaron"
+        ],
+        "imp": [
+          "escarmentaba",
+          "escarmentabas",
+          "escarmentaba",
+          "escarmentábamos",
+          "escarmentabais",
+          "escarmentaban"
+        ],
+        "ger": "escarmentando",
+        "part": "escarmentado"
+      },
+      "formsSource": "authored"
+    },
+    "herrar": {
+      "lemmaId": "herrar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "shoe (a horse)"
+      },
+      "forms": {
+        "pres": [
+          "hierro",
+          "hierras",
+          "hierra",
+          "herramos",
+          "herráis",
+          "hierran"
+        ],
+        "pret": [
+          "herré",
+          "herraste",
+          "herró",
+          "herramos",
+          "herrasteis",
+          "herraron"
+        ],
+        "imp": [
+          "herraba",
+          "herrabas",
+          "herraba",
+          "herrábamos",
+          "herrabais",
+          "herraban"
+        ],
+        "ger": "herrando",
+        "part": "herrado"
+      },
+      "formsSource": "authored"
+    },
+    "avergonzar": {
+      "lemmaId": "avergonzar",
+      "lang": "es",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "shame, embarrass"
+      },
+      "forms": {
+        "pres": [
+          "avergüenzo",
+          "avergüenzas",
+          "avergüenza",
+          "avergonzamos",
+          "avergonzáis",
+          "avergüenzan"
+        ],
+        "pret": [
+          "avergoncé",
+          "avergonzaste",
+          "avergonzó",
+          "avergonzamos",
+          "avergonzasteis",
+          "avergonzaron"
+        ],
+        "imp": [
+          "avergonzaba",
+          "avergonzabas",
+          "avergonzaba",
+          "avergonzábamos",
+          "avergonzabais",
+          "avergonzaban"
+        ],
+        "ger": "avergonzando",
+        "part": "avergonzado"
+      },
+      "formsSource": "authored"
+    },
+    "holgar": {
+      "lemmaId": "holgar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "be idle"
+      },
+      "forms": {
+        "pres": [
+          "huelgo",
+          "huelgas",
+          "huelga",
+          "holgamos",
+          "holgáis",
+          "huelgan"
+        ],
+        "pret": [
+          "holgué",
+          "holgaste",
+          "holgó",
+          "holgamos",
+          "holgasteis",
+          "holgaron"
+        ],
+        "imp": [
+          "holgaba",
+          "holgabas",
+          "holgaba",
+          "holgábamos",
+          "holgabais",
+          "holgaban"
+        ],
+        "ger": "holgando",
+        "part": "holgado"
+      },
+      "formsSource": "authored"
+    },
+    "amoblar": {
+      "lemmaId": "amoblar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "furnish"
+      },
+      "forms": {
+        "pres": [
+          "amueblo",
+          "amueblas",
+          "amuebla",
+          "amoblamos",
+          "amobláis",
+          "amueblan"
+        ],
+        "pret": [
+          "amoblé",
+          "amoblaste",
+          "amobló",
+          "amoblamos",
+          "amoblasteis",
+          "amoblaron"
+        ],
+        "imp": [
+          "amoblaba",
+          "amoblabas",
+          "amoblaba",
+          "amoblábamos",
+          "amoblabais",
+          "amoblaban"
+        ],
+        "ger": "amoblando",
+        "part": "amoblado"
+      },
+      "formsSource": "authored"
+    },
+    "engrosar": {
+      "lemmaId": "engrosar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "swell, thicken"
+      },
+      "forms": {
+        "pres": [
+          "engrueso",
+          "engruesas",
+          "engruesa",
+          "engrosamos",
+          "engrosáis",
+          "engruesan"
+        ],
+        "pret": [
+          "engrosé",
+          "engrosaste",
+          "engrosó",
+          "engrosamos",
+          "engrosasteis",
+          "engrosaron"
+        ],
+        "imp": [
+          "engrosaba",
+          "engrosabas",
+          "engrosaba",
+          "engrosábamos",
+          "engrosabais",
+          "engrosaban"
+        ],
+        "ger": "engrosando",
+        "part": "engrosado"
+      },
+      "formsSource": "authored"
+    },
+    "empedrar": {
+      "lemmaId": "empedrar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "pave"
+      },
+      "forms": {
+        "pres": [
+          "empiedro",
+          "empiedras",
+          "empiedra",
+          "empedramos",
+          "empedráis",
+          "empiedran"
+        ],
+        "pret": [
+          "empedré",
+          "empedraste",
+          "empedró",
+          "empedramos",
+          "empedrasteis",
+          "empedraron"
+        ],
+        "imp": [
+          "empedraba",
+          "empedrabas",
+          "empedraba",
+          "empedrábamos",
+          "empedrabais",
+          "empedraban"
+        ],
+        "ger": "empedrando",
+        "part": "empedrado"
+      },
+      "formsSource": "authored"
+    },
+    "desplegar": {
+      "lemmaId": "desplegar",
+      "lang": "es",
+      "cefrPriorBand": "B2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "unfold, deploy"
+      },
+      "forms": {
+        "pres": [
+          "despliego",
+          "despliegas",
+          "despliega",
+          "desplegamos",
+          "desplegáis",
+          "despliegan"
+        ],
+        "pret": [
+          "desplegué",
+          "desplegaste",
+          "desplegó",
+          "desplegamos",
+          "desplegasteis",
+          "desplegaron"
+        ],
+        "imp": [
+          "desplegaba",
+          "desplegabas",
+          "desplegaba",
+          "desplegábamos",
+          "desplegabais",
+          "desplegaban"
+        ],
+        "ger": "desplegando",
+        "part": "desplegado"
+      },
+      "formsSource": "authored"
+    },
+    "restregar": {
+      "lemmaId": "restregar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "scrub"
+      },
+      "forms": {
+        "pres": [
+          "restriego",
+          "restriegas",
+          "restriega",
+          "restregamos",
+          "restregáis",
+          "restriegan"
+        ],
+        "pret": [
+          "restregué",
+          "restregaste",
+          "restregó",
+          "restregamos",
+          "restregasteis",
+          "restregaron"
+        ],
+        "imp": [
+          "restregaba",
+          "restregabas",
+          "restregaba",
+          "restregábamos",
+          "restregabais",
+          "restregaban"
+        ],
+        "ger": "restregando",
+        "part": "restregado"
+      },
+      "formsSource": "authored"
+    },
+    "dentar": {
+      "lemmaId": "dentar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "tooth, indent"
+      },
+      "forms": {
+        "pres": [
+          "diento",
+          "dientas",
+          "dienta",
+          "dentamos",
+          "dentáis",
+          "dientan"
+        ],
+        "pret": [
+          "denté",
+          "dentaste",
+          "dentó",
+          "dentamos",
+          "dentasteis",
+          "dentaron"
+        ],
+        "imp": [
+          "dentaba",
+          "dentabas",
+          "dentaba",
+          "dentábamos",
+          "dentabais",
+          "dentaban"
+        ],
+        "ger": "dentando",
+        "part": "dentado"
+      },
+      "formsSource": "authored"
+    },
+    "salpimentar": {
+      "lemmaId": "salpimentar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "season"
+      },
+      "forms": {
+        "pres": [
+          "salpimiento",
+          "salpimientas",
+          "salpimienta",
+          "salpimentamos",
+          "salpimentáis",
+          "salpimientan"
+        ],
+        "pret": [
+          "salpimenté",
+          "salpimentaste",
+          "salpimentó",
+          "salpimentamos",
+          "salpimentasteis",
+          "salpimentaron"
+        ],
+        "imp": [
+          "salpimentaba",
+          "salpimentabas",
+          "salpimentaba",
+          "salpimentábamos",
+          "salpimentabais",
+          "salpimentaban"
+        ],
+        "ger": "salpimentando",
+        "part": "salpimentado"
+      },
+      "formsSource": "authored"
+    },
+    "desalentar": {
+      "lemmaId": "desalentar",
+      "lang": "es",
+      "cefrPriorBand": "B2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "discourage"
+      },
+      "forms": {
+        "pres": [
+          "desaliento",
+          "desalientas",
+          "desalienta",
+          "desalentamos",
+          "desalentáis",
+          "desalientan"
+        ],
+        "pret": [
+          "desalenté",
+          "desalentaste",
+          "desalentó",
+          "desalentamos",
+          "desalentasteis",
+          "desalentaron"
+        ],
+        "imp": [
+          "desalentaba",
+          "desalentabas",
+          "desalentaba",
+          "desalentábamos",
+          "desalentabais",
+          "desalentaban"
+        ],
+        "ger": "desalentando",
+        "part": "desalentado"
+      },
+      "formsSource": "authored"
+    },
+    "desacertar": {
+      "lemmaId": "desacertar",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "get wrong"
+      },
+      "forms": {
+        "pres": [
+          "desacierto",
+          "desaciertas",
+          "desacierta",
+          "desacertamos",
+          "desacertáis",
+          "desaciertan"
+        ],
+        "pret": [
+          "desacerté",
+          "desacertaste",
+          "desacertó",
+          "desacertamos",
+          "desacertasteis",
+          "desacertaron"
+        ],
+        "imp": [
+          "desacertaba",
+          "desacertabas",
+          "desacertaba",
+          "desacertábamos",
+          "desacertabais",
+          "desacertaban"
+        ],
+        "ger": "desacertando",
+        "part": "desacertado"
+      },
+      "formsSource": "authored"
+    },
+    "cerner": {
+      "lemmaId": "cerner",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "sift"
+      },
+      "forms": {
+        "pres": [
+          "cierno",
+          "ciernes",
+          "cierne",
+          "cernemos",
+          "cernéis",
+          "ciernen"
+        ],
+        "pret": [
+          "cerní",
+          "cerniste",
+          "cernió",
+          "cernimos",
+          "cernisteis",
+          "cernieron"
+        ],
+        "imp": [
+          "cernía",
+          "cernías",
+          "cernía",
+          "cerníamos",
+          "cerníais",
+          "cernían"
+        ],
+        "ger": "cerniendo",
+        "part": "cernido"
+      },
+      "formsSource": "authored"
+    },
+    "hender": {
+      "lemmaId": "hender",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "cleave"
+      },
+      "forms": {
+        "pres": [
+          "hiendo",
+          "hiendes",
+          "hiende",
+          "hendemos",
+          "hendéis",
+          "hienden"
+        ],
+        "pret": [
+          "hendí",
+          "hendiste",
+          "hendió",
+          "hendimos",
+          "hendisteis",
+          "hendieron"
+        ],
+        "imp": [
+          "hendía",
+          "hendías",
+          "hendía",
+          "hendíamos",
+          "hendíais",
+          "hendían"
+        ],
+        "ger": "hendiendo",
+        "part": "hendido"
+      },
+      "formsSource": "authored"
+    },
+    "henchir": {
+      "lemmaId": "henchir",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "fill, stuff"
+      },
+      "forms": {
+        "pres": [
+          "hincho",
+          "hinches",
+          "hinche",
+          "henchimos",
+          "henchís",
+          "hinchen"
+        ],
+        "pret": [
+          "henchí",
+          "henchiste",
+          "hinchió",
+          "henchimos",
+          "henchisteis",
+          "hinchieron"
+        ],
+        "imp": [
+          "henchía",
+          "henchías",
+          "henchía",
+          "henchíamos",
+          "henchíais",
+          "henchían"
+        ],
+        "ger": "hinchiendo",
+        "part": "henchido"
+      },
+      "formsSource": "authored"
+    },
+    "discernir": {
+      "lemmaId": "discernir",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "discern"
+      },
+      "forms": {
+        "pres": [
+          "discierno",
+          "disciernes",
+          "discierne",
+          "discernimos",
+          "discernís",
+          "disciernen"
+        ],
+        "pret": [
+          "discerní",
+          "discerniste",
+          "disciernió",
+          "discernimos",
+          "discernisteis",
+          "disciernieron"
+        ],
+        "imp": [
+          "discernía",
+          "discernías",
+          "discernía",
+          "discerníamos",
+          "discerníais",
+          "discernían"
+        ],
+        "ger": "discierniendo",
+        "part": "discernido"
+      },
+      "formsSource": "authored"
+    },
+    "concernir": {
+      "lemmaId": "concernir",
+      "lang": "es",
+      "cefrPriorBand": "B2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "concern"
+      },
+      "forms": {
+        "pres": [
+          "concierno",
+          "conciernes",
+          "concierne",
+          "concernimos",
+          "concernís",
+          "conciernen"
+        ],
+        "pret": [
+          "concerní",
+          "concerniste",
+          "conciernió",
+          "concernimos",
+          "concernisteis",
+          "conciernieron"
+        ],
+        "imp": [
+          "concernía",
+          "concernías",
+          "concernía",
+          "concerníamos",
+          "concerníais",
+          "concernían"
+        ],
+        "ger": "concierniendo",
+        "part": "concernido"
+      },
+      "formsSource": "authored"
+    },
+    "sobrentender": {
+      "lemmaId": "sobrentender",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "understand implicitly"
+      },
+      "forms": {
+        "pres": [
+          "sobrentiendo",
+          "sobrentiendes",
+          "sobrentiende",
+          "sobrentendemos",
+          "sobrentendéis",
+          "sobrentienden"
+        ],
+        "pret": [
+          "sobrentendí",
+          "sobrentendiste",
+          "sobrentendió",
+          "sobrentendimos",
+          "sobrentendisteis",
+          "sobrentendieron"
+        ],
+        "imp": [
+          "sobrentendía",
+          "sobrentendías",
+          "sobrentendía",
+          "sobrentendíamos",
+          "sobrentendíais",
+          "sobrentendían"
+        ],
+        "ger": "sobrentendiendo",
+        "part": "sobrentendido"
+      },
+      "formsSource": "authored"
+    },
+    "contender": {
+      "lemmaId": "contender",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "contend"
+      },
+      "forms": {
+        "pres": [
+          "contiendo",
+          "contiendes",
+          "contiende",
+          "contendemos",
+          "contendéis",
+          "contienden"
+        ],
+        "pret": [
+          "contendí",
+          "contendiste",
+          "contendió",
+          "contendimos",
+          "contendisteis",
+          "contendieron"
+        ],
+        "imp": [
+          "contendía",
+          "contendías",
+          "contendía",
+          "contendíamos",
+          "contendíais",
+          "contendían"
+        ],
+        "ger": "contendiendo",
+        "part": "contendido"
+      },
+      "formsSource": "authored"
+    },
+    "heder": {
+      "lemmaId": "heder",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "stink"
+      },
+      "forms": {
+        "pres": [
+          "hiedo",
+          "hiedes",
+          "hiede",
+          "hedemos",
+          "hedéis",
+          "hieden"
+        ],
+        "pret": [
+          "hedí",
+          "hediste",
+          "hedió",
+          "hedimos",
+          "hedisteis",
+          "hedieron"
+        ],
+        "imp": [
+          "hedía",
+          "hedías",
+          "hedía",
+          "hedíamos",
+          "hedíais",
+          "hedían"
+        ],
+        "ger": "hediendo",
+        "part": "hedido"
+      },
+      "formsSource": "authored"
+    },
+    "desvestir": {
+      "lemmaId": "desvestir",
+      "lang": "es",
+      "cefrPriorBand": "B2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "undress"
+      },
+      "forms": {
+        "pres": [
+          "desvisto",
+          "desvistes",
+          "desviste",
+          "desvestimos",
+          "desvestís",
+          "desvisten"
+        ],
+        "pret": [
+          "desvestí",
+          "desvestiste",
+          "desvistió",
+          "desvestimos",
+          "desvestisteis",
+          "desvistieron"
+        ],
+        "imp": [
+          "desvestía",
+          "desvestías",
+          "desvestía",
+          "desvestíamos",
+          "desvestíais",
+          "desvestían"
+        ],
+        "ger": "desvistiendo",
+        "part": "desvestido"
+      },
+      "formsSource": "authored"
+    },
+    "revestir": {
+      "lemmaId": "revestir",
+      "lang": "es",
+      "cefrPriorBand": "B2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "coat, cover"
+      },
+      "forms": {
+        "pres": [
+          "revisto",
+          "revistes",
+          "reviste",
+          "revestimos",
+          "revestís",
+          "revisten"
+        ],
+        "pret": [
+          "revestí",
+          "revestiste",
+          "revistió",
+          "revestimos",
+          "revestisteis",
+          "revistieron"
+        ],
+        "imp": [
+          "revestía",
+          "revestías",
+          "revestía",
+          "revestíamos",
+          "revestíais",
+          "revestían"
+        ],
+        "ger": "revistiendo",
+        "part": "revestido"
+      },
+      "formsSource": "authored"
+    },
+    "contraponer": {
+      "lemmaId": "contraponer",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "contrast"
+      },
+      "forms": {
+        "pres": [
+          "contrapongo",
+          "contrapones",
+          "contrapone",
+          "contraponemos",
+          "contraponéis",
+          "contraponen"
+        ],
+        "pret": [
+          "contrapuse",
+          "contrapusiste",
+          "contrapuso",
+          "contrapusimos",
+          "contrapusisteis",
+          "contrapusieron"
+        ],
+        "imp": [
+          "contraponía",
+          "contraponías",
+          "contraponía",
+          "contraponíamos",
+          "contraponíais",
+          "contraponían"
+        ],
+        "ger": "contraponiendo",
+        "part": "contrapuesto"
+      },
+      "formsSource": "authored"
+    },
+    "entrever": {
+      "lemmaId": "entrever",
+      "lang": "es",
+      "cefrPriorBand": "B2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "glimpse"
+      },
+      "forms": {
+        "pres": [
+          "entreveo",
+          "entreves",
+          "entreve",
+          "entrevemos",
+          "entreveis",
+          "entreven"
+        ],
+        "pret": [
+          "entrevi",
+          "entreviste",
+          "entrevio",
+          "entrevimos",
+          "entrevisteis",
+          "entrevieron"
+        ],
+        "imp": [
+          "entreveía",
+          "entreveías",
+          "entreveía",
+          "entreveíamos",
+          "entreveíais",
+          "entreveían"
+        ],
+        "ger": "entreviendo",
+        "part": "entrevisto"
+      },
+      "formsSource": "authored"
+    },
+    "rehacer": {
+      "lemmaId": "rehacer",
+      "lang": "es",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "redo, remake"
+      },
+      "forms": {
+        "pres": [
+          "rehago",
+          "rehaces",
+          "rehace",
+          "rehacemos",
+          "rehacéis",
+          "rehacen"
+        ],
+        "pret": [
+          "rehice",
+          "rehiciste",
+          "rehizo",
+          "rehicimos",
+          "rehicisteis",
+          "rehicieron"
+        ],
+        "imp": [
+          "rehacía",
+          "rehacías",
+          "rehacía",
+          "rehacíamos",
+          "rehacíais",
+          "rehacían"
+        ],
+        "ger": "rehaciendo",
+        "part": "rehecho"
+      },
+      "formsSource": "authored"
+    },
+    "desdecir": {
+      "lemmaId": "desdecir",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "retract"
+      },
+      "forms": {
+        "pres": [
+          "desdigo",
+          "desdices",
+          "desdice",
+          "desdecimos",
+          "desdecís",
+          "desdicen"
+        ],
+        "pret": [
+          "desdije",
+          "desdijiste",
+          "desdijo",
+          "desdijimos",
+          "desdijisteis",
+          "desdijeron"
+        ],
+        "imp": [
+          "desdecía",
+          "desdecías",
+          "desdecía",
+          "desdecíamos",
+          "desdecíais",
+          "desdecían"
+        ],
+        "ger": "desdiciendo",
+        "part": "desdicho"
+      },
+      "formsSource": "authored"
+    },
+    "reconvenir": {
+      "lemmaId": "reconvenir",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "reproach"
+      },
+      "forms": {
+        "pres": [
+          "reconvengo",
+          "reconvienes",
+          "reconviene",
+          "reconvenimos",
+          "reconvenís",
+          "reconvienen"
+        ],
+        "pret": [
+          "reconvine",
+          "reconviniste",
+          "reconvino",
+          "reconvinimos",
+          "reconvinisteis",
+          "reconvinieron"
+        ],
+        "imp": [
+          "reconvenía",
+          "reconvenías",
+          "reconvenía",
+          "reconveníamos",
+          "reconveníais",
+          "reconvenían"
+        ],
+        "ger": "reconviniendo",
+        "part": "reconvenido"
+      },
+      "formsSource": "authored"
+    },
+    "desoír": {
+      "lemmaId": "desoír",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "ignore, disregard"
+      },
+      "forms": {
+        "pres": [
+          "desoigo",
+          "desoyes",
+          "desoye",
+          "desoímos",
+          "desoís",
+          "desoyen"
+        ],
+        "pret": [
+          "desoí",
+          "desoíste",
+          "desoyó",
+          "desoímos",
+          "desoísteis",
+          "desoyeron"
+        ],
+        "imp": [
+          "desoía",
+          "desoías",
+          "desoía",
+          "desoíamos",
+          "desoíais",
+          "desoían"
+        ],
+        "ger": "desoyendo",
+        "part": "desoído"
+      },
+      "formsSource": "authored"
+    },
+    "reelegir": {
+      "lemmaId": "reelegir",
+      "lang": "es",
+      "cefrPriorBand": "B2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "re-elect"
+      },
+      "forms": {
+        "pres": [
+          "reelijo",
+          "reeliges",
+          "reelige",
+          "reelegimos",
+          "reelegís",
+          "reeligen"
+        ],
+        "pret": [
+          "reelegí",
+          "reelegiste",
+          "reeligió",
+          "reelegimos",
+          "reelegisteis",
+          "reeligieron"
+        ],
+        "imp": [
+          "reelegía",
+          "reelegías",
+          "reelegía",
+          "reelegíamos",
+          "reelegíais",
+          "reelegían"
+        ],
+        "ger": "reeligiendo",
+        "part": "reelegido"
+      },
+      "formsSource": "authored"
+    },
+    "sobreseer": {
+      "lemmaId": "sobreseer",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "dismiss (a case)"
+      },
+      "forms": {
+        "pres": [
+          "sobreseo",
+          "sobresees",
+          "sobresee",
+          "sobreseemos",
+          "sobreseéis",
+          "sobreseen"
+        ],
+        "pret": [
+          "sobreseí",
+          "sobreseíste",
+          "sobreseyó",
+          "sobreseímos",
+          "sobreseísteis",
+          "sobreseyeron"
+        ],
+        "imp": [
+          "sobreseía",
+          "sobreseías",
+          "sobreseía",
+          "sobreseíamos",
+          "sobreseíais",
+          "sobreseían"
+        ],
+        "ger": "sobreseyendo",
+        "part": "sobreseído"
+      },
+      "formsSource": "authored"
+    },
+    "entretejer": {
+      "lemmaId": "entretejer",
+      "lang": "es",
+      "cefrPriorBand": "C1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "interweave"
+      },
+      "forms": {
+        "pres": [
+          "entretejo",
+          "entretejes",
+          "entreteje",
+          "entretejemos",
+          "entretejéis",
+          "entretejen"
+        ],
+        "pret": [
+          "entretejí",
+          "entretejiste",
+          "entretejió",
+          "entretejimos",
+          "entretejisteis",
+          "entretejieron"
+        ],
+        "imp": [
+          "entretejía",
+          "entretejías",
+          "entretejía",
+          "entretejíamos",
+          "entretejíais",
+          "entretejían"
+        ],
+        "ger": "entretejiendo",
+        "part": "entretejido"
+      },
+      "formsSource": "authored"
     }
   }
 }
