@@ -23,6 +23,7 @@ import type {
   LemmaRef,
   LexicalAtlasProvider
 } from "../../types";
+import type { WordForms } from "../../classifier/word-forms";
 
 export type AtlasPriorSource =
   | "cefrlex"
@@ -201,6 +202,17 @@ export class CefrLexAtlasProvider implements LexicalAtlasProvider {
 
   getBand(lemmaId: string, lang: string): CEFRBand | undefined {
     return this.getLemma(lemmaId, lang)?.cefrPriorBand;
+  }
+
+  /**
+   * The word's inflected forms, or undefined when none are stored.
+   *
+   * Undefined is ordinary rather than exceptional: closed-class words do not
+   * inflect in this data, and higher-band verbs may not have been filled in
+   * yet. Callers fall back to the citation form.
+   */
+  getForms(lemmaId: string, lang: string): WordForms | undefined {
+    return this.getLemma(lemmaId, lang)?.forms;
   }
 
   getFrequencyRank(lemmaId: string, lang: string): number | undefined {

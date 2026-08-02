@@ -142,6 +142,9 @@ export function createBudgeterAtlasProvider(
     getBand(lemmaId, lang) {
       return map.get(`${lang}:${lemmaId}`)?.cefrPriorBand;
     },
+    getForms(lemmaId, lang) {
+      return map.get(`${lang}:${lemmaId}`)?.forms;
+    },
     getFrequencyRank(lemmaId, lang) {
       return map.get(`${lang}:${lemmaId}`)?.frequencyRank ?? undefined;
     },

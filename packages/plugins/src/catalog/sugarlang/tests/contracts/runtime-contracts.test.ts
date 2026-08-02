@@ -440,6 +440,7 @@ describe("sugarlang runtime contracts", () => {
           partsOfSpeech: ["interjection"]
         }) satisfies AtlasLemmaEntry,
       getBand: () => "A1",
+      getForms: () => undefined,
       getFrequencyRank: () => 10,
       getGloss: () => undefined,
       resolveFromGloss: () => [],
