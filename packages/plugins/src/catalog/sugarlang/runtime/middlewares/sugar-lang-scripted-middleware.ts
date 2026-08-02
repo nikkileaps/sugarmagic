@@ -234,11 +234,12 @@ export function createSugarLangScriptedMiddleware(
       // operation; only the moment differed, and the split was an accident of
       // which technique arrived first.
       //
-      // Substitution stays as the FALLBACK, not the path. A cold cache, a scene
-      // never built, or a bake that failed its gates all land here, and a woven
-      // line is far better than an untouched English one. It is deleted for good
-      // once the build-time Teacher call makes a missing A1 variant a build
-      // error rather than a normal state.
+      // SUBSTITUTION IS GONE ENTIRELY -- this block used to say it "stays as the
+      // FALLBACK, not the path", which stopped being true twelve lines below on
+      // 2026-07-31 and was corrected here on 2026-08-02. A cold cache, a scene
+      // never built, or a bake that failed its gates all still land in the
+      // fallback; the fallback is now the AUTHORED ENGLISH, which is untaught but
+      // correct. Item text follows the same rule as of the same date.
       //
       // Why it could not switch on sooner: A1/A2 were not in the baked set at
       // all, because `GradedTextService` defaults posture to `target-dominant`

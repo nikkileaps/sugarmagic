@@ -341,7 +341,9 @@ describe("end-to-end conversation golden", () => {
   it("scripted target-dominant posture: zero LLM calls -- degrades to substitution when no baked variant", async () => {
     // 086.4: scripted target-dominant no longer calls the LLM gateway at all.
     // When no variant cache is seeded (cold cache), the scripted middleware
-    // degrades to markGradedText. The fetch guard enforces zero /generate traffic.
+    // degrades to the AUTHORED ENGLISH (substitution deleted 2026-08-02).
+    // The fetch guard enforces zero /generate traffic, which is the real
+    // guarantee here: a beginner turn must never reach the LLM.
     // debugBandOverride:"B1" puts the learner at target-dominant posture.
     const authoredLine = "Welcome to the station, traveler.";
     // Allow nothing -- the scripted path must make zero gateway calls.
@@ -648,7 +650,8 @@ describe("end-to-end conversation golden", () => {
   });
 
   it("scripted anchored posture: zero LLM calls -- substitution produces substituted text", async () => {
-    // A1 learner -> anchored posture -> markGradedText path fires, no /generate call.
+    // A1 learner -> anchored posture -> baked variant or authored English,
+    // no /generate call.
     // The prescription includes "hola" so any authored word that resolves to
     // "hola" in the gloss index gets substituted. We assert no gateway calls and
     // that the scripted middleware ran (turn text is not the authored English

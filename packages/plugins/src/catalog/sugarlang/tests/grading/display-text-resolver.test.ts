@@ -158,99 +158,76 @@ describe("display text resolver", () => {
   });
 });
 
-describe("A1/A2 substitution path", () => {
-  // The bug this exists to fix: a beginner saw plain English on every item
-  // forever, because the resolver only ever looked up baked variants and none
-  // are baked below B1.
-  /**
-   * `atBand` is what the atlas reports as available for the learner's level --
-   * the whole substitution pool, since the demo substitution matches against the full
-   * lexicon rather than a teaching shortlist.
-   */
-  const markerInputs = (atBand: Array<{ lemmaId: string; lang: string }>) => async () => ({
-    band: "A1" as const,
-    atlas: {
-      listLemmasAtBand: () => atBand,
-      resolveFromGloss: (gloss: string) =>
-        gloss === "book"
-          ? [{ lemmaId: "libro", lang: "es", cefrPriorBand: "A1", partsOfSpeech: ["noun"] }]
-          : [],
-      getGloss: () => "book"
-    } as never,
-    supportLanguage: "en"
+describe("beginner bands read baked variants, like dialogue", () => {
+  // WAS "A1/A2 substitution path" (nine tests, deleted 2026-08-02).
+  //
+  // It pinned the opposite behaviour: at anchored/supported posture the
+  // resolver spliced bare target-language CITATION FORMS into the authored
+  // English and never consulted the cache. That is the mechanism the scripted
+  // dialogue path deleted on 2026-07-31, and for a verb a citation form is the
+  // INFINITIVE -- which is how an unconjugated verb reached players.
+  //
+  // Item text now behaves exactly like dialogue: a baked variant for the band
+  // if there is one, the authored English if there is not. Beginner bands are
+  // bakeable because the item bake passes posture now (see ITEM_VARIANT_BANDS).
+
+  it("reads a baked variant at A1", async () => {
+    expect(
+      await resolver({
+        getLearnerBand: async () => "A1",
+        getVariantCache: () => cacheReturning(record())
+      })(request)
+    ).toBe(GRADED);
   });
 
-  it("substitutes prescribed words into authored English at A1", async () => {
-    const text = await resolver({
-      getLearnerBand: async () => "A1",
-      getMarkerInputs: markerInputs([{ lemmaId: "libro", lang: "es" }])
-    })({ ...request, text: "An old book." });
-
-    expect(text).toContain("libro");
-    expect(text).not.toBe("An old book.");
+  it("reads a baked variant at A2", async () => {
+    expect(
+      await resolver({
+        getLearnerBand: async () => "A2",
+        getVariantCache: () => cacheReturning(record())
+      })(request)
+    ).toBe(GRADED);
   });
 
-  it("does not read the variant cache at A1", async () => {
-    // Variants below B1 do not exist; looking would be a guaranteed miss and
-    // would mask the substitution never running.
+  it("CONSULTS the cache at A1 -- the old path deliberately did not", async () => {
     const cache = cacheReturning(record());
-    await resolver({
-      getLearnerBand: async () => "A1",
-      getVariantCache: () => cache,
-      getMarkerInputs: markerInputs([{ lemmaId: "libro", lang: "es" }])
-    })({ ...request, text: "An old book." });
-
-    expect(cache.get).not.toHaveBeenCalled();
+    await resolver({ getLearnerBand: async () => "A1", getVariantCache: () => cache })(
+      request
+    );
+    expect(cache.get).toHaveBeenCalled();
   });
 
-  it("substitutes at A2 as well", async () => {
-    const text = await resolver({
-      getLearnerBand: async () => "A2",
-      getMarkerInputs: markerInputs([{ lemmaId: "libro", lang: "es" }])
-    })({ ...request, text: "An old book." });
-    expect(text).toContain("libro");
+  it("serves the authored English at A1 when nothing is baked", async () => {
+    // Untaught but CORRECT, and readable. The same rule the scripted path took:
+    // better than a line half-rewritten by a mechanism that made no
+    // pedagogical decision.
+    expect(
+      await resolver({
+        getLearnerBand: async () => "A1",
+        getVariantCache: () => cacheReturning(null)
+      })(request)
+    ).toBe(AUTHORED);
   });
 
-  it("substitutes any level-appropriate word in the text, not just a shortlist", async () => {
-    // THE bug this replaced. Candidates used to come from the budgeter's top-N
-    // teaching slate for the whole SCENE, which almost never intersects one
-    // specific paragraph -- measured on a real scene the slate was
-    // [estación, área, vuestro] while the item prose was about travellers and
-    // flying, so every substitution missed and the item rendered plain English.
-    // The pool is now everything the learner's level admits.
+  it("never emits a bare citation form into the authored text", async () => {
+    // The regression guard for this whole story. `libro` must not appear unless
+    // a baked variant put it there.
     const text = await resolver({
       getLearnerBand: async () => "A1",
-      getMarkerInputs: markerInputs([
-        { lemmaId: "estación", lang: "es" },
-        { lemmaId: "libro", lang: "es" }
-      ])
+      getVariantCache: () => cacheReturning(null)
     })({ ...request, text: "An old book." });
 
-    expect(text).toContain("libro");
-  });
-
-  it("returns authored text when nothing prescribed appears in the text", async () => {
-    const text = await resolver({
-      getLearnerBand: async () => "A1",
-      getMarkerInputs: markerInputs([{ lemmaId: "queso", lang: "es" }])
-    })({ ...request, text: "An old book." });
     expect(text).toBe("An old book.");
+    expect(text).not.toContain("libro");
   });
 
-  it("returns authored text when marker inputs are unavailable", async () => {
-    const text = await resolver({
-      getLearnerBand: async () => "A1",
-      getMarkerInputs: async () => null
-    })({ ...request, text: "An old book." });
-    expect(text).toBe("An old book.");
-  });
-
-  it("returns authored text when no marker inputs are wired at all", async () => {
-    const text = await resolver({ getLearnerBand: async () => "A1" })({
-      ...request,
-      text: "An old book."
-    });
-    expect(text).toBe("An old book.");
+  it("refuses a flagged variant at A1 and falls back to authored text", async () => {
+    expect(
+      await resolver({
+        getLearnerBand: async () => "A1",
+        getVariantCache: () => cacheReturning({ ...record(), reviewFlag: true })
+      })(request)
+    ).toBe(AUTHORED);
   });
 
   it("still uses baked variants at B1", async () => {

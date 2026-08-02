@@ -219,7 +219,8 @@ export function createSugarLangTeacherMiddleware(
       // The authored text IS the curriculum — we only control language mix.
       // 086.4: scripted branch no longer sets generatorPromptOverlay or writes a
       // sugaragent contribution -- the scripted middleware reads baked variants
-      // (target-dominant) or runs markGradedText (anchored/supported), zero LLM.
+      // (target-dominant) or serves the beginner baked variant
+      // (anchored/supported), zero LLM.
       if (isScriptedMode(execution)) {
         const targetLanguage =
           execution.selection.targetLanguage ?? learner.targetLanguage;

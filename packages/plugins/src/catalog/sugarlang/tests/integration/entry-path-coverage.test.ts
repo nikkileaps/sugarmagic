@@ -560,7 +560,7 @@ describe("081.3 entry-path coverage", () => {
   it("scripted target-dominant posture: zero LLM calls even with gateway configured (086.4)", async () => {
     // 086.4: the scripted middleware no longer calls the LLM at any posture.
     // With a configured gateway and a B1 learner (target-dominant), the scripted
-    // middleware degrades to markGradedText (no baked variant in cache).
+    // middleware degrades to the authored English (no baked variant in cache).
     // The global fetch stub fails any network call -- no call must fire.
     // debugBandOverride:"B1" forces target-dominant posture.
     const { host, captured } = buildHarness({
