@@ -18,19 +18,21 @@ import {
   PERSON_SLOT,
   allForms,
   formAt,
-  type VerbForms
-} from "../../runtime/classifier/verb-forms";
+  isVerbForms,
+  type VerbForms,
+  type WordForms
+} from "../../runtime/classifier/word-forms";
 
-const lemmas = (esAtlas as { lemmas: Record<string, { forms?: VerbForms }> })
+const lemmas = (esAtlas as { lemmas: Record<string, { forms?: WordForms }> })
   .lemmas;
 
 function formsOf(lemmaId: string): VerbForms {
   const forms = lemmas[lemmaId]?.forms;
-  if (!forms) throw new Error(`${lemmaId} has no forms in the dictionary`);
+  if (!isVerbForms(forms)) throw new Error(`${lemmaId} has no verb paradigm`);
   return forms;
 }
 
-describe("verb forms, against the shipped dictionary", () => {
+describe("word forms, against the shipped dictionary", () => {
   it("reads a slot by person rather than by index", () => {
     const pedir = formsOf("pedir");
     expect(formAt(pedir, "present", "firstSingular")).toBe("pido");
@@ -72,7 +74,7 @@ describe("verb forms, against the shipped dictionary", () => {
   it("keeps every paradigm six slots wide", () => {
     const wrong: string[] = [];
     for (const [lemmaId, entry] of Object.entries(lemmas)) {
-      if (!entry.forms) continue;
+      if (!isVerbForms(entry.forms)) continue;
       for (const tense of ["pres", "pret", "imp"] as const) {
         if (entry.forms[tense].length !== 6) wrong.push(`${lemmaId}.${tense}`);
       }

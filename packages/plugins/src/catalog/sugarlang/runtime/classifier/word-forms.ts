@@ -1,5 +1,6 @@
 /**
- * Verb form slots, and the ONLY sanctioned way to read a paradigm array.
+ * Inflected word forms as the dictionary stores them, and the ONLY sanctioned
+ * way to read them.
  *
  * A dictionary entry stores each tense as a 6-element array. The array is
  * positional for size and lookup speed -- a paradigm is a fixed-shape table, and
@@ -62,6 +63,43 @@ export interface VerbForms {
   part: string;
 }
 
+/** A noun inflects for number only. Feminine nouns are SEPARATE lemmas. */
+export interface NounForms {
+  sg: string;
+  pl: string;
+}
+
+/**
+ * An adjective inflects for gender and number.
+ *
+ * `fs`/`fp` are NULL for the invariable ones -- `verde`, `feliz`, `grande` have
+ * no distinct feminine, and inventing one would put a word in the index that
+ * nobody writes.
+ */
+export interface AdjectiveForms {
+  ms: string;
+  fs: string | null;
+  mp: string;
+  fp: string | null;
+}
+
+/** Whatever shape an entry's part of speech calls for. */
+export type WordForms = VerbForms | NounForms | AdjectiveForms;
+
+export function isVerbForms(forms: WordForms | undefined): forms is VerbForms {
+  return forms !== undefined && "pres" in forms;
+}
+
+export function isNounForms(forms: WordForms | undefined): forms is NounForms {
+  return forms !== undefined && "sg" in forms;
+}
+
+export function isAdjectiveForms(
+  forms: WordForms | undefined
+): forms is AdjectiveForms {
+  return forms !== undefined && "ms" in forms;
+}
+
 /**
  * Where a paradigm came from, so review is a queue rather than a guess.
  *
@@ -81,11 +119,11 @@ export type FormsSource = "generated" | "reviewed" | "authored";
  * should ask whether the entry has forms at all.
  */
 export function formAt(
-  forms: VerbForms | undefined,
+  forms: WordForms | undefined,
   tense: TenseName,
   person: PersonSlot
 ): string | null {
-  if (!forms) return null;
+  if (!isVerbForms(forms)) return null;
   const row = forms[TENSE_KEY[tense]];
   return row?.[PERSON_SLOT[person]] ?? null;
 }
@@ -97,15 +135,14 @@ export function formAt(
  * text". Order is not meaningful to the caller, and duplicates are real --
  * `hablamos` is both present and preterite first-plural -- so they collapse.
  */
-export function allForms(forms: VerbForms | undefined): string[] {
+export function allForms(forms: WordForms | undefined): string[] {
   if (!forms) return [];
-  return [
-    ...new Set([
-      ...forms.pres,
-      ...forms.pret,
-      ...forms.imp,
-      forms.ger,
-      forms.part
-    ])
-  ].filter((form): form is string => form !== null && form.length > 0);
+  const raw: Array<string | null> = isVerbForms(forms)
+    ? [...forms.pres, ...forms.pret, ...forms.imp, forms.ger, forms.part]
+    : isNounForms(forms)
+      ? [forms.sg, forms.pl]
+      : [forms.ms, forms.fs, forms.mp, forms.fp];
+  return [...new Set(raw)].filter(
+    (form): form is string => form !== null && form.length > 0
+  );
 }

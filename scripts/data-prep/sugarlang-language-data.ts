@@ -40,6 +40,25 @@ interface AtlasVerbForms {
   part: string;
 }
 
+/** Nouns inflect for number only -- a feminine noun is a separate lemma. */
+interface AtlasNounForms {
+  sg: string;
+  pl: string;
+}
+
+/** Adjectives inflect for gender and number; fs/fp null when invariable. */
+interface AtlasAdjectiveForms {
+  ms: string;
+  fs: string | null;
+  mp: string;
+  fp: string | null;
+}
+
+type AtlasWordForms =
+  | AtlasVerbForms
+  | AtlasNounForms
+  | AtlasAdjectiveForms;
+
 interface AtlasLemmaEntry {
   lemmaId: string;
   lang: string;
@@ -49,7 +68,7 @@ interface AtlasLemmaEntry {
   gloss?: string;
   cefrPriorSource: AtlasPriorSource;
   /** Verbs only. Authored in the dictionary; this file derives FROM it. */
-  forms?: AtlasVerbForms;
+  forms?: AtlasWordForms;
 }
 
 export interface CefrLexDataFile {
@@ -346,6 +365,27 @@ export async function buildItalianFrequencyData(): Promise<FrequencyDataFile> {
   };
 }
 
+/**
+ * Every distinct surface an entry claims, whatever its part of speech.
+ *
+ * Mirrors `allForms` in runtime/classifier/word-forms.ts. The two are separate
+ * because this script does not import from the plugin package; if the stored
+ * shape changes, change both.
+ */
+function surfacesOf(entry: AtlasLemmaEntry): string[] {
+  const f = entry.forms;
+  if (!f) return [entry.lemmaId];
+  const raw: Array<string | null | undefined> =
+    "pres" in f
+      ? [...f.pres, ...f.pret, ...f.imp, f.ger, f.part]
+      : "sg" in f
+        ? [f.sg, f.pl]
+        : [f.ms, f.fs, f.mp, f.fp];
+  return [
+    ...new Set([entry.lemmaId, ...raw])
+  ].filter((s): s is string => typeof s === "string" && s.length > 0);
+}
+
 function addMorphologyEntry(
   forms: Record<string, MorphologyEntry>,
   form: string,
@@ -364,56 +404,24 @@ function addMorphologyEntry(
 }
 
 /**
- * THE DICTIONARY WINS. A verb with an authored paradigm contributes ITS OWN
- * gerund and participle; the suffix rules below are a fallback for entries that
- * have none, not a second opinion.
+ * EVERY SURFACE THE DICTIONARY HOLDS, POINTED AT ITS LEMMA. No rules.
  *
- * Guessing produced words that do not exist -- `pedir` -> "pediendo" (real:
- * `pidiendo`), `ir` -> "iendo" (real: `yendo`, and the stem is empty so it
- * emitted the bare suffix), `ver` -> "vido" (real: `visto`). Since lemmatize is
- * a plain surface-key lookup, that meant real Spanish failed to resolve while
- * invented words succeeded.
+ * This function used to GUESS -- `-ar` verbs got `-ando`/`-ado`, nouns got
+ * `+s`/`+es`, and anything ending in `-o` got a `-a` "feminine". Guessing does
+ * not know meaning, so it produced words that do not exist (`pedir` ->
+ * "pediendo", real: `pidiendo`) and, worse, words that exist and mean something
+ * else: `caso` -> `casa`, `puerto` -> `puerta`, `libro` -> `libra`. Those are
+ * not inflections, they are different words, and the index claimed otherwise.
  *
- * ONLY the gerund and participle come across. The finite forms stay out: 1,162
- * of them collide with existing different-lemma entries, and resolving that
- * needs a disambiguation policy this file does not have. See
- * docs/backlog / the conjugation epic.
+ * The forms now live in the dictionary, where a person or a model can read them
+ * next to the gloss and correct them. This file only inverts them.
  */
 function addSpanishMorphologyForms(
   forms: Record<string, MorphologyEntry>,
   entry: AtlasLemmaEntry
 ): void {
-  const { lemmaId, partsOfSpeech } = entry;
-  addMorphologyEntry(forms, lemmaId, lemmaId, partsOfSpeech);
-
-  if (partsOfSpeech.includes("verb")) {
-    if (entry.forms) {
-      addMorphologyEntry(forms, entry.forms.ger, lemmaId, partsOfSpeech);
-      addMorphologyEntry(forms, entry.forms.part, lemmaId, partsOfSpeech);
-    } else if (lemmaId.endsWith("ar")) {
-      const stem = lemmaId.slice(0, -2);
-      addMorphologyEntry(forms, `${stem}ando`, lemmaId, partsOfSpeech);
-      addMorphologyEntry(forms, `${stem}ado`, lemmaId, partsOfSpeech);
-    } else if (lemmaId.endsWith("er") || lemmaId.endsWith("ir")) {
-      const stem = lemmaId.slice(0, -2);
-      addMorphologyEntry(forms, `${stem}iendo`, lemmaId, partsOfSpeech);
-      addMorphologyEntry(forms, `${stem}ido`, lemmaId, partsOfSpeech);
-    }
-  }
-
-  if (partsOfSpeech.includes("noun") || partsOfSpeech.includes("adjective")) {
-    if (/[aeiouáéíóú]$/u.test(lemmaId)) {
-      addMorphologyEntry(forms, `${lemmaId}s`, lemmaId, partsOfSpeech);
-    } else {
-      addMorphologyEntry(forms, `${lemmaId}es`, lemmaId, partsOfSpeech);
-    }
-
-    if (lemmaId.endsWith("o")) {
-      const stem = lemmaId.slice(0, -1);
-      addMorphologyEntry(forms, `${stem}a`, lemmaId, partsOfSpeech);
-      addMorphologyEntry(forms, `${stem}os`, lemmaId, partsOfSpeech);
-      addMorphologyEntry(forms, `${stem}as`, lemmaId, partsOfSpeech);
-    }
+  for (const surface of surfacesOf(entry)) {
+    addMorphologyEntry(forms, surface, entry.lemmaId, entry.partsOfSpeech);
   }
 }
 
