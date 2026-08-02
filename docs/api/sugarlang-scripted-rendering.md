@@ -71,7 +71,7 @@ band, generated at the anchored ratio their posture directs.
 Generating an inflected form would need an inverse morphology index (lemma +
 features -> surface form), which does not exist and is not planned -- nothing
 generates forms from features. Recognizing a conjugated form for MATCHING is a
-separate open question; see `docs/backlog/005-sugarlang-morphology-coverage.md`.
+separate open question; see `sugarmagic-morphology-2z1`.
 
 ### Tier B1: Baked variants -- NOW EVERY BAND, NOT JUST B1+
 
