@@ -29,14 +29,27 @@ type AtlasPriorSource =
   | "human-override"
   | "kelly";
 
+/** Six slots in person order 1s,2s,3s,1p,2p,3p; null where the form does not exist. */
+type ParadigmRow = Array<string | null>;
+
+interface AtlasVerbForms {
+  pres: ParadigmRow;
+  pret: ParadigmRow;
+  imp: ParadigmRow;
+  ger: string;
+  part: string;
+}
+
 interface AtlasLemmaEntry {
   lemmaId: string;
   lang: string;
   cefrPriorBand: CEFRBand;
-  frequencyRank: number;
+  frequencyRank: number | null;
   partsOfSpeech: string[];
   gloss?: string;
   cefrPriorSource: AtlasPriorSource;
+  /** Verbs only. Authored in the dictionary; this file derives FROM it. */
+  forms?: AtlasVerbForms;
 }
 
 export interface CefrLexDataFile {
@@ -350,15 +363,34 @@ function addMorphologyEntry(
   };
 }
 
+/**
+ * THE DICTIONARY WINS. A verb with an authored paradigm contributes ITS OWN
+ * gerund and participle; the suffix rules below are a fallback for entries that
+ * have none, not a second opinion.
+ *
+ * Guessing produced words that do not exist -- `pedir` -> "pediendo" (real:
+ * `pidiendo`), `ir` -> "iendo" (real: `yendo`, and the stem is empty so it
+ * emitted the bare suffix), `ver` -> "vido" (real: `visto`). Since lemmatize is
+ * a plain surface-key lookup, that meant real Spanish failed to resolve while
+ * invented words succeeded.
+ *
+ * ONLY the gerund and participle come across. The finite forms stay out: 1,162
+ * of them collide with existing different-lemma entries, and resolving that
+ * needs a disambiguation policy this file does not have. See
+ * docs/backlog / the conjugation epic.
+ */
 function addSpanishMorphologyForms(
   forms: Record<string, MorphologyEntry>,
-  lemmaId: string,
-  partsOfSpeech: string[]
+  entry: AtlasLemmaEntry
 ): void {
+  const { lemmaId, partsOfSpeech } = entry;
   addMorphologyEntry(forms, lemmaId, lemmaId, partsOfSpeech);
 
   if (partsOfSpeech.includes("verb")) {
-    if (lemmaId.endsWith("ar")) {
+    if (entry.forms) {
+      addMorphologyEntry(forms, entry.forms.ger, lemmaId, partsOfSpeech);
+      addMorphologyEntry(forms, entry.forms.part, lemmaId, partsOfSpeech);
+    } else if (lemmaId.endsWith("ar")) {
       const stem = lemmaId.slice(0, -2);
       addMorphologyEntry(forms, `${stem}ando`, lemmaId, partsOfSpeech);
       addMorphologyEntry(forms, `${stem}ado`, lemmaId, partsOfSpeech);
@@ -385,11 +417,12 @@ function addSpanishMorphologyForms(
   }
 }
 
+/** Italian has no authored paradigms yet, so every verb takes the rule path. */
 function addItalianMorphologyForms(
   forms: Record<string, MorphologyEntry>,
-  lemmaId: string,
-  partsOfSpeech: string[]
+  entry: AtlasLemmaEntry
 ): void {
+  const { lemmaId, partsOfSpeech } = entry;
   addMorphologyEntry(forms, lemmaId, lemmaId, partsOfSpeech);
 
   if (partsOfSpeech.includes("verb")) {
@@ -438,14 +471,28 @@ function buildMorphologyData(
   atlas: CefrLexDataFile,
   addLanguageSpecificForms: (
     forms: Record<string, MorphologyEntry>,
-    lemmaId: string,
-    partsOfSpeech: string[]
+    entry: AtlasLemmaEntry
   ) => void
 ): MorphologyDataFile {
   const forms: Record<string, MorphologyEntry> = {};
 
+  // TWO PASSES, AND THE ORDER IS THE POINT. `addMorphologyEntry` is
+  // first-come -- it refuses to overwrite -- so whoever claims a surface first
+  // keeps it. Every HEADWORD is claimed before any derived form, because a word
+  // that is a lemma in its own right outranks an inflected form of something
+  // else.
+  //
+  // Without this, `hecho` (the noun, "fact") loses its own entry to the
+  // participle of `hacer`, and `puesto`, `abierto`, `escrito`, `oido`,
+  // `muerto` and `cubierto` go the same way. That was latent while the
+  // generator guessed -- it produced `hacido`, which collides with nothing --
+  // and only surfaced once the real participles came from the dictionary.
   for (const entry of Object.values(atlas.lemmas)) {
-    addLanguageSpecificForms(forms, entry.lemmaId, entry.partsOfSpeech);
+    addMorphologyEntry(forms, entry.lemmaId, entry.lemmaId, entry.partsOfSpeech);
+  }
+
+  for (const entry of Object.values(atlas.lemmas)) {
+    addLanguageSpecificForms(forms, entry);
   }
 
   return {
