@@ -20,27 +20,19 @@ import { describe, expect, it } from "vitest";
 import esCefrlex from "../../data/languages/es/cefrlex.json";
 import esMorphology from "../../data/languages/es/morphology.json";
 import esPlacementQuestionnaire from "../../data/languages/es/placement-questionnaire.json";
-import esSimplifications from "../../data/languages/es/simplifications.json";
 import itCefrlex from "../../data/languages/it/cefrlex.json";
 import itFrequency from "../../data/languages/it/frequency.json";
 import itMorphology from "../../data/languages/it/morphology.json";
 import itPlacementQuestionnaire from "../../data/languages/it/placement-questionnaire.json";
-import itSimplifications from "../../data/languages/it/simplifications.json";
 import cefrlexSchema from "../../data/schemas/cefrlex.schema.json";
 import frequencySchema from "../../data/schemas/frequency.schema.json";
 import morphologySchema from "../../data/schemas/morphology.schema.json";
 import placementQuestionnaireSchema from "../../data/schemas/placement-questionnaire.schema.json";
-import simplificationsSchema from "../../data/schemas/simplifications.schema.json";
 import { lemmatize } from "../../runtime/classifier/lemmatize";
 import {
   MorphologyLoader,
   loadMorphologyIndex
 } from "../../runtime/classifier/morphology-loader";
-import {
-  SimplificationsLoader,
-  getSimplification,
-  loadSimplifications
-} from "../../runtime/classifier/simplifications-loader";
 import { PlacementQuestionnaireLoader } from "../../runtime/placement/placement-questionnaire-loader";
 import {
   CefrLexAtlasProvider,
@@ -67,7 +59,6 @@ describe("Epic 4 language-data schemas", () => {
   it("compile as valid draft-2020-12 schemas", () => {
     expect(() => compileSchema(cefrlexSchema)).not.toThrow();
     expect(() => compileSchema(morphologySchema)).not.toThrow();
-    expect(() => compileSchema(simplificationsSchema)).not.toThrow();
     expect(() => compileSchema(placementQuestionnaireSchema)).not.toThrow();
     expect(() => compileSchema(frequencySchema)).not.toThrow();
   });
@@ -75,7 +66,6 @@ describe("Epic 4 language-data schemas", () => {
   it("accept minimal valid examples for every schema", () => {
     const validateCefrlex = compileSchema(cefrlexSchema);
     const validateMorphology = compileSchema(morphologySchema);
-    const validateSimplifications = compileSchema(simplificationsSchema);
     const validatePlacement = compileSchema(placementQuestionnaireSchema);
     const validateFrequency = compileSchema(frequencySchema);
 
@@ -109,20 +99,6 @@ describe("Epic 4 language-data schemas", () => {
       })
     ).toBe(true);
 
-    expect(
-      validateSimplifications({
-        lang: "es",
-        entries: {
-          aduana: [
-            {
-              kind: "gloss-fallback",
-              gloss: "customs",
-              contextTags: ["travel"]
-            }
-          ]
-        }
-      })
-    ).toBe(true);
 
     expect(
       validatePlacement({
@@ -167,7 +143,6 @@ describe("Epic 4 language-data schemas", () => {
   it("reject invalid examples for every schema", () => {
     const validateCefrlex = compileSchema(cefrlexSchema);
     const validateMorphology = compileSchema(morphologySchema);
-    const validateSimplifications = compileSchema(simplificationsSchema);
     const validatePlacement = compileSchema(placementQuestionnaireSchema);
     const validateFrequency = compileSchema(frequencySchema);
 
@@ -194,14 +169,6 @@ describe("Epic 4 language-data schemas", () => {
       })
     ).toBe(false);
 
-    expect(
-      validateSimplifications({
-        lang: "es",
-        entries: {
-          aduana: [{ kind: "gloss-fallback" }]
-        }
-      })
-    ).toBe(false);
 
     expect(
       validatePlacement({
@@ -245,8 +212,6 @@ describe("Epic 4 language-data schemas", () => {
     expect(compileSchema(cefrlexSchema)(itCefrlex)).toBe(true);
     expect(compileSchema(morphologySchema)(esMorphology)).toBe(true);
     expect(compileSchema(morphologySchema)(itMorphology)).toBe(true);
-    expect(compileSchema(simplificationsSchema)(esSimplifications)).toBe(true);
-    expect(compileSchema(simplificationsSchema)(itSimplifications)).toBe(true);
     expect(
       compileSchema(placementQuestionnaireSchema)(esPlacementQuestionnaire)
     ).toBe(true);
@@ -333,21 +298,6 @@ describe("Epic 4 runtime language-data loaders", () => {
     expect(lemmatize("correndo", "it")).toBe("correre");
   });
 
-  it("loads simplifications and keeps Spanish B1+ coverage above 80%", () => {
-    const simplifications = loadSimplifications("es");
-    const provider = new CefrLexAtlasProvider();
-    const higherBandLemmaIds = Object.values(provider.load("es").lemmas)
-      .filter((entry) => ["B1", "B2", "C1", "C2"].includes(entry.cefrPriorBand))
-      .map((entry) => entry.lemmaId);
-    const coveredCount = higherBandLemmaIds.filter(
-      (lemmaId) => simplifications.entries[lemmaId]?.length
-    ).length;
-
-    expect(getSimplification("cuyo", "es")?.lemmaId).toBe("el");
-    expect(coveredCount / higherBandLemmaIds.length).toBeGreaterThanOrEqual(
-      0.8
-    );
-  });
 
   it("loads placement questionnaires for both shipped languages", () => {
     const loader = new PlacementQuestionnaireLoader();
@@ -397,17 +347,10 @@ describe("Epic 4 runtime language-data loaders", () => {
     expect(() => invalidProvider.load("es")).toThrow(/Invalid cefrlex data/);
   });
 
-  it("fails fast when morphology, simplifications, or placement data is missing or invalid", () => {
+  it("fails fast when morphology or placement data is missing or invalid", () => {
     const missingMorphologyLoader = new MorphologyLoader({});
     const invalidMorphologyLoader = new MorphologyLoader({
       es: { lang: "es", forms: { correr: {} } } as never
-    });
-    const missingSimplificationsLoader = new SimplificationsLoader({});
-    const invalidSimplificationsLoader = new SimplificationsLoader({
-      es: {
-        lang: "es",
-        entries: { ferrocarril: [{ kind: "lemma-substitution" }] }
-      }
     });
     const missingPlacementLoader = new PlacementQuestionnaireLoader({});
     const invalidPlacementLoader = new PlacementQuestionnaireLoader({
@@ -435,12 +378,6 @@ describe("Epic 4 runtime language-data loaders", () => {
     );
     expect(() => invalidMorphologyLoader.load("es")).toThrow(
       /Invalid morphology data/
-    );
-    expect(() => missingSimplificationsLoader.load("es")).toThrow(
-      /Missing sugarlang simplifications data/
-    );
-    expect(() => invalidSimplificationsLoader.load("es")).toThrow(
-      /Invalid simplifications data/
     );
     expect(() => missingPlacementLoader.getQuestionnaire("es")).toThrow(
       /Missing sugarlang placement questionnaire/

@@ -49,7 +49,7 @@ import { computeLanguageRatioVerdict } from "./language-ratio";
  * present in the candidate text. Returns 1 when spec is null (neutral -- no preference).
  *
  * Copied here (not re-exported) to avoid a circular dependency:
- *   auto-simplify -> envelope-classifier -> verify-middleware -> auto-simplify
+ *   envelope-classifier -> verify-middleware
  * Bake-time code imports from this classifier facade instead of the middleware.
  *
  * Implements: Plan 086 story 086.3

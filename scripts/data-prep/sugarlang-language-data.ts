@@ -55,18 +55,6 @@ export interface MorphologyDataFile {
   forms: Record<string, MorphologyEntry>;
 }
 
-interface SimplificationEntry {
-  kind: "lemma-substitution" | "gloss-fallback";
-  lemmaId?: string;
-  gloss?: string;
-  contextTags?: string[];
-}
-
-interface SimplificationsDataFile {
-  lang: string;
-  entries: Record<string, SimplificationEntry[]>;
-}
-
 interface FrequencyLemmaEntry {
   lemmaId: string;
   lang: string;
@@ -476,81 +464,6 @@ export function buildItalianMorphologyData(
   atlas: CefrLexDataFile
 ): MorphologyDataFile {
   return buildMorphologyData(atlas, addItalianMorphologyForms);
-}
-
-function buildSimplificationsData(
-  atlas: CefrLexDataFile
-): SimplificationsDataFile {
-  const lowerBandEntries = Object.values(atlas.lemmas)
-    .filter(
-      (entry) => entry.cefrPriorBand === "A1" || entry.cefrPriorBand === "A2"
-    )
-    .sort((left, right) => left.frequencyRank - right.frequencyRank);
-  const lowerByPos = new Map<string, AtlasLemmaEntry[]>();
-
-  for (const entry of lowerBandEntries) {
-    for (const partOfSpeech of entry.partsOfSpeech) {
-      const bucket = lowerByPos.get(partOfSpeech) ?? [];
-      bucket.push(entry);
-      lowerByPos.set(partOfSpeech, bucket);
-    }
-  }
-
-  const entries: Record<string, SimplificationEntry[]> = {};
-
-  for (const entry of Object.values(atlas.lemmas)) {
-    if (entry.cefrPriorBand === "A1" || entry.cefrPriorBand === "A2") {
-      continue;
-    }
-
-    const preferredPartOfSpeech = entry.partsOfSpeech[0];
-    const candidates =
-      (preferredPartOfSpeech
-        ? lowerByPos.get(preferredPartOfSpeech)
-        : undefined) ?? lowerBandEntries;
-    const substitute = candidates.find(
-      (candidate) => candidate.lemmaId !== entry.lemmaId
-    );
-
-    if (substitute) {
-      entries[entry.lemmaId] = [
-        {
-          kind: "lemma-substitution",
-          lemmaId: substitute.lemmaId,
-          contextTags: [
-            `source-band:${entry.cefrPriorBand.toLowerCase()}`,
-            `source-lang:${atlas.lang}`
-          ]
-        }
-      ];
-      continue;
-    }
-
-    entries[entry.lemmaId] = [
-      {
-        kind: "gloss-fallback",
-        gloss: entry.lemmaId,
-        contextTags: [`source-band:${entry.cefrPriorBand.toLowerCase()}`]
-      }
-    ];
-  }
-
-  return {
-    lang: atlas.lang,
-    entries
-  };
-}
-
-export function buildSpanishSimplificationsData(
-  atlas: CefrLexDataFile
-): SimplificationsDataFile {
-  return buildSimplificationsData(atlas);
-}
-
-export function buildItalianSimplificationsData(
-  atlas: CefrLexDataFile
-): SimplificationsDataFile {
-  return buildSimplificationsData(atlas);
 }
 
 function buildSpanishQuestionnaire(): PlacementQuestionnaire {

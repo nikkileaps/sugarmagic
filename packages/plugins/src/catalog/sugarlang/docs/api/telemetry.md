@@ -39,7 +39,6 @@ Core turn events:
 - `chunk.hit-during-classification`
 - `chunk.extraction-stale-discarded`
 - `verify.repair-triggered`
-- `verify.auto-simplify-triggered`
 - `observe.observations-applied`
 - `placement.completed`
 - `session.started`

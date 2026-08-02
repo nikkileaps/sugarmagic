@@ -9,7 +9,6 @@ one new `languages/<lang>/` directory that satisfies the shared schemas.
 - `languages/<lang>/README.md`: provenance, licensing notes, rerun instructions, and coverage notes.
 - `languages/<lang>/cefrlex.json`: lexical atlas consumed by the classifier, budgeter, compiler, and provider layer.
 - `languages/<lang>/morphology.json`: surface-form lookup data consumed by lemmatization.
-- `languages/<lang>/simplifications.json`: deterministic lower-band substitutions or gloss fallbacks.
 - `languages/<lang>/placement-questionnaire.json`: plugin-owned canonical placement question bank.
 
 Some under-resourced languages also carry auxiliary prep artifacts. Italian
@@ -23,7 +22,6 @@ currently ships:
 
 - `../schemas/cefrlex.schema.json`
 - `../schemas/morphology.schema.json`
-- `../schemas/simplifications.schema.json`
 - `../schemas/placement-questionnaire.schema.json`
 - `../schemas/frequency.schema.json`
 - `../schemas/kelly-subset.schema.json`
@@ -34,7 +32,6 @@ currently ships:
    Use a CEFR-graded lexicon when one exists. If not, derive a frequency-backed atlas and document the confidence limits honestly.
 2. Generate morphology.
    Build a runtime-owned surface-form index that covers the shipped lemma set and key inflections.
-3. Build simplifications.
    For higher-band lemmas, ship deterministic lower-band substitutions or a tagged gloss fallback.
 4. Author placement questions.
    Placement banks are plugin-owned v1 data, not per-project content.
@@ -53,5 +50,5 @@ currently ships:
 Languages likely feasible with the same architecture include French, German,
 Swedish, Dutch, and English. Languages intentionally out of scope for v1
 include Japanese, Chinese, Korean, and Arabic because the CEFR-aligned data,
-morphology, and simplification assumptions differ too much from the current
+and morphology assumptions differ too much from the current
 Latin-script pipeline.

@@ -16,7 +16,6 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
-import { autoSimplify } from "../classifier/auto-simplify";
 import {
   createNoOpTelemetrySink,
   createTelemetryEvent,
@@ -597,41 +596,21 @@ export function createSugarLangVerifyMiddleware(
         return normalizedTurn;
       }
 
-      // repairResult is null: no candidate beat the original.
-      // Lemma-substitution fallback: autoSimplify handles lemma violations only.
-      // For ratio-only failures autoSimplify is a no-op (zero violations) -- the
-      // original is the terminal result. (083.2, review round 1)
-      if (verdict.violations.length > 0) {
-        try {
-          const simplified = autoSimplify(
-            normalizedTurn.text,
-            verdict.violations.map((violation) => violation.lemmaRef),
-            learner
-          );
-          const originalText = normalizedTurn.text;
-          normalizedTurn.text = simplified.text;
-          await emitTelemetry(
-            telemetry,
-            createTelemetryEvent("verify.auto-simplify-triggered", {
-              conversationId,
-              sessionId,
-              turnId: traceTurnId,
-              timestamp: Date.now(),
-              sceneId: sceneId ?? "",
-              originalText,
-              simplifiedText: simplified.text,
-              substitutions: verdict.violations.map(
-                (violation) => violation.lemmaRef.lemmaId
-              )
-            }),
-            logger
-          );
-        } catch (error) {
-          logger.warn("Sugarlang autoSimplify failed; returning original turn.", {
-            reason: error instanceof Error ? error.message : String(error)
-          });
-        }
-      }
+      // repairResult is null: no candidate beat the original, SO THE ORIGINAL
+      // SHIPS. Out of envelope, but grammatical and meaningful.
+      //
+      // 2026-08-02 DELETED the autoSimplify fallback that used to run here. It
+      // rewrote the finished line in place, swapping each out-of-band lemma for
+      // a lower-band one -- and `entry.lemmaId` is a bare CITATION FORM, so for
+      // a verb it spliced in another verb's infinitive. The substitution table
+      // was chosen by band and part of speech with no notion of meaning: 2,996
+      // lemmas mapped to `el`, 910 to `y`, so `sostener` became "and". It
+      // produced sentences that passed a band check and meant nothing.
+      //
+      // Untaught but correct beats rewritten into nonsense -- the same rule the
+      // scripted path took on 2026-07-31 and item text took in story 1. The
+      // verdict still records the failure, so nothing is hidden by shipping the
+      // original.
 
       return normalizedTurn;
     }

@@ -7,7 +7,7 @@
  *   - tokenize
  *
  * Relationships:
- *   - Is consumed by lemmatization, coverage computation, and auto-simplify.
+ *   - Is consumed by lemmatization and coverage computation.
  *   - Preserves token offsets so later stages can report and rewrite exact spans.
  *
  * Implements: Proposal 001 §2. Envelope Classifier

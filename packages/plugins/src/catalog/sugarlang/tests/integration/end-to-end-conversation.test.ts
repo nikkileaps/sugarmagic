@@ -12,8 +12,8 @@
  *   - Covers: scripted constraint annotation + authored-text passthrough (no LLM),
  *     scripted adaptation via a stubbed gateway LLM + authored-text fallback on
  *     LLM failure, observation on card, directive cache hit, verify pass
- *     (in-envelope text unchanged), and verify repair path (autoSimplify
- *     fallback when no LLM client).
+ *     (in-envelope text unchanged), and the verify repair path (an
+ *     unrepairable turn ships unchanged when there is no LLM client).
  *
  * Implements: Plan 081 story 081.5 (E2E goldens)
  *
@@ -529,7 +529,7 @@ describe("end-to-end conversation golden", () => {
     // learner knows (seeded as the sole lexicon entry, same trick as the
     // observation test), so the generated turn is within the envelope and must
     // come out of finalize byte-for-byte identical to what the provider
-    // generated -- no repair, no auto-simplify.
+    // generated -- no repair fired.
     const npcText = "Hola.";
     const { telemetry, services, host } = makeSharedSetup({}, npcText);
 
@@ -558,13 +558,10 @@ describe("end-to-end conversation golden", () => {
     };
     expect(lastVerdict.verdict.withinEnvelope).toBe(true);
 
-    // And neither repair mechanism fired anywhere in the run.
+    // And repair never fired anywhere in the run. (There is no second
+    // mechanism: the autoSimplify fallback was deleted 2026-08-02.)
     const repairs = await telemetry.query({ eventKinds: ["verify.repair-triggered"] });
-    const simplifications = await telemetry.query({
-      eventKinds: ["verify.auto-simplify-triggered"]
-    });
     expect(repairs.length).toBe(0);
-    expect(simplifications.length).toBe(0);
   });
 
   it("B2 learner: all-English NPC turn triggers ratio repair (the playtest bug)", async () => {
@@ -626,10 +623,18 @@ describe("end-to-end conversation golden", () => {
     expect(repairEvent.violations.some((v) => v.includes("85%") && v.includes("Spanish"))).toBe(true);
   });
 
-  it("verify repair path: NPC text violating the envelope is auto-simplified (no LLM needed)", async () => {
-    // "adelante" is above A1 and has a known simplification ("bueno") in the
-    // Spanish simplifications data. With no proxy URL the LLM repair returns null,
-    // so autoSimplify is the repair path. The output text must differ from input.
+  it("verify: an unrepairable turn SHIPS UNCHANGED rather than being rewritten", async () => {
+    // "adelante" is above A1. With no proxy URL the LLM repair returns null, so
+    // there is nothing left to try -- and that is the end of it.
+    //
+    // This used to assert the OPPOSITE: that autoSimplify stripped "adelante"
+    // out. That fallback rewrote finished text, swapping each out-of-band lemma
+    // for a lower-band one chosen by band and part of speech with no notion of
+    // meaning -- 2,996 lemmas mapped to "el" and 910 to "y", so `sostener`
+    // became "and". Deleted 2026-08-02.
+    //
+    // Out of envelope but grammatical beats in-envelope nonsense. The verdict
+    // still records the violation; the player still gets a readable line.
     const { host } = makeSharedSetup({}, "Hola, adelante por favor.");
 
     await host.startSession({
@@ -640,16 +645,13 @@ describe("end-to-end conversation golden", () => {
       supportLanguage: "en"
     });
 
-    // Advance to get the violating NPC turn. The verify middleware should
-    // auto-simplify "adelante" out of the A1 learner's output.
     const turn = await host.submitInput({ kind: "advance" });
 
-    // The turn text must not contain "adelante" after repair.
     expect(turn?.text).toBeDefined();
-    expect(turn!.text.toLowerCase()).not.toContain("adelante");
+    expect(turn!.text.toLowerCase()).toContain("adelante");
   });
 
-  it("scripted anchored posture: zero LLM calls -- substitution produces substituted text", async () => {
+  it("scripted anchored posture: zero LLM calls", async () => {
     // A1 learner -> anchored posture -> baked variant or authored English,
     // no /generate call.
     // The prescription includes "hola" so any authored word that resolves to

@@ -96,10 +96,9 @@ Narrator, player-VO, and excerpt speakers are never adapted.
 
 **`sugarlang.verify` (analysis, 20).** Free-form turns only (skips scripted
 mode and player-spoken turns). Runs the envelope classifier over the
-generated text against the learner profile and the directive's slate; on violations,
-attempts one LLM repair, re-checks it, and if that fails applies the
-deterministic `autoSimplify` substitution fallback. See "Verify Enforcement
-Scope" below.
+generated text against the learner profile and the directive's slate; on
+violations, attempts one LLM repair and re-checks it. If that fails the original
+turn ships unchanged. See "Verify Enforcement Scope" below.
 
 **`sugarlang.observe` (analysis, 90).** The single place raw turn/input
 context becomes learner observations: hover events, choice selections,
@@ -233,11 +232,15 @@ a violating turn:
    tokens) asking for a same-meaning rewrite with the violating lemmas
    removed. The repaired text is re-run through the classifier; it is only
    accepted if it now passes (`verify.repair-triggered`).
-2. **Deterministic fallback** -- `autoSimplify`
-   (`runtime/classifier/auto-simplify.ts`) substitutes the violating lemmas
-   from the language's simplifications table (`verify.auto-simplify-triggered`).
-3. **Fail-open** -- if autoSimplify throws, the original turn is returned
-   unchanged.
+2. **The original ships.** If no candidate beats the original, that is the end
+   of the ladder. The turn goes out as written -- out of envelope, but
+   grammatical and meaningful -- and the verdict records the violation.
+
+   There is no second, deterministic fallback. One existed until 2026-08-02:
+   it rewrote the finished line, swapping each out-of-band lemma for a
+   lower-band one chosen by band and part of speech with no notion of meaning.
+   It produced text that passed the band check and said nothing. Untaught but
+   correct beats rewritten into nonsense.
 
 **Repair skip conditions.** Two turn types skip the repair ladder entirely
 (classifier still runs, telemetry still emits `verify.deterministic-bypass`):
