@@ -243,8 +243,7 @@ the gateway is unavailable. Results are cached per conversation by
 ### The envelope
 
 Band-keyed pedagogical limits live in exactly one file,
-`runtime/teacher/band-envelope.ts`, because every one of them has at some point
-existed in two places with different numbers:
+`runtime/teacher/band-envelope.ts`:
 
 | what | source of truth |
 |---|---|
@@ -278,33 +277,32 @@ two moments, and the only difference is *when*:
 Note there is no learner in the variant cache key: a variant is per-band, not
 per-person.
 
-The intent is that both paths shape a *generator* -- the target language is
-written by the model that writes the line, at whatever ratio the posture
-directs. Nothing should substitute words into already-finished text.
+Both paths shape a *generator* -- the target language is written by the model
+that writes the line, at whatever ratio the posture directs. Nothing substitutes
+words into already-finished text.
 
-**Gone from the scripted path (rf6.5.2).** A variant-cache miss now serves the
-authored English unchanged -- untaught but correct and readable. `applyWeave`
-and the dedicated `runtime/classifier/diglot-weave.ts` module are both deleted.
+Item text is realized the same way, through `display-text-resolver`: a variant
+baked per band, at every band.
 
-**One survival, still live.** `markGradedText`
-(`runtime/grading/graded-text-marker.ts`), called by `display-text-resolver`
-for item-view and dialogue-node sources at A1/A2, rewrites FINISHED TEXT --
-replacing English words with target-language citation forms. That is what the
-weave did, under a new name. Nothing should replace English after the line is
-rendered; it is doing two jobs and only the marking half belongs in the
-finished design.
-
-For a verb the citation form is the INFINITIVE, so this survival is why
-unconjugated verbs reach players. It should be deleted, not taught to
-conjugate. See the conjugation epic.
+On a cache miss any of these paths serves the **authored English unchanged** --
+untaught, but correct and readable.
 
 ---
 
 ## Presentation
 
 Realization produces text; presentation marks it up so the player can see what
-is being taught. `markGradedText` (`runtime/grading/graded-text-marker.ts`)
-annotates only -- it never rewrites. Two kinds of span:
+is being taught. Nothing in this layer changes a word -- markup travels beside
+the text, never inside it.
+
+Markup is built by `buildHighlightTerms` (`runtime/grading/highlight-terms.ts`)
+and carried as the `dialogueHighlight` TURN ANNOTATION -- written by the observe
+middleware for agent turns, and read off the baked variant's `highlight` for
+scripted ones. runtime-core re-derives the character spans from the text at
+render time (`findTermMatches`); offsets are never stored, which is why chunking
+a line needs no offset remapping.
+
+Two kinds of span:
 
 - **slate terms** (`findTermMatches`) -- what the Teacher asked this line to
   teach. These carry the gold/blue treatment and the celebrate animation.
@@ -320,12 +318,24 @@ The player can select any target-language span to see it translated
 (`lookupSelection`, `runtime/grading/lookup-selection.ts`), which returns `null`
 for every expected miss rather than guessing.
 
-**Ambient spans currently dead-end.** The observe middleware writes them onto
-the `dialogueHighlight` annotation, but `readDialogueHighlight`
-(`packages/runtime-core/src/dialogue/highlight.ts`) does not copy the field into
-its return value, so nothing downstream can see them. Select-to-translate works
-without them -- it resolves the raw selected string through the atlas -- so the
-player-facing feature is fine and the span data simply has no reader yet.
+**Ambient spans do not travel on the annotation.** The
+annotation carries what the Teacher CHOSE to teach; an ambient span is by
+definition what the slate never asked for, so putting it there would blur the
+one distinction the annotation exists to make. They are computed where the line
+is observed and consumed there, for three things:
+
+- **answering a selection.** The player may select any target-language word,
+  including one nobody slated. Resolution goes through the atlas on the selected
+  string, so the affordance does not depend on a span having been recorded.
+- **measuring the realized ratio.** How much target language the line actually
+  carried, as opposed to how much the posture directed -- which is what makes
+  the envelope checkable rather than aspirational.
+- **detecting drift.** Target language nobody asked for is the signal that
+  realization went beyond its directive, and it is reported as such.
+
+The third is why ambient detection reads the finished text instead of asking
+realization what it wrote: it is a check ON realization, so it cannot take
+realization's word for it.
 
 ---
 

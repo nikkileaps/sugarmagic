@@ -88,8 +88,9 @@ target words into the authored line. It was deleted in rf6.5.2 and no such
 function exists -- an untaught but correct line beats one half-rewritten by a
 mechanism that made no pedagogical decision.
 
-`markGradedText` still performs citation-form substitution, but on the
-display-text path (`display-text-resolver`), not here.
+Item text follows the same rule, via `display-text-resolver`: a baked variant
+for the band, else the authored English. No code in the system rewrites
+finished text.
 
 Narrator, player-VO, and excerpt speakers are never adapted.
 

@@ -22,11 +22,12 @@ deleted in rf6.5.2 and no such function exists. Its removal also fixed an
 inversion where the FALLBACK line highlighted and the correctly BAKED line did
 not.
 
-`markGradedText` still exists and still substitutes citation forms, but on the
-DISPLAY-TEXT path (`display-text-resolver.ts`, item-view and dialogue-node
-sources at A1/A2), not here.
+Item text follows the same rule, via `display-text-resolver`: a baked variant
+for the band, else the authored English. Nothing in the system rewrites finished
+text.
 
-DELETED, despite appearing below: the standalone diglot-weave module (the term is retired; the mechanism is `markGradedText`), and the
+DELETED, despite appearing below: the standalone diglot-weave module, the
+citation-form substitution that replaced it (`markGradedText`), and the
 directed live-render tier (unwired in 090.8c -- `live-render-cache.ts` and
 `verify-live-render.ts` still exist as files but nothing in the middleware
 imports them).
@@ -39,8 +40,7 @@ gateway present.
 | Role | Path |
 |------|------|
 | Scripted middleware | `packages/plugins/src/catalog/sugarlang/runtime/middlewares/sugar-lang-scripted-middleware.ts` |
-| Graded-text marker (citation-form substitution, display-text path only) | `packages/plugins/src/catalog/sugarlang/runtime/grading/graded-text-marker.ts` |
-| Display-text resolver (what calls the marker) | `packages/plugins/src/catalog/sugarlang/runtime/grading/display-text-resolver.ts` |
+| Display-text resolver (item text -> baked variant, else authored English) | `packages/plugins/src/catalog/sugarlang/runtime/grading/display-text-resolver.ts` |
 | Bake-time variant generator | `packages/plugins/src/catalog/sugarlang/runtime/compile/generate-variant.ts` |
 | Variant cache (memory + IDB) | `packages/plugins/src/catalog/sugarlang/runtime/compile/variant-cache.ts` |
 | Live-render cache (memory) -- UNWIRED, no middleware imports it | `packages/plugins/src/catalog/sugarlang/runtime/compile/live-render-cache.ts` |
@@ -55,56 +55,23 @@ gateway present.
 
 ## Rendering Ladder
 
-### Tier A1: Citation-form substitution -- DISPLAY-TEXT PATH ONLY
+### Citation-form substitution (deleted)
 
-Stale below: this described the substitution as the tier that ALWAYS runs for
-anchored/supported postures. Since 090.11 those postures read a baked variant,
-and since rf6.5.2 there is no substitution fallback in the scripted path at
-all -- a missing variant serves authored English. The mechanism described is
-still accurate for the DISPLAY-TEXT path (`markGradedText`, called by
-`display-text-resolver`).
+There is no substitution tier. Nothing splices target-language words into
+authored English, on either the scripted path or the display-text path.
 
-The authored English text is used as the frame. Words that resolve via the
-atlas to prescription-introduced lemmas are substituted with their citation
-form (lemmaId bare, no glossing markup inline). Output is built
-character-by-character with no model call.
+WHY, since "it taught a few words for free" is a real argument: for a verb the
+citation form is the INFINITIVE, so the mechanism deterministically wrote
+`necesitar` where the sentence needed `necesitas` -- ungrammatical output on
+every verb it touched, with no model involved and no verdict recording it.
 
-Rules:
-- Chunk constituent match takes priority over single-word substitution: if a
-  resolved lemma is a constituent of an inventory chunk, the chunk's primary
-  surface form is substituted instead.
-- Each English word is substituted at every occurrence in the line.
-- If no substitutions are possible, the original English is returned unchanged.
-- The introduce list for the substitution is built from TWO sources merged:
-  (1) the prescription's `targetVocab.introduce` list; (2) a gloss scan of the
-  authored English text itself (words with atlas resolutions, length >= 3,
-  de-duplicated). This ensures the substitution produces output even for lines with
-  no compiled scene lexicon (new scenes, uncomped regions).
+Beginner bands are not left untaught. They read baked variants like every other
+band, generated at the anchored ratio their posture directs.
 
-```typescript
-// graded-text-marker.ts
-export interface GradedTextMarkResult {
-  text: string;
-  markedForms: MarkedForm[];  // one entry per distinct substituted word
-}
-
-export interface MarkedForm {
-  targetForm: string;    // citation form placed in the text
-  lemmaId: string;       // target-lang lemma this represents
-  englishGloss: string;  // original English word (for observe middleware)
-}
-```
-
-After substitution, `constraint.targetVocab.introduce` is updated to contain only
-the woven forms. The observe middleware then highlights exactly what was
-substituted.
-
-**Inflected-form substitution is deferred.** The atlas morphology data is
-surface-to-lemma only; an inverse index (lemma + features -> surface form) does
-not exist. Citation forms (e.g. `comer`, not `comiendo`) are placed as-is.
-Revisit when citation-form output reads as grammatically wrong to a learner
-past A2, or when a native reviewer flags substituted-form grammar. (See the deferred
-seam comment in `graded-text-marker.ts`.)
+Generating an inflected form would need an inverse morphology index (lemma +
+features -> surface form), which does not exist and is not planned -- nothing
+generates forms from features. Recognizing a conjugated form for MATCHING is a
+separate open question; see `docs/backlog/005-sugarlang-morphology-coverage.md`.
 
 ### Tier B1: Baked variants -- NOW EVERY BAND, NOT JUST B1+
 
@@ -258,18 +225,23 @@ predicate has two legs only: violation allowance and ceiling exceedances.
 
 At runtime, for each scripted NPC turn:
 
-1. Posture check:
-   - `anchored` or `supported` -> go to step 2 (substitution path)
-   - `target-dominant` -> go to step 3 (variant path)
-2. (Substitution path) Run `markGradedText`. If markedForms.length > 0, update turn text
-   and introduce list. Return turn.
-3. (Variant path) If `liveRenderTriggered` (currently always false): attempt
-   live render. On success -> use rendered text, cache in `LiveRenderCache`.
-   On any failure -> fall through to step 4.
-4. (Variant path) If `variantCache` wired: attempt `variantCache.get`. On hit
-   -> use baked text. On miss or error -> fall through to step 5.
-5. (Degradation) Serve the authored English unchanged. Produces introduce
-   highlights at minimum; turn text is substitution output or unchanged English.
+Every band takes the same path -- there is no posture fork and no substitution
+step.
+
+1. If `liveRenderTriggered` (currently always false): attempt live render. On
+   success -> use rendered text, cache in `LiveRenderCache`. On any failure ->
+   fall through to step 2.
+2. If `variantCache` is wired: attempt `variantCache.get` for this band. On hit
+   -> use the baked text and attach its baked `highlight`. On miss or error ->
+   fall through to step 3.
+3. (Degradation) Serve the authored English UNCHANGED. Untaught but correct and
+   readable, which beats a line half-rewritten by a mechanism that made no
+   pedagogical decision.
+
+Beginner postures used to fork at step 1 into a substitution path that spliced
+citation forms into the authored English. That path is deleted; anchored and
+supported now read a baked variant like every other band, generated at the
+ratio their posture directs.
 
 Every step fails safe: a JavaScript error anywhere in steps 3-5 falls through
 to the next step.

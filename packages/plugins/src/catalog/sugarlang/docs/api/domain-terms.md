@@ -252,27 +252,8 @@ authored text; an exponent is specifically a phrase that performs *this* act.
 
 A competency is language-neutral; only its exponents are per-language.
 
-Named `function` until 2026-07-29, after CEFR's "functional syllabus". Renamed
-because it collided with the programming sense on every read; `Competency`,
-`competencyId`, `competency-inventory.json`, `kind: "competency"` throughout now.
-
-### Diglot weave (deleted)
-
-Substituting target-language words into otherwise-English text, so a beginner
-read mostly English with real target words embedded.
-
-**Gone as of Epic 090.** The target language is now written by the model that
-writes the line, at whatever ratio the posture directs -- so there is nothing
-left to add afterwards. Kept in this glossary only because the word still
-appears in older commits and comments; if you find code doing substitution on
-finished text, it is a survival and should be deleted.
-
-CONFIRMED STILL PRESENT 2026-08-01: `markGradedText`
-(`runtime/grading/graded-text-marker.ts`) rewrites finished text, replacing
-English words with target-language citation forms, on the display-text path
-(`display-text-resolver`, item-view and dialogue-node sources at A1/A2). It is
-a SURVIVAL of the weave under a new name, not a sanctioned mechanism, and it is
-the reason unconjugated verbs reach players. It should be deleted.
+Roughly based on CEFR's "functional syllabus" idea. Named Competency
+because Function collides with the programming sense on every read.
 
 ### Variant
 
