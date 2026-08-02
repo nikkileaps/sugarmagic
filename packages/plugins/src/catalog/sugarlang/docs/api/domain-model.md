@@ -201,14 +201,13 @@ So concepts reach the Teacher as *concepts*, not pre-resolved into a shortlist.
 The Teacher sees what the scene is about and picks; it is not handed a
 prescription to rubber-stamp.
 
-That was, for a long time, exactly backwards. A Lexical Budgeter scored the
-scene's words and prescribed a shortlist; the Teacher's job was to accept it.
-The failure that ended it: an NPC obsessed with cheese never taught `queso`,
-because his lines are generated at runtime, so "cheese" was never in authored
-text for a word-scan to find. Scoring the words that happen to be *present*
-cannot reach a word that is merely *relevant*. The budgeter and
-`LexicalPrescription` are deleted; `runtime/contracts/lexical-prescription.ts`
-survives only as the home of `LemmaRef`.
+Scoring the words that happen to be *present* cannot reach a word that is merely
+*relevant* -- an NPC obsessed with cheese teaches `queso` because the scene is
+ABOUT cheese, not because the word appears in his authored lines. It does not:
+they are generated at runtime.
+
+Note `runtime/contracts/lexical-prescription.ts` is now only the home of
+`LemmaRef`, despite the filename.
 
 ### Teachables
 
