@@ -175,40 +175,30 @@ describe("cold-start placement golden", () => {
       documentDefinitions: []
     });
 
-    const middlewares = [
-      makeAssessmentRuntimeContextMiddleware("npc-inspector"),
-      ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => factory({ services, logger }))
-    ];
-    const host = createConversationHost({
-      providers: [makePlacementMockProvider()],
-      middlewares
+    // PLACEMENT IS NOT A CONVERSATION. This used to drive a conversation for
+    // three turns to reach the questionnaire; the assessment quest node now
+    // opens the form directly and hands the answers straight back.
+
+    // The form is available on a COLD game -- before any conversation has
+    // happened, which is the case that used to return null and silently fall
+    // back to dialogue.
+    const form = services.getPlacementQuestForm();
+    expect(form).not.toBeNull();
+
+    // Empty answers -> lowest band, low confidence, which is what opens the
+    // calibration window. Submitting nothing is a valid, meaningful answer.
+    const proposals = await services.submitPlacementQuestForm({
+      questionnaireId: form!.formId ?? "es-placement-v1",
+      submittedAtMs: 1000,
+      answers: {}
     });
 
-    // Turn 0: startSession -> opening-dialog phase.
-    await host.startSession({
-      conversationKind: "scripted-dialogue",
-      npcDefinitionId: "npc-inspector",
-      npcDisplayName: "Inspector",
-      targetLanguage: "es",
-      supportLanguage: "en"
-    });
+    // The quest flags come back for the host to apply -- with no turn to carry
+    // them, they are the return value.
+    expect(proposals.length).toBeGreaterThan(0);
 
-    // Turn 1: advance (context middleware reads turnCount=0 -> still opening-dialog).
-    await host.submitInput({ kind: "advance" });
-
-    // Turn 2: advance (context middleware reads turnCount=1 -> advances to questionnaire).
-    await host.submitInput({ kind: "advance" });
-
-    // Turn 3: submit an empty questionnaire -> A1 with low confidence (< 0.65 threshold).
-    // Empty answers produce a low-confidence A1 result, which opens the calibration window.
-    await host.submitInput({
-      kind: "quest_form",
-      response: {
-        questionnaireId: "es-placement-v1",
-        submittedAtMs: 1000,
-        answers: {}
-      }
-    });
+    // And the form is gone once placement is complete.
+    expect(services.getPlacementQuestForm()).toBeNull();
 
     const profile = blackboard
       .getFact(LEARNER_PROFILE_FACT, createBlackboardScope("entity", "player-1"))

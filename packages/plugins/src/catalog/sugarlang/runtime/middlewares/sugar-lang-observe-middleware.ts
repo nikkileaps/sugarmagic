@@ -38,14 +38,11 @@ import { traceRealization } from "../teacher/teacher-trace";
 import { MorphologyLoader } from "../classifier/morphology-loader";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
-import { buildPlacementCompletionEvent } from "../placement/placement-flow-orchestrator";
-import { emitPlacementCompleted } from "../quest-integration/placement-completion";
 import { createSugarlangLogger } from "../logger";
 import {
   SUGARLANG_COMPLETED_OBJECTIVE_IDS_ANNOTATION,
   SUGARLANG_COMPREHENSION_PROBE_ID_ANNOTATION,
   SUGARLANG_CONSTRAINT_ANNOTATION,
-  SUGARLANG_PLACEMENT_FLOW_ANNOTATION,
   createObservationEvent,
   getChoiceLemmaRef,
   getHoverLemma,
@@ -54,7 +51,6 @@ import {
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
   getSugarAgentSessionId,
-  getSugarAgentTurnCount,
   getTurnsSinceLastProbe,
   isPlayerSpokenTurn,
   isScriptedMode,
@@ -62,7 +58,6 @@ import {
   setStoredComprehensionCheck,
   setTurnsSinceLastProbe,
   shouldRunSugarlangForExecution,
-  type PlacementFlowAnnotation,
   type SugarlangLoggerLike
 } from "./shared";
 
@@ -166,82 +161,11 @@ export function createSugarLangObserveMiddleware(
       const sessionId = getSugarAgentSessionId(execution);
       const traceTurnId = getSugarlangTelemetryTurnId(execution, "finalize");
       const sceneId = getSceneId(execution);
-      const now = Date.now();
 
-      const placementFlow = execution.annotations[
-        SUGARLANG_PLACEMENT_FLOW_ANNOTATION
-      ] as PlacementFlowAnnotation | undefined;
-      if (placementFlow?.phase === "opening-dialog") {
-        await emitTelemetry(
-          telemetry,
-          createTelemetryEvent("observer.pre-placement-bypass", {
-            conversationId,
-            sessionId,
-            turnId: traceTurnId,
-            timestamp: now,
-            sceneId
-          }),
-          logger
-        );
-        return normalizedTurn;
-      }
-
-      if (placementFlow?.phase === "questionnaire") {
-        await emitTelemetry(
-          telemetry,
-          createTelemetryEvent("observer.placement-questionnaire-bypass", {
-            conversationId,
-            sessionId,
-            turnId: traceTurnId,
-            timestamp: now,
-            sceneId
-          }),
-          logger
-        );
-        return normalizedTurn;
-      }
-
-      if (execution.input?.kind === "quest_form") {
-        if (
-          normalizedTurn &&
-          placementFlow?.phase === "closing-dialog" &&
-          placementFlow.scoreResult
-        ) {
-          const learner = await services.learnerStore.getCurrentProfile();
-          await services.learnerStateReducer.apply(
-            buildPlacementCompletionEvent(placementFlow.scoreResult, learner)
-          );
-          normalizedTurn.proposedActions = [
-            ...(normalizedTurn.proposedActions ?? []),
-            ...emitPlacementCompleted(placementFlow.scoreResult)
-          ];
-
-          const confidenceFloor = deps.services.getConfig().placement.confidenceFloor;
-          await emitTelemetry(
-            telemetry,
-            createTelemetryEvent("placement.completed", {
-              conversationId,
-              sessionId,
-              turnId: traceTurnId,
-              timestamp: Date.now(),
-              finalBand: placementFlow.scoreResult.cefrBand,
-              confidence: placementFlow.scoreResult.confidence,
-              turnCount: getSugarAgentTurnCount(execution),
-              questionnaireVersion: placementFlow.scoreResult.questionnaireVersion,
-              result: placementFlow.scoreResult
-            }),
-            logger
-          );
-          if (placementFlow.scoreResult.confidence < confidenceFloor) {
-            logger.warn("Placement completed below configured confidence floor.", {
-              confidence: placementFlow.scoreResult.confidence,
-              confidenceFloor
-            });
-          }
-        }
-
-        return normalizedTurn;
-      }
+      // Placement no longer passes through here. It used to bypass observation
+      // on the questionnaire turn and apply the completion off the submit turn;
+      // an assessment quest node now opens the form directly and sugarlang
+      // scores it in submitPlacementQuestForm, telemetry and all.
 
       const constraint = execution.annotations[
         SUGARLANG_CONSTRAINT_ANNOTATION

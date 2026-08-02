@@ -97,51 +97,6 @@ function isMinimalGreetingMode(
   return constraint?.minimalGreetingMode ?? false;
 }
 
-function buildPlacementQuestionnaireEnvelope(
-  input: GenerateStageInput,
-  context: TurnStageContext,
-  placementFlow: { questionnaire?: unknown; minAnswersForValid?: unknown } | undefined
-): ConversationTurnEnvelope | null {
-  const raw = placementFlow?.questionnaire;
-  if (
-    typeof raw !== "object" ||
-    raw === null ||
-    typeof (raw as Record<string, unknown>).formIntro !== "string" ||
-    typeof (raw as Record<string, unknown>).lang !== "string" ||
-    typeof (raw as Record<string, unknown>).schemaVersion !== "number"
-  ) {
-    return null;
-  }
-  const effectiveQuestionnaire = raw as {
-    formIntro: string;
-    lang: string;
-    schemaVersion: number;
-    minAnswersForValid: number;
-    [key: string]: unknown;
-  };
-  return {
-    turnId: context.turnId,
-    providerId: "sugaragent.provider",
-    conversationKind: input.execution.selection.conversationKind,
-    speakerId: input.execution.selection.npcDefinitionId,
-    speakerLabel: input.execution.selection.npcDisplayName,
-    displayName: input.execution.selection.npcDisplayName,
-    text: effectiveQuestionnaire.formIntro,
-    choices: [],
-    inputMode: "quest_form",
-    proposedActions: [],
-    metadata: {
-      "sugarlang.placementQuestionnaire": effectiveQuestionnaire,
-      "sugarlang.placementQuestionnaireVersion": `${effectiveQuestionnaire.lang}-placement-v${effectiveQuestionnaire.schemaVersion}`
-    },
-    annotations: input.execution.annotations,
-    diagnostics: {
-      placementQuestionnaire: true,
-      llmCallsMade: 0
-    }
-  };
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -200,9 +155,6 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     const constraint = input.execution.annotations[
       "sugarlang.constraint"
     ] as LanguageLearningConstraint | undefined;
-    const placementFlow = input.execution.annotations["sugarlang.placementFlow"] as
-      | { phase?: string; questionnaire?: unknown; minAnswersForValid?: unknown }
-      | undefined;
     const npcDisplayName = input.execution.selection.npcDisplayName ?? "NPC";
     const activeQuestDisplayName =
       input.execution.runtimeContext?.trackedQuest?.displayName ??
@@ -277,34 +229,10 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       };
     }
 
-    if (placementFlow?.phase === "questionnaire") {
-      const envelopeOverride = buildPlacementQuestionnaireEnvelope(
-        input,
-        context,
-        placementFlow
-      );
-      if (envelopeOverride) {
-        return {
-          output: {
-            text: envelopeOverride.text,
-            usedLlm: false,
-            llmBackend: "deterministic",
-            actionProposals: [],
-            envelopeOverride
-          },
-          diagnostics: createDiagnostics(
-            this.stageId,
-            startedAt,
-            "ok",
-            {
-              placementQuestionnaire: true,
-              usedLlm: false
-            }
-          ),
-          status: "ok"
-        };
-      }
-    }
+    // Placement is not built here any more, and is not a conversation at all:
+    // an assessment quest node opens the form directly. This stage only ever
+    // ran for free-form conversations, which is why the form was unreachable
+    // for a scripted NPC.
 
     // Plan 072 personas: a persona'd NPC should answer player-initiated social
     // turns (greetings, self-introductions, small talk) IN CHARACTER via the

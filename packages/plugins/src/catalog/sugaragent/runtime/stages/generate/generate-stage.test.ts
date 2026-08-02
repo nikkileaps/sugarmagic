@@ -469,38 +469,6 @@ describe("GenerateStage", () => {
     expect(result.diagnostics.payload.minimalSugarlangGreetingMode).toBe(true);
   });
 
-  it("returns the placement questionnaire envelope without using the llm", async () => {
-    const stage = new GenerateStage(null);
-    const input = createStageInput();
-    input.execution.selection.targetLanguage = "es";
-    input.execution.annotations["sugarlang.placementFlow"] = {
-      phase: "questionnaire",
-      minAnswersForValid: 4,
-      questionnaireVersion: "es-placement-v1",
-      questionnaire: {
-        schemaVersion: 1,
-        lang: "es",
-        targetLanguage: "Spanish",
-        supportLanguage: "English",
-        formTitle: "Language Test",
-        formIntro: "Please answer the following questions.",
-        questions: [],
-        minAnswersForValid: 4
-      }
-    };
-
-    const result = await stage.execute(input as never, createStageContext() as never);
-
-    expect(result.output.usedLlm).toBe(false);
-    expect(result.output.envelopeOverride?.inputMode).toBe("quest_form");
-    expect(
-      result.output.envelopeOverride?.metadata?.["sugarlang.placementQuestionnaire"]
-    ).toMatchObject({
-      lang: "es",
-      minAnswersForValid: 4
-    });
-  });
-
   // Plan 072.4 (absorbed 071.8) — the full prompts land in diagnostics only
   // when debugLogging is on; the 220-char preview is always present.
   it("gates the full systemPrompt/userPrompt in diagnostics behind debugLogging", async () => {

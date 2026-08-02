@@ -161,7 +161,6 @@ export interface PlacementScoreResult {
  * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
  */
 export type SugarlangPlacementFlowPhase =
-  | "opening-dialog"
   | "questionnaire"
   | "closing-dialog"
   | "not-active";

@@ -75,7 +75,9 @@ import { SUGARLANG_MIDDLEWARE_FACTORIES } from "../../manifest";
 import { SugarlangRuntimeServices } from "../../runtime/runtime-services";
 import { createSugarlangLogger } from "../../runtime/logger";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
-import { SUGARLANG_CONSTRAINT_ANNOTATION } from "../../runtime/middlewares/shared";
+import {
+  SUGARLANG_CONSTRAINT_ANNOTATION,
+} from "../../runtime/middlewares/shared";
 import { createTestRegion, createTestActiveScene } from "../compile/test-helpers";
 import { createBudgeterSceneLexicon } from "./scene-lexicon-fixture";
 import { clearSugarlangRuntimeCompileCache } from "../../runtime/compile/runtime-cache-state";
@@ -553,58 +555,6 @@ describe("081.3 entry-path coverage", () => {
       ?.value;
     expect(profile?.lemmaCards).toBeDefined();
     expect(Object.keys(profile!.lemmaCards).length).toBeGreaterThan(0);
-  });
-
-  it("mid-placement scripted line still flows through the chain (pre-placement semantics)", async () => {
-    // Placement enabled + an active assessment objective targeting npc-orrin,
-    // and NO questionnaire submitted yet: the learner is mid-placement.
-    const { host, telemetry, captured, blackboard } = buildHarness({
-      assessment: true,
-      placementEnabled: true
-    });
-
-    const turn = await host.startSession({
-      conversationKind: "scripted-dialogue",
-      dialogueDefinitionId: "dialogue-orrin",
-      npcDefinitionId: "npc-orrin",
-      npcDisplayName: "Orrin",
-      interactionMode: "scripted"
-    });
-    expect(turn).not.toBeNull();
-
-    // Placement has NOT completed.
-    const profile = blackboard
-      .getFact(LEARNER_PROFILE_FACT, createBlackboardScope("entity", "player-1"))
-      ?.value;
-    expect(profile?.assessment?.status).not.toBe("evaluated");
-
-    // The chain still saw the execution: the teacher built its lightweight
-    // scripted constraint even during the pre-placement opening dialog.
-    const constraint = captured.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] as
-      | { targetLanguage?: string; learnerCefr?: string }
-      | undefined;
-    expect(constraint).toBeDefined();
-    expect(constraint!.targetLanguage).toBe("es");
-
-    // Pre-placement semantics, as the code intends them:
-    // - context announces the opening-dialog phase,
-    const openingEvents = await telemetry.query({
-      eventKinds: ["pre-placement.opening-dialog-turn"]
-    });
-    expect(openingEvents.length).toBeGreaterThanOrEqual(1);
-    // - observe reaches the execution and takes its pre-placement bypass,
-    const observerBypass = await telemetry.query({
-      eventKinds: ["observer.pre-placement-bypass"]
-    });
-    expect(observerBypass.length).toBeGreaterThanOrEqual(1);
-    // - verify never classifies a scripted turn (it skips scripted mode
-    //   before its own prePlacementOpeningLine bypass can fire; that bypass
-    //   is the free-form pre-placement path).
-    const verdicts = await telemetry.query({ eventKinds: ["classifier.verdict"] });
-    expect(verdicts).toEqual([]);
-
-    // No LLM configured: the authored opening line renders as authored.
-    expect(turn!.text).toBe(AUTHORED_LINE_1);
   });
 
   it("scripted target-dominant posture: zero LLM calls even with gateway configured (086.4)", async () => {
