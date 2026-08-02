@@ -189,7 +189,8 @@ phrase that misses the atlas is precisely the signal to try the other table.
 Easy to get wrong, because both produce `Teachable`s and look symmetric. They
 are not:
 
-- The **atlas** is a lookup. `cheese` -> `queso` is mechanical, and the code
+- The **atlas** -- THE DICTIONARY; the code says "atlas" everywhere and means
+  dictionary -- is a lookup. `cheese` -> `queso` is mechanical, and the code
   does it. `LexicalAtlasProvider`, backed by
   `data/languages/<lang>/cefrlex.json` -- 11,000 entries in Spanish.
 - The **competency inventory** is a menu. Judging that this moment is a chance
