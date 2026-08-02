@@ -4,15 +4,17 @@
  * Purpose: Generic word-boundary-aware focus term matching for dialogue highlighting.
  *         Any plugin can write a DialogueHighlightAnnotation onto a turn's annotations
  *         under the key "dialogueHighlight" and the DialoguePanel will render it.
- *         Also carries the TeachLineAnnotation contract (085.5) for function-first-teach beats.
+ *         Carries the DialogueTeachLineAnnotation contract on the same terms: a
+ *         generic key, written by whoever has something to say, rendered by
+ *         runtime-core without knowing who wrote it.
  *
  * Exports:
  *   - HighlightMatch
  *   - DialogueHighlightAnnotation
- *   - TeachLineAnnotation
+ *   - DialogueTeachLineAnnotation
  *   - findTermMatches
  *   - readDialogueHighlight
- *   - readTeachLine
+ *   - readDialogueTeachLine
  *
  * Status: active
  */
@@ -39,24 +41,50 @@ export interface DialogueHighlightAnnotation {
 const DIALOGUE_HIGHLIGHT_KEY = "dialogueHighlight";
 
 /**
- * Written by sugarlang observe middleware on the first classifier-matched encounter
- * of a chunk that realizes a communicative function (085.5 first-teach beat).
- * DialoguePanel renders it in the enrichmentContainer as a labeled sub-line.
+ * A short labelled note attached to a turn, rendered beneath it.
+ *
+ * GENERIC, like DialogueHighlightAnnotation beside it: any plugin may write one
+ * and runtime-core renders whatever it finds. WHY a plugin writes one, and when,
+ * is the plugin's business and is documented at the writer -- runtime-core knows
+ * only that a turn may carry a label and a line of text.
  */
-export interface TeachLineAnnotation {
-  /** Short function label, e.g. "Greeting". */
+export interface DialogueTeachLineAnnotation {
+  /** Short label, e.g. "Greeting". */
   label: string;
-  /** One-line teach note, e.g. '"Buenos dias" is a formal morning greeting.' */
+  /** One line of text, e.g. '"Buenos dias" is a formal morning greeting.' */
   text: string;
 }
 
-const TEACH_LINE_KEY = "sugarlang.teachLine";
+/**
+ * Was "sugarlang.teachLine". A key namespaced to one plugin, in the layer that
+ * must not know that plugin exists: remove sugarlang and the reader became dead
+ * code that still shipped, and no other plugin could ever produce a teach line.
+ *
+ * EXPORTED so writers import it instead of copying the string. A private key
+ * with a hand-typed literal on the writing side is the same silent-failure
+ * shape this rename was meant to end -- both sides' tests keep passing while
+ * the annotation quietly stops rendering.
+ */
+export const DIALOGUE_TEACH_LINE_KEY = "dialogueTeachLine";
 
-export function readTeachLine(
+/**
+ * Attaches a teach line to a turn's annotations.
+ *
+ * The write half of the contract, so the key and the shape are checked by the
+ * compiler rather than agreed by convention.
+ */
+export function writeDialogueTeachLine(
+  annotations: Record<string, unknown>,
+  teachLine: DialogueTeachLineAnnotation
+): void {
+  annotations[DIALOGUE_TEACH_LINE_KEY] = teachLine;
+}
+
+export function readDialogueTeachLine(
   annotations: Record<string, unknown> | undefined
-): TeachLineAnnotation | null {
+): DialogueTeachLineAnnotation | null {
   if (!annotations) return null;
-  const raw = annotations[TEACH_LINE_KEY];
+  const raw = annotations[DIALOGUE_TEACH_LINE_KEY];
   if (
     typeof raw !== "object" ||
     raw === null ||

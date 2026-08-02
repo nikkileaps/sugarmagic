@@ -114,7 +114,7 @@ create/update chunk cards (`lemmaId = "chunk:<chunkId>"`). Player free-text
 input and scripted player lines emit `chunk-produced`. First encounter of a
 chunk tied to a communicative function (the function has no existing teach
 record) triggers the explicit teach beat: one `TeachRecord` is written via
-`TeachRecordStore` and one `sugarlang.teachLine` annotation (`{ label, text }`)
+`TeachRecordStore` and one `dialogueTeachLine` annotation (`{ label, text }`)
 is written onto the turn. `DialoguePanel` renders the annotation below the
 turn text in the enrichment slot (`enrichmentContainer`, CSS class
 `sm-dialogue-teach-line`). Only one teach-line annotation is written per turn

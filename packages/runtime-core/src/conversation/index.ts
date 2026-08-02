@@ -113,15 +113,6 @@ export interface QuestFormDefinition {
   >;
 }
 
-export function isQuestFormDefinition(value: unknown): value is QuestFormDefinition {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    Array.isArray((value as QuestFormDefinition).questions) &&
-    typeof (value as QuestFormDefinition).formTitle === "string"
-  );
-}
-
 export type ConversationPlayerInput =
   | { kind: "advance" }
   | { kind: "choice"; choiceId: string }

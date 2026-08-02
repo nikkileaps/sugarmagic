@@ -2507,9 +2507,16 @@ export function createRuntimeGameplaySessionController(
     toggleInventory: inventoryUi.toggle,
     toggleCaster: spellMenuUi.toggle,
     submitQuestFormResponse(response) {
-      // A form opened by an ASSESSMENT OBJECTIVE goes back to the plugin that
-      // supplied it -- there is no conversation behind it to submit into.
-      if (activeAssessment) {
+      // A quest form only ever comes from an ASSESSMENT OBJECTIVE, so the
+      // answers go back to the plugin that supplied it. There is no
+      // conversation route: a form never travels on a turn.
+      if (!activeAssessment) {
+        console.warn(
+          "[gameplay-session] quest form submitted with no assessment open; ignoring."
+        );
+        return;
+      }
+      {
         const contribution = activeAssessment;
         activeAssessment = null;
         options.uiStateStore?.setState({
@@ -2527,20 +2534,14 @@ export function createRuntimeGameplaySessionController(
           .catch((error: unknown) => {
             console.warn("[gameplay-session] assessment submit failed.", error);
           });
-        return;
       }
-      dialoguePanel.submitQuestFormResponse(response);
     },
     cancelQuestForm() {
-      if (activeAssessment) {
-        activeAssessment = null;
-        options.uiStateStore?.setState({
-          questFormOpen: false,
-          questFormDefinition: null
-        });
-        return;
-      }
-      dialoguePanel.cancelQuestForm();
+      activeAssessment = null;
+      options.uiStateStore?.setState({
+        questFormOpen: false,
+        questFormDefinition: null
+      });
     },
     dispose() {
       for (const dispose of [...mechanicsEmitDisposers].reverse()) {
