@@ -952,10 +952,25 @@ export function createSugarLangObserveMiddleware(
       // 090.7: the realization half of the trace. The teacher trace shows the
       // DECISION and runs before any text exists; this shows what the text
       // actually did with it, and calls out DISJOINT explicitly.
+      // WHAT THE TEACHER ASKED FOR, not every surface it might take.
+      // `focusTerms` is now the full paradigm of each slated word, so passing it
+      // straight through made the trace claim the Teacher had asked for
+      // `estaciones` and `problemas`. Group the terms back under the thing they
+      // are a form OF, which `creditByTerm` already records.
+      const formsByAsked = new Map<string, string[]>();
+      for (const term of focusTerms) {
+        const asked = creditByTerm[term] ?? term;
+        const forms = formsByAsked.get(asked) ?? [];
+        if (term !== asked) forms.push(term);
+        formsByAsked.set(asked, forms);
+      }
       traceRealization({
         npcDisplayName: execution.selection.npcDisplayName ?? null,
         text: normalizedTurn.text,
-        slateTerms: focusTerms,
+        slate: [...formsByAsked.entries()].map(([asked, forms]) => ({
+          asked,
+          forms
+        })),
         ambientSurfaces: ambientSpans.map((span) => span.surface)
       });
 

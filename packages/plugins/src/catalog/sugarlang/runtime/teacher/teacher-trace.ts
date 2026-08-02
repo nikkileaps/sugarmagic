@@ -242,15 +242,41 @@ export function traceTeacherCall(args: {
 export function traceRealization(args: {
   npcDisplayName: string | null;
   text: string;
-  slateTerms: string[];
+  /**
+   * WHAT THE TEACHER ASKED FOR, one entry per slated thing.
+   *
+   * `asked` is the citation form -- the thing the Teacher actually chose.
+   * `forms` is every surface it may legitimately appear as, because realization
+   * writes whatever the sentence needs.
+   *
+   * The two are separate on purpose. Handing this a flat list of surfaces made
+   * the trace claim the Teacher had asked for `estaciones` and `problemas`,
+   * which it never did -- it asked for `estación` and `problema`. A diagnostic
+   * that misreports the decision it exists to explain is worse than none.
+   */
+  slate: Array<{ asked: string; forms: string[] }>;
   ambientSurfaces: string[];
 }): void {
   if (!traceEnabled()) return;
   /* eslint-disable no-console */
-  const { npcDisplayName, text, slateTerms, ambientSurfaces } = args;
+  const { npcDisplayName, text, slate, ambientSurfaces } = args;
   const lowered = text.toLocaleLowerCase();
-  const landed = slateTerms.filter((term) => lowered.includes(term.toLocaleLowerCase()));
-  const missed = slateTerms.filter((term) => !lowered.includes(term.toLocaleLowerCase()));
+  const isPresent = (form: string) => lowered.includes(form.toLocaleLowerCase());
+  // A slated word LANDED if any of its forms is on the page -- `estación`
+  // counts whether the line said `estación` or `estaciones`.
+  const landedEntries = slate.filter((entry) =>
+    [entry.asked, ...entry.forms].some(isPresent)
+  );
+  const landed = landedEntries.map((entry) => {
+    const surface = [entry.asked, ...entry.forms].find(isPresent);
+    return surface && surface !== entry.asked
+      ? `${entry.asked} (as ${surface})`
+      : entry.asked;
+  });
+  const missed = slate
+    .filter((entry) => !landedEntries.includes(entry))
+    .map((entry) => entry.asked);
+  const slateTerms = slate.map((entry) => entry.asked);
   const disjoint = slateTerms.length > 0 && landed.length === 0;
 
   group(
