@@ -16,7 +16,7 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
-import { getWorldDay } from "@sugarmagic/runtime-core";
+import { getWorldDay, writeDialogueTeachLine } from "@sugarmagic/runtime-core";
 import {
   createNoOpTelemetrySink,
   createTelemetryEvent,
@@ -672,10 +672,10 @@ export function createSugarLangObserveMiddleware(
               // functions, chunks or first encounters. The key is generic
               // ("dialogueTeachLine", not "sugarlang.teachLine") so the
               // conversation layer holds no plugin knowledge.
-              normalizedTurn.annotations!["dialogueTeachLine"] = {
+              writeDialogueTeachLine(normalizedTurn.annotations!, {
                 label: fnEntry.displayName,
                 text: `"${match.surfaceMatched}" is a ${fnEntry.displayName.toLowerCase()}.`
-              };
+              });
               teachLineWritten = true;
               teachLineSurface = match.surfaceMatched;
 

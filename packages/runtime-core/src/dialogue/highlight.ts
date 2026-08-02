@@ -59,8 +59,26 @@ export interface DialogueTeachLineAnnotation {
  * Was "sugarlang.teachLine". A key namespaced to one plugin, in the layer that
  * must not know that plugin exists: remove sugarlang and the reader became dead
  * code that still shipped, and no other plugin could ever produce a teach line.
+ *
+ * EXPORTED so writers import it instead of copying the string. A private key
+ * with a hand-typed literal on the writing side is the same silent-failure
+ * shape this rename was meant to end -- both sides' tests keep passing while
+ * the annotation quietly stops rendering.
  */
-const DIALOGUE_TEACH_LINE_KEY = "dialogueTeachLine";
+export const DIALOGUE_TEACH_LINE_KEY = "dialogueTeachLine";
+
+/**
+ * Attaches a teach line to a turn's annotations.
+ *
+ * The write half of the contract, so the key and the shape are checked by the
+ * compiler rather than agreed by convention.
+ */
+export function writeDialogueTeachLine(
+  annotations: Record<string, unknown>,
+  teachLine: DialogueTeachLineAnnotation
+): void {
+  annotations[DIALOGUE_TEACH_LINE_KEY] = teachLine;
+}
 
 export function readDialogueTeachLine(
   annotations: Record<string, unknown> | undefined

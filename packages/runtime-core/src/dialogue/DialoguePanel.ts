@@ -25,7 +25,6 @@ import type {
   ConversationQuestFormResponse,
   ConversationTurnEnvelope
 } from "../conversation";
-import { isQuestFormDefinition } from "../conversation";
 import { findTermMatches, readDialogueHighlight, readDialogueTeachLine } from "./highlight";
 import { splitTextIntoChunks, type UnbreakableRange } from "./chunk-text";
 import {
@@ -44,10 +43,6 @@ import {
 
 export interface RuntimeDialoguePanel extends DialoguePresenter {
   getElement: () => HTMLElement;
-  /** 081.8 -- submits the active quest_form response and closes the overlay. */
-  submitQuestFormResponse: (response: ConversationQuestFormResponse) => void;
-  /** 081.8 -- cancels the active quest_form conversation and closes the overlay. */
-  cancelQuestForm: () => void;
 }
 
 /**
@@ -926,37 +921,8 @@ export function createRuntimeDialoguePanel(
       handler?.({ kind: "free_text", text: trimmed });
       return;
     }
-    if (input.kind === "quest_form") {
-      stopCurrent();
-      handler?.(input);
-      return;
-    }
     stopCurrent();
     handler?.(input);
-  }
-
-  /**
-   * Opens the full-screen QuestFormOverlay for a turn carrying a form.
-   *
-   * Shared by both presentations: the overlay is independent of whether the
-   * conversation is scripted or free-form.
-   *
-   * GENERIC KEY. This read two sugarlang-namespaced keys and ASSEMBLED the
-   * definition from them, which put one plugin's placement flow inside the
-   * generic conversation layer and left any other plugin no way to show a
-   * quest form. Read and pass through: whoever writes "questForm" supplies a
-   * complete definition, and this layer never learns whose it is.
-   *
-   * NO PRODUCER TODAY. Placement -- the only thing that ever wrote it -- now
-   * opens its form through the "quest.assessment" contribution rather than as
-   * a conversation turn. This stays because a quest form on a TURN is part of
-   * the generic conversation contract (`inputMode: "quest_form"`), and the
-   * next plugin to want one should find a key it can actually write.
-   */
-  function openQuestFormOverlay(metadata: Record<string, unknown> | undefined): void {
-    const raw = metadata?.["questForm"];
-    const formDef = isQuestFormDefinition(raw) ? raw : null;
-    uiStateStore?.setState({ questFormOpen: true, questFormDefinition: formDef });
   }
 
   function renderActions() {
@@ -994,11 +960,6 @@ export function createRuntimeDialoguePanel(
 
       footer.appendChild(controls);
       return footer;
-    }
-
-    if (currentInputMode === "quest_form") {
-      openQuestFormOverlay(currentTurnMetadata);
-      return;
     }
 
     // Beat two onwards: the arrow has done its job. Leaving it pulsing while
@@ -1197,9 +1158,7 @@ export function createRuntimeDialoguePanel(
             return;
           }
           // Free-text mode owns Enter via its own input element.
-          // quest_form mode defers to the React overlay.
           if (currentInputMode === "free_text") return;
-          if (currentInputMode === "quest_form") return;
           if (currentChoices.length > 1) return;
           event.preventDefault();
           submitInput({ kind: "advance" });
@@ -1224,7 +1183,6 @@ export function createRuntimeDialoguePanel(
               return;
             }
             if (currentInputMode === "free_text") return;
-            if (currentInputMode === "quest_form") return;
             if (choiceIndex >= currentChoices.length) return;
             event.preventDefault();
             submitInput({
@@ -1340,14 +1298,6 @@ export function createRuntimeDialoguePanel(
       // conversationKind is stable for the session; inputMode is NOT a valid
       // switch (an agent's closing turn reports "advance", which would snap a
       // chat into the scripted box and drop its visible history).
-      // A QUEST FORM IS AN OVERLAY, NOT A BOX. It is not a choice between the
-      // scripted box and the chat panel, so it must not be gated behind that
-      // choice -- which is exactly what happened: the quest_form branch lived
-      // only on the agent path, so an assessment on a scripted NPC rendered its
-      // form intro as an ordinary dialogue line and never opened the form.
-      if (turn.inputMode === "quest_form") {
-        openQuestFormOverlay(turn.metadata);
-      }
       scriptedActive = turn.conversationKind === "scripted-dialogue";
       if (scriptedActive) {
         onCancel = handleCancel ?? null;
@@ -1397,14 +1347,6 @@ export function createRuntimeDialoguePanel(
       }
 
       container.classList.add("visible");
-    },
-    submitQuestFormResponse(response: ConversationQuestFormResponse) {
-      uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
-      submitInput({ kind: "quest_form", response });
-    },
-    cancelQuestForm() {
-      uiStateStore?.setState({ questFormOpen: false, questFormDefinition: null });
-      onCancel?.();
     },
     dispose() {
       for (const unregister of unregisterActions) unregister();

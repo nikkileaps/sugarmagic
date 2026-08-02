@@ -15,7 +15,30 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { findTermMatches, readDialogueTeachLine } from "./highlight";
+import {
+  findTermMatches,
+  readDialogueTeachLine,
+  writeDialogueTeachLine
+} from "./highlight";
+
+describe("teach line write/read contract", () => {
+  it("round-trips: what the writer produces is what the reader finds", () => {
+    // BINDS THE TWO HALVES. Before this, the key was a private const on the
+    // reading side and a hand-typed literal on the writing side, in another
+    // package -- so either could drift and both suites would still pass while
+    // the teach line silently stopped rendering.
+    const annotations: Record<string, unknown> = {};
+    writeDialogueTeachLine(annotations, {
+      label: "Greeting",
+      text: '"Hola" is a greeting.'
+    });
+
+    expect(readDialogueTeachLine(annotations)).toEqual({
+      label: "Greeting",
+      text: '"Hola" is a greeting.'
+    });
+  });
+});
 
 describe("readDialogueTeachLine", () => {
   it("returns null when annotations is undefined", () => {
