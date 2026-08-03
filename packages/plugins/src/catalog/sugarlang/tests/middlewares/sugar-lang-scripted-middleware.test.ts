@@ -140,11 +140,11 @@ describe("scripted rendering costs nothing", () => {
     return scriptedExecution("anchored");
   }
 
-  it("090.11: an A1 line reads the baked variant instead of weaving", async () => {
+  it("090.11: an A1 line reads the baked variant instead of substituting", async () => {
     // THE BEHAVIOUR CHANGE. Beginner lines were the last ones realized at
     // runtime; every other band already read a bake. This is the pin that the
     // baked text actually reaches the player -- if the branch silently fell
-    // through to the weave, the turn would still succeed and still cost no
+    // through to substitution, the turn would still succeed and still cost no
     // gateway call, so nothing else here would notice.
     const llmClient = forbiddenGateway();
     const services = scriptedServices(llmClient) as unknown as {
@@ -173,13 +173,13 @@ describe("scripted rendering costs nothing", () => {
   });
 
   it("rf6.5.2: with no baked variant the AUTHORED ENGLISH is served unchanged", async () => {
-    // THE WEAVE IS GONE (nikki, 2026-07-31). A line with no variant is untaught
+    // CITATION-FORM SUBSTITUTION IS GONE FROM THIS PATH (nikki, 2026-07-31). A line with no variant is untaught
     // but correct and readable, which beats a line half-rewritten by a mechanism
     // that made no pedagogical decision.
     //
     // THIS TEST USED TO ASSERT `expect(turn?.text).toBeTruthy()`, which passes
     // whether the line was woven OR left alone -- so it could not tell the two
-    // apart, and deleting the weave broke nothing. Asserting the EXACT authored
+    // apart, and deleting substitution broke nothing. Asserting the EXACT authored
     // text is what makes the behaviour pinned instead of merely exercised.
     const authored = "Good morning. Would you like some cheese?";
     const llmClient = forbiddenGateway();
@@ -202,7 +202,7 @@ describe("scripted rendering costs nothing", () => {
     // THE REGRESSION THIS CLOSES. Serving a baked variant set turn.text and
     // returned, never touching targetVocab -- which scripted mode leaves empty
     // because it never calls the Teacher. So observe built focusTerms from
-    // nothing and a correctly baked line highlighted NOTHING, while a weave
+    // nothing and a correctly baked line highlighted NOTHING, while a substituted
     // FALLBACK line highlighted fine. Exactly backwards.
     //
     // Pinning the ANNOTATION, not the text. Every other scripted test asserts

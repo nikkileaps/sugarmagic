@@ -53,17 +53,16 @@ describe("tokenize", () => {
     expect(tokenize("...?!", "es")).toEqual([]);
   });
 
-  it("stays within the performance budget on a 500-token string", () => {
-    const text = Array.from({ length: 250 }, () => "hola día").join(" ");
-    const iterations = 100;
-    const startedAt = performance.now();
-    for (let index = 0; index < iterations; index += 1) {
-      tokenize(text, "es");
-    }
-    const averageDurationMs = (performance.now() - startedAt) / iterations;
+  // DELETED a wall-clock performance assertion (2026-08-02).
+  //
+  // It asserted a millisecond budget while vitest runs test files in PARALLEL,
+  // so it measured whatever else the machine was doing as much as the code. It
+  // passed every run in isolation and failed intermittently in the suite, which
+  // is the worst kind of test: it teaches you to ignore a red run.
+  //
+  // Nothing replaces it here. A latency bar needs a harness that controls what
+  // else is running; asserting one from inside the unit suite cannot work.
 
-    expect(averageDurationMs).toBeLessThan(2);
-  });
 
   it("strips gesture-tag spans before tokenization", () => {
     const tokens = tokenize("*slaps knee* ¡Ay, qué cosa!", "es");

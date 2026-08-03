@@ -17,6 +17,7 @@
 import { describe, expect, it } from "vitest";
 import {
   findTermMatches,
+  readDialogueHighlight,
   readDialogueTeachLine,
   writeDialogueTeachLine
 } from "./highlight";
@@ -108,8 +109,53 @@ describe("findTermMatches", () => {
     expect(matches[0]!.start).toBeLessThan(matches[1]!.start);
   });
 
-  it("does not match terms shorter than MIN_TERM_LENGTH (3)", () => {
-    expect(findTermMatches("un dia", ["un"], [], [])).toHaveLength(0);
+  it("the reader carries every field the type declares", () => {
+    // A field the reader forgets is a field nothing downstream can see, however
+    // carefully the writer set it. That already happened once with
+    // ambientSpans, which rode the annotation while the reader dropped it.
+    const annotations = {
+      dialogueHighlight: {
+        focusTerms: ["hablo"],
+        introduceTerms: ["hablo"],
+        celebrateTerms: [],
+        glosses: { hablo: "speak, talk" },
+        creditByTerm: { hablo: "hablar" }
+      }
+    };
+    const read = readDialogueHighlight(annotations);
+    expect(read?.creditByTerm).toEqual({ hablo: "hablar" });
+    expect(read?.glosses).toEqual({ hablo: "speak, talk" });
+  });
+
+  it("matches a two-letter term, because two letters is a word", () => {
+    // `es`, `va`, `ve`, `da` and `ha` are forms of the five commonest verbs in
+    // Spanish. The floor used to be 3 and silently dropped every one of them.
+    expect(findTermMatches("el es alto", ["es"], [], [])).toHaveLength(1);
+  });
+
+  it("does not match a one-letter term", () => {
+    expect(findTermMatches("un dia", ["u"], [], [])).toHaveLength(0);
+  });
+
+  it("matches an accent-bearing form, which an ASCII boundary cannot", () => {
+    // \b is ASCII-defined, so it treats an accent as a word boundary and
+    // `\bhabló\b` matches nothing. Spanish preterite first and third person
+    // always end in an accented vowel -- most of a tense.
+    expect(findTermMatches("ella habló ayer", ["habló"], [], [])).toHaveLength(1);
+    expect(findTermMatches("yo comí pan", ["comí"], [], [])).toHaveLength(1);
+  });
+
+  it("does not light half a word", () => {
+    // `\bhablar\w{0,4}\b` used to match `hablar` INSIDE `hablarás`, lighting
+    // six letters of an eight-letter word. A term is exact now.
+    expect(findTermMatches("hablarás manana", ["hablar"], [], [])).toHaveLength(0);
+  });
+
+  it("does not guess at inflection", () => {
+    // The caller supplies every form explicitly, so there is nothing to guess.
+    // `maleta` no longer half-matches `maletas`; the paradigm supplies both.
+    expect(findTermMatches("dos maletas", ["maleta"], [], [])).toHaveLength(0);
+    expect(findTermMatches("dos maletas", ["maletas"], [], [])).toHaveLength(1);
   });
 
   // 090.11 item 4: SPANS, NOT WORDS.

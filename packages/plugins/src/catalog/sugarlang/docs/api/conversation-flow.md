@@ -159,10 +159,10 @@ attempts one repair.
 `sugarlang.scripted` looks up the variant baked for this line at this learner's
 band and serves it. No model call.
 
-On a **cache miss** it falls back to `applyWeave`, which calls `markGradedText`
+On a **cache miss** it serves the authored English unchanged (`applyWeave` was deleted in rf6.5.2)
 and assigns the result back to the turn text -- substituting target-language
 words into the authored English. This is the last survival of the old "diglot
-weave" design, and it is the one place where finished text still gets rewritten
+substitution" design, and it is the one place where finished text still gets rewritten
 rather than generated. Expect it to go.
 
 ### 7. The text is marked up and presented

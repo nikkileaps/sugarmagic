@@ -77,6 +77,9 @@ export function createTestAtlasProvider(
     getBand(lemmaId: string): CEFRBand | undefined {
       return byLemma.get(lemmaId)?.cefrPriorBand;
     },
+    getForms(lemmaId: string) {
+      return byLemma.get(lemmaId)?.forms;
+    },
     getFrequencyRank(lemmaId: string): number | undefined {
       return byLemma.get(lemmaId)?.frequencyRank ?? undefined;
     },

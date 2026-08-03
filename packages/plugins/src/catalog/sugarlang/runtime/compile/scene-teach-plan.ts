@@ -61,6 +61,7 @@ import type { GradedTextSlate } from "../grading/graded-text-service";
 import { composeSituation } from "../situation";
 import { situationKey } from "../situation/situation-key";
 import { createEmptyLearnerProfile } from "../learner/persistence";
+import { seedCefrPosteriorFromPlacement } from "../learner/cefr-posterior";
 
 /** One directive per band, plus the slate the bake actually consumes. */
 export interface SceneTeachPlan {
@@ -115,15 +116,36 @@ export async function planSceneTeaching(args: {
   // fans out over scenes; firing every band of every scene at once is how a
   // rebuild turns into a rate-limit incident.
   for (const band of bands) {
-    const learner = createEmptyLearnerProfile({
-      // Branded id. Not a real learner and deliberately labelled as such, so a
-      // bake directive turning up in learner telemetry is obviously synthetic
-      // rather than looking like a player whose cards are all empty.
-      learnerId: `bake:${band}` as LearnerId,
-      targetLanguage,
-      supportLanguage,
-      estimatedCefrBand: band
-    });
+    const learner = {
+      ...createEmptyLearnerProfile({
+        // Branded id. Not a real learner and deliberately labelled as such, so a
+        // bake directive turning up in learner telemetry is obviously synthetic
+        // rather than looking like a player whose cards are all empty.
+        learnerId: `bake:${band}` as LearnerId,
+        targetLanguage,
+        supportLanguage,
+        estimatedCefrBand: band
+      }),
+      // The band is not a guess here -- the bake hardcodes it, one variant per
+      // band. An empty profile is cold-start by construction (unassessed,
+      // confidence 1/6, uniform posterior), and the Teacher reads that as "we
+      // do not know this learner" and teaches to the uncertainty rather than to
+      // the band: `isA1OrLowerConfidence` emits the beginner hint,
+      // `getDefaultSupportPosture` returns `anchored` under 0.3, and
+      // `getDefaultInteractionStyle` returns `listening_first` while the status
+      // is not `evaluated`. All three fired at every band, so C1 baked at the
+      // A1 support ratio and every variant came out almost entirely English.
+      //
+      // So state the certainty we actually have. evaluatedAtMs stays null: a
+      // bake must be deterministic, and nothing reads the timestamp.
+      assessment: {
+        status: "evaluated" as const,
+        evaluatedCefrBand: band,
+        cefrConfidence: 1,
+        evaluatedAtMs: null
+      },
+      cefrPosterior: seedCefrPosteriorFromPlacement(band, 1)
+    };
 
     try {
       const directive = await teacher.invoke({

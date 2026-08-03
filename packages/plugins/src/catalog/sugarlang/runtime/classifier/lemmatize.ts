@@ -7,7 +7,7 @@
  *   - lemmatize
  *
  * Relationships:
- *   - Is consumed by coverage computation, the classifier facade, and auto-simplify.
+ *   - Is consumed by coverage computation and the classifier facade.
  *   - Wraps the fail-fast morphology loader from Epic 4 without duplicating lookup rules.
  *
  * Implements: Proposal 001 §2. Envelope Classifier

@@ -9,7 +9,7 @@ This document records the deterministic classifier API owned by
 
 - The classifier is fully deterministic. No LLM calls. Same inputs produce the same verdict.
 - Tokenization uses built-in `Intl.Segmenter`, so there is no extra tokenizer dependency to drift out of sync.
-- Missing morphology, atlas, or simplification data throws loudly instead of silently degrading.
+- Missing morphology or atlas data throws loudly instead of silently degrading.
 
 ## Tokenization
 
@@ -110,32 +110,17 @@ This document records the deterministic classifier API owned by
 - Performance target from Epic 5:
   - p95 at or below ~5ms for a typical 50-80 token NPC reply
 
-## Auto-Simplify Fallback
-
-- `autoSimplify(text, violations, learner, simplifications?)`
-- Returns:
-  - `text`
-  - `substitutionCount`
-  - `fallbackGlosses`
-- Behavior:
-  - prefers the first simplification substitution whose replacement band is at or below the learner band
-  - falls back to an italicized gloss when no acceptable substitution exists
-  - re-runs the classifier on the final text and throws if the result is still out of envelope
-
 ## Real Data Dependencies
 
 - Spanish:
   - real ELELex-backed atlas
   - real morphology index
-  - simplifications dictionary generated from the shipped atlas
 - Italian:
   - real Kelly-backed atlas with frequency-derived backfill
   - real morphology index
-  - simplifications dictionary generated from the shipped atlas
 
 ## Regression Coverage
 
 - Unit tests cover every rule clause individually.
 - The Ethereal Altar quest-essential regression case is locked in.
 - Performance checks run for tokenization, coverage, and full-classifier loops.
-- Auto-simplify re-verification is tested repeatedly so classifier and simplification data stay aligned.

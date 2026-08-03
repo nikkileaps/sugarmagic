@@ -57,7 +57,7 @@
  *     hashing live with the callers that own the content.
  *   - It does not decide WHETHER to grade, or at which bands. That is
  *     scheduling.
- *   - It does not gloss, weave, or annotate. Those are runtime concerns.
+ *   - It does not gloss, substitute, or annotate. Those are runtime concerns.
  *
  * WHY IT EXISTS
  *
@@ -154,8 +154,26 @@ import { MorphologyLoader } from "../classifier/morphology-loader";
  *            passes `teach`, so the no-slate prompt is byte-identical and no
  *            snapshot moved. Without the bump, every already-baked variant would
  *            have stayed cached and never picked up slate steering at all.
+ *   conjugation.4b.0
+ *            Named for the epic rather than a plan number, because this work is
+ *            tracked in lit (sugarmagic-conjugation-u9w) and inventing a plan
+ *            number to match the older entries would be a lie. The value is a
+ *            cache-key leg; only its uniqueness matters.
+ *
+ *            THE PROMPT DID NOT CHANGE. The MARKS did: a slated word now
+ *            contributes every form it can take rather than its citation form,
+ *            and the record carries `creditByTerm`. Marks are computed at bake
+ *            time and stored on the variant, and the cache key is
+ *            {lang, band, contentHash, promptVersion} where contentHash hashes
+ *            the AUTHORED text -- so nothing else here moves when the marks
+ *            change. Without this bump every already-baked line would keep its
+ *            old lemma-only terms forever and only agent turns would highlight
+ *            conjugated verbs: the same word behaving differently depending on
+ *            whether its line was baked, which is what this pipeline exists to
+ *            prevent.
+ *            EVERY BAKED VARIANT IS INVALIDATED. Rebake.
  */
-export const GRADED_TEXT_PROMPT_VERSION = "090.11.0";
+export const GRADED_TEXT_PROMPT_VERSION = "conjugation.4b.0";
 
 /** Minimum voice-retention score for the voice gate to pass. */
 export const VOICE_RETENTION_PASS_THRESHOLD = 0.5;

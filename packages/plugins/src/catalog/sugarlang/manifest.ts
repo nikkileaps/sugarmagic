@@ -152,8 +152,7 @@ export function createSugarlangPlugin(
         getVariantCache: () => services.getVariantCache(),
         getTargetLanguage: () => services.getTargetLanguage(),
         getLearnerBand: () => services.getLearnerBand(),
-        promptVersion: GRADED_TEXT_PROMPT_VERSION,
-        getWeaveInputs: () => services.getWeaveInputs()
+        promptVersion: GRADED_TEXT_PROMPT_VERSION
       })
     }
   };

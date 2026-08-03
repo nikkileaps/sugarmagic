@@ -115,6 +115,9 @@ export function createLexicalAtlasProvider(
     getBand(lemmaId: string, _lookupLang: string): CEFRBand | undefined {
       return lemmaMap.get(lemmaId)?.cefrPriorBand;
     },
+    getForms(lemmaId: string, _lookupLang: string) {
+      return lemmaMap.get(lemmaId)?.forms;
+    },
     getFrequencyRank(lemmaId: string, _lookupLang: string): number | undefined {
       return lemmaMap.get(lemmaId)?.frequencyRank ?? undefined;
     },

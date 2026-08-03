@@ -23,6 +23,7 @@ import type {
   LemmaRef,
   LexicalAtlasProvider
 } from "../../types";
+import type { WordForms } from "../../classifier/word-forms";
 
 export type AtlasPriorSource =
   | "cefrlex"
@@ -95,10 +96,16 @@ function assertValidAtlasFile(
         `Invalid cefrlex data for "${lang}": lemma "${lemmaId}" lang mismatch.`
       );
     }
+    // NULL IS VALID and means "unranked" -- a lemma added by hand, or one the
+    // frequency corpus never saw. `AtlasLemmaEntry.frequencyRank` is
+    // `number | null` and every consumer already handles it; this check used to
+    // reject what the type and the schema both allow, which is why a
+    // hand-added lemma could not load.
     if (
-      typeof entry.frequencyRank !== "number" ||
-      !Number.isInteger(entry.frequencyRank) ||
-      entry.frequencyRank < 1
+      entry.frequencyRank !== null &&
+      (typeof entry.frequencyRank !== "number" ||
+        !Number.isInteger(entry.frequencyRank) ||
+        entry.frequencyRank < 1)
     ) {
       throw new Error(
         `Invalid cefrlex data for "${lang}": lemma "${lemmaId}" has invalid frequencyRank.`
@@ -197,6 +204,17 @@ export class CefrLexAtlasProvider implements LexicalAtlasProvider {
     return this.getLemma(lemmaId, lang)?.cefrPriorBand;
   }
 
+  /**
+   * The word's inflected forms, or undefined when none are stored.
+   *
+   * Undefined is ordinary rather than exceptional: closed-class words do not
+   * inflect in this data, and higher-band verbs may not have been filled in
+   * yet. Callers fall back to the citation form.
+   */
+  getForms(lemmaId: string, lang: string): WordForms | undefined {
+    return this.getLemma(lemmaId, lang)?.forms;
+  }
+
   getFrequencyRank(lemmaId: string, lang: string): number | undefined {
     return this.getLemma(lemmaId, lang)?.frequencyRank ?? undefined;
   }
@@ -219,8 +237,15 @@ export class CefrLexAtlasProvider implements LexicalAtlasProvider {
   listLemmasAtBand(band: CEFRBand, lang: string): LemmaRef[] {
     return Object.values(this.load(lang).lemmas)
       .filter((entry) => entry.cefrPriorBand === band)
+      // Commonest first, UNRANKED LAST -- matching `byFrequencyThenId` in
+      // scene-teachable-resolver.ts. This was `?? 0`, which sorted an unranked
+      // lemma as if it were the single most frequent word in the language. No
+      // null existed when it was written, so the two rankers disagreeing was
+      // invisible until one appeared.
       .sort(
-        (left, right) => (left.frequencyRank ?? 0) - (right.frequencyRank ?? 0)
+        (left, right) =>
+          (left.frequencyRank ?? Number.MAX_SAFE_INTEGER) -
+          (right.frequencyRank ?? Number.MAX_SAFE_INTEGER)
       )
       .map((entry) => ({
         lemmaId: entry.lemmaId,

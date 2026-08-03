@@ -28,6 +28,10 @@ import type { LearnerProfile, LemmaCard } from "../learner";
 import type { CefrPosterior } from "../learner";
 import type { Situation } from "../situation";
 import type { LemmaRef } from "./lexical-prescription";
+import type {
+  FormsSource,
+  WordForms
+} from "../classifier/word-forms";
 
 /**
  * Canonical atlas entry returned by the lexical-atlas provider.
@@ -43,6 +47,17 @@ export interface AtlasLemmaEntry {
   glosses?: Record<string, string>;
   examples?: string[];
   cefrPriorSource?: string;
+  /**
+   * The word's inflected forms, shaped by part of speech. Absent for entries
+   * that do not inflect, and for the ones nobody has filled in yet -- absence
+   * is a normal state, not an error.
+   *
+   * Read them through `runtime/classifier/word-forms.ts`; the arrays are
+   * positional and indexing them by hand is how a person miscounts a person.
+   */
+  forms?: WordForms;
+  /** Where `forms` came from, so review is a queue rather than a guess. */
+  formsSource?: FormsSource;
 }
 
 /**
@@ -158,6 +173,14 @@ export interface LexicalAtlasProvider {
   getBand: (lemmaId: string, lang: string) => CEFRBand | undefined;
   getFrequencyRank: (lemmaId: string, lang: string) => number | undefined;
   getGloss: (lemmaId: string, lang: string, supportLang: string) => string | undefined;
+  /**
+   * The word's inflected forms, or undefined when it has none stored.
+   *
+   * Undefined is ordinary: closed-class words do not inflect here, and 584
+   * higher-band verbs have no paradigm yet. Callers fall back to the citation
+   * form rather than treating it as a failure.
+   */
+  getForms: (lemmaId: string, lang: string) => WordForms | undefined;
   resolveFromGloss: (glossWord: string, lang: string, supportLang: string) => AtlasLemmaEntry[];
   listLemmasAtBand: (band: CEFRBand, lang: string) => LemmaRef[];
   getAtlasVersion: (lang: string) => string;

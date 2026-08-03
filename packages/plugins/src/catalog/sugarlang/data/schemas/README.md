@@ -6,7 +6,6 @@ Epic 4 owns the language-data schemas:
 
 - `cefrlex.schema.json`
 - `morphology.schema.json`
-- `simplifications.schema.json`
 - `placement-questionnaire.schema.json`
 - `frequency.schema.json`
 - `kelly-subset.schema.json`

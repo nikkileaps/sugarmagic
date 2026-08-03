@@ -96,7 +96,7 @@ describe("dialogue node source", () => {
   it("reproduces the legacy content hash exactly", () => {
     // LOAD-BEARING. The runtime lookup and the Studio popover build this seed
     // independently. Drift here does not error -- every lookup just misses and
-    // scripted lines quietly fall back to the diglot weave, which reads as
+    // scripted lines quietly fall back to citation-form substitution, which reads as
     // "grading broke" rather than "the hash moved".
     expect(buildDialogueNodeContentHash("node-1", "Have you seen my luggage?")).toBe(
       ["node-1", "Have you seen my luggage?", JSON.stringify({})].join("|")

@@ -5,7 +5,11 @@
   "description": "Plugin-shipped lexical atlas data keyed by lemma id.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["lang", "atlasVersion", "lemmas"],
+  "required": [
+    "lang",
+    "atlasVersion",
+    "lemmas"
+  ],
   "properties": {
     "lang": {
       "type": "string",
@@ -29,7 +33,14 @@
   "$defs": {
     "cefrBand": {
       "type": "string",
-      "enum": ["A1", "A2", "B1", "B2", "C1", "C2"]
+      "enum": [
+        "A1",
+        "A2",
+        "B1",
+        "B2",
+        "C1",
+        "C2"
+      ]
     },
     "atlasLemmaEntry": {
       "type": "object",
@@ -100,6 +111,155 @@
             "claude-classified",
             "human-override",
             "kelly"
+          ]
+        },
+        "forms": {
+          "description": "Inflected forms, shaped by part of speech. Read through runtime/classifier/word-forms.ts, never by bare index.",
+          "oneOf": [
+            {
+              "type": "object",
+              "description": "Verb paradigm. Six slots per tense in person order (1s,2s,3s,1p,2p,3p); null where the form does not exist.",
+              "additionalProperties": false,
+              "required": [
+                "pres",
+                "pret",
+                "imp",
+                "ger",
+                "part"
+              ],
+              "properties": {
+                "pres": {
+                  "type": "array",
+                  "minItems": 6,
+                  "maxItems": 6,
+                  "description": "Six slots in person order: 1s, 2s, 3s, 1p, 2p, 3p. Null where the form does not exist for this verb (llover has no first person).",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "pret": {
+                  "type": "array",
+                  "minItems": 6,
+                  "maxItems": 6,
+                  "description": "Six slots in person order: 1s, 2s, 3s, 1p, 2p, 3p. Null where the form does not exist for this verb (llover has no first person).",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "imp": {
+                  "type": "array",
+                  "minItems": 6,
+                  "maxItems": 6,
+                  "description": "Six slots in person order: 1s, 2s, 3s, 1p, 2p, 3p. Null where the form does not exist for this verb (llover has no first person).",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "ger": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "part": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Noun. Number only -- a feminine noun is a separate lemma.",
+              "required": [
+                "sg",
+                "pl"
+              ],
+              "properties": {
+                "sg": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "pl": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Adjective. Gender and number; fs/fp null for the invariable ones (verde, feliz).",
+              "required": [
+                "ms",
+                "fs",
+                "mp",
+                "fp"
+              ],
+              "properties": {
+                "ms": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "fs": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "mp": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "fp": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "formsSource": {
+          "type": "string",
+          "description": "Provenance of `forms`. Only `generated` may be overwritten by a seeding script.",
+          "enum": [
+            "generated",
+            "reviewed",
+            "authored"
           ]
         }
       }

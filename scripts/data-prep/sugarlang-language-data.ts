@@ -29,14 +29,46 @@ type AtlasPriorSource =
   | "human-override"
   | "kelly";
 
+/** Six slots in person order 1s,2s,3s,1p,2p,3p; null where the form does not exist. */
+type ParadigmRow = Array<string | null>;
+
+interface AtlasVerbForms {
+  pres: ParadigmRow;
+  pret: ParadigmRow;
+  imp: ParadigmRow;
+  ger: string;
+  part: string;
+}
+
+/** Nouns inflect for number only -- a feminine noun is a separate lemma. */
+interface AtlasNounForms {
+  sg: string;
+  pl: string;
+}
+
+/** Adjectives inflect for gender and number; fs/fp null when invariable. */
+interface AtlasAdjectiveForms {
+  ms: string;
+  fs: string | null;
+  mp: string;
+  fp: string | null;
+}
+
+type AtlasWordForms =
+  | AtlasVerbForms
+  | AtlasNounForms
+  | AtlasAdjectiveForms;
+
 interface AtlasLemmaEntry {
   lemmaId: string;
   lang: string;
   cefrPriorBand: CEFRBand;
-  frequencyRank: number;
+  frequencyRank: number | null;
   partsOfSpeech: string[];
   gloss?: string;
   cefrPriorSource: AtlasPriorSource;
+  /** Verbs only. Authored in the dictionary; this file derives FROM it. */
+  forms?: AtlasWordForms;
 }
 
 export interface CefrLexDataFile {
@@ -53,18 +85,6 @@ interface MorphologyEntry {
 export interface MorphologyDataFile {
   lang: string;
   forms: Record<string, MorphologyEntry>;
-}
-
-interface SimplificationEntry {
-  kind: "lemma-substitution" | "gloss-fallback";
-  lemmaId?: string;
-  gloss?: string;
-  contextTags?: string[];
-}
-
-interface SimplificationsDataFile {
-  lang: string;
-  entries: Record<string, SimplificationEntry[]>;
 }
 
 interface FrequencyLemmaEntry {
@@ -103,13 +123,6 @@ interface PlacementQuestionnaire {
   minAnswersForValid: number;
 }
 
-interface ParsedSpanishLemma {
-  lemmaId: string;
-  band: CEFRBand;
-  totalFrequency: number;
-  partsOfSpeech: Set<string>;
-}
-
 interface ParsedItalianLemma {
   lemmaId: string;
   partsOfSpeech: Set<string>;
@@ -117,15 +130,12 @@ interface ParsedItalianLemma {
   cefrBand: CEFRBand | null;
 }
 
-const ELELEX_DOWNLOAD_URL =
-  "https://cental.uclouvain.be/cefrlex/static/resources/es/ELELex.tsv";
 const ITALIAN_KELLY_URL = "https://ssharoff.github.io/kelly/it_m3.xls";
 const DATA_BUILD_DATE = "2026-04-09";
 
 const CEFR_ORDER: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1", "C2"];
 const SPANISH_SOURCE_BANDS: CEFRBand[] = ["A1", "A2", "B1", "B2", "C1"];
 const SPANISH_ATLAS_LIMIT = 11000;
-const ITALIAN_REVIEW_QUEUE_LIMIT = 50;
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(SCRIPT_DIR, "..", "..");
@@ -176,18 +186,6 @@ async function downloadToCache(url: string, filename: string): Promise<string> {
   const arrayBuffer = await response.arrayBuffer();
   writeFileSync(path, Buffer.from(arrayBuffer));
   return path;
-}
-
-async function downloadTextToCache(
-  url: string,
-  filename: string
-): Promise<string> {
-  const path = await downloadToCache(url, filename);
-  return readFileSync(path, "utf8");
-}
-
-function parseDelimitedRow(line: string): string[] {
-  return line.split("\t").map((cell) => cell.replace(/^"|"$/g, ""));
 }
 
 function mapSpanishPos(tag: string): string[] {
@@ -259,71 +257,6 @@ function mapItalianPos(pos: string): string[] {
     default:
       return ["other"];
   }
-}
-
-function guessSpanishBand(levelFrequencies: number[]): CEFRBand {
-  const index = levelFrequencies.findIndex((value) => value > 0);
-  if (index === -1) {
-    return "C1";
-  }
-
-  return SPANISH_SOURCE_BANDS[index] ?? "C1";
-}
-
-async function loadSpanishSourceEntries(): Promise<ParsedSpanishLemma[]> {
-  const tsv = await downloadTextToCache(ELELEX_DOWNLOAD_URL, "ELELex.tsv");
-  const lines = tsv.trim().split(/\r?\n/);
-  const grouped = new Map<string, ParsedSpanishLemma>();
-
-  for (const line of lines.slice(1)) {
-    const [
-      rawWord,
-      rawTag,
-      rawA1,
-      rawA2,
-      rawB1,
-      rawB2,
-      rawC1,
-      rawTotalFrequency
-    ] = parseDelimitedRow(line);
-    const lemmaId = normalizeLemma(rawWord ?? "");
-    if (!lemmaId) {
-      continue;
-    }
-
-    const entryBand = guessSpanishBand([
-      Number(rawA1),
-      Number(rawA2),
-      Number(rawB1),
-      Number(rawB2),
-      Number(rawC1)
-    ]);
-    const totalFrequency = Number(rawTotalFrequency);
-    const partsOfSpeech = mapSpanishPos(rawTag ?? "");
-    const existing = grouped.get(lemmaId);
-
-    if (existing) {
-      existing.band = pickLowerBand(existing.band, entryBand);
-      existing.totalFrequency += Number.isFinite(totalFrequency)
-        ? totalFrequency
-        : 0;
-      partsOfSpeech.forEach((partOfSpeech) =>
-        existing.partsOfSpeech.add(partOfSpeech)
-      );
-      continue;
-    }
-
-    grouped.set(lemmaId, {
-      lemmaId,
-      band: entryBand,
-      totalFrequency: Number.isFinite(totalFrequency) ? totalFrequency : 0,
-      partsOfSpeech: new Set(partsOfSpeech)
-    });
-  }
-
-  return [...grouped.values()]
-    .sort((left, right) => right.totalFrequency - left.totalFrequency)
-    .slice(0, SPANISH_ATLAS_LIMIT);
 }
 
 async function loadItalianSourceEntries(): Promise<ParsedItalianLemma[]> {
@@ -411,25 +344,6 @@ function finalizeAtlasEntries(
   );
 }
 
-export async function buildSpanishCefrlexData(): Promise<CefrLexDataFile> {
-  const entries = await loadSpanishSourceEntries();
-
-  return {
-    lang: "es",
-    atlasVersion: "es-elelex-2026-04-09",
-    lemmas: finalizeAtlasEntries(
-      entries.map((entry, index) => ({
-        lemmaId: entry.lemmaId,
-        lang: "es",
-        cefrPriorBand: entry.band,
-        frequencyRank: index + 1,
-        partsOfSpeech: [...entry.partsOfSpeech],
-        cefrPriorSource: "cefrlex"
-      }))
-    )
-  };
-}
-
 export async function buildItalianFrequencyData(): Promise<FrequencyDataFile> {
   const entries = await loadItalianSourceEntries();
   const total = entries.length;
@@ -451,46 +365,25 @@ export async function buildItalianFrequencyData(): Promise<FrequencyDataFile> {
   };
 }
 
-export async function buildItalianKellySubsetData(): Promise<KellySubsetDataFile> {
-  const entries = await loadItalianSourceEntries();
-  const filtered = entries.filter(
-    (entry): entry is ParsedItalianLemma & { cefrBand: CEFRBand } =>
-      entry.cefrBand !== null
-  );
-
-  return {
-    lang: "it",
-    sourceVersion: "it-kelly-2014",
-    lemmas: Object.fromEntries(
-      filtered.map((entry) => [
-        entry.lemmaId,
-        {
-          lemmaId: entry.lemmaId,
-          lang: "it",
-          cefrBand: entry.cefrBand
-        }
-      ])
-    )
-  };
-}
-
-export async function buildItalianCefrlexData(): Promise<CefrLexDataFile> {
-  const entries = await loadItalianSourceEntries();
-
-  return {
-    lang: "it",
-    atlasVersion: "it-kelly-2026-04-09",
-    lemmas: finalizeAtlasEntries(
-      entries.map((entry, index) => ({
-        lemmaId: entry.lemmaId,
-        lang: "it",
-        cefrPriorBand: entry.cefrBand ?? rankToBand(index + 1),
-        frequencyRank: index + 1,
-        partsOfSpeech: [...entry.partsOfSpeech],
-        cefrPriorSource: entry.cefrBand ? "kelly" : "frequency-derived"
-      }))
-    )
-  };
+/**
+ * Every distinct surface an entry claims, whatever its part of speech.
+ *
+ * Mirrors `allForms` in runtime/classifier/word-forms.ts. The two are separate
+ * because this script does not import from the plugin package; if the stored
+ * shape changes, change both.
+ */
+function surfacesOf(entry: AtlasLemmaEntry): string[] {
+  const f = entry.forms;
+  if (!f) return [entry.lemmaId];
+  const raw: Array<string | null | undefined> =
+    "pres" in f
+      ? [...f.pres, ...f.pret, ...f.imp, f.ger, f.part]
+      : "sg" in f
+        ? [f.sg, f.pl]
+        : [f.ms, f.fs, f.mp, f.fp];
+  return [
+    ...new Set([entry.lemmaId, ...raw])
+  ].filter((s): s is string => typeof s === "string" && s.length > 0);
 }
 
 function addMorphologyEntry(
@@ -510,46 +403,34 @@ function addMorphologyEntry(
   };
 }
 
+/**
+ * EVERY SURFACE THE DICTIONARY HOLDS, POINTED AT ITS LEMMA. No rules.
+ *
+ * This function used to GUESS -- `-ar` verbs got `-ando`/`-ado`, nouns got
+ * `+s`/`+es`, and anything ending in `-o` got a `-a` "feminine". Guessing does
+ * not know meaning, so it produced words that do not exist (`pedir` ->
+ * "pediendo", real: `pidiendo`) and, worse, words that exist and mean something
+ * else: `caso` -> `casa`, `puerto` -> `puerta`, `libro` -> `libra`. Those are
+ * not inflections, they are different words, and the index claimed otherwise.
+ *
+ * The forms now live in the dictionary, where a person or a model can read them
+ * next to the gloss and correct them. This file only inverts them.
+ */
 function addSpanishMorphologyForms(
   forms: Record<string, MorphologyEntry>,
-  lemmaId: string,
-  partsOfSpeech: string[]
+  entry: AtlasLemmaEntry
 ): void {
-  addMorphologyEntry(forms, lemmaId, lemmaId, partsOfSpeech);
-
-  if (partsOfSpeech.includes("verb")) {
-    if (lemmaId.endsWith("ar")) {
-      const stem = lemmaId.slice(0, -2);
-      addMorphologyEntry(forms, `${stem}ando`, lemmaId, partsOfSpeech);
-      addMorphologyEntry(forms, `${stem}ado`, lemmaId, partsOfSpeech);
-    } else if (lemmaId.endsWith("er") || lemmaId.endsWith("ir")) {
-      const stem = lemmaId.slice(0, -2);
-      addMorphologyEntry(forms, `${stem}iendo`, lemmaId, partsOfSpeech);
-      addMorphologyEntry(forms, `${stem}ido`, lemmaId, partsOfSpeech);
-    }
-  }
-
-  if (partsOfSpeech.includes("noun") || partsOfSpeech.includes("adjective")) {
-    if (/[aeiouáéíóú]$/u.test(lemmaId)) {
-      addMorphologyEntry(forms, `${lemmaId}s`, lemmaId, partsOfSpeech);
-    } else {
-      addMorphologyEntry(forms, `${lemmaId}es`, lemmaId, partsOfSpeech);
-    }
-
-    if (lemmaId.endsWith("o")) {
-      const stem = lemmaId.slice(0, -1);
-      addMorphologyEntry(forms, `${stem}a`, lemmaId, partsOfSpeech);
-      addMorphologyEntry(forms, `${stem}os`, lemmaId, partsOfSpeech);
-      addMorphologyEntry(forms, `${stem}as`, lemmaId, partsOfSpeech);
-    }
+  for (const surface of surfacesOf(entry)) {
+    addMorphologyEntry(forms, surface, entry.lemmaId, entry.partsOfSpeech);
   }
 }
 
+/** Italian has no authored paradigms yet, so every verb takes the rule path. */
 function addItalianMorphologyForms(
   forms: Record<string, MorphologyEntry>,
-  lemmaId: string,
-  partsOfSpeech: string[]
+  entry: AtlasLemmaEntry
 ): void {
+  const { lemmaId, partsOfSpeech } = entry;
   addMorphologyEntry(forms, lemmaId, lemmaId, partsOfSpeech);
 
   if (partsOfSpeech.includes("verb")) {
@@ -598,14 +479,28 @@ function buildMorphologyData(
   atlas: CefrLexDataFile,
   addLanguageSpecificForms: (
     forms: Record<string, MorphologyEntry>,
-    lemmaId: string,
-    partsOfSpeech: string[]
+    entry: AtlasLemmaEntry
   ) => void
 ): MorphologyDataFile {
   const forms: Record<string, MorphologyEntry> = {};
 
+  // TWO PASSES, AND THE ORDER IS THE POINT. `addMorphologyEntry` is
+  // first-come -- it refuses to overwrite -- so whoever claims a surface first
+  // keeps it. Every HEADWORD is claimed before any derived form, because a word
+  // that is a lemma in its own right outranks an inflected form of something
+  // else.
+  //
+  // Without this, `hecho` (the noun, "fact") loses its own entry to the
+  // participle of `hacer`, and `puesto`, `abierto`, `escrito`, `oido`,
+  // `muerto` and `cubierto` go the same way. That was latent while the
+  // generator guessed -- it produced `hacido`, which collides with nothing --
+  // and only surfaced once the real participles came from the dictionary.
   for (const entry of Object.values(atlas.lemmas)) {
-    addLanguageSpecificForms(forms, entry.lemmaId, entry.partsOfSpeech);
+    addMorphologyEntry(forms, entry.lemmaId, entry.lemmaId, entry.partsOfSpeech);
+  }
+
+  for (const entry of Object.values(atlas.lemmas)) {
+    addLanguageSpecificForms(forms, entry);
   }
 
   return {
@@ -624,99 +519,6 @@ export function buildItalianMorphologyData(
   atlas: CefrLexDataFile
 ): MorphologyDataFile {
   return buildMorphologyData(atlas, addItalianMorphologyForms);
-}
-
-function buildSimplificationsData(
-  atlas: CefrLexDataFile
-): SimplificationsDataFile {
-  const lowerBandEntries = Object.values(atlas.lemmas)
-    .filter(
-      (entry) => entry.cefrPriorBand === "A1" || entry.cefrPriorBand === "A2"
-    )
-    .sort((left, right) => left.frequencyRank - right.frequencyRank);
-  const lowerByPos = new Map<string, AtlasLemmaEntry[]>();
-
-  for (const entry of lowerBandEntries) {
-    for (const partOfSpeech of entry.partsOfSpeech) {
-      const bucket = lowerByPos.get(partOfSpeech) ?? [];
-      bucket.push(entry);
-      lowerByPos.set(partOfSpeech, bucket);
-    }
-  }
-
-  const entries: Record<string, SimplificationEntry[]> = {};
-
-  for (const entry of Object.values(atlas.lemmas)) {
-    if (entry.cefrPriorBand === "A1" || entry.cefrPriorBand === "A2") {
-      continue;
-    }
-
-    const preferredPartOfSpeech = entry.partsOfSpeech[0];
-    const candidates =
-      (preferredPartOfSpeech
-        ? lowerByPos.get(preferredPartOfSpeech)
-        : undefined) ?? lowerBandEntries;
-    const substitute = candidates.find(
-      (candidate) => candidate.lemmaId !== entry.lemmaId
-    );
-
-    if (substitute) {
-      entries[entry.lemmaId] = [
-        {
-          kind: "lemma-substitution",
-          lemmaId: substitute.lemmaId,
-          contextTags: [
-            `source-band:${entry.cefrPriorBand.toLowerCase()}`,
-            `source-lang:${atlas.lang}`
-          ]
-        }
-      ];
-      continue;
-    }
-
-    entries[entry.lemmaId] = [
-      {
-        kind: "gloss-fallback",
-        gloss: entry.lemmaId,
-        contextTags: [`source-band:${entry.cefrPriorBand.toLowerCase()}`]
-      }
-    ];
-  }
-
-  return {
-    lang: atlas.lang,
-    entries
-  };
-}
-
-export function buildSpanishSimplificationsData(
-  atlas: CefrLexDataFile
-): SimplificationsDataFile {
-  return buildSimplificationsData(atlas);
-}
-
-export function buildItalianSimplificationsData(
-  atlas: CefrLexDataFile
-): SimplificationsDataFile {
-  return buildSimplificationsData(atlas);
-}
-
-export function buildItalianReviewQueueYaml(atlas: CefrLexDataFile): string {
-  const lowConfidence = Object.values(atlas.lemmas)
-    .filter((entry) => entry.cefrPriorSource === "frequency-derived")
-    .slice(0, ITALIAN_REVIEW_QUEUE_LIMIT);
-
-  const lines = [
-    "# Frequency-derived Italian CEFR assignments for optional human review"
-  ];
-  for (const entry of lowConfidence) {
-    lines.push(`- lemmaId: ${entry.lemmaId}`);
-    lines.push(`  assignedBand: ${entry.cefrPriorBand}`);
-    lines.push(`  frequencyRank: ${entry.frequencyRank}`);
-    lines.push("  reviewReason: kelly-band-missing");
-  }
-
-  return lines.join("\n");
 }
 
 function buildSpanishQuestionnaire(): PlacementQuestionnaire {
@@ -959,11 +761,6 @@ export function readJsonFile<T>(path: string): T {
 export function writeJsonFile(path: string, value: unknown): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
-}
-
-export function writeTextFile(path: string, value: string): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${value}\n`, "utf8");
 }
 
 export function sugarlangDataPath(...segments: string[]): string {

@@ -44,6 +44,7 @@ import type { TeachableRef } from "../contracts/teachable-ref";
 import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
 import { tokenize } from "../classifier/tokenize";
 import { getCompetencyForChunk } from "../inventory/competency-inventory-loader";
+import { allForms } from "../classifier/word-forms";
 
 export interface HighlightTerms {
   /** NEW this turn. Drives gold vs blue. */
@@ -52,6 +53,21 @@ export interface HighlightTerms {
   reinforceTerms: string[];
   /** term -> gloss, for the hover tooltip. */
   glosses: Record<string, string>;
+  /**
+   * term -> what the player gets CREDIT for when they interact with it.
+   *
+   * A term is a surface now (`hablo`), not a citation form (`hablar`), and
+   * several terms map to one teachable. Anything that identifies WHAT WAS
+   * TAUGHT rather than where it is on screen needs this -- a hover writes a
+   * persisted card, and cards live in two key spaces: an atlas lemma, or a
+   * competency's chunk (`chunk:<id>`). Without it the surface itself becomes
+   * the key, which nothing can read back.
+   *
+   * Deliberately NOT called `lemmaByTerm`: a `chunk:` id is not a lemma, and
+   * `contracts/teachable-ref.ts` calls that prefix a lie told to a type. This
+   * is the card key, and the name says so.
+   */
+  creditByTerm: Record<string, string>;
 }
 
 /**
@@ -96,21 +112,47 @@ export function buildHighlightTerms(args: {
   const introduceTerms: string[] = [];
   const reinforceTerms: string[] = [];
   const glosses: Record<string, string> = {};
+  const creditByTerm: Record<string, string> = {};
 
-  // Vocabulary is a WORD, and its surface is the lemma with underscores opened
-  // out -- a multi-word lemma like `buenos_dias` is one term, not two.
-  for (const lemma of vocabularyRefs(introduce)) {
-    const surface = lemma.lemmaId.replace(/_/g, " ");
-    introduceTerms.push(surface);
+  /**
+   * EVERY FORM OF THE WORD, not just its citation form.
+   *
+   * The Teacher slates a LEMMA and realization writes whatever form the
+   * sentence needs, so `hablar` on the slate reaches the page as `hablo`.
+   * Listing only the lemma meant a slated verb never lit up.
+   *
+   * All the forms go in, and `findTermMatches` lights up whichever one is
+   * actually present -- so this file still does no matching, and there is still
+   * one answer to "is this word in this line". A form that is not in the text
+   * simply does not match, exactly as before.
+   *
+   * A word with no stored paradigm contributes its citation form, which is
+   * today's behaviour and the right fallback: 584 higher-band verbs and every
+   * closed-class word have none.
+   */
+  const addVocabulary = (
+    lemma: { lemmaId: string },
+    target: string[]
+  ): void => {
     const gloss = atlas.getGloss(lemma.lemmaId, targetLanguage, supportLanguage);
-    if (gloss) glosses[surface] = gloss;
-  }
-  for (const lemma of vocabularyRefs(reinforce)) {
-    const surface = lemma.lemmaId.replace(/_/g, " ");
-    reinforceTerms.push(surface);
-    const gloss = atlas.getGloss(lemma.lemmaId, targetLanguage, supportLanguage);
-    if (gloss) glosses[surface] = gloss;
-  }
+    // A multi-word lemma like `buenos_dias` is ONE term, not two.
+    const citation = lemma.lemmaId.replace(/_/g, " ");
+    // The citation form is ALWAYS a valid surface and is never a paradigm slot
+    // -- a verb's infinitive is the lemma itself, and `voy a hablar` puts it on
+    // the page verbatim. Include it alongside whatever the paradigm holds.
+    const terms = [
+      citation,
+      ...allForms(atlas.getForms(lemma.lemmaId, targetLanguage))
+    ];
+    for (const term of terms) {
+      if (!target.includes(term)) target.push(term);
+      if (gloss && !glosses[term]) glosses[term] = gloss;
+      creditByTerm[term] = lemma.lemmaId;
+    }
+  };
+
+  for (const lemma of vocabularyRefs(introduce)) addVocabulary(lemma, introduceTerms);
+  for (const lemma of vocabularyRefs(reinforce)) addVocabulary(lemma, reinforceTerms);
 
   // SPANS, NOT WORDS. A competency is an ACT and its exponent is a PHRASE, so
   // `buenos dias` has to be ONE term with one hover -- two lit words read as two
@@ -158,6 +200,10 @@ export function buildHighlightTerms(args: {
         // greet people in a simple way" is the useful hover for `buenos dias`;
         // a word gloss would not be.
         if (!glosses[surface]) glosses[surface] = competency.cefrDescriptor;
+        // The ACT is what was taught, so the credit goes to the competency's
+        // chunk rather than to any word inside the phrase. This is the key the
+        // card store already uses (observe-middleware:440).
+        creditByTerm[surface] = `chunk:${chunkMatch.chunk.chunkId}`;
       }
     } catch {
       // Phrase detection is an affordance. A failure must not cost the line its
@@ -165,5 +211,5 @@ export function buildHighlightTerms(args: {
     }
   }
 
-  return { introduceTerms, reinforceTerms, glosses };
+  return { introduceTerms, reinforceTerms, glosses, creditByTerm };
 }

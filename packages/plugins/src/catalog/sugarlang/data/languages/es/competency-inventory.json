@@ -134,6 +134,19 @@
             "constituentLemmas": [
               "bueno"
             ]
+          },
+          {
+            "chunkId": "que_tal",
+            "normalizedForm": "que_tal",
+            "surfaceForms": [
+              "que tal",
+              "qué tal"
+            ],
+            "cefrBand": "A2",
+            "constituentLemmas": [
+              "qué",
+              "tal"
+            ]
           }
         ]
       }
@@ -553,6 +566,79 @@
             "constituentLemmas": [
               "no",
               "gracia"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-when",
+      "displayName": "Say when",
+      "cefrDescriptor": "Can say when an activity happens.",
+      "band": "A1",
+      "chunks": {
+        "es": [
+          {
+            "chunkId": "fin_de_semana",
+            "normalizedForm": "fin_de_semana",
+            "surfaceForms": [
+              "fin de semana",
+              "el fin de semana",
+              "los fines de semana",
+              "fines de semana"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fin",
+              "de",
+              "semana"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-schedule",
+      "displayName": "State a schedule",
+      "cefrDescriptor": "Can state a basic daily schedule.",
+      "band": "A1",
+      "chunks": {
+        "es": [
+          {
+            "chunkId": "tiempo_libre",
+            "normalizedForm": "tiempo_libre",
+            "surfaceForms": [
+              "tiempo libre",
+              "el tiempo libre",
+              "mi tiempo libre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "tiempo",
+              "libre"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-location",
+      "displayName": "Understand location words",
+      "cefrDescriptor": "Can understand basic location words.",
+      "band": "A1",
+      "chunks": {
+        "es": [
+          {
+            "chunkId": "en_casa",
+            "normalizedForm": "en_casa",
+            "surfaceForms": [
+              "en casa",
+              "en la casa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "en",
+              "casa"
             ]
           }
         ]

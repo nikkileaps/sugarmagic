@@ -46,6 +46,7 @@ function createTeacherAtlasProvider(): LexicalAtlasProvider {
   return {
     getLemma: (lemmaId, lang) => byId.get(`${lang}:${lemmaId}`),
     getBand: (lemmaId, lang) => byId.get(`${lang}:${lemmaId}`)?.cefrPriorBand,
+    getForms: (lemmaId, lang) => byId.get(`${lang}:${lemmaId}`)?.forms,
     getFrequencyRank: (lemmaId, lang) =>
       byId.get(`${lang}:${lemmaId}`)?.frequencyRank ?? undefined,
     getGloss: (lemmaId, lang, supportLang) =>

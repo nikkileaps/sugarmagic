@@ -31,6 +31,7 @@ function createAtlas(): LexicalAtlasProvider {
         ? { lemmaId, lang, cefrPriorBand: "A1", frequencyRank: 1, partsOfSpeech: ["noun"] }
         : undefined,
     getBand: () => "A1",
+    getForms: () => undefined,
     getFrequencyRank: () => 1,
     getGloss: () => undefined,
     resolveFromGloss: () => [],

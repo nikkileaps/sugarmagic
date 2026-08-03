@@ -82,21 +82,23 @@ makes ZERO LLM calls. It reads the VARIANT baked for this line at the learner's
 band (`runtime/compile/variant-cache.ts`) and replaces `turn.text` with it.
 Baking happens at authoring time in Studio, not here.
 
-On a cache miss it falls back to `applyWeave`, which substitutes target-language
-words into the authored English via `markGradedText`. That fallback is the last
-survival of the old diglot-weave design and is load-bearing only because a
-missing variant is currently a NORMAL state: variants are generated one node at
-a time from the Studio variants popover, so most lines have none. It goes away
-once bulk baking lands.
+On a cache miss it serves the AUTHORED ENGLISH, unchanged. CORRECTED
+2026-08-01: this described a fallback called `applyWeave` that substituted
+target words into the authored line. It was deleted in rf6.5.2 and no such
+function exists -- an untaught but correct line beats one half-rewritten by a
+mechanism that made no pedagogical decision.
+
+Item text follows the same rule, via `display-text-resolver`: a baked variant
+for the band, else the authored English. No code in the system rewrites
+finished text.
 
 Narrator, player-VO, and excerpt speakers are never adapted.
 
 **`sugarlang.verify` (analysis, 20).** Free-form turns only (skips scripted
 mode and player-spoken turns). Runs the envelope classifier over the
-generated text against the learner profile and the directive's slate; on violations,
-attempts one LLM repair, re-checks it, and if that fails applies the
-deterministic `autoSimplify` substitution fallback. See "Verify Enforcement
-Scope" below.
+generated text against the learner profile and the directive's slate; on
+violations, attempts one LLM repair and re-checks it. If that fails the original
+turn ships unchanged. See "Verify Enforcement Scope" below.
 
 **`sugarlang.observe` (analysis, 90).** The single place raw turn/input
 context becomes learner observations: hover events, choice selections,
@@ -230,11 +232,15 @@ a violating turn:
    tokens) asking for a same-meaning rewrite with the violating lemmas
    removed. The repaired text is re-run through the classifier; it is only
    accepted if it now passes (`verify.repair-triggered`).
-2. **Deterministic fallback** -- `autoSimplify`
-   (`runtime/classifier/auto-simplify.ts`) substitutes the violating lemmas
-   from the language's simplifications table (`verify.auto-simplify-triggered`).
-3. **Fail-open** -- if autoSimplify throws, the original turn is returned
-   unchanged.
+2. **The original ships.** If no candidate beats the original, that is the end
+   of the ladder. The turn goes out as written -- out of envelope, but
+   grammatical and meaningful -- and the verdict records the violation.
+
+   There is no second, deterministic fallback. One existed until 2026-08-02:
+   it rewrote the finished line, swapping each out-of-band lemma for a
+   lower-band one chosen by band and part of speech with no notion of meaning.
+   It produced text that passed the band check and said nothing. Untaught but
+   correct beats rewritten into nonsense.
 
 **Repair skip conditions.** Two turn types skip the repair ladder entirely
 (classifier still runs, telemetry still emits `verify.deterministic-bypass`):

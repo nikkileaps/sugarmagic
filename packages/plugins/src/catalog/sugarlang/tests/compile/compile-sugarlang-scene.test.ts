@@ -298,18 +298,16 @@ describe("compileSugarlangScene", () => {
     )).toBe(true);
   });
 
-  it("stays within the performance budget for a medium fixture", () => {
-    const context = createTestSceneAuthoringContext();
-    const { atlas, morphology } = createCompileDependencies();
-    const startedAt = performance.now();
+  // DELETED a wall-clock performance assertion (2026-08-02).
+  //
+  // It asserted a millisecond budget while vitest runs test files in PARALLEL,
+  // so it measured whatever else the machine was doing as much as the code. It
+  // passed every run in isolation and failed intermittently in the suite, which
+  // is the worst kind of test: it teaches you to ignore a red run.
+  //
+  // Nothing replaces it here. A latency bar needs a harness that controls what
+  // else is running; asserting one from inside the unit suite cannot work.
 
-    for (let index = 0; index < 50; index += 1) {
-      compileSugarlangScene(context, atlas, morphology, "runtime-preview");
-    }
-
-    const averageDurationMs = (performance.now() - startedAt) / 50;
-    expect(averageDurationMs).toBeLessThan(50);
-  });
 
   it("populates npcVoiceSpecs from a Voice lore section", () => {
     const context = createTestSceneAuthoringContext();

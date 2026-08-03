@@ -480,7 +480,35 @@ export function createSugarLangObserveMiddleware(
       }
 
       const hoverLemma = getHoverLemma(execution);
-      if (hoverLemma) {
+      // A HOVER TERM IS NOT AUTOMATICALLY A LEMMA, and this write is PERSISTED.
+      //
+      // The term is whatever text the presentation layer highlighted, which
+      // reaches here as `lemmaId` with no check that such a lemma exists --
+      // `getHoverLemma` validates that it is a string and nothing more. Cards
+      // live in two key spaces: atlas lemmas, and chunks keyed `chunk:<id>`.
+      // A competency exponent surface is in neither, so hovering `buenos dias`
+      // writes a card under a key nothing can ever read back. 45 of the 56
+      // shipped competency surfaces are not atlas lemmas.
+      //
+      // Refusing is the conservative half. Crediting the COMPETENCY the surface
+      // belongs to needs a surface -> chunk map on the annotation, which the
+      // highlight terms do not carry yet; until then no card beats a junk one.
+      const hoverIsKnown =
+        hoverLemma !== null &&
+        (hoverLemma.lemma.lemmaId.startsWith("chunk:") ||
+          services.atlas.getLemma(
+            hoverLemma.lemma.lemmaId,
+            hoverLemma.lemma.lang
+          ) !== undefined);
+
+      if (hoverLemma && !hoverIsKnown) {
+        logger.debug("Sugarlang ignored a hover on a term that is not a lemma.", {
+          term: hoverLemma.lemma.lemmaId,
+          lang: hoverLemma.lemma.lang
+        });
+      }
+
+      if (hoverLemma && hoverIsKnown) {
         // Distinguish introduce hover (positive first exposure) from reinforce
         // hover (needed help remembering). See observations.ts for the
         // pedagogical rationale behind the different FSRS grades.
@@ -873,7 +901,7 @@ export function createSugarLangObserveMiddleware(
         supportLanguage: supportLang,
         chunkMatcher
       });
-      const { introduceTerms, glosses } = highlightTerms;
+      const { introduceTerms, glosses, creditByTerm } = highlightTerms;
 
       // 085.5 first-teach beat: fires the first time a learner meets a
       // competency-realizing chunk, INDEPENDENT of the slate. Different question
@@ -924,10 +952,25 @@ export function createSugarLangObserveMiddleware(
       // 090.7: the realization half of the trace. The teacher trace shows the
       // DECISION and runs before any text exists; this shows what the text
       // actually did with it, and calls out DISJOINT explicitly.
+      // WHAT THE TEACHER ASKED FOR, not every surface it might take.
+      // `focusTerms` is now the full paradigm of each slated word, so passing it
+      // straight through made the trace claim the Teacher had asked for
+      // `estaciones` and `problemas`. Group the terms back under the thing they
+      // are a form OF, which `creditByTerm` already records.
+      const formsByAsked = new Map<string, string[]>();
+      for (const term of focusTerms) {
+        const asked = creditByTerm[term] ?? term;
+        const forms = formsByAsked.get(asked) ?? [];
+        if (term !== asked) forms.push(term);
+        formsByAsked.set(asked, forms);
+      }
       traceRealization({
         npcDisplayName: execution.selection.npcDisplayName ?? null,
         text: normalizedTurn.text,
-        slateTerms: focusTerms,
+        slate: [...formsByAsked.entries()].map(([asked, forms]) => ({
+          asked,
+          forms
+        })),
         ambientSurfaces: ambientSpans.map((span) => span.surface)
       });
 
@@ -951,7 +994,8 @@ export function createSugarLangObserveMiddleware(
           focusTerms,
           introduceTerms,
           celebrateTerms: [],
-          glosses
+          glosses,
+          creditByTerm
         };
       }
 

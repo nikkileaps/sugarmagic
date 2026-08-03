@@ -11,12 +11,9 @@ and YAML files checked into
 
 - Spanish atlas snapshot: `import-elelex.ts`
 - Spanish morphology snapshot: `build-spanish-morphology.ts`
-- Spanish simplifications snapshot: `build-simplifications-es.ts`
 - Italian frequency snapshot: `derive-italian-frequency.ts`
 - Italian merged atlas snapshot: `build-italian-cefrlex.ts`
 - Italian morphology snapshot: `build-italian-morphology.ts`
-- Italian simplifications snapshot: `build-italian-simplifications.ts`
-- Italian review queue: `claude-classify-italian-lemmas.ts`
 - Shared placement banks: `build-placement-questionnaires.ts`
 
 ## Re-Run

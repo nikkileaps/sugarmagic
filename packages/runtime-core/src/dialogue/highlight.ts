@@ -36,6 +36,18 @@ export interface DialogueHighlightAnnotation {
   celebrateTerms: string[];
   /** Optional term → gloss map for tooltip display (e.g. { "queso": "cheese" }). */
   glosses?: Record<string, string>;
+  /**
+   * Optional term → the identity the term counts AS.
+   *
+   * A term is a surface, and several surfaces are the same word: `hablo`,
+   * `hablas` and `hablar` are one thing to a learner. Anything recording WHAT
+   * WAS MET rather than where it sat on screen reads this -- runtime-core does
+   * not know or care what the values mean, only that a term may carry one.
+   *
+   * Absent means the writer had nothing to say, and readers fall back to the
+   * term itself.
+   */
+  creditByTerm?: Record<string, string>;
 }
 
 const DIALOGUE_HIGHLIGHT_KEY = "dialogueHighlight";
@@ -112,18 +124,37 @@ export function findTermMatches(
   const matches: HighlightMatch[] = [];
   const occupied = new Uint8Array(text.length);
 
-  const MIN_TERM_LENGTH = 3;
+  // TWO CHARACTERS IS A WORD. `es`, `va`, `ve`, `da` and `ha` are forms of
+  // ser, ir, ver, dar and haber -- the five commonest verbs in the language --
+  // and a three-character floor silently dropped every one of them. The floor
+  // existed to stop stray fragments matching when terms were guessed; terms are
+  // now exact forms supplied by the caller, so a short term is a real word
+  // rather than a fragment.
+  const MIN_TERM_LENGTH = 2;
   const sorted = [...focusTerms]
     .filter((t) => t.length >= MIN_TERM_LENGTH)
     .sort((a, b) => b.length - a.length);
 
   for (const term of sorted) {
-    // Match the lemma and common inflected forms (e.g. maleta → maletas,
-    // hablar → hablando). The \w{0,4} suffix allows up to 4 extra characters
-    // for plural, conjugation, or gender suffixes while staying word-bounded.
+    // EXACT MATCH, WITH A UNICODE-AWARE BOUNDARY.
+    //
+    // This was `\b<term>\w{0,4}\b` -- a guess at inflection, tolerating up to
+    // four trailing characters so `maleta` could catch `maletas`. It was wrong
+    // in both directions: it never reached `hablo` from `hablar`, because
+    // Spanish conjugation changes the stem rather than appending to it, and it
+    // over-matched into words that merely began the same way.
+    //
+    // The caller now supplies every form explicitly, so there is nothing left
+    // to guess and the match is literal.
+    //
+    // `\b` and `\w` are ASCII-only, so they treat an accent as a word
+    // boundary: `\bhabló\b` matches NOTHING, and `\bhablar\w{0,4}\b` inside
+    // `hablarás` used to match just `hablar` and light up half a word. Spanish
+    // preterite first and third person always end in an accented vowel, so that
+    // was most of a tense. The lookarounds below are letter-aware.
     const pattern = new RegExp(
-      `\\b${escapeRegExp(term)}\\w{0,4}\\b`,
-      "gi"
+      `(?<![\\p{L}\\p{M}])${escapeRegExp(term)}(?![\\p{L}\\p{M}])`,
+      "giu"
     );
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(text)) !== null) {
@@ -178,6 +209,14 @@ export function readDialogueHighlight(
     typeof record.glosses === "object" && record.glosses !== null
       ? (record.glosses as Record<string, string>)
       : undefined;
+  // COPY EVERY FIELD THE TYPE DECLARES. A field the reader forgets is a field
+  // nothing downstream can see, however carefully the writer set it -- that
+  // already happened once with ambientSpans, which rode the annotation for a
+  // release while `readDialogueHighlight` quietly dropped it.
+  const creditByTerm =
+    typeof record.creditByTerm === "object" && record.creditByTerm !== null
+      ? (record.creditByTerm as Record<string, string>)
+      : undefined;
 
   return {
     focusTerms: (record.focusTerms as string[]).filter(
@@ -193,6 +232,7 @@ export function readDialogueHighlight(
           (t) => typeof t === "string"
         )
       : [],
-    glosses
+    glosses,
+    creditByTerm
   };
 }

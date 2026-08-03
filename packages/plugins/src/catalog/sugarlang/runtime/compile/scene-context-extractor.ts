@@ -93,7 +93,21 @@ import {
 
 const ajv = new Ajv({ allErrors: true, strict: false, removeAdditional: false });
 
-export const SCENE_CONTEXT_PROMPT_VERSION = "090.1.0";
+/**
+ * A leg of the scene-context cache key, so bumping it recompiles every scene.
+ *
+ *   090.1.0  first version.
+ *   conjugation.concepts.0
+ *            acts are named with their VERB rather than nominalized. The prompt
+ *            always asked for acts and always got them -- as `greeting`,
+ *            `arrival`, `introduction`. Those are nouns, and reverse-gloss
+ *            resolution turns them into `saludo`, `llegada`, `introducción`, so
+ *            a scene full of things happening could not put a single verb in
+ *            front of a learner. `greet` resolves to `saludar`, `arrive` to
+ *            `llegar`.
+ *            EVERY CACHED SCENE CONTEXT IS INVALIDATED. Rebuild scenes.
+ */
+export const SCENE_CONTEXT_PROMPT_VERSION = "conjugation.concepts.0";
 
 /**
  * The model's output contract.
@@ -167,8 +181,13 @@ export const SCENE_CONTEXT_PROMPT_TEMPLATE = [
   "- Infer, do not copy. A bio reading \"cheesemonger\" yields the concept",
   "  `cheese` even though that word never appears. This is the point of the",
   "  pass: surface what the content is about, not which words are in it.",
-  "- Include acts the content involves, not only objects: greeting, buying,",
-  "  asking directions, refusing. These matter as much as nouns.",
+  "- Include acts the content involves, not only objects. These matter as much",
+  "  as nouns.",
+  "- NAME AN ACT WITH ITS VERB, in the plain base form -- `arrive`, `greet`,",
+  "  `buy`, `introduce`, `ask` -- and set pos to \"verb\". Do NOT nominalize:",
+  "  `arrival`, `greeting`, `introduction` are nouns, and they resolve to the",
+  "  noun in the target language (`llegada`, `saludo`), so the learner never",
+  "  meets the verb. A scene where someone ARRIVES should teach `llegar`.",
   "- Do NOT translate anything. Every label is English.",
   "- Do NOT invent content that no source supports. Every concept must cite at",
   "  least one sourceId it actually came from.",

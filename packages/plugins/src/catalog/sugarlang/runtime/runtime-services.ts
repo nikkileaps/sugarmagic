@@ -446,31 +446,18 @@ export class SugarlangRuntimeServices {
   }
 
   /**
-   * Inputs for the A1/A2 display-text weave, outside any conversation.
+   * 2026-08-02 DELETED `getMarkerInputs`.
    *
-   * Just the atlas and the learner's band: the weave draws its pool from every
-   * lemma the band admits, so no scene lexicon and no budgeter prescription are
-   * involved (see the "WHY ITEM TEXT DOES NOT GO THROUGH THE BUDGETER" block in
-   * display-text-resolver.ts).
+   * It resolved the atlas + band that the A1/A2 item-text SUBSTITUTION drew its
+   * pool from. Substitution is gone -- item text reads a baked variant and falls
+   * back to authored English, like dialogue -- so the resolver needs nothing
+   * beyond the variant cache, the target language and the band.
    *
-   * Uses AMBIENT services so it answers before any conversation has run --
-   * resolving through execution services was what made item views render
-   * English until the player had talked to somebody.
-   *
-   * Returns null with no resolvable band or no ambient services, and the
-   * resolver falls back to authored English.
+   * The one thing worth keeping from it: it deliberately used AMBIENT services
+   * rather than execution services, because resolving through execution
+   * services made item views render English until the player had talked to
+   * somebody. Any future item-side lookup has the same constraint.
    */
-  async getWeaveInputs(): Promise<{
-    atlas: CefrLexAtlasProvider;
-    band: CEFRBand;
-    supportLanguage: string;
-  } | null> {
-    const band = await this.getLearnerBand();
-    if (!band) return null;
-    const services = await this.getAmbientServices();
-    if (!services) return null;
-    return { atlas: services.atlas, band, supportLanguage: "en" };
-  }
 
   async applyDebugBandOverride(band: CEFRBand, pin: boolean): Promise<void> {
     this._debugPinnedBand = pin ? band : null;

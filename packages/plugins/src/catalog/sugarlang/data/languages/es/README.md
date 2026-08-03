@@ -6,7 +6,7 @@ sugarlang.
 ## Provenance Status
 
 The current checked-in files are rebuilt from the real ELELex Spanish source via
-the scripts in `scripts/data-prep/`. The morphology and simplification files are
+the scripts in `scripts/data-prep/`. The morphology file is
 derived from that imported atlas and are checked in as canonical plugin data.
 
 ## Source Families
@@ -24,7 +24,6 @@ derived from that imported atlas and are checked in as canonical plugin data.
 - `morphology.json`
   - Surface-form entries: 29,284
   - Includes smoke-test forms such as `corriendo -> correr`
-- `simplifications.json`
   - Higher-band entries covered: 5,098
   - Current build strategy: lower-band substitutions chosen from the imported atlas by part of speech and rank
   - Current B1+ substitution coverage: 100%
@@ -43,5 +42,4 @@ From the repo root:
 
 - `pnpm exec tsx scripts/data-prep/import-elelex.ts`
 - `pnpm exec tsx scripts/data-prep/build-spanish-morphology.ts`
-- `pnpm exec tsx scripts/data-prep/build-simplifications-es.ts`
 - `pnpm exec tsx scripts/data-prep/build-placement-questionnaires.ts`

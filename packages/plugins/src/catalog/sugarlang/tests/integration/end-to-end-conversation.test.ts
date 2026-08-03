@@ -12,8 +12,8 @@
  *   - Covers: scripted constraint annotation + authored-text passthrough (no LLM),
  *     scripted adaptation via a stubbed gateway LLM + authored-text fallback on
  *     LLM failure, observation on card, directive cache hit, verify pass
- *     (in-envelope text unchanged), and verify repair path (autoSimplify
- *     fallback when no LLM client).
+ *     (in-envelope text unchanged), and the verify repair path (an
+ *     unrepairable turn ships unchanged when there is no LLM client).
  *
  * Implements: Plan 081 story 081.5 (E2E goldens)
  *
@@ -338,10 +338,12 @@ describe("end-to-end conversation golden", () => {
     expect(initialTurn?.text).toBe("Hola.");
   });
 
-  it("scripted target-dominant posture: zero LLM calls -- degrades to weave when no baked variant", async () => {
+  it("scripted target-dominant posture: zero LLM calls -- degrades to substitution when no baked variant", async () => {
     // 086.4: scripted target-dominant no longer calls the LLM gateway at all.
     // When no variant cache is seeded (cold cache), the scripted middleware
-    // degrades to markGradedText. The fetch guard enforces zero /generate traffic.
+    // degrades to the AUTHORED ENGLISH (substitution deleted 2026-08-02).
+    // The fetch guard enforces zero /generate traffic, which is the real
+    // guarantee here: a beginner turn must never reach the LLM.
     // debugBandOverride:"B1" puts the learner at target-dominant posture.
     const authoredLine = "Welcome to the station, traveler.";
     // Allow nothing -- the scripted path must make zero gateway calls.
@@ -362,7 +364,7 @@ describe("end-to-end conversation golden", () => {
     });
 
     // Turn is defined and the authored line passes through (no variant to substitute,
-    // weave may or may not substitute depending on the gloss index -- the invariant
+    // the marker may or may not substitute depending on the gloss index -- the invariant
     // is zero LLM calls, enforced by the guard).
     expect(turn).toBeDefined();
     void authoredLine; // used by makeNpcTurnProvider as initialText
@@ -527,7 +529,7 @@ describe("end-to-end conversation golden", () => {
     // learner knows (seeded as the sole lexicon entry, same trick as the
     // observation test), so the generated turn is within the envelope and must
     // come out of finalize byte-for-byte identical to what the provider
-    // generated -- no repair, no auto-simplify.
+    // generated -- no repair fired.
     const npcText = "Hola.";
     const { telemetry, services, host } = makeSharedSetup({}, npcText);
 
@@ -556,13 +558,10 @@ describe("end-to-end conversation golden", () => {
     };
     expect(lastVerdict.verdict.withinEnvelope).toBe(true);
 
-    // And neither repair mechanism fired anywhere in the run.
+    // And repair never fired anywhere in the run. (There is no second
+    // mechanism: the autoSimplify fallback was deleted 2026-08-02.)
     const repairs = await telemetry.query({ eventKinds: ["verify.repair-triggered"] });
-    const simplifications = await telemetry.query({
-      eventKinds: ["verify.auto-simplify-triggered"]
-    });
     expect(repairs.length).toBe(0);
-    expect(simplifications.length).toBe(0);
   });
 
   it("B2 learner: all-English NPC turn triggers ratio repair (the playtest bug)", async () => {
@@ -624,10 +623,18 @@ describe("end-to-end conversation golden", () => {
     expect(repairEvent.violations.some((v) => v.includes("85%") && v.includes("Spanish"))).toBe(true);
   });
 
-  it("verify repair path: NPC text violating the envelope is auto-simplified (no LLM needed)", async () => {
-    // "adelante" is above A1 and has a known simplification ("bueno") in the
-    // Spanish simplifications data. With no proxy URL the LLM repair returns null,
-    // so autoSimplify is the repair path. The output text must differ from input.
+  it("verify: an unrepairable turn SHIPS UNCHANGED rather than being rewritten", async () => {
+    // "adelante" is above A1. With no proxy URL the LLM repair returns null, so
+    // there is nothing left to try -- and that is the end of it.
+    //
+    // This used to assert the OPPOSITE: that autoSimplify stripped "adelante"
+    // out. That fallback rewrote finished text, swapping each out-of-band lemma
+    // for a lower-band one chosen by band and part of speech with no notion of
+    // meaning -- 2,996 lemmas mapped to "el" and 910 to "y", so `sostener`
+    // became "and". Deleted 2026-08-02.
+    //
+    // Out of envelope but grammatical beats in-envelope nonsense. The verdict
+    // still records the violation; the player still gets a readable line.
     const { host } = makeSharedSetup({}, "Hola, adelante por favor.");
 
     await host.startSession({
@@ -638,17 +645,15 @@ describe("end-to-end conversation golden", () => {
       supportLanguage: "en"
     });
 
-    // Advance to get the violating NPC turn. The verify middleware should
-    // auto-simplify "adelante" out of the A1 learner's output.
     const turn = await host.submitInput({ kind: "advance" });
 
-    // The turn text must not contain "adelante" after repair.
     expect(turn?.text).toBeDefined();
-    expect(turn!.text.toLowerCase()).not.toContain("adelante");
+    expect(turn!.text.toLowerCase()).toContain("adelante");
   });
 
-  it("scripted anchored posture: zero LLM calls -- weave produces woven text", async () => {
-    // A1 learner -> anchored posture -> markGradedText path fires, no /generate call.
+  it("scripted anchored posture: zero LLM calls", async () => {
+    // A1 learner -> anchored posture -> baked variant or authored English,
+    // no /generate call.
     // The prescription includes "hola" so any authored word that resolves to
     // "hola" in the gloss index gets substituted. We assert no gateway calls and
     // that the scripted middleware ran (turn text is not the authored English
@@ -740,7 +745,7 @@ describe("end-to-end conversation golden", () => {
     // Turn must be defined and the middleware chain must have run.
     expect(turn).toBeDefined();
     // capturedText is the text after the scripted middleware ran.
-    // With an empty introduce list (no prescription yet) the weave is a no-op;
+    // With an empty introduce list (no prescription yet) substitution is a no-op;
     // the important invariant is zero /generate calls, enforced by the guard above.
     expect(capturedText).toBeDefined();
 
@@ -900,9 +905,9 @@ describe("end-to-end conversation golden", () => {
     expect(cache.size()).toBe(1);
   });
 
-  it("086.4 pin: prescription-less scripted line still produces introduce highlights from weave", async () => {
+  it("086.4 pin: prescription-less scripted line still produces introduce highlights from substitution", async () => {
     // Pin for 086.4 deletion: the gloss-scan lineIntroduce variable is gone.
-    // For prescription-less scripted lines the weave now runs with whatever
+    // For prescription-less scripted lines substitution now runs with whatever
     // introduce list the teacher built from the seeded lexicon (possibly empty).
     // This confirms the scripted middleware produces a valid turn and the
     // constraint.targetVocab.introduce field is present and is an array --
@@ -910,7 +915,7 @@ describe("end-to-end conversation golden", () => {
     //
     // With the HOLA_PREVIEW_LEXICON seeded, the teacher's FallbackTeacherPolicy
     // (A1 learner) will include "hola" in the introduce list even without an
-    // explicit prescription. The weave then substitutes woven forms from that
+    // explicit prescription. It then substitutes forms from that
     // list. The introduce list in the constraint after the middleware runs must
     // be an array (possibly empty if no forms were woven).
     const authoredLine = "Hello, welcome to the station.";

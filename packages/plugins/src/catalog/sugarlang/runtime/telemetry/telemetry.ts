@@ -378,15 +378,6 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "verify.auto-simplify-triggered",
-      {
-        sceneId: string;
-        originalText: string;
-        simplifiedText: string;
-        substitutions: string[];
-      }
-    >
-  | TelemetryEventOf<
       "observe.observations-applied",
       {
         sceneId: string;

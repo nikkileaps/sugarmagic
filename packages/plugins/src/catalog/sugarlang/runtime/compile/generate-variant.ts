@@ -193,7 +193,8 @@ export async function generateVariant(
             highlight: {
               focusTerms: focusTermsOf(highlight),
               introduceTerms: highlight.introduceTerms,
-              glosses: highlight.glosses
+              glosses: highlight.glosses,
+              creditByTerm: highlight.creditByTerm
             }
           }
         : {}),

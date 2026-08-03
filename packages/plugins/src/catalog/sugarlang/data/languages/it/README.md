@@ -33,7 +33,6 @@ does not provide a CEFR point.
 - `morphology.json`
   - Surface-form entries: 12,943
   - Includes smoke-test forms such as `correndo -> correre`
-- `simplifications.json`
   - Higher-band entries covered: 4,435
   - Current build strategy: lower-band substitutions chosen from the imported atlas by part of speech and rank
   - Current substitution coverage: 100%
@@ -56,6 +55,4 @@ From the repo root:
 - `pnpm exec tsx scripts/data-prep/derive-italian-frequency.ts`
 - `pnpm exec tsx scripts/data-prep/build-italian-cefrlex.ts`
 - `pnpm exec tsx scripts/data-prep/build-italian-morphology.ts`
-- `pnpm exec tsx scripts/data-prep/build-italian-simplifications.ts`
 - `pnpm exec tsx scripts/data-prep/build-placement-questionnaires.ts`
-- `pnpm exec tsx scripts/data-prep/claude-classify-italian-lemmas.ts`

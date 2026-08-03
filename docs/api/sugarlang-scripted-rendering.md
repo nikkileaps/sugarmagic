@@ -12,16 +12,22 @@ out:
 1. **Baked variants (primary, every band A1-C2).** The line is pre-rendered per
    band at authoring time in Studio and read from cache at runtime. Baking is
    where the LLM call happens; the runtime only reads.
-2. **Weave (fallback, on cache miss).** `applyWeave` in the scripted middleware
-   substitutes target-language words into the authored English via
-   `markGradedText`.
+2. **No fallback.** A line with no baked variant serves the AUTHORED ENGLISH,
+   unchanged. It is untaught but correct and readable, which beats a line
+   half-rewritten by a mechanism that made no pedagogical decision.
 
-The weave survives ONLY because a missing variant is currently a normal state:
-variants are generated one node at a time from the Studio variants popover, so
-most lines have none. Once bulk baking lands, a missing A1 variant becomes a
-build error and the weave is deleted.
+CORRECTED 2026-08-01. This document described a cache-miss fallback called
+`applyWeave` that substituted target words into the authored line. It was
+deleted in rf6.5.2 and no such function exists. Its removal also fixed an
+inversion where the FALLBACK line highlighted and the correctly BAKED line did
+not.
 
-DELETED, despite appearing below: the standalone diglot-weave module, and the
+Item text follows the same rule, via `display-text-resolver`: a baked variant
+for the band, else the authored English. Nothing in the system rewrites finished
+text.
+
+DELETED, despite appearing below: the standalone diglot-weave module, the
+citation-form substitution that replaced it (`markGradedText`), and the
 directed live-render tier (unwired in 090.8c -- `live-render-cache.ts` and
 `verify-live-render.ts` still exist as files but nothing in the middleware
 imports them).
@@ -34,8 +40,7 @@ gateway present.
 | Role | Path |
 |------|------|
 | Scripted middleware | `packages/plugins/src/catalog/sugarlang/runtime/middlewares/sugar-lang-scripted-middleware.ts` |
-| Weave fallback (`applyWeave`) | inside `runtime/middlewares/sugar-lang-scripted-middleware.ts`. The standalone `runtime/classifier/diglot-weave.ts` module is DELETED. |
-| Graded-text marker (what the weave calls) | `packages/plugins/src/catalog/sugarlang/runtime/grading/graded-text-marker.ts` |
+| Display-text resolver (item text -> baked variant, else authored English) | `packages/plugins/src/catalog/sugarlang/runtime/grading/display-text-resolver.ts` |
 | Bake-time variant generator | `packages/plugins/src/catalog/sugarlang/runtime/compile/generate-variant.ts` |
 | Variant cache (memory + IDB) | `packages/plugins/src/catalog/sugarlang/runtime/compile/variant-cache.ts` |
 | Live-render cache (memory) -- UNWIRED, no middleware imports it | `packages/plugins/src/catalog/sugarlang/runtime/compile/live-render-cache.ts` |
@@ -50,54 +55,23 @@ gateway present.
 
 ## Rendering Ladder
 
-### Tier A1: Deterministic weave -- NOW THE FALLBACK, NOT THE FLOOR
+### Citation-form substitution (deleted)
 
-Stale below: this describes the weave as the tier that ALWAYS runs for
-anchored/supported postures. Since 090.11 those postures read a baked variant
-first and only weave on a cache miss. The mechanism described is otherwise
-accurate, and it now lives in `applyWeave` rather than its own module.
+There is no substitution tier. Nothing splices target-language words into
+authored English, on either the scripted path or the display-text path.
 
-The authored English text is used as the frame. Words that resolve via the
-atlas to prescription-introduced lemmas are substituted with their citation
-form (lemmaId bare, no glossing markup inline). Output is built
-character-by-character with no model call.
+WHY, since "it taught a few words for free" is a real argument: for a verb the
+citation form is the INFINITIVE, so the mechanism deterministically wrote
+`necesitar` where the sentence needed `necesitas` -- ungrammatical output on
+every verb it touched, with no model involved and no verdict recording it.
 
-Rules:
-- Chunk constituent match takes priority over single-word substitution: if a
-  resolved lemma is a constituent of an inventory chunk, the chunk's primary
-  surface form is substituted instead.
-- Each English word is substituted at every occurrence in the line.
-- If no substitutions are possible, the original English is returned unchanged.
-- The introduce list for the weave is built from TWO sources merged:
-  (1) the prescription's `targetVocab.introduce` list; (2) a gloss scan of the
-  authored English text itself (words with atlas resolutions, length >= 3,
-  de-duplicated). This ensures the weave produces output even for lines with
-  no compiled scene lexicon (new scenes, uncomped regions).
+Beginner bands are not left untaught. They read baked variants like every other
+band, generated at the anchored ratio their posture directs.
 
-```typescript
-// diglot-weave.ts
-export interface DiglotWeaveResult {
-  text: string;
-  weavedForms: WeavedForm[];  // one entry per distinct substituted word
-}
-
-export interface WeavedForm {
-  targetForm: string;    // citation form placed in the text
-  lemmaId: string;       // target-lang lemma this represents
-  englishGloss: string;  // original English word (for observe middleware)
-}
-```
-
-After weaving, `constraint.targetVocab.introduce` is updated to contain only
-the woven forms. The observe middleware then highlights exactly what was
-substituted.
-
-**Inflected-form substitution is deferred.** The atlas morphology data is
-surface-to-lemma only; an inverse index (lemma + features -> surface form) does
-not exist. Citation forms (e.g. `comer`, not `comiendo`) are placed as-is.
-Revisit when citation-form output reads as grammatically wrong to a learner
-past A2, or when a native reviewer flags weave grammar. (See deferred seam
-comment in `diglot-weave.ts`.)
+Generating an inflected form would need an inverse morphology index (lemma +
+features -> surface form), which does not exist and is not planned -- nothing
+generates forms from features. Recognizing a conjugated form for MATCHING is a
+separate open question; see `sugarmagic-morphology-2z1`.
 
 ### Tier B1: Baked variants -- NOW EVERY BAND, NOT JUST B1+
 
@@ -134,7 +108,7 @@ reads it via `extractSugarlangStudioWorkspaceId` and calls
 and Preview run on the same origin). If `studioWorkspaceId` is absent from the
 boot payload, `variantCache` is undefined and the middleware degrades silently.
 
-On a cache miss at runtime, the middleware degrades to the diglot weave (Tier
+On a cache miss at runtime, the middleware serves authored English -- there is no substitution fallback (Tier
 A1) so the turn always completes.
 
 ### Tier C: Directed live render -- DELETED (unwired in 090.8c)
@@ -239,30 +213,35 @@ completely wrong renderings without a model call.
 
 ### `applyMixedTextEnvelopePredicate` vs `applyEnvelopeRule`
 
-Mixed-text lines (diglot weave, baked variants) MUST use
+Mixed-text lines (substituted forms, baked variants) MUST use
 `applyMixedTextEnvelopePredicate`, NOT `applyEnvelopeRule`.
 
 `applyEnvelopeRule` has an unconditional `coverageRatio >= 0.95` floor.
 English-frame tokens fail target-language lemmatization into `unknownTokens`,
-collapsing coverage below the floor for any weaved line. The mixed-text
+collapsing coverage below the floor for any substituted line. The mixed-text
 predicate has two legs only: violation allowance and ceiling exceedances.
 
 ## Degradation Order
 
 At runtime, for each scripted NPC turn:
 
-1. Posture check:
-   - `anchored` or `supported` -> go to step 2 (weave path)
-   - `target-dominant` -> go to step 3 (variant path)
-2. (Weave path) Run `diglotWeave`. If weavedForms.length > 0, update turn text
-   and introduce list. Return turn.
-3. (Variant path) If `liveRenderTriggered` (currently always false): attempt
-   live render. On success -> use rendered text, cache in `LiveRenderCache`.
-   On any failure -> fall through to step 4.
-4. (Variant path) If `variantCache` wired: attempt `variantCache.get`. On hit
-   -> use baked text. On miss or error -> fall through to step 5.
-5. (Degradation) Run `diglotWeave` on the authored English. Produces introduce
-   highlights at minimum; turn text is weave output or unchanged English.
+Every band takes the same path -- there is no posture fork and no substitution
+step.
+
+1. If `liveRenderTriggered` (currently always false): attempt live render. On
+   success -> use rendered text, cache in `LiveRenderCache`. On any failure ->
+   fall through to step 2.
+2. If `variantCache` is wired: attempt `variantCache.get` for this band. On hit
+   -> use the baked text and attach its baked `highlight`. On miss or error ->
+   fall through to step 3.
+3. (Degradation) Serve the authored English UNCHANGED. Untaught but correct and
+   readable, which beats a line half-rewritten by a mechanism that made no
+   pedagogical decision.
+
+Beginner postures used to fork at step 1 into a substitution path that spliced
+citation forms into the authored English. That path is deleted; anchored and
+supported now read a baked variant like every other band, generated at the
+ratio their posture directs.
 
 Every step fails safe: a JavaScript error anywhere in steps 3-5 falls through
 to the next step.

@@ -56,6 +56,15 @@ export function createSugarlangDialogueContribution(): {
   let currentFocusTerms: string[] = [];
   let currentIntroduceTerms: string[] = [];
   let currentGlosses: Record<string, string> = {};
+  /**
+   * term -> what the player gets credit for touching it.
+   *
+   * A term is a SURFACE now (`hablo`), and a card is keyed by the thing it
+   * teaches (`hablar`, or `chunk:<id>` for a phrase). Without this the surface
+   * itself would be written as the card key, which nothing can read back --
+   * observe rejects it and the hover is dropped.
+   */
+  let currentCreditByTerm: Record<string, string> = {};
   let currentTargetLanguage = "es";
 
   // 090.12: the lookup resolver owns its atlas and morphology rather than
@@ -71,6 +80,7 @@ export function createSugarlangDialogueContribution(): {
       currentFocusTerms = highlight.focusTerms;
       currentIntroduceTerms = highlight.introduceTerms;
       currentGlosses = highlight.glosses ?? {};
+      currentCreditByTerm = highlight.creditByTerm ?? {};
     }
 
     // Track target language from NPC turn constraint annotations
@@ -104,7 +114,11 @@ export function createSugarlangDialogueContribution(): {
           focusTerms: matchedTerms,
           introduceTerms: matchedTerms.filter((t) => introduceSet.has(t)),
           celebrateTerms,
-          glosses: currentGlosses
+          glosses: currentGlosses,
+          // Carried, not rebuilt. This annotation is written fresh on the
+          // PLAYER's turn, so a field left out here is gone for the one turn
+          // celebrate runs on.
+          creditByTerm: currentCreditByTerm
         };
       }
     }
@@ -113,8 +127,15 @@ export function createSugarlangDialogueContribution(): {
   }
 
   function onTermHover(event: TermHoverEvent): void {
+    // REPORT WHAT THE TERM TEACHES, not the term. The player hovered `hablo`;
+    // the card belongs to `hablar`. Falling back to the term itself keeps the
+    // old behaviour for anything with no credit recorded -- observe still
+    // refuses it if the dictionary does not know it.
+    const term = event.term;
+    const credit =
+      currentCreditByTerm[term] ?? currentCreditByTerm[term.toLowerCase()] ?? term;
     pendingHover = {
-      lemmaId: event.term,
+      lemmaId: credit,
       lang: event.lang || currentTargetLanguage,
       dwellMs: event.dwellMs,
       hoveredAtMs: Date.now()

@@ -98,7 +98,7 @@ describe("generateVariant", () => {
     // just produced.
     //
     // Without this a correctly baked line reached the player with NO
-    // highlighting, while a weave fallback line highlighted fine.
+    // highlighting, while a substituted fallback line highlighted fine.
     const llmClient = createStubLLMClient({ variantText: "Hola. Quiere queso?" });
     const atlas = createTestAtlasProvider("es", [
       { lemmaId: "queso", cefrPriorBand: "A1", gloss: "cheese" }

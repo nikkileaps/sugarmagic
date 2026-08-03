@@ -610,7 +610,7 @@ describe("SugarLangVerifyMiddleware", () => {
     // directedRatio=1.0 (target-only), failFloor=0.7. Original is all-English (score=0).
     // Repair candidate has measuredRatio=0.5 -- still under-ratio but score=0.5 > 0.
     // repairWithBestOfN returns the candidate with selectedPasses=false.
-    // violations.length===0 so autoSimplify is a no-op; candidate is the terminal result.
+    // No lemma violations, so the repaired candidate is the terminal result.
     const repairCandidate = "Un poco en español hoy.";
     const llmClient = {
       generate: vi.fn().mockResolvedValue({ text: repairCandidate, requestId: null })
@@ -650,9 +650,14 @@ describe("SugarLangVerifyMiddleware", () => {
     expect(result?.text).not.toBe("I only speak English today.");
   });
 
-  it("083.2: lemma-violation with empty LLM response falls through to autoSimplify", async () => {
-    // LLM returns empty string -> parseCandidates returns [] -> repairWithBestOfN returns null.
-    // Original has a lemma violation; autoSimplify substitutes it.
+  it("083.2: lemma-violation with empty LLM response ships the original", async () => {
+    // LLM returns empty string -> parseCandidates returns [] -> repairWithBestOfN
+    // returns null. There is nothing further to try, so the original turn is the
+    // terminal result -- out of envelope, but grammatical and meaningful.
+    //
+    // This used to assert autoSimplify had rewritten "adelante" away. That
+    // fallback is deleted (2026-08-02): it swapped out-of-band lemmas for
+    // lower-band ones chosen with no notion of meaning.
     const llmClient = {
       generate: vi.fn().mockResolvedValue({ text: "", requestId: null })
     };
@@ -681,8 +686,8 @@ describe("SugarLangVerifyMiddleware", () => {
     const result = await middleware.finalize?.(execution, createTestTurn("Hola, adelante."));
 
     expect(llmClient.generate).toHaveBeenCalledTimes(1);
-    // autoSimplify substituted "adelante" since repair returned nothing
-    expect(result?.text?.toLowerCase()).not.toContain("adelante");
+    // Repair was attempted and failed; the original survives untouched.
+    expect(result?.text?.toLowerCase()).toContain("adelante");
   });
 
   it("083.2: code-fenced JSON response is parsed correctly (live regression)", async () => {

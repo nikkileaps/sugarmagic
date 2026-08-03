@@ -40,14 +40,9 @@
  */
 
 import type { CEFRBand } from "../cefr";
-import { CEFR_BAND_ORDER as BAND_ORDER } from "../learner";
 import type { GradedTextSource } from "../contracts/graded-text";
 import type { SugarlangVariantCache } from "../compile/variant-cache";
-import type { LexicalAtlasProvider } from "../types";
 import { buildItemViewContentHash } from "./sources/item-view-source";
-import { markGradedText } from "./graded-text-marker";
-import { postureForBand } from "../teacher/band-envelope";
-import { getAllInventoryChunks } from "../inventory/competency-inventory-loader";
 
 /**
  * 090.8a DELETED `isWeaveBand`.
@@ -62,21 +57,11 @@ import { getAllInventoryChunks } from "../inventory/competency-inventory-loader"
  * marked-up English on the line right after it. Sharing one definition is how
  * that stays true rather than how it happens to be true.
  *
- * Variants are deliberately not baked below B1 today -- a full target-language
- * paragraph is unreadable to a beginner. 090.11 changes that by baking
- * beginner-appropriate variants instead of substituting at runtime.
+ * 2026-08-02: moot HERE now -- every band reads a baked variant and there is no
+ * second strategy to keep in step. Beginner variants are baked at the anchored
+ * ratio (ITEM_VARIANT_BANDS), which is what 090.11 promised and what made
+ * runtime substitution unnecessary.
  */
-
-// 090.9: was a local copy named BAND_ORDER, one of six.
-
-/**
- * Every band at or below the learner's, so the pool is "all the vocabulary this
- * level admits" rather than a ranked shortlist.
- */
-function bandsUpTo(band: CEFRBand): CEFRBand[] {
-  const index = BAND_ORDER.indexOf(band);
-  return index < 0 ? [band] : BAND_ORDER.slice(0, index + 1);
-}
 
 /*
  * WHY ITEM TEXT DOES NOT GO THROUGH THE BUDGETER (nikki, 2026-07-28)
@@ -124,26 +109,12 @@ export interface DisplayTextResolveRequest {
   text: string;
 }
 
-/** Everything the A1/A2 weave path needs, resolved lazily. */
-export interface WeaveInputs {
-  atlas: LexicalAtlasProvider;
-  /** Learner's band -- the pool is every lemma at or below it. */
-  band: CEFRBand;
-  supportLanguage: string;
-}
-
 export interface DisplayTextResolverDeps {
   /** Undefined with no studio workspace. Only the B1+ path needs it. */
   getVariantCache: () => SugarlangVariantCache | undefined;
   getTargetLanguage: () => string | null;
   getLearnerBand: () => Promise<CEFRBand | null>;
   promptVersion: string;
-  /**
-   * Resolves the weave inputs, or null when they are unavailable (no learner,
-   * no scene lexicon yet). Omitting it disables weaving entirely; the resolver
-   * still answers, with authored text.
-   */
-  getWeaveInputs?: () => Promise<WeaveInputs | null>;
 }
 
 /**
@@ -188,15 +159,12 @@ export function createDisplayTextResolver(deps: DisplayTextResolverDeps) {
       const band = await deps.getLearnerBand();
       if (!band) return request.text;
 
-      // A1/A2 splice target words into the authored English rather than reading
-      // a baked variant -- there are none below B1, by design. Without this
-      // branch a beginner sees plain English on every item forever, which is
-      // exactly the bug this fixes.
-      const posture = postureForBand(band);
-      if (posture === "anchored" || posture === "supported") {
-        return (await markText(request.text, lang, deps)) ?? request.text;
-      }
-
+      // 2026-08-02: A1/A2 used to splice target words into the authored English
+      // here rather than read a baked variant, because none were baked below B1.
+      // Both halves are gone -- beginner item variants ARE baked now (see
+      // ITEM_VARIANT_BANDS), and nothing in this system rewrites finished text.
+      // Item text behaves exactly like dialogue: a baked variant if there is
+      // one, the authored English if there is not.
       const cache = deps.getVariantCache();
       if (!cache) return request.text;
 
@@ -220,48 +188,3 @@ export function createDisplayTextResolver(deps: DisplayTextResolverDeps) {
   };
 }
 
-/**
- * Splice target-language citation forms into authored English.
- *
- * The substitution pool is every lemma at or below the learner's band, straight
- * from the atlas. The budgeter is deliberately NOT consulted -- see the
- * "WHY ITEM TEXT DOES NOT GO THROUGH THE BUDGETER" block at the top of this
- * file for the reasoning and the 090 revisit.
- *
- * Returns null whenever anything is missing or nothing was substituted, and the
- * caller falls back to the authored text. Total, like the rest of the resolver.
- */
-async function markText(
-  text: string,
-  targetLang: string,
-  deps: DisplayTextResolverDeps
-): Promise<string | null> {
-  if (!deps.getWeaveInputs) return null;
-  const inputs = await deps.getWeaveInputs();
-  if (!inputs) return null;
-
-  let inventoryChunks: ReturnType<typeof getAllInventoryChunks> = [];
-  try {
-    inventoryChunks = getAllInventoryChunks(targetLang);
-  } catch {
-    // No inventory for this language -- weave proceeds without chunk swaps.
-  }
-
-  // Every lemma the learner's level admits, as the substitution pool.
-  const pool = bandsUpTo(inputs.band).flatMap((band) =>
-    inputs.atlas.listLemmasAtBand(band, targetLang)
-  );
-
-  const result = markGradedText(
-    text,
-    pool,
-    inventoryChunks,
-    inputs.atlas,
-    targetLang,
-    inputs.supportLanguage
-  );
-  // No substitution is not a failure -- it means nothing prescribed appears in
-  // this text. Returning null keeps the authored English rather than the
-  // identical string the weave just handed back.
-  return result.markedForms.length > 0 ? result.text : null;
-}

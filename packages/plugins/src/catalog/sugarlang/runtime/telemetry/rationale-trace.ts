@@ -54,7 +54,7 @@ export interface RationaleTraceVerdict {
 }
 
 export interface RationaleTraceRepair {
-  kind: "repair" | "auto-simplify";
+  kind: "repair";
   originalText: string;
   resultText?: string | null;
   details: string[];
@@ -132,7 +132,6 @@ export class RationaleTraceBuilder {
     const verdictEvent = firstOfKind(sorted, "classifier.verdict");
     const chunkHitEvent = firstOfKind(sorted, "chunk.hit-during-classification");
     const repairEvent = firstOfKind(sorted, "verify.repair-triggered");
-    const simplifyEvent = firstOfKind(sorted, "verify.auto-simplify-triggered");
     const observeEvent = firstOfKind(sorted, "observe.observations-applied");
     const probeTriggerEvent = firstOfKind(sorted, "comprehension.probe-triggered");
     const probeLifecycle =
@@ -187,14 +186,7 @@ export class RationaleTraceBuilder {
             resultText: repairEvent.repairedText ?? null,
             details: [...repairEvent.violations]
           }
-        : simplifyEvent
-          ? {
-              kind: "auto-simplify",
-              originalText: simplifyEvent.originalText,
-              resultText: simplifyEvent.simplifiedText,
-              details: [...simplifyEvent.substitutions]
-            }
-          : null,
+        : null,
       observations:
         observeEvent != null
           ? [observeEvent]
