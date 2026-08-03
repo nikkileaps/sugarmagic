@@ -1464,19 +1464,6 @@
       },
       "formsSource": "generated"
     },
-    "españa": {
-      "lemmaId": "españa",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 63,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "spain"
-      }
-    },
     "sí": {
       "lemmaId": "sí",
       "lang": "es",
@@ -5263,12 +5250,10 @@
         "en": "mister"
       },
       "forms": {
-        "ms": "señor",
-        "fs": "senora",
-        "mp": "señores",
-        "fp": "senoras"
+        "sg": "señor",
+        "pl": "señores"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "comida": {
       "lemmaId": "comida",
@@ -6733,19 +6718,6 @@
         "pl": "vacaciones"
       },
       "formsSource": "generated"
-    },
-    "requena": {
-      "lemmaId": "requena",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 275,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "requena"
-      }
     },
     "abuelo": {
       "lemmaId": "abuelo",
@@ -11402,19 +11374,6 @@
       },
       "formsSource": "generated"
     },
-    "américa": {
-      "lemmaId": "américa",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 472,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "america"
-      }
-    },
     "guerra": {
       "lemmaId": "guerra",
       "lang": "es",
@@ -12206,19 +12165,6 @@
         "part": "dispuesto"
       },
       "formsSource": "authored"
-    },
-    "raulito": {
-      "lemmaId": "raulito",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 503,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "raulito"
-      }
     },
     "pelo": {
       "lemmaId": "pelo",
@@ -13109,19 +13055,6 @@
         "pl": "entradas"
       },
       "formsSource": "generated"
-    },
-    "estados_unidos": {
-      "lemmaId": "estados_unidos",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 541,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "united states"
-      }
     },
     "mamá": {
       "lemmaId": "mamá",
@@ -14967,19 +14900,6 @@
         "pl": "movimientos"
       },
       "formsSource": "generated"
-    },
-    "américa_latina": {
-      "lemmaId": "américa_latina",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 620,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "latin america"
-      }
     },
     "objetivo": {
       "lemmaId": "objetivo",
@@ -19010,19 +18930,6 @@
       },
       "formsSource": "generated"
     },
-    "latinoamérica": {
-      "lemmaId": "latinoamérica",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 792,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "latin america"
-      }
-    },
     "fondo": {
       "lemmaId": "fondo",
       "lang": "es",
@@ -22596,19 +22503,6 @@
         "part": "alcanzado"
       },
       "formsSource": "generated"
-    },
-    "francia": {
-      "lemmaId": "francia",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 942,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "france"
-      }
     },
     "japonés": {
       "lemmaId": "japonés",
@@ -26359,19 +26253,6 @@
         "pl": "poemas"
       },
       "formsSource": "generated"
-    },
-    "italia": {
-      "lemmaId": "italia",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 1097,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "italy"
-      }
     },
     "comercio": {
       "lemmaId": "comercio",
@@ -32488,19 +32369,6 @@
       },
       "formsSource": "generated"
     },
-    "andalucía": {
-      "lemmaId": "andalucía",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 1346,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "andalusia"
-      }
-    },
     "presentación": {
       "lemmaId": "presentación",
       "lang": "es",
@@ -34547,19 +34415,6 @@
       },
       "formsSource": "generated"
     },
-    "caribe": {
-      "lemmaId": "caribe",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 1436,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "caribbean"
-      }
-    },
     "secundario": {
       "lemmaId": "secundario",
       "lang": "es",
@@ -34741,19 +34596,6 @@
         "part": "interrumpido"
       },
       "formsSource": "generated"
-    },
-    "áfrica": {
-      "lemmaId": "áfrica",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 1444,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "africa"
-      }
     },
     "infancia": {
       "lemmaId": "infancia",
@@ -41771,19 +41613,6 @@
         "pl": "fundaciones"
       },
       "formsSource": "generated"
-    },
-    "uruguay": {
-      "lemmaId": "uruguay",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 1744,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "uruguay"
-      }
     },
     "dudar": {
       "lemmaId": "dudar",
@@ -48951,19 +48780,6 @@
       },
       "formsSource": "generated"
     },
-    "reino_unido": {
-      "lemmaId": "reino_unido",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2045,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "united kingdom"
-      }
-    },
     "acceder": {
       "lemmaId": "acceder",
       "lang": "es",
@@ -51252,19 +51068,6 @@
       },
       "formsSource": "generated"
     },
-    "holanda": {
-      "lemmaId": "holanda",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2136,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "netherlands"
-      }
-    },
     "habilidad": {
       "lemmaId": "habilidad",
       "lang": "es",
@@ -51382,19 +51185,6 @@
         "part": "procedido"
       },
       "formsSource": "generated"
-    },
-    "inglaterra": {
-      "lemmaId": "inglaterra",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2142,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "england"
-      }
     },
     "azteca": {
       "lemmaId": "azteca",
@@ -55906,19 +55696,6 @@
       },
       "formsSource": "generated"
     },
-    "nobel": {
-      "lemmaId": "nobel",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2337,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "nobel"
-      }
-    },
     "exportar": {
       "lemmaId": "exportar",
       "lang": "es",
@@ -59790,19 +59567,6 @@
       },
       "formsSource": "generated"
     },
-    "suecia": {
-      "lemmaId": "suecia",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2504,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "sweden"
-      }
-    },
     "secuestrar": {
       "lemmaId": "secuestrar",
       "lang": "es",
@@ -60372,19 +60136,6 @@
         "pl": "agujeros"
       },
       "formsSource": "generated"
-    },
-    "félix_pantoja": {
-      "lemmaId": "félix_pantoja",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2528,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "félix pantoja"
-      }
     },
     "interlocutor": {
       "lemmaId": "interlocutor",
@@ -63242,19 +62993,6 @@
       },
       "formsSource": "generated"
     },
-    "centroamérica": {
-      "lemmaId": "centroamérica",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2649,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "central america"
-      }
-    },
     "adoptivo": {
       "lemmaId": "adoptivo",
       "lang": "es",
@@ -63312,19 +63050,6 @@
         "pl": "colaboradores"
       },
       "formsSource": "generated"
-    },
-    "cervantes": {
-      "lemmaId": "cervantes",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2653,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "cervantes"
-      }
     },
     "estadística": {
       "lemmaId": "estadística",
@@ -68990,19 +68715,6 @@
       },
       "formsSource": "generated"
     },
-    "el_prado": {
-      "lemmaId": "el_prado",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2910,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "the prado"
-      }
-    },
     "residente": {
       "lemmaId": "residente",
       "lang": "es",
@@ -70401,19 +70113,6 @@
         "pl": "bombones"
       },
       "formsSource": "generated"
-    },
-    "gil": {
-      "lemmaId": "gil",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 2968,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "gil"
-      }
     },
     "promesa": {
       "lemmaId": "promesa",
@@ -76785,19 +76484,6 @@
       },
       "formsSource": "generated"
     },
-    "carmela": {
-      "lemmaId": "carmela",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 3251,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "carmela"
-      }
-    },
     "choque": {
       "lemmaId": "choque",
       "lang": "es",
@@ -77531,19 +77217,6 @@
         "fp": "diplomáticas"
       },
       "formsSource": "generated"
-    },
-    "rusia": {
-      "lemmaId": "rusia",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 3288,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "russia"
-      }
     },
     "insomnio": {
       "lemmaId": "insomnio",
@@ -78927,19 +78600,6 @@
         "part": "licenciado"
       },
       "formsSource": "generated"
-    },
-    "la_unesco": {
-      "lemmaId": "la_unesco",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 3349,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "UNESCO"
-      }
     },
     "televisivo": {
       "lemmaId": "televisivo",
@@ -82341,19 +82001,6 @@
       },
       "formsSource": "generated"
     },
-    "víctor": {
-      "lemmaId": "víctor",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 3502,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "victor"
-      }
-    },
     "seña": {
       "lemmaId": "seña",
       "lang": "es",
@@ -85333,19 +84980,6 @@
         "part": "datado"
       },
       "formsSource": "generated"
-    },
-    "sudamérica": {
-      "lemmaId": "sudamérica",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 3633,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "south america"
-      }
     },
     "atento": {
       "lemmaId": "atento",
@@ -89147,19 +88781,6 @@
       },
       "formsSource": "generated"
     },
-    "and": {
-      "lemmaId": "and",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 3797,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "and"
-      }
-    },
     "l": {
       "lemmaId": "l",
       "lang": "es",
@@ -89838,19 +89459,6 @@
         "pl": "implantaciones"
       },
       "formsSource": "generated"
-    },
-    "antártica": {
-      "lemmaId": "antártica",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 3827,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "antarctic"
-      }
     },
     "peine": {
       "lemmaId": "peine",
@@ -91451,19 +91059,6 @@
       },
       "formsSource": "generated"
     },
-    "isla_de_pascua": {
-      "lemmaId": "isla_de_pascua",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 3903,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "easter island"
-      }
-    },
     "enunciado": {
       "lemmaId": "enunciado",
       "lang": "es",
@@ -91774,19 +91369,6 @@
         "pl": "semestres"
       },
       "formsSource": "generated"
-    },
-    "anaya": {
-      "lemmaId": "anaya",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 3917,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "anaya"
-      }
     },
     "cuota": {
       "lemmaId": "cuota",
@@ -97239,19 +96821,6 @@
         "pl": "columpios"
       },
       "formsSource": "generated"
-    },
-    "mariana": {
-      "lemmaId": "mariana",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 4148,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "mariana"
-      }
     },
     "sor": {
       "lemmaId": "sor",
@@ -104908,19 +104477,6 @@
       },
       "formsSource": "generated"
     },
-    "el_retiro": {
-      "lemmaId": "el_retiro",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 4491,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "el retiro"
-      }
-    },
     "incalculable": {
       "lemmaId": "incalculable",
       "lang": "es",
@@ -112102,19 +111658,6 @@
       },
       "formsSource": "generated"
     },
-    "el_salvador": {
-      "lemmaId": "el_salvador",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 4818,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "el salvador"
-      }
-    },
     "pablo": {
       "lemmaId": "pablo",
       "lang": "es",
@@ -115307,19 +114850,6 @@
       },
       "formsSource": "generated"
     },
-    "manolo": {
-      "lemmaId": "manolo",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 4966,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "manolo"
-      }
-    },
     "euforia": {
       "lemmaId": "euforia",
       "lang": "es",
@@ -115786,19 +115316,6 @@
       },
       "formsSource": "generated"
     },
-    "e-mail": {
-      "lemmaId": "e-mail",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 4990,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "email"
-      }
-    },
     "llanto": {
       "lemmaId": "llanto",
       "lang": "es",
@@ -115972,19 +115489,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "tailandia": {
-      "lemmaId": "tailandia",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5000,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "thailand"
-      }
     },
     "calentito": {
       "lemmaId": "calentito",
@@ -117470,19 +116974,6 @@
       },
       "formsSource": "generated"
     },
-    "s.a.": {
-      "lemmaId": "s.a.",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 5071,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "inc"
-      }
-    },
     "balonmano": {
       "lemmaId": "balonmano",
       "lang": "es",
@@ -118783,19 +118274,6 @@
         "en": "bye, goodbye"
       }
     },
-    "el_inca": {
-      "lemmaId": "el_inca",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5133,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "the inca"
-      }
-    },
     "jeans": {
       "lemmaId": "jeans",
       "lang": "es",
@@ -119298,19 +118776,6 @@
         "pl": "vestigios"
       },
       "formsSource": "generated"
-    },
-    "club_barcelona": {
-      "lemmaId": "club_barcelona",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 5157,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "fc barcelona"
-      }
     },
     "pin": {
       "lemmaId": "pin",
@@ -120826,19 +120291,6 @@
         "pl": "festividades"
       },
       "formsSource": "generated"
-    },
-    "guadalupe": {
-      "lemmaId": "guadalupe",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 5231,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "guadalupe"
-      }
     },
     "emerger": {
       "lemmaId": "emerger",
@@ -122523,19 +121975,6 @@
       },
       "formsSource": "generated"
     },
-    "república_dominicana": {
-      "lemmaId": "república_dominicana",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5310,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Dominican Republic"
-      }
-    },
     "fichar": {
       "lemmaId": "fichar",
       "lang": "es",
@@ -124146,19 +123585,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "cantabria": {
-      "lemmaId": "cantabria",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5381,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Cantabria"
-      }
     },
     "ll": {
       "lemmaId": "ll",
@@ -128011,20 +127437,6 @@
       },
       "formsSource": "generated"
     },
-    "bolívar": {
-      "lemmaId": "bolívar",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5563,
-      "partsOfSpeech": [
-        "proper-noun",
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "bolivar"
-      }
-    },
     "circuito": {
       "lemmaId": "circuito",
       "lang": "es",
@@ -128122,19 +127534,6 @@
         "part": "memorizado"
       },
       "formsSource": "generated"
-    },
-    "san_marcos": {
-      "lemmaId": "san_marcos",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5568,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "san marcos"
-      }
     },
     "matizar": {
       "lemmaId": "matizar",
@@ -129373,19 +128772,6 @@
       },
       "formsSource": "generated"
     },
-    "camillo": {
-      "lemmaId": "camillo",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5627,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "camillo"
-      }
-    },
     "sedentario": {
       "lemmaId": "sedentario",
       "lang": "es",
@@ -129593,19 +128979,6 @@
         "pl": "bordados"
       },
       "formsSource": "generated"
-    },
-    "san_fernando": {
-      "lemmaId": "san_fernando",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5638,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "san fernando"
-      }
     },
     "evacuar": {
       "lemmaId": "evacuar",
@@ -129899,19 +129272,6 @@
         "fp": "ateas"
       },
       "formsSource": "generated"
-    },
-    "business": {
-      "lemmaId": "business",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5652,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "business"
-      }
     },
     "cantina": {
       "lemmaId": "cantina",
@@ -136168,9 +135528,9 @@
       },
       "forms": {
         "sg": "cañón",
-        "pl": "canones"
+        "pl": "cañones"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "remoto": {
       "lemmaId": "remoto",
@@ -136512,19 +135872,6 @@
         "part": "responsabilizado"
       },
       "formsSource": "generated"
-    },
-    "san_isidro": {
-      "lemmaId": "san_isidro",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 5984,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "san isidro"
-      }
     },
     "sargento": {
       "lemmaId": "sargento",
@@ -137366,32 +136713,6 @@
       },
       "formsSource": "generated"
     },
-    "coca-cola": {
-      "lemmaId": "coca-cola",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6027,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "coca-cola"
-      }
-    },
-    "de_aguas_claras": {
-      "lemmaId": "de_aguas_claras",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6028,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "de aguas claras"
-      }
-    },
     "empujón": {
       "lemmaId": "empujón",
       "lang": "es",
@@ -138130,19 +137451,6 @@
       },
       "formsSource": "generated"
     },
-    "please": {
-      "lemmaId": "please",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6067,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "please"
-      }
-    },
     "pololo": {
       "lemmaId": "pololo",
       "lang": "es",
@@ -138500,19 +137808,6 @@
         "pl": "trofeos"
       },
       "formsSource": "generated"
-    },
-    "sudáfrica": {
-      "lemmaId": "sudáfrica",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6086,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "south africa"
-      }
     },
     "soda": {
       "lemmaId": "soda",
@@ -139233,19 +138528,6 @@
         "pl": "calzadas"
       },
       "formsSource": "generated"
-    },
-    "carlos_v": {
-      "lemmaId": "carlos_v",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6123,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "charles v"
-      }
     },
     "casamiento": {
       "lemmaId": "casamiento",
@@ -140968,19 +140250,6 @@
       },
       "formsSource": "generated"
     },
-    "de_la_castellana": {
-      "lemmaId": "de_la_castellana",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6194,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "de la Castellana"
-      }
-    },
     "espía": {
       "lemmaId": "espía",
       "lang": "es",
@@ -141173,19 +140442,6 @@
         "pl": "narcotráficos"
       },
       "formsSource": "generated"
-    },
-    "doñana": {
-      "lemmaId": "doñana",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6205,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Doñana"
-      }
     },
     "vudú": {
       "lemmaId": "vudú",
@@ -142171,19 +141427,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "and"
-      }
-    },
-    "humahuaca": {
-      "lemmaId": "humahuaca",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 6255,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Humahuaca"
       }
     },
     "quebrada": {
@@ -145758,19 +145001,6 @@
       },
       "formsSource": "generated"
     },
-    "la_real_academia_española": {
-      "lemmaId": "la_real_academia_española",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 6445,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "royal spanish academy"
-      }
-    },
     "laúd": {
       "lemmaId": "laúd",
       "lang": "es",
@@ -148518,19 +147748,6 @@
       },
       "formsSource": "generated"
     },
-    "islas_británicas": {
-      "lemmaId": "islas_británicas",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 6591,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "british isles"
-      }
-    },
     "resucitar": {
       "lemmaId": "resucitar",
       "lang": "es",
@@ -150981,19 +150198,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "avoid, shun"
-      }
-    },
-    "sapiens": {
-      "lemmaId": "sapiens",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 6720,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "sapiens"
       }
     },
     "tergiversar": {
@@ -154149,19 +153353,6 @@
       },
       "formsSource": "generated"
     },
-    "carolina": {
-      "lemmaId": "carolina",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6871,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "carolina"
-      }
-    },
     "duquesa": {
       "lemmaId": "duquesa",
       "lang": "es",
@@ -155650,19 +154841,6 @@
         "pl": "escuadras"
       },
       "formsSource": "generated"
-    },
-    "marquina": {
-      "lemmaId": "marquina",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6941,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "marquina"
-      }
     },
     "monarquía": {
       "lemmaId": "monarquía",
@@ -159501,19 +158679,6 @@
       },
       "formsSource": "generated"
     },
-    "daun": {
-      "lemmaId": "daun",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7127,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "daun"
-      }
-    },
     "depredador": {
       "lemmaId": "depredador",
       "lang": "es",
@@ -159633,19 +158798,6 @@
         "part": "doctorado"
       },
       "formsSource": "generated"
-    },
-    "eduardo": {
-      "lemmaId": "eduardo",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7132,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "edward"
-      }
     },
     "elástico": {
       "lemmaId": "elástico",
@@ -159979,19 +159131,6 @@
         "pl": "interjecciones"
       },
       "formsSource": "generated"
-    },
-    "la_cabaña": {
-      "lemmaId": "la_cabaña",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7150,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "the cabin"
-      }
     },
     "laburar": {
       "lemmaId": "laburar",
@@ -162152,19 +161291,6 @@
       },
       "formsSource": "generated"
     },
-    "pilates": {
-      "lemmaId": "pilates",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7266,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "pilates"
-      }
-    },
     "recitar": {
       "lemmaId": "recitar",
       "lang": "es",
@@ -162206,19 +161332,6 @@
         "part": "recitado"
       },
       "formsSource": "generated"
-    },
-    "sofía": {
-      "lemmaId": "sofía",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7268,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "sophia"
-      }
     },
     "viejecito": {
       "lemmaId": "viejecito",
@@ -162795,19 +161908,6 @@
         "pl": "contrastes"
       },
       "formsSource": "generated"
-    },
-    "el_escorial": {
-      "lemmaId": "el_escorial",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7296,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "el escorial"
-      }
     },
     "enfermera": {
       "lemmaId": "enfermera",
@@ -164172,19 +163272,6 @@
       },
       "formsSource": "generated"
     },
-    "américa_central": {
-      "lemmaId": "américa_central",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7365,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "central america"
-      }
-    },
     "colón": {
       "lemmaId": "colón",
       "lang": "es",
@@ -164569,19 +163656,6 @@
         "pl": "ramales"
       },
       "formsSource": "generated"
-    },
-    "s.l.": {
-      "lemmaId": "s.l.",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7385,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "sine loco"
-      }
     },
     "teniente": {
       "lemmaId": "teniente",
@@ -165258,19 +164332,6 @@
         "fp": "cansadas"
       },
       "formsSource": "generated"
-    },
-    "nal": {
-      "lemmaId": "nal",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7423,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "national"
-      }
     },
     "basílica": {
       "lemmaId": "basílica",
@@ -167419,19 +166480,6 @@
       },
       "formsSource": "generated"
     },
-    "conde_duque": {
-      "lemmaId": "conde_duque",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7526,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "conde duque"
-      }
-    },
     "film": {
       "lemmaId": "film",
       "lang": "es",
@@ -168276,19 +167324,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "gable": {
-      "lemmaId": "gable",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7559,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "gable"
-      }
     },
     "judería": {
       "lemmaId": "judería",
@@ -169152,19 +168187,6 @@
         "fp": "escénicas"
       },
       "formsSource": "generated"
-    },
-    "santa_ana": {
-      "lemmaId": "santa_ana",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7604,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "santa ana"
-      }
     },
     "gay": {
       "lemmaId": "gay",
@@ -170459,19 +169481,6 @@
       },
       "formsSource": "generated"
     },
-    "lola_lago": {
-      "lemmaId": "lola_lago",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7676,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "lola lago"
-      }
-    },
     "mía": {
       "lemmaId": "mía",
       "lang": "es",
@@ -170585,19 +169594,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "rhodes": {
-      "lemmaId": "rhodes",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7686,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "rhodes"
-      }
     },
     "setter": {
       "lemmaId": "setter",
@@ -170746,20 +169742,6 @@
         "pl": "tragaperras"
       },
       "formsSource": "generated"
-    },
-    "agencia_española": {
-      "lemmaId": "agencia_española",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 7695,
-      "partsOfSpeech": [
-        "noun",
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "spanish agency"
-      }
     },
     "fragilidad": {
       "lemmaId": "fragilidad",
@@ -171255,20 +170237,6 @@
         "pl": "ascensos"
       },
       "formsSource": "generated"
-    },
-    "cuzco": {
-      "lemmaId": "cuzco",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7717,
-      "partsOfSpeech": [
-        "proper-noun",
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "cusco"
-      }
     },
     "guion": {
       "lemmaId": "guion",
@@ -172039,19 +171007,6 @@
         "pl": "docilidades"
       },
       "formsSource": "generated"
-    },
-    "drácula": {
-      "lemmaId": "drácula",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 7759,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "dracula"
-      }
     },
     "ego": {
       "lemmaId": "ego",
@@ -173568,19 +172523,6 @@
       },
       "formsSource": "generated"
     },
-    "aragón": {
-      "lemmaId": "aragón",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7843,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "aragon"
-      }
-    },
     "araucaria": {
       "lemmaId": "araucaria",
       "lang": "es",
@@ -174119,19 +173061,6 @@
       },
       "formsSource": "generated"
     },
-    "boss": {
-      "lemmaId": "boss",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7873,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "boss"
-      }
-    },
     "brebaje": {
       "lemmaId": "brebaje",
       "lang": "es",
@@ -174223,19 +173152,6 @@
         "fp": "cachas"
       },
       "formsSource": "generated"
-    },
-    "calar_ca": {
-      "lemmaId": "calar_ca",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7879,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "calar ca"
-      }
     },
     "calificativo": {
       "lemmaId": "calificativo",
@@ -174406,19 +173322,6 @@
         "part": "capado"
       },
       "formsSource": "generated"
-    },
-    "capódel": {
-      "lemmaId": "capódel",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7888,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "capodel"
-      }
     },
     "caracoles": {
       "lemmaId": "caracoles",
@@ -174728,19 +173631,6 @@
       },
       "formsSource": "generated"
     },
-    "chaíto": {
-      "lemmaId": "chaíto",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7905,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "chaito"
-      }
-    },
     "chiiiiiiisst": {
       "lemmaId": "chiiiiiiisst",
       "lang": "es",
@@ -174871,19 +173761,6 @@
         "pl": "cinces"
       },
       "formsSource": "generated"
-    },
-    "claudio": {
-      "lemmaId": "claudio",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7914,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "claudio"
-      }
     },
     "closet": {
       "lemmaId": "closet",
@@ -175791,32 +174668,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "el_morro": {
-      "lemmaId": "el_morro",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7962,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "el morro"
-      }
-    },
-    "el_real_madrid": {
-      "lemmaId": "el_real_madrid",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7964,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "real madrid"
-      }
     },
     "ele": {
       "lemmaId": "ele",
@@ -176882,19 +175733,6 @@
       },
       "formsSource": "generated"
     },
-    "glad": {
-      "lemmaId": "glad",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8014,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "glad"
-      }
-    },
     "granero": {
       "lemmaId": "granero",
       "lang": "es",
@@ -176930,19 +175768,6 @@
         "pl": "grescas"
       },
       "formsSource": "generated"
-    },
-    "groningen": {
-      "lemmaId": "groningen",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8017,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "groningen"
-      }
     },
     "guagüita": {
       "lemmaId": "guagüita",
@@ -177036,19 +175861,6 @@
       },
       "formsSource": "generated"
     },
-    "guess": {
-      "lemmaId": "guess",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8023,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "guess"
-      }
-    },
     "gástrico": {
       "lemmaId": "gástrico",
       "lang": "es",
@@ -177068,19 +175880,6 @@
         "fp": "gástricas"
       },
       "formsSource": "generated"
-    },
-    "habana": {
-      "lemmaId": "habana",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8025,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "havana"
-      }
     },
     "helada": {
       "lemmaId": "helada",
@@ -177746,19 +176545,6 @@
       },
       "formsSource": "generated"
     },
-    "jerusalén": {
-      "lemmaId": "jerusalén",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8054,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "jerusalem"
-      }
-    },
     "job": {
       "lemmaId": "job",
       "lang": "es",
@@ -177776,45 +176562,6 @@
         "pl": "jobes"
       },
       "formsSource": "generated"
-    },
-    "jordi": {
-      "lemmaId": "jordi",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8056,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "jordi"
-      }
-    },
-    "josé_san_martín": {
-      "lemmaId": "josé_san_martín",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8057,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "josé de san martín"
-      }
-    },
-    "la_candelaria": {
-      "lemmaId": "la_candelaria",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8058,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "la candelaria"
-      }
     },
     "lagrima": {
       "lemmaId": "lagrima",
@@ -177851,19 +176598,6 @@
         "pl": "lames"
       },
       "formsSource": "generated"
-    },
-    "lautaro": {
-      "lemmaId": "lautaro",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8063,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "lautaro"
-      }
     },
     "lenguado": {
       "lemmaId": "lenguado",
@@ -178317,32 +177051,6 @@
       },
       "formsSource": "generated"
     },
-    "marijke": {
-      "lemmaId": "marijke",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8085,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "marijke"
-      }
-    },
-    "marqués_de_arcos": {
-      "lemmaId": "marqués_de_arcos",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8086,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "marquis of arcos"
-      }
-    },
     "mastín": {
       "lemmaId": "mastín",
       "lang": "es",
@@ -178621,19 +177329,6 @@
         "pl": "miss"
       },
       "formsSource": "generated"
-    },
-    "mitre": {
-      "lemmaId": "mitre",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8100,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "mitre"
-      }
     },
     "mitólogico": {
       "lemmaId": "mitólogico",
@@ -180409,19 +179104,6 @@
       },
       "formsSource": "generated"
     },
-    "san_francisco": {
-      "lemmaId": "san_francisco",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8196,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "san francisco"
-      }
-    },
     "seguidito": {
       "lemmaId": "seguidito",
       "lang": "es",
@@ -180685,19 +179367,6 @@
       },
       "formsSource": "generated"
     },
-    "super-whisky": {
-      "lemmaId": "super-whisky",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8210,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "super whisky"
-      }
-    },
     "superguía": {
       "lemmaId": "superguía",
       "lang": "es",
@@ -180811,19 +179480,6 @@
         "fp": "tabaqueras"
       },
       "formsSource": "generated"
-    },
-    "tagle": {
-      "lemmaId": "tagle",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8217,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "tagle"
-      }
     },
     "tallar": {
       "lemmaId": "tallar",
@@ -181011,19 +179667,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "tex-mex": {
-      "lemmaId": "tex-mex",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8227,
-      "partsOfSpeech": [
-        "adjective"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "tex-mex"
-      }
     },
     "tigresa": {
       "lemmaId": "tigresa",
@@ -181661,19 +180304,6 @@
         "en": "zap"
       }
     },
-    "áfrica_occidental": {
-      "lemmaId": "áfrica_occidental",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8260,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "west africa"
-      }
-    },
     "llamamiento": {
       "lemmaId": "llamamiento",
       "lang": "es",
@@ -182069,19 +180699,6 @@
       },
       "formsSource": "generated"
     },
-    "rapanui": {
-      "lemmaId": "rapanui",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8277,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "rapa nui"
-      }
-    },
     "totonaco": {
       "lemmaId": "totonaco",
       "lang": "es",
@@ -182235,19 +180852,6 @@
         "pl": "antisépticos"
       },
       "formsSource": "generated"
-    },
-    "boomers": {
-      "lemmaId": "boomers",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8288,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "baby boomers"
-      }
     },
     "botulímico": {
       "lemmaId": "botulímico",
@@ -182551,19 +181155,6 @@
         "fp": "cívicas"
       },
       "formsSource": "generated"
-    },
-    "d.n.i.": {
-      "lemmaId": "d.n.i.",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8307,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "id card"
-      }
     },
     "demógrafo": {
       "lemmaId": "demógrafo",
@@ -183835,19 +182426,6 @@
       },
       "formsSource": "generated"
     },
-    "ud.": {
-      "lemmaId": "ud.",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8384,
-      "partsOfSpeech": [
-        "pronoun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "you"
-      }
-    },
     "veinteañero": {
       "lemmaId": "veinteañero",
       "lang": "es",
@@ -184011,10 +182589,10 @@
       "forms": {
         "ms": "coruñés",
         "fs": "coruñesa",
-        "mp": "coruneses",
+        "mp": "coruñeses",
         "fp": "coruñesas"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "normando": {
       "lemmaId": "normando",
@@ -184748,19 +183326,6 @@
       },
       "formsSource": "generated"
     },
-    "carlos_iii_de_madrid": {
-      "lemmaId": "carlos_iii_de_madrid",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8430,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Charles III of Madrid"
-      }
-    },
     "impago": {
       "lemmaId": "impago",
       "lang": "es",
@@ -185208,19 +183773,6 @@
       },
       "formsSource": "generated"
     },
-    "el_cauca": {
-      "lemmaId": "el_cauca",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8454,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "The Cauca"
-      }
-    },
     "llavero": {
       "lemmaId": "llavero",
       "lang": "es",
@@ -185274,19 +183826,6 @@
         "pl": "pymes"
       },
       "formsSource": "generated"
-    },
-    "quetparec": {
-      "lemmaId": "quetparec",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8459,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Quetparec"
-      }
     },
     "respectar": {
       "lemmaId": "respectar",
@@ -185795,19 +184334,6 @@
       },
       "formsSource": "generated"
     },
-    "cadaqués": {
-      "lemmaId": "cadaqués",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8487,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Cadaqués"
-      }
-    },
     "camilla": {
       "lemmaId": "camilla",
       "lang": "es",
@@ -185843,19 +184369,6 @@
         "pl": "candiles"
       },
       "formsSource": "generated"
-    },
-    "cap_roig": {
-      "lemmaId": "cap_roig",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8490,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Cap Roig"
-      }
     },
     "cayo": {
       "lemmaId": "cayo",
@@ -186015,32 +184528,6 @@
         "pl": "cárteles"
       },
       "formsSource": "generated"
-    },
-    "de_la_habana": {
-      "lemmaId": "de_la_habana",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8502,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Of Havana"
-      }
-    },
-    "de_los_álamos": {
-      "lemmaId": "de_los_álamos",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8503,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Of Los Alamos"
-      }
     },
     "despojo": {
       "lemmaId": "despojo",
@@ -186239,58 +184726,6 @@
       },
       "formsSource": "generated"
     },
-    "emma": {
-      "lemmaId": "emma",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8516,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Emma"
-      }
-    },
-    "feliciano": {
-      "lemmaId": "feliciano",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8518,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Feliciano"
-      }
-    },
-    "figueres": {
-      "lemmaId": "figueres",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8519,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Figueres"
-      }
-    },
-    "gijon": {
-      "lemmaId": "gijon",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8520,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Gijón"
-      }
-    },
     "gravísimo": {
       "lemmaId": "gravísimo",
       "lang": "es",
@@ -186406,19 +184841,6 @@
       },
       "formsSource": "generated"
     },
-    "humberto": {
-      "lemmaId": "humberto",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8527,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Humberto"
-      }
-    },
     "impreciso": {
       "lemmaId": "impreciso",
       "lang": "es",
@@ -186474,19 +184896,6 @@
         "pl": "kiwis"
       },
       "formsSource": "generated"
-    },
-    "la_costa_brava": {
-      "lemmaId": "la_costa_brava",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8532,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Costa Brava"
-      }
     },
     "lato": {
       "lemmaId": "lato",
@@ -186562,19 +184971,6 @@
       },
       "formsSource": "generated"
     },
-    "lulú": {
-      "lemmaId": "lulú",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8537,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Lulu"
-      }
-    },
     "lupa": {
       "lemmaId": "lupa",
       "lang": "es",
@@ -186646,19 +185042,6 @@
         "pl": "migas"
       },
       "formsSource": "generated"
-    },
-    "montero": {
-      "lemmaId": "montero",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8542,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Montero"
-      }
     },
     "moqueta": {
       "lemmaId": "moqueta",
@@ -186753,19 +185136,6 @@
         "pl": "neonazis"
       },
       "formsSource": "generated"
-    },
-    "nilsson": {
-      "lemmaId": "nilsson",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8548,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Nilsson"
-      }
     },
     "onomatopeya": {
       "lemmaId": "onomatopeya",
@@ -186862,32 +185232,6 @@
         "part": "pastado"
       },
       "formsSource": "generated"
-    },
-    "paulino": {
-      "lemmaId": "paulino",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8553,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Paulino"
-      }
-    },
-    "perales": {
-      "lemmaId": "perales",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8554,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Perales"
-      }
     },
     "pobrecillo": {
       "lemmaId": "pobrecillo",
@@ -187056,32 +185400,6 @@
         "en": "sniff"
       }
     },
-    "solymar": {
-      "lemmaId": "solymar",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8566,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Solymar"
-      }
-    },
-    "sr.": {
-      "lemmaId": "sr.",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8567,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Mr."
-      }
-    },
     "srta": {
       "lemmaId": "srta",
       "lang": "es",
@@ -187137,32 +185455,6 @@
         "pl": "taquicardias"
       },
       "formsSource": "generated"
-    },
-    "thyssen": {
-      "lemmaId": "thyssen",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8571,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Thyssen"
-      }
-    },
-    "thyssen_bomemiza": {
-      "lemmaId": "thyssen_bomemiza",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8572,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Thyssen Bornemisza"
-      }
     },
     "tournée": {
       "lemmaId": "tournée",
@@ -187259,19 +185551,6 @@
         "pl": "visos"
       },
       "formsSource": "generated"
-    },
-    "von_thyssen": {
-      "lemmaId": "von_thyssen",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8578,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "von Thyssen"
-      }
     },
     "zeta": {
       "lemmaId": "zeta",
@@ -187652,19 +185931,6 @@
         "pl": "jaques"
       },
       "formsSource": "generated"
-    },
-    "la_laguna": {
-      "lemmaId": "la_laguna",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8602,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "La Laguna"
-      }
     },
     "mermar": {
       "lemmaId": "mermar",
@@ -188169,32 +186435,6 @@
         "fp": "cronológicas"
       },
       "formsSource": "generated"
-    },
-    "de_ayala": {
-      "lemmaId": "de_ayala",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8631,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "de Ayala"
-      }
-    },
-    "de_guadalupe": {
-      "lemmaId": "de_guadalupe",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8632,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "de Guadalupe"
-      }
     },
     "delicadeza": {
       "lemmaId": "delicadeza",
@@ -188898,19 +187138,6 @@
         "pl": "moderadores"
       },
       "formsSource": "generated"
-    },
-    "villasana": {
-      "lemmaId": "villasana",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8675,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Villasana"
-      }
     },
     "anglosajón": {
       "lemmaId": "anglosajón",
@@ -190381,19 +188608,6 @@
       },
       "formsSource": "generated"
     },
-    "aránzazu": {
-      "lemmaId": "aránzazu",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8761,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "aránzazu"
-      }
-    },
     "asa": {
       "lemmaId": "asa",
       "lang": "es",
@@ -190758,19 +188972,6 @@
       },
       "formsSource": "generated"
     },
-    "berri": {
-      "lemmaId": "berri",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8783,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "berri"
-      }
-    },
     "biográfico": {
       "lemmaId": "biográfico",
       "lang": "es",
@@ -190790,19 +188991,6 @@
         "fp": "biográficas"
       },
       "formsSource": "generated"
-    },
-    "bonofiglio": {
-      "lemmaId": "bonofiglio",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8785,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "bonofiglio"
-      }
     },
     "brumoso": {
       "lemmaId": "brumoso",
@@ -191042,19 +189230,6 @@
         "pl": "caprichos"
       },
       "formsSource": "generated"
-    },
-    "carmelo": {
-      "lemmaId": "carmelo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8800,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "carmelo"
-      }
     },
     "carretero": {
       "lemmaId": "carretero",
@@ -191359,19 +189534,6 @@
       },
       "formsSource": "generated"
     },
-    "co.": {
-      "lemmaId": "co.",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8819,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "co."
-      }
-    },
     "cobardía": {
       "lemmaId": "cobardía",
       "lang": "es",
@@ -191569,19 +189731,6 @@
         "pl": "compilaciones"
       },
       "formsSource": "generated"
-    },
-    "comunitatis": {
-      "lemmaId": "comunitatis",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8832,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "comunitatis"
-      }
     },
     "concejalía": {
       "lemmaId": "concejalía",
@@ -192139,19 +190288,6 @@
         "fp": "daltónicas"
       },
       "formsSource": "generated"
-    },
-    "de_acción_nacional": {
-      "lemmaId": "de_acción_nacional",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8865,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "national action"
-      }
     },
     "decretar": {
       "lemmaId": "decretar",
@@ -192720,19 +190856,6 @@
       },
       "formsSource": "generated"
     },
-    "don_sancho": {
-      "lemmaId": "don_sancho",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8902,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Don Sancho"
-      }
-    },
     "dorso": {
       "lemmaId": "dorso",
       "lang": "es",
@@ -192836,32 +190959,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "ahem, hem"
-      }
-    },
-    "el_andalus": {
-      "lemmaId": "el_andalus",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8910,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Al-Andalus"
-      }
-    },
-    "el_sagrado_corazón_de_la_rábita": {
-      "lemmaId": "el_sagrado_corazón_de_la_rábita",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8911,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Sacred Heart of La Rabita"
       }
     },
     "electorado": {
@@ -194227,19 +192324,6 @@
       },
       "formsSource": "generated"
     },
-    "gears": {
-      "lemmaId": "gears",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8997,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "gears"
-      }
-    },
     "gelatinoso": {
       "lemmaId": "gelatinoso",
       "lang": "es",
@@ -195421,19 +193505,6 @@
         "en": "lacerate"
       }
     },
-    "lamasosa": {
-      "lemmaId": "lamasosa",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9063,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "lamasosa"
-      }
-    },
     "lanza": {
       "lemmaId": "lanza",
       "lang": "es",
@@ -196304,19 +194375,6 @@
       },
       "formsSource": "generated"
     },
-    "montserrat": {
-      "lemmaId": "montserrat",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9115,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "montserrat"
-      }
-    },
     "morería": {
       "lemmaId": "morería",
       "lang": "es",
@@ -196888,19 +194946,6 @@
         "en": "luff"
       }
     },
-    "oviedo": {
-      "lemmaId": "oviedo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9148,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "oviedo"
-      }
-    },
     "paellera": {
       "lemmaId": "paellera",
       "lang": "es",
@@ -197226,32 +195271,6 @@
       },
       "formsSource": "generated"
     },
-    "people_ett": {
-      "lemmaId": "people_ett",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9167,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "people ett"
-      }
-    },
-    "pepa": {
-      "lemmaId": "pepa",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9168,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "pepa"
-      }
-    },
     "perfeccionismo": {
       "lemmaId": "perfeccionismo",
       "lang": "es",
@@ -197513,19 +195532,6 @@
       },
       "formsSource": "generated"
     },
-    "pilla_de_barajas_madrid": {
-      "lemmaId": "pilla_de_barajas_madrid",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9184,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "pilla de barajas madrid"
-      }
-    },
     "pillo": {
       "lemmaId": "pillo",
       "lang": "es",
@@ -197627,9 +195633,9 @@
       },
       "forms": {
         "sg": "piñón",
-        "pl": "pinones"
+        "pl": "piñones"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "plomo": {
       "lemmaId": "plomo",
@@ -198717,19 +196723,6 @@
         "pl": "romerías"
       },
       "formsSource": "generated"
-    },
-    "roncotur": {
-      "lemmaId": "roncotur",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9261,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "roncotur"
-      }
     },
     "rosaleda": {
       "lemmaId": "rosaleda",
@@ -200172,19 +198165,6 @@
       },
       "formsSource": "generated"
     },
-    "san_antonio": {
-      "lemmaId": "san_antonio",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 9345,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "san antonio"
-      }
-    },
     "hipster": {
       "lemmaId": "hipster",
       "lang": "es",
@@ -200673,19 +198653,6 @@
         "fp": "adversas"
       },
       "formsSource": "generated"
-    },
-    "aec": {
-      "lemmaId": "aec",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9376,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "aec"
-      }
     },
     "aerolínea": {
       "lemmaId": "aerolínea",
@@ -201487,19 +199454,6 @@
       },
       "formsSource": "generated"
     },
-    "aurrerá": {
-      "lemmaId": "aurrerá",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9423,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "aurrera"
-      }
-    },
     "auspicio": {
       "lemmaId": "auspicio",
       "lang": "es",
@@ -201974,19 +199928,6 @@
       },
       "formsSource": "generated"
     },
-    "bm_plus": {
-      "lemmaId": "bm_plus",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9452,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "bm plus"
-      }
-    },
     "bocal": {
       "lemmaId": "bocal",
       "lang": "es",
@@ -202060,19 +200001,6 @@
         "pl": "bogas"
       },
       "formsSource": "generated"
-    },
-    "brin": {
-      "lemmaId": "brin",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9458,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "brin"
-      }
     },
     "broncodilatador": {
       "lemmaId": "broncodilatador",
@@ -202307,32 +200235,6 @@
       },
       "formsSource": "generated"
     },
-    "capsi": {
-      "lemmaId": "capsi",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9473,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "capsi"
-      }
-    },
-    "carlos_de_amberes_de_madrid": {
-      "lemmaId": "carlos_de_amberes_de_madrid",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9474,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "charles of antwerp of madrid"
-      }
-    },
     "cauda": {
       "lemmaId": "cauda",
       "lang": "es",
@@ -202362,19 +200264,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "captivate, charm"
-      }
-    },
-    "caxazehui": {
-      "lemmaId": "caxazehui",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9477,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "caxazehui"
       }
     },
     "cazadora": {
@@ -202629,19 +200518,6 @@
         "pl": "cisnes"
       },
       "formsSource": "generated"
-    },
-    "ciudad_de_las_artes_y_las_ciencias": {
-      "lemmaId": "ciudad_de_las_artes_y_las_ciencias",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9494,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "city of arts and sciences"
-      }
     },
     "clasificatorio": {
       "lemmaId": "clasificatorio",
@@ -203433,19 +201309,6 @@
         "pl": "cúmulos"
       },
       "formsSource": "generated"
-    },
-    "desquadra": {
-      "lemmaId": "desquadra",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9541,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "desquadra"
-      }
     },
     "dañino": {
       "lemmaId": "dañino",
@@ -205431,19 +203294,6 @@
         "en": "fail, break"
       }
     },
-    "fernando_quiñones": {
-      "lemmaId": "fernando_quiñones",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9683,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Fernando Quiñones"
-      }
-    },
     "fertilizar": {
       "lemmaId": "fertilizar",
       "lang": "es",
@@ -205672,32 +203522,6 @@
       },
       "formsSource": "generated"
     },
-    "fotonatura": {
-      "lemmaId": "fotonatura",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9699,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Fotonatura"
-      }
-    },
-    "franco_filia": {
-      "lemmaId": "franco_filia",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9700,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Francophilia"
-      }
-    },
     "frialdad": {
       "lemmaId": "frialdad",
       "lang": "es",
@@ -205880,19 +203704,6 @@
       },
       "formsSource": "generated"
     },
-    "glasgow": {
-      "lemmaId": "glasgow",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9711,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Glasgow"
-      }
-    },
     "glicólico": {
       "lemmaId": "glicólico",
       "lang": "es",
@@ -205948,32 +203759,6 @@
         "pl": "golosinas"
       },
       "formsSource": "generated"
-    },
-    "graciela_iturbida": {
-      "lemmaId": "graciela_iturbida",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9715,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Graciela Iturbida"
-      }
-    },
-    "gran_mariscal": {
-      "lemmaId": "gran_mariscal",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9716,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Grand Marshal"
-      }
     },
     "gratitud": {
       "lemmaId": "gratitud",
@@ -207016,19 +204801,6 @@
         "en": "inspect, examine"
       }
     },
-    "instituto_de_estudios_económicos": {
-      "lemmaId": "instituto_de_estudios_económicos",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9777,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "institute of economic studies"
-      }
-    },
     "intachable": {
       "lemmaId": "intachable",
       "lang": "es",
@@ -207344,32 +205116,6 @@
       },
       "formsSource": "generated"
     },
-    "josé_guerrero": {
-      "lemmaId": "josé_guerrero",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9796,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "José Guerrero"
-      }
-    },
-    "keyword": {
-      "lemmaId": "keyword",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9797,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "keyword"
-      }
-    },
     "kiosco": {
       "lemmaId": "kiosco",
       "lang": "es",
@@ -207387,32 +205133,6 @@
         "pl": "kioscos"
       },
       "formsSource": "generated"
-    },
-    "kyoto": {
-      "lemmaId": "kyoto",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9799,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Kyoto"
-      }
-    },
-    "la_aecid": {
-      "lemmaId": "la_aecid",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9800,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "La AECID"
-      }
     },
     "labriego": {
       "lemmaId": "labriego",
@@ -207526,19 +205246,6 @@
         "pl": "lavaderos"
       },
       "formsSource": "generated"
-    },
-    "lavazza": {
-      "lemmaId": "lavazza",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9808,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Lavazza"
-      }
     },
     "laxante": {
       "lemmaId": "laxante",
@@ -207734,19 +205441,6 @@
       },
       "formsSource": "generated"
     },
-    "luis_vives": {
-      "lemmaId": "luis_vives",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9821,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Luis Vives"
-      }
-    },
     "lícito": {
       "lemmaId": "lícito",
       "lang": "es",
@@ -207766,19 +205460,6 @@
         "fp": "lícitas"
       },
       "formsSource": "generated"
-    },
-    "maec-aecid": {
-      "lemmaId": "maec-aecid",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9823,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "MAEC-AECID"
-      }
     },
     "maestre": {
       "lemmaId": "maestre",
@@ -207859,19 +205540,6 @@
         "pl": "mandantes"
       },
       "formsSource": "generated"
-    },
-    "mapfre": {
-      "lemmaId": "mapfre",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9829,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Mapfre"
-      }
     },
     "marea": {
       "lemmaId": "marea",
@@ -207981,32 +205649,6 @@
       },
       "formsSource": "generated"
     },
-    "medistas": {
-      "lemmaId": "medistas",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9836,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Medistas"
-      }
-    },
-    "mejor_maritata_criolla": {
-      "lemmaId": "mejor_maritata_criolla",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9837,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Mejor Maritata Criolla"
-      }
-    },
     "mesiánico": {
       "lemmaId": "mesiánico",
       "lang": "es",
@@ -208026,19 +205668,6 @@
         "fp": "mesiánicas"
       },
       "formsSource": "generated"
-    },
-    "michigan": {
-      "lemmaId": "michigan",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9839,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Michigan"
-      }
     },
     "microorganismo": {
       "lemmaId": "microorganismo",
@@ -208209,19 +205838,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "navarra": {
-      "lemmaId": "navarra",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9851,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Navarra"
-      }
     },
     "neoyorkino": {
       "lemmaId": "neoyorkino",
@@ -208558,19 +206174,6 @@
         "pl": "oleajes"
       },
       "formsSource": "generated"
-    },
-    "omicrón": {
-      "lemmaId": "omicrón",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9872,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Omicron"
-      }
     },
     "oncogén": {
       "lemmaId": "oncogén",
@@ -210904,19 +208507,6 @@
         "en": "dining room"
       }
     },
-    "salk": {
-      "lemmaId": "salk",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 10012,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Salk"
-      }
-    },
     "sangriento": {
       "lemmaId": "sangriento",
       "lang": "es",
@@ -211770,19 +209360,6 @@
       },
       "formsSource": "generated"
     },
-    "teleniños": {
-      "lemmaId": "teleniños",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 10065,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "teleniños"
-      }
-    },
     "telescopio": {
       "lemmaId": "telescopio",
       "lang": "es",
@@ -212412,19 +209989,6 @@
       },
       "formsSource": "generated"
     },
-    "uds.": {
-      "lemmaId": "uds.",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 10101,
-      "partsOfSpeech": [
-        "pronoun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "you (plural)"
-      }
-    },
     "ultrajar": {
       "lemmaId": "ultrajar",
       "lang": "es",
@@ -212879,19 +210443,6 @@
       },
       "formsSource": "generated"
     },
-    "wisconsin": {
-      "lemmaId": "wisconsin",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 10128,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "wisconsin"
-      }
-    },
     "yuxtaposición": {
       "lemmaId": "yuxtaposición",
       "lang": "es",
@@ -213161,19 +210712,6 @@
         "en": "expatriate"
       }
     },
-    "hispanoamérica": {
-      "lemmaId": "hispanoamérica",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10149,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "spanish america"
-      }
-    },
     "logística": {
       "lemmaId": "logística",
       "lang": "es",
@@ -213209,19 +210747,6 @@
         "pl": "negociadores"
       },
       "formsSource": "generated"
-    },
-    "n°": {
-      "lemmaId": "n°",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10153,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "number"
-      }
     },
     "persuadir": {
       "lemmaId": "persuadir",
@@ -213598,19 +211123,6 @@
       },
       "formsSource": "generated"
     },
-    "castilla": {
-      "lemmaId": "castilla",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10174,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "castile"
-      }
-    },
     "cuajar": {
       "lemmaId": "cuajar",
       "lang": "es",
@@ -213741,19 +211253,6 @@
         "pl": "medioambientes"
       },
       "formsSource": "generated"
-    },
-    "monte_soriano": {
-      "lemmaId": "monte_soriano",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10183,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "mount soriano"
-      }
     },
     "muslo": {
       "lemmaId": "muslo",
@@ -214108,19 +211607,6 @@
       },
       "formsSource": "generated"
     },
-    "jerez_de_la_frontera": {
-      "lemmaId": "jerez_de_la_frontera",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 10203,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "jerez de la frontera"
-      }
-    },
     "marcial": {
       "lemmaId": "marcial",
       "lang": "es",
@@ -214291,19 +211777,6 @@
       },
       "formsSource": "generated"
     },
-    "arturo": {
-      "lemmaId": "arturo",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 10212,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "arturo"
-      }
-    },
     "auditivo": {
       "lemmaId": "auditivo",
       "lang": "es",
@@ -214397,19 +211870,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "la_cebada": {
-      "lemmaId": "la_cebada",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 10218,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "la cebada"
-      }
     },
     "mascarpone": {
       "lemmaId": "mascarpone",
@@ -214991,19 +212451,6 @@
       },
       "formsSource": "generated"
     },
-    "la_fragua": {
-      "lemmaId": "la_fragua",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 10245,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "la fragua"
-      }
-    },
     "libra": {
       "lemmaId": "libra",
       "lang": "es",
@@ -215132,19 +212579,6 @@
         "fp": "tauras"
       },
       "formsSource": "generated"
-    },
-    "villacosta": {
-      "lemmaId": "villacosta",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 10255,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "villacosta"
-      }
     },
     "salado": {
       "lemmaId": "salado",
@@ -215935,19 +213369,6 @@
       },
       "formsSource": "generated"
     },
-    "altamira": {
-      "lemmaId": "altamira",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10301,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "altamira"
-      }
-    },
     "alternar": {
       "lemmaId": "alternar",
       "lang": "es",
@@ -216032,19 +213453,6 @@
         "pl": "anales"
       },
       "formsSource": "generated"
-    },
-    "andilla": {
-      "lemmaId": "andilla",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10307,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "andilla"
-      }
     },
     "angélica": {
       "lemmaId": "angélica",
@@ -216152,19 +213560,6 @@
         "fp": "apáticas"
       },
       "formsSource": "generated"
-    },
-    "arahuaka": {
-      "lemmaId": "arahuaka",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10314,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "arahuaka"
-      }
     },
     "arcilla": {
       "lemmaId": "arcilla",
@@ -216736,9 +214131,9 @@
       },
       "forms": {
         "sg": "champiñón",
-        "pl": "champinones"
+        "pl": "champiñones"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "chollo": {
       "lemmaId": "chollo",
@@ -217296,19 +214691,6 @@
         "pl": "cóleras"
       },
       "formsSource": "generated"
-    },
-    "de_los_uffizi": {
-      "lemmaId": "de_los_uffizi",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10386,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "uffizi"
-      }
     },
     "decantar": {
       "lemmaId": "decantar",
@@ -218386,19 +215768,6 @@
       },
       "formsSource": "generated"
     },
-    "finisterrae": {
-      "lemmaId": "finisterrae",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10459,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "finisterre"
-      }
-    },
     "finito": {
       "lemmaId": "finito",
       "lang": "es",
@@ -218454,32 +215823,6 @@
         "pl": "folkloras"
       },
       "formsSource": "generated"
-    },
-    "foucault": {
-      "lemmaId": "foucault",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10464,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "foucault"
-      }
-    },
-    "gardel": {
-      "lemmaId": "gardel",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10465,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "gardel"
-      }
     },
     "garrote": {
       "lemmaId": "garrote",
@@ -219227,19 +216570,6 @@
       },
       "formsSource": "generated"
     },
-    "la_universidad_complutense_de_madrid": {
-      "lemmaId": "la_universidad_complutense_de_madrid",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10509,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "complutense university of madrid"
-      }
-    },
     "lacustre": {
       "lemmaId": "lacustre",
       "lang": "es",
@@ -219707,19 +217037,6 @@
         "pl": "neumonías"
       },
       "formsSource": "generated"
-    },
-    "neurosalus": {
-      "lemmaId": "neurosalus",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10538,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "neurosalus"
-      }
     },
     "nogada": {
       "lemmaId": "nogada",
@@ -220422,19 +217739,6 @@
       },
       "formsSource": "generated"
     },
-    "planitas": {
-      "lemmaId": "planitas",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10578,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "planitas"
-      }
-    },
     "plató": {
       "lemmaId": "plató",
       "lang": "es",
@@ -220943,9 +218247,9 @@
       },
       "forms": {
         "sg": "riñón",
-        "pl": "rinones"
+        "pl": "riñones"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "rosco": {
       "lemmaId": "rosco",
@@ -221292,19 +218596,6 @@
         "pl": "sorderas"
       },
       "formsSource": "generated"
-    },
-    "stamford": {
-      "lemmaId": "stamford",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10630,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "stamford"
-      }
     },
     "step": {
       "lemmaId": "step",
@@ -222081,19 +219372,6 @@
       },
       "formsSource": "generated"
     },
-    "aguascalientes": {
-      "lemmaId": "aguascalientes",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10679,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "aguascalientes"
-      }
-    },
     "albaceteño": {
       "lemmaId": "albaceteño",
       "lang": "es",
@@ -222167,19 +219445,6 @@
         "pl": "americanismos"
       },
       "formsSource": "generated"
-    },
-    "antoñito_el_camborio": {
-      "lemmaId": "antoñito_el_camborio",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10684,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "antoñito el camborio"
-      }
     },
     "apuesto": {
       "lemmaId": "apuesto",
@@ -222324,32 +219589,6 @@
         "pl": "asteriscos"
       },
       "formsSource": "generated"
-    },
-    "atapuerca": {
-      "lemmaId": "atapuerca",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10694,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "atapuerca"
-      }
-    },
-    "baracaldo": {
-      "lemmaId": "baracaldo",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10695,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "baracaldo"
-      }
     },
     "barman": {
       "lemmaId": "barman",
@@ -222683,19 +219922,6 @@
       },
       "formsSource": "generated"
     },
-    "carrancistas": {
-      "lemmaId": "carrancistas",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10714,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "carrancistas"
-      }
-    },
     "catalina": {
       "lemmaId": "catalina",
       "lang": "es",
@@ -222874,19 +220100,6 @@
         "pl": "coincidencias"
       },
       "formsSource": "generated"
-    },
-    "col.": {
-      "lemmaId": "col.",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10725,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "col."
-      }
     },
     "collage": {
       "lemmaId": "collage",
@@ -223367,19 +220580,6 @@
         "en": "resign"
       }
     },
-    "el_mar": {
-      "lemmaId": "el_mar",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10758,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "the sea"
-      }
-    },
     "embellecer": {
       "lemmaId": "embellecer",
       "lang": "es",
@@ -223391,19 +220591,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "beautify, embellish"
-      }
-    },
-    "emiliano_zapata": {
-      "lemmaId": "emiliano_zapata",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10760,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "emiliano zapata"
       }
     },
     "emperatriz": {
@@ -223870,19 +221057,6 @@
         "pl": "gallineros"
       },
       "formsSource": "generated"
-    },
-    "gila": {
-      "lemmaId": "gila",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10789,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "gila"
-      }
     },
     "glotón": {
       "lemmaId": "glotón",
@@ -224786,19 +221960,6 @@
       },
       "formsSource": "generated"
     },
-    "mú": {
-      "lemmaId": "mú",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10846,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "mu"
-      }
-    },
     "nuca": {
       "lemmaId": "nuca",
       "lang": "es",
@@ -224995,19 +222156,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "parnaso": {
-      "lemmaId": "parnaso",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10859,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "parnassus"
-      }
     },
     "pasarela": {
       "lemmaId": "pasarela",
@@ -225514,19 +222662,6 @@
       },
       "formsSource": "generated"
     },
-    "rudd": {
-      "lemmaId": "rudd",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10890,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "rudd"
-      }
-    },
     "rótulo": {
       "lemmaId": "rótulo",
       "lang": "es",
@@ -225891,19 +223026,6 @@
       },
       "formsSource": "generated"
     },
-    "top-model": {
-      "lemmaId": "top-model",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10913,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "top model"
-      }
-    },
     "toreo": {
       "lemmaId": "toreo",
       "lang": "es",
@@ -226120,19 +223242,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "overturn, spill"
-      }
-    },
-    "yale": {
-      "lemmaId": "yale",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10927,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "yale"
       }
     },
     "zaguán": {
@@ -226564,19 +223673,6 @@
         "pl": "anatomías"
       },
       "formsSource": "generated"
-    },
-    "anno": {
-      "lemmaId": "anno",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 10951,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "anno"
-      }
     },
     "apoyabrazos": {
       "lemmaId": "apoyabrazos",
@@ -227036,19 +224132,6 @@
       },
       "formsSource": "generated"
     },
-    "cora": {
-      "lemmaId": "cora",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 10973,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "cora"
-      }
-    },
     "costurera": {
       "lemmaId": "costurera",
       "lang": "es",
@@ -227312,19 +224395,6 @@
         "pl": "ecogastronomías"
       },
       "formsSource": "generated"
-    },
-    "el_vaticano": {
-      "lemmaId": "el_vaticano",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 10987,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "vatican"
-      }
     },
     "elitista": {
       "lemmaId": "elitista",
@@ -229125,6 +226195,37 @@
         ],
         "ger": "entretejiendo",
         "part": "entretejido"
+      },
+      "formsSource": "authored"
+    },
+    "ustedes": {
+      "lemmaId": "ustedes",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "pronoun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "you (plural)"
+      }
+    },
+    "señora": {
+      "lemmaId": "señora",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "lady, madam"
+      },
+      "forms": {
+        "sg": "señora",
+        "pl": "señoras"
       },
       "formsSource": "authored"
     }

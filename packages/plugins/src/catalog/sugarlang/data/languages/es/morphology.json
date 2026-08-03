@@ -440,12 +440,6 @@
         "adjective"
       ]
     },
-    "españa": {
-      "lemmaId": "españa",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "sí": {
       "lemmaId": "sí",
       "partsOfSpeech": [
@@ -1769,12 +1763,6 @@
         "noun"
       ]
     },
-    "requena": {
-      "lemmaId": "requena",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "abuelo": {
       "lemmaId": "abuelo",
       "partsOfSpeech": [
@@ -2995,12 +2983,6 @@
         "noun"
       ]
     },
-    "américa": {
-      "lemmaId": "américa",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "guerra": {
       "lemmaId": "guerra",
       "partsOfSpeech": [
@@ -3186,12 +3168,6 @@
       "lemmaId": "disponer",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "raulito": {
-      "lemmaId": "raulito",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "pelo": {
@@ -3417,12 +3393,6 @@
       "lemmaId": "entrada",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "estados_unidos": {
-      "lemmaId": "estados_unidos",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "mamá": {
@@ -3905,12 +3875,6 @@
       "lemmaId": "movimiento",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "américa_latina": {
-      "lemmaId": "américa_latina",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "objetivo": {
@@ -4964,12 +4928,6 @@
         "noun"
       ]
     },
-    "latinoamérica": {
-      "lemmaId": "latinoamérica",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "fondo": {
       "lemmaId": "fondo",
       "partsOfSpeech": [
@@ -5889,12 +5847,6 @@
       "lemmaId": "alcanzar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "francia": {
-      "lemmaId": "francia",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "japonés": {
@@ -6840,12 +6792,6 @@
       "lemmaId": "poema",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "italia": {
-      "lemmaId": "italia",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "comercio": {
@@ -8373,12 +8319,6 @@
         "noun"
       ]
     },
-    "andalucía": {
-      "lemmaId": "andalucía",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "presentación": {
       "lemmaId": "presentación",
       "partsOfSpeech": [
@@ -8923,12 +8863,6 @@
         "noun"
       ]
     },
-    "caribe": {
-      "lemmaId": "caribe",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "secundario": {
       "lemmaId": "secundario",
       "partsOfSpeech": [
@@ -8971,12 +8905,6 @@
       "lemmaId": "interrumpir",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "áfrica": {
-      "lemmaId": "áfrica",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "infancia": {
@@ -10795,12 +10723,6 @@
       "lemmaId": "fundación",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "uruguay": {
-      "lemmaId": "uruguay",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "dudar": {
@@ -12642,12 +12564,6 @@
         "noun"
       ]
     },
-    "reino_unido": {
-      "lemmaId": "reino_unido",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "acceder": {
       "lemmaId": "acceder",
       "partsOfSpeech": [
@@ -13192,12 +13108,6 @@
         "verb"
       ]
     },
-    "holanda": {
-      "lemmaId": "holanda",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "habilidad": {
       "lemmaId": "habilidad",
       "partsOfSpeech": [
@@ -13228,12 +13138,6 @@
       "partsOfSpeech": [
         "noun",
         "verb"
-      ]
-    },
-    "inglaterra": {
-      "lemmaId": "inglaterra",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "azteca": {
@@ -14411,12 +14315,6 @@
         "noun"
       ]
     },
-    "nobel": {
-      "lemmaId": "nobel",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "exportar": {
       "lemmaId": "exportar",
       "partsOfSpeech": [
@@ -15429,12 +15327,6 @@
         "noun"
       ]
     },
-    "suecia": {
-      "lemmaId": "suecia",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "secuestrar": {
       "lemmaId": "secuestrar",
       "partsOfSpeech": [
@@ -15573,12 +15465,6 @@
       "lemmaId": "agujero",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "félix_pantoja": {
-      "lemmaId": "félix_pantoja",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "interlocutor": {
@@ -16321,12 +16207,6 @@
         "verb"
       ]
     },
-    "centroamérica": {
-      "lemmaId": "centroamérica",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "adoptivo": {
       "lemmaId": "adoptivo",
       "partsOfSpeech": [
@@ -16343,12 +16223,6 @@
       "lemmaId": "colaborador",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "cervantes": {
-      "lemmaId": "cervantes",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "estadística": {
@@ -17912,12 +17786,6 @@
         "noun"
       ]
     },
-    "el_prado": {
-      "lemmaId": "el_prado",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "residente": {
       "lemmaId": "residente",
       "partsOfSpeech": [
@@ -18255,12 +18123,6 @@
       "lemmaId": "bombón",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "gil": {
-      "lemmaId": "gil",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "promesa": {
@@ -19983,12 +19845,6 @@
         "adjective"
       ]
     },
-    "carmela": {
-      "lemmaId": "carmela",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "choque": {
       "lemmaId": "choque",
       "partsOfSpeech": [
@@ -20206,12 +20062,6 @@
       "partsOfSpeech": [
         "noun",
         "adjective"
-      ]
-    },
-    "rusia": {
-      "lemmaId": "rusia",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "insomnio": {
@@ -20577,12 +20427,6 @@
       "lemmaId": "licenciar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "la_unesco": {
-      "lemmaId": "la_unesco",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "televisivo": {
@@ -21495,12 +21339,6 @@
         "adjective"
       ]
     },
-    "víctor": {
-      "lemmaId": "víctor",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "seña": {
       "lemmaId": "seña",
       "partsOfSpeech": [
@@ -22278,12 +22116,6 @@
       "lemmaId": "datar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "sudamérica": {
-      "lemmaId": "sudamérica",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "atento": {
@@ -23275,12 +23107,6 @@
         "adjective"
       ]
     },
-    "and": {
-      "lemmaId": "and",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "l": {
       "lemmaId": "l",
       "partsOfSpeech": [
@@ -23454,12 +23280,6 @@
       "lemmaId": "implantación",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "antártica": {
-      "lemmaId": "antártica",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "peine": {
@@ -23920,12 +23740,6 @@
         "noun"
       ]
     },
-    "isla_de_pascua": {
-      "lemmaId": "isla_de_pascua",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "enunciado": {
       "lemmaId": "enunciado",
       "partsOfSpeech": [
@@ -24003,12 +23817,6 @@
       "lemmaId": "semestre",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "anaya": {
-      "lemmaId": "anaya",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "cuota": {
@@ -25392,12 +25200,6 @@
       "lemmaId": "columpio",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "mariana": {
-      "lemmaId": "mariana",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "sor": {
@@ -27456,12 +27258,6 @@
         "noun"
       ]
     },
-    "el_retiro": {
-      "lemmaId": "el_retiro",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "incalculable": {
       "lemmaId": "incalculable",
       "partsOfSpeech": [
@@ -29421,12 +29217,6 @@
         "noun"
       ]
     },
-    "el_salvador": {
-      "lemmaId": "el_salvador",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "pablo": {
       "lemmaId": "pablo",
       "partsOfSpeech": [
@@ -30314,12 +30104,6 @@
         "noun"
       ]
     },
-    "manolo": {
-      "lemmaId": "manolo",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "euforia": {
       "lemmaId": "euforia",
       "partsOfSpeech": [
@@ -30453,12 +30237,6 @@
         "noun"
       ]
     },
-    "e-mail": {
-      "lemmaId": "e-mail",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
     "llanto": {
       "lemmaId": "llanto",
       "partsOfSpeech": [
@@ -30506,12 +30284,6 @@
       "lemmaId": "excluyente",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "tailandia": {
-      "lemmaId": "tailandia",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "calentito": {
@@ -30942,12 +30714,6 @@
         "noun"
       ]
     },
-    "s.a.": {
-      "lemmaId": "s.a.",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
     "balonmano": {
       "lemmaId": "balonmano",
       "partsOfSpeech": [
@@ -31321,12 +31087,6 @@
         "interjection"
       ]
     },
-    "el_inca": {
-      "lemmaId": "el_inca",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "jeans": {
       "lemmaId": "jeans",
       "partsOfSpeech": [
@@ -31466,12 +31226,6 @@
       "lemmaId": "vestigio",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "club_barcelona": {
-      "lemmaId": "club_barcelona",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "pin": {
@@ -31918,12 +31672,6 @@
       "lemmaId": "festividad",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "guadalupe": {
-      "lemmaId": "guadalupe",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "emerger": {
@@ -32396,12 +32144,6 @@
         "noun"
       ]
     },
-    "república_dominicana": {
-      "lemmaId": "república_dominicana",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "fichar": {
       "lemmaId": "fichar",
       "partsOfSpeech": [
@@ -32817,12 +32559,6 @@
       "lemmaId": "teatral",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "cantabria": {
-      "lemmaId": "cantabria",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "ll": {
@@ -33901,13 +33637,6 @@
         "noun"
       ]
     },
-    "bolívar": {
-      "lemmaId": "bolívar",
-      "partsOfSpeech": [
-        "proper-noun",
-        "noun"
-      ]
-    },
     "circuito": {
       "lemmaId": "circuito",
       "partsOfSpeech": [
@@ -33930,12 +33659,6 @@
       "lemmaId": "memorizar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "san_marcos": {
-      "lemmaId": "san_marcos",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "matizar": {
@@ -34287,12 +34010,6 @@
         "noun"
       ]
     },
-    "camillo": {
-      "lemmaId": "camillo",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "sedentario": {
       "lemmaId": "sedentario",
       "partsOfSpeech": [
@@ -34351,12 +34068,6 @@
       "lemmaId": "bordado",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "san_fernando": {
-      "lemmaId": "san_fernando",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "evacuar": {
@@ -34431,12 +34142,6 @@
       "partsOfSpeech": [
         "noun",
         "adjective"
-      ]
-    },
-    "business": {
-      "lemmaId": "business",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "cantina": {
@@ -36424,12 +36129,6 @@
         "verb"
       ]
     },
-    "san_isidro": {
-      "lemmaId": "san_isidro",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "sargento": {
       "lemmaId": "sargento",
       "partsOfSpeech": [
@@ -36683,18 +36382,6 @@
         "noun"
       ]
     },
-    "coca-cola": {
-      "lemmaId": "coca-cola",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
-    "de_aguas_claras": {
-      "lemmaId": "de_aguas_claras",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "empujón": {
       "lemmaId": "empujón",
       "partsOfSpeech": [
@@ -36929,12 +36616,6 @@
         "noun"
       ]
     },
-    "please": {
-      "lemmaId": "please",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "pololo": {
       "lemmaId": "pololo",
       "partsOfSpeech": [
@@ -37035,12 +36716,6 @@
       "lemmaId": "trofeo",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "sudáfrica": {
-      "lemmaId": "sudáfrica",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "soda": {
@@ -37245,12 +36920,6 @@
       "lemmaId": "calzada",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "carlos_v": {
-      "lemmaId": "carlos_v",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "casamiento": {
@@ -37674,12 +37343,6 @@
         "adjective"
       ]
     },
-    "de_la_castellana": {
-      "lemmaId": "de_la_castellana",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "espía": {
       "lemmaId": "espía",
       "partsOfSpeech": [
@@ -37741,12 +37404,6 @@
       "lemmaId": "narcotráfico",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "doñana": {
-      "lemmaId": "doñana",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "vudú": {
@@ -38049,12 +37706,6 @@
       "lemmaId": "e",
       "partsOfSpeech": [
         "conjunction"
-      ]
-    },
-    "humahuaca": {
-      "lemmaId": "humahuaca",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "quebrada": {
@@ -39191,12 +38842,6 @@
         "adjective"
       ]
     },
-    "la_real_academia_española": {
-      "lemmaId": "la_real_academia_española",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "laúd": {
       "lemmaId": "laúd",
       "partsOfSpeech": [
@@ -40061,12 +39706,6 @@
         "noun"
       ]
     },
-    "islas_británicas": {
-      "lemmaId": "islas_británicas",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "resucitar": {
       "lemmaId": "resucitar",
       "partsOfSpeech": [
@@ -40836,12 +40475,6 @@
       "lemmaId": "rehuir",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "sapiens": {
-      "lemmaId": "sapiens",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "tergiversar": {
@@ -41721,12 +41354,6 @@
         "noun"
       ]
     },
-    "carolina": {
-      "lemmaId": "carolina",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "duquesa": {
       "lemmaId": "duquesa",
       "partsOfSpeech": [
@@ -42127,12 +41754,6 @@
       "lemmaId": "escuadra",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "marquina": {
-      "lemmaId": "marquina",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "monarquía": {
@@ -43221,12 +42842,6 @@
         "noun"
       ]
     },
-    "daun": {
-      "lemmaId": "daun",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "depredador": {
       "lemmaId": "depredador",
       "partsOfSpeech": [
@@ -43249,12 +42864,6 @@
       "lemmaId": "doctorar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "eduardo": {
-      "lemmaId": "eduardo",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "elástico": {
@@ -43357,12 +42966,6 @@
       "lemmaId": "interjección",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "la_cabaña": {
-      "lemmaId": "la_cabaña",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "laburar": {
@@ -44036,22 +43639,10 @@
         "noun"
       ]
     },
-    "pilates": {
-      "lemmaId": "pilates",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "recitar": {
       "lemmaId": "recitar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "sofía": {
-      "lemmaId": "sofía",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "viejecito": {
@@ -44208,12 +43799,6 @@
       "lemmaId": "contraste",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "el_escorial": {
-      "lemmaId": "el_escorial",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "enfermera": {
@@ -44618,12 +44203,6 @@
         "noun"
       ]
     },
-    "américa_central": {
-      "lemmaId": "américa_central",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "colón": {
       "lemmaId": "colón",
       "partsOfSpeech": [
@@ -44723,12 +44302,6 @@
     },
     "ramal": {
       "lemmaId": "ramal",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
-    "s.l.": {
-      "lemmaId": "s.l.",
       "partsOfSpeech": [
         "noun"
       ]
@@ -44943,12 +44516,6 @@
       "lemmaId": "cansado",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "nal": {
-      "lemmaId": "nal",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "basílica": {
@@ -45536,12 +45103,6 @@
         "noun"
       ]
     },
-    "conde_duque": {
-      "lemmaId": "conde_duque",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "film": {
       "lemmaId": "film",
       "partsOfSpeech": [
@@ -45734,12 +45295,6 @@
       "lemmaId": "excitante",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "gable": {
-      "lemmaId": "gable",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "judería": {
@@ -46003,12 +45558,6 @@
       "lemmaId": "escénico",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "santa_ana": {
-      "lemmaId": "santa_ana",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "gay": {
@@ -46437,12 +45986,6 @@
         "adjective"
       ]
     },
-    "lola_lago": {
-      "lemmaId": "lola_lago",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "mía": {
       "lemmaId": "mía",
       "partsOfSpeech": [
@@ -46477,12 +46020,6 @@
       "lemmaId": "progresista",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "rhodes": {
-      "lemmaId": "rhodes",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "setter": {
@@ -46526,13 +46063,6 @@
       "lemmaId": "tragaperras",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "agencia_española": {
-      "lemmaId": "agencia_española",
-      "partsOfSpeech": [
-        "noun",
-        "proper-noun"
       ]
     },
     "fragilidad": {
@@ -46661,13 +46191,6 @@
     "ascenso": {
       "lemmaId": "ascenso",
       "partsOfSpeech": [
-        "noun"
-      ]
-    },
-    "cuzco": {
-      "lemmaId": "cuzco",
-      "partsOfSpeech": [
-        "proper-noun",
         "noun"
       ]
     },
@@ -46911,12 +46434,6 @@
       "lemmaId": "docilidad",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "drácula": {
-      "lemmaId": "drácula",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "ego": {
@@ -47395,12 +46912,6 @@
         "noun"
       ]
     },
-    "aragón": {
-      "lemmaId": "aragón",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "araucaria": {
       "lemmaId": "araucaria",
       "partsOfSpeech": [
@@ -47563,12 +47074,6 @@
         "noun"
       ]
     },
-    "boss": {
-      "lemmaId": "boss",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "brebaje": {
       "lemmaId": "brebaje",
       "partsOfSpeech": [
@@ -47597,12 +47102,6 @@
       "lemmaId": "cacho",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "calar_ca": {
-      "lemmaId": "calar_ca",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "calificativo": {
@@ -47651,12 +47150,6 @@
       "lemmaId": "capar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "capódel": {
-      "lemmaId": "capódel",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "caracoles": {
@@ -47755,12 +47248,6 @@
         "noun"
       ]
     },
-    "chaíto": {
-      "lemmaId": "chaíto",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "chiiiiiiisst": {
       "lemmaId": "chiiiiiiisst",
       "partsOfSpeech": [
@@ -47807,12 +47294,6 @@
       "lemmaId": "cinc",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "claudio": {
-      "lemmaId": "claudio",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "closet": {
@@ -48059,18 +47540,6 @@
       "lemmaId": "ecuestre",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "el_morro": {
-      "lemmaId": "el_morro",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "el_real_madrid": {
-      "lemmaId": "el_real_madrid",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "ele": {
@@ -48361,12 +47830,6 @@
         "adjective"
       ]
     },
-    "glad": {
-      "lemmaId": "glad",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "granero": {
       "lemmaId": "granero",
       "partsOfSpeech": [
@@ -48377,12 +47840,6 @@
       "lemmaId": "gresca",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "groningen": {
-      "lemmaId": "groningen",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "guagüita": {
@@ -48415,22 +47872,10 @@
         "noun"
       ]
     },
-    "guess": {
-      "lemmaId": "guess",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "gástrico": {
       "lemmaId": "gástrico",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "habana": {
-      "lemmaId": "habana",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "helada": {
@@ -48601,34 +48046,10 @@
         "noun"
       ]
     },
-    "jerusalén": {
-      "lemmaId": "jerusalén",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "job": {
       "lemmaId": "job",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "jordi": {
-      "lemmaId": "jordi",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "josé_san_martín": {
-      "lemmaId": "josé_san_martín",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "la_candelaria": {
-      "lemmaId": "la_candelaria",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "lagrima": {
@@ -48641,12 +48062,6 @@
       "lemmaId": "lame",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "lautaro": {
-      "lemmaId": "lautaro",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "lenguado": {
@@ -48775,18 +48190,6 @@
         "noun"
       ]
     },
-    "marijke": {
-      "lemmaId": "marijke",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "marqués_de_arcos": {
-      "lemmaId": "marqués_de_arcos",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "mastín": {
       "lemmaId": "mastín",
       "partsOfSpeech": [
@@ -48863,12 +48266,6 @@
       "lemmaId": "miss",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "mitre": {
-      "lemmaId": "mitre",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "mitólogico": {
@@ -49387,12 +48784,6 @@
         "noun"
       ]
     },
-    "san_francisco": {
-      "lemmaId": "san_francisco",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "seguidito": {
       "lemmaId": "seguidito",
       "partsOfSpeech": [
@@ -49465,12 +48856,6 @@
         "adjective"
       ]
     },
-    "super-whisky": {
-      "lemmaId": "super-whisky",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
     "superguía": {
       "lemmaId": "superguía",
       "partsOfSpeech": [
@@ -49505,12 +48890,6 @@
       "lemmaId": "tabaquero",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "tagle": {
-      "lemmaId": "tagle",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "tallar": {
@@ -49563,12 +48942,6 @@
     },
     "territorial": {
       "lemmaId": "territorial",
-      "partsOfSpeech": [
-        "adjective"
-      ]
-    },
-    "tex-mex": {
-      "lemmaId": "tex-mex",
       "partsOfSpeech": [
         "adjective"
       ]
@@ -49753,12 +49126,6 @@
         "interjection"
       ]
     },
-    "áfrica_occidental": {
-      "lemmaId": "áfrica_occidental",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "llamamiento": {
       "lemmaId": "llamamiento",
       "partsOfSpeech": [
@@ -49858,12 +49225,6 @@
         "noun"
       ]
     },
-    "rapanui": {
-      "lemmaId": "rapanui",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "totonaco": {
       "lemmaId": "totonaco",
       "partsOfSpeech": [
@@ -49916,12 +49277,6 @@
       "lemmaId": "antiséptico",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "boomers": {
-      "lemmaId": "boomers",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "botulímico": {
@@ -50024,12 +49379,6 @@
       "lemmaId": "cívico",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "d.n.i.": {
-      "lemmaId": "d.n.i.",
-      "partsOfSpeech": [
-        "noun"
       ]
     },
     "demógrafo": {
@@ -50473,12 +49822,6 @@
         "noun"
       ]
     },
-    "ud.": {
-      "lemmaId": "ud.",
-      "partsOfSpeech": [
-        "pronoun"
-      ]
-    },
     "veinteañero": {
       "lemmaId": "veinteañero",
       "partsOfSpeech": [
@@ -50748,12 +50091,6 @@
         "noun"
       ]
     },
-    "carlos_iii_de_madrid": {
-      "lemmaId": "carlos_iii_de_madrid",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "impago": {
       "lemmaId": "impago",
       "partsOfSpeech": [
@@ -50887,12 +50224,6 @@
         "noun"
       ]
     },
-    "el_cauca": {
-      "lemmaId": "el_cauca",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "llavero": {
       "lemmaId": "llavero",
       "partsOfSpeech": [
@@ -50909,12 +50240,6 @@
       "lemmaId": "pyme",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "quetparec": {
-      "lemmaId": "quetparec",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "respectar": {
@@ -51072,12 +50397,6 @@
         "noun"
       ]
     },
-    "cadaqués": {
-      "lemmaId": "cadaqués",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "camilla": {
       "lemmaId": "camilla",
       "partsOfSpeech": [
@@ -51088,12 +50407,6 @@
       "lemmaId": "candil",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "cap_roig": {
-      "lemmaId": "cap_roig",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "cayo": {
@@ -51148,18 +50461,6 @@
       "lemmaId": "cártel",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "de_la_habana": {
-      "lemmaId": "de_la_habana",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "de_los_álamos": {
-      "lemmaId": "de_los_álamos",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "despojo": {
@@ -51228,30 +50529,6 @@
         "adjective"
       ]
     },
-    "emma": {
-      "lemmaId": "emma",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "feliciano": {
-      "lemmaId": "feliciano",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "figueres": {
-      "lemmaId": "figueres",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "gijon": {
-      "lemmaId": "gijon",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "gravísimo": {
       "lemmaId": "gravísimo",
       "partsOfSpeech": [
@@ -51282,12 +50559,6 @@
         "verb"
       ]
     },
-    "humberto": {
-      "lemmaId": "humberto",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "impreciso": {
       "lemmaId": "impreciso",
       "partsOfSpeech": [
@@ -51304,12 +50575,6 @@
       "lemmaId": "kiwi",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "la_costa_brava": {
-      "lemmaId": "la_costa_brava",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "lato": {
@@ -51336,12 +50601,6 @@
         "noun"
       ]
     },
-    "lulú": {
-      "lemmaId": "lulú",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "lupa": {
       "lemmaId": "lupa",
       "partsOfSpeech": [
@@ -51364,12 +50623,6 @@
       "lemmaId": "miga",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "montero": {
-      "lemmaId": "montero",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "moqueta": {
@@ -51402,12 +50655,6 @@
         "noun"
       ]
     },
-    "nilsson": {
-      "lemmaId": "nilsson",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "onomatopeya": {
       "lemmaId": "onomatopeya",
       "partsOfSpeech": [
@@ -51430,18 +50677,6 @@
       "lemmaId": "pastar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "paulino": {
-      "lemmaId": "paulino",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "perales": {
-      "lemmaId": "perales",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "pobrecillo": {
@@ -51492,18 +50727,6 @@
         "interjection"
       ]
     },
-    "solymar": {
-      "lemmaId": "solymar",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "sr.": {
-      "lemmaId": "sr.",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
     "srta": {
       "lemmaId": "srta",
       "partsOfSpeech": [
@@ -51520,18 +50743,6 @@
       "lemmaId": "taquicardia",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "thyssen": {
-      "lemmaId": "thyssen",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "thyssen_bomemiza": {
-      "lemmaId": "thyssen_bomemiza",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "tournée": {
@@ -51556,12 +50767,6 @@
       "lemmaId": "viso",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "von_thyssen": {
-      "lemmaId": "von_thyssen",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "zeta": {
@@ -51688,12 +50893,6 @@
       "lemmaId": "jaque",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "la_laguna": {
-      "lemmaId": "la_laguna",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "mermar": {
@@ -51864,18 +51063,6 @@
       "lemmaId": "cronológico",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "de_ayala": {
-      "lemmaId": "de_ayala",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "de_guadalupe": {
-      "lemmaId": "de_guadalupe",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "delicadeza": {
@@ -52112,12 +51299,6 @@
       "lemmaId": "moderador",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "villasana": {
-      "lemmaId": "villasana",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "anglosajón": {
@@ -52615,12 +51796,6 @@
         "adjective"
       ]
     },
-    "aránzazu": {
-      "lemmaId": "aránzazu",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "asa": {
       "lemmaId": "asa",
       "partsOfSpeech": [
@@ -52747,22 +51922,10 @@
         "adjective"
       ]
     },
-    "berri": {
-      "lemmaId": "berri",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "biográfico": {
       "lemmaId": "biográfico",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "bonofiglio": {
-      "lemmaId": "bonofiglio",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "brumoso": {
@@ -52847,12 +52010,6 @@
       "lemmaId": "capricho",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "carmelo": {
-      "lemmaId": "carmelo",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "carretero": {
@@ -52957,12 +52114,6 @@
         "adjective"
       ]
     },
-    "co.": {
-      "lemmaId": "co.",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "cobardía": {
       "lemmaId": "cobardía",
       "partsOfSpeech": [
@@ -53033,12 +52184,6 @@
       "lemmaId": "compilación",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "comunitatis": {
-      "lemmaId": "comunitatis",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "concejalía": {
@@ -53225,12 +52370,6 @@
       "lemmaId": "daltónico",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "de_acción_nacional": {
-      "lemmaId": "de_acción_nacional",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "decretar": {
@@ -53443,12 +52582,6 @@
         "noun"
       ]
     },
-    "don_sancho": {
-      "lemmaId": "don_sancho",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "dorso": {
       "lemmaId": "dorso",
       "partsOfSpeech": [
@@ -53483,18 +52616,6 @@
       "lemmaId": "ejem",
       "partsOfSpeech": [
         "interjection"
-      ]
-    },
-    "el_andalus": {
-      "lemmaId": "el_andalus",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "el_sagrado_corazón_de_la_rábita": {
-      "lemmaId": "el_sagrado_corazón_de_la_rábita",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "electorado": {
@@ -53983,12 +53104,6 @@
         "noun"
       ]
     },
-    "gears": {
-      "lemmaId": "gears",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "gelatinoso": {
       "lemmaId": "gelatinoso",
       "partsOfSpeech": [
@@ -54367,12 +53482,6 @@
         "verb"
       ]
     },
-    "lamasosa": {
-      "lemmaId": "lamasosa",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "lanza": {
       "lemmaId": "lanza",
       "partsOfSpeech": [
@@ -54661,12 +53770,6 @@
         "noun"
       ]
     },
-    "montserrat": {
-      "lemmaId": "montserrat",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "morería": {
       "lemmaId": "morería",
       "partsOfSpeech": [
@@ -54859,12 +53962,6 @@
         "verb"
       ]
     },
-    "oviedo": {
-      "lemmaId": "oviedo",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "paellera": {
       "lemmaId": "paellera",
       "partsOfSpeech": [
@@ -54973,18 +54070,6 @@
         "noun"
       ]
     },
-    "people_ett": {
-      "lemmaId": "people_ett",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "pepa": {
-      "lemmaId": "pepa",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "perfeccionismo": {
       "lemmaId": "perfeccionismo",
       "partsOfSpeech": [
@@ -55073,12 +54158,6 @@
       "lemmaId": "pigmentario",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "pilla_de_barajas_madrid": {
-      "lemmaId": "pilla_de_barajas_madrid",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "pillo": {
@@ -55499,12 +54578,6 @@
       "lemmaId": "romería",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "roncotur": {
-      "lemmaId": "roncotur",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "rosaleda": {
@@ -56002,12 +55075,6 @@
         "adjective"
       ]
     },
-    "san_antonio": {
-      "lemmaId": "san_antonio",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "hipster": {
       "lemmaId": "hipster",
       "partsOfSpeech": [
@@ -56178,12 +55245,6 @@
       "lemmaId": "adverso",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "aec": {
-      "lemmaId": "aec",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "aerolínea": {
@@ -56450,12 +55511,6 @@
         "adjective"
       ]
     },
-    "aurrerá": {
-      "lemmaId": "aurrerá",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "auspicio": {
       "lemmaId": "auspicio",
       "partsOfSpeech": [
@@ -56618,12 +55673,6 @@
         "noun"
       ]
     },
-    "bm_plus": {
-      "lemmaId": "bm_plus",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "bocal": {
       "lemmaId": "bocal",
       "partsOfSpeech": [
@@ -56646,12 +55695,6 @@
       "lemmaId": "boga",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "brin": {
-      "lemmaId": "brin",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "broncodilatador": {
@@ -56732,18 +55775,6 @@
         "noun"
       ]
     },
-    "capsi": {
-      "lemmaId": "capsi",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "carlos_de_amberes_de_madrid": {
-      "lemmaId": "carlos_de_amberes_de_madrid",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "cauda": {
       "lemmaId": "cauda",
       "partsOfSpeech": [
@@ -56754,12 +55785,6 @@
       "lemmaId": "cautivar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "caxazehui": {
-      "lemmaId": "caxazehui",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "cazadora": {
@@ -56844,12 +55869,6 @@
       "lemmaId": "cisne",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "ciudad_de_las_artes_y_las_ciencias": {
-      "lemmaId": "ciudad_de_las_artes_y_las_ciencias",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "clasificatorio": {
@@ -57114,12 +56133,6 @@
       "lemmaId": "cúmulo",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "desquadra": {
-      "lemmaId": "desquadra",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "dañino": {
@@ -57842,12 +56855,6 @@
         "verb"
       ]
     },
-    "fernando_quiñones": {
-      "lemmaId": "fernando_quiñones",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "fertilizar": {
       "lemmaId": "fertilizar",
       "partsOfSpeech": [
@@ -57926,18 +56933,6 @@
         "noun"
       ]
     },
-    "fotonatura": {
-      "lemmaId": "fotonatura",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "franco_filia": {
-      "lemmaId": "franco_filia",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "frialdad": {
       "lemmaId": "frialdad",
       "partsOfSpeech": [
@@ -57998,12 +56993,6 @@
         "noun"
       ]
     },
-    "glasgow": {
-      "lemmaId": "glasgow",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "glicólico": {
       "lemmaId": "glicólico",
       "partsOfSpeech": [
@@ -58020,18 +57009,6 @@
       "lemmaId": "golosina",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "graciela_iturbida": {
-      "lemmaId": "graciela_iturbida",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "gran_mariscal": {
-      "lemmaId": "gran_mariscal",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "gratitud": {
@@ -58382,12 +57359,6 @@
         "verb"
       ]
     },
-    "instituto_de_estudios_económicos": {
-      "lemmaId": "instituto_de_estudios_económicos",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "intachable": {
       "lemmaId": "intachable",
       "partsOfSpeech": [
@@ -58490,34 +57461,10 @@
         "noun"
       ]
     },
-    "josé_guerrero": {
-      "lemmaId": "josé_guerrero",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "keyword": {
-      "lemmaId": "keyword",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "kiosco": {
       "lemmaId": "kiosco",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "kyoto": {
-      "lemmaId": "kyoto",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "la_aecid": {
-      "lemmaId": "la_aecid",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "labriego": {
@@ -58560,12 +57507,6 @@
       "lemmaId": "lavadero",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "lavazza": {
-      "lemmaId": "lavazza",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "laxante": {
@@ -58634,22 +57575,10 @@
         "noun"
       ]
     },
-    "luis_vives": {
-      "lemmaId": "luis_vives",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "lícito": {
       "lemmaId": "lícito",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "maec-aecid": {
-      "lemmaId": "maec-aecid",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "maestre": {
@@ -58680,12 +57609,6 @@
       "lemmaId": "mandante",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "mapfre": {
-      "lemmaId": "mapfre",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "marea": {
@@ -58724,28 +57647,10 @@
         "noun"
       ]
     },
-    "medistas": {
-      "lemmaId": "medistas",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "mejor_maritata_criolla": {
-      "lemmaId": "mejor_maritata_criolla",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "mesiánico": {
       "lemmaId": "mesiánico",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "michigan": {
-      "lemmaId": "michigan",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "microorganismo": {
@@ -58800,12 +57705,6 @@
       "lemmaId": "naciente",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "navarra": {
-      "lemmaId": "navarra",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "neoyorkino": {
@@ -58920,12 +57819,6 @@
       "lemmaId": "oleaje",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "omicrón": {
-      "lemmaId": "omicrón",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "oncogén": {
@@ -59714,12 +58607,6 @@
         "noun"
       ]
     },
-    "salk": {
-      "lemmaId": "salk",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "sangriento": {
       "lemmaId": "sangriento",
       "partsOfSpeech": [
@@ -60002,12 +58889,6 @@
         "adjective"
       ]
     },
-    "teleniños": {
-      "lemmaId": "teleniños",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "telescopio": {
       "lemmaId": "telescopio",
       "partsOfSpeech": [
@@ -60218,12 +59099,6 @@
         "adjective"
       ]
     },
-    "uds.": {
-      "lemmaId": "uds.",
-      "partsOfSpeech": [
-        "pronoun"
-      ]
-    },
     "ultrajar": {
       "lemmaId": "ultrajar",
       "partsOfSpeech": [
@@ -60380,12 +59255,6 @@
         "noun"
       ]
     },
-    "wisconsin": {
-      "lemmaId": "wisconsin",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "yuxtaposición": {
       "lemmaId": "yuxtaposición",
       "partsOfSpeech": [
@@ -60482,12 +59351,6 @@
         "verb"
       ]
     },
-    "hispanoamérica": {
-      "lemmaId": "hispanoamérica",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "logística": {
       "lemmaId": "logística",
       "partsOfSpeech": [
@@ -60496,12 +59359,6 @@
     },
     "negociador": {
       "lemmaId": "negociador",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
-    "n°": {
-      "lemmaId": "n°",
       "partsOfSpeech": [
         "noun"
       ]
@@ -60631,12 +59488,6 @@
         "adjective"
       ]
     },
-    "castilla": {
-      "lemmaId": "castilla",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "cuajar": {
       "lemmaId": "cuajar",
       "partsOfSpeech": [
@@ -60683,12 +59534,6 @@
       "lemmaId": "medioambiente",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "monte_soriano": {
-      "lemmaId": "monte_soriano",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "muslo": {
@@ -60807,12 +59652,6 @@
         "noun"
       ]
     },
-    "jerez_de_la_frontera": {
-      "lemmaId": "jerez_de_la_frontera",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "marcial": {
       "lemmaId": "marcial",
       "partsOfSpeech": [
@@ -60861,12 +59700,6 @@
         "noun"
       ]
     },
-    "arturo": {
-      "lemmaId": "arturo",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "auditivo": {
       "lemmaId": "auditivo",
       "partsOfSpeech": [
@@ -60895,12 +59728,6 @@
       "lemmaId": "grupal",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "la_cebada": {
-      "lemmaId": "la_cebada",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "mascarpone": {
@@ -61055,12 +59882,6 @@
         "noun"
       ]
     },
-    "la_fragua": {
-      "lemmaId": "la_fragua",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "libra": {
       "lemmaId": "libra",
       "partsOfSpeech": [
@@ -61102,12 +59923,6 @@
       "partsOfSpeech": [
         "adjective",
         "noun"
-      ]
-    },
-    "villacosta": {
-      "lemmaId": "villacosta",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "salado": {
@@ -61366,12 +60181,6 @@
         "adjective"
       ]
     },
-    "altamira": {
-      "lemmaId": "altamira",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "alternar": {
       "lemmaId": "alternar",
       "partsOfSpeech": [
@@ -61400,12 +60209,6 @@
       "lemmaId": "anal",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "andilla": {
-      "lemmaId": "andilla",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "angélica": {
@@ -61442,12 +60245,6 @@
       "lemmaId": "apático",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "arahuaka": {
-      "lemmaId": "arahuaka",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "arcilla": {
@@ -61846,12 +60643,6 @@
         "noun"
       ]
     },
-    "de_los_uffizi": {
-      "lemmaId": "de_los_uffizi",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "decantar": {
       "lemmaId": "decantar",
       "partsOfSpeech": [
@@ -62230,12 +61021,6 @@
         "adjective"
       ]
     },
-    "finisterrae": {
-      "lemmaId": "finisterrae",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "finito": {
       "lemmaId": "finito",
       "partsOfSpeech": [
@@ -62252,18 +61037,6 @@
       "lemmaId": "folklora",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "foucault": {
-      "lemmaId": "foucault",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "gardel": {
-      "lemmaId": "gardel",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "garrote": {
@@ -62512,12 +61285,6 @@
         "noun"
       ]
     },
-    "la_universidad_complutense_de_madrid": {
-      "lemmaId": "la_universidad_complutense_de_madrid",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "lacustre": {
       "lemmaId": "lacustre",
       "partsOfSpeech": [
@@ -62672,12 +61439,6 @@
       "lemmaId": "neumonía",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "neurosalus": {
-      "lemmaId": "neurosalus",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "nogada": {
@@ -62906,12 +61667,6 @@
       "lemmaId": "planetario",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "planitas": {
-      "lemmaId": "planitas",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "plató": {
@@ -63208,12 +61963,6 @@
         "noun"
       ]
     },
-    "stamford": {
-      "lemmaId": "stamford",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "step": {
       "lemmaId": "step",
       "partsOfSpeech": [
@@ -63478,12 +62227,6 @@
         "noun"
       ]
     },
-    "aguascalientes": {
-      "lemmaId": "aguascalientes",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "albaceteño": {
       "lemmaId": "albaceteño",
       "partsOfSpeech": [
@@ -63506,12 +62249,6 @@
       "lemmaId": "americanismo",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "antoñito_el_camborio": {
-      "lemmaId": "antoñito_el_camborio",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "apuesto": {
@@ -63566,18 +62303,6 @@
       "lemmaId": "asterisco",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "atapuerca": {
-      "lemmaId": "atapuerca",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
-    "baracaldo": {
-      "lemmaId": "baracaldo",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "barman": {
@@ -63688,12 +62413,6 @@
         "noun"
       ]
     },
-    "carrancistas": {
-      "lemmaId": "carrancistas",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "catalina": {
       "lemmaId": "catalina",
       "partsOfSpeech": [
@@ -63752,12 +62471,6 @@
       "lemmaId": "coincidencia",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "col.": {
-      "lemmaId": "col.",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "collage": {
@@ -63934,22 +62647,10 @@
         "verb"
       ]
     },
-    "el_mar": {
-      "lemmaId": "el_mar",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "embellecer": {
       "lemmaId": "embellecer",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "emiliano_zapata": {
-      "lemmaId": "emiliano_zapata",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "emperatriz": {
@@ -64112,12 +62813,6 @@
       "lemmaId": "gallinero",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "gila": {
-      "lemmaId": "gila",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "glotón": {
@@ -64420,12 +63115,6 @@
         "noun"
       ]
     },
-    "mú": {
-      "lemmaId": "mú",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "nuca": {
       "lemmaId": "nuca",
       "partsOfSpeech": [
@@ -64490,12 +63179,6 @@
       "lemmaId": "palomar",
       "partsOfSpeech": [
         "adjective"
-      ]
-    },
-    "parnaso": {
-      "lemmaId": "parnaso",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "pasarela": {
@@ -64672,12 +63355,6 @@
         "noun"
       ]
     },
-    "rudd": {
-      "lemmaId": "rudd",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "rótulo": {
       "lemmaId": "rótulo",
       "partsOfSpeech": [
@@ -64804,12 +63481,6 @@
         "noun"
       ]
     },
-    "top-model": {
-      "lemmaId": "top-model",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
     "toreo": {
       "lemmaId": "toreo",
       "partsOfSpeech": [
@@ -64886,12 +63557,6 @@
       "lemmaId": "volcar",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "yale": {
-      "lemmaId": "yale",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "zaguán": {
@@ -65029,12 +63694,6 @@
         "noun"
       ]
     },
-    "anno": {
-      "lemmaId": "anno",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "apoyabrazos": {
       "lemmaId": "apoyabrazos",
       "partsOfSpeech": [
@@ -65161,12 +63820,6 @@
         "noun"
       ]
     },
-    "cora": {
-      "lemmaId": "cora",
-      "partsOfSpeech": [
-        "proper-noun"
-      ]
-    },
     "costurera": {
       "lemmaId": "costurera",
       "partsOfSpeech": [
@@ -65243,12 +63896,6 @@
       "lemmaId": "ecogastronomía",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "el_vaticano": {
-      "lemmaId": "el_vaticano",
-      "partsOfSpeech": [
-        "proper-noun"
       ]
     },
     "elitista": {
@@ -65543,6 +64190,18 @@
       "lemmaId": "entretejer",
       "partsOfSpeech": [
         "verb"
+      ]
+    },
+    "ustedes": {
+      "lemmaId": "ustedes",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "señora": {
+      "lemmaId": "señora",
+      "partsOfSpeech": [
+        "noun"
       ]
     },
     "eles": {
@@ -72889,23 +71548,7 @@
         "noun"
       ]
     },
-    "senora": {
-      "lemmaId": "señor",
-      "partsOfSpeech": [
-        "noun",
-        "interjection",
-        "adjective"
-      ]
-    },
     "señores": {
-      "lemmaId": "señor",
-      "partsOfSpeech": [
-        "noun",
-        "interjection",
-        "adjective"
-      ]
-    },
-    "senoras": {
       "lemmaId": "señor",
       "partsOfSpeech": [
         "noun",
@@ -222513,6 +221156,13 @@
         "adjective"
       ]
     },
+    "habana": {
+      "lemmaId": "habano",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
     "habanos": {
       "lemmaId": "habano",
       "partsOfSpeech": [
@@ -223601,7 +222251,7 @@
         "noun"
       ]
     },
-    "canones": {
+    "cañones": {
       "lemmaId": "cañón",
       "partsOfSpeech": [
         "noun"
@@ -254314,6 +252964,12 @@
         "adjective"
       ]
     },
+    "antártica": {
+      "lemmaId": "antártico",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
     "antárticos": {
       "lemmaId": "antártico",
       "partsOfSpeech": [
@@ -262700,7 +261356,7 @@
         "adjective"
       ]
     },
-    "coruneses": {
+    "coruñeses": {
       "lemmaId": "coruñés",
       "partsOfSpeech": [
         "adjective"
@@ -268949,7 +267605,7 @@
         "adjective"
       ]
     },
-    "pinones": {
+    "piñones": {
       "lemmaId": "piñón",
       "partsOfSpeech": [
         "noun"
@@ -269846,6 +268502,13 @@
       "partsOfSpeech": [
         "noun",
         "adjective"
+      ]
+    },
+    "navarra": {
+      "lemmaId": "navarro",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
       ]
     },
     "navarros": {
@@ -276626,7 +275289,7 @@
         "adjective"
       ]
     },
-    "champinones": {
+    "champiñones": {
       "lemmaId": "champiñón",
       "partsOfSpeech": [
         "noun"
@@ -278174,7 +276837,7 @@
         "noun"
       ]
     },
-    "rinones": {
+    "riñones": {
       "lemmaId": "riñón",
       "partsOfSpeech": [
         "noun"
@@ -285065,6 +283728,12 @@
       "lemmaId": "entretejer",
       "partsOfSpeech": [
         "verb"
+      ]
+    },
+    "señoras": {
+      "lemmaId": "señora",
+      "partsOfSpeech": [
+        "noun"
       ]
     }
   }
