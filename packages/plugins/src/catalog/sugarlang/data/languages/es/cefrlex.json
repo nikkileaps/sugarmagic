@@ -34152,19 +34152,6 @@
       },
       "formsSource": "generated"
     },
-    "de_acuerdo": {
-      "lemmaId": "de_acuerdo",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 1418,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "agreed, okay"
-      }
-    },
     "eso": {
       "lemmaId": "eso",
       "lang": "es",
@@ -35824,19 +35811,6 @@
         "pl": "compromisos"
       },
       "formsSource": "generated"
-    },
-    "echamos_de_menos": {
-      "lemmaId": "echamos_de_menos",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 1491,
-      "partsOfSpeech": [
-        "verb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "miss"
-      }
     },
     "ascensor": {
       "lemmaId": "ascensor",
@@ -55027,19 +55001,6 @@
       },
       "formsSource": "generated"
     },
-    "nota_explicativa": {
-      "lemmaId": "nota_explicativa",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 2299,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "explanatory note"
-      }
-    },
     "aislar": {
       "lemmaId": "aislar",
       "lang": "es",
@@ -57245,19 +57206,6 @@
         "pl": "diálogos"
       },
       "formsSource": "generated"
-    },
-    "américa_de_el_sur": {
-      "lemmaId": "américa_de_el_sur",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 2392,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "south america"
-      }
     },
     "programar": {
       "lemmaId": "programar",
@@ -68286,19 +68234,6 @@
       },
       "formsSource": "generated"
     },
-    "a_medida_que": {
-      "lemmaId": "a_medida_que",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 2873,
-      "partsOfSpeech": [
-        "preposition"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "as, while"
-      }
-    },
     "progreso": {
       "lemmaId": "progreso",
       "lang": "es",
@@ -70016,19 +69951,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "edad_media": {
-      "lemmaId": "edad_media",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 2949,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "middle ages"
-      }
     },
     "pirata": {
       "lemmaId": "pirata",
@@ -81160,19 +81082,6 @@
       },
       "formsSource": "generated"
     },
-    "seguridad_social": {
-      "lemmaId": "seguridad_social",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 3440,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "social security"
-      }
-    },
     "célula": {
       "lemmaId": "célula",
       "lang": "es",
@@ -82074,19 +81983,6 @@
         "pl": "estadios"
       },
       "formsSource": "generated"
-    },
-    "en_público": {
-      "lemmaId": "en_público",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 3483,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "in public"
-      }
     },
     "fantasía": {
       "lemmaId": "fantasía",
@@ -84662,19 +84558,6 @@
         "en": "carry out, perform"
       }
     },
-    "todo_lo_contrario": {
-      "lemmaId": "todo_lo_contrario",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 3597,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "quite the opposite"
-      }
-    },
     "filósofo": {
       "lemmaId": "filósofo",
       "lang": "es",
@@ -85408,19 +85291,6 @@
         "pl": "ubicaciones"
       },
       "formsSource": "generated"
-    },
-    "plaza_de_armas": {
-      "lemmaId": "plaza_de_armas",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 3631,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "parade ground"
-      }
     },
     "datar": {
       "lemmaId": "datar",
@@ -87174,19 +87044,6 @@
         "pl": "bienales"
       },
       "formsSource": "generated"
-    },
-    "danza_folclórica": {
-      "lemmaId": "danza_folclórica",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 3709,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "folk dance"
-      }
     },
     "concretar": {
       "lemmaId": "concretar",
@@ -96758,19 +96615,6 @@
       },
       "formsSource": "generated"
     },
-    "patrimonio_de_la_humanidad": {
-      "lemmaId": "patrimonio_de_la_humanidad",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 4121,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "world heritage"
-      }
-    },
     "barbacoa": {
       "lemmaId": "barbacoa",
       "lang": "es",
@@ -96983,19 +96827,6 @@
         "fp": "mayoritarias"
       },
       "formsSource": "generated"
-    },
-    "reyes_magos": {
-      "lemmaId": "reyes_magos",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 4130,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "three wise men"
-      }
     },
     "revolver": {
       "lemmaId": "revolver",
@@ -100747,19 +100578,6 @@
       },
       "formsSource": "generated"
     },
-    "asociación_colegial": {
-      "lemmaId": "asociación_colegial",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 4292,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "professional association"
-      }
-    },
     "asco": {
       "lemmaId": "asco",
       "lang": "es",
@@ -103113,32 +102931,6 @@
       },
       "formsSource": "generated"
     },
-    "casa_rural": {
-      "lemmaId": "casa_rural",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 4398,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "rural house"
-      }
-    },
-    "cerca_de": {
-      "lemmaId": "cerca_de",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 4399,
-      "partsOfSpeech": [
-        "preposition"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "near, close to"
-      }
-    },
     "trompeta": {
       "lemmaId": "trompeta",
       "lang": "es",
@@ -104814,19 +104606,6 @@
         "pl": "vedados"
       },
       "formsSource": "generated"
-    },
-    "registro_civil": {
-      "lemmaId": "registro_civil",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 4474,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "civil registry"
-      }
     },
     "tijera": {
       "lemmaId": "tijera",
@@ -108224,19 +108003,6 @@
       },
       "formsSource": "authored"
     },
-    "policía_nacional": {
-      "lemmaId": "policía_nacional",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 4633,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "national police"
-      }
-    },
     "computador": {
       "lemmaId": "computador",
       "lang": "es",
@@ -109643,19 +109409,6 @@
         "pl": "laberintos"
       },
       "formsSource": "generated"
-    },
-    "estar_de_moda": {
-      "lemmaId": "estar_de_moda",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 4691,
-      "partsOfSpeech": [
-        "verb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "be in fashion"
-      }
     },
     "una": {
       "lemmaId": "una",
@@ -112016,19 +111769,6 @@
         "pl": "pólizas"
       },
       "formsSource": "generated"
-    },
-    "real_decreto": {
-      "lemmaId": "real_decreto",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 4800,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "royal decree"
-      }
     },
     "revisión": {
       "lemmaId": "revisión",
@@ -115892,19 +115632,6 @@
         "pl": "pinceles"
       },
       "formsSource": "generated"
-    },
-    "bellas_artes": {
-      "lemmaId": "bellas_artes",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 4982,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "fine arts"
-      }
     },
     "sabio": {
       "lemmaId": "sabio",
@@ -122931,19 +122658,6 @@
       },
       "formsSource": "generated"
     },
-    "departamento_comercial": {
-      "lemmaId": "departamento_comercial",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 5315,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "sales department"
-      }
-    },
     "artesano": {
       "lemmaId": "artesano",
       "lang": "es",
@@ -126420,19 +126134,6 @@
       },
       "formsSource": "generated"
     },
-    "ministerio_de_sanidad": {
-      "lemmaId": "ministerio_de_sanidad",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5474,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "health ministry"
-      }
-    },
     "pasaje": {
       "lemmaId": "pasaje",
       "lang": "es",
@@ -126980,19 +126681,6 @@
         "pl": "cabaretes"
       },
       "formsSource": "generated"
-    },
-    "fiesta_mayor": {
-      "lemmaId": "fiesta_mayor",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 5501,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "festival, fair"
-      }
     },
     "aplauso": {
       "lemmaId": "aplauso",
@@ -127546,19 +127234,6 @@
         "pl": "rodajas"
       },
       "formsSource": "generated"
-    },
-    "parque_natural": {
-      "lemmaId": "parque_natural",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 5528,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "nature reserve"
-      }
     },
     "safari": {
       "lemmaId": "safari",
@@ -130016,19 +129691,6 @@
       },
       "formsSource": "generated"
     },
-    "a_través_de": {
-      "lemmaId": "a_través_de",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 5641,
-      "partsOfSpeech": [
-        "determiner"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "through"
-      }
-    },
     "oyente": {
       "lemmaId": "oyente",
       "lang": "es",
@@ -130897,19 +130559,6 @@
         "pl": "peloteros"
       },
       "formsSource": "generated"
-    },
-    "pisco_sour": {
-      "lemmaId": "pisco_sour",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 5684,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "pisco sour"
-      }
     },
     "pizzaiolo": {
       "lemmaId": "pizzaiolo",
@@ -132560,19 +132209,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "distrito_federal": {
-      "lemmaId": "distrito_federal",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 5761,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "federal district"
-      }
     },
     "variante": {
       "lemmaId": "variante",
@@ -135173,19 +134809,6 @@
       },
       "formsSource": "generated"
     },
-    "centro_de_salud": {
-      "lemmaId": "centro_de_salud",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 5899,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "health center"
-      }
-    },
     "costo": {
       "lemmaId": "costo",
       "lang": "es",
@@ -136736,19 +136359,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "calle_mayor": {
-      "lemmaId": "calle_mayor",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 5976,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "main street"
-      }
     },
     "anorexia": {
       "lemmaId": "anorexia",
@@ -138855,19 +138465,6 @@
       },
       "formsSource": "generated"
     },
-    "aire_libre": {
-      "lemmaId": "aire_libre",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 6083,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "open air"
-      }
-    },
     "cala": {
       "lemmaId": "cala",
       "lang": "es",
@@ -138970,19 +138567,6 @@
         "pl": "cuadrículas"
       },
       "formsSource": "generated"
-    },
-    "concejalía_de_medio_ambiente": {
-      "lemmaId": "concejalía_de_medio_ambiente",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6090,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "environmental council"
-      }
     },
     "manga": {
       "lemmaId": "manga",
@@ -139441,19 +139025,6 @@
         "pl": "casinos"
       },
       "formsSource": "generated"
-    },
-    "parque_nacional": {
-      "lemmaId": "parque_nacional",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 6112,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "national park"
-      }
     },
     "persistencia": {
       "lemmaId": "persistencia",
@@ -143527,19 +143098,6 @@
         "en": "spread, propagate"
       }
     },
-    "recursos_humanos": {
-      "lemmaId": "recursos_humanos",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 6307,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "human resources"
-      }
-    },
     "peninsular": {
       "lemmaId": "peninsular",
       "lang": "es",
@@ -143905,19 +143463,6 @@
         "fp": "agrónomas"
       },
       "formsSource": "generated"
-    },
-    "biblioteca_nacional": {
-      "lemmaId": "biblioteca_nacional",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6325,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "national library"
-      }
     },
     "capitalismo": {
       "lemmaId": "capitalismo",
@@ -146754,19 +146299,6 @@
       },
       "formsSource": "generated"
     },
-    "dar_de_alta": {
-      "lemmaId": "dar_de_alta",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 6475,
-      "partsOfSpeech": [
-        "verb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "discharge, register"
-      }
-    },
     "degenerar": {
       "lemmaId": "degenerar",
       "lang": "es",
@@ -147606,19 +147138,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "redesign"
-      }
-    },
-    "tal_o_cual": {
-      "lemmaId": "tal_o_cual",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 6525,
-      "partsOfSpeech": [
-        "adjective"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "such and such"
       }
     },
     "tasar": {
@@ -153050,19 +152569,6 @@
       },
       "formsSource": "generated"
     },
-    "universidad_abierta": {
-      "lemmaId": "universidad_abierta",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 6797,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "open university"
-      }
-    },
     "ceramista": {
       "lemmaId": "ceramista",
       "lang": "es",
@@ -154049,32 +153555,6 @@
       },
       "formsSource": "generated"
     },
-    "comité_central": {
-      "lemmaId": "comité_central",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 6840,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "central committee"
-      }
-    },
-    "correo_electrónico": {
-      "lemmaId": "correo_electrónico",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6841,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "email"
-      }
-    },
     "exterminio": {
       "lemmaId": "exterminio",
       "lang": "es",
@@ -154167,19 +153647,6 @@
       },
       "formsSource": "generated"
     },
-    "por_qué": {
-      "lemmaId": "por_qué",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6847,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "why"
-      }
-    },
     "psicópata": {
       "lemmaId": "psicópata",
       "lang": "es",
@@ -154197,19 +153664,6 @@
         "pl": "psicópatas"
       },
       "formsSource": "generated"
-    },
-    "red_social": {
-      "lemmaId": "red_social",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6849,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "social network"
-      }
     },
     "teclear": {
       "lemmaId": "teclear",
@@ -154706,19 +154160,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "carolina"
-      }
-    },
-    "de_vuelta": {
-      "lemmaId": "de_vuelta",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 6872,
-      "partsOfSpeech": [
-        "preposition"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "back"
       }
     },
     "duquesa": {
@@ -155571,19 +155012,6 @@
         "pl": "auxilios"
       },
       "formsSource": "generated"
-    },
-    "mercado_de_abastos": {
-      "lemmaId": "mercado_de_abastos",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 6913,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "food market"
-      }
     },
     "milenio": {
       "lemmaId": "milenio",
@@ -157690,19 +157118,6 @@
       },
       "formsSource": "generated"
     },
-    "hoja_de_papel": {
-      "lemmaId": "hoja_de_papel",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7011,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "sheet of paper"
-      }
-    },
     "pretencioso": {
       "lemmaId": "pretencioso",
       "lang": "es",
@@ -158389,19 +157804,6 @@
         "fp": "diuréticas"
       },
       "formsSource": "generated"
-    },
-    "el_que": {
-      "lemmaId": "el_que",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7045,
-      "partsOfSpeech": [
-        "pronoun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "the one that"
-      }
     },
     "pretexto": {
       "lemmaId": "pretexto",
@@ -159650,19 +159052,6 @@
       },
       "formsSource": "generated"
     },
-    "asociación_de_abuelas": {
-      "lemmaId": "asociación_de_abuelas",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7104,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "grandmothers association"
-      }
-    },
     "ateneo": {
       "lemmaId": "ateneo",
       "lang": "es",
@@ -160646,19 +160035,6 @@
       },
       "formsSource": "generated"
     },
-    "las_madres_locas": {
-      "lemmaId": "las_madres_locas",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7152,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "the crazy mothers"
-      }
-    },
     "lavanda": {
       "lemmaId": "lavanda",
       "lang": "es",
@@ -161024,19 +160400,6 @@
         "pl": "nites"
       },
       "formsSource": "generated"
-    },
-    "organización_no_gubernamental": {
-      "lemmaId": "organización_no_gubernamental",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7173,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "non-governmental organization"
-      }
     },
     "ornitólogo": {
       "lemmaId": "ornitólogo",
@@ -162485,19 +161848,6 @@
       },
       "formsSource": "generated"
     },
-    "campeonato_mundial": {
-      "lemmaId": "campeonato_mundial",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7248,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "world championship"
-      }
-    },
     "indignado": {
       "lemmaId": "indignado",
       "lang": "es",
@@ -162515,19 +161865,6 @@
         "pl": "indignados"
       },
       "formsSource": "generated"
-    },
-    "centro_comercial": {
-      "lemmaId": "centro_comercial",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7250,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "shopping center"
-      }
     },
     "islote": {
       "lemmaId": "islote",
@@ -163154,19 +162491,6 @@
         "pl": "conocedores"
       },
       "formsSource": "generated"
-    },
-    "educación_pública": {
-      "lemmaId": "educación_pública",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7280,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "public education"
-      }
     },
     "multitudinario": {
       "lemmaId": "multitudinario",
@@ -163868,19 +163192,6 @@
         "pl": "zappinges"
       },
       "formsSource": "generated"
-    },
-    "feliz_navidad": {
-      "lemmaId": "feliz_navidad",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7317,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "merry christmas"
-      }
     },
     "lástima": {
       "lemmaId": "lástima",
@@ -164987,19 +164298,6 @@
       },
       "formsSource": "generated"
     },
-    "obra_social": {
-      "lemmaId": "obra_social",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7372,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "social work"
-      }
-    },
     "bombardear": {
       "lemmaId": "bombardear",
       "lang": "es",
@@ -165077,19 +164375,6 @@
         "pl": "desembocaduras"
       },
       "formsSource": "generated"
-    },
-    "escuela_superior": {
-      "lemmaId": "escuela_superior",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7376,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "higher education"
-      }
     },
     "póker": {
       "lemmaId": "póker",
@@ -165692,19 +164977,6 @@
       },
       "formsSource": "generated"
     },
-    "banco_justo": {
-      "lemmaId": "banco_justo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 7405,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "fair trade bank"
-      }
-    },
     "biocida": {
       "lemmaId": "biocida",
       "lang": "es",
@@ -165740,19 +165012,6 @@
         "pl": "comparadores"
       },
       "formsSource": "generated"
-    },
-    "cooperación_internacional_para_el_desarrollo": {
-      "lemmaId": "cooperación_internacional_para_el_desarrollo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 7408,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "international development cooperation"
-      }
     },
     "cubierto": {
       "lemmaId": "cubierto",
@@ -166256,19 +165515,6 @@
       },
       "formsSource": "generated"
     },
-    "fin_de_semana": {
-      "lemmaId": "fin_de_semana",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7435,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "weekend"
-      }
-    },
     "cantábrico": {
       "lemmaId": "cantábrico",
       "lang": "es",
@@ -166602,19 +165848,6 @@
       },
       "formsSource": "generated"
     },
-    "tiempo_libre": {
-      "lemmaId": "tiempo_libre",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7449,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "free time, leisure"
-      }
-    },
     "desocupar": {
       "lemmaId": "desocupar",
       "lang": "es",
@@ -166656,19 +165889,6 @@
         "part": "desocupado"
       },
       "formsSource": "generated"
-    },
-    "festival_de_cine": {
-      "lemmaId": "festival_de_cine",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7451,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "film festival"
-      }
     },
     "precariedad": {
       "lemmaId": "precariedad",
@@ -166837,19 +166057,6 @@
         "fp": "venenosas"
       },
       "formsSource": "generated"
-    },
-    "paque_nacional": {
-      "lemmaId": "paque_nacional",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7461,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "national park"
-      }
     },
     "románico": {
       "lemmaId": "románico",
@@ -168211,19 +167418,6 @@
         "pl": "corales"
       },
       "formsSource": "generated"
-    },
-    "centro_cultural": {
-      "lemmaId": "centro_cultural",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7525,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "cultural center"
-      }
     },
     "conde_duque": {
       "lemmaId": "conde_duque",
@@ -169722,19 +168916,6 @@
       },
       "formsSource": "generated"
     },
-    "su_alteza": {
-      "lemmaId": "su_alteza",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 7592,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "his/her highness"
-      }
-    },
     "vello": {
       "lemmaId": "vello",
       "lang": "es",
@@ -170208,19 +169389,6 @@
       },
       "formsSource": "generated"
     },
-    "al_tiempo_que": {
-      "lemmaId": "al_tiempo_que",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 7615,
-      "partsOfSpeech": [
-        "preposition"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "while, as"
-      }
-    },
     "antidepresivo": {
       "lemmaId": "antidepresivo",
       "lang": "es",
@@ -170289,19 +169457,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "quote, trade"
-      }
-    },
-    "célula_madre": {
-      "lemmaId": "célula_madre",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 7620,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "stem cell"
       }
     },
     "danzarín": {
@@ -170648,19 +169803,6 @@
         "pl": "síntesis"
       },
       "formsSource": "generated"
-    },
-    "tercer_sector": {
-      "lemmaId": "tercer_sector",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 7641,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "third sector"
-      }
     },
     "toxina": {
       "lemmaId": "toxina",
@@ -171348,19 +170490,6 @@
       },
       "formsSource": "generated"
     },
-    "palacio_real": {
-      "lemmaId": "palacio_real",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7678,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "royal palace"
-      }
-    },
     "paternalista": {
       "lemmaId": "paternalista",
       "lang": "es",
@@ -171437,19 +170566,6 @@
       },
       "formsSource": "generated"
     },
-    "pretérito_indefinido": {
-      "lemmaId": "pretérito_indefinido",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7683,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "simple past tense"
-      }
-    },
     "progresista": {
       "lemmaId": "progresista",
       "lang": "es",
@@ -171469,19 +170585,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "puente_aéreo": {
-      "lemmaId": "puente_aéreo",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7685,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "airlift"
-      }
     },
     "rhodes": {
       "lemmaId": "rhodes",
@@ -171513,19 +170616,6 @@
         "pl": "setteres"
       },
       "formsSource": "generated"
-    },
-    "sociedad_limitada": {
-      "lemmaId": "sociedad_limitada",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7688,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "limited company"
-      }
     },
     "subastar": {
       "lemmaId": "subastar",
@@ -172669,19 +171759,6 @@
         "pl": "avestruces"
       },
       "formsSource": "generated"
-    },
-    "año_nuevo": {
-      "lemmaId": "año_nuevo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 7742,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "new year"
-      }
     },
     "benigno": {
       "lemmaId": "benigno",
@@ -173905,45 +172982,6 @@
       },
       "formsSource": "generated"
     },
-    "a_el_borde_de": {
-      "lemmaId": "a_el_borde_de",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7812,
-      "partsOfSpeech": [
-        "preposition"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "at the edge of"
-      }
-    },
-    "a_media_luz": {
-      "lemmaId": "a_media_luz",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7813,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "in half light"
-      }
-    },
-    "a_propósito_de": {
-      "lemmaId": "a_propósito_de",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7814,
-      "partsOfSpeech": [
-        "preposition"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "regarding, about"
-      }
-    },
     "abeto": {
       "lemmaId": "abeto",
       "lang": "es",
@@ -174003,19 +173041,6 @@
         "part": "acaparado"
       },
       "formsSource": "generated"
-    },
-    "acción_de_gracias": {
-      "lemmaId": "acción_de_gracias",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7817,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "thanksgiving"
-      }
     },
     "aclimatación": {
       "lemmaId": "aclimatación",
@@ -174684,19 +173709,6 @@
       },
       "formsSource": "generated"
     },
-    "asociación_civil": {
-      "lemmaId": "asociación_civil",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7851,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "civil association"
-      }
-    },
     "astucia": {
       "lemmaId": "astucia",
       "lang": "es",
@@ -174732,19 +173744,6 @@
         "pl": "atados"
       },
       "formsSource": "generated"
-    },
-    "auto_antiguo": {
-      "lemmaId": "auto_antiguo",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7854,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "vintage car"
-      }
     },
     "avellano": {
       "lemmaId": "avellano",
@@ -176314,58 +175313,6 @@
       },
       "formsSource": "generated"
     },
-    "curso_de_orientación": {
-      "lemmaId": "curso_de_orientación",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7936,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "orientation course"
-      }
-    },
-    "de_el_espíritu_santo": {
-      "lemmaId": "de_el_espíritu_santo",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7937,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "of the holy spirit"
-      }
-    },
-    "de_el_partido_revolucionario_cubano": {
-      "lemmaId": "de_el_partido_revolucionario_cubano",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7938,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "of cuban revolutionary party"
-      }
-    },
-    "de_el_triunfo": {
-      "lemmaId": "de_el_triunfo",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 7939,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "of the triumph"
-      }
-    },
     "dealer": {
       "lemmaId": "dealer",
       "lang": "es",
@@ -176751,19 +175698,6 @@
       },
       "formsSource": "generated"
     },
-    "diario_popular": {
-      "lemmaId": "diario_popular",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7955,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "popular newspaper"
-      }
-    },
     "dobla": {
       "lemmaId": "dobla",
       "lang": "es",
@@ -176781,19 +175715,6 @@
         "pl": "doblas"
       },
       "formsSource": "generated"
-    },
-    "documento_nacional_de_identidad": {
-      "lemmaId": "documento_nacional_de_identidad",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7957,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "national id card"
-      }
     },
     "drogadicción": {
       "lemmaId": "drogadicción",
@@ -176882,19 +175803,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "el morro"
-      }
-    },
-    "el_poder_ejecutivo": {
-      "lemmaId": "el_poder_ejecutivo",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 7963,
-      "partsOfSpeech": [
-        "determiner"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "executive power"
       }
     },
     "el_real_madrid": {
@@ -177158,19 +176066,6 @@
         "pl": "escalerillas"
       },
       "formsSource": "generated"
-    },
-    "escuela_primaria": {
-      "lemmaId": "escuela_primaria",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 7975,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "primary school"
-      }
     },
     "esdrújulo": {
       "lemmaId": "esdrújulo",
@@ -178921,32 +177816,6 @@
         "en": "la candelaria"
       }
     },
-    "la_mancha": {
-      "lemmaId": "la_mancha",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8059,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "la mancha"
-      }
-    },
-    "la_república_argentina": {
-      "lemmaId": "la_república_argentina",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8060,
-      "partsOfSpeech": [
-        "preposition"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "the argentine republic"
-      }
-    },
     "lagrima": {
       "lemmaId": "lagrima",
       "lang": "es",
@@ -179896,19 +178765,6 @@
       },
       "formsSource": "generated"
     },
-    "mundial_de_fútbol": {
-      "lemmaId": "mundial_de_fútbol",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8108,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "world cup"
-      }
-    },
     "mundialización": {
       "lemmaId": "mundialización",
       "lang": "es",
@@ -179944,19 +178800,6 @@
         "pl": "muralismos"
       },
       "formsSource": "generated"
-    },
-    "museo_antropológico": {
-      "lemmaId": "museo_antropológico",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8111,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "anthropological museum"
-      }
     },
     "musicar": {
       "lemmaId": "musicar",
@@ -179997,24 +178840,6 @@
         ],
         "ger": "musicando",
         "part": "musicado"
-      },
-      "formsSource": "generated"
-    },
-    "my": {
-      "lemmaId": "my",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8113,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "my"
-      },
-      "forms": {
-        "sg": "my",
-        "pl": "myes"
       },
       "formsSource": "generated"
     },
@@ -180378,19 +179203,6 @@
       },
       "formsSource": "generated"
     },
-    "palacio_presidencial": {
-      "lemmaId": "palacio_presidencial",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8132,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "presidential palace"
-      }
-    },
     "papagayo": {
       "lemmaId": "papagayo",
       "lang": "es",
@@ -180576,19 +179388,6 @@
         "pl": "paseítos"
       },
       "formsSource": "generated"
-    },
-    "patrimonio_cultural": {
-      "lemmaId": "patrimonio_cultural",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8142,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "cultural heritage"
-      }
     },
     "pelón": {
       "lemmaId": "pelón",
@@ -180962,32 +179761,6 @@
       },
       "formsSource": "generated"
     },
-    "presente_de_indicativo": {
-      "lemmaId": "presente_de_indicativo",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8162,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "present indicative"
-      }
-    },
-    "presidencia_de_la_república": {
-      "lemmaId": "presidencia_de_la_república",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8163,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "presidency"
-      }
-    },
     "primar": {
       "lemmaId": "primar",
       "lang": "es",
@@ -181029,19 +179802,6 @@
         "part": "primado"
       },
       "formsSource": "generated"
-    },
-    "primera_comunión": {
-      "lemmaId": "primera_comunión",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8165,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "first communion"
-      }
     },
     "problemita": {
       "lemmaId": "problemita",
@@ -181170,19 +179930,6 @@
         "pl": "quitas"
       },
       "formsSource": "generated"
-    },
-    "qué_tal": {
-      "lemmaId": "qué_tal",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8173,
-      "partsOfSpeech": [
-        "pronoun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "how are you, what's up"
-      }
     },
     "radiocasete": {
       "lemmaId": "radiocasete",
@@ -181673,19 +180420,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "san francisco"
-      }
-    },
-    "secreto_de_estado": {
-      "lemmaId": "secreto_de_estado",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8197,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "state secret"
       }
     },
     "seguidito": {
@@ -182461,19 +181195,6 @@
       },
       "formsSource": "generated"
     },
-    "tratado_de_libre_comercio": {
-      "lemmaId": "tratado_de_libre_comercio",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8236,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "free trade agreement"
-      }
-    },
     "trekking": {
       "lemmaId": "trekking",
       "lang": "es",
@@ -182908,19 +181629,6 @@
         "fp": "yugoslavas"
       },
       "formsSource": "generated"
-    },
-    "zona_rosa": {
-      "lemmaId": "zona_rosa",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8257,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "pink zone"
-      }
     },
     "zuecos": {
       "lemmaId": "zuecos",
@@ -183412,19 +182120,6 @@
       },
       "formsSource": "generated"
     },
-    "acción_social": {
-      "lemmaId": "acción_social",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8280,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "social action"
-      }
-    },
     "adelantamiento": {
       "lemmaId": "adelantamiento",
       "lang": "es",
@@ -183604,19 +182299,6 @@
         "pl": "cascadas"
       },
       "formsSource": "generated"
-    },
-    "centro_de_atención_primaria": {
-      "lemmaId": "centro_de_atención_primaria",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8292,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "primary care center"
-      }
     },
     "certificación": {
       "lemmaId": "certificación",
@@ -183918,19 +182600,6 @@
         "pl": "derrumbes"
       },
       "formsSource": "generated"
-    },
-    "descripción_meta": {
-      "lemmaId": "descripción_meta",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8310,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "meta description"
-      }
     },
     "destreza": {
       "lemmaId": "destreza",
@@ -184843,19 +183512,6 @@
       },
       "formsSource": "generated"
     },
-    "rafael_de_el_pino": {
-      "lemmaId": "rafael_de_el_pino",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8363,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "rafael de el pino"
-      }
-    },
     "recalcar": {
       "lemmaId": "recalcar",
       "lang": "es",
@@ -185002,19 +183658,6 @@
         "pl": "rinoplastias"
       },
       "formsSource": "generated"
-    },
-    "secretaría_de_estado": {
-      "lemmaId": "secretaría_de_estado",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8373,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "state secretariat"
-      }
     },
     "segunda": {
       "lemmaId": "segunda",
@@ -185280,19 +183923,6 @@
         "pl": "brevedades"
       },
       "formsSource": "generated"
-    },
-    "mercado_común": {
-      "lemmaId": "mercado_común",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8389,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "common market"
-      }
     },
     "acupuntor": {
       "lemmaId": "acupuntor",
@@ -186542,19 +185172,6 @@
       },
       "formsSource": "generated"
     },
-    "ir_a": {
-      "lemmaId": "ir_a",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8450,
-      "partsOfSpeech": [
-        "verb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "go to"
-      }
-    },
     "garrafa": {
       "lemmaId": "garrafa",
       "lang": "es",
@@ -186590,19 +185207,6 @@
         "pl": "campiñas"
       },
       "formsSource": "generated"
-    },
-    "convenio_colectivo": {
-      "lemmaId": "convenio_colectivo",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8453,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "collective agreement"
-      }
     },
     "el_cauca": {
       "lemmaId": "el_cauca",
@@ -186652,19 +185256,6 @@
         "pl": "motoristas"
       },
       "formsSource": "generated"
-    },
-    "polígono_industrial": {
-      "lemmaId": "polígono_industrial",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8457,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "industrial park"
-      }
     },
     "pyme": {
       "lemmaId": "pyme",
@@ -187056,19 +185647,6 @@
       },
       "formsSource": "generated"
     },
-    "agencia_de_detectives": {
-      "lemmaId": "agencia_de_detectives",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8477,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "detective agency"
-      }
-    },
     "apendicitis": {
       "lemmaId": "apendicitis",
       "lang": "es",
@@ -187106,19 +185684,6 @@
         "fp": "aragonesas"
       },
       "formsSource": "generated"
-    },
-    "arte_moderno": {
-      "lemmaId": "arte_moderno",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8480,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "modern art"
-      }
     },
     "autovía": {
       "lemmaId": "autovía",
@@ -187451,32 +186016,6 @@
       },
       "formsSource": "generated"
     },
-    "de_el_carpo": {
-      "lemmaId": "de_el_carpo",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8500,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "De El Carpo"
-      }
-    },
-    "de_el_prado": {
-      "lemmaId": "de_el_prado",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8501,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "De El Prado"
-      }
-    },
     "de_la_habana": {
       "lemmaId": "de_la_habana",
       "lang": "es",
@@ -187662,19 +186201,6 @@
         "en": "F"
       }
     },
-    "el_roncal": {
-      "lemmaId": "el_roncal",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8513,
-      "partsOfSpeech": [
-        "determiner"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "El Roncal"
-      }
-    },
     "elle": {
       "lemmaId": "elle",
       "lang": "es",
@@ -187724,19 +186250,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "Emma"
-      }
-    },
-    "en_venta": {
-      "lemmaId": "en_venta",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8517,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "for sale"
       }
     },
     "feliciano": {
@@ -187797,19 +186310,6 @@
         "fp": "gravísimas"
       },
       "formsSource": "generated"
-    },
-    "guerra_civil": {
-      "lemmaId": "guerra_civil",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8522,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "civil war"
-      }
     },
     "hala": {
       "lemmaId": "hala",
@@ -187956,19 +186456,6 @@
         "pl": "inmovilidades"
       },
       "formsSource": "generated"
-    },
-    "inspector_de_hacienda": {
-      "lemmaId": "inspector_de_hacienda",
-      "lang": "es",
-      "cefrPriorBand": "A1",
-      "frequencyRank": 8530,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "tax inspector"
-      }
     },
     "kiwi": {
       "lemmaId": "kiwi",
@@ -188402,19 +186889,6 @@
         "en": "Perales"
       }
     },
-    "permiso_de_residencia": {
-      "lemmaId": "permiso_de_residencia",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8555,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "residence permit"
-      }
-    },
     "pobrecillo": {
       "lemmaId": "pobrecillo",
       "lang": "es",
@@ -188434,19 +186908,6 @@
         "fp": "pobrecillas"
       },
       "formsSource": "generated"
-    },
-    "porque_dalí": {
-      "lemmaId": "porque_dalí",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8557,
-      "partsOfSpeech": [
-        "conjunction"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "because Dalí"
-      }
     },
     "postguerra": {
       "lemmaId": "postguerra",
@@ -188563,19 +187024,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "servicio_de_inteligencia": {
-      "lemmaId": "servicio_de_inteligencia",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8563,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "intelligence service"
-      }
     },
     "sesentón": {
       "lemmaId": "sesentón",
@@ -188751,19 +187199,6 @@
         "pl": "tónicas"
       },
       "formsSource": "generated"
-    },
-    "unidad_de_vigilancia_intensiva": {
-      "lemmaId": "unidad_de_vigilancia_intensiva",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8575,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "intensive care unit"
-      }
     },
     "vetar": {
       "lemmaId": "vetar",
@@ -189026,19 +187461,6 @@
       },
       "formsSource": "generated"
     },
-    "ciencias_de_la_información": {
-      "lemmaId": "ciencias_de_la_información",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8589,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "information science"
-      }
-    },
     "complutense": {
       "lemmaId": "complutense",
       "lang": "es",
@@ -189058,19 +187480,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "consejería_de_medio_ambiente": {
-      "lemmaId": "consejería_de_medio_ambiente",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8591,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "environment ministry"
-      }
     },
     "coplero": {
       "lemmaId": "coplero",
@@ -190090,19 +188499,6 @@
       },
       "formsSource": "generated"
     },
-    "santa_maría_de_el_peñasco": {
-      "lemmaId": "santa_maría_de_el_peñasco",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 8650,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Santa María de El Peñasco"
-      }
-    },
     "substancia": {
       "lemmaId": "substancia",
       "lang": "es",
@@ -190431,19 +188827,6 @@
       },
       "formsSource": "generated"
     },
-    "club_de_fútbol": {
-      "lemmaId": "club_de_fútbol",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8669,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "football club"
-      }
-    },
     "cántara": {
       "lemmaId": "cántara",
       "lang": "es",
@@ -190497,19 +188880,6 @@
         "pl": "judos"
       },
       "formsSource": "generated"
-    },
-    "medio_ambiente": {
-      "lemmaId": "medio_ambiente",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 8673,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "environment, surroundings"
-      }
     },
     "moderador": {
       "lemmaId": "moderador",
@@ -191026,19 +189396,6 @@
       },
       "formsSource": "generated"
     },
-    "gabinete_jurídico": {
-      "lemmaId": "gabinete_jurídico",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 8700,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "legal department"
-      }
-    },
     "sensacional": {
       "lemmaId": "sensacional",
       "lang": "es",
@@ -191058,19 +189415,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "a_menos_que": {
-      "lemmaId": "a_menos_que",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8702,
-      "partsOfSpeech": [
-        "preposition"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "unless"
-      }
     },
     "abducir": {
       "lemmaId": "abducir",
@@ -191286,19 +189630,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "insult, shame"
-      }
-    },
-    "agente_de_viajes": {
-      "lemmaId": "agente_de_viajes",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8717,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "travel agent"
       }
     },
     "aguafiestas": {
@@ -193028,19 +191359,6 @@
       },
       "formsSource": "generated"
     },
-    "club_marítimo": {
-      "lemmaId": "club_marítimo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8818,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "yacht club"
-      }
-    },
     "co.": {
       "lemmaId": "co.",
       "lang": "es",
@@ -193822,19 +192140,6 @@
       },
       "formsSource": "generated"
     },
-    "daño_material": {
-      "lemmaId": "daño_material",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8864,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "property damage"
-      }
-    },
     "de_acción_nacional": {
       "lemmaId": "de_acción_nacional",
       "lang": "es",
@@ -194248,19 +192553,6 @@
       },
       "formsSource": "generated"
     },
-    "diario_de_la_guerra": {
-      "lemmaId": "diario_de_la_guerra",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8891,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "war diary"
-      }
-    },
     "dichoso": {
       "lemmaId": "dichoso",
       "lang": "es",
@@ -194513,19 +192805,6 @@
       },
       "formsSource": "generated"
     },
-    "edad_mediano": {
-      "lemmaId": "edad_mediano",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8907,
-      "partsOfSpeech": [
-        "adjective"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "middle-aged"
-      }
-    },
     "efusivo": {
       "lemmaId": "efusivo",
       "lang": "es",
@@ -194691,19 +192970,6 @@
         "pl": "emplazamientos"
       },
       "formsSource": "generated"
-    },
-    "en_un_santiamén": {
-      "lemmaId": "en_un_santiamén",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8918,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "in a jiffy"
-      }
     },
     "encalar": {
       "lemmaId": "encalar",
@@ -194907,19 +193173,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "vent rage, wreak"
-      }
-    },
-    "ente_público": {
-      "lemmaId": "ente_público",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8933,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "public entity"
       }
     },
     "entrecortar": {
@@ -195707,19 +193960,6 @@
       },
       "formsSource": "generated"
     },
-    "feliz_año_nuevo": {
-      "lemmaId": "feliz_año_nuevo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8980,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "happy new year"
-      }
-    },
     "ferrolano": {
       "lemmaId": "ferrolano",
       "lang": "es",
@@ -195759,19 +193999,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "fin_de_año": {
-      "lemmaId": "fin_de_año",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 8983,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "year-end, new year's eve"
-      }
     },
     "flechar": {
       "lemmaId": "flechar",
@@ -197125,19 +195352,6 @@
       },
       "formsSource": "generated"
     },
-    "jornada_parcial": {
-      "lemmaId": "jornada_parcial",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9057,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "part-time"
-      }
-    },
     "juguetón": {
       "lemmaId": "juguetón",
       "lang": "es",
@@ -197157,19 +195371,6 @@
         "fp": "juguetonas"
       },
       "formsSource": "generated"
-    },
-    "juicio_final": {
-      "lemmaId": "juicio_final",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9059,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "last judgment"
-      }
     },
     "junco": {
       "lemmaId": "junco",
@@ -197438,19 +195639,6 @@
         "pl": "linces"
       },
       "formsSource": "generated"
-    },
-    "lingüística_aplicada": {
-      "lemmaId": "lingüística_aplicada",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9075,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "applied linguistics"
-      }
     },
     "lirón": {
       "lemmaId": "lirón",
@@ -198048,32 +196236,6 @@
         "pl": "mininos"
       },
       "formsSource": "generated"
-    },
-    "ministerio_de_gobernación": {
-      "lemmaId": "ministerio_de_gobernación",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9109,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "ministry of interior"
-      }
-    },
-    "ministro_de_asuntos_exteriores": {
-      "lemmaId": "ministro_de_asuntos_exteriores",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9110,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "foreign minister"
-      }
     },
     "mitificar": {
       "lemmaId": "mitificar",
@@ -199523,32 +197685,6 @@
       },
       "formsSource": "generated"
     },
-    "poner_resta": {
-      "lemmaId": "poner_resta",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9194,
-      "partsOfSpeech": [
-        "verb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "subtract, put minus"
-      }
-    },
-    "por_motivos_de": {
-      "lemmaId": "por_motivos_de",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9195,
-      "partsOfSpeech": [
-        "preposition"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "for reasons of"
-      }
-    },
     "portafolios": {
       "lemmaId": "portafolios",
       "lang": "es",
@@ -199683,19 +197819,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "presuppose"
-      }
-    },
-    "primera_división": {
-      "lemmaId": "primera_división",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9204,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "first division"
       }
     },
     "primor": {
@@ -199865,45 +197988,6 @@
         "pl": "prosperidades"
       },
       "formsSource": "generated"
-    },
-    "protección_civil": {
-      "lemmaId": "protección_civil",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9214,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "civil protection"
-      }
-    },
-    "próspera_navidad": {
-      "lemmaId": "próspera_navidad",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9215,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "merry christmas"
-      }
-    },
-    "próspero_año_nuevo": {
-      "lemmaId": "próspero_año_nuevo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9216,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "happy new year"
-      }
     },
     "pudor": {
       "lemmaId": "pudor",
@@ -201570,19 +199654,6 @@
       },
       "formsSource": "generated"
     },
-    "tribunal_supremo": {
-      "lemmaId": "tribunal_supremo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9314,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "supreme court"
-      }
-    },
     "trinchera": {
       "lemmaId": "trinchera",
       "lang": "es",
@@ -202429,19 +200500,6 @@
       },
       "formsSource": "generated"
     },
-    "abogacía_de_el_estado": {
-      "lemmaId": "abogacía_de_el_estado",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9363,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "state attorney"
-      }
-    },
     "abrumar": {
       "lemmaId": "abrumar",
       "lang": "es",
@@ -202497,19 +200555,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "silence, hush"
-      }
-    },
-    "aceptación_de_el_beneficiario": {
-      "lemmaId": "aceptación_de_el_beneficiario",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9368,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "acceptance of benefit"
       }
     },
     "achacable": {
@@ -203310,19 +201355,6 @@
       },
       "formsSource": "generated"
     },
-    "arte_callejero": {
-      "lemmaId": "arte_callejero",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9414,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "street art"
-      }
-    },
     "artificio": {
       "lemmaId": "artificio",
       "lang": "es",
@@ -203398,19 +201430,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "atención_primaria": {
-      "lemmaId": "atención_primaria",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9419,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "primary care"
-      }
     },
     "atenuante": {
       "lemmaId": "atenuante",
@@ -203687,19 +201706,6 @@
         "fp": "baldías"
       },
       "formsSource": "generated"
-    },
-    "banco_de_comercio": {
-      "lemmaId": "banco_de_comercio",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9436,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "commerce bank"
-      }
     },
     "barata": {
       "lemmaId": "barata",
@@ -204055,19 +202061,6 @@
       },
       "formsSource": "generated"
     },
-    "boletín_oficial_de_el_estado": {
-      "lemmaId": "boletín_oficial_de_el_estado",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9457,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "official state bulletin"
-      }
-    },
     "brin": {
       "lemmaId": "brin",
       "lang": "es",
@@ -204313,19 +202306,6 @@
         "pl": "capacitaciones"
       },
       "formsSource": "generated"
-    },
-    "capital_federal": {
-      "lemmaId": "capital_federal",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9472,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "federal capital"
-      }
     },
     "capsi": {
       "lemmaId": "capsi",
@@ -204632,32 +202612,6 @@
         "en": "circumscribe"
       }
     },
-    "cirugía_estética": {
-      "lemmaId": "cirugía_estética",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9491,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "cosmetic surgery"
-      }
-    },
-    "cirugía_plástica": {
-      "lemmaId": "cirugía_plástica",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9492,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "plastic surgery"
-      }
-    },
     "cisne": {
       "lemmaId": "cisne",
       "lang": "es",
@@ -204726,19 +202680,6 @@
         "pl": "climatizaciones"
       },
       "formsSource": "generated"
-    },
-    "club_de_el_motor": {
-      "lemmaId": "club_de_el_motor",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9497,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "motor club"
-      }
     },
     "clérigo": {
       "lemmaId": "clérigo",
@@ -205154,19 +203095,6 @@
       },
       "formsSource": "generated"
     },
-    "contenido_televisivo_audiovisual": {
-      "lemmaId": "contenido_televisivo_audiovisual",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9521,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "television audiovisual content"
-      }
-    },
     "contractual": {
       "lemmaId": "contractual",
       "lang": "es",
@@ -205519,19 +203447,6 @@
         "en": "desquadra"
       }
     },
-    "dar_rienda_suelta_a": {
-      "lemmaId": "dar_rienda_suelta_a",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9542,
-      "partsOfSpeech": [
-        "conjunction"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "give free rein to"
-      }
-    },
     "dañino": {
       "lemmaId": "dañino",
       "lang": "es",
@@ -205551,19 +203466,6 @@
         "fp": "dañinas"
       },
       "formsSource": "generated"
-    },
-    "de_bolsillo": {
-      "lemmaId": "de_bolsillo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9544,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "pocket-sized"
-      }
     },
     "dedal": {
       "lemmaId": "dedal",
@@ -205715,58 +203617,6 @@
       },
       "formsSource": "generated"
     },
-    "departamento_de_publicidad": {
-      "lemmaId": "departamento_de_publicidad",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9553,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "advertising department"
-      }
-    },
-    "departamento_escolar": {
-      "lemmaId": "departamento_escolar",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9554,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "school department"
-      }
-    },
-    "departamento_legal": {
-      "lemmaId": "departamento_legal",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9555,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "legal department"
-      }
-    },
-    "departamento_universitario": {
-      "lemmaId": "departamento_universitario",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9556,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "university department"
-      }
-    },
     "derretimiento": {
       "lemmaId": "derretimiento",
       "lang": "es",
@@ -205851,19 +203701,6 @@
         "pl": "desahogos"
       },
       "formsSource": "generated"
-    },
-    "desastre_natural": {
-      "lemmaId": "desastre_natural",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9562,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "natural disaster"
-      }
     },
     "desatender": {
       "lemmaId": "desatender",
@@ -206133,32 +203970,6 @@
         "en": "malnourish"
       }
     },
-    "despacho_de_justicia": {
-      "lemmaId": "despacho_de_justicia",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9580,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "law office"
-      }
-    },
-    "despacho_de_relaciones_interiores": {
-      "lemmaId": "despacho_de_relaciones_interiores",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9581,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "interior relations office"
-      }
-    },
     "desparramar": {
       "lemmaId": "desparramar",
       "lang": "es",
@@ -206242,19 +204053,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "detonate"
-      }
-    },
-    "deuda_estudiantil": {
-      "lemmaId": "deuda_estudiantil",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9588,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "student debt"
       }
     },
     "diabla": {
@@ -206566,19 +204364,6 @@
       },
       "formsSource": "generated"
     },
-    "documento_de_afiliación": {
-      "lemmaId": "documento_de_afiliación",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9608,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "affiliation document"
-      }
-    },
     "dote": {
       "lemmaId": "dote",
       "lang": "es",
@@ -206615,19 +204400,6 @@
       },
       "formsSource": "generated"
     },
-    "eco_vivienda": {
-      "lemmaId": "eco_vivienda",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9611,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "eco-friendly housing"
-      }
-    },
     "economicista": {
       "lemmaId": "economicista",
       "lang": "es",
@@ -206661,19 +204433,6 @@
         "en": "build, construct"
       }
     },
-    "efecto_adverso": {
-      "lemmaId": "efecto_adverso",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9614,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "adverse effect"
-      }
-    },
     "efeméride": {
       "lemmaId": "efeméride",
       "lang": "es",
@@ -206691,19 +204450,6 @@
         "pl": "efemérides"
       },
       "formsSource": "generated"
-    },
-    "el_hospital_de_especialidades_la_raza_de_el_imss": {
-      "lemmaId": "el_hospital_de_especialidades_la_raza_de_el_imss",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9616,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "La Raza Specialty Hospital IMSS"
-      }
     },
     "elector": {
       "lemmaId": "elector",
@@ -207095,45 +204841,6 @@
       },
       "formsSource": "generated"
     },
-    "enseñanza_primaria": {
-      "lemmaId": "enseñanza_primaria",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9641,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "primary education"
-      }
-    },
-    "enseñanza_pública": {
-      "lemmaId": "enseñanza_pública",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9642,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "public education"
-      }
-    },
-    "enseñanza_secundaria_obligatoria": {
-      "lemmaId": "enseñanza_secundaria_obligatoria",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9643,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "compulsory secondary education"
-      }
-    },
     "entendimiento": {
       "lemmaId": "entendimiento",
       "lang": "es",
@@ -207334,32 +205041,6 @@
         "pl": "escotes"
       },
       "formsSource": "generated"
-    },
-    "escuela_de_hostelería": {
-      "lemmaId": "escuela_de_hostelería",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9657,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "hospitality school"
-      }
-    },
-    "escuela_privada_concertada": {
-      "lemmaId": "escuela_privada_concertada",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9658,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "concerted private school"
-      }
     },
     "esmalte": {
       "lemmaId": "esmalte",
@@ -207724,19 +205405,6 @@
       },
       "formsSource": "generated"
     },
-    "factor_de_protección_solar": {
-      "lemmaId": "factor_de_protección_solar",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9679,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "sun protection factor"
-      }
-    },
     "facultar": {
       "lemmaId": "facultar",
       "lang": "es",
@@ -207761,19 +205429,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "fail, break"
-      }
-    },
-    "feria_de_alimentación": {
-      "lemmaId": "feria_de_alimentación",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9682,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "food fair"
       }
     },
     "fernando_quiñones": {
@@ -207907,19 +205562,6 @@
       },
       "formsSource": "generated"
     },
-    "fiscalía_de_menores": {
-      "lemmaId": "fiscalía_de_menores",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9691,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "juvenile prosecution office"
-      }
-    },
     "fisura": {
       "lemmaId": "fisura",
       "lang": "es",
@@ -207993,19 +205635,6 @@
         "pl": "fomentos"
       },
       "formsSource": "generated"
-    },
-    "formación_técnica_especializada": {
-      "lemmaId": "formación_técnica_especializada",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9696,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "specialized technical training"
-      }
     },
     "formulación": {
       "lemmaId": "formulación",
@@ -208451,19 +206080,6 @@
       },
       "formsSource": "generated"
     },
-    "guerra_mundial": {
-      "lemmaId": "guerra_mundial",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9723,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "world war"
-      }
-    },
     "góndola": {
       "lemmaId": "góndola",
       "lang": "es",
@@ -208633,19 +206249,6 @@
         "pl": "hinchazones"
       },
       "formsSource": "generated"
-    },
-    "historia_natural": {
-      "lemmaId": "historia_natural",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9734,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "natural history"
-      }
     },
     "histéresis": {
       "lemmaId": "histéresis",
@@ -209426,19 +207029,6 @@
         "en": "institute of economic studies"
       }
     },
-    "instrucción_pública": {
-      "lemmaId": "instrucción_pública",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9778,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "public education"
-      }
-    },
     "intachable": {
       "lemmaId": "intachable",
       "lang": "es",
@@ -210001,19 +207591,6 @@
         "en": "injure, harm"
       }
     },
-    "ley_de_reforma": {
-      "lemmaId": "ley_de_reforma",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9812,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "reform law"
-      }
-    },
     "liberalismo": {
       "lemmaId": "liberalismo",
       "lang": "es",
@@ -210499,19 +208076,6 @@
       },
       "formsSource": "generated"
     },
-    "ministerio_de_instrucción_pública": {
-      "lemmaId": "ministerio_de_instrucción_pública",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9842,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "ministry of public education"
-      }
-    },
     "miocardio": {
       "lemmaId": "miocardio",
       "lang": "es",
@@ -210626,19 +208190,6 @@
       },
       "formsSource": "generated"
     },
-    "médico_interno": {
-      "lemmaId": "médico_interno",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9849,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "resident physician"
-      }
-    },
     "naciente": {
       "lemmaId": "naciente",
       "lang": "es",
@@ -210729,19 +208280,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "no_obstante": {
-      "lemmaId": "no_obstante",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9855,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "nevertheless, however"
-      }
     },
     "normalista": {
       "lemmaId": "normalista",
@@ -211206,19 +208744,6 @@
       },
       "formsSource": "generated"
     },
-    "orquesta_sinfónica": {
-      "lemmaId": "orquesta_sinfónica",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9882,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "symphony orchestra"
-      }
-    },
     "ortodoxia": {
       "lemmaId": "ortodoxia",
       "lang": "es",
@@ -211458,19 +208983,6 @@
         "pl": "pasodobles"
       },
       "formsSource": "generated"
-    },
-    "patrimonio_artístico": {
-      "lemmaId": "patrimonio_artístico",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9896,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "artistic heritage"
-      }
     },
     "patrio": {
       "lemmaId": "patrio",
@@ -212213,32 +209725,6 @@
       },
       "formsSource": "generated"
     },
-    "producto_bruto_nacional": {
-      "lemmaId": "producto_bruto_nacional",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9938,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "gross national product"
-      }
-    },
-    "producto_interno": {
-      "lemmaId": "producto_interno",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9939,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "domestic product"
-      }
-    },
     "profundización": {
       "lemmaId": "profundización",
       "lang": "es",
@@ -212256,19 +209742,6 @@
         "pl": "profundizaciones"
       },
       "formsSource": "generated"
-    },
-    "programa_de_becas": {
-      "lemmaId": "programa_de_becas",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9941,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "scholarship program"
-      }
     },
     "programador": {
       "lemmaId": "programador",
@@ -212345,19 +209818,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "príncipe_felipe": {
-      "lemmaId": "príncipe_felipe",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9946,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "Prince Philip"
-      }
     },
     "prótesis": {
       "lemmaId": "prótesis",
@@ -213252,19 +210712,6 @@
         "en": "revert, return"
       }
     },
-    "revolución_digital": {
-      "lemmaId": "revolución_digital",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 9999,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "digital revolution"
-      }
-    },
     "riachuelo": {
       "lemmaId": "riachuelo",
       "lang": "es",
@@ -213457,19 +210904,6 @@
         "en": "dining room"
       }
     },
-    "salario_mínimo": {
-      "lemmaId": "salario_mínimo",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 10011,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "minimum wage"
-      }
-    },
     "salk": {
       "lemmaId": "salk",
       "lang": "es",
@@ -213522,19 +210956,6 @@
         "fp": "santanderinas"
       },
       "formsSource": "generated"
-    },
-    "santo_patrón": {
-      "lemmaId": "santo_patrón",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 10015,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "patron saint"
-      }
     },
     "scoparius": {
       "lemmaId": "scoparius",
@@ -213825,19 +211246,6 @@
         "en": "oversize"
       }
     },
-    "sociedad_de_el_conocimiento": {
-      "lemmaId": "sociedad_de_el_conocimiento",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 10032,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "knowledge society"
-      }
-    },
     "sociolaboral": {
       "lemmaId": "sociolaboral",
       "lang": "es",
@@ -213857,19 +211265,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "sociología_aplicada": {
-      "lemmaId": "sociología_aplicada",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 10034,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "applied sociology"
-      }
     },
     "soconusco": {
       "lemmaId": "soconusco",
@@ -214353,32 +211748,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "plug, cork"
-      }
-    },
-    "tarjeta_sanitaria": {
-      "lemmaId": "tarjeta_sanitaria",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 10062,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "health card"
-      }
-    },
-    "tasa_de_paro": {
-      "lemmaId": "tasa_de_paro",
-      "lang": "es",
-      "cefrPriorBand": "C1",
-      "frequencyRank": 10063,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "unemployment rate"
       }
     },
     "taxonómico": {
@@ -215628,19 +212997,6 @@
       },
       "formsSource": "generated"
     },
-    "agencia_de_publicidad": {
-      "lemmaId": "agencia_de_publicidad",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10135,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "advertising agency"
-      }
-    },
     "aplazar": {
       "lemmaId": "aplazar",
       "lang": "es",
@@ -215710,19 +213066,6 @@
       },
       "formsSource": "generated"
     },
-    "comercio_exterior": {
-      "lemmaId": "comercio_exterior",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10140,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "foreign trade"
-      }
-    },
     "contratación": {
       "lemmaId": "contratación",
       "lang": "es",
@@ -215774,19 +213117,6 @@
       },
       "formsSource": "generated"
     },
-    "departamento_de_contabilidad": {
-      "lemmaId": "departamento_de_contabilidad",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10144,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "accounting department"
-      }
-    },
     "descontar": {
       "lemmaId": "descontar",
       "lang": "es",
@@ -215817,19 +213147,6 @@
         "pl": "desviaciones"
       },
       "formsSource": "generated"
-    },
-    "directora_de_ventas": {
-      "lemmaId": "directora_de_ventas",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10147,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "sales director"
-      }
     },
     "expatriar": {
       "lemmaId": "expatriar",
@@ -215874,19 +213191,6 @@
         "pl": "logísticas"
       },
       "formsSource": "generated"
-    },
-    "lápiz_usb": {
-      "lemmaId": "lápiz_usb",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10151,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "usb pen drive"
-      }
     },
     "negociador": {
       "lemmaId": "negociador",
@@ -217687,19 +214991,6 @@
       },
       "formsSource": "generated"
     },
-    "festival_de_jazz": {
-      "lemmaId": "festival_de_jazz",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 10244,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "jazz festival"
-      }
-    },
     "la_fragua": {
       "lemmaId": "la_fragua",
       "lang": "es",
@@ -217766,32 +215057,6 @@
         "pl": "membrillos"
       },
       "formsSource": "generated"
-    },
-    "naranjita_dieta": {
-      "lemmaId": "naranjita_dieta",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 10249,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "diet orange"
-      }
-    },
-    "oferta_de_trabajo": {
-      "lemmaId": "oferta_de_trabajo",
-      "lang": "es",
-      "cefrPriorBand": "A2",
-      "frequencyRank": 10250,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "job offer"
-      }
     },
     "romanización": {
       "lemmaId": "romanización",
@@ -218078,19 +215343,6 @@
       },
       "formsSource": "generated"
     },
-    "sin_prisas": {
-      "lemmaId": "sin_prisas",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10267,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "unhurried"
-      }
-    },
     "suscitar": {
       "lemmaId": "suscitar",
       "lang": "es",
@@ -218102,19 +215354,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "provoke, arouse"
-      }
-    },
-    "vida_de_pareja": {
-      "lemmaId": "vida_de_pareja",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10269,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "couple's life"
       }
     },
     "materialista": {
@@ -218285,19 +215524,6 @@
         "fp": "morbosas"
       },
       "formsSource": "generated"
-    },
-    "museo_mural": {
-      "lemmaId": "museo_mural",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 10278,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "mural museum"
-      }
     },
     "serenata": {
       "lemmaId": "serenata",
@@ -218976,19 +216202,6 @@
       },
       "formsSource": "generated"
     },
-    "asamblea_de_las_mujeres": {
-      "lemmaId": "asamblea_de_las_mujeres",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10317,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "women's assembly"
-      }
-    },
     "asfixiar": {
       "lemmaId": "asfixiar",
       "lang": "es",
@@ -219163,19 +216376,6 @@
         "pl": "bagajes"
       },
       "formsSource": "generated"
-    },
-    "banco_mundial": {
-      "lemmaId": "banco_mundial",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10329,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "world bank"
-      }
     },
     "bandazo": {
       "lemmaId": "bandazo",
@@ -219633,19 +216833,6 @@
         "en": "bind together"
       }
     },
-    "cola_de_caballo": {
-      "lemmaId": "cola_de_caballo",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10356,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "ponytail"
-      }
-    },
     "colegiado": {
       "lemmaId": "colegiado",
       "lang": "es",
@@ -219732,19 +216919,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "compute, calculate"
-      }
-    },
-    "comunicación_empresarial": {
-      "lemmaId": "comunicación_empresarial",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10363,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "corporate communication"
       }
     },
     "conceptual": {
@@ -220104,19 +217278,6 @@
         "pl": "cuencos"
       },
       "formsSource": "generated"
-    },
-    "curso_abierto": {
-      "lemmaId": "curso_abierto",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10384,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "open course"
-      }
     },
     "cólera": {
       "lemmaId": "cólera",
@@ -220553,19 +217714,6 @@
         "en": "deign, condescend"
       }
     },
-    "directora_ejecutiva": {
-      "lemmaId": "directora_ejecutiva",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10411,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "chief executive officer"
-      }
-    },
     "dispersión": {
       "lemmaId": "dispersión",
       "lang": "es",
@@ -220640,84 +217788,6 @@
       },
       "formsSource": "generated"
     },
-    "edad_antigua": {
-      "lemmaId": "edad_antigua",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10416,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "ancient age"
-      }
-    },
-    "edad_contemporánea": {
-      "lemmaId": "edad_contemporánea",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10417,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "contemporary age"
-      }
-    },
-    "edad_de_bronce": {
-      "lemmaId": "edad_de_bronce",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10418,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "bronze age"
-      }
-    },
-    "edad_de_hierro": {
-      "lemmaId": "edad_de_hierro",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10419,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "iron age"
-      }
-    },
-    "edad_de_piedra": {
-      "lemmaId": "edad_de_piedra",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10420,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "stone age"
-      }
-    },
-    "educación_física": {
-      "lemmaId": "educación_física",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10421,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "physical education"
-      }
-    },
     "edulcorante": {
       "lemmaId": "edulcorante",
       "lang": "es",
@@ -220791,32 +217861,6 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "charge, attack"
-      }
-    },
-    "empleo_estatal": {
-      "lemmaId": "empleo_estatal",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10427,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "public employment"
-      }
-    },
-    "en_casa": {
-      "lemmaId": "en_casa",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10428,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "at home"
       }
     },
     "encarcelar": {
@@ -221375,19 +218419,6 @@
       },
       "formsSource": "generated"
     },
-    "fiscalía_general_de_el_estado": {
-      "lemmaId": "fiscalía_general_de_el_estado",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10461,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "attorney general"
-      }
-    },
     "fisioterapia": {
       "lemmaId": "fisioterapia",
       "lang": "es",
@@ -221667,19 +218698,6 @@
       },
       "formsSource": "generated"
     },
-    "guardia_civil": {
-      "lemmaId": "guardia_civil",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10478,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "civil guard"
-      }
-    },
     "guisado": {
       "lemmaId": "guisado",
       "lang": "es",
@@ -221771,19 +218789,6 @@
         "pl": "heroidas"
       },
       "formsSource": "generated"
-    },
-    "hospital_general": {
-      "lemmaId": "hospital_general",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10484,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "general hospital"
-      }
     },
     "hélice": {
       "lemmaId": "hélice",
@@ -222286,19 +219291,6 @@
         "en": "legitimize"
       }
     },
-    "lengua_indígena": {
-      "lemmaId": "lengua_indígena",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10513,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "indigenous language"
-      }
-    },
     "libanés": {
       "lemmaId": "libanés",
       "lang": "es",
@@ -222537,19 +219529,6 @@
         "fp": null
       },
       "formsSource": "generated"
-    },
-    "ministerio_de_industria": {
-      "lemmaId": "ministerio_de_industria",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10527,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "ministry of industry"
-      }
     },
     "mirón": {
       "lemmaId": "mirón",
@@ -223003,19 +219982,6 @@
         "pl": "palacetes"
       },
       "formsSource": "generated"
-    },
-    "paleolítico_superior_magdaleniense": {
-      "lemmaId": "paleolítico_superior_magdaleniense",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10553,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "upper paleolithic magdalenian"
-      }
     },
     "palimpsesto": {
       "lemmaId": "palimpsesto",
@@ -224171,19 +221137,6 @@
       },
       "formsSource": "generated"
     },
-    "seguridad_alimentaria": {
-      "lemmaId": "seguridad_alimentaria",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10619,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "food security"
-      }
-    },
     "senador": {
       "lemmaId": "senador",
       "lang": "es",
@@ -224201,19 +221154,6 @@
         "pl": "senadores"
       },
       "formsSource": "generated"
-    },
-    "servicio_público": {
-      "lemmaId": "servicio_público",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10621,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "public service"
-      }
     },
     "señero": {
       "lemmaId": "señero",
@@ -224572,19 +221512,6 @@
       },
       "formsSource": "generated"
     },
-    "terapia_natural": {
-      "lemmaId": "terapia_natural",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10642,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "natural therapy"
-      }
-    },
     "terso": {
       "lemmaId": "terso",
       "lang": "es",
@@ -224684,19 +221611,6 @@
         "pl": "tipografías"
       },
       "formsSource": "generated"
-    },
-    "trabajo_temporal": {
-      "lemmaId": "trabajo_temporal",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10649,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "temporary work"
-      }
     },
     "trabar": {
       "lemmaId": "trabar",
@@ -224910,19 +221824,6 @@
       },
       "formsSource": "generated"
     },
-    "villar_de_el_arzobispo": {
-      "lemmaId": "villar_de_el_arzobispo",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10662,
-      "partsOfSpeech": [
-        "proper-noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "villar de el arzobispo"
-      }
-    },
     "vinagreta": {
       "lemmaId": "vinagreta",
       "lang": "es",
@@ -225112,19 +222013,6 @@
         "fp": "óseas"
       },
       "formsSource": "generated"
-    },
-    "a_partir_de": {
-      "lemmaId": "a_partir_de",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10674,
-      "partsOfSpeech": [
-        "preposition"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "from, starting from"
-      }
     },
     "abstracción": {
       "lemmaId": "abstracción",
@@ -226036,32 +222924,6 @@
       },
       "formsSource": "generated"
     },
-    "color_de_pelo": {
-      "lemmaId": "color_de_pelo",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10728,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "hair color"
-      }
-    },
-    "color_de_piel": {
-      "lemmaId": "color_de_piel",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10729,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "skin color"
-      }
-    },
     "compenetración": {
       "lemmaId": "compenetración",
       "lang": "es",
@@ -226245,19 +223107,6 @@
         "pl": "cuchilleros"
       },
       "formsSource": "generated"
-    },
-    "cuerpo_nacional_de_policía": {
-      "lemmaId": "cuerpo_nacional_de_policía",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10741,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "national police corps"
-      }
     },
     "curvatura": {
       "lemmaId": "curvatura",
@@ -226574,19 +223423,6 @@
         "pl": "emperatrices"
       },
       "formsSource": "generated"
-    },
-    "en_cambio": {
-      "lemmaId": "en_cambio",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10762,
-      "partsOfSpeech": [
-        "adverb"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "on the other hand"
-      }
     },
     "enamoradizo": {
       "lemmaId": "enamoradizo",
@@ -227141,19 +223977,6 @@
       },
       "formsSource": "generated"
     },
-    "hada_madrina": {
-      "lemmaId": "hada_madrina",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10795,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "fairy godmother"
-      }
-    },
     "hambriento": {
       "lemmaId": "hambriento",
       "lang": "es",
@@ -227475,19 +224298,6 @@
         "en": "soap"
       }
     },
-    "jefatura_superior_de_policía": {
-      "lemmaId": "jefatura_superior_de_policía",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10815,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "police headquarters"
-      }
-    },
     "kiosko": {
       "lemmaId": "kiosko",
       "lang": "es",
@@ -227544,32 +224354,6 @@
       },
       "formsSource": "generated"
     },
-    "langostino_abanico": {
-      "lemmaId": "langostino_abanico",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10819,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "fan prawn"
-      }
-    },
-    "las_mil_maravillas": {
-      "lemmaId": "las_mil_maravillas",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10820,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "wonderfully"
-      }
-    },
     "lego": {
       "lemmaId": "lego",
       "lang": "es",
@@ -227607,19 +224391,6 @@
         "pl": "leños"
       },
       "formsSource": "generated"
-    },
-    "literatura_popular": {
-      "lemmaId": "literatura_popular",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10823,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "folk literature"
-      }
     },
     "llaneza": {
       "lemmaId": "llaneza",
@@ -228435,19 +225206,6 @@
         "pl": "poemitas"
       },
       "formsSource": "generated"
-    },
-    "política_alimentaria": {
-      "lemmaId": "política_alimentaria",
-      "lang": "es",
-      "cefrPriorBand": "B2",
-      "frequencyRank": 10871,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "food policy"
-      }
     },
     "porrón": {
       "lemmaId": "porrón",
@@ -229626,19 +226384,6 @@
         "pl": "potosíes"
       },
       "formsSource": "generated"
-    },
-    "ciencia_ficción": {
-      "lemmaId": "ciencia_ficción",
-      "lang": "es",
-      "cefrPriorBand": "B1",
-      "frequencyRank": 10940,
-      "partsOfSpeech": [
-        "noun"
-      ],
-      "cefrPriorSource": "cefrlex",
-      "glosses": {
-        "en": "science fiction"
-      }
     },
     "metrocable": {
       "lemmaId": "metrocable",
