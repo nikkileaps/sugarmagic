@@ -26,6 +26,8 @@ import {
 import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
+import { observationToOutcome } from "../learner/observations";
+import { recordObservation } from "../debug/turn-debug-state";
 import {
   getCompetencyForChunk as getInventoryCompetencyForChunk,
   getAllInventoryChunks
@@ -800,6 +802,18 @@ export function createSugarLangObserveMiddleware(
       }
 
       if (appliedObservations.length > 0) {
+        // One hook for every apply site above: they all push here first. The
+        // debug HUD shows the most recent one, which is what answers "did that
+        // hover do anything" -- the grade is null for passive exposure, and
+        // that null is the answer, not a missing value.
+        const latest = appliedObservations[appliedObservations.length - 1];
+        recordObservation({
+          kind: latest.observation.kind,
+          cardKey: latest.lemma.lemmaId,
+          grade: observationToOutcome(latest.observation).receptiveGrade,
+          observedAtMs: Date.now()
+        });
+
         const updatedProfile = await services.learnerStore.getCurrentProfile();
         const observationSummary = appliedObservations.map((obs) => ({
           lemma: obs.lemma.lemmaId,

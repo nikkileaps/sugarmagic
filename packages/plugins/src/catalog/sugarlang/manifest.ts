@@ -66,6 +66,8 @@ import { GRADED_TEXT_PROMPT_VERSION } from "./runtime/grading/graded-text-servic
 import { createSugarlangLogger } from "./runtime/logger";
 import { createSugarlangDialogueContribution } from "./runtime/dialogue-entry-decorator";
 import { createSceneContextHudCard } from "./runtime/scene-context-hud-card";
+import { createLearnerDebugHudCard } from "./runtime/learner-debug-hud-card";
+import { readTurnDebugState } from "./runtime/debug/turn-debug-state";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
 import {
   flushTelemetry,
@@ -165,6 +167,30 @@ export function createSugarlangPlugin(
     getSceneContext: (sceneId) => services.getSceneContext(sceneId)
   });
 
+  // What the teaching system knows about the learner, while playing. Contributed
+  // by this plugin, so it simply does not exist when sugarlang is absent or
+  // disabled -- the HUD renders whatever cards it is given and knows nothing
+  // about any of this. Every piece of sugarlang state reaches it through the
+  // getters below rather than through the card context, which is what keeps
+  // runtime-core unaware that a learner is a thing.
+  const learnerCardContribution = createLearnerDebugHudCard({
+    pluginId: context.configuration.pluginId,
+    getSnapshot: async () => {
+      const debugState = await services.getDebugState();
+      if (!debugState) return null;
+      return {
+        estimatedCefrBand: debugState.estimatedCefrBand,
+        assessmentStatus: debugState.assessmentStatus,
+        cefrConfidence: debugState.cefrConfidence,
+        lemmaCards: debugState.lemmaCards,
+        chunkCards: debugState.chunkCards,
+        teachRecordCount: debugState.teachRecords.length
+      };
+    },
+    getTurnState: () => readTurnDebugState(),
+    getTargetLanguage: () => services.getTargetLanguage()
+  });
+
   /**
    * THE PLACEMENT ASSESSMENT, AS A QUEST FORM.
    *
@@ -196,7 +222,7 @@ export function createSugarlangPlugin(
     | DebugHudCardContribution
     | QuestAssessmentContribution
   )[] =
-    [decoratorContribution, displayTextContribution, sceneContextCardContribution, assessmentContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
+    [decoratorContribution, displayTextContribution, sceneContextCardContribution, learnerCardContribution, assessmentContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
       const middleware = factory({ services, logger, telemetry });
       return {
         pluginId: context.configuration.pluginId,

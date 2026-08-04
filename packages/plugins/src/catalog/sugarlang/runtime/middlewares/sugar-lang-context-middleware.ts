@@ -47,6 +47,7 @@ import {
   type SugarlangLoggerLike
 } from "./shared";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
+import { recordCurriculumState } from "../debug/turn-debug-state";
 import type { SchedulerBoardView } from "../scheduler/scheduler-board-view";
 import type { Competency } from "../contracts/competency-inventory";
 import { getWorldDay } from "@sugarmagic/runtime-core";
@@ -172,8 +173,9 @@ export function createSugarLangContextMiddleware(
           },
           conversationId: getSugarlangConversationId(execution)
         };
-        execution.annotations[SUGARLANG_CURRICULUM_STATE_ANNOTATION] =
-          services.outerLoopScheduler.compute(board);
+        const curriculumState = services.outerLoopScheduler.compute(board);
+        execution.annotations[SUGARLANG_CURRICULUM_STATE_ANNOTATION] = curriculumState;
+        recordCurriculumState(curriculumState);
       } catch {
         // Reporting failure is non-fatal: the Teacher runs without learner
         // facts rather than not at all.
