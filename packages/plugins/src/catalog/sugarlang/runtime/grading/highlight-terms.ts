@@ -224,10 +224,15 @@ export function buildHighlightTerms(args: {
         // by lemma, which is lowercase by construction, so this side was the
         // only one that disagreed.
         const key = termKey(surface);
-        // The can-do descriptor, because what is being taught is the ACT. "Can
-        // greet people in a simple way" is the useful hover for `buenos dias`;
-        // a word gloss would not be.
-        if (!glosses[key]) glosses[key] = competency.cefrDescriptor;
+        // What the phrase MEANS. A hover answers the player's question, which
+        // is "what did they just say" -- not which competency it belongs to.
+        // Keyed by the surface that matched, so `qué significa` reads "what
+        // does it mean" even though it shares an exponent with `qué es`.
+        const gloss =
+          chunkMatch.item.glossBySurface[surface.toLowerCase()]?.[
+            supportLanguage
+          ];
+        if (gloss && !glosses[key]) glosses[key] = gloss;
         // The ACT is what was taught, so the credit goes to the competency's
         // chunk rather than to any word inside the phrase. This is the key the
         // card store already uses.

@@ -54,7 +54,8 @@
         "normalizedForm",
         "surfaceForms",
         "cefrBand",
-        "constituentLemmas"
+        "constituentLemmas",
+        "glossBySurface"
       ],
       "properties": {
         "exponentId": { "type": "string", "minLength": 1 },
@@ -68,6 +69,16 @@
         "constituentLemmas": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "glossBySurface": {
+          "description": "Every surface form to what it means, per support language.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": { "type": "string", "minLength": 2 },
+            "additionalProperties": { "type": "string", "minLength": 1 },
+            "minProperties": 1
+          }
         }
       }
     },

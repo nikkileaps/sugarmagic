@@ -66,11 +66,22 @@ describe("the Teacher can see where the learner stands on the curriculum", () =>
   });
 
   it("says nothing about what to teach", () => {
-    // The prompt carries counts. Ranking, priority and "needs N more" are
-    // judgements, and the Teacher makes those against the situation.
+    // The learner-state block carries counts. Ranking, priority and "needs N
+    // more" are judgements, and the Teacher makes those against the situation.
+    //
+    // Scoped to that block rather than the whole prompt: the curriculum
+    // legitimately contains the English word, in `ask-what-someone-needs`
+    // ("Can ask what someone needs"), so searching the whole prompt for
+    // "needs " now matches a competency name instead of a verdict.
     const prompt = promptWith(STATE);
+    const start = prompt.indexOf("LEARNER STATE:");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const rest = prompt.slice(start + 1);
+    const nextBlock = rest.search(/\n[A-Z][A-Z -]+:/);
+    const learnerState = nextBlock === -1 ? rest : rest.slice(0, nextBlock);
+
     for (const banned of ["priority", "teachReason", "needs ", "recommend"]) {
-      expect(prompt).not.toContain(banned);
+      expect(learnerState, `learner state must not contain "${banned}"`).not.toContain(banned);
     }
   });
 

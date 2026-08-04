@@ -78,7 +78,14 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "one"
-      }
+      },
+      "forms": {
+        "ms": "uno",
+        "fs": "una",
+        "mp": "unos",
+        "fp": "unas"
+      },
+      "formsSource": "authored"
     },
     "en": {
       "lemmaId": "en",
@@ -508,10 +515,12 @@
         "en": "this"
       },
       "forms": {
-        "sg": "este",
-        "pl": "estes"
+        "ms": "este",
+        "fs": "esta",
+        "mp": "estos",
+        "fp": "estas"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "ir": {
       "lemmaId": "ir",
@@ -721,7 +730,12 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "my"
-      }
+      },
+      "forms": {
+        "sg": "mi",
+        "pl": "mis"
+      },
+      "formsSource": "authored"
     },
     "otro": {
       "lemmaId": "otro",
@@ -818,7 +832,14 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "that"
-      }
+      },
+      "forms": {
+        "ms": "ese",
+        "fs": "esa",
+        "mp": "esos",
+        "fp": "esas"
+      },
+      "formsSource": "authored"
     },
     "yo": {
       "lemmaId": "yo",
@@ -1002,7 +1023,7 @@
         "mp": "buenos",
         "fp": "buenas"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "cuando": {
       "lemmaId": "cuando",
@@ -1188,7 +1209,12 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "your"
-      }
+      },
+      "forms": {
+        "sg": "tu",
+        "pl": "tus"
+      },
+      "formsSource": "authored"
     },
     "ya": {
       "lemmaId": "ya",
@@ -1214,7 +1240,14 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "he, him"
-      }
+      },
+      "forms": {
+        "ms": "él",
+        "fs": "ella",
+        "mp": "ellos",
+        "fp": "ellas"
+      },
+      "formsSource": "authored"
     },
     "llamar": {
       "lemmaId": "llamar",
@@ -2556,10 +2589,12 @@
         "en": "son"
       },
       "forms": {
-        "sg": "hijo",
-        "pl": "hijos"
+        "ms": "hijo",
+        "fs": "hija",
+        "mp": "hijos",
+        "fp": "hijas"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "gente": {
       "lemmaId": "gente",
@@ -4367,7 +4402,12 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "who"
-      }
+      },
+      "forms": {
+        "sg": "quién",
+        "pl": "quiénes"
+      },
+      "formsSource": "authored"
     },
     "aunque": {
       "lemmaId": "aunque",
@@ -6452,7 +6492,14 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "that"
-      }
+      },
+      "forms": {
+        "ms": "aquel",
+        "fs": "aquella",
+        "mp": "aquellos",
+        "fp": "aquellas"
+      },
+      "formsSource": "authored"
     },
     "significar": {
       "lemmaId": "significar",
@@ -6650,10 +6697,12 @@
         "en": "brother"
       },
       "forms": {
-        "sg": "hermano",
-        "pl": "hermanos"
+        "ms": "hermano",
+        "fs": "hermana",
+        "mp": "hermanos",
+        "fp": "hermanas"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "sol": {
       "lemmaId": "sol",
@@ -6746,10 +6795,12 @@
         "en": "grandfather"
       },
       "forms": {
-        "sg": "abuelo",
-        "pl": "abuelos"
+        "ms": "abuelo",
+        "fs": "abuela",
+        "mp": "abuelos",
+        "fp": "abuelas"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "viejo": {
       "lemmaId": "viejo",
@@ -7126,10 +7177,12 @@
         "en": "teacher"
       },
       "forms": {
-        "sg": "profesor",
-        "pl": "profesores"
+        "ms": "profesor",
+        "fs": "profesora",
+        "mp": "profesores",
+        "fp": "profesoras"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "lado": {
       "lemmaId": "lado",
@@ -12946,7 +12999,14 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "how much, how many"
-      }
+      },
+      "forms": {
+        "ms": "cuánto",
+        "fs": "cuánta",
+        "mp": "cuántos",
+        "fp": "cuántas"
+      },
+      "formsSource": "authored"
     },
     "situar": {
       "lemmaId": "situar",
@@ -15071,10 +15131,12 @@
         "en": "uncle, guy"
       },
       "forms": {
-        "sg": "tío",
-        "pl": "tíos"
+        "ms": "tío",
+        "fs": "tía",
+        "mp": "tíos",
+        "fp": "tías"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "enseñar": {
       "lemmaId": "enseñar",
@@ -24212,7 +24274,7 @@
         "mp": "primos",
         "fp": "primas"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "sal": {
       "lemmaId": "sal",
@@ -26716,10 +26778,12 @@
         "en": "secretary"
       },
       "forms": {
-        "sg": "secretario",
-        "pl": "secretarios"
+        "ms": "secretario",
+        "fs": "secretaria",
+        "mp": "secretarios",
+        "fp": "secretarias"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "influencia": {
       "lemmaId": "influencia",
@@ -29396,10 +29460,12 @@
         "en": "a, an"
       },
       "forms": {
-        "sg": "un",
-        "pl": "unes"
+        "ms": "un",
+        "fs": "una",
+        "mp": "unos",
+        "fp": "unas"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "cámara": {
       "lemmaId": "cámara",
@@ -41733,10 +41799,12 @@
         "en": "husband"
       },
       "forms": {
-        "sg": "esposo",
-        "pl": "esposos"
+        "ms": "esposo",
+        "fs": "esposa",
+        "mp": "esposos",
+        "fp": "esposas"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "grita": {
       "lemmaId": "grita",
@@ -226283,7 +226351,877 @@
       "cefrPriorSource": "claude-classified",
       "glosses": {
         "en": "which, which one"
+      },
+      "forms": {
+        "sg": "cuál",
+        "pl": "cuáles"
+      },
+      "formsSource": "authored"
+    },
+    "hay": {
+      "lemmaId": "hay",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "there is, there are"
       }
+    },
+    "doña": {
+      "lemmaId": "doña",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "madam (title before a first name)"
+      }
+    },
+    "igualmente": {
+      "lemmaId": "igualmente",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adverb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "likewise, same to you"
+      }
+    },
+    "tres": {
+      "lemmaId": "tres",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "three"
+      }
+    },
+    "cinco": {
+      "lemmaId": "cinco",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "five"
+      }
+    },
+    "seis": {
+      "lemmaId": "seis",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "six"
+      }
+    },
+    "siete": {
+      "lemmaId": "siete",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "seven"
+      }
+    },
+    "ocho": {
+      "lemmaId": "ocho",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "eight"
+      }
+    },
+    "nueve": {
+      "lemmaId": "nueve",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "nine"
+      }
+    },
+    "diez": {
+      "lemmaId": "diez",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "ten"
+      }
+    },
+    "once": {
+      "lemmaId": "once",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "eleven"
+      }
+    },
+    "doce": {
+      "lemmaId": "doce",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "twelve"
+      }
+    },
+    "trece": {
+      "lemmaId": "trece",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "thirteen"
+      }
+    },
+    "catorce": {
+      "lemmaId": "catorce",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "fourteen"
+      }
+    },
+    "quince": {
+      "lemmaId": "quince",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "fifteen"
+      }
+    },
+    "dieciséis": {
+      "lemmaId": "dieciséis",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "sixteen"
+      }
+    },
+    "diecisiete": {
+      "lemmaId": "diecisiete",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "seventeen"
+      }
+    },
+    "dieciocho": {
+      "lemmaId": "dieciocho",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "eighteen"
+      }
+    },
+    "diecinueve": {
+      "lemmaId": "diecinueve",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "nineteen"
+      }
+    },
+    "veinte": {
+      "lemmaId": "veinte",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "twenty"
+      }
+    },
+    "treinta": {
+      "lemmaId": "treinta",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "thirty"
+      }
+    },
+    "cuarenta": {
+      "lemmaId": "cuarenta",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "forty"
+      }
+    },
+    "cincuenta": {
+      "lemmaId": "cincuenta",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "fifty"
+      }
+    },
+    "sesenta": {
+      "lemmaId": "sesenta",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "sixty"
+      }
+    },
+    "setenta": {
+      "lemmaId": "setenta",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "seventy"
+      }
+    },
+    "ochenta": {
+      "lemmaId": "ochenta",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "eighty"
+      }
+    },
+    "noventa": {
+      "lemmaId": "noventa",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "ninety"
+      }
+    },
+    "cien": {
+      "lemmaId": "cien",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "numeral"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "a hundred"
+      }
+    },
+    "febrero": {
+      "lemmaId": "febrero",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "February"
+      },
+      "forms": {
+        "sg": "febrero",
+        "pl": "febreros"
+      },
+      "formsSource": "authored"
+    },
+    "abril": {
+      "lemmaId": "abril",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "April"
+      },
+      "forms": {
+        "sg": "abril",
+        "pl": "abrils"
+      },
+      "formsSource": "authored"
+    },
+    "mayo": {
+      "lemmaId": "mayo",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "May"
+      },
+      "forms": {
+        "sg": "mayo",
+        "pl": "mayos"
+      },
+      "formsSource": "authored"
+    },
+    "junio": {
+      "lemmaId": "junio",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "June"
+      },
+      "forms": {
+        "sg": "junio",
+        "pl": "junios"
+      },
+      "formsSource": "authored"
+    },
+    "julio": {
+      "lemmaId": "julio",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "July"
+      },
+      "forms": {
+        "sg": "julio",
+        "pl": "julios"
+      },
+      "formsSource": "authored"
+    },
+    "agosto": {
+      "lemmaId": "agosto",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "August"
+      },
+      "forms": {
+        "sg": "agosto",
+        "pl": "agostos"
+      },
+      "formsSource": "authored"
+    },
+    "septiembre": {
+      "lemmaId": "septiembre",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "September"
+      },
+      "forms": {
+        "sg": "septiembre",
+        "pl": "septiembres"
+      },
+      "formsSource": "authored"
+    },
+    "octubre": {
+      "lemmaId": "octubre",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "October"
+      },
+      "forms": {
+        "sg": "octubre",
+        "pl": "octubres"
+      },
+      "formsSource": "authored"
+    },
+    "noviembre": {
+      "lemmaId": "noviembre",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "November"
+      },
+      "forms": {
+        "sg": "noviembre",
+        "pl": "noviembres"
+      },
+      "formsSource": "authored"
+    },
+    "diciembre": {
+      "lemmaId": "diciembre",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "December"
+      },
+      "forms": {
+        "sg": "diciembre",
+        "pl": "diciembres"
+      },
+      "formsSource": "authored"
+    },
+    "lunes": {
+      "lemmaId": "lunes",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "Monday"
+      },
+      "forms": {
+        "sg": "lunes",
+        "pl": "lunes"
+      },
+      "formsSource": "authored"
+    },
+    "martes": {
+      "lemmaId": "martes",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "Tuesday"
+      },
+      "forms": {
+        "sg": "martes",
+        "pl": "martes"
+      },
+      "formsSource": "authored"
+    },
+    "miércoles": {
+      "lemmaId": "miércoles",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "Wednesday"
+      },
+      "forms": {
+        "sg": "miércoles",
+        "pl": "miércoles"
+      },
+      "formsSource": "authored"
+    },
+    "jueves": {
+      "lemmaId": "jueves",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "Thursday"
+      },
+      "forms": {
+        "sg": "jueves",
+        "pl": "jueves"
+      },
+      "formsSource": "authored"
+    },
+    "viernes": {
+      "lemmaId": "viernes",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "Friday"
+      },
+      "forms": {
+        "sg": "viernes",
+        "pl": "viernes"
+      },
+      "formsSource": "authored"
+    },
+    "al": {
+      "lemmaId": "al",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "preposition"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "to the"
+      }
+    },
+    "del": {
+      "lemmaId": "del",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "preposition"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "of the, from the"
+      }
+    },
+    "socorro": {
+      "lemmaId": "socorro",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "interjection",
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "help!"
+      }
+    },
+    "adónde": {
+      "lemmaId": "adónde",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adverb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "where to"
+      }
+    },
+    "buen": {
+      "lemmaId": "buen",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adjective"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "good (before a masculine noun)"
+      }
+    },
+    "primer": {
+      "lemmaId": "primer",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adjective"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "first (before a masculine noun)"
+      }
+    },
+    "boleto": {
+      "lemmaId": "boleto",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "ticket"
+      },
+      "forms": {
+        "sg": "boleto",
+        "pl": "boletos"
+      },
+      "formsSource": "authored"
+    },
+    "normalmente": {
+      "lemmaId": "normalmente",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adverb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "normally, usually"
+      }
+    },
+    "medianoche": {
+      "lemmaId": "medianoche",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "midnight"
+      },
+      "forms": {
+        "sg": "medianoche",
+        "pl": "medianoches"
+      },
+      "formsSource": "authored"
+    },
+    "docena": {
+      "lemmaId": "docena",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "dozen"
+      },
+      "forms": {
+        "sg": "docena",
+        "pl": "docenas"
+      },
+      "formsSource": "authored"
+    },
+    "deberes": {
+      "lemmaId": "deberes",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "homework"
+      },
+      "forms": {
+        "sg": "deberes",
+        "pl": "deberes"
+      },
+      "formsSource": "authored"
+    },
+    "gluten": {
+      "lemmaId": "gluten",
+      "lang": "es",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "gluten"
+      },
+      "forms": {
+        "sg": "gluten",
+        "pl": "glútenes"
+      },
+      "formsSource": "authored"
+    },
+    "perfectamente": {
+      "lemmaId": "perfectamente",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adverb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "perfectly"
+      }
+    },
+    "mayúscula": {
+      "lemmaId": "mayúscula",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "capital letter"
+      },
+      "forms": {
+        "sg": "mayúscula",
+        "pl": "mayúsculas"
+      },
+      "formsSource": "authored"
+    },
+    "jota": {
+      "lemmaId": "jota",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "the letter J"
+      },
+      "forms": {
+        "sg": "jota",
+        "pl": "jotas"
+      },
+      "formsSource": "authored"
     }
   }
 }

@@ -49,6 +49,12 @@ export interface Exponent {
   surfaceForms: string[];
   cefrBand: CEFRBand;
   constituentLemmas: string[];
+  /**
+   * Every spelling to what it means, per support language. Keyed by surface
+   * form so a hover answers from the text it matched: `qué significa` reads
+   * "what does it mean" though it shares an exponent with `qué es`.
+   */
+  glossBySurface: Record<string, Record<string, string>>;
 }
 
 /** One topic within a band. `A1.5` is band plus ordinal, derived and not stored. */

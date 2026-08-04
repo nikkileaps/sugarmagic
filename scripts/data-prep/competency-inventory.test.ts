@@ -72,7 +72,7 @@ describe("a wording ships every way a player might accent it", () => {
       ...inputs,
       exponents: {
         ...inputs.exponents,
-        exponents: { "ask-where": [{ wordings: ["dónde está"] }] }
+        exponents: { "ask-where": [{ wordings: [{ phrase: "dónde está", gloss: { en: "x" } }] }] }
       }
     });
     expect(built.competencies[0]!.exponents.es[0]!.surfaceForms).toEqual([
@@ -89,7 +89,7 @@ describe("a wording ships every way a player might accent it", () => {
       ...inputs,
       exponents: {
         ...inputs.exponents,
-        exponents: { greet: [{ wordings: ["hola"] }] }
+        exponents: { greet: [{ wordings: [{ phrase: "hola", gloss: { en: "x" } }] }] }
       }
     });
     expect(built.competencies[0]!.exponents.es[0]!.surfaceForms).toEqual(["hola"]);
@@ -107,7 +107,7 @@ describe("a phrase that cannot be resolved fails the build", () => {
         exponents: {
           ...inputs.exponents,
           exponents: {
-            greet: [{ wordings: ["hola qwertyuiop"] }]
+            greet: [{ wordings: [{ phrase: "hola qwertyuiop", gloss: { en: "x" } }] }]
           }
         }
       })
@@ -121,7 +121,7 @@ describe("a phrase that cannot be resolved fails the build", () => {
         ...inputs,
         exponents: {
           ...inputs.exponents,
-          exponents: { "not-a-competency": [{ wordings: ["hola"] }] }
+          exponents: { "not-a-competency": [{ wordings: [{ phrase: "hola", gloss: { en: "x" } }] }] }
         }
       })
     ).toThrow(/not-a-competency: named in es exponents but absent/);
@@ -136,7 +136,7 @@ describe("a phrase that cannot be resolved fails the build", () => {
       ...inputs,
       exponents: {
         ...inputs.exponents,
-        exponents: { "ask-price": [{ wordings: ["cuánto cuesta"] }] }
+        exponents: { "ask-price": [{ wordings: [{ phrase: "cuánto cuesta", gloss: { en: "x" } }] }] }
       }
     });
     expect(
@@ -149,7 +149,7 @@ describe("a phrase that cannot be resolved fails the build", () => {
         ...inputs.exponents,
         exponents: {
           "ask-price": [
-            { wordings: ["cuánto cuesta"], lemmas: { cuesta: "costar" } }
+            { wordings: [{ phrase: "cuánto cuesta", gloss: { en: "x" }, lemmas: { cuesta: "costar" } }] }
           ]
         }
       }

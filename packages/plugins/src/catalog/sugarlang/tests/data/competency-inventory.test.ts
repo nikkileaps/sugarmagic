@@ -28,6 +28,8 @@ import {
   loadCompetencyInventory
 } from "../../runtime/inventory/competency-inventory-loader";
 import { INTERPRET_LEXICON_CATEGORIES } from "../../runtime/contracts/competency-inventory";
+import { createChunkMatcher } from "../../runtime/classifier/chunk-matcher";
+import { tokenize } from "../../runtime/classifier/tokenize";
 
 describe("competency-inventory schema + data", () => {
   const ajv = new Ajv2020({ strict: true });
@@ -114,6 +116,52 @@ describe("competency-inventory schema + data", () => {
   });
 });
 
+describe("the matcher can actually find what was authored", () => {
+  it("THE ONE THAT MATTERS: every surface form finds its own exponent", () => {
+    // Authoring a phrase is not the same as the matcher being able to reach
+    // it. Two exponents sharing a surface form both validate -- their ids
+    // differ, so the uniqueness check passes -- but longest-match means only
+    // the longer one is ever returned, and the shorter one lists a spelling it
+    // can never earn credit for. That is how `qué es esto` ended up on both
+    // `meta-language` and `ask-meaning`, and `no me gusta nada` on both
+    // `state-dislike` and `state-food-dislikes`.
+    const exponents = getAllInventoryExponents("es");
+    const matcher = createChunkMatcher(exponents, "es");
+    const unreachable: string[] = [];
+    for (const exponent of exponents) {
+      for (const surface of exponent.surfaceForms) {
+        const hits = matcher.match(tokenize(surface, "es"), surface);
+        if (!hits.some((hit) => hit.item.exponentId === exponent.exponentId)) {
+          unreachable.push(
+            `${exponent.exponentId}: "${surface}" matched ${
+              hits.map((h) => h.item.exponentId).join(", ") || "nothing"
+            }`
+          );
+        }
+      }
+    }
+    expect(unreachable).toEqual([]);
+  });
+
+  it("no phrase is authored under two competencies", () => {
+    const owner = new Map<string, string>();
+    const shared: string[] = [];
+    for (const competency of esInventory.competencies) {
+      for (const exponent of competency.exponents.es ?? []) {
+        for (const surface of exponent.surfaceForms) {
+          const prior = owner.get(surface);
+          if (prior && prior !== competency.competencyId) {
+            shared.push(`"${surface}": ${prior} and ${competency.competencyId}`);
+          } else {
+            owner.set(surface, competency.competencyId);
+          }
+        }
+      }
+    }
+    expect(shared).toEqual([]);
+  });
+});
+
 describe("CompetencyInventoryLoader", () => {
   it("loads es inventory without throwing", () => {
     expect(() => loadCompetencyInventory("es")).not.toThrow();
@@ -142,10 +190,11 @@ describe("CompetencyInventoryLoader", () => {
   it("getAllExponents returns exponents from every competency", () => {
     const loader = new CompetencyInventoryLoader({ es: esInventory });
     const all = loader.getAllExponents("es");
-    const expected = esInventory.competencies.flatMap(
-      (c) => c.exponents.es ?? []
+    const expected = esInventory.competencies.reduce(
+      (count, c) => count + (c.exponents.es?.length ?? 0),
+      0
     );
-    expect(all.length).toBe(expected.length);
+    expect(all.length).toBe(expected);
   });
 
   it("getAllInventoryExponents convenience fn matches loader output", () => {

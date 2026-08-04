@@ -122,9 +122,34 @@ describe("the keys both sides use agree", () => {
     expect(highlightFor("Hola, senor.").introduceTerms).toContain("Hola");
   });
 
-  it("the gloss explains the act, not the word", () => {
+  it("the gloss says what the phrase MEANS", () => {
+    // Not the can-do descriptor. A hover answers the player's question --
+    // "what did they just say" -- and "Can greet people in a simple way" is a
+    // statement about the learner written for the Teacher.
     const highlight = highlightFor("Buenos dias, viajero.");
-    expect(highlight.glosses[termKey("Buenos dias")]).toContain("greet");
+    expect(highlight.glosses[termKey("Buenos dias")]).toBe("good morning");
+  });
+
+  it("each wording of one exponent glosses to its own meaning", () => {
+    // `qué es` and `qué significa` are one exponent and one card, but they do
+    // not mean the same thing, so one gloss for the pair would be wrong for
+    // whichever one the NPC did not say.
+    const meta = (text: string) =>
+      buildHighlightTerms({
+        text,
+        introduce: [
+          { kind: "competency", competencyId: "meta-language", lang: "es" } as TeachableRef
+        ],
+        reinforce: [],
+        atlas,
+        targetLanguage: "es",
+        supportLanguage: "en",
+        chunkMatcher: matcher
+      } as never);
+    expect(meta("Que es?").glosses[termKey("Que es")]).toBe("what is it");
+    expect(meta("Que significa?").glosses[termKey("Que significa")]).toBe(
+      "what does it mean"
+    );
   });
 });
 

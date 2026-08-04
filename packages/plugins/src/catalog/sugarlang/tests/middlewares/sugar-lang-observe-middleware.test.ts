@@ -235,7 +235,7 @@ describe("SugarLangObserveMiddleware", () => {
     // to read `glosses["Buenos dias"]`, which passed while the tooltip was
     // broken in play: the reader looks up the hovered text, and a hover arrives
     // lowercased, so a key carrying the line's casing was never found.
-    expect(highlight?.glosses?.["buenos dias"]).toContain("greet");
+    expect(highlight?.glosses?.["buenos dias"]).toBe("good morning");
     expect(highlight?.glosses?.["Buenos dias"]).toBeUndefined();
   });
 

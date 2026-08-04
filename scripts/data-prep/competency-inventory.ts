@@ -34,10 +34,19 @@ export type CurriculumBandFile = {
 export type ExponentsFile = {
   schemaVersion: string;
   lang: string;
-  exponents: Record<
-    string,
-    Array<{ wordings: string[]; lemmas?: Record<string, string> }>
-  >;
+  exponents: Record<string, AuthoredExponent[]>;
+};
+
+export type AuthoredExponent = {
+  /** Ordered. The first phrase is canonical and gives the exponent its id. */
+  wordings: Array<{
+    phrase: string;
+    /** What it means, per support language. Authored: `por favor` does not
+     *  come out of its own words. */
+    gloss: Record<string, string>;
+    /** Only where the morphology index resolves a word the wrong way. */
+    lemmas?: Record<string, string>;
+  }>;
 };
 
 export type MorphologyFile = {
@@ -73,6 +82,12 @@ type InventoryExponent = {
   surfaceForms: string[];
   cefrBand: string;
   constituentLemmas: string[];
+  /**
+   * Every spelling to what it means. Keyed by surface form so a hover can
+   * answer from the text it matched -- `qué significa` reads "what does it
+   * mean" even though it shares an exponent with `qué es`.
+   */
+  glossBySurface: Record<string, Record<string, string>>;
 };
 
 /**
@@ -194,25 +209,32 @@ export function buildCompetencyInventory(inputs: {
         continue;
       }
 
-      // Players accent inconsistently -- a word here, not the next one -- so a
-      // wording ships every combination of its accented words kept or dropped,
-      // not just the two extremes. The shipped `donde esta` carried exactly
-      // such a mixed spelling by hand, and emitting only both-or-neither would
-      // have quietly stopped matching it.
       const surfaceForms: string[] = [];
-      for (const wording of entry.wordings) {
-        for (const form of accentCombinations(wording)) {
-          if (!surfaceForms.includes(form)) surfaceForms.push(form);
-        }
-      }
-
+      const glossBySurface: Record<string, Record<string, string>> = {};
       const constituentLemmas: string[] = [];
+
       for (const wording of entry.wordings) {
-        for (const token of tokenize(wording)) {
-          const lemma = entry.lemmas?.[token] ?? morphology.forms[token]?.lemmaId;
+        if (Object.keys(wording.gloss).length === 0) {
+          failures.push(`${competencyId} / "${wording.phrase}": no gloss`);
+        }
+
+        // Players accent inconsistently -- a word here, not the next one -- so
+        // a wording ships every combination of its accented words kept or
+        // dropped, not just the two extremes. The shipped `donde esta` carried
+        // exactly such a mixed spelling by hand, and emitting only
+        // both-or-neither would have quietly stopped matching it.
+        for (const form of accentCombinations(wording.phrase)) {
+          if (!surfaceForms.includes(form)) surfaceForms.push(form);
+          // Every spelling answers with its own wording's meaning.
+          glossBySurface[form] ??= wording.gloss;
+        }
+
+        for (const token of tokenize(wording.phrase)) {
+          const lemma =
+            wording.lemmas?.[token] ?? morphology.forms[token]?.lemmaId;
           if (!lemma) {
             failures.push(
-              `${competencyId} / "${wording}": "${token}" does not resolve to a lemma`
+              `${competencyId} / "${wording.phrase}": "${token}" does not resolve to a lemma`
             );
             continue;
           }
@@ -221,13 +243,14 @@ export function buildCompetencyInventory(inputs: {
         }
       }
 
-      const exponentId = exponentIdFor(canonical);
+      const exponentId = exponentIdFor(canonical.phrase);
       built.push({
         exponentId,
         normalizedForm: exponentId,
         surfaceForms,
         cefrBand: band.band,
-        constituentLemmas
+        constituentLemmas,
+        glossBySurface
       });
     }
 

@@ -3,74 +3,8546 @@
   "lang": "es",
   "exponents": {
     "meta-language": [
-      { "wordings": ["qué es", "qué es esto", "qué significa"] },
-      { "wordings": ["no entiendo", "no lo entiendo"] },
-      { "wordings": ["más despacio", "más despacio por favor", "habla más despacio"], "lemmas": { "habla": "hablar" } },
-      { "wordings": ["cómo se dice", "cómo se llama"], "lemmas": { "llama": "llamar" } }
+      {
+        "wordings": [
+          {
+            "phrase": "qué es",
+            "gloss": {
+              "en": "what is it"
+            }
+          },
+          {
+            "phrase": "qué significa",
+            "gloss": {
+              "en": "what does it mean"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no entiendo",
+            "gloss": {
+              "en": "I don't understand"
+            }
+          },
+          {
+            "phrase": "no lo entiendo",
+            "gloss": {
+              "en": "I don't understand it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "más despacio",
+            "gloss": {
+              "en": "slower"
+            }
+          },
+          {
+            "phrase": "más despacio por favor",
+            "gloss": {
+              "en": "slower, please"
+            }
+          },
+          {
+            "phrase": "habla más despacio",
+            "gloss": {
+              "en": "speak more slowly"
+            },
+            "lemmas": {
+              "habla": "hablar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cómo se dice",
+            "gloss": {
+              "en": "how do you say"
+            }
+          },
+          {
+            "phrase": "cómo se llama",
+            "gloss": {
+              "en": "what is it called"
+            },
+            "lemmas": {
+              "llama": "llamar"
+            }
+          }
+        ]
+      }
     ],
     "greet": [
-      { "wordings": ["hola"] },
-      { "wordings": ["buenos días"] },
-      { "wordings": ["buenas tardes"] },
-      { "wordings": ["buenas noches"] },
-      { "wordings": ["buenas"] },
-      { "wordings": ["qué tal"] }
+      {
+        "wordings": [
+          {
+            "phrase": "hola",
+            "gloss": {
+              "en": "hello"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buenos días",
+            "gloss": {
+              "en": "good morning"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buenas tardes",
+            "gloss": {
+              "en": "good afternoon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buenas noches",
+            "gloss": {
+              "en": "good evening"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buenas",
+            "gloss": {
+              "en": "hi"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué tal",
+            "gloss": {
+              "en": "how's it going"
+            }
+          }
+        ]
+      }
     ],
     "introduce-self": [
-      { "wordings": ["me llamo"] },
-      { "wordings": ["mi nombre es"] },
-      { "wordings": ["mucho gusto"] }
+      {
+        "wordings": [
+          {
+            "phrase": "mucho gusto",
+            "gloss": {
+              "en": "pleased to meet you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "encantado",
+            "gloss": {
+              "en": "delighted to meet you"
+            }
+          }
+        ]
+      }
+    ],
+    "state-name": [
+      {
+        "wordings": [
+          {
+            "phrase": "me llamo",
+            "gloss": {
+              "en": "my name is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi nombre es",
+            "gloss": {
+              "en": "my name is"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-name": [
+      {
+        "wordings": [
+          {
+            "phrase": "cómo te llamas",
+            "gloss": {
+              "en": "what's your name"
+            }
+          },
+          {
+            "phrase": "cómo se llama usted",
+            "gloss": {
+              "en": "what is your name"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuál es tu nombre",
+            "gloss": {
+              "en": "what is your name"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-how-are-you": [
+      {
+        "wordings": [
+          {
+            "phrase": "cómo estás",
+            "gloss": {
+              "en": "how are you"
+            }
+          },
+          {
+            "phrase": "cómo está",
+            "gloss": {
+              "en": "how are you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cómo te va",
+            "gloss": {
+              "en": "how's it going for you"
+            }
+          }
+        ]
+      }
+    ],
+    "say-how-i-am": [
+      {
+        "wordings": [
+          {
+            "phrase": "bien",
+            "gloss": {
+              "en": "well"
+            }
+          },
+          {
+            "phrase": "muy bien",
+            "gloss": {
+              "en": "very well"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "más o menos",
+            "gloss": {
+              "en": "so-so"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "regular",
+            "gloss": {
+              "en": "not great"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mal",
+            "gloss": {
+              "en": "badly"
+            }
+          }
+        ]
+      }
+    ],
+    "introduce-other": [
+      {
+        "wordings": [
+          {
+            "phrase": "te presento a",
+            "gloss": {
+              "en": "let me introduce you to"
+            }
+          },
+          {
+            "phrase": "le presento a",
+            "gloss": {
+              "en": "may I introduce you to"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "este es",
+            "gloss": {
+              "en": "this is (a man)"
+            }
+          },
+          {
+            "phrase": "esta es",
+            "gloss": {
+              "en": "this is (a woman)"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-origin": [
+      {
+        "wordings": [
+          {
+            "phrase": "de dónde eres",
+            "gloss": {
+              "en": "where are you from"
+            }
+          },
+          {
+            "phrase": "de dónde es",
+            "gloss": {
+              "en": "where are you from"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "eres de aquí",
+            "gloss": {
+              "en": "are you from around here"
+            }
+          }
+        ]
+      }
+    ],
+    "state-origin": [
+      {
+        "wordings": [
+          {
+            "phrase": "soy de",
+            "gloss": {
+              "en": "I'm from"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vengo de",
+            "gloss": {
+              "en": "I come from"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-residence": [
+      {
+        "wordings": [
+          {
+            "phrase": "dónde vives",
+            "gloss": {
+              "en": "where do you live"
+            }
+          },
+          {
+            "phrase": "dónde vive",
+            "gloss": {
+              "en": "where do you live"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vives por aquí",
+            "gloss": {
+              "en": "do you live near here"
+            }
+          }
+        ]
+      }
+    ],
+    "state-residence": [
+      {
+        "wordings": [
+          {
+            "phrase": "vivo en",
+            "gloss": {
+              "en": "I live in"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vivo cerca",
+            "gloss": {
+              "en": "I live nearby"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "soy de aquí",
+            "gloss": {
+              "en": "I'm from here"
+            }
+          }
+        ]
+      }
+    ],
+    "address-politely": [
+      {
+        "wordings": [
+          {
+            "phrase": "señor",
+            "gloss": {
+              "en": "sir"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "señora",
+            "gloss": {
+              "en": "madam"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "señorita",
+            "gloss": {
+              "en": "miss"
+            }
+          }
+        ]
+      }
+    ],
+    "say-please": [
+      {
+        "wordings": [
+          {
+            "phrase": "por favor",
+            "gloss": {
+              "en": "please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "si es tan amable",
+            "gloss": {
+              "en": "if you would be so kind"
+            }
+          }
+        ]
+      }
+    ],
+    "respond-to-thanks": [
+      {
+        "wordings": [
+          {
+            "phrase": "de nada",
+            "gloss": {
+              "en": "you're welcome"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no hay de qué",
+            "gloss": {
+              "en": "don't mention it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con gusto",
+            "gloss": {
+              "en": "with pleasure"
+            }
+          }
+        ]
+      }
+    ],
+    "apologize": [
+      {
+        "wordings": [
+          {
+            "phrase": "perdón",
+            "gloss": {
+              "en": "sorry"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo siento",
+            "gloss": {
+              "en": "I'm sorry"
+            },
+            "lemmas": {
+              "siento": "sentir"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "disculpa",
+            "gloss": {
+              "en": "sorry"
+            }
+          }
+        ]
+      }
+    ],
+    "get-attention": [
+      {
+        "wordings": [
+          {
+            "phrase": "disculpe",
+            "gloss": {
+              "en": "excuse me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "perdone",
+            "gloss": {
+              "en": "pardon me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "oiga",
+            "gloss": {
+              "en": "excuse me (calling out)"
+            }
+          }
+        ]
+      }
     ],
     "thank": [
-      { "wordings": ["gracias"] },
-      { "wordings": ["muchas gracias"] },
-      { "wordings": ["mil gracias"] }
+      {
+        "wordings": [
+          {
+            "phrase": "gracias",
+            "gloss": {
+              "en": "thank you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "muchas gracias",
+            "gloss": {
+              "en": "thank you very much"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mil gracias",
+            "gloss": {
+              "en": "thanks a million"
+            }
+          }
+        ]
+      }
     ],
     "acknowledge": [
-      { "wordings": ["sí"] },
-      { "wordings": ["claro", "claro que sí"] },
-      { "wordings": ["vale"], "lemmas": { "vale": "valer" } },
-      { "wordings": ["de acuerdo"] },
-      { "wordings": ["entendido"] },
-      { "wordings": ["perfecto"] },
-      { "wordings": ["genial"] },
-      { "wordings": ["bueno"] }
+      {
+        "wordings": [
+          {
+            "phrase": "sí",
+            "gloss": {
+              "en": "yes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "claro",
+            "gloss": {
+              "en": "of course"
+            }
+          },
+          {
+            "phrase": "claro que sí",
+            "gloss": {
+              "en": "of course, yes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vale",
+            "gloss": {
+              "en": "okay"
+            },
+            "lemmas": {
+              "vale": "valer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "de acuerdo",
+            "gloss": {
+              "en": "agreed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "entendido",
+            "gloss": {
+              "en": "understood"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "perfecto",
+            "gloss": {
+              "en": "perfect"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "genial",
+            "gloss": {
+              "en": "great"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "bueno",
+            "gloss": {
+              "en": "alright"
+            }
+          }
+        ]
+      }
     ],
     "farewell": [
-      { "wordings": ["adiós"] },
-      { "wordings": ["hasta luego"] },
-      { "wordings": ["hasta pronto"] },
-      { "wordings": ["hasta mañana"] },
-      { "wordings": ["nos vemos"] },
-      { "wordings": ["chao", "chau"] }
+      {
+        "wordings": [
+          {
+            "phrase": "adiós",
+            "gloss": {
+              "en": "goodbye"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hasta luego",
+            "gloss": {
+              "en": "see you later"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hasta pronto",
+            "gloss": {
+              "en": "see you soon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hasta mañana",
+            "gloss": {
+              "en": "see you tomorrow"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "nos vemos",
+            "gloss": {
+              "en": "see you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "chao",
+            "gloss": {
+              "en": "bye"
+            }
+          },
+          {
+            "phrase": "chau",
+            "gloss": {
+              "en": "bye"
+            }
+          }
+        ]
+      }
     ],
     "request": [
-      { "wordings": ["por favor"] },
-      { "wordings": ["me das", "me puedes dar", "me puede dar"] }
+      {
+        "wordings": [
+          {
+            "phrase": "me das",
+            "gloss": {
+              "en": "will you give me"
+            }
+          },
+          {
+            "phrase": "me puedes dar",
+            "gloss": {
+              "en": "can you give me"
+            }
+          },
+          {
+            "phrase": "me puede dar",
+            "gloss": {
+              "en": "could you give me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "necesito",
+            "gloss": {
+              "en": "I need"
+            }
+          }
+        ]
+      }
     ],
     "ask-meaning": [
-      { "wordings": ["qué es esto", "qué es eso"] }
+      {
+        "wordings": [
+          {
+            "phrase": "qué es esto",
+            "gloss": {
+              "en": "what is this"
+            }
+          },
+          {
+            "phrase": "qué es eso",
+            "gloss": {
+              "en": "what is that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué quiere decir",
+            "gloss": {
+              "en": "what does that mean"
+            }
+          }
+        ]
+      }
     ],
     "ask-where": [
-      { "wordings": ["dónde está"] }
+      {
+        "wordings": [
+          {
+            "phrase": "dónde está",
+            "gloss": {
+              "en": "where is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dónde queda",
+            "gloss": {
+              "en": "whereabouts is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sabe dónde está",
+            "gloss": {
+              "en": "do you know where it is"
+            }
+          }
+        ]
+      }
     ],
     "ask-price": [
-      { "wordings": ["cuánto cuesta", "cuánto vale"], "lemmas": { "cuesta": "costar", "vale": "valer" } }
+      {
+        "wordings": [
+          {
+            "phrase": "cuánto cuesta",
+            "gloss": {
+              "en": "how much does it cost"
+            },
+            "lemmas": {
+              "cuesta": "costar"
+            }
+          },
+          {
+            "phrase": "cuánto vale",
+            "gloss": {
+              "en": "how much is it"
+            },
+            "lemmas": {
+              "vale": "valer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué precio tiene",
+            "gloss": {
+              "en": "what price is it"
+            }
+          }
+        ]
+      }
     ],
     "accept-offer": [
-      { "wordings": ["me lo llevo", "lo quiero"] }
+      {
+        "wordings": [
+          {
+            "phrase": "me lo llevo",
+            "gloss": {
+              "en": "I'll take it"
+            }
+          },
+          {
+            "phrase": "lo quiero",
+            "gloss": {
+              "en": "I want it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo compro",
+            "gloss": {
+              "en": "I'll buy it"
+            }
+          }
+        ]
+      }
     ],
     "refuse-politely": [
-      { "wordings": ["no gracias", "no, gracias"] }
+      {
+        "wordings": [
+          {
+            "phrase": "no gracias",
+            "gloss": {
+              "en": "no thank you"
+            }
+          },
+          {
+            "phrase": "no, gracias",
+            "gloss": {
+              "en": "no, thank you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "así está bien",
+            "gloss": {
+              "en": "that's fine as it is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no hace falta",
+            "gloss": {
+              "en": "there's no need"
+            }
+          }
+        ]
+      }
     ],
     "say-when": [
-      { "wordings": ["fin de semana", "el fin de semana", "los fines de semana", "fines de semana"] }
+      {
+        "wordings": [
+          {
+            "phrase": "fin de semana",
+            "gloss": {
+              "en": "weekend"
+            }
+          },
+          {
+            "phrase": "el fin de semana",
+            "gloss": {
+              "en": "the weekend"
+            }
+          },
+          {
+            "phrase": "los fines de semana",
+            "gloss": {
+              "en": "on weekends"
+            }
+          },
+          {
+            "phrase": "fines de semana",
+            "gloss": {
+              "en": "weekends"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "entre semana",
+            "gloss": {
+              "en": "during the week"
+            }
+          }
+        ]
+      }
     ],
     "state-schedule": [
-      { "wordings": ["tiempo libre", "el tiempo libre", "mi tiempo libre"] }
+      {
+        "wordings": [
+          {
+            "phrase": "tiempo libre",
+            "gloss": {
+              "en": "free time"
+            }
+          },
+          {
+            "phrase": "el tiempo libre",
+            "gloss": {
+              "en": "the free time"
+            }
+          },
+          {
+            "phrase": "mi tiempo libre",
+            "gloss": {
+              "en": "my free time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "de lunes a viernes",
+            "gloss": {
+              "en": "Monday to Friday"
+            }
+          }
+        ]
+      }
     ],
     "understand-location": [
-      { "wordings": ["en casa", "en la casa"] }
+      {
+        "wordings": [
+          {
+            "phrase": "en casa",
+            "gloss": {
+              "en": "at home"
+            }
+          },
+          {
+            "phrase": "en la casa",
+            "gloss": {
+              "en": "in the house"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "allí",
+            "gloss": {
+              "en": "over there"
+            }
+          }
+        ]
+      }
+    ],
+    "state-age": [
+      {
+        "wordings": [
+          {
+            "phrase": "tengo veinte años",
+            "gloss": {
+              "en": "I'm twenty years old"
+            }
+          },
+          {
+            "phrase": "tengo treinta años",
+            "gloss": {
+              "en": "I'm thirty years old"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo la misma edad que tú",
+            "gloss": {
+              "en": "I'm the same age as you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "soy mayor que tú",
+            "gloss": {
+              "en": "I'm older than you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "soy menor que tú",
+            "gloss": {
+              "en": "I'm younger than you"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-age": [
+      {
+        "wordings": [
+          {
+            "phrase": "cuántos años tienes",
+            "gloss": {
+              "en": "how old are you"
+            }
+          },
+          {
+            "phrase": "cuántos años tiene",
+            "gloss": {
+              "en": "how old are you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué edad tienes",
+            "gloss": {
+              "en": "what age are you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuál es tu edad",
+            "gloss": {
+              "en": "what is your age"
+            }
+          }
+        ]
+      }
+    ],
+    "state-birthday": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi cumpleaños es en mayo",
+            "gloss": {
+              "en": "my birthday is in May"
+            }
+          },
+          {
+            "phrase": "mi cumpleaños es en julio",
+            "gloss": {
+              "en": "my birthday is in July"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cumplo años en marzo",
+            "gloss": {
+              "en": "my birthday is in March"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "nací en enero",
+            "gloss": {
+              "en": "I was born in January"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi cumpleaños es hoy",
+            "gloss": {
+              "en": "my birthday is today"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-birthday": [
+      {
+        "wordings": [
+          {
+            "phrase": "cuándo es tu cumpleaños",
+            "gloss": {
+              "en": "when is your birthday"
+            }
+          },
+          {
+            "phrase": "cuándo es su cumpleaños",
+            "gloss": {
+              "en": "when is your birthday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuándo cumples años",
+            "gloss": {
+              "en": "when is your birthday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué día es tu cumpleaños",
+            "gloss": {
+              "en": "what day is your birthday"
+            }
+          }
+        ]
+      }
+    ],
+    "state-occupation": [
+      {
+        "wordings": [
+          {
+            "phrase": "soy profesor",
+            "gloss": {
+              "en": "I'm a teacher"
+            }
+          },
+          {
+            "phrase": "soy médico",
+            "gloss": {
+              "en": "I'm a doctor"
+            }
+          },
+          {
+            "phrase": "soy estudiante",
+            "gloss": {
+              "en": "I'm a student"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "trabajo en una tienda",
+            "gloss": {
+              "en": "I work in a shop"
+            },
+            "lemmas": {
+              "trabajo": "trabajar"
+            }
+          },
+          {
+            "phrase": "trabajo en un banco",
+            "gloss": {
+              "en": "I work in a bank"
+            },
+            "lemmas": {
+              "trabajo": "trabajar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no trabajo",
+            "gloss": {
+              "en": "I don't work"
+            },
+            "lemmas": {
+              "trabajo": "trabajar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "estoy jubilado",
+            "gloss": {
+              "en": "I'm retired"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-occupation": [
+      {
+        "wordings": [
+          {
+            "phrase": "a qué te dedicas",
+            "gloss": {
+              "en": "what do you do for a living"
+            }
+          },
+          {
+            "phrase": "a qué se dedica",
+            "gloss": {
+              "en": "what do you do for a living"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "en qué trabajas",
+            "gloss": {
+              "en": "what do you work as"
+            }
+          },
+          {
+            "phrase": "en qué trabaja",
+            "gloss": {
+              "en": "what do you work as"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuál es tu trabajo",
+            "gloss": {
+              "en": "what is your job"
+            }
+          }
+        ]
+      }
+    ],
+    "give-phone-number": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi número es",
+            "gloss": {
+              "en": "my number is"
+            }
+          },
+          {
+            "phrase": "mi número de teléfono es",
+            "gloss": {
+              "en": "my phone number is"
+            }
+          },
+          {
+            "phrase": "mi teléfono es",
+            "gloss": {
+              "en": "my phone number is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "te doy mi número",
+            "gloss": {
+              "en": "I'll give you my number"
+            }
+          },
+          {
+            "phrase": "le doy mi número",
+            "gloss": {
+              "en": "I'll give you my number"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "te paso mi teléfono",
+            "gloss": {
+              "en": "I'll pass you my phone number"
+            },
+            "lemmas": {
+              "paso": "pasar"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-phone-number": [
+      {
+        "wordings": [
+          {
+            "phrase": "cuál es tu número",
+            "gloss": {
+              "en": "what is your number"
+            }
+          },
+          {
+            "phrase": "cuál es tu número de teléfono",
+            "gloss": {
+              "en": "what is your phone number"
+            }
+          },
+          {
+            "phrase": "cuál es su número",
+            "gloss": {
+              "en": "what is your number"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me das tu número",
+            "gloss": {
+              "en": "will you give me your number"
+            }
+          },
+          {
+            "phrase": "me das tu teléfono",
+            "gloss": {
+              "en": "will you give me your phone number"
+            }
+          }
+        ]
+      }
+    ],
+    "give-email": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi correo es",
+            "gloss": {
+              "en": "my email is"
+            }
+          },
+          {
+            "phrase": "mi correo electrónico es",
+            "gloss": {
+              "en": "my email address is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "te escribo mi correo",
+            "gloss": {
+              "en": "I'll write my email down for you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "arroba",
+            "gloss": {
+              "en": "at sign"
+            }
+          }
+        ]
+      }
+    ],
+    "spell-name": [
+      {
+        "wordings": [
+          {
+            "phrase": "se escribe así",
+            "gloss": {
+              "en": "it's spelled like this"
+            }
+          },
+          {
+            "phrase": "mi nombre se escribe así",
+            "gloss": {
+              "en": "my name is spelled like this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "te lo deletreo",
+            "gloss": {
+              "en": "I'll spell it for you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "todo junto",
+            "gloss": {
+              "en": "all one word"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con hache",
+            "gloss": {
+              "en": "with an h"
+            }
+          },
+          {
+            "phrase": "con be",
+            "gloss": {
+              "en": "with a b"
+            }
+          },
+          {
+            "phrase": "con uve",
+            "gloss": {
+              "en": "with a v"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-spelling": [
+      {
+        "wordings": [
+          {
+            "phrase": "cómo se escribe",
+            "gloss": {
+              "en": "how do you spell it"
+            }
+          },
+          {
+            "phrase": "cómo se escribe eso",
+            "gloss": {
+              "en": "how do you spell that"
+            }
+          },
+          {
+            "phrase": "cómo se escribe tu nombre",
+            "gloss": {
+              "en": "how do you spell your name"
+            }
+          },
+          {
+            "phrase": "cómo se deletrea",
+            "gloss": {
+              "en": "how do you spell it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me lo deletreas",
+            "gloss": {
+              "en": "will you spell it for me"
+            }
+          },
+          {
+            "phrase": "me lo deletrea",
+            "gloss": {
+              "en": "could you spell it for me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con hache o sin hache",
+            "gloss": {
+              "en": "with an h or without one"
+            }
+          }
+        ]
+      }
+    ],
+    "state-languages": [
+      {
+        "wordings": [
+          {
+            "phrase": "hablo español",
+            "gloss": {
+              "en": "I speak Spanish"
+            }
+          },
+          {
+            "phrase": "hablo inglés",
+            "gloss": {
+              "en": "I speak English"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hablo un poco de español",
+            "gloss": {
+              "en": "I speak a little Spanish"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no hablo español",
+            "gloss": {
+              "en": "I don't speak Spanish"
+            }
+          },
+          {
+            "phrase": "no hablo mucho español",
+            "gloss": {
+              "en": "I don't speak much Spanish"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi lengua materna es el español",
+            "gloss": {
+              "en": "my first language is Spanish"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-languages": [
+      {
+        "wordings": [
+          {
+            "phrase": "hablas español",
+            "gloss": {
+              "en": "do you speak Spanish"
+            }
+          },
+          {
+            "phrase": "hablas inglés",
+            "gloss": {
+              "en": "do you speak English"
+            }
+          },
+          {
+            "phrase": "habla español",
+            "gloss": {
+              "en": "do you speak Spanish"
+            },
+            "lemmas": {
+              "habla": "hablar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué idiomas hablas",
+            "gloss": {
+              "en": "what languages do you speak"
+            }
+          },
+          {
+            "phrase": "qué lenguas hablas",
+            "gloss": {
+              "en": "what languages do you speak"
+            }
+          }
+        ]
+      }
+    ],
+    "confirm-understanding": [
+      {
+        "wordings": [
+          {
+            "phrase": "entiendo",
+            "gloss": {
+              "en": "I understand"
+            }
+          },
+          {
+            "phrase": "sí, entiendo",
+            "gloss": {
+              "en": "yes, I understand"
+            }
+          },
+          {
+            "phrase": "lo entiendo",
+            "gloss": {
+              "en": "I understand it"
+            }
+          },
+          {
+            "phrase": "te entiendo",
+            "gloss": {
+              "en": "I understand you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ya entiendo",
+            "gloss": {
+              "en": "now I get it"
+            }
+          },
+          {
+            "phrase": "ahora entiendo",
+            "gloss": {
+              "en": "now I understand"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está claro",
+            "gloss": {
+              "en": "that's clear"
+            }
+          }
+        ]
+      }
+    ],
+    "name-family-members": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi madre",
+            "gloss": {
+              "en": "my mother"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi padre",
+            "gloss": {
+              "en": "my father"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi hermano",
+            "gloss": {
+              "en": "my brother"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi hijo",
+            "gloss": {
+              "en": "my son"
+            }
+          },
+          {
+            "phrase": "mi hija",
+            "gloss": {
+              "en": "my daughter"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi abuelo",
+            "gloss": {
+              "en": "my grandfather"
+            }
+          },
+          {
+            "phrase": "mi abuela",
+            "gloss": {
+              "en": "my grandmother"
+            }
+          }
+        ]
+      }
+    ],
+    "say-who-someone-is": [
+      {
+        "wordings": [
+          {
+            "phrase": "es mi hermano",
+            "gloss": {
+              "en": "he's my brother"
+            }
+          },
+          {
+            "phrase": "es mi madre",
+            "gloss": {
+              "en": "she's my mother"
+            }
+          },
+          {
+            "phrase": "es mi amigo",
+            "gloss": {
+              "en": "he's my friend"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "este es mi padre",
+            "gloss": {
+              "en": "this is my father"
+            }
+          },
+          {
+            "phrase": "esta es mi hija",
+            "gloss": {
+              "en": "this is my daughter"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es un amigo",
+            "gloss": {
+              "en": "he's a friend"
+            }
+          },
+          {
+            "phrase": "es una amiga",
+            "gloss": {
+              "en": "she's a friend"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es de mi familia",
+            "gloss": {
+              "en": "he's family"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-who-someone-is": [
+      {
+        "wordings": [
+          {
+            "phrase": "quién es",
+            "gloss": {
+              "en": "who is it"
+            }
+          },
+          {
+            "phrase": "quién es él",
+            "gloss": {
+              "en": "who is he"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quién es esa persona",
+            "gloss": {
+              "en": "who is that person"
+            }
+          },
+          {
+            "phrase": "quién es ese señor",
+            "gloss": {
+              "en": "who is that man"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "de quién es amigo",
+            "gloss": {
+              "en": "whose friend is he"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-relationship": [
+      {
+        "wordings": [
+          {
+            "phrase": "es mi hermano mayor",
+            "gloss": {
+              "en": "he's my older brother"
+            }
+          },
+          {
+            "phrase": "es mi hermano menor",
+            "gloss": {
+              "en": "he's my younger brother"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "somos hermanos",
+            "gloss": {
+              "en": "we're siblings"
+            }
+          },
+          {
+            "phrase": "somos primos",
+            "gloss": {
+              "en": "we're cousins"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "estamos casados",
+            "gloss": {
+              "en": "we're married"
+            }
+          },
+          {
+            "phrase": "está casado",
+            "gloss": {
+              "en": "he's married"
+            }
+          },
+          {
+            "phrase": "está casada",
+            "gloss": {
+              "en": "she's married"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es el hijo de mi hermano",
+            "gloss": {
+              "en": "he's my brother's son"
+            }
+          },
+          {
+            "phrase": "es la madre de mi amigo",
+            "gloss": {
+              "en": "she's my friend's mother"
+            }
+          }
+        ]
+      }
+    ],
+    "state-siblings": [
+      {
+        "wordings": [
+          {
+            "phrase": "tengo un hermano",
+            "gloss": {
+              "en": "I have a brother"
+            }
+          },
+          {
+            "phrase": "tengo dos hermanos",
+            "gloss": {
+              "en": "I have two brothers"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no tengo hermanos",
+            "gloss": {
+              "en": "I don't have any brothers or sisters"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "soy hijo único",
+            "gloss": {
+              "en": "I'm an only child"
+            }
+          },
+          {
+            "phrase": "soy hija única",
+            "gloss": {
+              "en": "I'm an only child"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "somos dos hermanos",
+            "gloss": {
+              "en": "there are two of us"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-siblings": [
+      {
+        "wordings": [
+          {
+            "phrase": "tienes hermanos",
+            "gloss": {
+              "en": "do you have any brothers or sisters"
+            }
+          },
+          {
+            "phrase": "tiene hermanos",
+            "gloss": {
+              "en": "do you have any brothers or sisters"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "eres hijo único",
+            "gloss": {
+              "en": "are you an only child"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-appearance": [
+      {
+        "wordings": [
+          {
+            "phrase": "es alto",
+            "gloss": {
+              "en": "he's tall"
+            }
+          },
+          {
+            "phrase": "es alta",
+            "gloss": {
+              "en": "she's tall"
+            }
+          },
+          {
+            "phrase": "es bajo",
+            "gloss": {
+              "en": "he's short"
+            }
+          },
+          {
+            "phrase": "es baja",
+            "gloss": {
+              "en": "she's short"
+            },
+            "lemmas": {
+              "baja": "bajo"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tiene el pelo largo",
+            "gloss": {
+              "en": "she has long hair"
+            }
+          },
+          {
+            "phrase": "tiene el pelo corto",
+            "gloss": {
+              "en": "he has short hair"
+            }
+          },
+          {
+            "phrase": "tiene el pelo rubio",
+            "gloss": {
+              "en": "she has blond hair"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tiene los ojos azules",
+            "gloss": {
+              "en": "he has blue eyes"
+            }
+          },
+          {
+            "phrase": "tiene los ojos verdes",
+            "gloss": {
+              "en": "she has green eyes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lleva gafas",
+            "gloss": {
+              "en": "he wears glasses"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es joven",
+            "gloss": {
+              "en": "he's young"
+            }
+          },
+          {
+            "phrase": "es mayor",
+            "gloss": {
+              "en": "she's elderly"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-personality": [
+      {
+        "wordings": [
+          {
+            "phrase": "es simpático",
+            "gloss": {
+              "en": "he's nice"
+            }
+          },
+          {
+            "phrase": "es simpática",
+            "gloss": {
+              "en": "she's nice"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es muy amable",
+            "gloss": {
+              "en": "he's very kind"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es divertido",
+            "gloss": {
+              "en": "he's fun"
+            }
+          },
+          {
+            "phrase": "es divertida",
+            "gloss": {
+              "en": "she's fun"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es un poco tímido",
+            "gloss": {
+              "en": "he's a bit shy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es muy inteligente",
+            "gloss": {
+              "en": "she's very clever"
+            }
+          }
+        ]
+      }
+    ],
+    "express-affection": [
+      {
+        "wordings": [
+          {
+            "phrase": "te quiero",
+            "gloss": {
+              "en": "I love you"
+            }
+          },
+          {
+            "phrase": "te quiero mucho",
+            "gloss": {
+              "en": "I love you very much"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me cae bien",
+            "gloss": {
+              "en": "I like him"
+            }
+          },
+          {
+            "phrase": "me cae muy bien",
+            "gloss": {
+              "en": "I like her a lot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no me cae bien",
+            "gloss": {
+              "en": "I don't like him"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es mi mejor amigo",
+            "gloss": {
+              "en": "he's my best friend"
+            }
+          },
+          {
+            "phrase": "es mi mejor amiga",
+            "gloss": {
+              "en": "she's my best friend"
+            }
+          }
+        ]
+      }
+    ],
+    "name-objects": [
+      {
+        "wordings": [
+          {
+            "phrase": "es una mesa",
+            "gloss": {
+              "en": "it's a table"
+            }
+          },
+          {
+            "phrase": "la mesa",
+            "gloss": {
+              "en": "the table"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es una silla",
+            "gloss": {
+              "en": "it's a chair"
+            }
+          },
+          {
+            "phrase": "la silla",
+            "gloss": {
+              "en": "the chair"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es un libro",
+            "gloss": {
+              "en": "it's a book"
+            }
+          },
+          {
+            "phrase": "el libro",
+            "gloss": {
+              "en": "the book"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es una puerta",
+            "gloss": {
+              "en": "it's a door"
+            }
+          },
+          {
+            "phrase": "la puerta",
+            "gloss": {
+              "en": "the door"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es una llave",
+            "gloss": {
+              "en": "it's a key"
+            }
+          },
+          {
+            "phrase": "las llaves",
+            "gloss": {
+              "en": "the keys"
+            }
+          }
+        ]
+      }
+    ],
+    "state-object-location": [
+      {
+        "wordings": [
+          {
+            "phrase": "está en la mesa",
+            "gloss": {
+              "en": "it's on the table"
+            }
+          },
+          {
+            "phrase": "está en la silla",
+            "gloss": {
+              "en": "it's on the chair"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está aquí",
+            "gloss": {
+              "en": "it's here"
+            }
+          },
+          {
+            "phrase": "está ahí",
+            "gloss": {
+              "en": "it's right there"
+            }
+          },
+          {
+            "phrase": "está allí",
+            "gloss": {
+              "en": "it's over there"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está debajo de la mesa",
+            "gloss": {
+              "en": "it's under the table"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está encima de la mesa",
+            "gloss": {
+              "en": "it's on top of the table"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está cerca de la puerta",
+            "gloss": {
+              "en": "it's near the door"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-object-location": [
+      {
+        "wordings": [
+          {
+            "phrase": "dónde está el libro",
+            "gloss": {
+              "en": "where is the book"
+            }
+          },
+          {
+            "phrase": "dónde está la llave",
+            "gloss": {
+              "en": "where is the key"
+            }
+          },
+          {
+            "phrase": "dónde están las llaves",
+            "gloss": {
+              "en": "where are the keys"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sabes dónde está",
+            "gloss": {
+              "en": "do you know where it is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dónde hay una silla",
+            "gloss": {
+              "en": "where can I find a chair"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-room": [
+      {
+        "wordings": [
+          {
+            "phrase": "es una habitación grande",
+            "gloss": {
+              "en": "it's a big room"
+            }
+          },
+          {
+            "phrase": "es un cuarto pequeño",
+            "gloss": {
+              "en": "it's a small room"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hay una mesa y dos sillas",
+            "gloss": {
+              "en": "there's a table and two chairs"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hay mucha luz",
+            "gloss": {
+              "en": "there's a lot of light"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no hay mucho espacio",
+            "gloss": {
+              "en": "there isn't much room"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la habitación tiene una ventana",
+            "gloss": {
+              "en": "the room has a window"
+            }
+          }
+        ]
+      }
+    ],
+    "say-what-they-have": [
+      {
+        "wordings": [
+          {
+            "phrase": "tengo un coche",
+            "gloss": {
+              "en": "I have a car"
+            }
+          },
+          {
+            "phrase": "tengo una casa",
+            "gloss": {
+              "en": "I have a house"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no tengo dinero",
+            "gloss": {
+              "en": "I don't have any money"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo muchos libros",
+            "gloss": {
+              "en": "I have a lot of books"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no tengo nada",
+            "gloss": {
+              "en": "I don't have anything"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-availability": [
+      {
+        "wordings": [
+          {
+            "phrase": "tienes café",
+            "gloss": {
+              "en": "do you have any coffee"
+            }
+          },
+          {
+            "phrase": "tiene pan",
+            "gloss": {
+              "en": "do you have any bread"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hay café",
+            "gloss": {
+              "en": "is there any coffee"
+            }
+          },
+          {
+            "phrase": "hay pan",
+            "gloss": {
+              "en": "is there any bread"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "queda café",
+            "gloss": {
+              "en": "is there any coffee left"
+            },
+            "lemmas": {
+              "queda": "quedar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está disponible",
+            "gloss": {
+              "en": "is it available"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-colour-and-size": [
+      {
+        "wordings": [
+          {
+            "phrase": "es rojo",
+            "gloss": {
+              "en": "it's red"
+            }
+          },
+          {
+            "phrase": "es roja",
+            "gloss": {
+              "en": "it's red"
+            }
+          },
+          {
+            "phrase": "es azul",
+            "gloss": {
+              "en": "it's blue"
+            }
+          },
+          {
+            "phrase": "es verde",
+            "gloss": {
+              "en": "it's green"
+            }
+          },
+          {
+            "phrase": "es negro",
+            "gloss": {
+              "en": "it's black"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es grande",
+            "gloss": {
+              "en": "it's big"
+            }
+          },
+          {
+            "phrase": "es pequeño",
+            "gloss": {
+              "en": "it's small"
+            }
+          },
+          {
+            "phrase": "es pequeña",
+            "gloss": {
+              "en": "it's small"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es muy grande",
+            "gloss": {
+              "en": "it's very big"
+            }
+          },
+          {
+            "phrase": "es demasiado grande",
+            "gloss": {
+              "en": "it's too big"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es largo",
+            "gloss": {
+              "en": "it's long"
+            }
+          },
+          {
+            "phrase": "es corto",
+            "gloss": {
+              "en": "it's short"
+            }
+          }
+        ]
+      }
+    ],
+    "name-food-and-drink": [
+      {
+        "wordings": [
+          {
+            "phrase": "el pan",
+            "gloss": {
+              "en": "the bread"
+            }
+          },
+          {
+            "phrase": "pan",
+            "gloss": {
+              "en": "bread"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el café",
+            "gloss": {
+              "en": "the coffee"
+            }
+          },
+          {
+            "phrase": "un café",
+            "gloss": {
+              "en": "a coffee"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la carne",
+            "gloss": {
+              "en": "the meat"
+            }
+          },
+          {
+            "phrase": "carne",
+            "gloss": {
+              "en": "meat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el pescado",
+            "gloss": {
+              "en": "the fish"
+            }
+          },
+          {
+            "phrase": "pescado",
+            "gloss": {
+              "en": "fish"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la fruta",
+            "gloss": {
+              "en": "the fruit"
+            }
+          },
+          {
+            "phrase": "fruta",
+            "gloss": {
+              "en": "fruit"
+            }
+          }
+        ]
+      }
+    ],
+    "state-food-likes": [
+      {
+        "wordings": [
+          {
+            "phrase": "me gusta el café",
+            "gloss": {
+              "en": "I like coffee"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me encanta",
+            "gloss": {
+              "en": "I love it"
+            }
+          }
+        ]
+      }
+    ],
+    "state-food-dislikes": [
+      {
+        "wordings": [
+          {
+            "phrase": "no me gusta",
+            "gloss": {
+              "en": "I don't like it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no me gustan",
+            "gloss": {
+              "en": "I don't like them"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no me gusta el pescado",
+            "gloss": {
+              "en": "I don't like fish"
+            }
+          }
+        ]
+      }
+    ],
+    "say-hungry-or-thirsty": [
+      {
+        "wordings": [
+          {
+            "phrase": "tengo hambre",
+            "gloss": {
+              "en": "I'm hungry"
+            }
+          },
+          {
+            "phrase": "tengo mucha hambre",
+            "gloss": {
+              "en": "I'm very hungry"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo sed",
+            "gloss": {
+              "en": "I'm thirsty"
+            }
+          },
+          {
+            "phrase": "tengo mucha sed",
+            "gloss": {
+              "en": "I'm very thirsty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no tengo hambre",
+            "gloss": {
+              "en": "I'm not hungry"
+            }
+          }
+        ]
+      }
+    ],
+    "order-item": [
+      {
+        "wordings": [
+          {
+            "phrase": "un café por favor",
+            "gloss": {
+              "en": "a coffee, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quiero un café",
+            "gloss": {
+              "en": "I want a coffee"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "para mí un café",
+            "gloss": {
+              "en": "a coffee for me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me pone un café",
+            "gloss": {
+              "en": "could I have a coffee"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-ingredients": [
+      {
+        "wordings": [
+          {
+            "phrase": "qué lleva",
+            "gloss": {
+              "en": "what's in it"
+            }
+          },
+          {
+            "phrase": "qué tiene",
+            "gloss": {
+              "en": "what does it have in it"
+            }
+          },
+          {
+            "phrase": "qué lleva este plato",
+            "gloss": {
+              "en": "what's in this dish"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "de qué es",
+            "gloss": {
+              "en": "what's it made of"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lleva carne",
+            "gloss": {
+              "en": "does it have meat in it"
+            }
+          },
+          {
+            "phrase": "tiene queso",
+            "gloss": {
+              "en": "does it have cheese in it"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-water": [
+      {
+        "wordings": [
+          {
+            "phrase": "agua por favor",
+            "gloss": {
+              "en": "water, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un vaso de agua",
+            "gloss": {
+              "en": "a glass of water"
+            }
+          },
+          {
+            "phrase": "un vaso de agua por favor",
+            "gloss": {
+              "en": "a glass of water, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "agua sin gas",
+            "gloss": {
+              "en": "still water"
+            }
+          },
+          {
+            "phrase": "agua con gas",
+            "gloss": {
+              "en": "sparkling water"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me trae agua",
+            "gloss": {
+              "en": "could you bring me some water"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-the-bill": [
+      {
+        "wordings": [
+          {
+            "phrase": "la cuenta",
+            "gloss": {
+              "en": "the bill"
+            }
+          },
+          {
+            "phrase": "la cuenta por favor",
+            "gloss": {
+              "en": "the bill, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me trae la cuenta",
+            "gloss": {
+              "en": "could you bring me the bill"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuánto es todo",
+            "gloss": {
+              "en": "how much is it altogether"
+            }
+          }
+        ]
+      }
+    ],
+    "read-a-menu": [
+      {
+        "wordings": [
+          {
+            "phrase": "la carta",
+            "gloss": {
+              "en": "the menu"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el menú",
+            "gloss": {
+              "en": "the menu"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "las bebidas",
+            "gloss": {
+              "en": "drinks"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "los postres",
+            "gloss": {
+              "en": "desserts"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la especialidad de la casa",
+            "gloss": {
+              "en": "the house speciality"
+            }
+          }
+        ]
+      }
+    ],
+    "state-dietary-need": [
+      {
+        "wordings": [
+          {
+            "phrase": "soy vegetariano",
+            "gloss": {
+              "en": "I'm vegetarian (a man speaking)"
+            }
+          },
+          {
+            "phrase": "soy vegetariana",
+            "gloss": {
+              "en": "I'm vegetarian (a woman speaking)"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no como carne",
+            "gloss": {
+              "en": "I don't eat meat"
+            },
+            "lemmas": {
+              "como": "comer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sin azúcar",
+            "gloss": {
+              "en": "without sugar"
+            }
+          },
+          {
+            "phrase": "sin sal",
+            "gloss": {
+              "en": "without salt"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "soy alérgico a los frutos secos",
+            "gloss": {
+              "en": "I'm allergic to nuts"
+            }
+          }
+        ]
+      }
+    ],
+    "give-opinion-on-food": [
+      {
+        "wordings": [
+          {
+            "phrase": "está rico",
+            "gloss": {
+              "en": "it's tasty"
+            }
+          },
+          {
+            "phrase": "está muy rico",
+            "gloss": {
+              "en": "it's really tasty"
+            }
+          },
+          {
+            "phrase": "qué rico",
+            "gloss": {
+              "en": "how tasty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está delicioso",
+            "gloss": {
+              "en": "it's delicious"
+            }
+          },
+          {
+            "phrase": "delicioso",
+            "gloss": {
+              "en": "delicious"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está muy bueno",
+            "gloss": {
+              "en": "it's very good"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no está mal",
+            "gloss": {
+              "en": "it's not bad"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-price": [
+      {
+        "wordings": [
+          {
+            "phrase": "son diez euros",
+            "gloss": {
+              "en": "that's ten euros"
+            }
+          },
+          {
+            "phrase": "son quince euros",
+            "gloss": {
+              "en": "that's fifteen euros"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuesta cinco euros",
+            "gloss": {
+              "en": "it costs five euros"
+            },
+            "lemmas": {
+              "cuesta": "costar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dos euros con cincuenta",
+            "gloss": {
+              "en": "two euros fifty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "en total",
+            "gloss": {
+              "en": "in total"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es gratis",
+            "gloss": {
+              "en": "it's free"
+            }
+          }
+        ]
+      }
+    ],
+    "state-what-to-buy": [
+      {
+        "wordings": [
+          {
+            "phrase": "quiero comprar",
+            "gloss": {
+              "en": "I want to buy"
+            }
+          },
+          {
+            "phrase": "quiero comprar un regalo",
+            "gloss": {
+              "en": "I want to buy a present"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "busco un regalo",
+            "gloss": {
+              "en": "I'm looking for a present"
+            },
+            "lemmas": {
+              "busco": "buscar"
+            }
+          },
+          {
+            "phrase": "estoy buscando un regalo",
+            "gloss": {
+              "en": "I'm looking for a present"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "necesito pan",
+            "gloss": {
+              "en": "I need some bread"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-if-shop-has": [
+      {
+        "wordings": [
+          {
+            "phrase": "tienen pan",
+            "gloss": {
+              "en": "do you have any bread"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hay leche",
+            "gloss": {
+              "en": "is there any milk"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tienen algo más barato",
+            "gloss": {
+              "en": "do you have anything cheaper"
+            }
+          }
+        ]
+      }
+    ],
+    "request-quantity": [
+      {
+        "wordings": [
+          {
+            "phrase": "un kilo",
+            "gloss": {
+              "en": "a kilo"
+            }
+          },
+          {
+            "phrase": "un kilo por favor",
+            "gloss": {
+              "en": "a kilo, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "medio kilo",
+            "gloss": {
+              "en": "half a kilo"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un poco",
+            "gloss": {
+              "en": "a little"
+            }
+          },
+          {
+            "phrase": "un poco más",
+            "gloss": {
+              "en": "a bit more"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dos por favor",
+            "gloss": {
+              "en": "two, please"
+            }
+          }
+        ]
+      }
+    ],
+    "state-size": [
+      {
+        "wordings": [
+          {
+            "phrase": "grande",
+            "gloss": {
+              "en": "big"
+            }
+          },
+          {
+            "phrase": "más grande",
+            "gloss": {
+              "en": "bigger"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "pequeño",
+            "gloss": {
+              "en": "small"
+            }
+          },
+          {
+            "phrase": "más pequeño",
+            "gloss": {
+              "en": "smaller"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mediano",
+            "gloss": {
+              "en": "medium"
+            }
+          },
+          {
+            "phrase": "es mediano",
+            "gloss": {
+              "en": "it's medium"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué talla",
+            "gloss": {
+              "en": "what size"
+            }
+          },
+          {
+            "phrase": "qué talla es",
+            "gloss": {
+              "en": "what size is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me queda grande",
+            "gloss": {
+              "en": "it's too big on me"
+            },
+            "lemmas": {
+              "queda": "quedar"
+            }
+          },
+          {
+            "phrase": "me queda pequeño",
+            "gloss": {
+              "en": "it's too small on me"
+            },
+            "lemmas": {
+              "queda": "quedar"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-to-see-item": [
+      {
+        "wordings": [
+          {
+            "phrase": "puedo ver",
+            "gloss": {
+              "en": "can I see it"
+            }
+          },
+          {
+            "phrase": "puedo ver eso",
+            "gloss": {
+              "en": "can I see that"
+            }
+          },
+          {
+            "phrase": "quiero ver eso",
+            "gloss": {
+              "en": "I'd like to see that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me lo enseña",
+            "gloss": {
+              "en": "could you show it to me"
+            },
+            "lemmas": {
+              "enseña": "enseñar"
+            }
+          },
+          {
+            "phrase": "me enseña ese",
+            "gloss": {
+              "en": "could you show me that one"
+            },
+            "lemmas": {
+              "enseña": "enseñar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quiero probar esto",
+            "gloss": {
+              "en": "I'd like to try this on"
+            }
+          }
+        ]
+      }
+    ],
+    "pay": [
+      {
+        "wordings": [
+          {
+            "phrase": "quiero pagar",
+            "gloss": {
+              "en": "I want to pay"
+            }
+          },
+          {
+            "phrase": "voy a pagar",
+            "gloss": {
+              "en": "I'm going to pay"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con tarjeta",
+            "gloss": {
+              "en": "by card"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "en efectivo",
+            "gloss": {
+              "en": "in cash"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "puedo pagar con tarjeta",
+            "gloss": {
+              "en": "can I pay by card"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-shop-phrases": [
+      {
+        "wordings": [
+          {
+            "phrase": "algo más",
+            "gloss": {
+              "en": "anything else"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es todo",
+            "gloss": {
+              "en": "that's everything"
+            }
+          },
+          {
+            "phrase": "eso es todo",
+            "gloss": {
+              "en": "that's everything"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "en qué puedo ayudar",
+            "gloss": {
+              "en": "how can I help you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué desea",
+            "gloss": {
+              "en": "what would you like"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "aquí tiene",
+            "gloss": {
+              "en": "here you are"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-opening-hours": [
+      {
+        "wordings": [
+          {
+            "phrase": "abierto",
+            "gloss": {
+              "en": "open"
+            }
+          },
+          {
+            "phrase": "está abierto",
+            "gloss": {
+              "en": "it's open"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cerrado",
+            "gloss": {
+              "en": "closed"
+            }
+          },
+          {
+            "phrase": "está cerrado",
+            "gloss": {
+              "en": "it's closed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cerrado los domingos",
+            "gloss": {
+              "en": "closed on Sundays"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abierto todo el día",
+            "gloss": {
+              "en": "open all day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el horario",
+            "gloss": {
+              "en": "the opening hours"
+            }
+          },
+          {
+            "phrase": "horario de apertura",
+            "gloss": {
+              "en": "opening hours"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-numbers": [
+      {
+        "wordings": [
+          {
+            "phrase": "cero",
+            "gloss": {
+              "en": "zero"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "uno",
+            "gloss": {
+              "en": "one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dos",
+            "gloss": {
+              "en": "two"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tres",
+            "gloss": {
+              "en": "three"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuatro",
+            "gloss": {
+              "en": "four"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cinco",
+            "gloss": {
+              "en": "five"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "seis",
+            "gloss": {
+              "en": "six"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siete",
+            "gloss": {
+              "en": "seven"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ocho",
+            "gloss": {
+              "en": "eight"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "nueve",
+            "gloss": {
+              "en": "nine"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "diez",
+            "gloss": {
+              "en": "ten"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "once",
+            "gloss": {
+              "en": "eleven"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "doce",
+            "gloss": {
+              "en": "twelve"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "trece",
+            "gloss": {
+              "en": "thirteen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "catorce",
+            "gloss": {
+              "en": "fourteen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quince",
+            "gloss": {
+              "en": "fifteen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "veinte",
+            "gloss": {
+              "en": "twenty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "treinta",
+            "gloss": {
+              "en": "thirty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuarenta",
+            "gloss": {
+              "en": "forty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cincuenta",
+            "gloss": {
+              "en": "fifty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cien",
+            "gloss": {
+              "en": "a hundred"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mil",
+            "gloss": {
+              "en": "a thousand"
+            }
+          }
+        ]
+      }
+    ],
+    "state-the-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "es la una",
+            "gloss": {
+              "en": "it's one o'clock"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "son las tres",
+            "gloss": {
+              "en": "it's three o'clock"
+            }
+          },
+          {
+            "phrase": "son las siete",
+            "gloss": {
+              "en": "it's seven o'clock"
+            }
+          },
+          {
+            "phrase": "son las diez",
+            "gloss": {
+              "en": "it's ten o'clock"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "son las cinco y media",
+            "gloss": {
+              "en": "it's half past five"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "son las ocho y cuarto",
+            "gloss": {
+              "en": "it's quarter past eight"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es mediodía",
+            "gloss": {
+              "en": "it's midday"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-the-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "qué hora es",
+            "gloss": {
+              "en": "what time is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tiene hora",
+            "gloss": {
+              "en": "have you got the time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sabe qué hora es",
+            "gloss": {
+              "en": "do you know what time it is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me dice la hora",
+            "gloss": {
+              "en": "could you tell me the time"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-days": [
+      {
+        "wordings": [
+          {
+            "phrase": "lunes",
+            "gloss": {
+              "en": "Monday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "martes",
+            "gloss": {
+              "en": "Tuesday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "miércoles",
+            "gloss": {
+              "en": "Wednesday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "jueves",
+            "gloss": {
+              "en": "Thursday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "viernes",
+            "gloss": {
+              "en": "Friday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sábado",
+            "gloss": {
+              "en": "Saturday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "domingo",
+            "gloss": {
+              "en": "Sunday"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-months": [
+      {
+        "wordings": [
+          {
+            "phrase": "enero",
+            "gloss": {
+              "en": "January"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "febrero",
+            "gloss": {
+              "en": "February"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "marzo",
+            "gloss": {
+              "en": "March"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abril",
+            "gloss": {
+              "en": "April"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mayo",
+            "gloss": {
+              "en": "May"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "junio",
+            "gloss": {
+              "en": "June"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "julio",
+            "gloss": {
+              "en": "July"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "agosto",
+            "gloss": {
+              "en": "August"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "septiembre",
+            "gloss": {
+              "en": "September"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "octubre",
+            "gloss": {
+              "en": "October"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "noviembre",
+            "gloss": {
+              "en": "November"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "diciembre",
+            "gloss": {
+              "en": "December"
+            }
+          }
+        ]
+      }
+    ],
+    "give-a-date": [
+      {
+        "wordings": [
+          {
+            "phrase": "hoy es sábado",
+            "gloss": {
+              "en": "today is Saturday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es el dos de enero",
+            "gloss": {
+              "en": "it's the second of January"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el cuatro de marzo",
+            "gloss": {
+              "en": "the fourth of March"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-what-day": [
+      {
+        "wordings": [
+          {
+            "phrase": "qué día es hoy",
+            "gloss": {
+              "en": "what day is it today"
+            }
+          },
+          {
+            "phrase": "qué día es",
+            "gloss": {
+              "en": "what day is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué fecha es hoy",
+            "gloss": {
+              "en": "what's the date today"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuándo es",
+            "gloss": {
+              "en": "when is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuándo empieza",
+            "gloss": {
+              "en": "when does it start"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-parts-of-day": [
+      {
+        "wordings": [
+          {
+            "phrase": "por la mañana",
+            "gloss": {
+              "en": "in the morning"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "por la tarde",
+            "gloss": {
+              "en": "in the afternoon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "por la noche",
+            "gloss": {
+              "en": "at night"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "esta mañana",
+            "gloss": {
+              "en": "this morning"
+            }
+          },
+          {
+            "phrase": "esta tarde",
+            "gloss": {
+              "en": "this afternoon"
+            }
+          },
+          {
+            "phrase": "esta noche",
+            "gloss": {
+              "en": "tonight"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-opening-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "a qué hora abren",
+            "gloss": {
+              "en": "what time do you open"
+            }
+          },
+          {
+            "phrase": "a qué hora abre",
+            "gloss": {
+              "en": "what time does it open"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a qué hora cierran",
+            "gloss": {
+              "en": "what time do you close"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuándo abren",
+            "gloss": {
+              "en": "when do you open"
+            }
+          },
+          {
+            "phrase": "cuándo cierran",
+            "gloss": {
+              "en": "when do you close"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hasta qué hora",
+            "gloss": {
+              "en": "until what time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abren los domingos",
+            "gloss": {
+              "en": "are you open on Sundays"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-appointment": [
+      {
+        "wordings": [
+          {
+            "phrase": "a las cuatro",
+            "gloss": {
+              "en": "at four o'clock"
+            }
+          },
+          {
+            "phrase": "a la una",
+            "gloss": {
+              "en": "at one o'clock"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a las cuatro de la tarde",
+            "gloss": {
+              "en": "at four in the afternoon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el sábado a las dos",
+            "gloss": {
+              "en": "on Saturday at two"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo una cita",
+            "gloss": {
+              "en": "I have an appointment"
+            }
+          },
+          {
+            "phrase": "la cita es a las cuatro",
+            "gloss": {
+              "en": "the appointment is at four"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quedamos a las dos",
+            "gloss": {
+              "en": "let's meet at two"
+            }
+          }
+        ]
+      }
+    ],
+    "say-early-or-late": [
+      {
+        "wordings": [
+          {
+            "phrase": "es tarde",
+            "gloss": {
+              "en": "it's late"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es temprano",
+            "gloss": {
+              "en": "it's early"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "llego tarde",
+            "gloss": {
+              "en": "I'm late"
+            }
+          },
+          {
+            "phrase": "voy a llegar tarde",
+            "gloss": {
+              "en": "I'm going to be late"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "llegas temprano",
+            "gloss": {
+              "en": "you're early"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "estoy a tiempo",
+            "gloss": {
+              "en": "I'm on time"
+            }
+          }
+        ]
+      }
+    ],
+    "read-a-timetable": [
+      {
+        "wordings": [
+          {
+            "phrase": "sale a las dos",
+            "gloss": {
+              "en": "it leaves at two"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "llega a las cuatro",
+            "gloss": {
+              "en": "it arrives at four"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el próximo tren",
+            "gloss": {
+              "en": "the next train"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "salidas",
+            "gloss": {
+              "en": "departures"
+            }
+          },
+          {
+            "phrase": "llegadas",
+            "gloss": {
+              "en": "arrivals"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cada media hora",
+            "gloss": {
+              "en": "every half hour"
+            },
+            "lemmas": {
+              "media": "medio"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-routine": [
+      {
+        "wordings": [
+          {
+            "phrase": "me levanto temprano",
+            "gloss": {
+              "en": "I get up early"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me ducho por la mañana",
+            "gloss": {
+              "en": "I shower in the morning"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "desayuno en casa",
+            "gloss": {
+              "en": "I have breakfast at home"
+            },
+            "lemmas": {
+              "desayuno": "desayunar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me acuesto temprano",
+            "gloss": {
+              "en": "I go to bed early"
+            }
+          },
+          {
+            "phrase": "me acuesto tarde",
+            "gloss": {
+              "en": "I go to bed late"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vuelvo a casa por la tarde",
+            "gloss": {
+              "en": "I come home in the afternoon"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-routine": [
+      {
+        "wordings": [
+          {
+            "phrase": "qué haces todos los días",
+            "gloss": {
+              "en": "what do you do every day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a qué hora te levantas",
+            "gloss": {
+              "en": "what time do you get up"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué haces por la mañana",
+            "gloss": {
+              "en": "what do you do in the morning"
+            }
+          },
+          {
+            "phrase": "qué haces por la tarde",
+            "gloss": {
+              "en": "what do you do in the afternoon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cómo es tu día",
+            "gloss": {
+              "en": "what is your day like"
+            }
+          }
+        ]
+      }
+    ],
+    "state-work-or-study": [
+      {
+        "wordings": [
+          {
+            "phrase": "trabajo en",
+            "gloss": {
+              "en": "I work at"
+            },
+            "lemmas": {
+              "trabajo": "trabajar"
+            }
+          },
+          {
+            "phrase": "trabajo en una oficina",
+            "gloss": {
+              "en": "I work in an office"
+            },
+            "lemmas": {
+              "trabajo": "trabajar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "trabajo en casa",
+            "gloss": {
+              "en": "I work at home"
+            },
+            "lemmas": {
+              "trabajo": "trabajar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "estudio en la universidad",
+            "gloss": {
+              "en": "I study at the university"
+            },
+            "lemmas": {
+              "estudio": "estudiar"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-school-activities": [
+      {
+        "wordings": [
+          {
+            "phrase": "estudio español",
+            "gloss": {
+              "en": "I study Spanish"
+            },
+            "lemmas": {
+              "estudio": "estudiar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "voy a clase",
+            "gloss": {
+              "en": "I go to class"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hago la tarea",
+            "gloss": {
+              "en": "I do my homework"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo un examen",
+            "gloss": {
+              "en": "I have an exam"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-work-activities": [
+      {
+        "wordings": [
+          {
+            "phrase": "trabajo en la computadora",
+            "gloss": {
+              "en": "I work on the computer"
+            },
+            "lemmas": {
+              "trabajo": "trabajar"
+            }
+          },
+          {
+            "phrase": "trabajo con el ordenador",
+            "gloss": {
+              "en": "I work on the computer"
+            },
+            "lemmas": {
+              "trabajo": "trabajar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo una reunión",
+            "gloss": {
+              "en": "I have a meeting"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "contesto el teléfono",
+            "gloss": {
+              "en": "I answer the phone"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "empiezo temprano",
+            "gloss": {
+              "en": "I start early"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "salgo de la oficina tarde",
+            "gloss": {
+              "en": "I leave the office late"
+            }
+          }
+        ]
+      }
+    ],
+    "state-free-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "escucho música",
+            "gloss": {
+              "en": "I listen to music"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "veo la televisión",
+            "gloss": {
+              "en": "I watch television"
+            }
+          },
+          {
+            "phrase": "veo la tele",
+            "gloss": {
+              "en": "I watch TV"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "salgo con amigos",
+            "gloss": {
+              "en": "I go out with friends"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "leo un libro",
+            "gloss": {
+              "en": "I read a book"
+            },
+            "lemmas": {
+              "leo": "leer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hago deporte",
+            "gloss": {
+              "en": "I play sport"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-hobbies": [
+      {
+        "wordings": [
+          {
+            "phrase": "qué te gusta hacer",
+            "gloss": {
+              "en": "what do you like to do"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué haces en tu tiempo libre",
+            "gloss": {
+              "en": "what do you do in your free time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tienes algún pasatiempo",
+            "gloss": {
+              "en": "do you have a hobby"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "practicas algún deporte",
+            "gloss": {
+              "en": "do you play a sport"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "te gusta el fútbol",
+            "gloss": {
+              "en": "do you like football"
+            }
+          }
+        ]
+      }
+    ],
+    "express-ability": [
+      {
+        "wordings": [
+          {
+            "phrase": "sé nadar",
+            "gloss": {
+              "en": "I can swim"
+            }
+          },
+          {
+            "phrase": "sé cocinar",
+            "gloss": {
+              "en": "I can cook"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "puedo ayudar",
+            "gloss": {
+              "en": "I can help"
+            }
+          },
+          {
+            "phrase": "te puedo ayudar",
+            "gloss": {
+              "en": "I can help you"
+            }
+          }
+        ]
+      }
+    ],
+    "express-inability": [
+      {
+        "wordings": [
+          {
+            "phrase": "no puedo",
+            "gloss": {
+              "en": "I can't"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no sé nadar",
+            "gloss": {
+              "en": "I can't swim"
+            }
+          },
+          {
+            "phrase": "no sé cocinar",
+            "gloss": {
+              "en": "I can't cook"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no hablo inglés",
+            "gloss": {
+              "en": "I don't speak English"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no puedo ir",
+            "gloss": {
+              "en": "I can't go"
+            }
+          }
+        ]
+      }
+    ],
+    "state-frequency": [
+      {
+        "wordings": [
+          {
+            "phrase": "todos los días",
+            "gloss": {
+              "en": "every day"
+            }
+          },
+          {
+            "phrase": "cada día",
+            "gloss": {
+              "en": "each day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a veces",
+            "gloss": {
+              "en": "sometimes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siempre",
+            "gloss": {
+              "en": "always"
+            }
+          },
+          {
+            "phrase": "casi siempre",
+            "gloss": {
+              "en": "almost always"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "nunca",
+            "gloss": {
+              "en": "never"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "una vez a la semana",
+            "gloss": {
+              "en": "once a week"
+            }
+          }
+        ]
+      }
+    ],
+    "name-public-places": [
+      {
+        "wordings": [
+          {
+            "phrase": "el banco",
+            "gloss": {
+              "en": "the bank"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la farmacia",
+            "gloss": {
+              "en": "the pharmacy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el mercado",
+            "gloss": {
+              "en": "the market"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la plaza",
+            "gloss": {
+              "en": "the square"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el hospital",
+            "gloss": {
+              "en": "the hospital"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-left-and-right": [
+      {
+        "wordings": [
+          {
+            "phrase": "a la izquierda",
+            "gloss": {
+              "en": "on the left"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a la derecha",
+            "gloss": {
+              "en": "on the right"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la primera a la derecha",
+            "gloss": {
+              "en": "the first one on the right"
+            }
+          },
+          {
+            "phrase": "la primera a la izquierda",
+            "gloss": {
+              "en": "the first one on the left"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-straight-ahead": [
+      {
+        "wordings": [
+          {
+            "phrase": "todo recto",
+            "gloss": {
+              "en": "straight ahead"
+            }
+          },
+          {
+            "phrase": "recto",
+            "gloss": {
+              "en": "straight on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "todo derecho",
+            "gloss": {
+              "en": "straight ahead"
+            }
+          },
+          {
+            "phrase": "derecho",
+            "gloss": {
+              "en": "straight on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "de frente",
+            "gloss": {
+              "en": "straight ahead"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "más adelante",
+            "gloss": {
+              "en": "further ahead"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-near-and-far": [
+      {
+        "wordings": [
+          {
+            "phrase": "cerca",
+            "gloss": {
+              "en": "nearby"
+            }
+          },
+          {
+            "phrase": "muy cerca",
+            "gloss": {
+              "en": "very near"
+            }
+          },
+          {
+            "phrase": "aquí cerca",
+            "gloss": {
+              "en": "near here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lejos",
+            "gloss": {
+              "en": "far"
+            }
+          },
+          {
+            "phrase": "muy lejos",
+            "gloss": {
+              "en": "very far"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a dos minutos",
+            "gloss": {
+              "en": "two minutes away"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-landmarks": [
+      {
+        "wordings": [
+          {
+            "phrase": "enfrente de la iglesia",
+            "gloss": {
+              "en": "opposite the church"
+            }
+          },
+          {
+            "phrase": "enfrente de la plaza",
+            "gloss": {
+              "en": "opposite the square"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "en la esquina",
+            "gloss": {
+              "en": "on the corner"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "detrás de la iglesia",
+            "gloss": {
+              "en": "behind the church"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "delante de la farmacia",
+            "gloss": {
+              "en": "in front of the pharmacy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "entre el banco y la plaza",
+            "gloss": {
+              "en": "between the bank and the square"
+            }
+          }
+        ]
+      }
+    ],
+    "give-directions": [
+      {
+        "wordings": [
+          {
+            "phrase": "gire a la derecha",
+            "gloss": {
+              "en": "turn right"
+            }
+          },
+          {
+            "phrase": "gira a la derecha",
+            "gloss": {
+              "en": "turn right"
+            },
+            "lemmas": {
+              "gira": "girar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "gire a la izquierda",
+            "gloss": {
+              "en": "turn left"
+            }
+          },
+          {
+            "phrase": "gira a la izquierda",
+            "gloss": {
+              "en": "turn left"
+            },
+            "lemmas": {
+              "gira": "girar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siga todo recto",
+            "gloss": {
+              "en": "keep going straight"
+            }
+          },
+          {
+            "phrase": "sigue todo recto",
+            "gloss": {
+              "en": "keep going straight"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cruce la calle",
+            "gloss": {
+              "en": "cross the street"
+            },
+            "lemmas": {
+              "cruce": "cruzar"
+            }
+          },
+          {
+            "phrase": "cruza la calle",
+            "gloss": {
+              "en": "cross the street"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tome la primera calle",
+            "gloss": {
+              "en": "take the first street"
+            }
+          }
+        ]
+      }
+    ],
+    "follow-directions": [
+      {
+        "wordings": [
+          {
+            "phrase": "por aquí",
+            "gloss": {
+              "en": "this way"
+            }
+          },
+          {
+            "phrase": "venga por aquí",
+            "gloss": {
+              "en": "come this way"
+            },
+            "lemmas": {
+              "venga": "venir"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "espere aquí",
+            "gloss": {
+              "en": "wait here"
+            }
+          },
+          {
+            "phrase": "espera aquí",
+            "gloss": {
+              "en": "wait here"
+            },
+            "lemmas": {
+              "espera": "esperar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "pase",
+            "gloss": {
+              "en": "come in"
+            },
+            "lemmas": {
+              "pase": "pasar"
+            }
+          },
+          {
+            "phrase": "pase por favor",
+            "gloss": {
+              "en": "come in, please"
+            },
+            "lemmas": {
+              "pase": "pasar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "venga conmigo",
+            "gloss": {
+              "en": "come with me"
+            },
+            "lemmas": {
+              "venga": "venir"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-if-nearby": [
+      {
+        "wordings": [
+          {
+            "phrase": "está cerca",
+            "gloss": {
+              "en": "is it near"
+            }
+          },
+          {
+            "phrase": "está cerca de aquí",
+            "gloss": {
+              "en": "is it near here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está lejos",
+            "gloss": {
+              "en": "is it far"
+            }
+          },
+          {
+            "phrase": "está muy lejos",
+            "gloss": {
+              "en": "is it very far"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "queda cerca",
+            "gloss": {
+              "en": "is it nearby"
+            },
+            "lemmas": {
+              "queda": "quedar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hay una farmacia por aquí",
+            "gloss": {
+              "en": "is there a pharmacy around here"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-how-to-get-there": [
+      {
+        "wordings": [
+          {
+            "phrase": "cómo llego",
+            "gloss": {
+              "en": "how do I get there"
+            }
+          },
+          {
+            "phrase": "cómo llego a la estación",
+            "gloss": {
+              "en": "how do I get to the station"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "por dónde se va",
+            "gloss": {
+              "en": "which way is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cómo se va",
+            "gloss": {
+              "en": "how do you get there"
+            }
+          },
+          {
+            "phrase": "cómo se va a la playa",
+            "gloss": {
+              "en": "how do you get to the beach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cómo puedo llegar",
+            "gloss": {
+              "en": "how can I get there"
+            }
+          }
+        ]
+      }
+    ],
+    "state-destination": [
+      {
+        "wordings": [
+          {
+            "phrase": "voy a la estación",
+            "gloss": {
+              "en": "I'm going to the station"
+            }
+          },
+          {
+            "phrase": "voy a la plaza",
+            "gloss": {
+              "en": "I'm going to the square"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "voy a casa",
+            "gloss": {
+              "en": "I'm going home"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vamos a la playa",
+            "gloss": {
+              "en": "we're going to the beach"
+            },
+            "lemmas": {
+              "vamos": "ir"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me voy",
+            "gloss": {
+              "en": "I'm off"
+            }
+          }
+        ]
+      }
+    ],
+    "state-where-coming-from": [
+      {
+        "wordings": [
+          {
+            "phrase": "vengo de casa",
+            "gloss": {
+              "en": "I'm coming from home"
+            }
+          },
+          {
+            "phrase": "vengo de la escuela",
+            "gloss": {
+              "en": "I'm coming from school"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vuelvo de la oficina",
+            "gloss": {
+              "en": "I'm on my way back from the office"
+            }
+          },
+          {
+            "phrase": "vuelvo de la playa",
+            "gloss": {
+              "en": "I'm on my way back from the beach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "acabo de llegar",
+            "gloss": {
+              "en": "I've just arrived"
+            }
+          }
+        ]
+      }
+    ],
+    "read-signs": [
+      {
+        "wordings": [
+          {
+            "phrase": "entrada",
+            "gloss": {
+              "en": "entrance"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "salida",
+            "gloss": {
+              "en": "exit"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prohibido fumar",
+            "gloss": {
+              "en": "no smoking"
+            }
+          }
+        ]
+      }
+    ],
+    "name-transport": [
+      {
+        "wordings": [
+          {
+            "phrase": "el autobús",
+            "gloss": {
+              "en": "the bus"
+            }
+          },
+          {
+            "phrase": "el bus",
+            "gloss": {
+              "en": "the bus"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el tren",
+            "gloss": {
+              "en": "the train"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el metro",
+            "gloss": {
+              "en": "the underground"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el taxi",
+            "gloss": {
+              "en": "the taxi"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el avión",
+            "gloss": {
+              "en": "the plane"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-where-service-goes": [
+      {
+        "wordings": [
+          {
+            "phrase": "a dónde va este autobús",
+            "gloss": {
+              "en": "where does this bus go"
+            }
+          },
+          {
+            "phrase": "a dónde va este tren",
+            "gloss": {
+              "en": "where does this train go"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "va a la estación",
+            "gloss": {
+              "en": "does it go to the station"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "este autobús va a la plaza",
+            "gloss": {
+              "en": "does this bus go to the square"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-departure-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "a qué hora sale",
+            "gloss": {
+              "en": "what time does it leave"
+            }
+          },
+          {
+            "phrase": "a qué hora sale el tren",
+            "gloss": {
+              "en": "what time does the train leave"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuándo sale",
+            "gloss": {
+              "en": "when does it leave"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuándo sale el próximo",
+            "gloss": {
+              "en": "when does the next one leave"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-departure-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "sale en dos minutos",
+            "gloss": {
+              "en": "it leaves in two minutes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el próximo sale a las cuatro",
+            "gloss": {
+              "en": "the next one leaves at four"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sale ahora",
+            "gloss": {
+              "en": "it's leaving now"
+            }
+          }
+        ]
+      }
+    ],
+    "buy-ticket": [
+      {
+        "wordings": [
+          {
+            "phrase": "un billete por favor",
+            "gloss": {
+              "en": "one ticket, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quiero un billete",
+            "gloss": {
+              "en": "I want a ticket"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un billete de ida",
+            "gloss": {
+              "en": "a one-way ticket"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dos billetes de ida y vuelta",
+            "gloss": {
+              "en": "two return tickets"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dónde puedo comprar un billete",
+            "gloss": {
+              "en": "where can I buy a ticket"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-where-platform": [
+      {
+        "wordings": [
+          {
+            "phrase": "dónde está el andén",
+            "gloss": {
+              "en": "where is the platform"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "de qué andén sale",
+            "gloss": {
+              "en": "which platform does it leave from"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuál es el andén",
+            "gloss": {
+              "en": "which platform is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dónde está la parada",
+            "gloss": {
+              "en": "where is the stop"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dónde para el autobús",
+            "gloss": {
+              "en": "where does the bus stop"
+            },
+            "lemmas": {
+              "para": "parar"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-announcement": [
+      {
+        "wordings": [
+          {
+            "phrase": "atención pasajeros",
+            "gloss": {
+              "en": "attention, passengers"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "última llamada",
+            "gloss": {
+              "en": "final call"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el tren está retrasado",
+            "gloss": {
+              "en": "the train is delayed"
+            }
+          },
+          {
+            "phrase": "el vuelo está retrasado",
+            "gloss": {
+              "en": "the flight is delayed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "próxima parada",
+            "gloss": {
+              "en": "next stop"
+            }
+          }
+        ]
+      }
+    ],
+    "name-luggage": [
+      {
+        "wordings": [
+          {
+            "phrase": "la maleta",
+            "gloss": {
+              "en": "the suitcase"
+            }
+          },
+          {
+            "phrase": "una maleta",
+            "gloss": {
+              "en": "a suitcase"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la mochila",
+            "gloss": {
+              "en": "the backpack"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el equipaje",
+            "gloss": {
+              "en": "the luggage"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la bolsa",
+            "gloss": {
+              "en": "the bag"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-missing-luggage": [
+      {
+        "wordings": [
+          {
+            "phrase": "no encuentro mi maleta",
+            "gloss": {
+              "en": "I can't find my suitcase"
+            },
+            "lemmas": {
+              "encuentro": "encontrar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "perdí mi maleta",
+            "gloss": {
+              "en": "I lost my suitcase"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi maleta no está",
+            "gloss": {
+              "en": "my suitcase isn't here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "falta una maleta",
+            "gloss": {
+              "en": "a suitcase is missing"
+            },
+            "lemmas": {
+              "falta": "faltar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es una maleta negra",
+            "gloss": {
+              "en": "it's a black suitcase"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-travel-help": [
+      {
+        "wordings": [
+          {
+            "phrase": "estoy perdido",
+            "gloss": {
+              "en": "I'm lost"
+            },
+            "lemmas": {
+              "perdido": "perder"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "necesito un taxi",
+            "gloss": {
+              "en": "I need a taxi"
+            }
+          }
+        ]
+      }
+    ],
+    "name-weather": [
+      {
+        "wordings": [
+          {
+            "phrase": "el sol",
+            "gloss": {
+              "en": "the sun"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la lluvia",
+            "gloss": {
+              "en": "the rain"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la nieve",
+            "gloss": {
+              "en": "the snow"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el viento",
+            "gloss": {
+              "en": "the wind"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "las nubes",
+            "gloss": {
+              "en": "the clouds"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-weather": [
+      {
+        "wordings": [
+          {
+            "phrase": "qué tiempo hace",
+            "gloss": {
+              "en": "what's the weather like"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cómo está el tiempo",
+            "gloss": {
+              "en": "how's the weather"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "va a llover",
+            "gloss": {
+              "en": "is it going to rain"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué tiempo va a hacer",
+            "gloss": {
+              "en": "what's the weather going to be like"
+            }
+          }
+        ]
+      }
+    ],
+    "state-weather": [
+      {
+        "wordings": [
+          {
+            "phrase": "hace sol",
+            "gloss": {
+              "en": "it's sunny"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está lloviendo",
+            "gloss": {
+              "en": "it's raining"
+            }
+          },
+          {
+            "phrase": "llueve",
+            "gloss": {
+              "en": "it's raining"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está nublado",
+            "gloss": {
+              "en": "it's cloudy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hace viento",
+            "gloss": {
+              "en": "it's windy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hace mal tiempo",
+            "gloss": {
+              "en": "the weather is bad"
+            }
+          }
+        ]
+      }
+    ],
+    "name-seasons": [
+      {
+        "wordings": [
+          {
+            "phrase": "la primavera",
+            "gloss": {
+              "en": "spring"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el verano",
+            "gloss": {
+              "en": "summer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el otoño",
+            "gloss": {
+              "en": "autumn"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el invierno",
+            "gloss": {
+              "en": "winter"
+            }
+          }
+        ]
+      }
+    ],
+    "say-hot-or-cold": [
+      {
+        "wordings": [
+          {
+            "phrase": "hace calor",
+            "gloss": {
+              "en": "it's hot"
+            }
+          },
+          {
+            "phrase": "hace mucho calor",
+            "gloss": {
+              "en": "it's very hot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hace frío",
+            "gloss": {
+              "en": "it's cold"
+            }
+          },
+          {
+            "phrase": "hace mucho frío",
+            "gloss": {
+              "en": "it's very cold"
+            }
+          }
+        ]
+      }
+    ],
+    "state-weather-preference": [
+      {
+        "wordings": [
+          {
+            "phrase": "me gusta el sol",
+            "gloss": {
+              "en": "I like the sun"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no me gusta la lluvia",
+            "gloss": {
+              "en": "I don't like the rain"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prefiero el verano",
+            "gloss": {
+              "en": "I prefer summer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me encanta la nieve",
+            "gloss": {
+              "en": "I love the snow"
+            }
+          }
+        ]
+      }
+    ],
+    "name-landscape": [
+      {
+        "wordings": [
+          {
+            "phrase": "la montaña",
+            "gloss": {
+              "en": "the mountain"
+            }
+          },
+          {
+            "phrase": "las montañas",
+            "gloss": {
+              "en": "the mountains"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el río",
+            "gloss": {
+              "en": "the river"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el mar",
+            "gloss": {
+              "en": "the sea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la playa",
+            "gloss": {
+              "en": "the beach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el bosque",
+            "gloss": {
+              "en": "the forest"
+            }
+          }
+        ]
+      }
+    ],
+    "name-animals-and-plants": [
+      {
+        "wordings": [
+          {
+            "phrase": "el perro",
+            "gloss": {
+              "en": "the dog"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el gato",
+            "gloss": {
+              "en": "the cat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el pájaro",
+            "gloss": {
+              "en": "the bird"
+            }
+          },
+          {
+            "phrase": "los pájaros",
+            "gloss": {
+              "en": "the birds"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el árbol",
+            "gloss": {
+              "en": "the tree"
+            }
+          },
+          {
+            "phrase": "los árboles",
+            "gloss": {
+              "en": "the trees"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la flor",
+            "gloss": {
+              "en": "the flower"
+            }
+          },
+          {
+            "phrase": "las flores",
+            "gloss": {
+              "en": "the flowers"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-surroundings": [
+      {
+        "wordings": [
+          {
+            "phrase": "hay muchos árboles",
+            "gloss": {
+              "en": "there are a lot of trees"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es muy bonito",
+            "gloss": {
+              "en": "it's very pretty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hay mucha gente",
+            "gloss": {
+              "en": "there are a lot of people"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es un lugar tranquilo",
+            "gloss": {
+              "en": "it's a quiet place"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no hay nadie",
+            "gloss": {
+              "en": "there's nobody here"
+            }
+          }
+        ]
+      }
+    ],
+    "say-how-they-feel": [
+      {
+        "wordings": [
+          {
+            "phrase": "me siento bien",
+            "gloss": {
+              "en": "I feel well"
+            },
+            "lemmas": {
+              "siento": "sentir"
+            }
+          },
+          {
+            "phrase": "me siento mal",
+            "gloss": {
+              "en": "I feel bad"
+            },
+            "lemmas": {
+              "siento": "sentir"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no me siento bien",
+            "gloss": {
+              "en": "I don't feel well"
+            },
+            "lemmas": {
+              "siento": "sentir"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "estoy enfermo",
+            "gloss": {
+              "en": "I'm ill"
+            }
+          },
+          {
+            "phrase": "estoy enferma",
+            "gloss": {
+              "en": "I'm ill"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "estoy mejor",
+            "gloss": {
+              "en": "I'm better"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo fiebre",
+            "gloss": {
+              "en": "I have a fever"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-how-someone-feels": [
+      {
+        "wordings": [
+          {
+            "phrase": "cómo te sientes",
+            "gloss": {
+              "en": "how do you feel"
+            }
+          },
+          {
+            "phrase": "cómo se siente",
+            "gloss": {
+              "en": "how do you feel"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "te sientes bien",
+            "gloss": {
+              "en": "do you feel alright"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué te pasa",
+            "gloss": {
+              "en": "what's wrong"
+            },
+            "lemmas": {
+              "pasa": "pasar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "estás bien",
+            "gloss": {
+              "en": "are you okay"
+            }
+          }
+        ]
+      }
+    ],
+    "name-body-parts": [
+      {
+        "wordings": [
+          {
+            "phrase": "cabeza",
+            "gloss": {
+              "en": "head"
+            }
+          },
+          {
+            "phrase": "la cabeza",
+            "gloss": {
+              "en": "the head"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "estómago",
+            "gloss": {
+              "en": "stomach"
+            }
+          },
+          {
+            "phrase": "el estómago",
+            "gloss": {
+              "en": "the stomach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "garganta",
+            "gloss": {
+              "en": "throat"
+            }
+          },
+          {
+            "phrase": "la garganta",
+            "gloss": {
+              "en": "the throat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mano",
+            "gloss": {
+              "en": "hand"
+            }
+          },
+          {
+            "phrase": "la mano",
+            "gloss": {
+              "en": "the hand"
+            }
+          },
+          {
+            "phrase": "las manos",
+            "gloss": {
+              "en": "the hands"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "pie",
+            "gloss": {
+              "en": "foot"
+            }
+          },
+          {
+            "phrase": "el pie",
+            "gloss": {
+              "en": "the foot"
+            }
+          },
+          {
+            "phrase": "los pies",
+            "gloss": {
+              "en": "the feet"
+            }
+          }
+        ]
+      }
+    ],
+    "say-it-hurts": [
+      {
+        "wordings": [
+          {
+            "phrase": "me duele la cabeza",
+            "gloss": {
+              "en": "my head hurts"
+            }
+          },
+          {
+            "phrase": "me duele el estómago",
+            "gloss": {
+              "en": "my stomach hurts"
+            }
+          },
+          {
+            "phrase": "me duele la garganta",
+            "gloss": {
+              "en": "my throat hurts"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me duele aquí",
+            "gloss": {
+              "en": "it hurts here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me duelen los pies",
+            "gloss": {
+              "en": "my feet hurt"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo dolor de cabeza",
+            "gloss": {
+              "en": "I have a headache"
+            }
+          }
+        ]
+      }
+    ],
+    "express-tiredness": [
+      {
+        "wordings": [
+          {
+            "phrase": "estoy cansado",
+            "gloss": {
+              "en": "I'm tired"
+            }
+          },
+          {
+            "phrase": "estoy cansada",
+            "gloss": {
+              "en": "I'm tired"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo sueño",
+            "gloss": {
+              "en": "I'm sleepy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "necesito descansar",
+            "gloss": {
+              "en": "I need to rest"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no puedo más",
+            "gloss": {
+              "en": "I can't go on"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-help": [
+      {
+        "wordings": [
+          {
+            "phrase": "ayuda",
+            "gloss": {
+              "en": "help"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "necesito ayuda",
+            "gloss": {
+              "en": "I need help"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me puedes ayudar",
+            "gloss": {
+              "en": "can you help me"
+            }
+          },
+          {
+            "phrase": "me puede ayudar",
+            "gloss": {
+              "en": "could you help me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "auxilio",
+            "gloss": {
+              "en": "help! (emergency)"
+            }
+          }
+        ]
+      }
+    ],
+    "follow-helper-instruction": [
+      {
+        "wordings": [
+          {
+            "phrase": "ven conmigo",
+            "gloss": {
+              "en": "come with me"
+            },
+            "lemmas": {
+              "ven": "venir"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abre la boca",
+            "gloss": {
+              "en": "open your mouth"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "respira",
+            "gloss": {
+              "en": "breathe"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tranquilo",
+            "gloss": {
+              "en": "easy now"
+            }
+          }
+        ]
+      }
+    ],
+    "state-immediate-need": [
+      {
+        "wordings": [
+          {
+            "phrase": "tengo frío",
+            "gloss": {
+              "en": "I'm cold"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo calor",
+            "gloss": {
+              "en": "I'm hot"
+            }
+          }
+        ]
+      }
+    ],
+    "recognize-safety-words": [
+      {
+        "wordings": [
+          {
+            "phrase": "cuidado",
+            "gloss": {
+              "en": "careful"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "peligro",
+            "gloss": {
+              "en": "danger"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "emergencia",
+            "gloss": {
+              "en": "emergency"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "farmacia",
+            "gloss": {
+              "en": "pharmacy"
+            }
+          }
+        ]
+      }
+    ],
+    "state-want": [
+      {
+        "wordings": [
+          {
+            "phrase": "quiero agua",
+            "gloss": {
+              "en": "I want water"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quiero esto",
+            "gloss": {
+              "en": "I want this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no quiero",
+            "gloss": {
+              "en": "I don't want to"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quiero más",
+            "gloss": {
+              "en": "I want more"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-what-someone-wants": [
+      {
+        "wordings": [
+          {
+            "phrase": "qué quieres",
+            "gloss": {
+              "en": "what do you want"
+            }
+          },
+          {
+            "phrase": "qué quiere",
+            "gloss": {
+              "en": "what do you want"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quieres algo",
+            "gloss": {
+              "en": "do you want something"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué quieres tomar",
+            "gloss": {
+              "en": "what would you like to drink"
+            }
+          }
+        ]
+      }
+    ],
+    "state-need": [
+      {
+        "wordings": [
+          {
+            "phrase": "necesito un médico",
+            "gloss": {
+              "en": "I need a doctor"
+            }
+          },
+          {
+            "phrase": "necesito un doctor",
+            "gloss": {
+              "en": "I need a doctor"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo necesito",
+            "gloss": {
+              "en": "I need it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me hace falta",
+            "gloss": {
+              "en": "I'm short of it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "necesito más tiempo",
+            "gloss": {
+              "en": "I need more time"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-what-someone-needs": [
+      {
+        "wordings": [
+          {
+            "phrase": "qué necesitas",
+            "gloss": {
+              "en": "what do you need"
+            }
+          },
+          {
+            "phrase": "qué necesita",
+            "gloss": {
+              "en": "what do you need"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "necesitas algo",
+            "gloss": {
+              "en": "do you need anything"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué te hace falta",
+            "gloss": {
+              "en": "what are you missing"
+            }
+          }
+        ]
+      }
+    ],
+    "state-where-going": [
+      {
+        "wordings": [
+          {
+            "phrase": "quiero ir a casa",
+            "gloss": {
+              "en": "I want to go home"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "voy a la tienda",
+            "gloss": {
+              "en": "I'm going to the shop"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vamos a la plaza",
+            "gloss": {
+              "en": "we're going to the square"
+            },
+            "lemmas": {
+              "vamos": "ir"
+            }
+          }
+        ]
+      }
+    ],
+    "state-intention": [
+      {
+        "wordings": [
+          {
+            "phrase": "voy a comer",
+            "gloss": {
+              "en": "I'm going to eat"
+            }
+          },
+          {
+            "phrase": "voy a dormir",
+            "gloss": {
+              "en": "I'm going to sleep"
+            }
+          },
+          {
+            "phrase": "voy a trabajar",
+            "gloss": {
+              "en": "I'm going to work"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "pienso ir",
+            "gloss": {
+              "en": "I plan to go"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tengo que trabajar",
+            "gloss": {
+              "en": "I have to work"
+            }
+          }
+        ]
+      }
+    ],
+    "accept-suggestion": [
+      {
+        "wordings": [
+          {
+            "phrase": "me parece bien",
+            "gloss": {
+              "en": "sounds good to me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buena idea",
+            "gloss": {
+              "en": "good idea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "por supuesto",
+            "gloss": {
+              "en": "of course"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está bien",
+            "gloss": {
+              "en": "that's fine"
+            }
+          }
+        ]
+      }
+    ],
+    "decline-suggestion": [
+      {
+        "wordings": [
+          {
+            "phrase": "ahora no",
+            "gloss": {
+              "en": "not now"
+            }
+          },
+          {
+            "phrase": "hoy no",
+            "gloss": {
+              "en": "not today"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "otro día",
+            "gloss": {
+              "en": "another day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mejor no",
+            "gloss": {
+              "en": "better not"
+            }
+          }
+        ]
+      }
+    ],
+    "invite": [
+      {
+        "wordings": [
+          {
+            "phrase": "vamos",
+            "gloss": {
+              "en": "let's go"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quieres venir",
+            "gloss": {
+              "en": "do you want to come"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "te invito",
+            "gloss": {
+              "en": "it's my treat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vamos juntos",
+            "gloss": {
+              "en": "let's go together"
+            },
+            "lemmas": {
+              "vamos": "ir"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-permission": [
+      {
+        "wordings": [
+          {
+            "phrase": "puedo pasar",
+            "gloss": {
+              "en": "may I come through"
+            }
+          },
+          {
+            "phrase": "puedo entrar",
+            "gloss": {
+              "en": "may I come in"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se puede",
+            "gloss": {
+              "en": "is it allowed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me permite",
+            "gloss": {
+              "en": "may I"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con permiso",
+            "gloss": {
+              "en": "excuse me, may I get by"
+            }
+          }
+        ]
+      }
+    ],
+    "grant-or-deny-permission": [
+      {
+        "wordings": [
+          {
+            "phrase": "adelante",
+            "gloss": {
+              "en": "go ahead"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "pasa",
+            "gloss": {
+              "en": "come in"
+            },
+            "lemmas": {
+              "pasa": "pasar"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no se puede",
+            "gloss": {
+              "en": "you can't"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "está prohibido",
+            "gloss": {
+              "en": "it's not allowed"
+            }
+          }
+        ]
+      }
+    ],
+    "state-like": [
+      {
+        "wordings": [
+          {
+            "phrase": "me gusta",
+            "gloss": {
+              "en": "I like it"
+            }
+          },
+          {
+            "phrase": "me gustan",
+            "gloss": {
+              "en": "I like them"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me gusta mucho",
+            "gloss": {
+              "en": "I like it a lot"
+            }
+          }
+        ]
+      }
+    ],
+    "state-dislike": [
+      {
+        "wordings": [
+          {
+            "phrase": "no me gusta mucho",
+            "gloss": {
+              "en": "I don't like it much"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no me gusta nada",
+            "gloss": {
+              "en": "I don't like it at all"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-what-someone-likes": [
+      {
+        "wordings": [
+          {
+            "phrase": "qué te gusta",
+            "gloss": {
+              "en": "what do you like"
+            }
+          },
+          {
+            "phrase": "qué le gusta",
+            "gloss": {
+              "en": "what do you like"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "te gusta",
+            "gloss": {
+              "en": "do you like it"
+            }
+          },
+          {
+            "phrase": "te gustan",
+            "gloss": {
+              "en": "do you like them"
+            }
+          }
+        ]
+      }
+    ],
+    "choose-between-options": [
+      {
+        "wordings": [
+          {
+            "phrase": "este",
+            "gloss": {
+              "en": "this one"
+            }
+          },
+          {
+            "phrase": "esta",
+            "gloss": {
+              "en": "this one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ese",
+            "gloss": {
+              "en": "that one"
+            }
+          },
+          {
+            "phrase": "esa",
+            "gloss": {
+              "en": "that one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "el otro",
+            "gloss": {
+              "en": "the other one"
+            }
+          },
+          {
+            "phrase": "la otra",
+            "gloss": {
+              "en": "the other one"
+            }
+          }
+        ]
+      }
+    ],
+    "state-preference": [
+      {
+        "wordings": [
+          {
+            "phrase": "prefiero este",
+            "gloss": {
+              "en": "I prefer this one"
+            }
+          },
+          {
+            "phrase": "prefiero el té",
+            "gloss": {
+              "en": "I prefer tea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me gusta más",
+            "gloss": {
+              "en": "I like it better"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es mejor",
+            "gloss": {
+              "en": "it's better"
+            }
+          }
+        ]
+      }
+    ],
+    "say-good-or-bad": [
+      {
+        "wordings": [
+          {
+            "phrase": "es bueno",
+            "gloss": {
+              "en": "it's good"
+            }
+          },
+          {
+            "phrase": "está bueno",
+            "gloss": {
+              "en": "it tastes good"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es malo",
+            "gloss": {
+              "en": "it's bad"
+            }
+          },
+          {
+            "phrase": "está mal",
+            "gloss": {
+              "en": "it's wrong"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué bonito",
+            "gloss": {
+              "en": "how lovely"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es feo",
+            "gloss": {
+              "en": "it's ugly"
+            }
+          }
+        ]
+      }
+    ],
+    "say-easy-or-hard": [
+      {
+        "wordings": [
+          {
+            "phrase": "es fácil",
+            "gloss": {
+              "en": "it's easy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es difícil",
+            "gloss": {
+              "en": "it's hard"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "muy difícil",
+            "gloss": {
+              "en": "very hard"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no es difícil",
+            "gloss": {
+              "en": "it's not hard"
+            }
+          }
+        ]
+      }
+    ],
+    "agree": [
+      {
+        "wordings": [
+          {
+            "phrase": "yo también",
+            "gloss": {
+              "en": "me too"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tienes razón",
+            "gloss": {
+              "en": "you're right"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "exacto",
+            "gloss": {
+              "en": "exactly"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es verdad",
+            "gloss": {
+              "en": "that's true"
+            }
+          }
+        ]
+      }
+    ],
+    "disagree": [
+      {
+        "wordings": [
+          {
+            "phrase": "no estoy de acuerdo",
+            "gloss": {
+              "en": "I don't agree"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "yo no",
+            "gloss": {
+              "en": "not me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no es verdad",
+            "gloss": {
+              "en": "that's not true"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "para nada",
+            "gloss": {
+              "en": "not at all"
+            }
+          }
+        ]
+      }
+    ],
+    "give-a-reason": [
+      {
+        "wordings": [
+          {
+            "phrase": "porque sí",
+            "gloss": {
+              "en": "just because"
+            }
+          },
+          {
+            "phrase": "porque no",
+            "gloss": {
+              "en": "because I don't want to"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "porque quiero",
+            "gloss": {
+              "en": "because I want to"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "por eso",
+            "gloss": {
+              "en": "that's why"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es que",
+            "gloss": {
+              "en": "the thing is"
+            }
+          }
+        ]
+      }
+    ],
+    "express-surprise": [
+      {
+        "wordings": [
+          {
+            "phrase": "de verdad",
+            "gloss": {
+              "en": "really"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "en serio",
+            "gloss": {
+              "en": "seriously"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no puede ser",
+            "gloss": {
+              "en": "it can't be"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qué sorpresa",
+            "gloss": {
+              "en": "what a surprise"
+            }
+          }
+        ]
+      }
+    ],
+    "express-uncertainty": [
+      {
+        "wordings": [
+          {
+            "phrase": "no sé",
+            "gloss": {
+              "en": "I don't know"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quizás",
+            "gloss": {
+              "en": "maybe"
+            }
+          },
+          {
+            "phrase": "tal vez",
+            "gloss": {
+              "en": "perhaps"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "creo que sí",
+            "gloss": {
+              "en": "I think so"
+            }
+          },
+          {
+            "phrase": "creo que no",
+            "gloss": {
+              "en": "I don't think so"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no estoy seguro",
+            "gloss": {
+              "en": "I'm not sure"
+            }
+          },
+          {
+            "phrase": "no estoy segura",
+            "gloss": {
+              "en": "I'm not sure"
+            }
+          }
+        ]
+      }
+    ],
+    "say-not-understood": [
+      {
+        "wordings": [
+          {
+            "phrase": "no comprendo",
+            "gloss": {
+              "en": "I don't understand"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no te entiendo",
+            "gloss": {
+              "en": "I don't understand you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no entiendo nada",
+            "gloss": {
+              "en": "I don't understand anything"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no entiendo esa palabra",
+            "gloss": {
+              "en": "I don't understand that word"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-to-repeat": [
+      {
+        "wordings": [
+          {
+            "phrase": "otra vez",
+            "gloss": {
+              "en": "again"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "puedes repetir",
+            "gloss": {
+              "en": "can you repeat that"
+            }
+          },
+          {
+            "phrase": "puede repetir",
+            "gloss": {
+              "en": "could you repeat that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "repite",
+            "gloss": {
+              "en": "say it again"
+            }
+          },
+          {
+            "phrase": "repita",
+            "gloss": {
+              "en": "say it again"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cómo dices",
+            "gloss": {
+              "en": "what was that"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-to-slow-down": [
+      {
+        "wordings": [
+          {
+            "phrase": "más lento",
+            "gloss": {
+              "en": "more slowly"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no tan rápido",
+            "gloss": {
+              "en": "not so fast"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "puedes hablar más despacio",
+            "gloss": {
+              "en": "can you speak more slowly"
+            }
+          },
+          {
+            "phrase": "puede hablar más despacio",
+            "gloss": {
+              "en": "could you speak more slowly"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-how-to-say": [
+      {
+        "wordings": [
+          {
+            "phrase": "cómo se pronuncia",
+            "gloss": {
+              "en": "how do you pronounce it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cuál es la palabra",
+            "gloss": {
+              "en": "what's the word"
+            }
+          }
+        ]
+      }
+    ],
+    "repeat-to-confirm": [
+      {
+        "wordings": [
+          {
+            "phrase": "así se dice",
+            "gloss": {
+              "en": "that's how you say it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es así",
+            "gloss": {
+              "en": "it's like this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo digo bien",
+            "gloss": {
+              "en": "am I saying it right"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-unknown-word": [
+      {
+        "wordings": [
+          {
+            "phrase": "es como",
+            "gloss": {
+              "en": "it's like"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "una cosa para comer",
+            "gloss": {
+              "en": "a thing for eating"
+            }
+          },
+          {
+            "phrase": "una cosa para beber",
+            "gloss": {
+              "en": "a thing for drinking"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no sé la palabra",
+            "gloss": {
+              "en": "I don't know the word"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es algo así",
+            "gloss": {
+              "en": "it's something like that"
+            }
+          }
+        ]
+      }
+    ],
+    "confirm-information": [
+      {
+        "wordings": [
+          {
+            "phrase": "eso es",
+            "gloss": {
+              "en": "that's it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es correcto",
+            "gloss": {
+              "en": "that's correct"
+            }
+          },
+          {
+            "phrase": "correcto",
+            "gloss": {
+              "en": "correct"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "así es",
+            "gloss": {
+              "en": "that's right"
+            }
+          }
+        ]
+      }
+    ],
+    "correct-misunderstanding": [
+      {
+        "wordings": [
+          {
+            "phrase": "no es eso",
+            "gloss": {
+              "en": "that's not it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quiero decir",
+            "gloss": {
+              "en": "I mean"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no dije eso",
+            "gloss": {
+              "en": "I didn't say that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "es otra cosa",
+            "gloss": {
+              "en": "it's something else"
+            }
+          }
+        ]
+      }
     ]
   }
 }
