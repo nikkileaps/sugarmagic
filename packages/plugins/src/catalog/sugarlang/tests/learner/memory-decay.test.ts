@@ -21,8 +21,8 @@ import {
 import {
   DESIRED_RETENTION,
   DUE_RETRIEVABILITY_FLOOR,
-  getLearningStatus
-} from "../../runtime/learner/learning-status";
+  getItemProgress
+} from "../../runtime/learner/item-progress";
 import type { AtlasLemmaEntry } from "../../runtime/types";
 
 const DAY = 86_400_000;
@@ -96,7 +96,7 @@ describe("the timescale is the one the retention target implies", () => {
   it("reports as due through the one status function, not a bare comparison", () => {
     const card = reviewedCard();
     const stale = { ...card, retrievability: decayedRetrievability(card, T0 + 14 * DAY) };
-    expect(getLearningStatus({ card: stale, learnerBand: "A1" })).toBe("due");
+    expect(getItemProgress({ card: stale, itemBand: undefined, learnerBand: "A1" })).toBe("due");
   });
 
   it("a longer-known card lasts longer, because stability grows", () => {
@@ -129,18 +129,18 @@ describe("a card the learner never had is not a card they forgot", () => {
     // those as overdue. They are not forgotten; they were never had.
     const seeded = seedCardFromAtlas("x", "es", atlasEntry("B2"), "A1");
     expect(seeded.retrievability).toBeLessThan(DUE_RETRIEVABILITY_FLOOR);
-    expect(getLearningStatus({ card: seeded, learnerBand: "A1" })).not.toBe("due");
+    expect(getItemProgress({ card: seeded, itemBand: undefined, learnerBand: "A1" })).not.toBe("due");
   });
 
   it("reports it as unseen, which is the honest answer", () => {
     const seeded = seedCardFromAtlas("x", "es", atlasEntry("A1"), "A1");
-    expect(getLearningStatus({ card: seeded, learnerBand: "A1" })).toBe("unseen");
+    expect(getItemProgress({ card: seeded, itemBand: undefined, learnerBand: "A1" })).toBe("unseen");
   });
 
   it("and out-of-reach still wins over any card history", () => {
     const seeded = seedCardFromAtlas("x", "es", atlasEntry("C1"), "A1");
     expect(
-      getLearningStatus({ card: seeded, itemBand: "C1", learnerBand: "A1" })
+      getItemProgress({ card: seeded, itemBand: "C1", learnerBand: "A1" })
     ).toBe("out-of-reach");
   });
 });

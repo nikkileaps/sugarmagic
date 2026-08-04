@@ -14,15 +14,15 @@
 import { describe, expect, it } from "vitest";
 import { buildTeacherPrompt } from "../../runtime/teacher/prompt-builder";
 import { createTeacherContext } from "./test-helpers";
-import type { LearnerCurriculumState } from "../../runtime/scheduler/learner-curriculum-state";
+import type { LearnerProgress } from "../../runtime/learner/learner-progress";
 
-function promptWith(state?: LearnerCurriculumState): string {
+function promptWith(state?: LearnerProgress): string {
   return buildTeacherPrompt(
-    createTeacherContext(state ? { curriculumState: state } : {})
+    createTeacherContext(state ? { learnerProgress: state } : {})
   ).user;
 }
 
-const STATE: LearnerCurriculumState = {
+const STATE: LearnerProgress = {
   met: [
     { competencyId: "greet", encounterCount: 4 },
     { competencyId: "thank", encounterCount: 0 }

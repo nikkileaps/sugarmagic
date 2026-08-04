@@ -1,22 +1,25 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/learner/learning-status.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/learner/item-progress.ts
  *
- * Purpose: Answers "where does this learner stand on this item" as ONE named
- *   fact, readable without invoking the budgeter.
+ * Purpose: Answers "where does this learner stand on ONE item" -- a word or a
+ *   competency -- as one named value.
+ *
+ * The singular of `learner-progress.ts`, which answers the same question across
+ * the whole curriculum and is built by calling this once per card. Item first,
+ * learner overall second; the names say which is which.
  *
  * WHY THIS EXISTS
- *   The five values below were always implicit in the system -- they were just
- *   spread across whoever needed them first, each as a private predicate: the
- *   band-envelope filter in the budgeter, a `reviewCount === 0` split two lines
- *   below it, and retrievability comparisons in the scheduler. Nothing named the
- *   concept, so the Teacher could not read it; it could only re-derive it, or
- *   accept whatever the budgeter had already decided. 090.4 needs to ask
- *   directly.
+ *   The five values below were always implicit in the system, spread across
+ *   whoever needed them first as private predicates: a band filter in one
+ *   place, a `reviewCount === 0` split in another, retrievability comparisons
+ *   in a third. Nothing named the concept, so nothing could read it -- it could
+ *   only be re-derived, slightly differently each time. Two of those re-derivals
+ *   turned out to be wrong.
  *
  * THIS IS A DERIVATION, NOT A NEW STORE
  *   Every input already exists. The card lives on `LearnerProfile.lemmaCards`,
  *   the learner's band on the same profile, the item's band in the atlas. What
- *   moved is the decision, not the data:
+ *   moved here is the decision, not the data:
  *
  *     LemmaCard      retrievability, reviewCount  -> unseen / learning / due / known
  *     atlas          the item's band              -\
@@ -30,8 +33,8 @@
  *
  * Exports:
  *   - DUE_RETRIEVABILITY_FLOOR, KNOWN_RETRIEVABILITY_FLOOR
- *   - LEARNING_STATUSES, LearningStatus
- *   - getLearningStatus
+ *   - ITEM_PROGRESS_VALUES, ItemProgress
+ *   - getItemProgress
  *
  * Relationships:
  *   - Reads a LemmaCard and a band; no store, no I/O, no side effects.
@@ -99,7 +102,7 @@ export const DUE_RETRIEVABILITY_FLOOR = DESIRED_RETENTION;
  */
 export const KNOWN_RETRIEVABILITY_FLOOR = 0.98;
 
-export const LEARNING_STATUSES = [
+export const ITEM_PROGRESS_VALUES = [
   "unseen",
   "learning",
   "due",
@@ -115,9 +118,9 @@ export const LEARNING_STATUSES = [
  * above their band to be worth teaching yet. It wins over the others because a
  * card's history does not make an out-of-reach item teachable.
  */
-export type LearningStatus = (typeof LEARNING_STATUSES)[number];
+export type ItemProgress = (typeof ITEM_PROGRESS_VALUES)[number];
 
-export interface LearningStatusInput {
+export interface ItemProgressInput {
   /** The learner's card for this item, when one exists. */
   card: LemmaCard | undefined;
   /** The item's band, from the atlas. Undefined when the atlas cannot place it. */
@@ -145,7 +148,7 @@ export interface LearningStatusInput {
  *   3. known / due -- both read retrievability, so the higher floor is tested
  *      first or everything known would also read as due.
  */
-export function getLearningStatus(input: LearningStatusInput): LearningStatus {
+export function getItemProgress(input: ItemProgressInput): ItemProgress {
   const reachDelta = input.reachDelta ?? 1;
 
   // An item the atlas cannot band is treated as in-reach rather than

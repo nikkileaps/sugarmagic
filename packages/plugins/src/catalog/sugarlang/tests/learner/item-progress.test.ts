@@ -1,7 +1,7 @@
 /**
  * packages/plugins/src/catalog/sugarlang/tests/learner/learning-status.test.ts
  *
- * Purpose: Pins LearningStatus -- the five values, their precedence, and the
+ * Purpose: Pins ItemProgress -- the five values, their precedence, and the
  *   fact that this module declares no thresholds of its own.
  *
  * Exports:
@@ -20,11 +20,10 @@ import {
   DESIRED_RETENTION,
   DUE_RETRIEVABILITY_FLOOR,
   KNOWN_RETRIEVABILITY_FLOOR,
-  LEARNING_STATUSES,
-  getLearningStatus,
-  type LearningStatus
-} from "../../runtime/learner/learning-status";
-import { DUE_RETRIEVABILITY_FLOOR as SCHEDULER_DUE_FLOOR } from "../../runtime/scheduler/outer-loop-scheduler";
+  ITEM_PROGRESS_VALUES,
+  getItemProgress,
+  type ItemProgress
+} from "../../runtime/learner/item-progress";
 import type { CEFRBand, LemmaCard } from "../../runtime/types";
 
 function card(overrides: Partial<LemmaCard> = {}): LemmaCard {
@@ -50,11 +49,11 @@ function status(
   cardValue: LemmaCard | undefined,
   itemBand: CEFRBand | undefined = "A1",
   learnerBand: CEFRBand = "A1"
-): LearningStatus {
-  return getLearningStatus({ card: cardValue, itemBand, learnerBand });
+): ItemProgress {
+  return getItemProgress({ card: cardValue, itemBand, learnerBand });
 }
 
-describe("getLearningStatus -- the five values", () => {
+describe("getItemProgress -- the five values", () => {
   it("no card is unseen", () => {
     expect(status(undefined)).toBe("unseen");
   });
@@ -87,7 +86,7 @@ describe("getLearningStatus -- the five values", () => {
   });
 });
 
-describe("getLearningStatus -- precedence", () => {
+describe("getItemProgress -- precedence", () => {
   it("reach beats card history", () => {
     // A learner can hold a card for a word above their band -- seen in passing,
     // or after a band re-estimate downward. Teaching it is still wrong.
@@ -110,7 +109,7 @@ describe("getLearningStatus -- precedence", () => {
   });
 
   it("is total: every value is reachable and nothing falls through", () => {
-    const produced = new Set<LearningStatus>([
+    const produced = new Set<ItemProgress>([
       status(undefined),
       status(card({ retrievability: DUE_RETRIEVABILITY_FLOOR - 0.1 })),
       status(card({ retrievability: KNOWN_RETRIEVABILITY_FLOOR })),
@@ -122,11 +121,11 @@ describe("getLearningStatus -- precedence", () => {
       ),
       status(card(), "C1", "A1")
     ]);
-    expect([...produced].sort()).toEqual([...LEARNING_STATUSES].sort());
+    expect([...produced].sort()).toEqual([...ITEM_PROGRESS_VALUES].sort());
   });
 });
 
-describe("getLearningStatus -- single enforcer", () => {
+describe("getItemProgress -- single enforcer", () => {
   it("the due floor IS the desired retention, not a number that matches it", () => {
     // There were two retention targets: the FSRS engine was built with 0.9 and
     // the due question used 0.7, neither aware of the other. Identity rather
@@ -139,11 +138,5 @@ describe("getLearningStatus -- single enforcer", () => {
     // the middle band unreachable -- and an unreachable branch is worse than no
     // branch, because it reads as covered.
     expect(KNOWN_RETRIEVABILITY_FLOOR).toBeGreaterThan(DUE_RETRIEVABILITY_FLOOR);
-  });
-
-  it("is the same due floor the scheduler uses", () => {
-    // The scheduler re-exports rather than declaring, so these are one constant
-    // and not two that happen to agree today.
-    expect(SCHEDULER_DUE_FLOOR).toBe(DUE_RETRIEVABILITY_FLOOR);
   });
 });

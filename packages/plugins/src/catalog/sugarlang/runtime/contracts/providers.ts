@@ -24,9 +24,8 @@
 
 import type { PedagogicalDirective } from "./pedagogy";
 import type { CEFRBand } from "../cefr";
-import type { LearnerProfile, LemmaCard } from "../learner";
+import type { LearnerProfile, LearnerProgress, LemmaCard } from "../learner";
 import type { CefrPosterior } from "../learner";
-import type { LearnerCurriculumState } from "../scheduler/learner-curriculum-state";
 import type { Situation } from "../situation";
 import type { LemmaRef } from "./lexical-prescription";
 import type {
@@ -168,7 +167,7 @@ export interface TeacherContext {
    * decides; nothing upstream is allowed to decide for it. Optional because a
    * caller may have none, and absent is not the same claim as "nothing met".
    */
-  curriculumState?: LearnerCurriculumState;
+  learnerProgress?: LearnerProgress;
   lang: TeacherLanguageContext;
   calibrationActive: boolean;
 }

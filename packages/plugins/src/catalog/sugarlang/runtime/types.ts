@@ -28,7 +28,7 @@ export type {
   LearnerId,
   LearnerProfile,
   LemmaCard,
-  LearningStatus,
+  ItemProgress,
   PendingProvisional,
   ProbeFloorState,
   SessionRecord

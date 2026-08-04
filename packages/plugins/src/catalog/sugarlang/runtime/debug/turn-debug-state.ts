@@ -23,7 +23,7 @@
  * Status: active
  */
 
-import type { LearnerCurriculumState } from "../scheduler/learner-curriculum-state";
+import type { LearnerProgress } from "../learner/learner-progress";
 
 /** What one observation did, in the terms the observation path uses. */
 export interface ObservationRecord {
@@ -43,21 +43,21 @@ export interface ObservationRecord {
 }
 
 let lastObservation: ObservationRecord | null = null;
-let lastCurriculumState: LearnerCurriculumState | null = null;
+let lastCurriculumState: LearnerProgress | null = null;
 
 export function recordObservation(record: ObservationRecord): void {
   lastObservation = record;
 }
 
-export function recordCurriculumState(state: LearnerCurriculumState): void {
+export function recordCurriculumState(state: LearnerProgress): void {
   lastCurriculumState = state;
 }
 
 export function readTurnDebugState(): {
   lastObservation: ObservationRecord | null;
-  curriculumState: LearnerCurriculumState | null;
+  learnerProgress: LearnerProgress | null;
 } {
-  return { lastObservation, curriculumState: lastCurriculumState };
+  return { lastObservation, learnerProgress: lastCurriculumState };
 }
 
 /** Used by the learner-data reset so the HUD does not outlive the learner. */

@@ -49,7 +49,7 @@ import {
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
-  SUGARLANG_CURRICULUM_STATE_ANNOTATION,
+  SUGARLANG_LEARNER_PROGRESS_ANNOTATION,
   extractCharacterVoiceReminder,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
@@ -61,7 +61,7 @@ import {
   shouldRunSugarlangForExecution,
   type SugarlangLoggerLike
 } from "./shared";
-import type { LearnerCurriculumState } from "../scheduler/learner-curriculum-state";
+import type { LearnerProgress } from "../learner/learner-progress";
 import { composeSituation, situationKey } from "../situation";
 import type { TeacherNpcContext, TeacherRecentTurn } from "../situation";
 import {
@@ -272,9 +272,9 @@ export function createSugarLangTeacherMiddleware(
       // would be true every turn, the middleware would return early every turn,
       // and the Teacher would never run again. Nothing would fail; NPCs would
       // just quietly go back to ungraded output.
-      const curriculumState = execution.annotations[
-        SUGARLANG_CURRICULUM_STATE_ANNOTATION
-      ] as LearnerCurriculumState | undefined;
+      const learnerProgress = execution.annotations[
+        SUGARLANG_LEARNER_PROGRESS_ANNOTATION
+      ] as LearnerProgress | undefined;
       const prePlacementOpeningLine = execution.annotations[
         SUGARLANG_PREPLACEMENT_LINE_ANNOTATION
       ] as SugarlangConstraint["prePlacementOpeningLine"] | undefined;
@@ -386,7 +386,7 @@ export function createSugarLangTeacherMiddleware(
           ...(situation === null
             ? {}
             : { situation, situationKey: situationKey(situation) }),
-          ...(curriculumState ? { curriculumState } : {}),
+          ...(learnerProgress ? { learnerProgress } : {}),
           lang: {
             targetLanguage: execution.selection.targetLanguage ?? learner.targetLanguage,
             supportLanguage: execution.selection.supportLanguage ?? learner.supportLanguage
@@ -485,8 +485,8 @@ export function createSugarLangTeacherMiddleware(
       // become vector-store query terms. `queso` finds cheese lore; a
       // competency id like `ask-where` is not a thing anyone wrote lore about.
       const scheduledBiasTerms: string[] =
-        curriculumState && !curriculumState.isColdStart
-          ? curriculumState.dueItemIds
+        learnerProgress && !learnerProgress.isColdStart
+          ? learnerProgress.dueItemIds
               .filter((id) => !id.startsWith("chunk:"))
               .slice(0, 3)
           : [];

@@ -13,15 +13,10 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-  OuterLoopScheduler,
-  DUE_RETRIEVABILITY_FLOOR
-} from "../../runtime/scheduler/outer-loop-scheduler";
+import { deriveLearnerProgress } from "../../runtime/learner/learner-progress";
+import { DUE_RETRIEVABILITY_FLOOR } from "../../runtime/learner/item-progress";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
-import type {
-  SchedulerBoardView,
-  SchedulerCurriculumView
-} from "../../runtime/scheduler/scheduler-board-view";
+import type { LearnerProgressInputs } from "../../runtime/learner/learner-progress";
 import type { LemmaCard } from "../../runtime/types";
 
 // ---------- fixture builders ----------
@@ -45,11 +40,11 @@ function makeCard(lemmaId: string, retrievability: number): LemmaCard {
 }
 
 function board(
-  overrides: Partial<Omit<SchedulerBoardView, "curriculum">> & {
-    curriculum?: Partial<SchedulerCurriculumView>;
+  overrides: Partial<Omit<LearnerProgressInputs, "curriculum">> & {
+    curriculum?: Partial<LearnerProgressInputs["curriculum"]>;
   } = {}
-): SchedulerBoardView {
-  const baseCurriculum: SchedulerCurriculumView = {
+): LearnerProgressInputs {
+  const baseCurriculum: LearnerProgressInputs["curriculum"] = {
     introducedCompetencyIds: new Set<string>(),
     availableCompetencies: [],
     encounterCounts: new Map<string, number>()
@@ -73,11 +68,9 @@ const COMPETENCIES = [
 
 describe("OuterLoopScheduler", () => {
   let telemetry: MemoryTelemetrySink;
-  let scheduler: OuterLoopScheduler;
 
   beforeEach(() => {
     telemetry = new MemoryTelemetrySink();
-    scheduler = new OuterLoopScheduler({ telemetry });
   });
 
   describe("it reports facts, never a recommendation", () => {
@@ -85,7 +78,7 @@ describe("OuterLoopScheduler", () => {
       // A fact that arrives with a recommendation attached is a second
       // authority on what to teach. Whether a competency is worth teaching now
       // depends on the scene and the NPCs present, which only the Teacher sees.
-      const state = scheduler.compute(
+      const state = deriveLearnerProgress(
         board({
           learner: { cefrBand: "A1", lemmaCards: { queso: makeCard("queso", 0.1) } },
           curriculum: {
@@ -104,7 +97,7 @@ describe("OuterLoopScheduler", () => {
 
   describe("competencies the learner has met", () => {
     it("separates met from unmet against the inventory", () => {
-      const state = scheduler.compute(
+      const state = deriveLearnerProgress(
         board({
           curriculum: {
             availableCompetencies: COMPETENCIES,
@@ -118,7 +111,7 @@ describe("OuterLoopScheduler", () => {
     });
 
     it("carries the encounter count, and defaults to zero when the ledger has none", () => {
-      const state = scheduler.compute(
+      const state = deriveLearnerProgress(
         board({
           curriculum: {
             availableCompetencies: COMPETENCIES,
@@ -137,7 +130,7 @@ describe("OuterLoopScheduler", () => {
     it("reports a count well past any target without calling it paid", () => {
       // The ledger's target is a policy. Whether 40 encounters is enough is a
       // judgement, so the count is passed through unjudged.
-      const state = scheduler.compute(
+      const state = deriveLearnerProgress(
         board({
           curriculum: {
             availableCompetencies: COMPETENCIES,
@@ -153,7 +146,7 @@ describe("OuterLoopScheduler", () => {
 
   describe("due cards", () => {
     it("reports cards below the due floor and omits cards above it", () => {
-      const state = scheduler.compute(
+      const state = deriveLearnerProgress(
         board({
           learner: {
             cefrBand: "A2",
@@ -172,7 +165,7 @@ describe("OuterLoopScheduler", () => {
       // A decayed competency card is as much a fact as a decayed lemma card.
       // Consumers that want lemmas only filter at the point of use, where the
       // reason is visible -- the lore-search bias does exactly that.
-      const state = scheduler.compute(
+      const state = deriveLearnerProgress(
         board({
           learner: {
             cefrBand: "A2",
@@ -190,18 +183,18 @@ describe("OuterLoopScheduler", () => {
 
   describe("cold start", () => {
     it("is cold with no cards and no met competencies", () => {
-      expect(scheduler.compute(board()).isColdStart).toBe(true);
+      expect(deriveLearnerProgress(board()).isColdStart).toBe(true);
     });
 
     it("is not cold once a card exists", () => {
-      const state = scheduler.compute(
+      const state = deriveLearnerProgress(
         board({ learner: { cefrBand: "A2", lemmaCards: { queso: makeCard("queso", 0.9) } } })
       );
       expect(state.isColdStart).toBe(false);
     });
 
     it("is not cold once a competency has been met", () => {
-      const state = scheduler.compute(
+      const state = deriveLearnerProgress(
         board({ curriculum: { introducedCompetencyIds: new Set(["greet"]) } })
       );
       expect(state.isColdStart).toBe(false);
@@ -209,7 +202,7 @@ describe("OuterLoopScheduler", () => {
 
     it("still reports the unmet curriculum while cold", () => {
       // Cold start is a fact about the learner, not a reason to say nothing.
-      const state = scheduler.compute(
+      const state = deriveLearnerProgress(
         board({ curriculum: { availableCompetencies: COMPETENCIES } })
       );
       expect(state.isColdStart).toBe(true);
@@ -227,11 +220,11 @@ describe("OuterLoopScheduler", () => {
           encounterCounts: new Map([["greet", 2]])
         }
       });
-      expect(scheduler.compute(input)).toEqual(scheduler.compute(input));
+      expect(deriveLearnerProgress(input)).toEqual(deriveLearnerProgress(input));
     });
 
     it("propagates sceneId and conversationId", () => {
-      const state = scheduler.compute(
+      const state = deriveLearnerProgress(
         board({ scene: { sceneId: "plaza", dayIndex: 3 }, conversationId: "conv-9" })
       );
       expect(state.sceneId).toBe("plaza");
@@ -239,17 +232,18 @@ describe("OuterLoopScheduler", () => {
     });
 
     it("emits scheduler.computed with the counts it reported", async () => {
-      scheduler.compute(
+      deriveLearnerProgress(
         board({
           learner: { cefrBand: "A1", lemmaCards: { queso: makeCard("queso", 0.2) } },
           curriculum: {
             availableCompetencies: COMPETENCIES,
             introducedCompetencyIds: new Set(["greet"])
           }
-        })
+        }),
+        telemetry
       );
 
-      const events = await telemetry.query({ eventKinds: ["scheduler.computed"] });
+      const events = await telemetry.query({ eventKinds: ["learner.progress-derived"] });
       expect(events).toHaveLength(1);
       expect(events[0]).toMatchObject({
         isColdStart: false,

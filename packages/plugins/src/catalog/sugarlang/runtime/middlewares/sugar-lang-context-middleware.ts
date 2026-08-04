@@ -36,7 +36,7 @@ import {
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_QUEST_ESSENTIAL_IDS_ANNOTATION,
-  SUGARLANG_CURRICULUM_STATE_ANNOTATION,
+  SUGARLANG_LEARNER_PROGRESS_ANNOTATION,
   buildLearnerSnapshot,
   computePendingProvisionalLemmas,
   computeProbeFloorState,
@@ -48,7 +48,10 @@ import {
 } from "./shared";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
 import { recordCurriculumState } from "../debug/turn-debug-state";
-import type { SchedulerBoardView } from "../scheduler/scheduler-board-view";
+import {
+  deriveLearnerProgress,
+  type LearnerProgressInputs
+} from "../learner/learner-progress";
 import type { Competency } from "../contracts/competency-inventory";
 import { getWorldDay } from "@sugarmagic/runtime-core";
 
@@ -157,7 +160,7 @@ export function createSugarLangContextMiddleware(
         } catch {
           // No inventory for this language.
         }
-        const board: SchedulerBoardView = {
+        const board: LearnerProgressInputs = {
           learner: {
             cefrBand: learner.estimatedCefrBand,
             lemmaCards: learner.lemmaCards,
@@ -173,9 +176,9 @@ export function createSugarLangContextMiddleware(
           },
           conversationId: getSugarlangConversationId(execution)
         };
-        const curriculumState = services.outerLoopScheduler.compute(board);
-        execution.annotations[SUGARLANG_CURRICULUM_STATE_ANNOTATION] = curriculumState;
-        recordCurriculumState(curriculumState);
+        const learnerProgress = deriveLearnerProgress(board, deps.telemetry);
+        execution.annotations[SUGARLANG_LEARNER_PROGRESS_ANNOTATION] = learnerProgress;
+        recordCurriculumState(learnerProgress);
       } catch {
         // Reporting failure is non-fatal: the Teacher runs without learner
         // facts rather than not at all.

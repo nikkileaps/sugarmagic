@@ -341,7 +341,7 @@ export function formatLearnerSummary(context: TeacherContext): string {
  * step nobody asked for.
  */
 function formatCompetencyStandingLines(context: TeacherContext): string[] {
-  const state = context.curriculumState;
+  const state = context.learnerProgress;
   // Absent is not the same claim as "has met nothing", so say so.
   if (!state) return ["- competencies met: (unknown)"];
 

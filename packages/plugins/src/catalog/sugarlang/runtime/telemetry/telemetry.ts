@@ -702,7 +702,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "scheduler.computed",
+      "learner.progress-derived",
       {
         sceneId: string | null;
         isColdStart: boolean;

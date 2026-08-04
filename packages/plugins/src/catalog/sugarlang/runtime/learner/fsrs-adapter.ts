@@ -42,7 +42,7 @@ import type {
   LemmaCard,
   ObservationOutcome
 } from "../types";
-import { DESIRED_RETENTION } from "./learning-status";
+import { DESIRED_RETENTION } from "./item-progress";
 import {
   INITIAL_PRODUCTIVE_STRENGTH,
   INITIAL_PROVISIONAL_EVIDENCE,
@@ -133,7 +133,7 @@ const FORGETTING_PARAMS = generatorParameters({ enable_fuzz: false }).w;
  * A card that has never been graded is returned untouched. Its retrievability
  * is a seeded PRIOR -- a guess from the learner's band about whether they
  * already know the word -- and a prior does not decay, because there is no
- * remembering for time to erode. `getLearningStatus` reports those as `unseen`
+ * remembering for time to erode. `getItemProgress` reports those as `unseen`
  * on review count, which is the honest answer.
  */
 export function decayedRetrievability(card: LemmaCard, now: number): number {

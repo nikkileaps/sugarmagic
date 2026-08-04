@@ -60,7 +60,7 @@ function readText(element: FakeElement): string {
     .join(" ");
 }
 
-const EMPTY_TURN = { lastObservation: null, curriculumState: null };
+const EMPTY_TURN = { lastObservation: null, learnerProgress: null };
 const CONTEXT = {} as unknown as DebugHudCardContext;
 
 function makeCard(getSnapshot: () => Promise<null>) {

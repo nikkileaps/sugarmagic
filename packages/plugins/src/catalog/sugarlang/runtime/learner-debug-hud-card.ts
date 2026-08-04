@@ -29,7 +29,7 @@ import type {
   DebugHudCardContribution
 } from "@sugarmagic/runtime-core";
 import type { LemmaCard } from "./learner";
-import type { LearnerCurriculumState } from "./scheduler/learner-curriculum-state";
+import type { LearnerProgress } from "./learner/learner-progress";
 import type { ObservationRecord } from "./debug/turn-debug-state";
 import { cardDisplayName } from "./inventory/card-display-name";
 import { DUE_RETRIEVABILITY_FLOOR } from "./learner";
@@ -131,7 +131,7 @@ function appendLastObservation(
  */
 function appendCurriculumState(
   container: HTMLElement,
-  state: LearnerCurriculumState | null
+  state: LearnerProgress | null
 ): void {
   appendHeading(container, "TOLD TO TEACHER (as of turn start)");
   if (!state) {
@@ -201,7 +201,7 @@ function renderCardList(
 /** The turn that just happened, as the card needs it. */
 interface TurnDebugView {
   lastObservation: ObservationRecord | null;
-  curriculumState: LearnerCurriculumState | null;
+  learnerProgress: LearnerProgress | null;
 }
 
 function renderInto(
@@ -246,7 +246,7 @@ function renderInto(
   appendMetric(card, "taught", String(snapshot.teachRecordCount));
 
   appendLastObservation(card, turnState.lastObservation, lang, nowMs);
-  appendCurriculumState(card, turnState.curriculumState);
+  appendCurriculumState(card, turnState.learnerProgress);
 
   container.appendChild(card);
 

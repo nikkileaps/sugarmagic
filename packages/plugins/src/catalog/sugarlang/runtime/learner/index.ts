@@ -70,10 +70,10 @@ export { learnerKey } from "./learner-key";
 export {
   DUE_RETRIEVABILITY_FLOOR,
   KNOWN_RETRIEVABILITY_FLOOR,
-  LEARNING_STATUSES,
-  getLearningStatus
-} from "./learning-status";
-export type { LearningStatus, LearningStatusInput } from "./learning-status";
+  ITEM_PROGRESS_VALUES,
+  getItemProgress
+} from "./item-progress";
+export type { ItemProgress, ItemProgressInput } from "./item-progress";
 
 export {
   CARD_STORE_DB_NAME_PREFIX,
@@ -101,3 +101,10 @@ export * from "./persistence";
 export * from "./learner-state-reducer";
 // 090.5: `session-signals` deleted -- it computed the fatigue/strain score,
 // which never ran. See outer-loop-scheduler.ts for the full note.
+
+export type {
+  LearnerProgress,
+  LearnerProgressInputs,
+  MetCompetency
+} from "./learner-progress";
+export { deriveLearnerProgress } from "./learner-progress";

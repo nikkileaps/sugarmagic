@@ -19,7 +19,7 @@ import {
   type TeachableRef
 } from "../../contracts/teachable-ref";
 import { isAvailable, EMPTY_NPC_CONTEXT } from "../../situation";
-import { computePacingSignals, getLearningStatus } from "../../learner";
+import { computePacingSignals, getItemProgress } from "../../learner";
 import { resolveSceneTeachables } from "../../inventory/scene-teachable-resolver";
 import { resolveQuestEssentialLemmaRefs } from "../quest-essential";
 import type {
@@ -184,7 +184,7 @@ function deriveFallbackSlate(context: TeacherContext): {
       lemmaId: teachable.id,
       lang: targetLanguage
     };
-    const status = getLearningStatus({
+    const status = getItemProgress({
       card: context.learner.lemmaCards[teachable.id],
       itemBand: context.atlas.getBand(teachable.id, targetLanguage),
       learnerBand: context.learner.estimatedCefrBand

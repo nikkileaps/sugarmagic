@@ -87,7 +87,6 @@ import {
   emitTelemetry,
   createTelemetryEvent
 } from "./telemetry/telemetry";
-import { OuterLoopScheduler } from "./scheduler/outer-loop-scheduler";
 import type { SugarlangLoggerLike } from "./logger";
 export type { SugarlangLoggerLike } from "./logger";
 import type { CEFRBand } from "./types";
@@ -131,7 +130,6 @@ export interface SugarlangExecutionServices {
   /** 086.5: optional live-render cache (in-memory only; no persistence needed). */
   liveRenderCache?: LiveRenderCache;
   /** 087.1: outer-loop scheduler -- computes the cross-session teach schedule. */
-  outerLoopScheduler: OuterLoopScheduler;
 }
 
 export interface SugarlangDebugState {
@@ -792,7 +790,6 @@ export class SugarlangRuntimeServices {
       ? new IndexedDBIntentCache({ workspaceId: this.studioWorkspaceId })
       : undefined;
     const liveRenderCache = new LiveRenderCache();
-    const outerLoopScheduler = new OuterLoopScheduler({ telemetry: this.telemetry });
 
     const services: SugarlangExecutionServices = {
       ...languageBundle,
@@ -808,8 +805,7 @@ export class SugarlangRuntimeServices {
       llmClient: this.gatewayClient,
       variantCache,
       intentCache,
-      liveRenderCache,
-      outerLoopScheduler
+      liveRenderCache
     };
     this.executionServices.set(key, services);
 

@@ -141,7 +141,7 @@ describe("DirectiveCache", () => {
   it("retires a directive when the LEARNER changes, independently of the situation", () => {
     // 090.4, and the whole point of two keys. The world is identical -- same
     // scene, same quest, same hour -- but the learner produced a word and its
-    // LearningStatus flipped. That is a reason to re-decide, and with a single
+    // ItemProgress flipped. That is a reason to re-decide, and with a single
     // merged key it would have been indistinguishable from the player walking
     // somewhere.
     const { cache } = createCache();

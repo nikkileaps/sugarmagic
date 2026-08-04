@@ -22,9 +22,9 @@ import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
   SUGARLANG_DIRECTIVE_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
-  SUGARLANG_CURRICULUM_STATE_ANNOTATION
+  SUGARLANG_LEARNER_PROGRESS_ANNOTATION
 } from "../../runtime/middlewares/shared";
-import type { LearnerCurriculumState } from "../../runtime/scheduler/learner-curriculum-state";
+import type { LearnerProgress } from "../../runtime/learner/learner-progress";
 import {
   createServicesStub,
   createTestExecution,
@@ -395,8 +395,8 @@ describe("SugarLangTeacherMiddleware", () => {
 const SUGARAGENT_CONTRIB_SUGARLANG_KEY = "sugaragent.contrib/sugarlang";
 
 function makeSchedule(
-  overrides: Partial<LearnerCurriculumState> = {}
-): LearnerCurriculumState {
+  overrides: Partial<LearnerProgress> = {}
+): LearnerProgress {
   return {
     met: [],
     unmetCompetencyIds: [],
@@ -461,7 +461,7 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
-    execution.annotations[SUGARLANG_CURRICULUM_STATE_ANNOTATION] = makeSchedule();
+    execution.annotations[SUGARLANG_LEARNER_PROGRESS_ANNOTATION] = makeSchedule();
 
     await middleware.prepare?.(execution);
 
@@ -488,7 +488,7 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
-    execution.annotations[SUGARLANG_CURRICULUM_STATE_ANNOTATION] = makeSchedule();
+    execution.annotations[SUGARLANG_LEARNER_PROGRESS_ANNOTATION] = makeSchedule();
 
     await middleware.prepare?.(execution);
 
@@ -540,7 +540,7 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
-    // No SUGARLANG_CURRICULUM_STATE_ANNOTATION.
+    // No SUGARLANG_LEARNER_PROGRESS_ANNOTATION.
 
     await middleware.prepare?.(execution);
 
@@ -565,7 +565,7 @@ describe("SugarLangTeacherMiddleware -- the Teacher is on the path", () => {
     const services = createServicesStub(makeScheduleServices(invokeTeacher));
     const middleware = createSugarLangTeacherMiddleware({ services: services as never });
     const execution = createTestExecution();
-    execution.annotations[SUGARLANG_CURRICULUM_STATE_ANNOTATION] = makeSchedule({ isColdStart: true });
+    execution.annotations[SUGARLANG_LEARNER_PROGRESS_ANNOTATION] = makeSchedule({ isColdStart: true });
 
     await middleware.prepare?.(execution);
 

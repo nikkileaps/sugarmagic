@@ -118,7 +118,7 @@ export class DirectiveCache {
 
     // The learner half. This is what closes the loop that already ran end to
     // end and had nobody listening: produce a word -> observe -> FSRS -> the
-    // item's LearningStatus flips -> this key moves -> re-slate against what
+    // item's ItemProgress flips -> this key moves -> re-slate against what
     // they now know.
     if (
       keysNow?.learnerKey !== undefined &&
