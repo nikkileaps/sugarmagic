@@ -705,23 +705,16 @@ export type TelemetryEvent =
       "scheduler.computed",
       {
         sceneId: string | null;
-        teachableCount: number;
         isColdStart: boolean;
         learnerBand: string;
+        /** Competencies the learner has been taught. */
+        metCompetencyCount: number;
+        /** Competencies in the inventory they have not. */
+        unmetCompetencyCount: number;
+        /** Cards below the due floor, including competency cards. */
         dueItemCount: number;
-        debtServiceCount: number;
-        introductionCount: number;
-        affinityCount: number;
-        stretchCount: number;
-        topTeachableId: string | null;
-        topTeachableReason: string | null;
         /** True when the world-day axis was unavailable and diversity degrades to npc x scene. */
         dayAxisDegraded: boolean;
-        /** 087.3: Estimated fraction of scene lemmas currently known by the learner. */
-        sceneComprehensionRate: number | null;
-        /** 087.3: True when stretch allowance gate was triggered this turn. */
-        stretchAllowanceActive: boolean;
-        /** 087.4: True when fatigueScore >= STRAIN_SUPPRESS_THRESHOLD; introductions suppressed. */
       }
     >
   | TelemetryEventOf<

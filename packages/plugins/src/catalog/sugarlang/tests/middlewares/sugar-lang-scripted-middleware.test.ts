@@ -30,7 +30,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSugarLangScriptedMiddleware } from "../../runtime/middlewares/sugar-lang-scripted-middleware";
 import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
-import { SUGARLANG_CONSTRAINT_ANNOTATION } from "../../runtime/middlewares/shared";
+import { SUGARLANG_CONSTRAINT_ANNOTATION,
+  SUGARLANG_CURRICULUM_STATE_ANNOTATION
+} from "../../runtime/middlewares/shared";
 import { createTestExecution } from "./test-helpers";
 
 /**
@@ -297,7 +299,7 @@ describe("scripted rendering costs nothing", () => {
       services: scriptedServices(llmClient) as never
     });
     const execution = scriptedExecution("target-dominant");
-    execution.annotations["sugarlang.schedule"] = dueSchedule();
+    execution.annotations[SUGARLANG_CURRICULUM_STATE_ANNOTATION] = dueSchedule();
 
     await middleware.finalize?.(execution, {
       speakerId: "npc-orrin",

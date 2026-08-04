@@ -12,12 +12,9 @@
  *
  * IT CARRIES TEACHABLES, NOT LEMMA REFS
  *   The Teacher can teach two kinds of thing -- a vocabulary item realized as a
- *   lemma, and a competency realized as exponents -- and has only ever been
- *   handed the first. `ScheduledTeachable.kind` has existed since 087 but stops
- *   at the scheduler, and the Teacher's world is `LemmaRef`, so competency
- *   teachables get filtered out and dropped. A slate that carried lemma refs
- *   would rebuild that dead end, and deleting the prescriber on top of it would
- *   delete competency teaching silently.
+ *   lemma, and a competency realized as exponents. A slate of `LemmaRef` can
+ *   only express the first, so competencies would be filtered out and dropped
+ *   on the way through.
  *
  * DELIBERATELY NOT TRUNCATED
  *   A slate is a working set, not a teaching quota. Cutting it to a top N is why
