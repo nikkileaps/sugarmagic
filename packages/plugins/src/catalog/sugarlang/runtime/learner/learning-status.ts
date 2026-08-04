@@ -48,24 +48,56 @@ import { bandIndex } from "../cefr";
 import type { LemmaCard } from "../types";
 
 /**
+ * The recall probability we aim to keep an item at. One number, because there
+ * were two: the FSRS engine was asked for 0.9 and the due question used 0.7,
+ * neither aware of the other.
+ *
+ * FSRS defines stability as the interval at which retrievability reaches 0.90,
+ * and the interval to any target r is (S/FACTOR) * (r^(1/DECAY) - 1). Measured
+ * against the installed library, for a card at stability 19 (one successful
+ * review of a fresh item):
+ *
+ *     r=0.97 -> 4.2 days   r=0.95 -> 7.7   r=0.90 -> 19   r=0.70 -> 177
+ *
+ * Anki documents 0.90 as a WORKLOAD balance -- higher retention means shorter
+ * intervals and more reviews per day, and above 90% the workload climbs
+ * steeply. That tradeoff does not apply here. In a flashcard app a review costs
+ * the learner deliberate effort at a queue; here it is an NPC using a word in a
+ * line the player was reading anyway, so the cost of re-exposure is close to
+ * zero. What limits us is how many items fit naturally in a turn, and the
+ * Teacher already caps that.
+ *
+ * So we sit above the flashcard balance point. 0.95 puts a brand-new item about
+ * a day out and a reviewed one about a week, stretching as stability grows. Not
+ * higher: at 0.97 intervals fall to half a day, nearly everything is always
+ * due, and "due" stops telling anyone anything.
+ */
+export const DESIRED_RETENTION = 0.95;
+
+/**
  * Retrievability below this = the learner is overdue on this item.
  *
  * Lives here rather than in the scheduler because it defines a LEARNER fact --
  * "is this card due" -- and 087 put it in the scheduler only because that was
  * the first caller.
  */
-export const DUE_RETRIEVABILITY_FLOOR = 0.7;
+export const DUE_RETRIEVABILITY_FLOOR = DESIRED_RETENTION;
 
 /**
  * At or above this retrievability the learner is treated as knowing the item.
  *
- * 090.5 renamed it from `FLUENCY_RETRIEVABILITY_FLOOR`. 087.4 introduced it for
- * fluency recycling -- surfacing well-known lemmas during a strain valley -- and
- * that feature is gone, but the threshold itself was always really "does the
- * learner know this", which is what `known` means here. The old name outlived
- * the only thing it referred to.
+ * Sits ABOVE the desired retention, which is what keeps three bands meaningful
+ * once the due floor became the retention target: known is freshly recalled,
+ * `learning` is still above target but drifting toward it, and due is below.
+ * With both numbers equal the middle band would be unreachable, and an
+ * unreachable branch is worse than no branch.
+ *
+ * It measures "would they recall it right now", not "have they mastered it".
+ * Mastery is a property of stability -- how durable the memory is -- and a card
+ * can read as known here minutes after its first exposure. Keying this off
+ * stability instead is a real improvement and a separate change.
  */
-export const KNOWN_RETRIEVABILITY_FLOOR = 0.90;
+export const KNOWN_RETRIEVABILITY_FLOOR = 0.98;
 
 export const LEARNING_STATUSES = [
   "unseen",

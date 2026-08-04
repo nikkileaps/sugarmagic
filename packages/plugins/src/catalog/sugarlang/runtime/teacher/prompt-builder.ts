@@ -37,6 +37,7 @@ import { EMPTY_NPC_CONTEXT, type RuntimeFact } from "../situation";
 import { computePacingSignals } from "../learner";
 import { resolveSceneTeachables } from "../inventory/scene-teachable-resolver";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
+import { DUE_RETRIEVABILITY_FLOOR } from "../learner";
 import type { Competency } from "../contracts/competency-inventory";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
@@ -278,8 +279,6 @@ function isA1OrLowerConfidence(context: TeacherContext): boolean {
   );
 }
 
-// 090.4b: `hasEmptyPrescription` deleted with its only caller.
-
 export function estimatePromptTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
@@ -292,6 +291,7 @@ export function formatLearnerSummary(context: TeacherContext): string {
     (card) => !card.lemmaId.startsWith("chunk:")
   );
   const due = lemmaCardsOnly
+    .filter((card) => card.retrievability < DUE_RETRIEVABILITY_FLOOR)
     .sort((left, right) => estimateDueScore(right) - estimateDueScore(left))
     .slice(0, MAX_DUE_LEMMAS)
     .map((card) => `${card.lemmaId} (ret ${card.retrievability.toFixed(2)})`);

@@ -31,7 +31,9 @@
 import {
   State,
   createEmptyCard,
+  forgetting_curve,
   fsrs,
+  generatorParameters,
   type Card as FsrsCard
 } from "ts-fsrs";
 import type {
@@ -40,6 +42,7 @@ import type {
   LemmaCard,
   ObservationOutcome
 } from "../types";
+import { DESIRED_RETENTION } from "./learning-status";
 import {
   INITIAL_PRODUCTIVE_STRENGTH,
   INITIAL_PROVISIONAL_EVIDENCE,
@@ -103,10 +106,44 @@ function mapFsrsGrade(grade: ObservationOutcome["receptiveGrade"]): 1 | 2 | 3 | 
 
 export function createFsrsEngine(options: { retention?: number } = {}) {
   return fsrs({
-    request_retention: options.retention ?? 0.9,
+    request_retention: options.retention ?? DESIRED_RETENTION,
     enable_fuzz: false,
     enable_short_term: false
   });
+}
+
+/** Weights for the forgetting curve. Same defaults the engine is built with. */
+const FORGETTING_PARAMS = generatorParameters({ enable_fuzz: false }).w;
+
+/**
+ * How well the learner remembers this right now, given how long it has been.
+ *
+ * THIS IS THE THING THAT DID NOT HAPPEN. `applyOutcome` pins retrievability to
+ * 1 on every graded observation and nothing lowered it afterwards, so no card
+ * ever decayed below the due floor by sitting unused and nothing was ever due
+ * for being forgotten. The only function that recomputed it from elapsed time
+ * had no callers -- and threw when called, because it round-trips through an
+ * FSRS card marked `State.Review` with no `last_review`, and the engine does a
+ * date diff on that. Every passively-encountered card is exactly that case.
+ *
+ * So this uses the pure forgetting curve instead. No card conversion, nothing
+ * to mismark, and it does not write `lastReviewedAt` the way the round trip
+ * did -- a decay pass that moves the clock it reads is not a decay pass.
+ *
+ * A card that has never been graded is returned untouched. Its retrievability
+ * is a seeded PRIOR -- a guess from the learner's band about whether they
+ * already know the word -- and a prior does not decay, because there is no
+ * remembering for time to erode. `getLearningStatus` reports those as `unseen`
+ * on review count, which is the honest answer.
+ */
+export function decayedRetrievability(card: LemmaCard, now: number): number {
+  if (card.lastReviewedAt === null) return card.retrievability;
+  const elapsedDays = Math.max(0, (now - card.lastReviewedAt) / DAY_MS);
+  return forgetting_curve(
+    FORGETTING_PARAMS,
+    elapsedDays,
+    Math.max(0.1, card.stability)
+  );
 }
 
 export function lemmaCardToFsrsCard(card: LemmaCard): FsrsCard {

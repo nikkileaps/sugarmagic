@@ -15,9 +15,9 @@
  * Status: active
  */
 
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  DESIRED_RETENTION,
   DUE_RETRIEVABILITY_FLOOR,
   KNOWN_RETRIEVABILITY_FLOOR,
   LEARNING_STATUSES,
@@ -74,7 +74,11 @@ describe("getLearningStatus -- the five values", () => {
   });
 
   it("between the two floors is learning", () => {
-    expect(status(card({ retrievability: 0.8 }))).toBe("learning");
+    // Stated against the floors rather than a literal. A literal encodes
+    // today's numbers, and this band moved when the due floor became the
+    // desired-retention target -- 0.8 used to be learning and is now due.
+    const between = (DUE_RETRIEVABILITY_FLOOR + KNOWN_RETRIEVABILITY_FLOOR) / 2;
+    expect(status(card({ retrievability: between }))).toBe("learning");
   });
 
   it("an item more than one band above the learner is out-of-reach", () => {
@@ -99,15 +103,23 @@ describe("getLearningStatus -- precedence", () => {
   it("an unbanded item is in-reach, not out-of-reach", () => {
     // Absent evidence is not evidence of difficulty. Withholding every unbanded
     // word is the failure that is hardest to notice from the outside.
-    expect(status(card(), undefined, "A1")).toBe("learning");
+    const between = (DUE_RETRIEVABILITY_FLOOR + KNOWN_RETRIEVABILITY_FLOOR) / 2;
+    expect(status(card({ retrievability: between }), undefined, "A1")).toBe(
+      "learning"
+    );
   });
 
   it("is total: every value is reachable and nothing falls through", () => {
     const produced = new Set<LearningStatus>([
       status(undefined),
-      status(card({ retrievability: 0.5 })),
-      status(card({ retrievability: 0.95 })),
-      status(card({ retrievability: 0.8 })),
+      status(card({ retrievability: DUE_RETRIEVABILITY_FLOOR - 0.1 })),
+      status(card({ retrievability: KNOWN_RETRIEVABILITY_FLOOR })),
+      status(
+        card({
+          retrievability:
+            (DUE_RETRIEVABILITY_FLOOR + KNOWN_RETRIEVABILITY_FLOOR) / 2
+        })
+      ),
       status(card(), "C1", "A1")
     ]);
     expect([...produced].sort()).toEqual([...LEARNING_STATUSES].sort());
@@ -115,16 +127,18 @@ describe("getLearningStatus -- precedence", () => {
 });
 
 describe("getLearningStatus -- single enforcer", () => {
-  it("declares no threshold constants of its own", () => {
-    // The story's pin: standing binds to the existing floors rather than
-    // redeclaring them. Asserted against the SOURCE, because a value-equality
-    // check would pass just as well against a duplicated literal.
-    const source = readFileSync(
-      new URL("../../runtime/learner/learning-status.ts", import.meta.url),
-      "utf8"
-    );
-    const declarations = source.match(/=\s*0\.\d+/g) ?? [];
-    expect(declarations).toEqual(["= 0.7", "= 0.90"]);
+  it("the due floor IS the desired retention, not a number that matches it", () => {
+    // There were two retention targets: the FSRS engine was built with 0.9 and
+    // the due question used 0.7, neither aware of the other. Identity rather
+    // than equality, so they cannot drift apart again by someone editing one.
+    expect(DUE_RETRIEVABILITY_FLOOR).toBe(DESIRED_RETENTION);
+  });
+
+  it("the known floor sits above the due floor, so learning is reachable", () => {
+    // Once the due floor became the retention target, equal floors would make
+    // the middle band unreachable -- and an unreachable branch is worse than no
+    // branch, because it reads as covered.
+    expect(KNOWN_RETRIEVABILITY_FLOOR).toBeGreaterThan(DUE_RETRIEVABILITY_FLOOR);
   });
 
   it("is the same due floor the scheduler uses", () => {

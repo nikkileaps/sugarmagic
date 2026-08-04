@@ -40,7 +40,8 @@ import type { LearnerCurriculumState, MetCompetency } from "./learner-curriculum
  * scheduler needed it first. Re-exported so existing importers keep working.
  */
 export { DUE_RETRIEVABILITY_FLOOR } from "../learner";
-import { DUE_RETRIEVABILITY_FLOOR } from "../learner";
+import { getLearningStatus } from "../learner";
+import type { CEFRBand } from "../cefr";
 
 export interface OuterLoopSchedulerOptions {
   telemetry?: TelemetrySink;
@@ -65,8 +66,27 @@ export class OuterLoopScheduler {
     // keys are NOT excluded: a competency card that has decayed is as much a
     // fact as a lemma card that has. Consumers needing lemmas only filter at
     // the point of use, where the reason for filtering is visible.
+    //
+    // Asked through `getLearningStatus` rather than compared here. It is the
+    // one named answer to where a learner stands on an item, and comparing
+    // retrievability directly skipped two things it already knows:
+    //
+    //   A never-reviewed card is UNSEEN, not due. Seeding gives a card a prior
+    //   from the learner's band, and an item two bands up seeds below the due
+    //   floor -- so a raw comparison reported every above-band word the learner
+    //   had passed as overdue, which is the opposite of true. They have not
+    //   forgotten it; they never had it.
+    //
+    //   An item out of reach is out of reach, whatever its card says.
     const dueItemIds = Object.values(learner.lemmaCards)
-      .filter((card) => card.retrievability < DUE_RETRIEVABILITY_FLOOR)
+      .filter(
+        (card) =>
+          getLearningStatus({
+            card,
+            itemBand: card.cefrPriorBand,
+            learnerBand: learner.cefrBand as CEFRBand
+          }) === "due"
+      )
       .map((card) => card.lemmaId)
       .sort();
 

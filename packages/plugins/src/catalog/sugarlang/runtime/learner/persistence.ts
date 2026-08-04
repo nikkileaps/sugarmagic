@@ -32,6 +32,7 @@ import type {
   LemmaCard
 } from "../types";
 import { createUniformCefrPosterior } from "./cefr-posterior";
+import { decayedRetrievability } from "./fsrs-adapter";
 import {
   CARD_STORE_PAGE_SIZE,
   type CardStore
@@ -45,6 +46,15 @@ interface LoadLearnerProfileOptions {
   playerEntityId: string;
   cardStore: CardStore;
   fallbackProfile: LearnerProfile;
+  /**
+   * Injectable clock, for decay.
+   *
+   * Retrievability falls with elapsed time and the intervals are days, so a
+   * test that cannot move the clock cannot check any of it. Watching a session
+   * proves nothing either way -- the movement inside one is real and far too
+   * small to see.
+   */
+  now?: number;
 }
 
 interface SaveLearnerProfileOptions {
@@ -227,6 +237,29 @@ export async function loadLearnerProfile(
       break;
     }
     cursor = page.nextCursor;
+  }
+
+  // DECAY HAPPENS HERE, on the way out, for every card.
+  //
+  // Retrievability is a function of how long it has been, not a value to store
+  // and trust. It is written as 1 by every graded observation and nothing
+  // lowers it, so a card read straight from the store claims the learner
+  // remembers it perfectly however long ago that was.
+  //
+  // This is the one place worth doing it: every read of a profile comes through
+  // here, so a caller cannot forget. Doing it at each reader instead is how the
+  // stored value and the real one drift, and the drift is invisible -- a stale
+  // 1.0 looks exactly like a fresh one.
+  //
+  // NOT written back. The store keeps what was measured at review time; this is
+  // the derived view. Persisting it would bake a timestamp into the number and
+  // make the next load decay from the wrong instant.
+  const now = options.now ?? Date.now();
+  for (const [lemmaId, card] of Object.entries(lemmaCards)) {
+    lemmaCards[lemmaId] = {
+      ...card,
+      retrievability: decayedRetrievability(card, now)
+    };
   }
 
   return {
