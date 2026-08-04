@@ -137,6 +137,7 @@ describe("a phrase is credited whether or not the player types the accents", () 
     ["adios", "adiós", "adios"],
     ["hasta manana", "hasta mañana", "hasta_manana"],
     ["donde esta", "dónde está", "donde_esta"],
+    ["donde está", "dónde esta", "donde_esta"],
     ["cuanto cuesta", "cuánto cuesta", "cuanto_cuesta"],
     ["que tal", "qué tal", "que_tal"],
     ["si", "sí", "si"]

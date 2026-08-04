@@ -108,6 +108,26 @@ export function stripDiacritics(value: string): string {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").normalize("NFC");
 }
 
+/**
+ * Every way a player might accent a wording: each accented word independently
+ * kept or dropped. `"dónde está"` gives four, `"hola"` gives one.
+ *
+ * The count is 2^(accented words). Real phrases carry one or two, so this stays
+ * small; a wording with more than a handful is a sign it should be several.
+ */
+function accentCombinations(wording: string): string[] {
+  const words = wording.split(" ");
+  let forms = [""];
+  for (const word of words) {
+    const plain = stripDiacritics(word);
+    const options = plain === word ? [word] : [word, plain];
+    forms = forms.flatMap((prefix) =>
+      options.map((option) => (prefix === "" ? option : `${prefix} ${option}`))
+    );
+  }
+  return forms;
+}
+
 /** `"cuánto cuesta"` -> `"cuanto_cuesta"`. Ids are deaccented, so correcting a
  *  phrase's spelling never moves the id -- and never orphans a learner card. */
 function exponentIdFor(wording: string): string {
@@ -174,11 +194,14 @@ export function buildCompetencyInventory(inputs: {
         continue;
       }
 
-      // Players type without accents, so every accented wording also ships
-      // deaccented. Derived rather than authored, so the two cannot drift.
+      // Players accent inconsistently -- a word here, not the next one -- so a
+      // wording ships every combination of its accented words kept or dropped,
+      // not just the two extremes. The shipped `donde esta` carried exactly
+      // such a mixed spelling by hand, and emitting only both-or-neither would
+      // have quietly stopped matching it.
       const surfaceForms: string[] = [];
       for (const wording of entry.wordings) {
-        for (const form of [wording, stripDiacritics(wording)]) {
+        for (const form of accentCombinations(wording)) {
           if (!surfaceForms.includes(form)) surfaceForms.push(form);
         }
       }

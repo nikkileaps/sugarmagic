@@ -62,6 +62,40 @@ describe("the shipped competency inventory is generated, not authored", () => {
   });
 });
 
+describe("a wording ships every way a player might accent it", () => {
+  it("emits each accented word independently kept or dropped", () => {
+    // The shipped `donde esta` carried a MIXED spelling by hand -- plain first
+    // word, accented second. Emitting only fully-accented and fully-plain
+    // would have dropped it and stopped crediting anyone who types that way.
+    const inputs = realInputs();
+    const built = buildCompetencyInventory({
+      ...inputs,
+      exponents: {
+        ...inputs.exponents,
+        exponents: { "ask-where": [{ wordings: ["dónde está"] }] }
+      }
+    });
+    expect(built.competencies[0]!.exponents.es[0]!.surfaceForms).toEqual([
+      "dónde está",
+      "dónde esta",
+      "donde está",
+      "donde esta"
+    ]);
+  });
+
+  it("leaves a wording with no accents alone", () => {
+    const inputs = realInputs();
+    const built = buildCompetencyInventory({
+      ...inputs,
+      exponents: {
+        ...inputs.exponents,
+        exponents: { greet: [{ wordings: ["hola"] }] }
+      }
+    });
+    expect(built.competencies[0]!.exponents.es[0]!.surfaceForms).toEqual(["hola"]);
+  });
+});
+
 describe("a phrase that cannot be resolved fails the build", () => {
   it("names the competency, the phrase, and the word", () => {
     // nikki is the user of a build pass, so it fails loudly here rather than
