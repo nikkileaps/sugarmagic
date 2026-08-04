@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sugarmagic.dev/schemas/curriculum-band.schema.json",
+  "title": "Sugarlang Curriculum Band",
+  "description": "One CEFR band of the authored curriculum: its lessons and the competencies in them. Language-neutral -- the phrases that realize a competency live with a language's own data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "band", "lessons", "competencies"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "band": {
+      "description": "The CEFR band every competency in this file belongs to.",
+      "enum": ["A1", "A2", "B1", "B2", "C1", "C2"]
+    },
+    "lessons": {
+      "description": "Topics within the band. A lesson is what a situation can match -- a cafe is food, a ticket window is transport.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["lessonId", "ordinal", "displayName"],
+        "properties": {
+          "lessonId": {
+            "description": "Stable slug. Permanent once shipped.",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "ordinal": {
+            "description": "Position within the band. `A1.5` is band plus ordinal, derived and never stored, so renumbering does not edit text other things parse.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "displayName": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "competencies": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["competencyId", "lessonId", "displayName", "cefrDescriptor"],
+        "properties": {
+          "competencyId": {
+            "description": "Stable slug, and what the Teacher reads -- the prompt drops the descriptors at this scale, so the id has to say what the competency is on its own. PERMANENT once shipped: learner cards and teach records are written against it.",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "lessonId": {
+            "description": "The lesson this belongs to. Exactly one.",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "displayName": { "type": "string", "minLength": 1 },
+          "cefrDescriptor": {
+            "description": "The can-do statement, in the CEFR's own voice.",
+            "type": "string",
+            "minLength": 1
+          },
+          "isItemZero": {
+            "description": "Taught before anything else, regardless of level. Repair language a beginner needs to survive turn two.",
+            "type": "boolean"
+          },
+          "placementGateBand": {
+            "description": "When set, taught before the learner is placed rather than waiting on assessment.",
+            "enum": ["A1", "A2", "B1", "B2", "C1", "C2"]
+          },
+          "interpretLexiconCategory": {
+            "description": "Feeds this competency's phrases to social-move detection, so a player typing one is recognized as performing it.",
+            "enum": ["farewell", "greeting", "gratitude", "acknowledgement"]
+          }
+        }
+      }
+    }
+  }
+}
