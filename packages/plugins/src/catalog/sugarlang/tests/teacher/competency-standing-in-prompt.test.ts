@@ -14,6 +14,7 @@
 import { describe, expect, it } from "vitest";
 import { buildTeacherPrompt } from "../../runtime/teacher/prompt-builder";
 import { createTeacherContext } from "./test-helpers";
+import { createLemmaCard } from "../learner/test-helpers";
 import type { LearnerProgress } from "../../runtime/learner/learner-progress";
 
 function promptWith(state?: LearnerProgress): string {
@@ -81,5 +82,56 @@ describe("the Teacher can see where the learner stands on the curriculum", () =>
     expect(
       promptWith({ ...STATE, met: [], unmetCompetencyIds: ["greet"] })
     ).toContain("- competencies met: (none)");
+  });
+});
+
+describe("competency cards reach the learner state, by name", () => {
+  /** A learner who met a greeting, engaged with it, and then let it fade. */
+  function withFadedGreeting() {
+    return buildTeacherPrompt(
+      createTeacherContext({
+        learner: {
+          ...createTeacherContext().learner,
+          lemmaCards: {
+            "chunk:hola": createLemmaCard("chunk:hola", "A1", {
+              retrievability: 0.4,
+              reviewCount: 2,
+              lapseCount: 1,
+              lastReviewedAt: 5_000
+            }),
+            queso: createLemmaCard("queso", "A1", {
+              retrievability: 0.3,
+              reviewCount: 1,
+              lastReviewedAt: 1_000
+            })
+          }
+        }
+      })
+    ).user;
+  }
+
+  it("THE POINT: a competency the learner is forgetting appears in top due", () => {
+    // The lists dropped every `chunk:` card, so the Teacher could see that a
+    // learner was losing the word for cheese but not that they were losing how
+    // to greet someone -- which is the half it can do more about.
+    expect(withFadedGreeting()).toMatch(/- top due:.*Greet/);
+  });
+
+  it("names it readably, never as a card key", () => {
+    const prompt = withFadedGreeting();
+    expect(prompt).toContain("Greet: hola");
+    expect(prompt).not.toContain("chunk:hola");
+  });
+
+  it("shows it in recently active too", () => {
+    expect(withFadedGreeting()).toMatch(/- recently active:.*Greet/);
+  });
+
+  it("still shows words, which never stopped working", () => {
+    expect(withFadedGreeting()).toMatch(/- top due:.*queso/);
+  });
+
+  it("counts both kinds, since the line no longer means words only", () => {
+    expect(withFadedGreeting()).toContain("- cards: 2");
   });
 });

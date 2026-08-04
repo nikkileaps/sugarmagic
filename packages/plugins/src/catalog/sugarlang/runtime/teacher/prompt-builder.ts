@@ -38,6 +38,7 @@ import { computePacingSignals } from "../learner";
 import { resolveSceneTeachables } from "../inventory/scene-teachable-resolver";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
 import { DUE_RETRIEVABILITY_FLOOR } from "../learner";
+import { cardDisplayName } from "../inventory/card-display-name";
 import type { Competency } from "../contracts/competency-inventory";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
@@ -285,28 +286,27 @@ export function estimatePromptTokens(text: string): number {
 
 export function formatLearnerSummary(context: TeacherContext): string {
   const learner = context.learner;
-  // Exclude chunk cards ("chunk:" prefix) -- they track pragmatic function acquisition,
-  // not vocabulary, and would pollute the due/active/struggling lists sent to the teacher.
-  const lemmaCardsOnly = Object.values(learner.lemmaCards).filter(
-    (card) => !card.lemmaId.startsWith("chunk:")
-  );
-  const due = lemmaCardsOnly
+  const lang = context.lang.targetLanguage;
+  const cards = Object.values(learner.lemmaCards);
+  const name = (card: { lemmaId: string }) => cardDisplayName(card.lemmaId, lang);
+
+  const due = cards
     .filter((card) => card.retrievability < DUE_RETRIEVABILITY_FLOOR)
     .sort((left, right) => estimateDueScore(right) - estimateDueScore(left))
     .slice(0, MAX_DUE_LEMMAS)
-    .map((card) => `${card.lemmaId} (ret ${card.retrievability.toFixed(2)})`);
-  const active = lemmaCardsOnly
+    .map((card) => `${name(card)} (ret ${card.retrievability.toFixed(2)})`);
+  const active = cards
     .sort((left, right) => (right.lastReviewedAt ?? 0) - (left.lastReviewedAt ?? 0))
     .slice(0, MAX_RECENTLY_ACTIVE)
-    .map((card) => `${card.lemmaId} (reviews ${card.reviewCount})`);
-  const struggling = lemmaCardsOnly
+    .map((card) => `${name(card)} (reviews ${card.reviewCount})`);
+  const struggling = cards
     .sort((left, right) => {
       const leftScore = left.lapseCount * 10 + left.provisionalEvidence;
       const rightScore = right.lapseCount * 10 + right.provisionalEvidence;
       return rightScore - leftScore;
     })
     .slice(0, MAX_STRUGGLING_LEMMAS)
-    .map((card) => `${card.lemmaId} (lapses ${card.lapseCount})`);
+    .map((card) => `${name(card)} (lapses ${card.lapseCount})`);
 
   return [
     "LEARNER STATE:",
@@ -316,7 +316,7 @@ export function formatLearnerSummary(context: TeacherContext): string {
     `- CEFR confidence: ${learner.assessment.cefrConfidence.toFixed(2)}`,
     `- target/support language: ${context.lang.targetLanguage} / ${context.lang.supportLanguage}`,
     `- session turns: ${learner.currentSession?.turns ?? 0}`,
-    `- known lemma cards: ${lemmaCardsOnly.length}`,
+    `- cards: ${cards.length}`,
     `- top due: ${listOrNone(due)}`,
     `- recently active: ${listOrNone(active)}`,
     `- struggling: ${listOrNone(struggling)}`,

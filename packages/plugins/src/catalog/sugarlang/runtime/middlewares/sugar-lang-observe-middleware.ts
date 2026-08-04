@@ -516,9 +516,11 @@ export function createSugarLangObserveMiddleware(
       // writes a card under a key nothing can ever read back. 45 of the 56
       // shipped competency surfaces are not atlas lemmas.
       //
-      // Refusing is the conservative half. Crediting the COMPETENCY the surface
-      // belongs to needs a surface -> chunk map on the annotation, which the
-      // highlight terms do not carry yet; until then no card beats a junk one.
+      // In practice a competency surface no longer arrives raw: the highlight
+      // terms carry a surface-to-chunk map, so the decorator resolves `buenos
+      // dias` to its `chunk:` id before it gets here. This guard is the floor
+      // under that, for anything the map does not cover -- and refusing is
+      // right, because no card beats one filed under a key nothing reads.
       const hoverIsKnown =
         hoverLemma !== null &&
         (hoverLemma.lemma.lemmaId.startsWith("chunk:") ||
