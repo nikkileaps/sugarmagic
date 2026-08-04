@@ -75,7 +75,7 @@ export function computeCoverage(
   const consumedTokenIndexes = new Set<number>();
 
   for (const match of chunkMatches) {
-    matchedChunks.set(match.chunk.chunkId, match.chunk);
+    matchedChunks.set(match.item.normalizedForm, match.item);
     for (const tokenIndex of match.tokenIndexes) {
       consumedTokenIndexes.add(tokenIndex);
     }
@@ -188,10 +188,9 @@ export function computeCoverage(
     ceilingExceededLemmas: Array.from(ceilingExceededLemmas.values()),
     questEssentialLemmasMatched: Array.from(matchedQuestEssentialLemmas.values()),
     matchedChunks:
-      sceneChunks?.filter((chunk) => matchedChunks.has(chunk.chunkId)) ??
+      sceneChunks?.filter((chunk) => matchedChunks.has(chunk.normalizedForm)) ??
       Array.from(matchedChunks.values()),
     matchedChunkTokens: chunkMatches.map((match) => ({
-      chunkId: match.chunk.chunkId,
       normalizedForm: match.normalizedForm,
       surfaceMatched: match.surfaceMatched,
       start: match.start,

@@ -64204,6 +64204,27 @@
         "noun"
       ]
     },
+    "dónde": {
+      "lemmaId": "dónde",
+      "partsOfSpeech": [
+        "adverb",
+        "pronoun"
+      ]
+    },
+    "cuándo": {
+      "lemmaId": "cuándo",
+      "partsOfSpeech": [
+        "adverb",
+        "conjunction"
+      ]
+    },
+    "cuál": {
+      "lemmaId": "cuál",
+      "partsOfSpeech": [
+        "pronoun",
+        "determiner"
+      ]
+    },
     "eles": {
       "lemmaId": "el",
       "partsOfSpeech": [
@@ -65028,6 +65049,30 @@
       "partsOfSpeech": [
         "verb",
         "noun"
+      ]
+    },
+    "mucha": {
+      "lemmaId": "mucho",
+      "partsOfSpeech": [
+        "pronoun",
+        "determiner",
+        "adverb"
+      ]
+    },
+    "muchos": {
+      "lemmaId": "mucho",
+      "partsOfSpeech": [
+        "pronoun",
+        "determiner",
+        "adverb"
+      ]
+    },
+    "muchas": {
+      "lemmaId": "mucho",
+      "partsOfSpeech": [
+        "pronoun",
+        "determiner",
+        "adverb"
       ]
     },
     "digo": {
@@ -66004,6 +66049,27 @@
       "lemmaId": "llamar",
       "partsOfSpeech": [
         "verb"
+      ]
+    },
+    "alguna": {
+      "lemmaId": "alguno",
+      "partsOfSpeech": [
+        "determiner",
+        "pronoun"
+      ]
+    },
+    "algunos": {
+      "lemmaId": "alguno",
+      "partsOfSpeech": [
+        "determiner",
+        "pronoun"
+      ]
+    },
+    "algunas": {
+      "lemmaId": "alguno",
+      "partsOfSpeech": [
+        "determiner",
+        "pronoun"
       ]
     },
     "poca": {

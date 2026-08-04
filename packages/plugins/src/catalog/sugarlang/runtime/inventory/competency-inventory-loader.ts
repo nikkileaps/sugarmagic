@@ -1,12 +1,13 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/inventory/competency-inventory-loader.ts
  *
- * Purpose: Loads the hand-curated competency inventory JSON data and exposes lookup helpers.
+ * Purpose: Loads the generated competency inventory JSON data and exposes lookup helpers.
  *
  * Exports:
  *   - CompetencyInventoryLoader
  *   - loadCompetencyInventory
- *   - getAllInventoryChunks
+ *   - getAllInventoryExponents
+ *   - getCompetencyForExponent
  *   - buildInterpretLexiconFromInventory
  *
  * Relationships:
@@ -24,7 +25,7 @@ import esInventoryData from "../../data/languages/es/competency-inventory.json";
 import type {
   CompetencyInventory,
   Competency,
-  InventoryChunk
+  Exponent
 } from "../contracts/competency-inventory";
 import { INTERPRET_LEXICON_CATEGORIES as CATEGORIES } from "../contracts/competency-inventory";
 
@@ -38,7 +39,7 @@ function assertValidInventory(
     );
   }
   const record = data as Record<string, unknown>;
-  if (record.schemaVersion !== "1") {
+  if (record.schemaVersion !== "2") {
     throw new Error(
       `Invalid competency inventory for "${lang}": unsupported schemaVersion "${record.schemaVersion}".`
     );
@@ -50,24 +51,24 @@ function assertValidInventory(
   }
   if (!Array.isArray(record.competencies) || record.competencies.length === 0) {
     throw new Error(
-      `Invalid competency inventory for "${lang}": missing or empty functions array.`
+      `Invalid competency inventory for "${lang}": missing or empty competencies array.`
     );
   }
-  for (const fn of record.competencies as unknown[]) {
-    if (typeof fn !== "object" || fn === null) {
+  for (const competency of record.competencies as unknown[]) {
+    if (typeof competency !== "object" || competency === null) {
       throw new Error(
-        `Invalid competency inventory for "${lang}": function entry is not an object.`
+        `Invalid competency inventory for "${lang}": competency entry is not an object.`
       );
     }
-    const entry = fn as Record<string, unknown>;
+    const entry = competency as Record<string, unknown>;
     if (typeof entry.competencyId !== "string" || entry.competencyId.length === 0) {
       throw new Error(
-        `Invalid competency inventory for "${lang}": function entry missing competencyId.`
+        `Invalid competency inventory for "${lang}": competency entry missing competencyId.`
       );
     }
-    if (typeof entry.chunks !== "object" || entry.chunks === null) {
+    if (typeof entry.exponents !== "object" || entry.exponents === null) {
       throw new Error(
-        `Invalid competency inventory for "${lang}": function "${entry.competencyId}" missing chunks map.`
+        `Invalid competency inventory for "${lang}": competency "${entry.competencyId}" missing exponents map.`
       );
     }
   }
@@ -104,33 +105,33 @@ export class CompetencyInventoryLoader {
     return this.load(lang).competencies;
   }
 
-  /** Chunks registered under a specific competencyId for a language. */
-  getChunks(competencyId: string, lang: string): InventoryChunk[] {
-    const fn = this.load(lang).competencies.find(
-      (f) => f.competencyId === competencyId
+  /** Exponents registered under a specific competencyId for a language. */
+  getExponents(competencyId: string, lang: string): Exponent[] {
+    const found = this.load(lang).competencies.find(
+      (c) => c.competencyId === competencyId
     );
-    return fn?.chunks[lang] ?? [];
+    return found?.exponents[lang] ?? [];
   }
 
   /**
-   * All InventoryChunk objects across all functions for a language.
-   * Used by the observe middleware to seed the chunk detection pass.
+   * Every exponent across all competencies for a language.
+   * Used by the observe middleware to seed the detection pass.
    */
-  getAllChunks(lang: string): InventoryChunk[] {
-    return this.load(lang).competencies.flatMap((fn) => fn.chunks[lang] ?? []);
+  getAllExponents(lang: string): Exponent[] {
+    return this.load(lang).competencies.flatMap((c) => c.exponents[lang] ?? []);
   }
 
   /**
-   * Returns the Competency that owns the given chunkId for a language,
-   * or undefined if the chunk is not in the inventory.
-   * Used by the observe middleware to find the function for a first-teach event.
+   * The Competency that owns the given exponent id for a language, or
+   * undefined if it is not in the inventory. Used by the observe middleware to
+   * find the competency for a first-teach event.
    */
-  getCompetencyForChunk(
-    chunkId: string,
+  getCompetencyForExponent(
+    exponentId: string,
     lang: string
-  ): import("../contracts/competency-inventory").Competency | undefined {
-    return this.load(lang).competencies.find((fn) =>
-      (fn.chunks[lang] ?? []).some((c) => c.chunkId === chunkId)
+  ): Competency | undefined {
+    return this.load(lang).competencies.find((c) =>
+      (c.exponents[lang] ?? []).some((e) => e.exponentId === exponentId)
     );
   }
 
@@ -138,7 +139,7 @@ export class CompetencyInventoryLoader {
    * Builds the interpretLexicon contribution from inventory data.
    * Returns a Record<category, surfaceForm[]> consumed by interpretation.ts
    * to classify social moves (farewell / greeting / gratitude / acknowledgement).
-   * Only functions with `interpretLexiconCategory` set contribute.
+   * Only competencies with `interpretLexiconCategory` set contribute.
    */
   buildInterpretLexicon(lang: string): Record<string, string[]> {
     const result: Record<string, string[]> = {};
@@ -146,12 +147,11 @@ export class CompetencyInventoryLoader {
       result[category] = [];
     }
 
-    for (const fn of this.load(lang).competencies) {
-      if (!fn.interpretLexiconCategory) continue;
-      const category = fn.interpretLexiconCategory;
-      const chunks = fn.chunks[lang] ?? [];
-      for (const chunk of chunks) {
-        for (const surface of chunk.surfaceForms) {
+    for (const competency of this.load(lang).competencies) {
+      if (!competency.interpretLexiconCategory) continue;
+      const category = competency.interpretLexiconCategory;
+      for (const exponent of competency.exponents[lang] ?? []) {
+        for (const surface of exponent.surfaceForms) {
           if (!result[category].includes(surface)) {
             result[category].push(surface);
           }
@@ -169,8 +169,8 @@ export function loadCompetencyInventory(lang: string): CompetencyInventory {
   return defaultLoader.load(lang);
 }
 
-export function getAllInventoryChunks(lang: string): InventoryChunk[] {
-  return defaultLoader.getAllChunks(lang);
+export function getAllInventoryExponents(lang: string): Exponent[] {
+  return defaultLoader.getAllExponents(lang);
 }
 
 export function buildInterpretLexiconFromInventory(
@@ -179,12 +179,12 @@ export function buildInterpretLexiconFromInventory(
   return defaultLoader.buildInterpretLexicon(lang);
 }
 
-export function getCompetencyForChunk(
-  chunkId: string,
+export function getCompetencyForExponent(
+  exponentId: string,
   lang: string
-): import("../contracts/competency-inventory").Competency | undefined {
+): Competency | undefined {
   try {
-    return defaultLoader.getCompetencyForChunk(chunkId, lang);
+    return defaultLoader.getCompetencyForExponent(exponentId, lang);
   } catch {
     // Missing inventory for language -- not a fatal error at observation time.
     return undefined;

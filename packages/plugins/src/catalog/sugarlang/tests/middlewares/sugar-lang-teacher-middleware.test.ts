@@ -402,7 +402,7 @@ function makeSchedule(
     unmetCompetencyIds: [],
     // A competency card is included deliberately: the lore-search bias must
     // filter it out itself, because a competency id is not a search term.
-    dueItemIds: ["chunk:que_tal", "comer", "hablar"],
+    dueItemIds: ["exponent:que_tal", "comer", "hablar"],
     isColdStart: false,
     sceneId: "scene-1",
     conversationId: "conv-1",

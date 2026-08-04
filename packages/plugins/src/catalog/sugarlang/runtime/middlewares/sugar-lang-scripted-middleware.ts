@@ -92,10 +92,10 @@ function isNonAdaptableSpeaker(speakerId: string | undefined): boolean {
  * for the fidelity gate ONLY -- mapping them verbatim into
  * constraint.targetVocab.introduce would put fake lemmaIds ("the merchant
  * arrives at dawn") into the substitution/highlight/observe machinery, which contracts
- * LemmaRef.lemmaId as an atlas lemmaId or a chunk: ref.
+ * LemmaRef.lemmaId as an atlas lemmaId or an exponent ref.
  *
  * Validation: atlas membership for bare ids, competency-inventory membership for
- * chunk: refs. Anything that resolves to neither is dropped here.
+ * exponent refs. Anything that resolves to neither is dropped here.
  */
 // 090.4: `validateTeachableFacts` deleted with its two callers. It filtered
 // intent facts against the atlas as if they were lemma ids; since 090.1 they are

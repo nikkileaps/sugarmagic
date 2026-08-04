@@ -91,7 +91,7 @@
  *
  * USAGE
  *
- *   const adapter = new GradedTextService({ llmClient, atlas, inventoryChunks });
+ *   const adapter = new GradedTextService({ llmClient, atlas, inventoryExponents });
  *   const result = await adapter.adapt({
  *     sourceText: "The stationmaster is looking for his luggage.",
  *     targetLang: "es",
@@ -119,7 +119,7 @@ import type { VariantVerdict } from "../contracts/baked-variant";
 import type { SupportPosture } from "../contracts/pedagogy";
 import type { SugarlangLLMClient } from "../llm/types";
 import type { LexicalAtlasProvider } from "../types";
-import type { InventoryChunk } from "../contracts/competency-inventory";
+import type { Exponent } from "../contracts/competency-inventory";
 import type { CompetencyRef, TeachableRef } from "../contracts/teachable-ref";
 import { applyMixedTextEnvelopePredicate } from "../classifier/envelope-rule";
 import { computeLanguageRatioVerdict } from "../classifier/language-ratio";
@@ -285,7 +285,7 @@ export interface GradedTextResult {
 export interface GradedTextServiceDeps {
   llmClient: SugarlangLLMClient;
   atlas: LexicalAtlasProvider;
-  inventoryChunks: InventoryChunk[];
+  inventoryExponents: Exponent[];
   morphology?: MorphologyLoader;
 }
 
@@ -434,13 +434,13 @@ function extractJsonCandidate(text: string): string | null {
 export class GradedTextService {
   private readonly llmClient: SugarlangLLMClient;
   private readonly atlas: LexicalAtlasProvider;
-  private readonly inventoryChunks: InventoryChunk[];
+  private readonly inventoryExponents: Exponent[];
   private readonly morphology: MorphologyLoader;
 
   constructor(deps: GradedTextServiceDeps) {
     this.llmClient = deps.llmClient;
     this.atlas = deps.atlas;
-    this.inventoryChunks = deps.inventoryChunks;
+    this.inventoryExponents = deps.inventoryExponents;
     // Shared by default. MorphologyLoader caches per INSTANCE, so a fresh one
     // per service re-runs assertValidMorphologyData over ~29k form entries --
     // once per variant generated, and generateVariantsForNode fans out over
@@ -545,7 +545,7 @@ export class GradedTextService {
 
     // Inventory chunks, NOT sceneLexicon.chunks: scene.chunks only holds
     // authored text, so dynamic phrases would never match.
-    const chunkMatcher = createChunkMatcher(this.inventoryChunks, request.targetLang);
+    const chunkMatcher = createChunkMatcher(this.inventoryExponents, request.targetLang);
     const tokens = tokenize(generatedText, request.targetLang);
     const profile = computeCoverage(
       tokens,

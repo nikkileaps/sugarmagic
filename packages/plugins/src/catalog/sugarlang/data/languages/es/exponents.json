@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "1",
+  "lang": "es",
+  "exponents": {
+    "meta-language": [
+      { "wordings": ["qué es", "qué es esto", "qué significa"] },
+      { "wordings": ["no entiendo", "no lo entiendo"] },
+      { "wordings": ["más despacio", "más despacio por favor", "habla más despacio"], "lemmas": { "habla": "hablar" } },
+      { "wordings": ["cómo se dice", "cómo se llama"], "lemmas": { "llama": "llamar" } }
+    ],
+    "greet": [
+      { "wordings": ["hola"] },
+      { "wordings": ["buenos días"] },
+      { "wordings": ["buenas tardes"] },
+      { "wordings": ["buenas noches"] },
+      { "wordings": ["buenas"] },
+      { "wordings": ["qué tal"] }
+    ],
+    "introduce-self": [
+      { "wordings": ["me llamo"] },
+      { "wordings": ["mi nombre es"] },
+      { "wordings": ["mucho gusto"] }
+    ],
+    "thank": [
+      { "wordings": ["gracias"] },
+      { "wordings": ["muchas gracias"] },
+      { "wordings": ["mil gracias"] }
+    ],
+    "acknowledge": [
+      { "wordings": ["sí"] },
+      { "wordings": ["claro", "claro que sí"] },
+      { "wordings": ["vale"], "lemmas": { "vale": "valer" } },
+      { "wordings": ["de acuerdo"] },
+      { "wordings": ["entendido"] },
+      { "wordings": ["perfecto"] },
+      { "wordings": ["genial"] },
+      { "wordings": ["bueno"] }
+    ],
+    "farewell": [
+      { "wordings": ["adiós"] },
+      { "wordings": ["hasta luego"] },
+      { "wordings": ["hasta pronto"] },
+      { "wordings": ["hasta mañana"] },
+      { "wordings": ["nos vemos"] },
+      { "wordings": ["chao", "chau"] }
+    ],
+    "request": [
+      { "wordings": ["por favor"] },
+      { "wordings": ["me das", "me puedes dar", "me puede dar"] }
+    ],
+    "ask-meaning": [
+      { "wordings": ["qué es esto", "qué es eso"] }
+    ],
+    "ask-where": [
+      { "wordings": ["dónde está"] }
+    ],
+    "ask-price": [
+      { "wordings": ["cuánto cuesta", "cuánto vale"], "lemmas": { "cuesta": "costar", "vale": "valer" } }
+    ],
+    "accept-offer": [
+      { "wordings": ["me lo llevo", "lo quiero"] }
+    ],
+    "refuse-politely": [
+      { "wordings": ["no gracias", "no, gracias"] }
+    ],
+    "say-when": [
+      { "wordings": ["fin de semana", "el fin de semana", "los fines de semana", "fines de semana"] }
+    ],
+    "state-schedule": [
+      { "wordings": ["tiempo libre", "el tiempo libre", "mi tiempo libre"] }
+    ],
+    "understand-location": [
+      { "wordings": ["en casa", "en la casa"] }
+    ]
+  }
+}

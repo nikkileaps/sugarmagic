@@ -61,7 +61,7 @@ export function createSugarlangDialogueContribution(): {
    * term -> what the player gets credit for touching it.
    *
    * A term is a SURFACE now (`hablo`), and a card is keyed by the thing it
-   * teaches (`hablar`, or `chunk:<id>` for a phrase). Without this the surface
+   * teaches (`hablar`, or `exponent:<id>` for a phrase). Without this the surface
    * itself would be written as the card key, which nothing can read back --
    * observe rejects it and the hover is dropped.
    */

@@ -42,7 +42,7 @@ function createService(client: SugarlangLLMClient): GradedTextService {
   return new GradedTextService({
     llmClient: client,
     atlas: createTestAtlasProvider("es", []),
-    inventoryChunks: []
+    inventoryExponents: []
   });
 }
 

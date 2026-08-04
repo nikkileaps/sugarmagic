@@ -1,68 +1,137 @@
 {
-  "schemaVersion": "1",
+  "schemaVersion": "2",
   "lang": "es",
+  "lessons": [
+    {
+      "lessonId": "social-contact",
+      "band": "A1",
+      "ordinal": 1,
+      "displayName": "Social Contact"
+    },
+    {
+      "lessonId": "surroundings",
+      "band": "A1",
+      "ordinal": 4,
+      "displayName": "Immediate Surroundings"
+    },
+    {
+      "lessonId": "buying-things",
+      "band": "A1",
+      "ordinal": 6,
+      "displayName": "Buying Things"
+    },
+    {
+      "lessonId": "time",
+      "band": "A1",
+      "ordinal": 7,
+      "displayName": "Time and Scheduling"
+    },
+    {
+      "lessonId": "places",
+      "band": "A1",
+      "ordinal": 9,
+      "displayName": "Places and Directions"
+    },
+    {
+      "lessonId": "wants-and-needs",
+      "band": "A1",
+      "ordinal": 13,
+      "displayName": "Simple Wants, Needs and Intentions"
+    },
+    {
+      "lessonId": "likes-and-dislikes",
+      "band": "A1",
+      "ordinal": 14,
+      "displayName": "Likes, Dislikes and Simple Reactions"
+    },
+    {
+      "lessonId": "asking-for-help-understanding",
+      "band": "A1",
+      "ordinal": 15,
+      "displayName": "Asking for Help Understanding"
+    }
+  ],
   "competencies": [
     {
-      "competencyId": "meta-language",
-      "displayName": "Meta-language",
-      "cefrDescriptor": "Can ask for clarification and slowing down in the target language.",
+      "competencyId": "farewell",
+      "lessonId": "social-contact",
+      "displayName": "Farewell",
+      "cefrDescriptor": "Can take leave of someone with a simple expression.",
       "band": "A1",
-      "isItemZero": true,
-      "placementGateBand": "A2",
-      "chunks": {
+      "interpretLexiconCategory": "farewell",
+      "exponents": {
         "es": [
           {
-            "chunkId": "que_es",
-            "normalizedForm": "que_es",
+            "exponentId": "adios",
+            "normalizedForm": "adios",
             "surfaceForms": [
-              "que es",
-              "que es esto",
-              "que significa"
+              "adiós",
+              "adios"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "que",
-              "ser"
+              "adiós"
             ]
           },
           {
-            "chunkId": "no_entiendo",
-            "normalizedForm": "no_entiendo",
+            "exponentId": "hasta_luego",
+            "normalizedForm": "hasta_luego",
             "surfaceForms": [
-              "no entiendo",
-              "no lo entiendo"
+              "hasta luego"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "no",
-              "entender"
+              "hasta",
+              "luego"
             ]
           },
           {
-            "chunkId": "mas_despacio",
-            "normalizedForm": "mas_despacio",
+            "exponentId": "hasta_pronto",
+            "normalizedForm": "hasta_pronto",
             "surfaceForms": [
-              "mas despacio",
-              "mas despacio por favor",
-              "habla mas despacio"
+              "hasta pronto"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "mas",
-              "despacio"
+              "hasta",
+              "pronto"
             ]
           },
           {
-            "chunkId": "como_se_dice",
-            "normalizedForm": "como_se_dice",
+            "exponentId": "hasta_manana",
+            "normalizedForm": "hasta_manana",
             "surfaceForms": [
-              "como se dice",
-              "como se llama"
+              "hasta mañana",
+              "hasta manana"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "como",
-              "decir"
+              "hasta",
+              "mañana"
+            ]
+          },
+          {
+            "exponentId": "nos_vemos",
+            "normalizedForm": "nos_vemos",
+            "surfaceForms": [
+              "nos vemos"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ver"
+            ]
+          },
+          {
+            "exponentId": "chao",
+            "normalizedForm": "chao",
+            "surfaceForms": [
+              "chao",
+              "chau"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "chao",
+              "chau"
             ]
           }
         ]
@@ -70,14 +139,15 @@
     },
     {
       "competencyId": "greet",
+      "lessonId": "social-contact",
       "displayName": "Greet",
-      "cefrDescriptor": "Can greet people in a simple way.",
+      "cefrDescriptor": "Can greet someone and respond to a greeting.",
       "band": "A1",
       "interpretLexiconCategory": "greeting",
-      "chunks": {
+      "exponents": {
         "es": [
           {
-            "chunkId": "hola",
+            "exponentId": "hola",
             "normalizedForm": "hola",
             "surfaceForms": [
               "hola"
@@ -88,20 +158,20 @@
             ]
           },
           {
-            "chunkId": "buenos_dias",
+            "exponentId": "buenos_dias",
             "normalizedForm": "buenos_dias",
             "surfaceForms": [
-              "buenos dias",
-              "buenos días"
+              "buenos días",
+              "buenos dias"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
               "bueno",
-              "dia"
+              "día"
             ]
           },
           {
-            "chunkId": "buenas_tardes",
+            "exponentId": "buenas_tardes",
             "normalizedForm": "buenas_tardes",
             "surfaceForms": [
               "buenas tardes"
@@ -113,7 +183,7 @@
             ]
           },
           {
-            "chunkId": "buenas_noches",
+            "exponentId": "buenas_noches",
             "normalizedForm": "buenas_noches",
             "surfaceForms": [
               "buenas noches"
@@ -125,7 +195,7 @@
             ]
           },
           {
-            "chunkId": "buenas",
+            "exponentId": "buenas",
             "normalizedForm": "buenas",
             "surfaceForms": [
               "buenas"
@@ -136,13 +206,13 @@
             ]
           },
           {
-            "chunkId": "que_tal",
+            "exponentId": "que_tal",
             "normalizedForm": "que_tal",
             "surfaceForms": [
-              "que tal",
-              "qué tal"
+              "qué tal",
+              "que tal"
             ],
-            "cefrBand": "A2",
+            "cefrBand": "A1",
             "constituentLemmas": [
               "qué",
               "tal"
@@ -153,25 +223,25 @@
     },
     {
       "competencyId": "introduce-self",
-      "displayName": "Introduce yourself",
+      "lessonId": "social-contact",
+      "displayName": "Introduce self",
       "cefrDescriptor": "Can say their own name and introduce themselves simply.",
       "band": "A1",
-      "chunks": {
+      "exponents": {
         "es": [
           {
-            "chunkId": "me_llamo",
+            "exponentId": "me_llamo",
             "normalizedForm": "me_llamo",
             "surfaceForms": [
               "me llamo"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "me",
               "llamar"
             ]
           },
           {
-            "chunkId": "mi_nombre_es",
+            "exponentId": "mi_nombre_es",
             "normalizedForm": "mi_nombre_es",
             "surfaceForms": [
               "mi nombre es"
@@ -183,7 +253,7 @@
             ]
           },
           {
-            "chunkId": "mucho_gusto",
+            "exponentId": "mucho_gusto",
             "normalizedForm": "mucho_gusto",
             "surfaceForms": [
               "mucho gusto"
@@ -199,14 +269,15 @@
     },
     {
       "competencyId": "thank",
+      "lessonId": "social-contact",
       "displayName": "Thank",
       "cefrDescriptor": "Can thank someone simply.",
       "band": "A1",
       "interpretLexiconCategory": "gratitude",
-      "chunks": {
+      "exponents": {
         "es": [
           {
-            "chunkId": "gracias",
+            "exponentId": "gracias",
             "normalizedForm": "gracias",
             "surfaceForms": [
               "gracias"
@@ -217,7 +288,7 @@
             ]
           },
           {
-            "chunkId": "muchas_gracias",
+            "exponentId": "muchas_gracias",
             "normalizedForm": "muchas_gracias",
             "surfaceForms": [
               "muchas gracias"
@@ -229,12 +300,12 @@
             ]
           },
           {
-            "chunkId": "mil_gracias",
+            "exponentId": "mil_gracias",
             "normalizedForm": "mil_gracias",
             "surfaceForms": [
               "mil gracias"
             ],
-            "cefrBand": "A2",
+            "cefrBand": "A1",
             "constituentLemmas": [
               "mil",
               "gracia"
@@ -244,302 +315,45 @@
       }
     },
     {
-      "competencyId": "acknowledge",
-      "displayName": "Acknowledge",
-      "cefrDescriptor": "Can signal understanding or agreement with simple expressions.",
+      "competencyId": "understand-location",
+      "lessonId": "surroundings",
+      "displayName": "Understand location words",
+      "cefrDescriptor": "Can understand basic location words.",
       "band": "A1",
-      "interpretLexiconCategory": "acknowledgement",
-      "chunks": {
+      "exponents": {
         "es": [
           {
-            "chunkId": "si",
-            "normalizedForm": "si",
+            "exponentId": "en_casa",
+            "normalizedForm": "en_casa",
             "surfaceForms": [
-              "si",
-              "si",
-              "sí"
+              "en casa",
+              "en la casa"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "si"
-            ]
-          },
-          {
-            "chunkId": "claro",
-            "normalizedForm": "claro",
-            "surfaceForms": [
-              "claro",
-              "claro que si"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "claro"
-            ]
-          },
-          {
-            "chunkId": "vale",
-            "normalizedForm": "vale",
-            "surfaceForms": [
-              "vale"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "valer"
-            ]
-          },
-          {
-            "chunkId": "de_acuerdo",
-            "normalizedForm": "de_acuerdo",
-            "surfaceForms": [
-              "de acuerdo"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "acuerdo"
-            ]
-          },
-          {
-            "chunkId": "entendido",
-            "normalizedForm": "entendido",
-            "surfaceForms": [
-              "entendido"
-            ],
-            "cefrBand": "A2",
-            "constituentLemmas": [
-              "entender"
-            ]
-          },
-          {
-            "chunkId": "perfecto",
-            "normalizedForm": "perfecto",
-            "surfaceForms": [
-              "perfecto"
-            ],
-            "cefrBand": "A2",
-            "constituentLemmas": [
-              "perfecto"
-            ]
-          },
-          {
-            "chunkId": "genial",
-            "normalizedForm": "genial",
-            "surfaceForms": [
-              "genial"
-            ],
-            "cefrBand": "A2",
-            "constituentLemmas": [
-              "genial"
-            ]
-          },
-          {
-            "chunkId": "bueno",
-            "normalizedForm": "bueno",
-            "surfaceForms": [
-              "bueno"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "bueno"
+              "en",
+              "casa"
             ]
           }
         ]
       }
     },
     {
-      "competencyId": "farewell",
-      "displayName": "Farewell",
-      "cefrDescriptor": "Can take leave of someone with a simple expression.",
+      "competencyId": "accept-offer",
+      "lessonId": "buying-things",
+      "displayName": "Accept an offer",
+      "cefrDescriptor": "Can accept an offered item.",
       "band": "A1",
-      "interpretLexiconCategory": "farewell",
-      "chunks": {
+      "exponents": {
         "es": [
           {
-            "chunkId": "adios",
-            "normalizedForm": "adios",
-            "surfaceForms": [
-              "adios",
-              "adiós"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "adios"
-            ]
-          },
-          {
-            "chunkId": "hasta_luego",
-            "normalizedForm": "hasta_luego",
-            "surfaceForms": [
-              "hasta luego"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "hasta",
-              "luego"
-            ]
-          },
-          {
-            "chunkId": "hasta_pronto",
-            "normalizedForm": "hasta_pronto",
-            "surfaceForms": [
-              "hasta pronto"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "hasta",
-              "pronto"
-            ]
-          },
-          {
-            "chunkId": "hasta_manana",
-            "normalizedForm": "hasta_manana",
-            "surfaceForms": [
-              "hasta manana",
-              "hasta mañana"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "hasta",
-              "manana"
-            ]
-          },
-          {
-            "chunkId": "nos_vemos",
-            "normalizedForm": "nos_vemos",
-            "surfaceForms": [
-              "nos vemos"
-            ],
-            "cefrBand": "A2",
-            "constituentLemmas": [
-              "ver"
-            ]
-          },
-          {
-            "chunkId": "chao",
-            "normalizedForm": "chao",
-            "surfaceForms": [
-              "chao",
-              "chau"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "chao"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "competencyId": "request",
-      "displayName": "Request",
-      "cefrDescriptor": "Can make a simple request or ask for something.",
-      "band": "A1",
-      "chunks": {
-        "es": [
-          {
-            "chunkId": "por_favor",
-            "normalizedForm": "por_favor",
-            "surfaceForms": [
-              "por favor"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "por",
-              "favor"
-            ]
-          },
-          {
-            "chunkId": "me_das",
-            "normalizedForm": "me_das",
-            "surfaceForms": [
-              "me das",
-              "me puedes dar",
-              "me puede dar"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "dar"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "competencyId": "ask-what",
-      "displayName": "Ask what something is",
-      "cefrDescriptor": "Can ask what something is called or what it means.",
-      "band": "A1",
-      "chunks": {
-        "es": [
-          {
-            "chunkId": "que_es_esto",
-            "normalizedForm": "que_es_esto",
-            "surfaceForms": [
-              "que es esto",
-              "que es eso"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "que",
-              "ser",
-              "esto"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "competencyId": "ask-where",
-      "displayName": "Ask where something is",
-      "cefrDescriptor": "Can ask where a place or person is.",
-      "band": "A1",
-      "chunks": {
-        "es": [
-          {
-            "chunkId": "donde_esta",
-            "normalizedForm": "donde_esta",
-            "surfaceForms": [
-              "donde esta",
-              "donde está"
-            ],
-            "cefrBand": "A1",
-            "constituentLemmas": [
-              "donde",
-              "estar"
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "competencyId": "buy",
-      "displayName": "Buy / transact",
-      "cefrDescriptor": "Can handle simple transactions and ask prices.",
-      "band": "A2",
-      "chunks": {
-        "es": [
-          {
-            "chunkId": "cuanto_cuesta",
-            "normalizedForm": "cuanto_cuesta",
-            "surfaceForms": [
-              "cuanto cuesta",
-              "cuánto cuesta",
-              "cuanto vale",
-              "cuánto vale"
-            ],
-            "cefrBand": "A2",
-            "constituentLemmas": [
-              "cuanto",
-              "costar"
-            ]
-          },
-          {
-            "chunkId": "me_lo_llevo",
+            "exponentId": "me_lo_llevo",
             "normalizedForm": "me_lo_llevo",
             "surfaceForms": [
               "me lo llevo",
               "lo quiero"
             ],
-            "cefrBand": "A2",
+            "cefrBand": "A1",
             "constituentLemmas": [
               "llevar",
               "querer"
@@ -549,14 +363,42 @@
       }
     },
     {
-      "competencyId": "refuse-politely",
-      "displayName": "Refuse politely",
-      "cefrDescriptor": "Can decline something politely.",
+      "competencyId": "ask-price",
+      "lessonId": "buying-things",
+      "displayName": "Ask the price",
+      "cefrDescriptor": "Can ask how much something costs.",
       "band": "A1",
-      "chunks": {
+      "exponents": {
         "es": [
           {
-            "chunkId": "no_gracias",
+            "exponentId": "cuanto_cuesta",
+            "normalizedForm": "cuanto_cuesta",
+            "surfaceForms": [
+              "cuánto cuesta",
+              "cuanto cuesta",
+              "cuánto vale",
+              "cuanto vale"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cuánto",
+              "costar",
+              "valer"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "refuse-politely",
+      "lessonId": "buying-things",
+      "displayName": "Decline politely",
+      "cefrDescriptor": "Can decline something politely.",
+      "band": "A1",
+      "exponents": {
+        "es": [
+          {
+            "exponentId": "no_gracias",
             "normalizedForm": "no_gracias",
             "surfaceForms": [
               "no gracias",
@@ -573,13 +415,14 @@
     },
     {
       "competencyId": "say-when",
-      "displayName": "Say when",
+      "lessonId": "time",
+      "displayName": "Say when something happens",
       "cefrDescriptor": "Can say when an activity happens.",
       "band": "A1",
-      "chunks": {
+      "exponents": {
         "es": [
           {
-            "chunkId": "fin_de_semana",
+            "exponentId": "fin_de_semana",
             "normalizedForm": "fin_de_semana",
             "surfaceForms": [
               "fin de semana",
@@ -599,13 +442,14 @@
     },
     {
       "competencyId": "state-schedule",
-      "displayName": "State a schedule",
+      "lessonId": "time",
+      "displayName": "State a daily schedule",
       "cefrDescriptor": "Can state a basic daily schedule.",
       "band": "A1",
-      "chunks": {
+      "exponents": {
         "es": [
           {
-            "chunkId": "tiempo_libre",
+            "exponentId": "tiempo_libre",
             "normalizedForm": "tiempo_libre",
             "surfaceForms": [
               "tiempo libre",
@@ -622,23 +466,276 @@
       }
     },
     {
-      "competencyId": "understand-location",
-      "displayName": "Understand location words",
-      "cefrDescriptor": "Can understand basic location words.",
+      "competencyId": "ask-where",
+      "lessonId": "places",
+      "displayName": "Ask where a place is",
+      "cefrDescriptor": "Can ask where a place or person is.",
       "band": "A1",
-      "chunks": {
+      "exponents": {
         "es": [
           {
-            "chunkId": "en_casa",
-            "normalizedForm": "en_casa",
+            "exponentId": "donde_esta",
+            "normalizedForm": "donde_esta",
             "surfaceForms": [
-              "en casa",
-              "en la casa"
+              "dónde está",
+              "donde esta"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "en",
-              "casa"
+              "dónde",
+              "estar"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "request",
+      "lessonId": "wants-and-needs",
+      "displayName": "Make a request",
+      "cefrDescriptor": "Can make a simple request or ask for something.",
+      "band": "A1",
+      "exponents": {
+        "es": [
+          {
+            "exponentId": "por_favor",
+            "normalizedForm": "por_favor",
+            "surfaceForms": [
+              "por favor"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "por",
+              "favor"
+            ]
+          },
+          {
+            "exponentId": "me_das",
+            "normalizedForm": "me_das",
+            "surfaceForms": [
+              "me das",
+              "me puedes dar",
+              "me puede dar"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dar",
+              "poder"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "acknowledge",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Acknowledge",
+      "cefrDescriptor": "Can signal understanding or agreement with simple expressions.",
+      "band": "A1",
+      "interpretLexiconCategory": "acknowledgement",
+      "exponents": {
+        "es": [
+          {
+            "exponentId": "si",
+            "normalizedForm": "si",
+            "surfaceForms": [
+              "sí",
+              "si"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sí"
+            ]
+          },
+          {
+            "exponentId": "claro",
+            "normalizedForm": "claro",
+            "surfaceForms": [
+              "claro",
+              "claro que sí",
+              "claro que si"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "claro",
+              "que",
+              "sí"
+            ]
+          },
+          {
+            "exponentId": "vale",
+            "normalizedForm": "vale",
+            "surfaceForms": [
+              "vale"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "valer"
+            ]
+          },
+          {
+            "exponentId": "de_acuerdo",
+            "normalizedForm": "de_acuerdo",
+            "surfaceForms": [
+              "de acuerdo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "de",
+              "acuerdo"
+            ]
+          },
+          {
+            "exponentId": "entendido",
+            "normalizedForm": "entendido",
+            "surfaceForms": [
+              "entendido"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "entender"
+            ]
+          },
+          {
+            "exponentId": "perfecto",
+            "normalizedForm": "perfecto",
+            "surfaceForms": [
+              "perfecto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "perfecto"
+            ]
+          },
+          {
+            "exponentId": "genial",
+            "normalizedForm": "genial",
+            "surfaceForms": [
+              "genial"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "genial"
+            ]
+          },
+          {
+            "exponentId": "bueno",
+            "normalizedForm": "bueno",
+            "surfaceForms": [
+              "bueno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "bueno"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-meaning",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Ask what a word means",
+      "cefrDescriptor": "Can ask what something is called or what it means.",
+      "band": "A1",
+      "exponents": {
+        "es": [
+          {
+            "exponentId": "que_es_esto",
+            "normalizedForm": "que_es_esto",
+            "surfaceForms": [
+              "qué es esto",
+              "que es esto",
+              "qué es eso",
+              "que es eso"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "qué",
+              "ser",
+              "esto",
+              "eso"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "meta-language",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Ask for clarification",
+      "cefrDescriptor": "Can ask for clarification and slowing down in the target language.",
+      "band": "A1",
+      "isItemZero": true,
+      "placementGateBand": "A2",
+      "exponents": {
+        "es": [
+          {
+            "exponentId": "que_es",
+            "normalizedForm": "que_es",
+            "surfaceForms": [
+              "qué es",
+              "que es",
+              "qué es esto",
+              "que es esto",
+              "qué significa",
+              "que significa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "qué",
+              "ser",
+              "esto",
+              "significar"
+            ]
+          },
+          {
+            "exponentId": "no_entiendo",
+            "normalizedForm": "no_entiendo",
+            "surfaceForms": [
+              "no entiendo",
+              "no lo entiendo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "no",
+              "entender"
+            ]
+          },
+          {
+            "exponentId": "mas_despacio",
+            "normalizedForm": "mas_despacio",
+            "surfaceForms": [
+              "más despacio",
+              "mas despacio",
+              "más despacio por favor",
+              "mas despacio por favor",
+              "habla más despacio",
+              "habla mas despacio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "más",
+              "despacio",
+              "por",
+              "favor",
+              "hablar"
+            ]
+          },
+          {
+            "exponentId": "como_se_dice",
+            "normalizedForm": "como_se_dice",
+            "surfaceForms": [
+              "cómo se dice",
+              "como se dice",
+              "cómo se llama",
+              "como se llama"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cómo",
+              "decir",
+              "llamar"
             ]
           }
         ]

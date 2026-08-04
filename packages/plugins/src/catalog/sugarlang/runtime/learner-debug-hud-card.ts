@@ -45,7 +45,7 @@ export interface LearnerDebugSnapshot {
   assessmentStatus: string;
   cefrConfidence: number;
   lemmaCards: LemmaCard[];
-  chunkCards: LemmaCard[];
+  exponentCards: LemmaCard[];
   teachRecordCount: number;
 }
 
@@ -225,7 +225,7 @@ function renderInto(
     return;
   }
 
-  const allCards = [...snapshot.lemmaCards, ...snapshot.chunkCards];
+  const allCards = [...snapshot.lemmaCards, ...snapshot.exponentCards];
   const dueCount = allCards.filter(
     (entry) => entry.retrievability < DUE_RETRIEVABILITY_FLOOR
   ).length;
@@ -240,7 +240,7 @@ function renderInto(
   appendMetric(
     card,
     "cards",
-    `${snapshot.lemmaCards.length} word / ${snapshot.chunkCards.length} competency`
+    `${snapshot.lemmaCards.length} word / ${snapshot.exponentCards.length} competency`
   );
   appendMetric(card, "due now", String(dueCount));
   appendMetric(card, "taught", String(snapshot.teachRecordCount));

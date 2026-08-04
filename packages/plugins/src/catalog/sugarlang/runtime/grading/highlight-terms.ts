@@ -39,11 +39,12 @@
  */
 
 import type { ChunkMatcher } from "../classifier/chunk-matcher";
+import type { Exponent } from "../contracts/competency-inventory";
 import type { LexicalAtlasProvider } from "../types";
 import type { TeachableRef } from "../contracts/teachable-ref";
 import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
 import { tokenize } from "../classifier/tokenize";
-import { getCompetencyForChunk } from "../inventory/competency-inventory-loader";
+import { getCompetencyForExponent } from "../inventory/competency-inventory-loader";
 import { allForms } from "../classifier/word-forms";
 
 export interface HighlightTerms {
@@ -60,10 +61,10 @@ export interface HighlightTerms {
    * several terms map to one teachable. Anything that identifies WHAT WAS
    * TAUGHT rather than where it is on screen needs this -- a hover writes a
    * persisted card, and cards live in two key spaces: an atlas lemma, or a
-   * competency's chunk (`chunk:<id>`). Without it the surface itself becomes
+   * competency's chunk (`exponent:<id>`). Without it the surface itself becomes
    * the key, which nothing can read back.
    *
-   * Deliberately NOT called `lemmaByTerm`: a `chunk:` id is not a lemma, and
+   * Deliberately NOT called `lemmaByTerm`: a `exponent:` id is not a lemma, and
    * `contracts/teachable-ref.ts` calls that prefix a lie told to a type. This
    * is the card key, and the name says so.
    */
@@ -115,7 +116,7 @@ export function buildHighlightTerms(args: {
   atlas: LexicalAtlasProvider;
   targetLanguage: string;
   supportLanguage: string;
-  chunkMatcher?: ChunkMatcher | null;
+  chunkMatcher?: ChunkMatcher<Exponent> | null;
 }): HighlightTerms {
   const {
     text,
@@ -195,8 +196,8 @@ export function buildHighlightTerms(args: {
     try {
       const tokens = tokenize(text, targetLanguage);
       for (const chunkMatch of chunkMatcher.match(tokens, text)) {
-        const competency = getCompetencyForChunk(
-          chunkMatch.chunk.chunkId,
+        const competency = getCompetencyForExponent(
+          chunkMatch.item.exponentId,
           targetLanguage
         );
         if (!competency) continue;
@@ -230,7 +231,7 @@ export function buildHighlightTerms(args: {
         // The ACT is what was taught, so the credit goes to the competency's
         // chunk rather than to any word inside the phrase. This is the key the
         // card store already uses.
-        creditByTerm[key] = `chunk:${chunkMatch.chunk.chunkId}`;
+        creditByTerm[key] = `exponent:${chunkMatch.item.exponentId}`;
       }
     } catch {
       // Phrase detection is an affordance. A failure must not cost the line its

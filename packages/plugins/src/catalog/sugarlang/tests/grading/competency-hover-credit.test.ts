@@ -23,7 +23,8 @@ import {
 } from "../../runtime/grading/highlight-terms";
 import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
 import { createChunkMatcher } from "../../runtime/classifier/chunk-matcher";
-import { getAllInventoryChunks } from "../../runtime/inventory/competency-inventory-loader";
+import { getAllInventoryExponents } from "../../runtime/inventory/competency-inventory-loader";
+import { tokenize } from "../../runtime/classifier/tokenize";
 import {
   createSugarlangDialogueContribution,
   drainPendingHover
@@ -32,7 +33,7 @@ import type { ConversationTurnEnvelope } from "@sugarmagic/runtime-core";
 import type { TeachableRef } from "../../runtime/contracts/teachable-ref";
 
 const atlas = new CefrLexAtlasProvider();
-const matcher = createChunkMatcher(getAllInventoryChunks("es"), "es");
+const matcher = createChunkMatcher(getAllInventoryExponents("es"), "es");
 
 function highlightFor(text: string) {
   return buildHighlightTerms({
@@ -81,19 +82,19 @@ describe("hovering a competency credits the competency", () => {
     // guard downstream accepted it and graded the WORD. It looked like it
     // worked. Greetings are almost always sentence-initial, so the broken case
     // was the normal one.
-    expect(creditForHoverIn("Hola, senor.", "Hola")).toBe("chunk:hola");
+    expect(creditForHoverIn("Hola, senor.", "Hola")).toBe("exponent:hola");
   });
 
   it("a multi-word greeting starting a sentence", () => {
     // This one failed differently: `Buenos dias` is not an atlas lemma, so the
     // guard rejected it and the hover was dropped entirely. Nothing recorded.
     expect(creditForHoverIn("Buenos dias, viajero.", "Buenos dias")).toBe(
-      "chunk:buenos_dias"
+      "exponent:buenos_dias"
     );
   });
 
   it("still works mid-sentence, which is the case that always worked", () => {
-    expect(creditForHoverIn("Pues hola.", "hola")).toBe("chunk:hola");
+    expect(creditForHoverIn("Pues hola.", "hola")).toBe("exponent:hola");
   });
 
   it("never credits a word that merely looks like the exponent", () => {
@@ -102,7 +103,7 @@ describe("hovering a competency credits the competency", () => {
     // stays at zero forever.
     const credit = creditForHoverIn("Hola, senor.", "Hola");
     expect(credit).not.toBe("hola");
-    expect(credit?.startsWith("chunk:")).toBe(true);
+    expect(credit?.startsWith("exponent:")).toBe(true);
   });
 });
 
@@ -110,7 +111,7 @@ describe("the keys both sides use agree", () => {
   it("credit and gloss are keyed by the same normalization", () => {
     const highlight = highlightFor("Hola, senor.");
     const key = termKey("Hola");
-    expect(highlight.creditByTerm[key]).toBe("chunk:hola");
+    expect(highlight.creditByTerm[key]).toBe("exponent:hola");
     expect(highlight.glosses[key]).toBeDefined();
   });
 
@@ -125,4 +126,31 @@ describe("the keys both sides use agree", () => {
     const highlight = highlightFor("Buenos dias, viajero.");
     expect(highlight.glosses[termKey("Buenos dias")]).toContain("greet");
   });
+});
+
+describe("a phrase is credited whether or not the player types the accents", () => {
+  // Every accented wording ships deaccented too, derived rather than authored.
+  // Asserting the data carries both spellings is not the same claim as
+  // asserting a typed line MATCHES, which is what a player actually does.
+  const both: Array<[string, string, string]> = [
+    ["buenos dias", "buenos días", "buenos_dias"],
+    ["adios", "adiós", "adios"],
+    ["hasta manana", "hasta mañana", "hasta_manana"],
+    ["donde esta", "dónde está", "donde_esta"],
+    ["cuanto cuesta", "cuánto cuesta", "cuanto_cuesta"],
+    ["que tal", "qué tal", "que_tal"],
+    ["si", "sí", "si"]
+  ];
+
+  for (const [plain, accented, exponentId] of both) {
+    it(`"${plain}" and "${accented}" both credit ${exponentId}`, () => {
+      for (const text of [plain, accented]) {
+        const hits = matcher.match(tokenize(text, "es"), text);
+        expect(
+          hits.map((hit) => hit.item.exponentId),
+          `"${text}" did not match`
+        ).toContain(exponentId);
+      }
+    });
+  }
 });

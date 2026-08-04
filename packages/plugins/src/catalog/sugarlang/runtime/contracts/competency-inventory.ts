@@ -1,19 +1,20 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/contracts/competency-inventory.ts
  *
- * Purpose: Declares the hand-curated competency inventory types used by the curriculum spine.
+ * Purpose: Declares the competency inventory types used by the curriculum spine.
  *
  * Exports:
  *   - INTERPRET_LEXICON_CATEGORIES
  *   - InterpretLexiconCategory
- *   - InventoryChunk
+ *   - Exponent
+ *   - Lesson
  *   - Competency
  *   - CompetencyInventory
  *
  * Relationships:
  *   - Consumed by competency-inventory-loader, competency-tag-resolver, and teacher middleware.
  *   - The inventory data lives in data/languages/{lang}/competency-inventory.json.
- *   - InventoryChunk mirrors LexicalChunk minus extraction metadata; the join field is normalizedForm.
+ *   - An Exponent joins to a scene-extracted LexicalChunk on normalizedForm.
  *
  * Implements: Plan 085 story 085.2
  *
@@ -33,12 +34,15 @@ export const INTERPRET_LEXICON_CATEGORIES = [
 export type InterpretLexiconCategory = (typeof INTERPRET_LEXICON_CATEGORIES)[number];
 
 /**
- * A hand-curated formulaic sequence that realizes a competency.
- * Mirrors LexicalChunk but without LLM extraction metadata.
- * Join key to scene-extracted chunks: normalizedForm.
+ * A phrase that performs a competency in one language.
+ *
+ * Not the same thing as a chunk. A chunk is any multi-word expression the
+ * scene extractor found in text; an exponent is specifically a phrase that
+ * performs THIS competency. The two share a shape and a join key
+ * (normalizedForm) because the same matcher scans text for both.
  */
-export interface InventoryChunk {
-  chunkId: string;
+export interface Exponent {
+  exponentId: string;
   /** Underscore-normalized lowercase form -- join key to SceneVocabularyModel.chunks. */
   normalizedForm: string;
   /** Human-readable surface variants (may include diacritics, punctuation). */
@@ -47,11 +51,21 @@ export interface InventoryChunk {
   constituentLemmas: string[];
 }
 
+/** One topic within a band. `A1.5` is band plus ordinal, derived and not stored. */
+export interface Lesson {
+  lessonId: string;
+  band: CEFRBand;
+  ordinal: number;
+  displayName: string;
+}
+
 /**
  * One competency entry in the hand-curated inventory.
  */
 export interface Competency {
   competencyId: string;
+  /** The lesson this belongs to. Exactly one. */
+  lessonId: string;
   displayName: string;
   /** CEFR can-do descriptor (human-readable, not machine-actionable). */
   cefrDescriptor: string;
@@ -75,15 +89,20 @@ export interface Competency {
    * by interpretation.ts are valid. Item-zero recognition waits for epic F.
    */
   interpretLexiconCategory?: InterpretLexiconCategory;
-  /** Realizing chunks per language (BCP-47 key, e.g. "es"). */
-  chunks: Record<string, InventoryChunk[]>;
+  /** Performing phrases per language (BCP-47 key, e.g. "es"). */
+  exponents: Record<string, Exponent[]>;
 }
 
 /**
- * The full hand-curated competency inventory for one language.
+ * The competency inventory for one language.
+ *
+ * GENERATED. Built from data/curriculum/<band>.json and
+ * data/languages/<lang>/exponents.json by
+ * scripts/data-prep/build-spanish-competency-inventory.ts. Do not hand-edit.
  */
 export interface CompetencyInventory {
-  schemaVersion: "1";
+  schemaVersion: "2";
   lang: string;
+  lessons: Lesson[];
   competencies: Competency[];
 }

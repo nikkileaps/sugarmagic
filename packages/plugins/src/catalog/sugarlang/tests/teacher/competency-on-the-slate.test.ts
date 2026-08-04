@@ -7,7 +7,7 @@
  * WHY THIS FILE EXISTS
  *   Competency teaching has never had an end-to-end test, and that is exactly
  *   how it kept nearly disappearing. Before 090.4 a competency could only reach
- *   teaching by being flattened into a `chunk:` pseudo-lemma and smuggled
+ *   teaching by being flattened into a `exponent:` pseudo-lemma and smuggled
  *   through the lemma channel; removing the prescription block from the prompt
  *   severed that channel instantly and NOTHING failed.
  *
@@ -157,7 +157,9 @@ describe("a competency can be taught", () => {
       describe
     );
 
-    expect(overlay).toContain("Can greet people in a simple way");
+    // The descriptor comes from the authored curriculum, which is the only
+    // place one is written now -- the inventory is generated from it.
+    expect(overlay).toContain("Can greet someone and respond to a greeting");
     expect(overlay).toContain("hola");
     expect(overlay).not.toContain("Introduce vocabulary (try to use naturally this turn, not their English translations): greet.");
   });

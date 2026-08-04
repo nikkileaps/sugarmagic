@@ -59,7 +59,7 @@ import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/g
 import { GradedTextService } from "../../runtime/grading/graded-text-service";
 import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
 import { buildDialogueNodeContentHash } from "../../runtime/grading/sources/dialogue-node-source";
-import { getAllInventoryChunks } from "../../runtime/inventory/competency-inventory-loader";
+import { getAllInventoryExponents } from "../../runtime/inventory/competency-inventory-loader";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
 import {
   DIALOGUE_VARIANT_BANDS,
@@ -868,9 +868,9 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       if (!llmClient) return {};
       const cache = getCache(workspaceId);
       const contentHash = buildVariantContentHash(nodeId, nodeText);
-      let inventoryChunks: import("../../runtime/contracts/competency-inventory").InventoryChunk[] = [];
+      let inventoryExponents: import("../../runtime/contracts/competency-inventory").Exponent[] = [];
       try {
-        inventoryChunks = getAllInventoryChunks(targetLanguage);
+        inventoryExponents = getAllInventoryExponents(targetLanguage);
       } catch {
         // No inventory for this language -- generation proceeds without chunk context
       }
@@ -895,7 +895,7 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
                 nodeId,
                 ...(plan ? { teach: plan.slate, posture: plan.posture } : {})
               },
-              { llmClient, atlas, inventoryChunks }
+              { llmClient, atlas, inventoryExponents }
             );
             if (generated.variant) {
               await cache.set({ key: { lang: targetLanguage, band, contentHash, variantPromptVersion: VARIANT_PROMPT_VERSION }, variant: generated.variant });
@@ -929,13 +929,13 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       if (!llmClient) return {};
       const cache = getCache(workspaceId);
       const contentHash = buildItemViewContentHash(itemDefinitionId, field, text);
-      let inventoryChunks: import("../../runtime/contracts/competency-inventory").InventoryChunk[] = [];
+      let inventoryExponents: import("../../runtime/contracts/competency-inventory").Exponent[] = [];
       try {
-        inventoryChunks = getAllInventoryChunks(targetLanguage);
+        inventoryExponents = getAllInventoryExponents(targetLanguage);
       } catch {
         // No inventory for this language -- generation proceeds without chunk context
       }
-      const service = new GradedTextService({ llmClient, atlas, inventoryChunks });
+      const service = new GradedTextService({ llmClient, atlas, inventoryExponents });
       const result: Partial<Record<CEFRBand, BakedLineVariant>> = {};
       await Promise.all(
         ITEM_VARIANT_BANDS.map(async (band) => {

@@ -160,7 +160,7 @@ describe("SugarLangObserveMiddleware", () => {
         event.observationEvent?.observation.kind === "chunk-encountered"
     );
     expect(chunkObs).toBeDefined();
-    expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("chunk:buenos_dias");
+    expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("exponent:buenos_dias");
   });
 
   it("085.3: emits chunk-produced when player free-text input contains a chunk", async () => {
@@ -188,7 +188,7 @@ describe("SugarLangObserveMiddleware", () => {
         event.observationEvent?.observation.kind === "chunk-produced"
     );
     expect(chunkObs).toBeDefined();
-    expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("chunk:buenos_dias");
+    expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("exponent:buenos_dias");
   });
 
   it("090.11: a competency on the slate highlights the exponent the NPC actually said", async () => {
@@ -313,7 +313,7 @@ describe("SugarLangObserveMiddleware", () => {
         event.observationEvent?.observation.kind === "chunk-produced"
     );
     expect(chunkObs).toBeDefined();
-    expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("chunk:buenos_dias");
+    expect(chunkObs![0].observationEvent!.lemma.lemmaId).toBe("exponent:buenos_dias");
   });
 
   it("085.3: detects inventory chunks even when scene.chunks is absent", async () => {
@@ -423,8 +423,8 @@ describe("SugarLangObserveMiddleware", () => {
           // chunk card already exists in lemmaCards
           getCurrentProfile: vi.fn().mockResolvedValue(createTestLearnerProfile({
             lemmaCards: {
-              "chunk:buenos_dias": {
-                lemmaId: "chunk:buenos_dias",
+              "exponent:buenos_dias": {
+                lemmaId: "exponent:buenos_dias",
                 difficulty: 0.3,
                 stability: 1,
                 retrievability: 0.9,
@@ -475,8 +475,8 @@ describe("SugarLangObserveMiddleware", () => {
           provisionalEvidence: 2,
           provisionalEvidenceFirstSeenTurn: 1
         },
-        "chunk:buenos_dias": {
-          lemmaId: "chunk:buenos_dias",
+        "exponent:buenos_dias": {
+          lemmaId: "exponent:buenos_dias",
           difficulty: 0.3,
           stability: 1,
           retrievability: 0.9,
@@ -496,14 +496,14 @@ describe("SugarLangObserveMiddleware", () => {
     const pending = computePendingProvisionalLemmas(profile);
 
     // Only the real lemma (hola) appears; the chunk card is excluded.
-    expect(pending.map((p) => p.lemmaRef.lemmaId)).not.toContain("chunk:buenos_dias");
+    expect(pending.map((p) => p.lemmaRef.lemmaId)).not.toContain("exponent:buenos_dias");
     expect(pending.map((p) => p.lemmaRef.lemmaId)).toContain("hola");
   });
 });
 
 describe("hover observations are guarded by the dictionary", () => {
   // A LemmaCard is a persisted flashcard, and its key is either an atlas lemma
-  // or a chunk id (`chunk:<id>`). The hover term is whatever the presentation
+  // or a chunk id (`exponent:<id>`). The hover term is whatever the presentation
   // layer highlighted, and it reaches the reducer as `lemmaId` unchecked -- so
   // without a guard a competency exponent surface writes a card under a key in
   // neither space. 45 of the 56 shipped competency surfaces are not lemmas.
@@ -559,7 +559,7 @@ describe("hover observations are guarded by the dictionary", () => {
   });
 
   it("records a hover on a chunk id, which is the other valid key space", async () => {
-    const { middleware, execution, apply } = setup("chunk:buenos_dias", []);
+    const { middleware, execution, apply } = setup("exponent:buenos_dias", []);
     await middleware.finalize?.(execution, createTestTurn("Buenos dias!"));
     expect(hoverEvents(apply)).toHaveLength(1);
   });
@@ -567,10 +567,10 @@ describe("hover observations are guarded by the dictionary", () => {
   it("grades a hover on a competency BEING INTRODUCED as an introduction", async () => {
     // It used to grade every competency hover as a review -- "hovered", which
     // is FSRS "Hard" with a negative productive delta. The introduce check only
-    // looked at vocabulary refs, and a competency card is keyed `chunk:<id>`,
+    // looked at vocabulary refs, and a competency card is keyed `exponent:<id>`,
     // so it could never match. A learner reaching for the competency the
     // Teacher was introducing got marked down for engaging with it.
-    const { middleware, execution, apply } = setup("chunk:buenos_dias", []);
+    const { middleware, execution, apply } = setup("exponent:buenos_dias", []);
     execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({
       targetVocab: {
         introduce: [{ kind: "competency", competencyId: "greet", lang: "es" }],
@@ -591,7 +591,7 @@ describe("hover observations are guarded by the dictionary", () => {
   });
 
   it("still grades a competency NOT being introduced as a review", async () => {
-    const { middleware, execution, apply } = setup("chunk:buenos_dias", []);
+    const { middleware, execution, apply } = setup("exponent:buenos_dias", []);
     await middleware.finalize?.(execution, createTestTurn("Buenos dias!"));
     const kinds = (
       apply.mock.calls as Array<

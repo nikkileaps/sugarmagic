@@ -658,7 +658,14 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "much, many"
-      }
+      },
+      "forms": {
+        "ms": "mucho",
+        "fs": "mucha",
+        "mp": "muchos",
+        "fp": "muchas"
+      },
+      "formsSource": "authored"
     },
     "decir": {
       "lemmaId": "decir",
@@ -1263,7 +1270,14 @@
       "cefrPriorSource": "cefrlex",
       "glosses": {
         "en": "some, any"
-      }
+      },
+      "forms": {
+        "ms": "alguno",
+        "fs": "alguna",
+        "mp": "algunos",
+        "fp": "algunas"
+      },
+      "formsSource": "authored"
     },
     "porque": {
       "lemmaId": "porque",
@@ -226228,6 +226242,48 @@
         "pl": "señoras"
       },
       "formsSource": "authored"
+    },
+    "dónde": {
+      "lemmaId": "dónde",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adverb",
+        "pronoun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "where"
+      }
+    },
+    "cuándo": {
+      "lemmaId": "cuándo",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adverb",
+        "conjunction"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "when"
+      }
+    },
+    "cuál": {
+      "lemmaId": "cuál",
+      "lang": "es",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "pronoun",
+        "determiner"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "which, which one"
+      }
     }
   }
 }

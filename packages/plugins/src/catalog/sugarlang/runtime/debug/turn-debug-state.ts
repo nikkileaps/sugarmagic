@@ -29,7 +29,7 @@ import type { LearnerProgress } from "../learner/learner-progress";
 export interface ObservationRecord {
   /** The observation kind, e.g. "hovered", "chunk-encountered". */
   kind: string;
-  /** The card it landed on -- a lemma, or `chunk:<id>` for a competency. */
+  /** The card it landed on -- a lemma, or `exponent:<id>` for a competency. */
   cardKey: string;
   /**
    * The FSRS grade it produced, or null.

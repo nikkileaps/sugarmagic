@@ -93,7 +93,7 @@ describe("competency cards reach the learner state, by name", () => {
         learner: {
           ...createTeacherContext().learner,
           lemmaCards: {
-            "chunk:hola": createLemmaCard("chunk:hola", "A1", {
+            "exponent:hola": createLemmaCard("exponent:hola", "A1", {
               retrievability: 0.4,
               reviewCount: 2,
               lapseCount: 1,
@@ -111,7 +111,7 @@ describe("competency cards reach the learner state, by name", () => {
   }
 
   it("THE POINT: a competency the learner is forgetting appears in top due", () => {
-    // The lists dropped every `chunk:` card, so the Teacher could see that a
+    // The lists dropped every `exponent:` card, so the Teacher could see that a
     // learner was losing the word for cheese but not that they were losing how
     // to greet someone -- which is the half it can do more about.
     expect(withFadedGreeting()).toMatch(/- top due:.*Greet/);
@@ -120,7 +120,7 @@ describe("competency cards reach the learner state, by name", () => {
   it("names it readably, never as a card key", () => {
     const prompt = withFadedGreeting();
     expect(prompt).toContain("Greet: hola");
-    expect(prompt).not.toContain("chunk:hola");
+    expect(prompt).not.toContain("exponent:hola");
   });
 
   it("shows it in recently active too", () => {

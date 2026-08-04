@@ -24,7 +24,7 @@
 import type { CEFRBand } from "../cefr";
 import type { SupportPosture } from "../contracts/pedagogy";
 import type { VariantVerdict } from "../contracts/baked-variant";
-import type { InventoryChunk } from "../contracts/competency-inventory";
+import type { Exponent } from "../contracts/competency-inventory";
 import type { LexicalAtlasProvider } from "../types";
 import { applyMixedTextEnvelopePredicate } from "../classifier/envelope-rule";
 import { computeLanguageRatioVerdict } from "../classifier/language-ratio";
@@ -46,7 +46,7 @@ export interface VerifyLiveRenderInput {
   directedRatio: number;
   /** Required lemmas/chunks -- deterministic fidelity floor (>= half must appear in text). */
   introduce: Array<{ lemmaId: string; lang: string }>;
-  inventoryChunks: InventoryChunk[];
+  inventoryExponents: Exponent[];
   atlas: LexicalAtlasProvider;
 }
 
@@ -55,7 +55,7 @@ export interface VerifyLiveRenderInput {
  * No LLM calls -- the LLM fidelity judge is bake-only.
  */
 export function verifyLiveRender(input: VerifyLiveRenderInput): VariantVerdict {
-  const { text, targetLang, band, posture, directedRatio, introduce, inventoryChunks, atlas } =
+  const { text, targetLang, band, posture, directedRatio, introduce, inventoryExponents, atlas } =
     input;
 
   // Build a synthetic learner profile for this band (same pattern as generate-variant.ts).
@@ -84,7 +84,7 @@ export function verifyLiveRender(input: VerifyLiveRenderInput): VariantVerdict {
   };
 
   // Coverage profile shared by gates 1 and 2.
-  const chunkMatcher = createChunkMatcher(inventoryChunks, targetLang);
+  const chunkMatcher = createChunkMatcher(inventoryExponents, targetLang);
   const tokens = tokenize(text, targetLang);
   const profile = computeCoverage(
     tokens,

@@ -142,8 +142,8 @@ export interface SugarlangDebugState {
   pinnedBand: CEFRBand | null;
   /** 085.3: lemma cards in the learner store (excludes chunk cards). */
   lemmaCards: import("./learner").LemmaCard[];
-  /** 085.3: chunk cards (lemmaId starts with "chunk:") in the learner store. */
-  chunkCards: import("./learner").LemmaCard[];
+  /** 085.3: chunk cards (lemmaId starts with "exponent:") in the learner store. */
+  exponentCards: import("./learner").LemmaCard[];
   /** 085.5: teach records written for realized competencies. */
   teachRecords: import("./learner").TeachRecord[];
 }
@@ -491,8 +491,8 @@ export class SugarlangRuntimeServices {
       inCalibration: isInPostPlacementCalibration(profile),
       pinned: this._debugPinnedBand !== null,
       pinnedBand: this._debugPinnedBand,
-      lemmaCards: allCards.filter((c) => !c.lemmaId.startsWith("chunk:")),
-      chunkCards: allCards.filter((c) => c.lemmaId.startsWith("chunk:")),
+      lemmaCards: allCards.filter((c) => !c.lemmaId.startsWith("exponent:")),
+      exponentCards: allCards.filter((c) => c.lemmaId.startsWith("exponent:")),
       teachRecords
     };
   }

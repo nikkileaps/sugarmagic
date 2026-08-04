@@ -272,7 +272,7 @@ export class EnvelopeClassifier {
           timestamp: Date.now(),
           sceneId: options.sceneLexicon.sceneId,
           matchedChunks: profile.matchedChunkTokens.map((match) => ({
-            chunkId: match.chunkId,
+            normalizedForm: match.normalizedForm,
             cefrBand: match.cefrBand,
             surfaceMatched: match.surfaceMatched
           }))

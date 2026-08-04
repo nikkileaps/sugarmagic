@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 import { verifyLiveRender, type VerifyLiveRenderInput } from "../../runtime/compile/verify-live-render";
-import type { InventoryChunk } from "../../runtime/contracts/competency-inventory";
+import type { Exponent } from "../../runtime/contracts/competency-inventory";
 import { createTestAtlasProvider } from "./test-helpers";
 
 // Atlas with Spanish A1/B1 vocabulary sufficient for a basic check.
@@ -27,7 +27,7 @@ const testAtlas = createTestAtlasProvider("es", [
   { lemmaId: "bien", cefrPriorBand: "A1" }
 ]);
 
-const noChunks: InventoryChunk[] = [];
+const noChunks: Exponent[] = [];
 
 function makeInput(overrides: Partial<VerifyLiveRenderInput> = {}): VerifyLiveRenderInput {
   return {
@@ -37,7 +37,7 @@ function makeInput(overrides: Partial<VerifyLiveRenderInput> = {}): VerifyLiveRe
     posture: "target-dominant",
     directedRatio: 0.8,
     introduce: [],
-    inventoryChunks: noChunks,
+    inventoryExponents: noChunks,
     atlas: testAtlas,
     ...overrides
   };

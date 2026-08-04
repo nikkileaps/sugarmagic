@@ -357,7 +357,6 @@ describe("sugarlang runtime contracts", () => {
       matchedChunks: [chunk],
       matchedChunkTokens: [
         {
-          chunkId: chunk.chunkId,
           normalizedForm: chunk.normalizedForm,
           surfaceMatched: chunk.surfaceForms[0]!,
           start: 0,

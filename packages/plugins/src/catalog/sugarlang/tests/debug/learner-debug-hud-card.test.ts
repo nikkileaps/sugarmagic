@@ -19,7 +19,7 @@ import {
   isChunkCardKey
 } from "../../runtime/inventory/card-display-name";
 import { createLearnerDebugHudCard } from "../../runtime/learner-debug-hud-card";
-import { getAllInventoryChunks } from "../../runtime/inventory/competency-inventory-loader";
+import { getAllInventoryExponents } from "../../runtime/inventory/competency-inventory-loader";
 import type { DebugHudCardContext } from "@sugarmagic/runtime-core";
 
 interface FakeElement {
@@ -74,11 +74,11 @@ function makeCard(getSnapshot: () => Promise<null>) {
 
 describe("a card key becomes something a human can read", () => {
   it("THE POINT: a competency card resolves to its display name", () => {
-    // `chunk:que_tal` in a debug list is unreadable, and that unreadability is
+    // `exponent:que_tal` in a debug list is unreadable, and that unreadability is
     // the stated reason competency cards were kept out of the Teacher prompt.
-    const chunk = getAllInventoryChunks("es")[0];
-    const name = cardDisplayName(`chunk:${chunk.chunkId}`, "es");
-    expect(name).not.toContain("chunk:");
+    const chunk = getAllInventoryExponents("es")[0];
+    const name = cardDisplayName(`exponent:${chunk.exponentId}`, "es");
+    expect(name).not.toContain("exponent:");
     expect(name.length).toBeGreaterThan(0);
   });
 
@@ -89,17 +89,17 @@ describe("a card key becomes something a human can read", () => {
   it("falls back to the key when the chunk is unknown", () => {
     // An inventory edit can remove a chunk while a card for it survives. The
     // key is what you would grep for, so showing it beats showing nothing.
-    expect(cardDisplayName("chunk:not_a_real_chunk", "es")).toBe(
-      "chunk:not_a_real_chunk"
+    expect(cardDisplayName("exponent:not_a_real_exponent", "es")).toBe(
+      "exponent:not_a_real_exponent"
     );
   });
 
   it("does not resolve for a language with no inventory", () => {
-    expect(cardDisplayName("chunk:que_tal", "it")).toBe("chunk:que_tal");
+    expect(cardDisplayName("exponent:que_tal", "it")).toBe("exponent:que_tal");
   });
 
   it("knows which keys are competencies", () => {
-    expect(isChunkCardKey("chunk:que_tal")).toBe(true);
+    expect(isChunkCardKey("exponent:que_tal")).toBe(true);
     expect(isChunkCardKey("queso")).toBe(false);
   });
 });

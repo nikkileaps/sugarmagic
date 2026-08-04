@@ -187,7 +187,7 @@ describe("computeCoverage", () => {
     expect(profile.matchedChunks).toEqual(chunks);
     expect(profile.matchedChunkTokens[0]).toEqual(
       expect.objectContaining({
-        chunkId: "de_vez_en_cuando",
+        normalizedForm: "de_vez_en_cuando",
         surfaceMatched: "de vez en cuando",
         cefrBand: "A2"
       })

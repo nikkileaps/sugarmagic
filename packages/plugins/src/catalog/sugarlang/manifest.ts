@@ -183,7 +183,7 @@ export function createSugarlangPlugin(
         assessmentStatus: debugState.assessmentStatus,
         cefrConfidence: debugState.cefrConfidence,
         lemmaCards: debugState.lemmaCards,
-        chunkCards: debugState.chunkCards,
+        exponentCards: debugState.exponentCards,
         teachRecordCount: debugState.teachRecords.length
       };
     },

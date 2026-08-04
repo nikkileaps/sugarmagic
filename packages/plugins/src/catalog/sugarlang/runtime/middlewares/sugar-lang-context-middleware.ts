@@ -223,7 +223,7 @@ export function createSugarLangContextMiddleware(
       //
       // What used to be here: `budgeter.prescribe()` produced a ranked, capped
       // shortlist of lemmas; it was annotated for the teacher middleware, and
-      // scheduled competencies were expanded into `chunk:` pseudo-lemmas and
+      // scheduled competencies were expanded into `exponent:` pseudo-lemmas and
       // INJECTED into `prescription.introduce` so they could ride the lemma
       // channel. That shortlist was not an input to the Teacher's decision, it
       // WAS the decision -- the Teacher could only pick 1-2 items from what a

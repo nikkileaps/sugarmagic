@@ -4,30 +4,29 @@
  * Purpose: Turns a card key into something a human can read.
  *
  * Cards live in two key spaces: a lemma is its own word, and a competency is
- * stored as `chunk:<chunkId>`. The second one is unreadable -- `chunk:que_tal`
- * says nothing about greeting anyone -- and that unreadability is the stated
- * reason competency cards were kept out of the Teacher prompt in the first
- * place. Anywhere a card is shown, it goes through here.
+ * stored as `exponent:<exponentId>`. The second one is unreadable --
+ * `exponent:que_tal` says nothing about greeting anyone -- so anywhere a card
+ * is shown to a person, it goes through here.
  *
  * Exports:
- *   - CHUNK_CARD_PREFIX
+ *   - EXPONENT_CARD_PREFIX
  *   - isChunkCardKey
  *   - cardDisplayName
  *
  * Relationships:
- *   - Resolves through getCompetencyForChunk, which returns undefined when the
+ *   - Resolves through getCompetencyForExponent, which returns undefined when the
  *     language has no inventory.
  *
  * Status: active
  */
 
-import { getCompetencyForChunk } from "./competency-inventory-loader";
+import { getCompetencyForExponent } from "./competency-inventory-loader";
 
-export const CHUNK_CARD_PREFIX = "chunk:";
+export const EXPONENT_CARD_PREFIX = "exponent:";
 
 /** True when a card key belongs to a competency rather than a word. */
 export function isChunkCardKey(cardKey: string): boolean {
-  return cardKey.startsWith(CHUNK_CARD_PREFIX);
+  return cardKey.startsWith(EXPONENT_CARD_PREFIX);
 }
 
 /**
@@ -49,15 +48,15 @@ export function isChunkCardKey(cardKey: string): boolean {
  */
 export function cardDisplayName(cardKey: string, lang: string): string {
   if (!isChunkCardKey(cardKey)) return cardKey;
-  const chunkId = cardKey.slice(CHUNK_CARD_PREFIX.length);
-  const competency = getCompetencyForChunk(chunkId, lang);
+  const exponentId = cardKey.slice(EXPONENT_CARD_PREFIX.length);
+  const competency = getCompetencyForExponent(exponentId, lang);
   if (!competency) return cardKey;
 
   // Prefer the surface a speaker would say over the normalized id: `buenos
   // dias` reads, `buenos_dias` is a key with a costume on.
-  const chunk = (competency.chunks[lang] ?? []).find(
-    (candidate) => candidate.chunkId === chunkId
+  const exponent = (competency.exponents[lang] ?? []).find(
+    (candidate) => candidate.exponentId === exponentId
   );
-  const exponent = chunk?.surfaceForms[0] ?? chunkId;
-  return `${competency.displayName}: ${exponent}`;
+  const surface = exponent?.surfaceForms[0] ?? exponentId;
+  return `${competency.displayName}: ${surface}`;
 }

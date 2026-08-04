@@ -123,11 +123,9 @@ const lemmaRefSchema = {
 /**
  * 090.4: what the Teacher may name on the slate -- a word OR a competency.
  *
- * This schema is the thing that makes "introduce ask-where" expressible. While
- * `targetVocab` accepted only `lemmaRefSchema`, a competency could reach
- * teaching in exactly one way: flattened into a `chunk:` pseudo-lemma and
- * smuggled through the lemma channel. The union closes that side door by
- * opening a front one.
+ * This schema is what makes "introduce ask-where" expressible: `targetVocab`
+ * takes a union, so a competency is named directly rather than disguised as a
+ * word.
  *
  * `kind` is REQUIRED on both branches rather than defaulted to "vocabulary".
  * A default would mean a malformed competency silently parses as a word with a

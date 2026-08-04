@@ -487,7 +487,7 @@ export function createSugarLangTeacherMiddleware(
       const scheduledBiasTerms: string[] =
         learnerProgress && !learnerProgress.isColdStart
           ? learnerProgress.dueItemIds
-              .filter((id) => !id.startsWith("chunk:"))
+              .filter((id) => !id.startsWith("exponent:"))
               .slice(0, 3)
           : [];
       const contrib: SugarlangContributionShape = {

@@ -59,9 +59,12 @@ function board(
 }
 
 const COMPETENCIES = [
-  { competencyId: "greet", displayName: "Greet", cefrDescriptor: "", band: "A1" as const, chunks: {} },
-  { competencyId: "farewell", displayName: "Farewell", cefrDescriptor: "", band: "A1" as const, chunks: {} },
-  { competencyId: "buy", displayName: "Buy", cefrDescriptor: "", band: "B1" as const, chunks: {} }
+  { competencyId: "greet", displayName: "Greet", cefrDescriptor: "", band: "A1" as const, lessonId: "social-contact",
+      exponents: {} },
+  { competencyId: "farewell", displayName: "Farewell", cefrDescriptor: "", band: "A1" as const, lessonId: "social-contact",
+      exponents: {} },
+  { competencyId: "buy", displayName: "Buy", cefrDescriptor: "", band: "B1" as const, lessonId: "social-contact",
+      exponents: {} }
 ];
 
 // ---------- tests ----------
@@ -170,14 +173,14 @@ describe("OuterLoopScheduler", () => {
           learner: {
             cefrBand: "A2",
             lemmaCards: {
-              "chunk:que_tal": makeCard("chunk:que_tal", 0.2),
+              "exponent:que_tal": makeCard("exponent:que_tal", 0.2),
               queso: makeCard("queso", 0.2)
             }
           }
         })
       );
 
-      expect(state.dueItemIds).toEqual(["chunk:que_tal", "queso"]);
+      expect(state.dueItemIds).toEqual(["exponent:que_tal", "queso"]);
     });
   });
 

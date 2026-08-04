@@ -62,7 +62,7 @@ export interface LearnerProgress {
   /**
    * Cards the learner would no longer reliably recall.
    *
-   * Includes `chunk:` keys -- a competency card that has decayed is as much a
+   * Includes `exponent:` keys -- a competency card that has decayed is as much a
    * fact as a word card that has. Callers needing words only filter at the
    * point of use, where the reason for filtering is visible.
    */

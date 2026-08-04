@@ -91,7 +91,7 @@ export function computePendingProvisionalLemmas(
 ): PendingProvisional[] {
   const currentTurn = learner.currentSession?.turns ?? 0;
   return Object.values(learner.lemmaCards)
-    .filter((card) => !card.lemmaId.startsWith("chunk:") && card.provisionalEvidence > 0)
+    .filter((card) => !card.lemmaId.startsWith("exponent:") && card.provisionalEvidence > 0)
     .map((card) => ({
       lemmaRef: {
         lemmaId: card.lemmaId,

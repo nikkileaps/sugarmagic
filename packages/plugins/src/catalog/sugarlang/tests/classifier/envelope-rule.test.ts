@@ -233,7 +233,6 @@ describe("applyEnvelopeRule", () => {
         matchedChunks: [createChunk("de_vez_en_cuando")],
         matchedChunkTokens: [
           {
-            chunkId: "de_vez_en_cuando",
             normalizedForm: "de_vez_en_cuando",
             surfaceMatched: "de vez en cuando",
             start: 0,

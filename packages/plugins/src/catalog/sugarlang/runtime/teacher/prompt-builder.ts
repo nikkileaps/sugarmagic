@@ -390,14 +390,9 @@ export function formatSceneSnapshot(context: TeacherContext): string {
 /**
  * The competencies this curriculum can actually teach, by id.
  *
- * 090.10: THE MENU THAT WAS MISSING. `targetVocab` has accepted
- * `{kind: "competency", competencyId}` since 090.4a and the output-shape block
- * shows an example, but the id space was never stated -- so the Teacher could
- * only name a competency by guessing, and in practice competencies reached
- * teaching through a side door instead: the scheduler expanded them into
- * `chunk:` refs and they were injected into `prescription.introduce`. Deleting
- * the prescriber removes that door, so the menu has to exist first or
- * competency teaching stops with nothing failing.
+ * `targetVocab` accepts `{kind: "competency", competencyId}`, so the prompt
+ * has to state which ids exist. Without this list the Teacher can only guess
+ * an id, and a guess fails as an unknown competency.
  *
  * Read at prompt time from the inventory, deliberately: it is ten entries, it
  * is the same read-time resolution `resolveSceneTeachables` already does above,

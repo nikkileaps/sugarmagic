@@ -34,7 +34,7 @@ const TEACH_RECORDS_STORE = "teach-records";
 
 interface ProfileSnapshot {
   learnerId: string;
-  chunkCards: LemmaCard[];
+  exponentCards: LemmaCard[];
   teachRecords: TeachRecord[];
 }
 
@@ -85,8 +85,8 @@ async function loadAllProfiles(): Promise<ProfileSnapshot[]> {
     cardDbNames.map(async (dbName) => {
       const learnerId = dbName.slice(CARD_STORE_DB_NAME_PREFIX.length + 1);
       const allCards = await readStoreAll<LemmaCard>(dbName, LEMMA_CARDS_STORE);
-      const chunkCards = allCards.filter((c) => c.lemmaId.startsWith("chunk:"));
-      profileMap.set(learnerId, { learnerId, chunkCards, teachRecords: [] });
+      const exponentCards = allCards.filter((c) => c.lemmaId.startsWith("exponent:"));
+      profileMap.set(learnerId, { learnerId, exponentCards, teachRecords: [] });
     })
   );
 
@@ -98,13 +98,13 @@ async function loadAllProfiles(): Promise<ProfileSnapshot[]> {
       if (existing) {
         existing.teachRecords = teachRecords;
       } else {
-        profileMap.set(learnerId, { learnerId, chunkCards: [], teachRecords });
+        profileMap.set(learnerId, { learnerId, exponentCards: [], teachRecords });
       }
     })
   );
 
   return Array.from(profileMap.values()).filter(
-    (p) => p.chunkCards.length > 0 || p.teachRecords.length > 0
+    (p) => p.exponentCards.length > 0 || p.teachRecords.length > 0
   );
 }
 
@@ -195,10 +195,10 @@ export function LearnerCardInspector(): ReactElement {
               {profile.learnerId}
             </div>
             <div style={{ fontSize: "0.75rem", fontFamily: "var(--sm-font-mono, monospace)" }}>
-              chunk cards: {profile.chunkCards.length} | teach records: {profile.teachRecords.length}
+              competency cards: {profile.exponentCards.length} | teach records: {profile.teachRecords.length}
             </div>
 
-            {profile.chunkCards.length > 0 && (
+            {profile.exponentCards.length > 0 && (
               <details style={{ fontSize: "0.72rem" }}>
                 <summary
                   style={{ cursor: "pointer", color: "var(--sm-color-subtext, #6c7086)", marginBottom: "0.2rem" }}
@@ -214,7 +214,7 @@ export function LearnerCardInspector(): ReactElement {
                   }}
                 >
                   {/* Same unvalidated-IndexedDB caveat as teach records below. */}
-                  {profile.chunkCards.map((c, index) => (
+                  {profile.exponentCards.map((c, index) => (
                     <div key={`${c.lemmaId ?? "unreadable"}:${index}`}>
                       {c.lemmaId ?? "(unreadable record)"} [{c.cefrPriorBand ?? "?"}] pro{" "}
                       {typeof c.productiveStrength === "number"
