@@ -33,7 +33,7 @@ import {
   getAllInventoryChunks
 } from "../inventory/competency-inventory-loader";
 import { countDiverseEncounters } from "../learner";
-import { vocabularyRefs } from "../contracts/teachable-ref";
+import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
 import { buildHighlightTerms, focusTermsOf } from "../grading/highlight-terms";
 import { findAmbientSpans } from "../grading/ambient-spans";
 import { traceRealization } from "../teacher/teacher-trace";
@@ -107,6 +107,30 @@ function buildTargetLemmaSet(constraint: SugarlangConstraint): Set<string> {
       ...vocabularyRefs(constraint.targetVocab.introduce),
       ...vocabularyRefs(constraint.targetVocab.reinforce)
     ].map((lemma) => lemma.lemmaId)
+  );
+}
+
+/**
+ * Is this card key a competency the Teacher is INTRODUCING this turn?
+ *
+ * A competency card is keyed `chunk:<id>`, so it never appears in the slate's
+ * vocabulary refs and never will -- the slate names the competency, the card
+ * names the exponent. Resolving the chunk back to its competency is the join
+ * the two key spaces need.
+ */
+function isIntroducedCompetencyCard(
+  cardKey: string,
+  lang: string,
+  constraint: SugarlangConstraint
+): boolean {
+  if (!cardKey.startsWith("chunk:")) return false;
+  const competency = getInventoryCompetencyForChunk(
+    cardKey.slice("chunk:".length),
+    lang
+  );
+  if (!competency) return false;
+  return competencyRefs(constraint.targetVocab.introduce).some(
+    (ref) => ref.competencyId === competency.competencyId
   );
 }
 
@@ -514,9 +538,21 @@ export function createSugarLangObserveMiddleware(
         // Distinguish introduce hover (positive first exposure) from reinforce
         // hover (needed help remembering). See observations.ts for the
         // pedagogical rationale behind the different FSRS grades.
-        const isIntroduceHover = vocabularyRefs(constraint.targetVocab.introduce).some(
-          (l) => l.lemmaId === hoverLemma.lemma.lemmaId
-        );
+        //
+        // Competencies are checked as well as words. Checking only
+        // `vocabularyRefs` meant a `chunk:` card could never match, so every
+        // competency hover fell through to "hovered" -- graded Hard, with a
+        // negative productive delta. A learner reaching for a competency the
+        // Teacher was introducing was penalised for engaging with it.
+        const isIntroduceHover =
+          vocabularyRefs(constraint.targetVocab.introduce).some(
+            (l) => l.lemmaId === hoverLemma.lemma.lemmaId
+          ) ||
+          isIntroducedCompetencyCard(
+            hoverLemma.lemma.lemmaId,
+            hoverLemma.lemma.lang,
+            constraint
+          );
         const observationEvent = createObservationEvent({
           execution,
           lemma: hoverLemma.lemma,

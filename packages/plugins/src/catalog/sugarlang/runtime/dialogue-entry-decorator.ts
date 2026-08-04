@@ -26,6 +26,7 @@ import { isPlayerSpeaker, resolveDialogueSpeaker } from "@sugarmagic/domain";
 import { lookupSelection } from "./grading/lookup-selection";
 import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider";
 import { MorphologyLoader } from "./classifier/morphology-loader";
+import { termKey } from "./grading/highlight-terms";
 
 export interface PendingHover {
   lemmaId: string;
@@ -132,8 +133,13 @@ export function createSugarlangDialogueContribution(): {
     // old behaviour for anything with no credit recorded -- observe still
     // refuses it if the dictionary does not know it.
     const term = event.term;
-    const credit =
-      currentCreditByTerm[term] ?? currentCreditByTerm[term.toLowerCase()] ?? term;
+    // One normalization, shared with the side that writes the map. Doing it
+    // here with a local `toLowerCase` is what let the two drift: the writer
+    // kept the line's casing, so `Hola` at the start of a sentence never
+    // resolved and fell through to the raw term -- which, for a single-word
+    // exponent, is a real dictionary word, so the hover silently graded the
+    // WORD `hola` instead of the greeting it was teaching.
+    const credit = currentCreditByTerm[termKey(term)] ?? term;
     pendingHover = {
       lemmaId: credit,
       lang: event.lang || currentTargetLanguage,

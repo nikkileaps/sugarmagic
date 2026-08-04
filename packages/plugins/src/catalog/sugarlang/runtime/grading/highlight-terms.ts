@@ -71,6 +71,24 @@ export interface HighlightTerms {
 }
 
 /**
+ * The key `creditByTerm` and `glosses` are looked up by.
+ *
+ * Both maps are read with the hovered text, and a hover arrives lowercased. So
+ * both must be WRITTEN lowercased, or a term appearing with the line's own
+ * casing is never found. That is not a rare case: `Hola, senor.` puts the
+ * commonest greeting in the language at the start of a sentence.
+ *
+ * Exported so the reader normalizes with this function rather than its own
+ * `toLowerCase`. Two sides deciding independently is what broke it, and a
+ * shared function is what stops it happening again the next time normalization
+ * needs to handle something else -- accents, say, or a trailing punctuation
+ * mark the matcher keeps.
+ */
+export function termKey(term: string): string {
+  return term.toLowerCase();
+}
+
+/**
  * What `findTermMatches` scans for: the union, in introduce-then-reinforce
  * order.
  *
@@ -146,8 +164,9 @@ export function buildHighlightTerms(args: {
     ];
     for (const term of terms) {
       if (!target.includes(term)) target.push(term);
-      if (gloss && !glosses[term]) glosses[term] = gloss;
-      creditByTerm[term] = lemma.lemmaId;
+      const key = termKey(term);
+      if (gloss && !glosses[key]) glosses[key] = gloss;
+      creditByTerm[key] = lemma.lemmaId;
     }
   };
 
@@ -195,15 +214,23 @@ export function buildHighlightTerms(args: {
         const surface = chunkMatch.surfaceMatched.trim();
         if (surface.length === 0 || target.includes(surface)) continue;
 
+        // The TERM keeps the line's own casing, because it is displayed and
+        // because span matching is case-insensitive anyway.
         target.push(surface);
+        // The KEYS do not. A hover arrives lowercased, so a key carrying the
+        // line's casing is never found -- and `Hola` at the start of a sentence
+        // is the common case, not an edge one. The word branch above is keyed
+        // by lemma, which is lowercase by construction, so this side was the
+        // only one that disagreed.
+        const key = termKey(surface);
         // The can-do descriptor, because what is being taught is the ACT. "Can
         // greet people in a simple way" is the useful hover for `buenos dias`;
         // a word gloss would not be.
-        if (!glosses[surface]) glosses[surface] = competency.cefrDescriptor;
+        if (!glosses[key]) glosses[key] = competency.cefrDescriptor;
         // The ACT is what was taught, so the credit goes to the competency's
         // chunk rather than to any word inside the phrase. This is the key the
-        // card store already uses (observe-middleware:440).
-        creditByTerm[surface] = `chunk:${chunkMatch.chunk.chunkId}`;
+        // card store already uses.
+        creditByTerm[key] = `chunk:${chunkMatch.chunk.chunkId}`;
       }
     } catch {
       // Phrase detection is an affordance. A failure must not cost the line its

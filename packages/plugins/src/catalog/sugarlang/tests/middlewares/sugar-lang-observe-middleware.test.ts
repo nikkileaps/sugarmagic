@@ -230,7 +230,13 @@ describe("SugarLangObserveMiddleware", () => {
       false
     );
     // The hover explains the ACT, because that is what is being taught.
-    expect(highlight?.glosses?.["Buenos dias"]).toContain("greet");
+    //
+    // Keyed LOWERCASE even though the line capitalises it. This assertion used
+    // to read `glosses["Buenos dias"]`, which passed while the tooltip was
+    // broken in play: the reader looks up the hovered text, and a hover arrives
+    // lowercased, so a key carrying the line's casing was never found.
+    expect(highlight?.glosses?.["buenos dias"]).toContain("greet");
+    expect(highlight?.glosses?.["Buenos dias"]).toBeUndefined();
   });
 
   it("090.11: a slated competency whose exponent is ABSENT is not listed", async () => {
@@ -556,5 +562,42 @@ describe("hover observations are guarded by the dictionary", () => {
     const { middleware, execution, apply } = setup("chunk:buenos_dias", []);
     await middleware.finalize?.(execution, createTestTurn("Buenos dias!"));
     expect(hoverEvents(apply)).toHaveLength(1);
+  });
+
+  it("grades a hover on a competency BEING INTRODUCED as an introduction", async () => {
+    // It used to grade every competency hover as a review -- "hovered", which
+    // is FSRS "Hard" with a negative productive delta. The introduce check only
+    // looked at vocabulary refs, and a competency card is keyed `chunk:<id>`,
+    // so it could never match. A learner reaching for the competency the
+    // Teacher was introducing got marked down for engaging with it.
+    const { middleware, execution, apply } = setup("chunk:buenos_dias", []);
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint({
+      targetVocab: {
+        introduce: [{ kind: "competency", competencyId: "greet", lang: "es" }],
+        reinforce: [],
+        avoid: []
+      }
+    });
+    await middleware.finalize?.(execution, createTestTurn("Buenos dias!"));
+    const kinds = (
+      apply.mock.calls as Array<
+        [{ observationEvent?: { observation: { kind: string } } }]
+      >
+    )
+      .map(([e]) => e.observationEvent?.observation.kind)
+      .filter((kind): kind is string => typeof kind === "string");
+    expect(kinds).toContain("hovered-introduce");
+    expect(kinds).not.toContain("hovered");
+  });
+
+  it("still grades a competency NOT being introduced as a review", async () => {
+    const { middleware, execution, apply } = setup("chunk:buenos_dias", []);
+    await middleware.finalize?.(execution, createTestTurn("Buenos dias!"));
+    const kinds = (
+      apply.mock.calls as Array<
+        [{ observationEvent?: { observation: { kind: string } } }]
+      >
+    ).map(([e]) => e.observationEvent?.observation.kind);
+    expect(kinds).toContain("hovered");
   });
 });
