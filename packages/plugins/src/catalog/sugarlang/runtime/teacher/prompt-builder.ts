@@ -319,8 +319,41 @@ export function formatLearnerSummary(context: TeacherContext): string {
     `- known lemma cards: ${lemmaCardsOnly.length}`,
     `- top due: ${listOrNone(due)}`,
     `- recently active: ${listOrNone(active)}`,
-    `- struggling: ${listOrNone(struggling)}`
+    `- struggling: ${listOrNone(struggling)}`,
+    ...formatCompetencyStandingLines(context)
   ].join("\n");
+}
+
+/**
+ * What the learner has done with the curriculum.
+ *
+ * Counts, not verdicts. "met in 4 situations" is a fact; "needs 6 more" would
+ * be a judgement about what to teach, and the Teacher makes those against the
+ * situation, which is the only place the answer lives.
+ *
+ * The count is DIVERSE encounters -- distinct (npc, scene, day) slots -- so
+ * meeting a competency five times with one NPC in one room counts once. The
+ * wording has to say that: "seen 4x" reads as four repetitions and would
+ * overstate a learner who has only ever met it in one place.
+ *
+ * Competencies are named by id because that is the id space the Teacher must
+ * answer in -- a display name here and an id in the answer is a translation
+ * step nobody asked for.
+ */
+function formatCompetencyStandingLines(context: TeacherContext): string[] {
+  const state = context.curriculumState;
+  // Absent is not the same claim as "has met nothing", so say so.
+  if (!state) return ["- competencies met: (unknown)"];
+
+  const met = state.met.map((entry) =>
+    entry.encounterCount === 1
+      ? `${entry.competencyId} (met in 1 situation)`
+      : `${entry.competencyId} (met in ${entry.encounterCount} situations)`
+  );
+  return [
+    `- competencies met: ${listOrNone(met)}`,
+    `- competencies not yet met: ${listOrNone([...state.unmetCompetencyIds])}`
+  ];
 }
 
 export function formatRelationshipState(context: TeacherContext): string {

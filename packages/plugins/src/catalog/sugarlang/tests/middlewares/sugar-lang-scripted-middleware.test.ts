@@ -121,17 +121,15 @@ function scriptedExecution(
   return execution;
 }
 
-/** The schedule shape the deleted trigger required: a DUE teachable. */
+/** The learner state the deleted trigger required: a due item. */
 function dueSchedule() {
   return {
-    teachables: [
-      { id: "queso", kind: "vocabulary", teachReason: "due", affinityNpcIds: [] }
-    ],
+    met: [],
+    unmetCompetencyIds: [],
+    dueItemIds: ["queso"],
     isColdStart: false,
     sceneId: "scene-dock",
-    conversationId: "c1",
-    sceneComprehensionRate: 1,
-    stretchAllowanceActive: false
+    conversationId: "c1"
   };
 }
 

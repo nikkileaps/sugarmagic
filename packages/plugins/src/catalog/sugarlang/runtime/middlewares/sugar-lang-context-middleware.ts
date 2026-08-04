@@ -36,7 +36,7 @@ import {
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_QUEST_ESSENTIAL_IDS_ANNOTATION,
-  SUGARLANG_SCHEDULE_ANNOTATION,
+  SUGARLANG_CURRICULUM_STATE_ANNOTATION,
   buildLearnerSnapshot,
   computePendingProvisionalLemmas,
   computeProbeFloorState,
@@ -48,8 +48,6 @@ import {
 } from "./shared";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
 import type { SchedulerBoardView } from "../scheduler/scheduler-board-view";
-import type { TeachSchedule } from "../scheduler/teach-schedule";
-import { realizeCompetencyChunksFromSchedule } from "../scheduler/competency-chunk-realizer";
 import type { Competency } from "../contracts/competency-inventory";
 import { getWorldDay } from "@sugarmagic/runtime-core";
 
@@ -149,12 +147,10 @@ export function createSugarLangContextMiddleware(
       // 087.1: outer-loop schedule. Computed from the scene lexicon + learner state
       // that are already in hand. Fail-safe: any error means no annotation, which
       // preserves today's rendering behavior exactly.
-      // availableCompetencies is declared here so it's accessible for the post-prescribe
-      // function-chunk realization step (087.3).
       let availableCompetencies: Competency[] = [];
       try {
         const teachRecords = await services.teachRecordStore.list();
-        const activeDebts = await services.ledgerStore.getActiveDebts();
+        const encounterCounts = await services.ledgerStore.getEncounterCounts();
         try {
           availableCompetencies = loadCompetencyInventory(targetLanguage).competencies;
         } catch {
@@ -163,29 +159,24 @@ export function createSugarLangContextMiddleware(
         const board: SchedulerBoardView = {
           learner: {
             cefrBand: learner.estimatedCefrBand,
-            cefrConfidence: learner.assessment.cefrConfidence,
             lemmaCards: learner.lemmaCards,
           },
           curriculum: {
             introducedCompetencyIds: new Set(teachRecords.map((r) => r.competencyId)),
             availableCompetencies,
-            activeDebts
+            encounterCounts
           },
           scene: {
             sceneId,
-            dayIndex: blackboard ? getWorldDay(blackboard) : null,
-            sceneLemmaIds: (sceneLexicon?.lemmaIds ?? []).filter(
-              (id) => !id.startsWith("chunk:")
-            )
+            dayIndex: blackboard ? getWorldDay(blackboard) : null
           },
-          conversationId: getSugarlangConversationId(execution),
-          npcDefinitionId: execution.selection.npcDefinitionId ?? null,
-          targetLanguage
+          conversationId: getSugarlangConversationId(execution)
         };
-        execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] =
+        execution.annotations[SUGARLANG_CURRICULUM_STATE_ANNOTATION] =
           services.outerLoopScheduler.compute(board);
       } catch {
-        // Scheduler failure is non-fatal.
+        // Reporting failure is non-fatal: the Teacher runs without learner
+        // facts rather than not at all.
       }
 
       await services.learnerStateReducer.apply({

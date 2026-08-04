@@ -26,6 +26,7 @@ import type { PedagogicalDirective } from "./pedagogy";
 import type { CEFRBand } from "../cefr";
 import type { LearnerProfile, LemmaCard } from "../learner";
 import type { CefrPosterior } from "../learner";
+import type { LearnerCurriculumState } from "../scheduler/learner-curriculum-state";
 import type { Situation } from "../situation";
 import type { LemmaRef } from "./lexical-prescription";
 import type {
@@ -159,6 +160,15 @@ export interface TeacherContext {
    * empty situation, because those are different claims.
    */
   situation?: Situation;
+  /**
+   * Where the learner stands on the curriculum: competencies met and how often
+   * they have recurred, competencies never met, cards that have decayed.
+   *
+   * Facts, never a ranking. The Teacher weighs them against the situation and
+   * decides; nothing upstream is allowed to decide for it. Optional because a
+   * caller may have none, and absent is not the same claim as "nothing met".
+   */
+  curriculumState?: LearnerCurriculumState;
   lang: TeacherLanguageContext;
   calibrationActive: boolean;
 }

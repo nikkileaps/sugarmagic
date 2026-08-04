@@ -132,44 +132,42 @@ describe("MemoryEncounterDebtLedger", () => {
     });
   });
 
-  describe("getActiveDebts", () => {
-    it("returns empty map when no debts exist", async () => {
-      expect((await ledger.getActiveDebts()).size).toBe(0);
+  describe("getEncounterCounts", () => {
+    it("returns empty map when nothing is tracked", async () => {
+      expect((await ledger.getEncounterCounts()).size).toBe(0);
     });
 
-    it("includes newly created debts (0 encounters < target)", async () => {
+    it("reports a newly created item at zero", async () => {
       await ledger.createDebt("hola", "vocabulary", 1);
-      const active = await ledger.getActiveDebts();
-      expect(active.has("hola")).toBe(true);
-      expect(active.get("hola")!.diverseEncounterCount).toBe(0);
-      expect(active.get("hola")!.targetEncounters).toBe(TARGET_DEBT_ENCOUNTERS);
+      expect((await ledger.getEncounterCounts()).get("hola")).toBe(0);
     });
 
-    it("excludes fully-paid debts (diverseEncounterCount >= targetEncounters)", async () => {
+    it("KEEPS REPORTING an item past its target rather than dropping it", async () => {
+      // The old method filtered on diverseEncounterCount < targetEncounters, so
+      // a fully-paid item vanished. That comparison is a judgement about
+      // whether an item still needs teaching, and judgements about what to
+      // teach belong to the Teacher. The ledger reports the count.
       await ledger.createDebt("adios", "vocabulary", 1);
-      // Pay it down to exactly TARGET_DEBT_ENCOUNTERS diverse slots.
-      for (let i = 0; i < TARGET_DEBT_ENCOUNTERS; i++) {
+      for (let i = 0; i < TARGET_DEBT_ENCOUNTERS + 2; i++) {
         await ledger.recordEncounter("adios", entry(`npc-${i}`, "scene-1", 1));
       }
-      const active = await ledger.getActiveDebts();
-      expect(active.has("adios")).toBe(false);
+      expect((await ledger.getEncounterCounts()).get("adios")).toBe(
+        TARGET_DEBT_ENCOUNTERS + 2
+      );
     });
 
-    it("returns partial-debt status correctly", async () => {
+    it("counts diverse encounters, not raw ones", async () => {
       await ledger.createDebt("hola", "vocabulary", 1);
       await ledger.recordEncounter("hola", entry("npc-a", "scene-1", 1));
       await ledger.recordEncounter("hola", entry("npc-b", "scene-1", 1));
-      const active = await ledger.getActiveDebts();
-      expect(active.get("hola")!.diverseEncounterCount).toBe(2);
+      expect((await ledger.getEncounterCounts()).get("hola")).toBe(2);
     });
 
-    it("static-day degradation: diverse counting uses npc x scene only when dayIndex null", async () => {
+    it("static-day degradation: diversity is npc x scene when dayIndex is null", async () => {
       await ledger.createDebt("hola", "vocabulary", null);
-      // Same npc, same scene, but "different" in wall time -- should be ONE slot
       await ledger.recordEncounter("hola", entry("npc-a", "market", null));
       await ledger.recordEncounter("hola", entry("npc-a", "market", null));
-      const active = await ledger.getActiveDebts();
-      expect(active.get("hola")!.diverseEncounterCount).toBe(1);
+      expect((await ledger.getEncounterCounts()).get("hola")).toBe(1);
     });
   });
 

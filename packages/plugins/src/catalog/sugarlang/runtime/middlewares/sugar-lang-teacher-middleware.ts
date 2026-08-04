@@ -49,7 +49,7 @@ import {
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
-  SUGARLANG_SCHEDULE_ANNOTATION,
+  SUGARLANG_CURRICULUM_STATE_ANNOTATION,
   extractCharacterVoiceReminder,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
@@ -61,7 +61,7 @@ import {
   shouldRunSugarlangForExecution,
   type SugarlangLoggerLike
 } from "./shared";
-import type { TeachSchedule } from "../scheduler/teach-schedule";
+import type { LearnerCurriculumState } from "../scheduler/learner-curriculum-state";
 import { composeSituation, situationKey } from "../situation";
 import type { TeacherNpcContext, TeacherRecentTurn } from "../situation";
 import {
@@ -272,9 +272,9 @@ export function createSugarLangTeacherMiddleware(
       // would be true every turn, the middleware would return early every turn,
       // and the Teacher would never run again. Nothing would fail; NPCs would
       // just quietly go back to ungraded output.
-      const schedule = execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] as
-        | TeachSchedule
-        | undefined;
+      const curriculumState = execution.annotations[
+        SUGARLANG_CURRICULUM_STATE_ANNOTATION
+      ] as LearnerCurriculumState | undefined;
       const prePlacementOpeningLine = execution.annotations[
         SUGARLANG_PREPLACEMENT_LINE_ANNOTATION
       ] as SugarlangConstraint["prePlacementOpeningLine"] | undefined;
@@ -386,6 +386,7 @@ export function createSugarLangTeacherMiddleware(
           ...(situation === null
             ? {}
             : { situation, situationKey: situationKey(situation) }),
+          ...(curriculumState ? { curriculumState } : {}),
           lang: {
             targetLanguage: execution.selection.targetLanguage ?? learner.targetLanguage,
             supportLanguage: execution.selection.supportLanguage ?? learner.supportLanguage
@@ -476,17 +477,18 @@ export function createSugarLangTeacherMiddleware(
         constraint.targetLanguage,
         constraint.learnerCefr
       );
-      // 087.6: when the schedule drives the directive, publish the top scheduled
-      // lemma ids as retrieveBiasTerms so sugaragent's RetrieveStage can bias the
-      // vector-store query toward topics that exercise what the learner needs to
-      // practice. Fluency items (well-known lemmas recycled for ease) are excluded;
-      // only active teach targets are relevant for retrieval bias.
+      // Bias sugaragent's lore retrieval toward what the learner is due to
+      // practise. Due-ness is a fact about a card, so this survives the
+      // scheduler no longer ranking anything.
+      //
+      // Lemmas only, and the reason is retrieval rather than teaching: these
+      // become vector-store query terms. `queso` finds cheese lore; a
+      // competency id like `ask-where` is not a thing anyone wrote lore about.
       const scheduledBiasTerms: string[] =
-        schedule && !schedule.isColdStart
-          ? schedule.teachables
-              .filter((t) => t.kind === "vocabulary")
+        curriculumState && !curriculumState.isColdStart
+          ? curriculumState.dueItemIds
+              .filter((id) => !id.startsWith("chunk:"))
               .slice(0, 3)
-              .map((t) => t.id)
           : [];
       const contrib: SugarlangContributionShape = {
         schemaVersion: 1,

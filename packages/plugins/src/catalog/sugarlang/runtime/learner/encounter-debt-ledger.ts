@@ -12,7 +12,6 @@
  *   - ENCOUNTER_DEBT_DB_NAME_PREFIX
  *   - EncounterEntry
  *   - DebtRecord
- *   - DebtStatus
  *   - EncounterDebtLedger
  *   - MemoryEncounterDebtLedger
  *   - IndexedDBEncounterDebtLedger
@@ -62,20 +61,6 @@ export interface DebtRecord {
 }
 
 /**
- * Reduced debt state surfaced to the scheduler board.
- * Only unpaid debts appear in the board's activeDebts map.
- */
-export interface DebtStatus {
-  /** Carried from DebtRecord so the scheduler can classify the teachable
-   *  correctly -- a competency debt scheduled as kind "vocabulary" is unrealizable
-   *  (realizeCompetencyChunksFromSchedule only expands kind "competency") and
-   *  leaks its competencyId into lemma-only surfaces like retrieveBiasTerms. */
-  itemKind: "vocabulary" | "competency";
-  diverseEncounterCount: number;
-  targetEncounters: number;
-}
-
-/**
  * Count distinct diversity slots in an encounter list.
  * Two entries share a slot iff (npc, scene, day) are all equal
  * (with null === null for the day-axis-degraded case).
@@ -112,10 +97,14 @@ export interface EncounterDebtLedger {
   listDebts(): Promise<DebtRecord[]>;
 
   /**
-   * Returns a map of itemId -> DebtStatus for all unpaid debts
-   * (diverseEncounterCount < targetEncounters).
+   * Distinct encounters recorded against every tracked item.
+   *
+   * Every record, with no target applied. Comparing a count against
+   * `targetEncounters` to decide an item is still owed is a judgement about
+   * what to teach, and those belong to the Teacher -- so the ledger reports the
+   * count and says nothing about whether it is enough.
    */
-  getActiveDebts(): Promise<Map<string, DebtStatus>>;
+  getEncounterCounts(): Promise<Map<string, number>>;
 
   close?: () => Promise<void>;
 }
@@ -157,17 +146,10 @@ export class MemoryEncounterDebtLedger implements EncounterDebtLedger {
       .sort((a, b) => a.itemId.localeCompare(b.itemId));
   }
 
-  async getActiveDebts(): Promise<Map<string, DebtStatus>> {
-    const result = new Map<string, DebtStatus>();
+  async getEncounterCounts(): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
     for (const record of this.records.values()) {
-      const diverse = countDiverseEncounters(record.encounters);
-      if (diverse < record.targetEncounters) {
-        result.set(record.itemId, {
-          itemKind: record.itemKind,
-          diverseEncounterCount: diverse,
-          targetEncounters: record.targetEncounters
-        });
-      }
+      result.set(record.itemId, countDiverseEncounters(record.encounters));
     }
     return result;
   }
@@ -288,18 +270,10 @@ export class IndexedDBEncounterDebtLedger implements EncounterDebtLedger {
     });
   }
 
-  async getActiveDebts(): Promise<Map<string, DebtStatus>> {
-    const all = await this.listDebts();
-    const result = new Map<string, DebtStatus>();
-    for (const record of all) {
-      const diverse = countDiverseEncounters(record.encounters);
-      if (diverse < record.targetEncounters) {
-        result.set(record.itemId, {
-          itemKind: record.itemKind,
-          diverseEncounterCount: diverse,
-          targetEncounters: record.targetEncounters
-        });
-      }
+  async getEncounterCounts(): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    for (const record of await this.listDebts()) {
+      result.set(record.itemId, countDiverseEncounters(record.encounters));
     }
     return result;
   }
