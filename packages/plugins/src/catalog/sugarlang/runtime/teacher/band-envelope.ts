@@ -122,6 +122,41 @@ export function getIntroduceCapForBand(cefrBand: CEFRBand): number {
 }
 
 /**
+ * Does a line at this band say the subject pronoun out loud, or drop it?
+ *
+ * Spanish drops it: `Vendo queso` is the natural sentence and `Yo vendo queso`
+ * is emphatic. Forcing it for beginners is a deliberate trade -- pro-drop hides
+ * the person inside a verb ending they cannot parse yet, so their first
+ * sentences would read as "sell cheese" with nobody in them. `yo vendo` makes
+ * I -> yo and sell -> vendo legible, and dropping it later teaches pro-drop as
+ * a real feature rather than one they never noticed was there.
+ *
+ * The cost is a learner who over-generalizes and says `yo` constantly, which
+ * corrects at exactly the band where this stops applying.
+ *
+ * Here rather than beside the word list (`always-target-words.ts`) because it
+ * is band-keyed, and every band-keyed pedagogical number lives in this file.
+ * They are also two different rules wearing one face: WHICH LANGUAGE the
+ * subject is in is always the target one; WHETHER IT IS SAID AT ALL is this.
+ *
+ * TAKES NO LANGUAGE, AND THAT IS A LIMIT RATHER THAN A DECISION. Everything
+ * else in this file is a language-neutral pedagogical number; this one is
+ * justified entirely by Spanish pro-drop. It happens to hold for the other
+ * pro-drop languages (Italian, Portuguese) and is simply wrong for a language
+ * that requires the subject -- French, German -- where the instruction would
+ * ask for something a speaker does anyway.
+ *
+ * Nothing enforces that today: the only gate is that Spanish is the one
+ * language with an always-target list. Whoever authors the second list decides
+ * whether this grows a language parameter or moves.
+ *
+ *   A1 yes   A2 yes   B1+ no
+ */
+export function saysSubjectPronounExplicitly(cefrBand: CEFRBand): boolean {
+  return cefrBand === "A1" || cefrBand === "A2";
+}
+
+/**
  * THE READABILITY CEILING: above this share of target language, a line stops
  * being hard and starts being unreadable, and the turn is regenerated.
  *

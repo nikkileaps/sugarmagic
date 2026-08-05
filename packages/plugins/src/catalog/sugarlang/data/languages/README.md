@@ -36,6 +36,13 @@ Only two kinds of file live here, and the difference decides how you change one.
   Everything else about an exponent is derived.
 - `placement-questionnaire.json`.
 
+- `always-target.json` -- the handful of words spoken in this language at every
+  level, however much of the line is in English: subject pronouns, possessives,
+  yes and no. HAND-AUTHORED, and short on purpose. These are not teachables --
+  the Teacher never chooses them and they consume no slate slot. A content word
+  here would be taught to every learner forever, so the suite rejects anything
+  that is only a noun.
+
 **DERIVED. Regenerated from the sources above, never hand-edited.**
 
 - `morphology.json` -- the reverse index: `surface form -> lemma`. The

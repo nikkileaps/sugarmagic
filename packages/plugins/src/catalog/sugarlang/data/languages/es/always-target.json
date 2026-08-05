@@ -1,0 +1,14 @@
+{
+  "lang": "es",
+  "note": "Words spoken in Spanish at every level, however English the rest of the line is. See runtime/teacher/always-target-words.ts for what this is for and what belongs here.",
+  "lemmaIds": [
+    "yo",
+    "tú",
+    "usted",
+    "mi",
+    "tu",
+    "me",
+    "sí",
+    "no"
+  ]
+}

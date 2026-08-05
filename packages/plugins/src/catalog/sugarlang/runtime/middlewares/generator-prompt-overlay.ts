@@ -23,7 +23,9 @@ import {
   describeLanguageMix,
   getIntroduceCapForBand
 } from "../teacher/band-envelope";
+import { formatAlwaysTargetWords } from "../teacher/always-target-words";
 import {
+  INFLECT_SLATED_WORDS_PROMPT,
   MAX_PROMPT_REINFORCE,
   renderTeachableList
 } from "../teacher/slate-prompt";
@@ -89,8 +91,22 @@ export function buildGeneratorPromptOverlay(
 ): string {
   const lines = [
     formatTargetLanguageGuidance(constraint),
+    // Directly under the ratio line, because they qualify it: the ratio says
+    // how much target language, these say which words are target language no
+    // matter what the ratio works out to.
+    ...formatAlwaysTargetWords(
+      constraint.targetLanguage,
+      constraint.learnerCefr,
+      languageDisplayName(constraint.targetLanguage)
+    ),
     `Reinforce (weave naturally into your reply, not their English translations):${renderTeachableList(constraint.targetVocab.reinforce.slice(0, MAX_PROMPT_REINFORCE), describeCompetency) || " (none)"}`,
     `Introduce (try to use naturally this turn, not their English translations):${renderTeachableList(constraint.targetVocab.introduce.slice(0, getIntroduceCapForBand(constraint.learnerCefr)), describeCompetency) || " (none)"}\nDo not substitute their English equivalents. Reach for whichever is true and closest to hand: first something about yourself or what you do, then this place or this moment, then a passing observation, rumor, or memory. A question is a good shape -- it invites a reply -- but ask about something that is true of the PLAYER or the world, never about what you do yourself. Do not invent an action or goal you do not have in order to use one -- leaving a word out is better than pretending.`,
+    // Only when something is actually slated. With an empty slate the lists
+    // render "(none)" and this would tell the model to inflect nothing.
+    ...(constraint.targetVocab.introduce.length > 0 ||
+    constraint.targetVocab.reinforce.length > 0
+      ? [INFLECT_SLATED_WORDS_PROMPT]
+      : []),
     `Forbidden vocabulary (use simpler synonyms):${renderTeachableList(constraint.targetVocab.avoid.slice(0, 12), describeCompetency) || " (none)"}`,
     `CEFR envelope: learner is ${constraint.learnerCefr}; keep >=95% of lemmas at or below ${constraint.learnerCefr}+1 band.`,
     `Support posture: ${constraint.supportPosture}. Target-language ratio: ${constraint.targetLanguageRatio}. Sentence complexity: ${constraint.sentenceComplexityCap}.`,

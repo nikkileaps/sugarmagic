@@ -128,9 +128,12 @@ import {
   getIntroduceCapForBand
 } from "../teacher/band-envelope";
 import {
+  INFLECT_SLATED_WORDS_PROMPT,
   MAX_PROMPT_REINFORCE,
   renderTeachableList
 } from "../teacher/slate-prompt";
+import { languageDisplayName } from "../language-names";
+import { formatAlwaysTargetWords } from "../teacher/always-target-words";
 import { createCompetencyDescriber } from "../inventory/describe-competency";
 import { computeVoiceRetentionScore } from "../classifier/envelope-classifier";
 import { computeCoverage } from "../classifier/coverage";
@@ -172,8 +175,21 @@ import { MorphologyLoader } from "../classifier/morphology-loader";
  *            whether its line was baked, which is what this pipeline exists to
  *            prevent.
  *            EVERY BAKED VARIANT IS INVALIDATED. Rebake.
+ *   conjugation.6.0
+ *            THE PROMPT CHANGED THIS TIME, in two places, and they only work
+ *            together.
+ *            The Teach section now says the slated words are dictionary forms
+ *            and asks for the form the sentence needs. Alone that was not
+ *            enough: at anchored posture the sentence frame is English, and a
+ *            conjugated verb cannot sit in it -- `vendo` already means "I
+ *            sell", so "I vendo queso" says the subject twice and the model
+ *            backs off to the infinitive.
+ *            So the language guidance now also carries the ALWAYS-TARGET
+ *            WORDS, which put the pronoun in the target language and move the
+ *            switch to the clause boundary: "Yo vendo queso".
+ *            EVERY BAKED VARIANT IS INVALIDATED. Rebake.
  */
-export const GRADED_TEXT_PROMPT_VERSION = "conjugation.4b.0";
+export const GRADED_TEXT_PROMPT_VERSION = "conjugation.6.0";
 
 /** Minimum voice-retention score for the voice gate to pass. */
 export const VOICE_RETENTION_PASS_THRESHOLD = 0.5;
@@ -324,6 +340,12 @@ function renderSlateSection(
       ? `Work these in naturally, in ${targetLang} -- not their English equivalents:${introduce}`
       : null,
     reinforce ? `Re-use these if they fit naturally:${reinforce}` : null,
+    // BEFORE the avoid list, and only when something was actually slated.
+    // "The words above are given in dictionary form" has to point at words the
+    // line should USE. Appended after the whole block it pointed at the
+    // FORBIDDEN list instead -- and on a slate carrying only `avoid`, that was
+    // the only list above it.
+    introduce || reinforce ? INFLECT_SLATED_WORDS_PROMPT : null,
     avoid ? `Avoid these -- use simpler synonyms:${avoid}` : null
   ].filter((part): part is string => Boolean(part));
 
@@ -370,10 +392,21 @@ export function buildAdaptationPrompt(
     // envelope directed 30%: posture and ratio were passed to the VERIFIER and
     // never to the generator, so the model was told to write full target
     // language and then measured against a rule it had never seen.
+    // The DISPLAY name, not the code. This said "Write mostly in es" -- fine
+    // as a language tag, poor as a instruction to a writer, and the new lines
+    // below read even worse that way ("Inside a es phrase").
     describeLanguageMix(
       request.posture ?? DEFAULT_POSTURE,
-      request.targetLang,
+      languageDisplayName(request.targetLang),
       request.directedRatio
+    ),
+    // Directly under the ratio line, which they qualify. Same wording as the
+    // agent path: a baked line and a generated line face the same learner, and
+    // this is the pair that has drifted into contradiction before.
+    ...formatAlwaysTargetWords(
+      request.targetLang,
+      request.band,
+      languageDisplayName(request.targetLang)
     ),
     `Keep it grammatically natural for the learner level.`,
     `Preserve the length and shape of the original -- a one-line ${register} stays one line, a paragraph stays a paragraph.`,
