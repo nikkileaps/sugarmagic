@@ -377,6 +377,24 @@ describe("competency cards reach the learner state, by name", () => {
     expect(prompt).not.toMatch(/- top due:.*anden/);
   });
 
+  it("says (unknown), not (none), when there is no progress to read", () => {
+    // The derivation sits in a catch that swallows, so absent progress is a
+    // real runtime state. `(none)` would tell the Teacher the learner owes
+    // nothing -- a claim, and the wrong one. `(unknown)` claims nothing.
+    const base = createTeacherContext();
+    const prompt = buildTeacherPrompt({
+      ...base,
+      learnerProgress: undefined,
+      learner: {
+        ...base.learner,
+        lemmaCards: { queso: createLemmaCard("queso", "A1", { retrievability: 0.2 }) }
+      }
+    }).user;
+
+    expect(prompt).toContain("- top due: (unknown)");
+    expect(prompt).not.toContain("- top due: (none)");
+  });
+
   it("THE POINT: a competency the learner is forgetting appears in top due", () => {
     // The lists dropped every `exponent:` card, so the Teacher could see that a
     // learner was losing the word for cheese but not that they were losing how

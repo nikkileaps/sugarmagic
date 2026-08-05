@@ -381,7 +381,11 @@ export function formatLearnerSummary(context: TeacherContext): string {
     `- target/support language: ${context.lang.targetLanguage} / ${context.lang.supportLanguage}`,
     `- session turns: ${learner.currentSession?.turns ?? 0}`,
     `- cards: ${cards.length}`,
-    `- top due: ${listOrNone(due)}`,
+    // (unknown) when there is no progress to read, NOT (none). An empty due
+    // list asserts the learner owes nothing; absent means we could not work it
+    // out. The Teacher acts on those differently, and only one of them is
+    // ever true when the derivation failed.
+    `- top due: ${context.learnerProgress ? listOrNone(due) : UNKNOWN_SECTION}`,
     `- recently active: ${listOrNone(active)}`,
     `- struggling: ${listOrNone(struggling)}`,
     ...formatCompetencyStandingLines(context)
