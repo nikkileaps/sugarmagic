@@ -110,9 +110,11 @@ provisional evidence) and emits `placement.completed` when the questionnaire
 scores out.
 
 **Chunk detection (085.3/085.5).** Observe also runs the chunk matcher
-(`createChunkMatcher`) over the scene lexicon's chunk list. NPC turn text is
+(`createChunkMatcher`) over the competency inventory's exponents -- not the
+scene lexicon's chunks, so a phrase an NPC generates at runtime is detected
+even though it appears in no authored text. NPC turn text is
 scanned for chunk matches and emits `chunk-encountered` observations that
-create/update chunk cards (`lemmaId = "chunk:<chunkId>"`). Player free-text
+create/update exponent cards (`lemmaId = "exponent:<exponentId>"`). Player free-text
 input and scripted player lines emit `chunk-produced`. First encounter of a
 chunk tied to a communicative function (the function has no existing teach
 record) triggers the explicit teach beat: one `TeachRecord` is written via

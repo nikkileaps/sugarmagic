@@ -1,6 +1,7 @@
 # Domain Terms
 
-Status: Updated in Epic 090
+Status: active
+Last verified against code: 2026-08-05
 
 The nouns sugarlang uses, and the distinctions between the ones that sound
 alike. Every definition below cites the type or file that owns it; if the code
@@ -35,14 +36,14 @@ Machine enrichment fills GAPS ONLY, so a correction is permanent.
 English gloss and writes only those. Anything that adds to the dictionary works
 the same way, which is what makes re-running it safe.
 
-- `data/languages/es/cefrlex.json` -- 11,000 Spanish entries
+- `data/languages/es/cefrlex.json` -- 10,618 Spanish entries
 - `data/languages/it/cefrlex.json` -- 6,370 Italian entries
 - Read through `CefrLexAtlasProvider` (`runtime/providers/impls/cefr-lex-atlas-provider.ts`)
 
 ### Lemma
 
 One atlas entry. A headword, **not** an inflected surface form.
-Type: `AtlasLemmaEntry` (`runtime/contracts/providers.ts:40-49`).
+Type: `AtlasLemmaEntry` (`runtime/contracts/providers.ts`).
 
 ```jsonc
 {
@@ -61,13 +62,13 @@ Type: `AtlasLemmaEntry` (`runtime/contracts/providers.ts:40-49`).
 The headword-vs-surface-form distinction is load-bearing in one place worth
 knowing about: the reverse gloss index is keyed on the exact English gloss, so
 `cheese` resolves and `cheeses` does not (`resolveFromGloss`,
-`cefr-lex-atlas-provider.ts:208-215`).
+`cefr-lex-atlas-provider.ts`).
 
 ### Lexicon
 
 The whole word stock of a language. In this codebase that **is** the atlas --
 the interface is literally `LexicalAtlasProvider`
-(`runtime/contracts/providers.ts:152`). **Lexicon, atlas and dictionary all name
+(`runtime/contracts/providers.ts`). **Lexicon, atlas and dictionary all name
 the same thing here**: the dictionary is what it is, atlas is what the code
 calls it, lexicon is the linguistic term for the concept.
 
@@ -140,7 +141,7 @@ into the prompt, where it renders as `(none)` versus `(unknown)`.
 
 A compile-time unit of authored text, one per dialogue node. Not linguistic --
 it is a scanning and hashing unit. Emitted by `collectDialogueBlobs`
-(`runtime/compile/scene-traversal.ts:204-213`).
+(`runtime/compile/scene-traversal.ts`).
 
 ```jsonc
 {
@@ -152,7 +153,7 @@ it is a scanning and hashing unit. Emitted by `collectDialogueBlobs`
 ```
 
 `weight` is how much that kind of source counts toward `sceneWeight`. The full
-table (`TEXT_BLOB_WEIGHTS`, `scene-traversal.ts:95-103`):
+table (`TEXT_BLOB_WEIGHTS`, `scene-traversal.ts`):
 
 | sourceKind | weight |
 |---|---|
@@ -182,9 +183,14 @@ second path is for.
 
 ### Band
 
-A CEFR level -- A1, A2, B1, B2, C1, C2. Both a property of a lemma
-(`cefrPriorBand`: roughly "how advanced is this word") and of a learner
-(`estimatedCefrBand`). Canonical ordering helper: `cefr-band-utils.ts`.
+A CEFR level -- A1, A2, B1, B2, C1, C2. A property of a lemma (`cefrPriorBand`:
+roughly "how advanced is this word"), of a lesson, and of a learner
+(`estimatedCefrBand`). Ordering lives in `runtime/cefr/`: `CEFR_BAND_ORDER`,
+`compareCefrBands`, `bandIndex`.
+
+The curriculum stops at C1. C2 is a band a learner can be estimated at, and no
+lesson is authored there -- so a C2 learner's band window is empty and the
+Teacher is told there are no competencies to teach.
 
 ### Posture
 
@@ -232,9 +238,12 @@ a decision, the constraint is instructions to whatever produces the text.
 
 ### Card
 
-The learner's memory record for one lemma -- review count, stability,
-retrievability. Drives what is due for review. Lives on the learner profile as
-`lemmaCards`.
+The learner's memory record for one thing they are learning -- review count,
+stability, retrievability. Drives what is due for review. Lives on the learner
+profile as `lemmaCards`.
+
+Two things get one: a **lemma**, keyed by its lemma id, and an **exponent**,
+keyed `exponent:<exponentId>`. One map holds both, and the key says which.
 
 ### Teachable
 
@@ -248,28 +257,71 @@ A third (conjugation) is anticipated, not built. Both subtypes share a shape: a
 language-neutral thing plus how this language performs it.
 
 The kinds are `TEACHABLE_KINDS` (`runtime/contracts/scene-teachable.ts`).
-Two shapes carry them, and the difference is where they came from:
-
-| type | file | what it is |
-|---|---|---|
-| `SceneTeachable` | `runtime/contracts/scene-teachable.ts` | what a scene's concepts resolved to -- the supply available here |
-| `ScheduledTeachable` | `runtime/scheduler/teach-schedule.ts` | what the outer-loop scheduler has queued for this learner |
+`SceneTeachable` (same file) is what a scene's concepts resolved to -- what is
+available to teach here.
 
 ### Competency
 
 One communicative act the learner can perform, with a CEFR descriptor and a
-band. Ten in Spanish: `greet`, `thank`, `request`, `ask-where`, `buy`,
-`refuse-politely`, and so on.
+band: `greet`, `thank`, `ask-where`, `buy`, `refuse-politely`.
 
-The phrases that perform it are its **exponents** (`"donde esta"`,
-`"donde está"`). Note an exponent is NOT the same as a **chunk**: a chunk is any
-multi-word expression, which is what `MultiWordExpressionExtractor` finds in
-authored text; an exponent is specifically a phrase that performs *this* act.
-
-A competency is language-neutral; only its exponents are per-language.
+Language-neutral -- it belongs to a lesson, not to a language. Only its
+**exponents** are per-language.
 
 Roughly based on CEFR's "functional syllabus" idea. Named Competency
 because Function collides with the programming sense on every read.
+
+### Exponent
+
+A phrase that performs a competency. `hola` and `buenos días` both perform
+`greet`. Type: `Exponent` (`runtime/contracts/competency-inventory.ts`).
+
+One exponent is one learner **card**. Every spelling of a phrase belongs to the
+same exponent, so `dónde está` and `donde esta` share a card; `hola` and
+`buenos días` are separate exponents and do not.
+
+Not the same as a **chunk**: a chunk is any multi-word expression, which is what
+`MultiWordExpressionExtractor` finds in authored text; an exponent is
+specifically a phrase that performs *this* act. Most chunks perform none.
+
+### Lesson
+
+A group of competencies that go together, and the unit a language is authored
+in: *Social Contact*, *Getting Around*, *Money and Buying*. It belongs to
+exactly one band, and a competency belongs to exactly one lesson.
+
+Type: `Lesson` (`runtime/contracts/competency-inventory.ts`). Ordering within a
+band is `ordinal`; `A1.5` is derived from band and ordinal, never stored.
+
+A lesson is a **grouping, not a gate**. Nothing requires finishing one before
+another, and the Teacher may choose from any lesson in the band. What it buys is
+that a band reads as a syllabus rather than as a few hundred loose ids.
+
+### Curriculum
+
+Every lesson and competency, banded A1 to C1. **Language-neutral** -- it says
+what a learner should be able to do, never how to say it. Lives in
+`data/curriculum/<band>.json`.
+
+A language joins it by authoring **exponents**
+(`data/languages/<lang>/exponents.json`). The build joins the two into the
+**competency inventory** (`data/languages/<lang>/competency-inventory.json`),
+which is generated and never hand-edited:
+
+```
+curriculum  +  exponents  ->  competency inventory
+(neutral)      (per lang)     (per lang, generated)
+```
+
+See [API 016](../../../../../../../docs/api/sugarlang-competency-inventory.md).
+
+### Band window
+
+The slice of the curriculum the Teacher is shown: the learner's current band
+only. A B1 learner's Teacher does not see A1 competencies, or B2 ones.
+
+It varies by band and never by learner, which is what lets the rendered
+curriculum be cached and shared by every player at that band.
 
 ### Variant
 

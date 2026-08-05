@@ -46,24 +46,31 @@ discards it.
 
 ## Adding a Phrase
 
-Edit `exponents.json`. Wordings only, spelled properly -- accents and all:
+Edit `exponents.json`. A wording is a phrase plus what it means, spelled
+properly -- accents and all:
 
 ```json
 "greet": [
-  { "wordings": ["buenos días"] },
-  { "wordings": ["qué tal"] }
+  { "wordings": [{ "phrase": "buenos días", "gloss": { "en": "good morning" } }] },
+  { "wordings": [{ "phrase": "qué tal",     "gloss": { "en": "how's it going" } }] }
 ]
 ```
 
 Wordings grouped in one entry are **one exponent and one learner card**. Put
-alternative phrasings of the same move together, and separate moves apart:
+alternative phrasings of the same move together, and separate moves apart. The
+gloss is per wording, because sharing a card is not sharing a meaning:
 
 ```json
 "meta-language": [
-  { "wordings": ["qué es", "qué es esto", "qué significa"] },
-  { "wordings": ["no entiendo", "no lo entiendo"] }
+  { "wordings": [
+      { "phrase": "qué es",        "gloss": { "en": "what is it" } },
+      { "phrase": "qué significa", "gloss": { "en": "what does it mean" } }
+  ]},
+  { "wordings": [{ "phrase": "no entiendo", "gloss": { "en": "I don't understand" } }] }
 ]
 ```
+
+Authoring rules in depth: `scripts/data-prep/EXPONENT-AUTHORING.md`.
 
 The competency id must already exist in `data/curriculum/`. Naming one that
 does not fails the build.
@@ -121,6 +128,9 @@ interface Exponent {
   surfaceForms: string[];     // every spelling, accented and not
   cefrBand: CEFRBand;
   constituentLemmas: string[];
+  // Every spelling to what it means, per support language. Keyed by surface so
+  // a hover answers from the text it matched.
+  glossBySurface: Record<string, Record<string, string>>;
 }
 ```
 
@@ -131,9 +141,13 @@ else on an exponent comes from the build:
 
 - `exponentId` and `normalizedForm` -- the first wording, deaccented, with
   spaces as underscores. Learner cards are keyed `exponent:<exponentId>`.
-- `surfaceForms` -- each wording plus its deaccented spelling, because players
-  type without accents.
+- `surfaceForms` -- every accent combination of each wording, each accented
+  word independently kept or dropped, because players accent inconsistently.
+  `cómo estás` ships as all eight of `cómo estás`, `cómo estas`, `como estás`,
+  `como esta`, and so on.
 - `cefrBand` -- from the competency's band in the curriculum.
+- `glossBySurface` -- every spelling of a wording mapped to that wording's
+  gloss, so an accented and an unaccented spelling answer identically.
 - `constituentLemmas` -- every wording tokenized and resolved through the
   morphology index, minus words with no lexical content of their own (articles,
   clitic pronouns, possessives). Prepositions are kept: `hasta` and `por` are
@@ -149,9 +163,12 @@ outranks another word's inflected form. So `cuesta` resolves to the noun
 ("slope") rather than to `costar`, and `llama` to the animal rather than to
 `llamar`. Where that is wrong for a phrase, the authored exponent says so:
 
+The override sits on the wording, beside its phrase and gloss:
+
 ```json
-{ "wordings": ["cuánto cuesta", "cuánto vale"],
-  "lemmas": { "cuesta": "costar", "vale": "valer" } }
+{ "phrase": "habla más despacio",
+  "gloss": { "en": "speak more slowly" },
+  "lemmas": { "habla": "hablar" } }
 ```
 
 This matters beyond tidiness: a competency counts as in-envelope when one of
@@ -203,8 +220,9 @@ in `sugaragent/runtime/stages/interpretation.ts`. Call
 ## normalizedForm Join Key
 
 `Exponent.normalizedForm` is the join key to scene-extracted
-`LexicalChunk.normalizedForm` objects in `CompiledSceneLexicon.chunks`. The
-scene-extraction pipeline uses the same underscore-lowercased convention.
+`LexicalChunk.normalizedForm` objects in `SceneVocabularyModel.chunks`
+(`runtime/contracts/scene-lexicon.ts`). The scene-extraction pipeline uses the
+same underscore-lowercased convention.
 
 ## Adding a New Language
 

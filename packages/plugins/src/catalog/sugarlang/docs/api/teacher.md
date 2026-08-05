@@ -40,7 +40,8 @@ splice.
 
 ```ts
 {
-  system: string;
+  system: string;              // the blocks joined, for callers that want one string
+  systemBlocks: { text: string; cache: boolean }[];   // what goes on the wire
   user: string;
   cacheMarkers: string[];
 }
@@ -48,7 +49,12 @@ splice.
 
 Budget split:
 
-- cacheable system prompt: role, pedagogical rubric, CEFR descriptors, output schema, hard constraints, comprehension guidance
+- cacheable system prompt, as two blocks: (1) role, pedagogical rubric, output
+  schema, hard constraints, comprehension guidance, pragmatic feedback;
+  (2) the curriculum -- the learner's **band window**, its competencies grouped
+  under their lesson names. Two blocks and not one because they go stale for
+  different reasons: instructions when a prompt constant is edited, the
+  curriculum every time a phrase is authored.
 - dynamic user prompt: the SITUATION (scene concepts, runtime facts, NPC, recent turns) and the LEARNER (state, derived pacing signals), plus turn-shaping hints. These are the two content doors on `TeacherContext`; there is no prescription.
 
 The builder now renders a canonical template from `prompt-template.ts` so the

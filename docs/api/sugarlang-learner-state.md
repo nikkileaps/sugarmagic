@@ -8,7 +8,7 @@ post-placement calibration window, and the dev-only band override contract.
 
 ## Learner Profile Shape
 
-**File:** `packages/plugins/src/catalog/sugarlang/runtime/contracts/learner-profile.ts`
+**File:** `packages/plugins/src/catalog/sugarlang/runtime/learner/learner-profile.ts`
 
 ```typescript
 interface LearnerProfile {
@@ -38,12 +38,15 @@ tracks receptive and productive exposure with the same FSRS fields as a word.
 The colon is unreachable by the normalizer, so both kinds live in the same
 `lemma-cards` IDB object store with no version bump.
 
-The teacher, probe, and provisional systems exclude them with a
-`lemmaId.startsWith("exponent:")` guard (`shared.ts:
-computePendingProvisionalLemmas`, `prompt-builder.ts: formatLearnerSummary`).
+The Teacher sees them: `formatLearnerSummary` (`prompt-builder.ts`) walks
+every card and renders each through `cardDisplayName`, which strips the
+`exponent:` prefix. Only the provisional/probe path filters them out
+(`pacing-signals.ts`), because a phrase is not a word to be probed.
+
 Observations are emitted as `chunk-encountered` (NPC speech) and
-`chunk-produced` (player input) telemetry events and update
-`productiveStrength` / `receptiveStrength` directly.
+`chunk-produced` (player input) telemetry events. They move the card's FSRS
+state -- `stability` and `retrievability` -- the same way a lemma observation
+does.
 
 An exponent is a phrase that performs a competency; see API 016.
 

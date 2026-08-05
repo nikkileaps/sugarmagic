@@ -69,8 +69,8 @@ describe("the Teacher is told which competencies exist", () => {
   // 090.10: the schema has accepted a competencyId since 090.4a, but the prompt
   // never said which ids are real -- so naming one meant guessing, and in
   // practice competencies arrived by being flattened into
-  // `prescription.introduce` instead. That road is what 090.10 deletes, so this
-  // menu is the precondition for deleting it safely.
+  // `prescription.introduce` instead. That road is what 090.10 deletes, so
+  // showing the real ids is the precondition for deleting it safely.
   it("lists real competency ids, in the CACHED half", () => {
     // 222.9 moved the curriculum out of the per-turn half. It is identical on
     // every call for a language, so there it could never be cached -- and it
