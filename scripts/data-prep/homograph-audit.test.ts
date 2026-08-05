@@ -70,8 +70,43 @@ const NOUN_READING_IS_CORRECT = new Set([
   // `el año pasado`, `un pueblo pequeño`, `vivo en el centro`, `una cocina`.
   "camino", "cena", "centro", "cocina", "curso", "daño", "desayuno", "forma",
   "oído", "parte", "pasado", "paso", "piso", "pregunta", "pueblo", "recibo",
-  "reserva", "retraso", "sala", "salado", "separado"
+  "reserva", "retraso", "sala", "salado", "separado",
+  // Added with B1. All nouns in every phrase that uses them -- `sin aviso`,
+  // `en este caso`, `el pago`, `un resumen`. `pasa` and `espera` are NOT here:
+  // "qué pasa con mi boleto" and "espera, lo estoy contando mal" are verbs and
+  // carry overrides.
+  "aviso", "calma", "cargo", "casco", "caso", "concierto", "contrato",
+  "diferencia", "documento", "encargado", "equipo", "logro", "malentendido",
+  "negocio", "pago", "peso", "proyecto", "puesto", "queja", "resumen",
+  "sentido",
+  // Added with B2. All nouns or adjectives in their phrases -- `eso es un
+  // hecho`, `con todo respeto`, `contrato fijo`, `el juego de palabras`. This
+  // band produced no verb-reading errors: its author applied 72 overrides
+  // itself, which is the difference.
+  "cambio", "completo", "concreto", "dato", "elogio", "entusiasmo", "envío",
+  "fijo", "firma", "fotografía", "gobierno", "hecho", "juego", "molesto",
+  "parecido", "partido", "pedido", "proceso", "receta", "registro", "respeto",
+  "resto", "salvo", "seco", "tapa", "vacío",
+  // Added with C1. All nouns or adjectives here -- `la espera fue larga`, `una
+  // muestra pequeña`, `el olvido`, `tengo el mes lleno`.
+  "adelantado", "burla", "causa", "copia", "despido", "duda", "duro",
+  "entrega", "espera", "estudio", "exilio", "fuerza", "lista", "lleno",
+  "muestra", "olvido", "reclamo", "resultado", "rodeo", "trato"
 ]);
+
+/**
+ * KNOWN LIMIT of this list: it is per TOKEN, not per phrase.
+ *
+ * `espera` is a noun in C1's "la espera fue larga" and a verb in B1's
+ * "espera, lo estoy contando mal". The verb use carries an override, and
+ * overrides are checked before this list, so both are correct today -- but a
+ * FUTURE verb use of `espera` without an override would pass unflagged.
+ *
+ * Tightening this means keying on the phrase rather than the token, which
+ * makes the list churn every time a phrase is edited. Left as is deliberately:
+ * the check still catches a token the first time it appears anywhere, which is
+ * when the decision actually gets made.
+ */
 
 describe("an authored phrase does not teach a word it does not contain", () => {
   it("THE ONE THAT MATTERS: every verb/noun ambiguity is decided deliberately", () => {

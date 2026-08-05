@@ -406,6 +406,36 @@ const SPANISH_IRREGULAR_FUTURE_STEM: Record<string, string> = {
   haber: "habr"
 };
 
+/**
+ * Spanish keeps a consonant's SOUND across a vowel change, and respells it to
+ * do so. Adding an -e ending to an -ar stem forces this: `buscar` gives
+ * `busque`, not `busce`; `llegar` gives `llegue`; `empezar` gives `empiece`.
+ *
+ * Without this the derivation wrote non-words for every -car, -gar and -zar
+ * verb -- a large class -- AND left their real forms missing, including the
+ * polite imperative (`busque`, `pague`), which is ordinary language.
+ *
+ * -er and -ir verbs need no equivalent: their subjunctive takes an -a ending
+ * and the `yo` stem already carries the respelling (`cojo` -> `coja`).
+ */
+function respellBeforeE(stem: string): string {
+  if (stem.endsWith("gu")) return `${stem.slice(0, -2)}gü`;
+  if (stem.endsWith("c")) return `${stem.slice(0, -1)}qu`;
+  if (stem.endsWith("g")) return `${stem}u`;
+  if (stem.endsWith("z")) return `${stem.slice(0, -1)}c`;
+  return stem;
+}
+
+/** Puts a written accent on a stem's final vowel: `tuvie` -> `tuvié`. */
+function accentFinalVowel(stem: string): string {
+  const map: Record<string, string> = { a: "á", e: "é", i: "í", o: "ó", u: "ú" };
+  for (let index = stem.length - 1; index >= 0; index -= 1) {
+    const accented = map[stem[index]!];
+    if (accented) return stem.slice(0, index) + accented + stem.slice(index + 1);
+  }
+  return stem;
+}
+
 const SUBJUNCTIVE_AR = ["e", "es", "e", "emos", "éis", "en"];
 const SUBJUNCTIVE_ER_IR = ["a", "as", "a", "amos", "áis", "an"];
 const CONDITIONAL = ["ía", "ías", "ía", "íamos", "íais", "ían"];
@@ -444,10 +474,10 @@ function spanishDerivedTenses(entry: AtlasLemmaEntry): string[] {
     const yo = f.pres[0];
     if (typeof yo === "string" && yo.endsWith("o")) {
       const stem = yo.slice(0, -1);
-      const endings = entry.lemmaId.endsWith("ar")
-        ? SUBJUNCTIVE_AR
-        : SUBJUNCTIVE_ER_IR;
-      out.push(...endings.map((ending) => `${stem}${ending}`));
+      const isAr = entry.lemmaId.endsWith("ar");
+      const endings = isAr ? SUBJUNCTIVE_AR : SUBJUNCTIVE_ER_IR;
+      const spelled = isAr ? respellBeforeE(stem) : stem;
+      out.push(...endings.map((ending) => `${spelled}${ending}`));
     }
   }
 
@@ -457,7 +487,15 @@ function spanishDerivedTenses(entry: AtlasLemmaEntry): string[] {
   const theyDid = f.pret[5];
   if (typeof theyDid === "string" && theyDid.endsWith("ron")) {
     const stem = theyDid.slice(0, -3);
-    out.push(...IMPERFECT_SUBJUNCTIVE.map((ending) => `${stem}${ending}`));
+    // The first-person plural is the one form that shifts the written accent:
+    // `tuvieron` -> `tuviéramos`, not `tuvieramos`.
+    out.push(
+      ...IMPERFECT_SUBJUNCTIVE.map((ending) =>
+        ending === "ramos"
+          ? `${accentFinalVowel(stem)}${ending}`
+          : `${stem}${ending}`
+      )
+    );
   }
 
   const futureStem =

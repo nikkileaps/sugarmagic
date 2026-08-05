@@ -123,6 +123,43 @@ describe("the curriculum half is shared; the learner half is not", () => {
     for (const id of a1Only) expect(idsIn(shownToA2).has(id)).toBe(false);
   });
 
+  it("every band sees its own competencies and no other band's", () => {
+    // All five bands are authored now, so this is the whole curriculum: 635
+    // competencies, and a learner at any band sees only their own slice.
+    const inventory = loadCompetencyInventory("es");
+    const bands = ["A1", "A2", "B1", "B2", "C1"] as const;
+
+    const idsIn = (rendered: string) =>
+      new Set(
+        rendered
+          .split("\n")
+          .filter((line) => line.startsWith("  "))
+          .flatMap((line) => line.trim().split(", "))
+          .filter(Boolean)
+      );
+
+    for (const band of bands) {
+      const expected = inventory.competencies
+        .filter((c) => c.band === band)
+        .map((c) => c.competencyId);
+      expect(expected.length, band).toBeGreaterThan(0);
+
+      const base = createTeacherContext();
+      const shown = idsIn(
+        formatAvailableCompetencies({
+          ...base,
+          learner: { ...base.learner, estimatedCefrBand: band }
+        })
+      );
+
+      expect([...shown].sort(), band).toEqual([...expected].sort());
+      // ...and nothing from any other band leaked in.
+      for (const other of inventory.competencies.filter((c) => c.band !== band)) {
+        expect(shown.has(other.competencyId), `${band} saw ${other.band}`).toBe(false);
+      }
+    }
+  });
+
   it("two learners at DIFFERENT bands get different cached bytes", () => {
     // The cached curriculum block is now keyed by band as well as language --
     // one entry per band, still shared by every player at that band. If these
