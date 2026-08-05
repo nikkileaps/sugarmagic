@@ -680,6 +680,70 @@ async function listVectorStoreFiles(vectorStoreId: string): Promise<Record<strin
   return items;
 }
 
+/**
+ * Is this vector-store file something the lore ingest put there?
+ *
+ * Every real lore chunk is attached with `page_id` and friends
+ * (`uploadChunkToVectorStore`). The health probe attaches with `{ file_id }`
+ * and nothing else. Those are the only two things that attach to this store, so
+ * a file carrying no `page_id` did not come from lore.
+ *
+ * Keyed on the ATTRIBUTE rather than the filename for the same reason the
+ * relevance floor is not a filename filter: a name check answers "is this the
+ * probe", and the question worth asking is "did this come from lore", which
+ * also catches whatever gets uploaded by hand next.
+ *
+ * `attributes` is on the list response -- verified against openai-node's
+ * `VectorStoreFile`, which declares
+ * `attributes?: { [key: string]: string | number | boolean } | null`.
+ */
+export function isLoreVectorStoreFile(item: Record<string, unknown>): boolean {
+  const attributes = item["attributes"];
+  if (typeof attributes !== "object" || attributes === null) return false;
+  const pageId = (attributes as Record<string, unknown>)["page_id"];
+  return typeof pageId === "string" && pageId.length > 0;
+}
+
+/**
+ * Removes files that did not come from the lore ingest.
+ *
+ * WHY THIS EXISTS. The probe used to leave its file behind whenever it failed
+ * partway -- cleanup was the last step, so any early return orphaned it. That
+ * is fixed, and a relevance floor was added so junk could not be retrieved.
+ * Neither of those deletes what already leaked, and on 2026-08-05 four orphans
+ * were still being handed to an NPC as the entire evidence block for a turn.
+ *
+ * Runs before the probe uploads its own file, so anything unattributed at that
+ * moment is from a previous run and there is no "except mine" case to get
+ * wrong.
+ *
+ * Returns what it removed rather than logging and swallowing: the count is the
+ * only evidence the spill existed, and a sweep that silently finds nothing and
+ * a sweep that silently fails look identical.
+ */
+async function sweepNonLoreVectorStoreFiles(
+  vectorStoreId: string
+): Promise<{ removed: string[]; failed: number }> {
+  const files = await listVectorStoreFiles(vectorStoreId);
+  const removed: string[] = [];
+  let failed = 0;
+
+  for (const item of files) {
+    const id = item["id"];
+    if (typeof id !== "string" || isLoreVectorStoreFile(item)) continue;
+    try {
+      await deleteVectorStoreFile(vectorStoreId, id);
+      removed.push(id);
+    } catch {
+      // One failed delete must not abandon the rest, and must not fail the
+      // caller: this is housekeeping attached to a health check.
+      failed += 1;
+    }
+  }
+
+  return { removed, failed };
+}
+
 async function deleteVectorStoreFile(vectorStoreId: string, vectorStoreFileId: string): Promise<void> {
   await requestJson(
     "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/files/" + vectorStoreFileId,
@@ -1365,6 +1429,34 @@ export async function handleSugarAgentLoreStatus(
 
   const lore = readLorePages();
   const vectorStoreId = resolveEnv("SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID") || null;
+
+  // WHAT IS ACTUALLY INDEXED, which is a different question from what is on
+  // disk. `pageCount` and `chunkCount` describe the SOURCE; retrieval reads the
+  // STORE, and the two drift -- a failed ingest, a partial upload, or a probe
+  // that orphaned its file. Nothing reported the store at all, so the drift was
+  // invisible until an NPC was handed four test files as world context.
+  //
+  // `null` rather than 0 when it cannot be read. "No lore is indexed" and "we
+  // could not ask" are different facts, and only one of them means re-ingest.
+  let store: {
+    fileCount: number;
+    loreFileCount: number;
+    nonLoreFileCount: number;
+  } | null = null;
+  if (vectorStoreId) {
+    try {
+      const files = await listVectorStoreFiles(vectorStoreId);
+      const loreFiles = files.filter(isLoreVectorStoreFile);
+      store = {
+        fileCount: files.length,
+        loreFileCount: loreFiles.length,
+        nonLoreFileCount: files.length - loreFiles.length
+      };
+    } catch {
+      // Status must answer even when OpenAI does not.
+    }
+  }
+
   sendJson(res, 200, {
     ok: true,
     sourceKind: lore.source.sourceKind,
@@ -1373,6 +1465,7 @@ export async function handleSugarAgentLoreStatus(
     vectorStoreId,
     pageCount: lore.pages.length,
     chunkCount: lore.chunks.length,
+    store,
     warnings: lore.warnings,
     ingest: { ..._loreIngestState }
   });
@@ -1780,6 +1873,26 @@ export async function handleSugarAgentLoreProbe(
   let uploadedFileId: string | null = null;
 
   const authHeader = { authorization: "Bearer " + apiKey };
+
+  // Step 0: clear anything a previous probe left behind.
+  //
+  // Before the upload, so "unattributed" unambiguously means "from an earlier
+  // run" and this never has to except its own file.
+  //
+  // Best-effort on purpose: this is housekeeping bolted to a health check, and
+  // a store that cannot be listed is a thing the probe should go on to REPORT,
+  // not something it should die of.
+  try {
+    const swept = await sweepNonLoreVectorStoreFiles(vectorStoreId);
+    steps["sweep"] = {
+      ok: true,
+      removed: swept.removed.length,
+      failed: swept.failed,
+      fileIds: swept.removed
+    };
+  } catch (err) {
+    steps["sweep"] = { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 
   // Step 1: upload probe file
   try {
