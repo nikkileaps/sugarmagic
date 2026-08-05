@@ -77,6 +77,66 @@ describe("the curriculum half is shared; the learner half is not", () => {
     expect(a).toBe(b);
   });
 
+  it("THE ONE 222.14 EXISTS FOR: the window EXCLUDES another band's competencies", () => {
+    // Could not be written before A2 shipped. With A1 alone, "the learner's
+    // band" was every competency that existed, so a filter would have excluded
+    // nothing and this test would have passed with no filter implemented.
+    //
+    // Current band only, not band+1 (nikki, 2026-08-05): band+1 came from when
+    // there were ten vocabulary words and getting enough teachables into a turn
+    // was the constraint. A1 alone is 172 competencies now.
+    const inventory = loadCompetencyInventory("es");
+    const a1Only = inventory.competencies
+      .filter((c) => c.band === "A1")
+      .map((c) => c.competencyId);
+    const a2Only = inventory.competencies
+      .filter((c) => c.band === "A2")
+      .map((c) => c.competencyId);
+    expect(a1Only.length).toBeGreaterThan(0);
+    expect(a2Only.length).toBeGreaterThan(0);
+
+    const listFor = (band: "A1" | "A2") => {
+      const base = createTeacherContext();
+      return formatAvailableCompetencies({
+        ...base,
+        learner: { ...base.learner, estimatedCefrBand: band }
+      });
+    };
+
+    const shownToA1 = listFor("A1");
+    const shownToA2 = listFor("A2");
+    const idsIn = (rendered: string) =>
+      new Set(
+        rendered
+          .split("\n")
+          .filter((line) => line.startsWith("  "))
+          .flatMap((line) => line.trim().split(", "))
+          .filter(Boolean)
+      );
+
+    // Each learner sees their own band in full...
+    expect([...idsIn(shownToA1)].sort()).toEqual([...a1Only].sort());
+    expect([...idsIn(shownToA2)].sort()).toEqual([...a2Only].sort());
+
+    // ...and provably not the other one. This is the exclusion.
+    for (const id of a2Only) expect(idsIn(shownToA1).has(id)).toBe(false);
+    for (const id of a1Only) expect(idsIn(shownToA2).has(id)).toBe(false);
+  });
+
+  it("two learners at DIFFERENT bands get different cached bytes", () => {
+    // The cached curriculum block is now keyed by band as well as language --
+    // one entry per band, still shared by every player at that band. If these
+    // matched, the window would not be reaching the cached half at all.
+    const blocksFor = (band: "A1" | "A2") => {
+      const base = createTeacherContext();
+      return buildTeacherPrompt({
+        ...base,
+        learner: { ...base.learner, estimatedCefrBand: band }
+      }).systemBlocks.map((block) => block.text);
+    };
+    expect(blocksFor("A1")).not.toEqual(blocksFor("A2"));
+  });
+
   it("groups every competency under its lesson, and invents none", () => {
     const inventory = loadCompetencyInventory("es");
     const rendered = formatAvailableCompetencies(createTeacherContext());
@@ -90,11 +150,16 @@ describe("the curriculum half is shared; the learner half is not", () => {
       .filter(Boolean);
     expect(listed.filter((id) => !known.has(id))).toEqual([]);
 
-    // ...and nothing was silently dropped by the grouping.
-    expect(new Set(listed).size).toBe(known.size);
+    // ...and nothing was silently dropped by the grouping, within the band the
+    // fixture learner is at.
+    const inBand = inventory.competencies.filter(
+      (c) => c.band === createTeacherContext().learner.estimatedCefrBand
+    );
+    expect(new Set(listed).size).toBe(inBand.length);
 
-    // Lesson headings are present and readable.
-    for (const lesson of inventory.lessons) {
+    // Lesson headings are present and readable, for that band's lessons.
+    const bandLessons = new Set(inBand.map((c) => c.lessonId));
+    for (const lesson of inventory.lessons.filter((l) => bandLessons.has(l.lessonId))) {
       expect(rendered).toContain(
         `${lesson.band}.${lesson.ordinal} ${lesson.displayName}`
       );
@@ -102,7 +167,14 @@ describe("the curriculum half is shared; the learner half is not", () => {
   });
 
   it("drops the can-do descriptors, which were most of the cost", () => {
-    const rendered = formatAvailableCompetencies(createTeacherContext());
+    // Pinned to A1 because `greet` is an A1 competency and the band window
+    // (222.14) rightly hides it from the A2 fixture learner. This test is
+    // about descriptors, not about the window.
+    const base = createTeacherContext();
+    const rendered = formatAvailableCompetencies({
+      ...base,
+      learner: { ...base.learner, estimatedCefrBand: "A1" }
+    });
     expect(rendered).toContain("greet");
     expect(rendered).not.toContain("Can greet someone and respond to a greeting");
   });

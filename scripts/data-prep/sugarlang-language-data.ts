@@ -628,6 +628,88 @@ function buildMorphologyData(
   };
 }
 
+/**
+ * Object and reflexive pronouns that attach to the end of a verb.
+ *
+ * Only the single-clitic case, and only on the INFINITIVE. Spanish also
+ * attaches these to affirmative imperatives and gerunds, but both shift the
+ * written accent (`cuenta` + `me` is `cuéntame`), which needs syllabification
+ * to get right. The infinitive never shifts, so this half is exact; the other
+ * half is absent and every authoring pass so far has reported it.
+ */
+const SPANISH_ENCLITICS = [
+  "me", "te", "se", "lo", "la", "le", "nos", "los", "las", "les"
+];
+
+/**
+ * The eight affirmative `tú` imperatives that are not simply the third-person
+ * singular present. The regular ones already resolve through that form.
+ */
+const SPANISH_IRREGULAR_TU_IMPERATIVE: Record<string, string> = {
+  decir: "di",
+  hacer: "haz",
+  ir: "ve",
+  poner: "pon",
+  salir: "sal",
+  ser: "sé",
+  tener: "ten",
+  venir: "ven"
+};
+
+/**
+ * Forms the dictionary does not store but authored phrases keep reaching for.
+ *
+ * Every A2 authoring pass independently reported the same four shapes missing,
+ * which is why they are derived rather than filed one at a time:
+ *
+ *   INFINITIVE + CLITIC -- `ayudarme`, `verte`, `explicarlo`. The single
+ *   biggest blocker reported; polite requests and instructions are built on it.
+ *
+ *   PARTICIPLE AGREEMENT -- `pasada`, `ocupada`, `preocupada`. The masculine
+ *   resolved and the feminine did not, so half of every such phrase failed.
+ *
+ *   -MENTE ADVERBS -- `finalmente`, `totalmente`. Formed off the feminine
+ *   adjective, so they are derivable wherever the adjective has one.
+ *
+ *   IRREGULAR TU IMPERATIVES -- `ten`, `pon`. The regular ones already resolve
+ *   as third-person present; these eight do not.
+ */
+function addSpanishExtraForms(
+  forms: Record<string, MorphologyEntry>,
+  entry: AtlasLemmaEntry
+): void {
+  const f = entry.forms;
+  const { lemmaId, partsOfSpeech } = entry;
+
+  if (partsOfSpeech.includes("verb") && /(ar|er|ir)$/.test(lemmaId)) {
+    for (const clitic of SPANISH_ENCLITICS) {
+      addMorphologyEntry(forms, `${lemmaId}${clitic}`, lemmaId, partsOfSpeech);
+    }
+    const irregular = SPANISH_IRREGULAR_TU_IMPERATIVE[lemmaId];
+    if (irregular) {
+      addMorphologyEntry(forms, irregular, lemmaId, partsOfSpeech);
+    }
+  }
+
+  if (f && "pres" in f && typeof f.part === "string" && f.part.endsWith("o")) {
+    const stem = f.part.slice(0, -1);
+    for (const ending of ["a", "os", "as"]) {
+      addMorphologyEntry(forms, `${stem}${ending}`, lemmaId, partsOfSpeech);
+    }
+  }
+
+  // -mente attaches to the FEMININE adjective where one exists. Adjectives
+  // ending in -l, -e or -z do not inflect for gender, so the dictionary stores
+  // `fs: null` and the base form is what takes the suffix: `final` ->
+  // `finalmente`, but `rápida` -> `rápidamente`.
+  if (partsOfSpeech.includes("adjective") && f && "fs" in f) {
+    const base = typeof f.fs === "string" ? f.fs : f.ms;
+    if (typeof base === "string") {
+      addMorphologyEntry(forms, `${base}mente`, lemmaId, partsOfSpeech);
+    }
+  }
+}
+
 function addSpanishDerivedForms(
   forms: Record<string, MorphologyEntry>,
   entry: AtlasLemmaEntry
@@ -635,6 +717,7 @@ function addSpanishDerivedForms(
   for (const surface of spanishDerivedTenses(entry)) {
     addMorphologyEntry(forms, surface, entry.lemmaId, entry.partsOfSpeech);
   }
+  addSpanishExtraForms(forms, entry);
 }
 
 export function buildSpanishMorphologyData(

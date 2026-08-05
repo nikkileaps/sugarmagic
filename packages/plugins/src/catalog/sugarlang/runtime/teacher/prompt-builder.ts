@@ -456,7 +456,30 @@ export function formatAvailableCompetencies(context: TeacherContext): string {
     inventory = null;
   }
 
-  const competencies = inventory?.competencies ?? [];
+  // THE BAND WINDOW. The Teacher is shown its learner's CURRENT band only.
+  //
+  // Deferred out of 222.7 on purpose: with A1 alone, "band and below plus one
+  // above" was every competency that existed, so a filter would have excluded
+  // nothing and its test would have passed without the filter being written.
+  // With A2 shipped it can exclude something, so it can be tested.
+  //
+  // Current band only rather than band+1 (nikki, 2026-08-05): band+1 was an
+  // idea from when there were ten vocabulary words and no competencies, and
+  // getting enough teachables into a turn was the constraint. It is not any
+  // more -- A1 alone is 172.
+  //
+  // This is the ONLY cut allowed here. It varies by band, never by learner,
+  // because these bytes are cached and shared by every player at that band --
+  // anything learner-specific would give each player their own entry and put
+  // one learner's state in front of another.
+  //
+  // The consequence, accepted and measured rather than designed around: a B1
+  // learner can hold a due A1 card the Teacher can no longer see. 222.13 emits
+  // `dueBelowLearnerBandCount` so that is answerable.
+  const learnerBand = context.learner.estimatedCefrBand;
+  const competencies = (inventory?.competencies ?? []).filter(
+    (competency) => competency.band === learnerBand
+  );
   if (competencies.length === 0) {
     return ["COMPETENCIES THIS CURRICULUM CAN TEACH:", `- ${EMPTY_SECTION}`].join("\n");
   }

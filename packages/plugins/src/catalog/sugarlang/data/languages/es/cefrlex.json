@@ -3570,10 +3570,12 @@
         "en": "so much, as much"
       },
       "forms": {
-        "sg": "tanto",
-        "pl": "tantos"
+        "ms": "tanto",
+        "fs": "tanta",
+        "mp": "tantos",
+        "fp": "tantas"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "mañana": {
       "lemmaId": "mañana",
@@ -4313,9 +4315,9 @@
       },
       "forms": {
         "sg": "mes",
-        "pl": "mes"
+        "pl": "meses"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "sentir": {
       "lemmaId": "sentir",
@@ -13670,12 +13672,10 @@
         "en": "square, picture"
       },
       "forms": {
-        "ms": "cuadro",
-        "fs": "cuadra",
-        "mp": "cuadros",
-        "fp": "cuadras"
+        "sg": "cuadro",
+        "pl": "cuadros"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "negocio": {
       "lemmaId": "negocio",
@@ -93331,7 +93331,7 @@
         "sg": "cuadra",
         "pl": "cuadras"
       },
-      "formsSource": "generated"
+      "formsSource": "authored"
     },
     "disculpa": {
       "lemmaId": "disculpa",

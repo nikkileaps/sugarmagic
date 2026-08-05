@@ -96,15 +96,26 @@ describe("the Teacher is told which competencies exist", () => {
   });
 
   it("carries the descriptor, not just the id", () => {
-    // `ask-where` alone does not tell the Teacher what the learner would be able
-    // to DO, which is the whole basis for judging whether this moment calls for it.
-    const section = formatAvailableCompetencies(createTeacherContext());
+    // A bare id does not say what the learner would be able to DO. Since 222.7
+    // the meaning is carried by the LESSON HEADING the id sits under rather
+    // than by a descriptor beside it -- `A1.9 Places and Directions` over
+    // `ask-where` says as much as the can-do sentence did, for a fifth of the
+    // tokens.
+    //
+    // Pinned to A1: `ask-where` is A1 and the band window hides it from the A2
+    // fixture learner.
+    const base = createTeacherContext();
+    const section = formatAvailableCompetencies({
+      ...base,
+      learner: { ...base.learner, estimatedCefrBand: "A1" }
+    });
     const askWhere = section
       .split("\n")
       .find((line) => line.includes("ask-where"));
 
     expect(askWhere).toBeDefined();
-    expect(askWhere!.length).toBeGreaterThan("- ask-where (A1): ".length);
+    // The heading above it is what carries the meaning now.
+    expect(section).toContain("Places and Directions");
   });
 });
 

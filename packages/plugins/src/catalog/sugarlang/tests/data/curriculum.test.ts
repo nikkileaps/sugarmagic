@@ -237,7 +237,11 @@ describe("shipped ids survive", () => {
       "ask-what": "ask-meaning"
     };
 
-    const authored = new Set(competencies.map((c) => c.competencyId));
+    // Every band, not just A1: the shipped inventory spans whatever has been
+    // authored, and checking one band would report the rest as lost.
+    const authored = new Set(
+      BANDS.flatMap((band) => band.competencies).map((c) => c.competencyId)
+    );
     const lost = shippedInventory.competencies
       .map((c) => c.competencyId)
       .filter((id) => !authored.has(id) && !(id in RETIRED) && !(id in RENAMED));
