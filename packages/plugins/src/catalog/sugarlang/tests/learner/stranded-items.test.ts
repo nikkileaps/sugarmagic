@@ -110,8 +110,19 @@ describe("competencies squeezed out of the shared due list", () => {
     });
 
     const base = createTeacherContext();
+    // All thirteen have been reviewed and have fallen under the floor, so all
+    // thirteen are due. The pressure summary reads the derived list rather than
+    // re-deciding from retrievability, so the fixture carries it.
     const pressure = summarizeDueListPressure({
       ...base,
+      learnerProgress: {
+        met: [],
+        unmetCompetencyIds: [],
+        dueItemIds: Object.keys(cards),
+        isColdStart: false,
+        sceneId: "scene-station",
+        conversationId: "conv-1"
+      },
       learner: { ...base.learner, lemmaCards: cards }
     });
 

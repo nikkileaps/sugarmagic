@@ -298,6 +298,12 @@ describe("competency cards reach the learner state, by name", () => {
   function withFadedGreeting() {
     return buildTeacherPrompt(
       createTeacherContext({
+        // Due-ness comes from `learnerProgress`, which `deriveLearnerProgress`
+        // computes through `getItemProgress`. Both cards below have been
+        // reviewed and have fallen well under the floor, so both are due -- but
+        // the prompt reads the derived list rather than re-deciding from
+        // retrievability, so the fixture has to carry it.
+        learnerProgress: { ...STATE, dueItemIds: ["exponent:hola", "queso"] },
         learner: {
           ...createTeacherContext().learner,
           lemmaCards: {
@@ -317,6 +323,36 @@ describe("competency cards reach the learner state, by name", () => {
       })
     ).user;
   }
+
+  it("THE ONE THAT MATTERS: a card only ever SHOWN is not reported as due", () => {
+    // How the two-definitions bug got in. A card the learner has only been
+    // shown is never reviewed, so it keeps the prior it was seeded with --
+    // about 0.82 at their own band -- which is under the 0.95 floor forever.
+    // `encountered` is the commonest observation there is, so comparing
+    // retrievability directly reported most of the passive vocabulary as
+    // overdue, and the Teacher was told to remind the learner of words they
+    // had never been tested on.
+    const base = createTeacherContext();
+    const prompt = buildTeacherPrompt({
+      ...base,
+      // Derived through `getItemProgress`, which calls a never-reviewed card
+      // `unseen`. So it is absent here even though its retrievability is low.
+      learnerProgress: { ...STATE, dueItemIds: [] },
+      learner: {
+        ...base.learner,
+        lemmaCards: {
+          anden: createLemmaCard("anden", "A1", {
+            retrievability: 0.82,
+            reviewCount: 0,
+            lastReviewedAt: null
+          })
+        }
+      }
+    }).user;
+
+    expect(prompt).toContain("- top due: (none)");
+    expect(prompt).not.toMatch(/- top due:.*anden/);
+  });
 
   it("THE POINT: a competency the learner is forgetting appears in top due", () => {
     // The lists dropped every `exponent:` card, so the Teacher could see that a

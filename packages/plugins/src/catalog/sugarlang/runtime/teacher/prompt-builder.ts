@@ -38,7 +38,6 @@ import { computePacingSignals } from "../learner";
 import { resolveSceneTeachables } from "../inventory/scene-teachable-resolver";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
 import type { CompetencyInventory } from "../contracts/competency-inventory";
-import { DUE_RETRIEVABILITY_FLOOR } from "../learner";
 import {
   cardDisplayName,
   isChunkCardKey
@@ -325,14 +324,38 @@ export function estimatePromptTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+/**
+ * The learner's due cards, as decided by `deriveLearnerProgress`.
+ *
+ * Read from `learnerProgress.dueItemIds` rather than re-derived here. Comparing
+ * `retrievability` to the floor looks equivalent and is not: a card the learner
+ * has only ever been SHOWN is never reviewed, so it keeps the prior it was
+ * seeded with -- about 0.82 for a word at their own band -- which sits below
+ * the 0.95 floor forever. `encountered` is the commonest observation there is,
+ * so that comparison reports most of the learner's passive vocabulary as
+ * overdue. They have not forgotten it; they were never tested on it.
+ *
+ * `getItemProgress` already knows this and calls such a card `unseen`
+ * (learner/item-progress.ts). Deriving a second answer here put two
+ * contradictory due lists in one prompt.
+ *
+ * Falls back to no cards rather than to a comparison: with no progress
+ * annotation the honest answer is that we do not know what is due.
+ */
+function dueCards(context: TeacherContext) {
+  const dueIds = new Set(context.learnerProgress?.dueItemIds ?? []);
+  return Object.values(context.learner.lemmaCards).filter((card) =>
+    dueIds.has(card.lemmaId)
+  );
+}
+
 export function formatLearnerSummary(context: TeacherContext): string {
   const learner = context.learner;
   const lang = context.lang.targetLanguage;
   const cards = Object.values(learner.lemmaCards);
   const name = (card: { lemmaId: string }) => cardDisplayName(card.lemmaId, lang);
 
-  const due = cards
-    .filter((card) => card.retrievability < DUE_RETRIEVABILITY_FLOOR)
+  const due = dueCards(context)
     .sort((left, right) => estimateDueScore(right) - estimateDueScore(left))
     .slice(0, MAX_DUE_LEMMAS)
     .map((card) => `${name(card)} (ret ${card.retrievability.toFixed(2)})`);
@@ -779,9 +802,7 @@ export function summarizeDueListPressure(context: TeacherContext): {
   competenciesShown: number;
   competenciesCut: number;
 } {
-  const cards = Object.values(context.learner.lemmaCards).filter(
-    (card) => card.retrievability < DUE_RETRIEVABILITY_FLOOR
-  );
+  const cards = dueCards(context);
   const shown = [...cards]
     .sort((left, right) => estimateDueScore(right) - estimateDueScore(left))
     .slice(0, MAX_DUE_LEMMAS);

@@ -32,7 +32,6 @@ import type { LemmaCard } from "./learner";
 import type { LearnerProgress } from "./learner/learner-progress";
 import type { ObservationRecord } from "./debug/turn-debug-state";
 import { cardDisplayName } from "./inventory/card-display-name";
-import { DUE_RETRIEVABILITY_FLOOR } from "./learner";
 
 const CARD_ID = "sugarlang.learner";
 
@@ -163,7 +162,8 @@ function appendCurriculumState(
 function renderCardList(
   documentRef: Document,
   cards: LemmaCard[],
-  lang: string | null
+  lang: string | null,
+  dueItemIds: Set<string>
 ): HTMLElement {
   const list = documentRef.createElement("div");
   list.className = "sm-debug-hud__world-card";
@@ -189,7 +189,12 @@ function renderCardList(
     label.style.textOverflow = "ellipsis";
 
     const value = documentRef.createElement("span");
-    const due = card.retrievability < DUE_RETRIEVABILITY_FLOOR ? " DUE" : "";
+    // DUE means what the Teacher was told is due, not "retrievability is below
+    // the floor". A card the learner has only been shown keeps its seeded
+    // prior, which is under the floor -- so the raw comparison marked most of
+    // the passive vocabulary DUE and disagreed with the prompt this HUD exists
+    // to explain.
+    const due = dueItemIds.has(card.lemmaId) ? " DUE" : "";
     value.textContent = `r ${card.retrievability.toFixed(2)} rev ${card.reviewCount} lapse ${card.lapseCount}${due}`;
 
     row.append(label, value);
@@ -226,9 +231,8 @@ function renderInto(
   }
 
   const allCards = [...snapshot.lemmaCards, ...snapshot.exponentCards];
-  const dueCount = allCards.filter(
-    (entry) => entry.retrievability < DUE_RETRIEVABILITY_FLOOR
-  ).length;
+  const dueItemIds = new Set(turnState.learnerProgress?.dueItemIds ?? []);
+  const dueCount = dueItemIds.size;
 
   appendHeading(card, "LEARNER");
   appendMetric(card, "band", snapshot.estimatedCefrBand);
@@ -252,7 +256,7 @@ function renderInto(
 
   if (allCards.length > 0) {
     appendHeading(container, "CARDS");
-    container.appendChild(renderCardList(documentRef, allCards, lang));
+    container.appendChild(renderCardList(documentRef, allCards, lang, dueItemIds));
   }
 }
 
