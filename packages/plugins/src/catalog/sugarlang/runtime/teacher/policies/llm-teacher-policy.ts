@@ -19,6 +19,7 @@ import { buildPostPlacementCalibrationHint, isInPostPlacementCalibration } from 
 import { traceTeacherCall } from "../teacher-trace";
 import {
   buildTeacherPrompt,
+  summarizeDueListPressure,
   estimatePromptTokens
 } from "../prompt-builder";
 import { parseDirective, repairDirective } from "../schema-parser";
@@ -114,6 +115,31 @@ export class TeacherInvocationError extends Error {
  * Creates a TeacherClaudeClient backed by sugarlang's own gateway.
  * No dependency on sugaragent — all calls go through the gateway proxy.
  */
+/**
+ * Due items the Teacher was shown and did not choose this turn.
+ *
+ * Ids only. Whether the pile is a problem is an aggregate question, and
+ * carrying the whole card here would put learner state in a telemetry payload
+ * that already names the item.
+ */
+function passedOverDueItems(
+  context: TeacherContext,
+  directive: PedagogicalDirective
+): string[] {
+  const due = context.learnerProgress?.dueItemIds ?? [];
+  if (due.length === 0) return [];
+
+  const chosen = new Set<string>();
+  for (const ref of [
+    ...directive.targetVocab.introduce,
+    ...directive.targetVocab.reinforce
+  ]) {
+    if (ref.kind === "competency") chosen.add(`exponent:${ref.competencyId}`);
+    else chosen.add(ref.lemmaId);
+  }
+  return due.filter((itemId) => !chosen.has(itemId));
+}
+
 export function createGatewayTeacherClient(
   gateway: SugarlangLLMClient
 ): TeacherClaudeClient {
@@ -208,7 +234,12 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
             context.lang
           ).length,
           pendingProvisionalCount: pendingProvisionalLemmas.length,
-          learnerBand: context.learner.estimatedCefrBand
+          learnerBand: context.learner.estimatedCefrBand,
+          // Whether competencies are being squeezed out of the shared top-N
+          // due list by the far larger pool of word cards. If competenciesCut
+          // is routinely above zero, the answer is a short line of their own
+          // rather than a shared cap.
+          dueListPressure: summarizeDueListPressure(context)
         },
         cacheHit: false,
         model: this.model,
@@ -375,6 +406,15 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         parseMode,
         cacheHit: false,
         fallback: directive.isFallbackDirective,
+        // The other half of the stranded-item question. `mostOverdue` on
+        // `learner.progress-derived` says how long something has been due;
+        // this says it was on offer THIS turn and was not taken. Counting the
+        // same id across turns is what turns "due for three weeks" into "due
+        // for three weeks and passed over forty times".
+        //
+        // Passing over a due item is correct when the moment does not afford
+        // it, so this is a measurement and never a rule.
+        dueItemsPassedOver: passedOverDueItems(context, directive),
         tokenCost: {
           inputTokens:
             response.inputTokens ??

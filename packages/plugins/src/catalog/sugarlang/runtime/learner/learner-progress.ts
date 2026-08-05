@@ -38,7 +38,16 @@ import {
 import type { CEFRBand } from "../cefr";
 import type { Competency } from "../contracts/competency-inventory";
 import type { LemmaCard } from "../types";
-import { getItemProgress } from "./item-progress";
+import { DUE_RETRIEVABILITY_FLOOR, getItemProgress } from "./item-progress";
+import { daysOverdue } from "./fsrs-adapter";
+import { bandIndex } from "../cefr";
+import { isChunkCardKey } from "../inventory/card-display-name";
+
+/**
+ * How many stranded items the progress event names individually. The total is
+ * emitted beside it, so a cap is never mistaken for the whole pile.
+ */
+const MOST_OVERDUE_CAP = 20;
 
 /** A competency the learner has been taught, and how often it has recurred. */
 export interface MetCompetency {
@@ -135,17 +144,28 @@ export function deriveLearnerProgress(
   //   had passed as overdue. They have not forgotten it; they never had it.
   //
   //   An item out of reach is out of reach, whatever its card says.
-  const dueItemIds = Object.values(learner.lemmaCards)
-    .filter(
-      (card) =>
-        getItemProgress({
-          card,
-          itemBand: card.cefrPriorBand,
-          learnerBand: learner.cefrBand as CEFRBand
-        }) === "due"
-    )
-    .map((card) => card.lemmaId)
-    .sort();
+  const dueCards = Object.values(learner.lemmaCards).filter(
+    (card) =>
+      getItemProgress({
+        card,
+        itemBand: card.cefrPriorBand,
+        learnerBand: learner.cefrBand as CEFRBand
+      }) === "due"
+  );
+  const dueItemIds = dueCards.map((card) => card.lemmaId).sort();
+
+  // STRANDED ITEMS. Ignoring a due item because the moment does not afford it
+  // is correct behaviour, so the pile is tuned in aggregate rather than gated
+  // in code -- but tuning needs to know WHICH items are stuck and for how
+  // long, and a count can only say the pile is growing.
+  const learnerBandIndex = bandIndex(learner.cefrBand as CEFRBand);
+  const overdue = dueCards
+    .map((card) => ({
+      itemId: card.lemmaId,
+      daysOverdue: daysOverdue(card, now, DUE_RETRIEVABILITY_FLOOR),
+      isCompetency: isChunkCardKey(card.lemmaId)
+    }))
+    .sort((left, right) => right.daysOverdue - left.daysOverdue);
 
   const met: MetCompetency[] = [...curriculum.introducedCompetencyIds]
     .map((competencyId) => ({
@@ -170,6 +190,16 @@ export function deriveLearnerProgress(
       metCompetencyCount: met.length,
       unmetCompetencyCount: unmetCompetencyIds.length,
       dueItemCount: dueItemIds.length,
+      dueCompetencyCount: overdue.filter((entry) => entry.isCompetency).length,
+      dueWordCount: overdue.filter((entry) => !entry.isCompetency).length,
+      dueBelowLearnerBandCount:
+        learnerBandIndex < 0
+          ? 0
+          : dueCards.filter((card) => {
+              return bandIndex(card.cefrPriorBand) < learnerBandIndex;
+            }).length,
+      mostOverdue: overdue.slice(0, MOST_OVERDUE_CAP),
+      mostOverdueCap: MOST_OVERDUE_CAP,
       dayAxisDegraded: scene.dayIndex === null
     })
   );

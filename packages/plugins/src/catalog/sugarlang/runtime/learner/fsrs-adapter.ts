@@ -146,6 +146,43 @@ export function decayedRetrievability(card: LemmaCard, now: number): number {
   );
 }
 
+/**
+ * How long an item has been due, in days. Negative means not due yet.
+ *
+ * Derived, not stored. Due-ness is a function of stability and elapsed time,
+ * so the moment a card crossed the floor is already implied by what the card
+ * says -- persisting a `becameDueAt` would be a second copy that drifts the
+ * first time the retention target moves.
+ *
+ * Found by bisecting `forgetting_curve` rather than by inverting it in closed
+ * form. The curve is the same function `getItemProgress` asks, so the answer
+ * cannot disagree with whether the item is actually reported due; a
+ * hand-written inverse would be a second implementation of the same maths.
+ */
+export function daysOverdue(
+  card: LemmaCard,
+  now: number,
+  floor: number
+): number {
+  if (card.lastReviewedAt === null) return 0;
+  const stability = Math.max(0.1, card.stability);
+  const elapsedDays = Math.max(0, (now - card.lastReviewedAt) / DAY_MS);
+
+  // Retrievability falls monotonically, so bisect for where it meets the floor.
+  let low = 0;
+  let high = Math.max(elapsedDays, 1);
+  while (forgetting_curve(FORGETTING_PARAMS, high, stability) > floor) {
+    high *= 2;
+    if (high > 36500) return elapsedDays - high; // a century out; stop
+  }
+  for (let step = 0; step < 40; step += 1) {
+    const mid = (low + high) / 2;
+    if (forgetting_curve(FORGETTING_PARAMS, mid, stability) > floor) low = mid;
+    else high = mid;
+  }
+  return elapsedDays - high;
+}
+
 export function lemmaCardToFsrsCard(card: LemmaCard): FsrsCard {
   const base = createEmptyCard(new Date(card.lastReviewedAt ?? 0));
 

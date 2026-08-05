@@ -39,7 +39,10 @@ import { resolveSceneTeachables } from "../inventory/scene-teachable-resolver";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
 import type { CompetencyInventory } from "../contracts/competency-inventory";
 import { DUE_RETRIEVABILITY_FLOOR } from "../learner";
-import { cardDisplayName } from "../inventory/card-display-name";
+import {
+  cardDisplayName,
+  isChunkCardKey
+} from "../inventory/card-display-name";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
   TARGET_LANGUAGE_RATIO_TOLERANCE
@@ -731,6 +734,46 @@ export function formatTurnShapingHints(context: TeacherContext): string {
   }
 
   return ["TURN-SHAPING HINTS:", ...hints.map((hint) => `- ${hint}`)].join("\n");
+}
+
+/**
+ * How hard the shared top-N lists are squeezing competencies out.
+ *
+ * Words and competencies compete for the same slots, ranked against each
+ * other. A conversation contains far more words than competencies, so the card
+ * pool skews toward words as a learner plays -- and taking the top 8 from a
+ * pool that is mostly words yields mostly words. A greeting at 0.61 loses its
+ * slot to eight words at 0.55, on arithmetic rather than on importance.
+ *
+ * Not a fix, a measurement. The information is not lost -- the competencies
+ * met line is uncapped -- but the narrower fact that one is fading NOW can be.
+ * If this shows competencies routinely cut, the answer is a short line of
+ * their own rather than a shared top-N.
+ */
+export function summarizeDueListPressure(context: TeacherContext): {
+  dueCompetencies: number;
+  dueWords: number;
+  competenciesShown: number;
+  competenciesCut: number;
+} {
+  const cards = Object.values(context.learner.lemmaCards).filter(
+    (card) => card.retrievability < DUE_RETRIEVABILITY_FLOOR
+  );
+  const shown = [...cards]
+    .sort((left, right) => estimateDueScore(right) - estimateDueScore(left))
+    .slice(0, MAX_DUE_LEMMAS);
+
+  const isCompetency = (card: { lemmaId: string }) =>
+    isChunkCardKey(card.lemmaId);
+  const dueCompetencies = cards.filter(isCompetency).length;
+  const competenciesShown = shown.filter(isCompetency).length;
+
+  return {
+    dueCompetencies,
+    dueWords: cards.length - dueCompetencies,
+    competenciesShown,
+    competenciesCut: dueCompetencies - competenciesShown
+  };
 }
 
 export function buildTeacherPrompt(context: TeacherContext): TeacherPrompt {

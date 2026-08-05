@@ -151,6 +151,13 @@ export type TelemetryEvent =
         cacheHit: boolean;
         fallback: boolean;
         latencyMs: number;
+        /**
+         * Due items the Teacher was shown this turn and did not choose.
+         * Counting an id across turns turns "due for three weeks" into "due
+         * for three weeks and passed over forty times", which is the fact
+         * that decides whether the stranded pile needs tuning.
+         */
+        dueItemsPassedOver?: string[];
         tokenCost?: {
           inputTokens: number;
           outputTokens: number;
@@ -713,6 +720,36 @@ export type TelemetryEvent =
         unmetCompetencyCount: number;
         /** Cards below the due floor, including competency cards. */
         dueItemCount: number;
+        /**
+         * Due cards split by what they are. A conversation contains far more
+         * words than competencies, so this pool skews toward words as a
+         * learner plays -- which is what decides whether competencies are
+         * being squeezed out of the shared top-N lists in the prompt.
+         */
+        dueCompetencyCount: number;
+        dueWordCount: number;
+        /**
+         * Due cards for a band BELOW the learner's own. A baseline for the
+         * band window (222.14): once the Teacher only sees its current band,
+         * these are the items it can no longer reach to reinforce.
+         */
+        dueBelowLearnerBandCount: number;
+        /**
+         * The most-overdue items, longest first, with how many days each has
+         * been past the due floor. Derived from stability and elapsed time,
+         * not stored.
+         *
+         * This is what answers "these six have been due for three weeks and
+         * were never chosen" -- a count alone shows a pile growing without
+         * saying what is stuck. Capped, with the total beside it so the cap is
+         * never mistaken for the whole.
+         */
+        mostOverdue: Array<{
+          itemId: string;
+          daysOverdue: number;
+          isCompetency: boolean;
+        }>;
+        mostOverdueCap: number;
         /** True when the world-day axis was unavailable and diversity degrades to npc x scene. */
         dayAxisDegraded: boolean;
       }
