@@ -55,8 +55,11 @@
  *
  * Relationships:
  *   - Data is hand-authored per language in data/languages/<lang>/always-target.json.
- *   - Rendered into both realization paths: the agent overlay and the variant
- *     bake, so a line does not depend on when it was written.
+ *   - Rendered into every prompt that produces player-facing text: the agent
+ *     overlay, the variant bake, and the verify middleware's repair. The third
+ *     one is easy to miss -- it rewrites a finished turn and assigns the result
+ *     straight back, so a line generated correctly can be replaced by one that
+ *     was never told these rules.
  *
  * Status: active
  */

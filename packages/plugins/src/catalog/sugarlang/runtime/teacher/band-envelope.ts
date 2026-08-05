@@ -106,6 +106,21 @@ export function clampRatioToPosture(
  *
  *   A1 3   A2 4   B1 5   B2 5   C1 6   C2 6
  */
+export function getIntroduceCapForBand(cefrBand: CEFRBand): number {
+  switch (cefrBand) {
+    case "A1":
+      return 3;
+    case "A2":
+      return 4;
+    case "B1":
+    case "B2":
+      return 5;
+    case "C1":
+    case "C2":
+      return 6;
+  }
+}
+
 /**
  * Does a line at this band say the subject pronoun out loud, or drop it?
  *
@@ -124,25 +139,21 @@ export function clampRatioToPosture(
  * They are also two different rules wearing one face: WHICH LANGUAGE the
  * subject is in is always the target one; WHETHER IT IS SAID AT ALL is this.
  *
+ * TAKES NO LANGUAGE, AND THAT IS A LIMIT RATHER THAN A DECISION. Everything
+ * else in this file is a language-neutral pedagogical number; this one is
+ * justified entirely by Spanish pro-drop. It happens to hold for the other
+ * pro-drop languages (Italian, Portuguese) and is simply wrong for a language
+ * that requires the subject -- French, German -- where the instruction would
+ * ask for something a speaker does anyway.
+ *
+ * Nothing enforces that today: the only gate is that Spanish is the one
+ * language with an always-target list. Whoever authors the second list decides
+ * whether this grows a language parameter or moves.
+ *
  *   A1 yes   A2 yes   B1+ no
  */
 export function saysSubjectPronounExplicitly(cefrBand: CEFRBand): boolean {
   return cefrBand === "A1" || cefrBand === "A2";
-}
-
-export function getIntroduceCapForBand(cefrBand: CEFRBand): number {
-  switch (cefrBand) {
-    case "A1":
-      return 3;
-    case "A2":
-      return 4;
-    case "B1":
-    case "B2":
-      return 5;
-    case "C1":
-    case "C2":
-      return 6;
-  }
 }
 
 /**

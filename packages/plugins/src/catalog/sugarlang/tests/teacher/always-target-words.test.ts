@@ -27,8 +27,12 @@ describe("words that are always in the target language", () => {
     // the switch to the clause boundary, where "Yo vendo queso" is just a
     // Spanish sentence.
     for (const band of ["A1", "A2", "B1", "B2", "C1"] as const) {
-      const lines = formatAlwaysTargetWords("es", band, "Spanish").join(" ");
-      expect(lines, band).toContain("yo");
+      // Assert against the LIST line only. The line below it contains the
+      // worked example `never "yo sell cheese"`, so searching the whole block
+      // for "yo" passes even with an empty list -- which is what the first
+      // version of this test did.
+      const listLine = formatAlwaysTargetWords("es", band, "Spanish")[0];
+      expect(listLine, band).toMatch(/never English: .*\byo\b/);
     }
   });
 
@@ -103,13 +107,17 @@ describe("words that are always in the target language", () => {
   it("holds function words only, not things the Teacher should choose", () => {
     // A content word here would be taught to every learner forever, bypassing
     // the Teacher's judgement about whether this moment affords it.
+    // NOUN IS NOT ALLOWED, and that is the point. `queso` is a noun, and a
+    // noun on this list is a content word taught to every learner forever,
+    // bypassing the Teacher's judgement about whether the moment affords it.
+    // An earlier version of this guard allowed "noun" and therefore guarded
+    // nothing.
     const allowed = new Set([
       "pronoun",
       "determiner",
       "adverb",
       "conjunction",
-      "preposition",
-      "noun"
+      "preposition"
     ]);
     for (const lemmaId of loadAlwaysTargetWords("es").lemmaIds) {
       const pos = LEMMAS[lemmaId].partsOfSpeech;

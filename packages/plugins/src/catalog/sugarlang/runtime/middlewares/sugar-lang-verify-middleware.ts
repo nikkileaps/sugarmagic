@@ -28,6 +28,9 @@ import type { SugarlangRuntimeServices } from "../runtime-services";
 import type { SugarlangConstraint } from "../types";
 import { createSugarlangLogger } from "../logger";
 import { vocabularyRefs } from "../contracts/teachable-ref";
+import { formatAlwaysTargetWords } from "../teacher/always-target-words";
+import { INFLECT_SLATED_WORDS_PROMPT } from "../teacher/slate-prompt";
+import { describeLanguageMix } from "../teacher/band-envelope";
 import { languageDisplayName } from "../language-names";
 import { exceedsReadabilityCeiling } from "../teacher/band-envelope";
 import {
@@ -207,12 +210,33 @@ async function repairWithBestOfN(
       `Do NOT add inline glosses, parenthetical translations, or line-by-line word pairings.`,
       `The NPC speaks naturally -- never write a word followed by its translation on the next line.`,
       ...(voiceRubricLine ? [voiceRubricLine] : []),
+      // THE THIRD PATH THAT WRITES WHAT THE PLAYER READS. Repair rewrites the
+      // turn and assigns the result straight back, so a line that was generated
+      // correctly can be replaced by one that was never told these rules.
+      // Repair fires on ordinary under-ratio turns at the anchored end, which
+      // is exactly the band these rules exist for.
+      ...formatAlwaysTargetWords(
+        constraint.targetLanguage,
+        constraint.learnerCefr,
+        targetLang
+      ),
+      ...(vocabularyRefs(constraint.targetVocab.introduce).length > 0 ||
+      vocabularyRefs(constraint.targetVocab.reinforce).length > 0
+        ? [INFLECT_SLATED_WORDS_PROMPT]
+        : []),
       `Return exactly ${n} alternative versions as a JSON array.`
     ].join(" "),
     userPrompt: [
       `Original: ${originalText}`,
       `Learner level: ${constraint.learnerCefr}. Sentence complexity: ${constraint.sentenceComplexityCap}.`,
-      `About ${pct}% of the words should be in ${targetLang}.`,
+      // describeLanguageMix rather than a third phrasing of the same fact --
+      // the bake and the overlay already share it, and this one had drifted to
+      // a bare percentage with none of the posture guidance.
+      describeLanguageMix(
+        constraint.supportPosture,
+        targetLang,
+        constraint.targetLanguageRatio
+      ),
       vocabContext,
       ``,
       `Return a JSON array of exactly ${n} versions, nothing else: ["...", "...", "..."]`

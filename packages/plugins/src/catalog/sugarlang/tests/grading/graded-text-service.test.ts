@@ -82,7 +82,10 @@ describe("GradedTextService", () => {
       directedRatio: 0.85
     });
 
-    expect(dominant.system).toContain("mostly in es");
+    // The DISPLAY name: "Write mostly in es" was a language tag standing in for
+    // an instruction to a writer. What this pins is the direction and the
+    // ratio, not which spelling of the language name got used.
+    expect(dominant.system).toContain("mostly in Spanish");
     expect(dominant.system).toContain("85%");
   });
 
@@ -345,7 +348,7 @@ describe("GradedTextService", () => {
       })
     ).toMatchInlineSnapshot(`
       {
-        "system": "You are a writer for a language-learning game. Adapt the given English item description into es for a elementary (A2) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a elementary (A2) learner. Write mostly in es -- about 85% -- with brief support-language anchoring only where it aids comprehension. Inside a Spanish phrase, these are always Spanish, never English: yo, tú, usted, mi, tu, me, sí, no. Do NOT drop one into an otherwise English sentence -- write "I sell cheese", never "yo sell cheese". If you want one of these words, write the whole phrase around it in Spanish. When you do write a Spanish phrase, say its subject pronoun out loud rather than dropping it, even where a native speaker would leave it out, so the learner can see who is doing the action. Keep it grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line item description stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
+        "system": "You are a writer for a language-learning game. Adapt the given English item description into es for a elementary (A2) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a elementary (A2) learner. Write mostly in Spanish -- about 85% -- with brief support-language anchoring only where it aids comprehension. Inside a Spanish phrase, these are always Spanish, never English: yo, tú, usted, mi, tu, me, sí, no. Do NOT drop one into an otherwise English sentence -- write "I sell cheese", never "yo sell cheese". If you want one of these words, write the whole phrase around it in Spanish. When you do write a Spanish phrase, say its subject pronoun out loud rather than dropping it, even where a native speaker would leave it out, so the learner can see who is doing the action. Keep it grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line item description stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
         "user": "Target language: es
       Learner level: A2 (elementary (A2))
 
@@ -369,7 +372,7 @@ describe("GradedTextService", () => {
       })
     ).toMatchInlineSnapshot(`
       {
-        "system": "You are a writer for a language-learning game. Adapt the given English dialogue line into es for a intermediate (B1) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a intermediate (B1) learner. Write mostly in es -- about 85% -- with brief support-language anchoring only where it aids comprehension. Inside a Spanish phrase, these are always Spanish, never English: yo, tú, usted, mi, tu, me, sí, no. Do NOT drop one into an otherwise English sentence -- write "I sell cheese", never "yo sell cheese". If you want one of these words, write the whole phrase around it in Spanish. Keep it grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line dialogue line stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
+        "system": "You are a writer for a language-learning game. Adapt the given English dialogue line into es for a intermediate (B1) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a intermediate (B1) learner. Write mostly in Spanish -- about 85% -- with brief support-language anchoring only where it aids comprehension. Inside a Spanish phrase, these are always Spanish, never English: yo, tú, usted, mi, tu, me, sí, no. Do NOT drop one into an otherwise English sentence -- write "I sell cheese", never "yo sell cheese". If you want one of these words, write the whole phrase around it in Spanish. Keep it grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line dialogue line stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
         "user": "Target language: es
       Learner level: B1 (intermediate (B1))
 

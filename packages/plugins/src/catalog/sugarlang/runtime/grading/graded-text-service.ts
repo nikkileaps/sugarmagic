@@ -340,6 +340,12 @@ function renderSlateSection(
       ? `Work these in naturally, in ${targetLang} -- not their English equivalents:${introduce}`
       : null,
     reinforce ? `Re-use these if they fit naturally:${reinforce}` : null,
+    // BEFORE the avoid list, and only when something was actually slated.
+    // "The words above are given in dictionary form" has to point at words the
+    // line should USE. Appended after the whole block it pointed at the
+    // FORBIDDEN list instead -- and on a slate carrying only `avoid`, that was
+    // the only list above it.
+    introduce || reinforce ? INFLECT_SLATED_WORDS_PROMPT : null,
     avoid ? `Avoid these -- use simpler synonyms:${avoid}` : null
   ].filter((part): part is string => Boolean(part));
 
@@ -349,7 +355,6 @@ function renderSlateSection(
 
   return [
     `\nTeach:\n${sections.join("\n")}`,
-    INFLECT_SLATED_WORDS_PROMPT,
     `Do not force every item in. A line that carries one of them naturally beats a line that lists all of them.`
   ];
 }
@@ -387,9 +392,12 @@ export function buildAdaptationPrompt(
     // envelope directed 30%: posture and ratio were passed to the VERIFIER and
     // never to the generator, so the model was told to write full target
     // language and then measured against a rule it had never seen.
+    // The DISPLAY name, not the code. This said "Write mostly in es" -- fine
+    // as a language tag, poor as a instruction to a writer, and the new lines
+    // below read even worse that way ("Inside a es phrase").
     describeLanguageMix(
       request.posture ?? DEFAULT_POSTURE,
-      request.targetLang,
+      languageDisplayName(request.targetLang),
       request.directedRatio
     ),
     // Directly under the ratio line, which they qualify. Same wording as the
