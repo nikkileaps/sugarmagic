@@ -31,6 +31,7 @@ import {
   createTestLearnerProfile
 } from "./test-helpers";
 import { createLearnerBlackboard } from "../learner/test-helpers";
+import { SUGARLANG_LEARNER_PROGRESS_ANNOTATION } from "../../runtime/middlewares/shared";
 import { SugarlangMissingTargetLanguageError } from "../../config";
 
 describe("SugarLangContextMiddleware", () => {
@@ -146,6 +147,67 @@ describe("SugarLangContextMiddleware", () => {
     // gone; `ensure` below proves the same thing -- the middleware fell through
     // to the normal runtime path rather than short-circuiting on placement.
     expect(ensure).toHaveBeenCalledTimes(1);
+  });
+
+  it("THE ONE THAT MATTERS: writes the learner-progress annotation", async () => {
+    // The only place learner progress is PRODUCED. Every other test injects
+    // this annotation by hand, so the whole consumer side was covered and the
+    // writer was not -- and a writer nothing exercises can stop writing
+    // without one test noticing.
+    const learner = createTestLearnerProfile({
+      learnerId: "learner:es:en" as ReturnType<typeof createTestLearnerProfile>["learnerId"]
+    });
+    // No blackboard: the world-day lookup is optional and the annotation must
+    // still be written without it.
+    const services = createServicesStub({
+      getBlackboard: () => null,
+      resolveForExecution: () => ({
+        learnerStore: { getCurrentProfile: vi.fn().mockResolvedValue(learner) },
+        learnerStateReducer: { apply: vi.fn() },
+        sceneLexiconStore: {
+          ensure: vi.fn().mockResolvedValue({
+            sceneId: "scene-1",
+            contentHash: "hash",
+            pipelineVersion: "v1",
+            atlasVersion: "atlas-v1",
+            profile: "runtime-preview",
+            lemmas: {},
+            properNouns: [],
+            anchors: [],
+            questEssentialLemmas: []
+          })
+        },
+        atlas: { getLemma: vi.fn().mockReturnValue(undefined) },
+        teachRecordStore: { list: vi.fn().mockResolvedValue([]) },
+        ledgerStore: { getEncounterCounts: vi.fn().mockResolvedValue({}) }
+      })
+    });
+    const execution = createTestExecution({
+      selection: {
+        conversationKind: "free-form",
+        npcDefinitionId: "npc-1",
+        npcDisplayName: "Marisol",
+        interactionMode: "agent",
+        targetLanguage: "es",
+        supportLanguage: "en"
+      }
+    });
+
+    await createSugarLangContextMiddleware({ services: services as never }).prepare?.(
+      execution
+    );
+
+    const written = execution.annotations[SUGARLANG_LEARNER_PROGRESS_ANNOTATION];
+    expect(written).toBeDefined();
+    // Shape, not values: the fixture learner has no history, so what is being
+    // pinned is that a real LearnerProgress reached the annotation rather than
+    // an empty object or a partially-built one.
+    expect(written).toMatchObject({
+      met: expect.any(Array),
+      unmetCompetencyIds: expect.any(Array),
+      dueItemIds: expect.any(Array),
+      isColdStart: expect.any(Boolean)
+    });
   });
 
   it("treats the placement role as inert when placement is globally disabled", async () => {

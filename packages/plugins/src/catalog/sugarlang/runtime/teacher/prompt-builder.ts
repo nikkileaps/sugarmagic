@@ -40,7 +40,7 @@ import { loadCompetencyInventory } from "../inventory/competency-inventory-loade
 import type { CompetencyInventory } from "../contracts/competency-inventory";
 import {
   cardDisplayName,
-  isChunkCardKey
+  isExponentCardKey
 } from "../inventory/card-display-name";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
@@ -808,7 +808,7 @@ export function summarizeDueListPressure(context: TeacherContext): {
     .slice(0, MAX_DUE_LEMMAS);
 
   const isCompetency = (card: { lemmaId: string }) =>
-    isChunkCardKey(card.lemmaId);
+    isExponentCardKey(card.lemmaId);
   const dueCompetencies = cards.filter(isCompetency).length;
   const competenciesShown = shown.filter(isCompetency).length;
 

@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 import {
   cardDisplayName,
-  isChunkCardKey
+  isExponentCardKey
 } from "../../runtime/inventory/card-display-name";
 import { createLearnerDebugHudCard } from "../../runtime/learner-debug-hud-card";
 import { getAllInventoryExponents } from "../../runtime/inventory/competency-inventory-loader";
@@ -99,8 +99,8 @@ describe("a card key becomes something a human can read", () => {
   });
 
   it("knows which keys are competencies", () => {
-    expect(isChunkCardKey("exponent:que_tal")).toBe(true);
-    expect(isChunkCardKey("queso")).toBe(false);
+    expect(isExponentCardKey("exponent:que_tal")).toBe(true);
+    expect(isExponentCardKey("queso")).toBe(false);
   });
 });
 

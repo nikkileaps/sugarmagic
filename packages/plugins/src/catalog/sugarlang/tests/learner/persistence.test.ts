@@ -202,3 +202,35 @@ describe("learner persistence", () => {
     expect(await store.get("hablar")).toEqual(profile.lemmaCards.hablar);
   });
 });
+
+describe("cards from before the key-space rename", () => {
+  it("THE ONE THAT MATTERS: a chunk: card is dropped, not loaded as a word", () => {
+    // `exponent:` is what marks a card as a competency. A leftover `chunk:`
+    // card matches nothing that looks for one, so it reads as an ordinary
+    // WORD everywhere -- counted as vocabulary, and eligible for the
+    // provisional/probe path, where it could be picked as the target of a
+    // comprehension check about a word that does not exist.
+    const store = new MemoryCardStore();
+    const blackboard = createLearnerBlackboard();
+
+    return (async () => {
+      await store.bulkSet([
+        createLemmaCard("chunk:buenos_dias", "A1", { provisionalEvidence: 1 }),
+        createLemmaCard("exponent:hola", "A1"),
+        createLemmaCard("queso", "A1")
+      ]);
+
+      const loaded = await loadLearnerProfile({
+        blackboard,
+        playerEntityId: "player-1",
+        cardStore: store,
+        fallbackProfile: createLearnerProfile("A1")
+      });
+
+      expect(Object.keys(loaded.lemmaCards).sort()).toEqual([
+        "exponent:hola",
+        "queso"
+      ]);
+    })();
+  });
+});

@@ -33,7 +33,11 @@ import {
   getCompetencyForExponent as getInventoryCompetencyForExponent,
   getAllInventoryExponents
 } from "../inventory/competency-inventory-loader";
-import { competencyIdForCardKey } from "../inventory/card-display-name";
+import {
+  competencyIdForCardKey,
+  exponentCardKey,
+  isExponentCardKey
+} from "../inventory/card-display-name";
 import { countDiverseEncounters } from "../learner";
 import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
 import { buildHighlightTerms, focusTermsOf } from "../grading/highlight-terms";
@@ -464,7 +468,7 @@ export function createSugarLangObserveMiddleware(
             const observationEvent = createObservationEvent({
               execution,
               lemma: {
-                lemmaId: `exponent:${match.item.exponentId}`,
+                lemmaId: exponentCardKey(match.item.exponentId),
                 lang: learner.targetLanguage
               },
               observation: {
@@ -524,7 +528,7 @@ export function createSugarLangObserveMiddleware(
       // right, because no card beats one filed under a key nothing reads.
       const hoverIsKnown =
         hoverLemma !== null &&
-        (hoverLemma.lemma.lemmaId.startsWith("exponent:") ||
+        (isExponentCardKey(hoverLemma.lemma.lemmaId) ||
           services.atlas.getLemma(
             hoverLemma.lemma.lemmaId,
             hoverLemma.lemma.lang
@@ -634,7 +638,7 @@ export function createSugarLangObserveMiddleware(
         for (const { lemmaId } of turnLemmas) {
           if (!lemmaId) continue;
           // Skip introduce-list lemmas (handled above) and exponent ids.
-          if (introduceIds.has(lemmaId) || lemmaId.startsWith("exponent:")) continue;
+          if (introduceIds.has(lemmaId) || isExponentCardKey(lemmaId)) continue;
           // Only reinforce lemmas -- ones with an existing card in the snapshot.
           if (!(lemmaId in learner.lemmaCards)) continue;
           try {
@@ -690,13 +694,13 @@ export function createSugarLangObserveMiddleware(
           // Also exclude chunks the player already produced this turn -- learner snapshot is stale.
           const isNewCard =
             !isPlayerTurn &&
-            !(`exponent:${match.item.exponentId}` in learner.lemmaCards) &&
+            !(exponentCardKey(match.item.exponentId) in learner.lemmaCards) &&
             !playerProducedChunkIds.has(match.item.exponentId);
 
           const observationEvent = createObservationEvent({
             execution,
             lemma: {
-              lemmaId: `exponent:${match.item.exponentId}`,
+              lemmaId: exponentCardKey(match.item.exponentId),
               lang: learner.targetLanguage
             },
             observation: isPlayerTurn

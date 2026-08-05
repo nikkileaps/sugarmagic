@@ -69,6 +69,7 @@ import {
   getSentenceComplexityCap,
   postureForBand
 } from "../teacher/band-envelope";
+import { isExponentCardKey } from "../inventory/card-display-name";
 
 // Local structural type matching SugaragentContribution (sugaragent owns the
 // full interface; we mirror only the fields we write -- no import needed).
@@ -487,7 +488,7 @@ export function createSugarLangTeacherMiddleware(
       const scheduledBiasTerms: string[] =
         learnerProgress && !learnerProgress.isColdStart
           ? learnerProgress.dueItemIds
-              .filter((id) => !id.startsWith("exponent:"))
+              .filter((id) => !isExponentCardKey(id))
               .slice(0, 3)
           : [];
       const contrib: SugarlangContributionShape = {

@@ -160,6 +160,29 @@ describe("the curriculum half is shared; the learner half is not", () => {
     }
   });
 
+  it("a band with no authored lessons says so rather than falling back", () => {
+    // C2 is a band a learner can be estimated at, and the curriculum stops at
+    // C1. The window filters on the band exactly, so a C2 learner has nothing
+    // to choose from -- and the Teacher is TOLD that, rather than being
+    // silently handed C1 or the whole inventory. A quiet fallback here would
+    // teach below band without anything saying so.
+    const base = createTeacherContext();
+    const rendered = formatAvailableCompetencies({
+      ...base,
+      learner: { ...base.learner, estimatedCefrBand: "C2" }
+    });
+
+    expect(rendered).toContain("(none)");
+    // Nothing from the band below leaked in to fill the gap.
+    const c1 = loadCompetencyInventory("es").competencies.filter(
+      (competency) => competency.band === "C1"
+    );
+    expect(c1.length).toBeGreaterThan(0);
+    for (const competency of c1) {
+      expect(rendered).not.toContain(competency.competencyId);
+    }
+  });
+
   it("two learners at DIFFERENT bands get different cached bytes", () => {
     // The cached curriculum block is now keyed by band as well as language --
     // one entry per band, still shared by every player at that band. If these

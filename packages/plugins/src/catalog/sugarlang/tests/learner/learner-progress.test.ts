@@ -1,13 +1,13 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/scheduler/outer-loop-scheduler.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/learner/learner-progress.test.ts
  *
- * Purpose: Pins what the scheduler reports -- met and unmet competencies,
- *   encounter counts, due cards, cold start -- and that it reports nothing
- *   about what to teach.
+ * Purpose: Pins what deriveLearnerProgress reports -- met and unmet
+ *   competencies, encounter counts, due items, cold start -- and that it
+ *   reports nothing about what to teach.
  *
  * Relationships:
- *   - Exercises ../../runtime/scheduler/outer-loop-scheduler.
- *   - Uses MemoryTelemetrySink to verify the scheduler.computed event.
+ *   - Exercises ../../runtime/learner/learner-progress.
+ *   - Uses MemoryTelemetrySink to verify the emitted event.
  *
  * Status: active
  */
@@ -162,6 +162,43 @@ describe("OuterLoopScheduler", () => {
       );
 
       expect(state.dueItemIds).toEqual(["faded"]);
+    });
+
+    it("THE ONE THAT MATTERS: ranks most-forgotten first, not alphabetically", () => {
+      // Consumers take the HEAD of this list. The lore-search bias sends the
+      // first three to the vector store as query terms, so an alphabetical
+      // sort meant `anden` was always searched and `zapato` never was, however
+      // faded each one actually was.
+      const state = deriveLearnerProgress(
+        board({
+          learner: {
+            cefrBand: "A2",
+            lemmaCards: {
+              anden: makeCard("anden", 0.6),
+              queso: makeCard("queso", 0.2),
+              zapato: makeCard("zapato", 0.4)
+            }
+          }
+        })
+      );
+
+      expect(state.dueItemIds).toEqual(["queso", "zapato", "anden"]);
+    });
+
+    it("breaks ties on id, so the order is stable for the cache", () => {
+      const state = deriveLearnerProgress(
+        board({
+          learner: {
+            cefrBand: "A2",
+            lemmaCards: {
+              zapato: makeCard("zapato", 0.3),
+              anden: makeCard("anden", 0.3)
+            }
+          }
+        })
+      );
+
+      expect(state.dueItemIds).toEqual(["anden", "zapato"]);
     });
 
     it("INCLUDES competency cards, which the ranked scheduler used to skip", () => {

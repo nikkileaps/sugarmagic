@@ -10,7 +10,8 @@
  *
  * Exports:
  *   - EXPONENT_CARD_PREFIX
- *   - isChunkCardKey
+ *   - isExponentCardKey
+ *   - exponentCardKey
  *   - competencyIdForCardKey
  *   - cardDisplayName
  *
@@ -26,8 +27,13 @@ import { getCompetencyForExponent } from "./competency-inventory-loader";
 export const EXPONENT_CARD_PREFIX = "exponent:";
 
 /** True when a card key belongs to a competency rather than a word. */
-export function isChunkCardKey(cardKey: string): boolean {
+export function isExponentCardKey(cardKey: string): boolean {
   return cardKey.startsWith(EXPONENT_CARD_PREFIX);
+}
+
+/** The card key for an exponent. The only place this string is built. */
+export function exponentCardKey(exponentId: string): string {
+  return `${EXPONENT_CARD_PREFIX}${exponentId}`;
 }
 
 /**
@@ -50,7 +56,7 @@ export function competencyIdForCardKey(
   cardKey: string,
   lang: string
 ): string | null {
-  if (!isChunkCardKey(cardKey)) return null;
+  if (!isExponentCardKey(cardKey)) return null;
   const competency = getCompetencyForExponent(
     cardKey.slice(EXPONENT_CARD_PREFIX.length),
     lang
@@ -76,7 +82,7 @@ export function competencyIdForCardKey(
  * inventory) and the key is what you would grep for.
  */
 export function cardDisplayName(cardKey: string, lang: string): string {
-  if (!isChunkCardKey(cardKey)) return cardKey;
+  if (!isExponentCardKey(cardKey)) return cardKey;
   const exponentId = cardKey.slice(EXPONENT_CARD_PREFIX.length);
   const competency = getCompetencyForExponent(exponentId, lang);
   if (!competency) return cardKey;

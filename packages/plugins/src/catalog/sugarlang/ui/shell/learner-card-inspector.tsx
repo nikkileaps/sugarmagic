@@ -28,6 +28,7 @@ import { CARD_STORE_DB_NAME_PREFIX } from "../../runtime/learner";
 import { TEACH_RECORD_DB_NAME_PREFIX } from "../../runtime/learner";
 import type { LemmaCard } from "../../runtime/learner";
 import type { TeachRecord } from "../../runtime/learner";
+import { isExponentCardKey } from "../../runtime/inventory/card-display-name";
 
 const LEMMA_CARDS_STORE = "lemma-cards";
 const TEACH_RECORDS_STORE = "teach-records";
@@ -85,7 +86,7 @@ async function loadAllProfiles(): Promise<ProfileSnapshot[]> {
     cardDbNames.map(async (dbName) => {
       const learnerId = dbName.slice(CARD_STORE_DB_NAME_PREFIX.length + 1);
       const allCards = await readStoreAll<LemmaCard>(dbName, LEMMA_CARDS_STORE);
-      const exponentCards = allCards.filter((c) => c.lemmaId.startsWith("exponent:"));
+      const exponentCards = allCards.filter((c) => isExponentCardKey(c.lemmaId));
       profileMap.set(learnerId, { learnerId, exponentCards, teachRecords: [] });
     })
   );

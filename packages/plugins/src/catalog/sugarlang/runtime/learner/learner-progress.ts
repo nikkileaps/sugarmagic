@@ -41,7 +41,7 @@ import type { LemmaCard } from "../types";
 import { DUE_RETRIEVABILITY_FLOOR, getItemProgress } from "./item-progress";
 import { daysOverdue } from "./fsrs-adapter";
 import { bandIndex } from "../cefr";
-import { isChunkCardKey } from "../inventory/card-display-name";
+import { isExponentCardKey } from "../inventory/card-display-name";
 
 /**
  * How many stranded items the progress event names individually. The total is
@@ -152,7 +152,20 @@ export function deriveLearnerProgress(
         learnerBand: learner.cefrBand as CEFRBand
       }) === "due"
   );
-  const dueItemIds = dueCards.map((card) => card.lemmaId).sort();
+  // MOST FORGOTTEN FIRST, not alphabetical. Consumers take the head of this
+  // list -- the lore-search bias uses the first three -- so the order is a
+  // ranking, not a presentation detail. Sorting by id meant `anden` always beat
+  // `queso` no matter which one the learner was actually losing.
+  //
+  // Ties break on id so the list stays deterministic, which the directive
+  // cache and the telemetry both rely on.
+  const dueItemIds = dueCards
+    .sort(
+      (left, right) =>
+        left.retrievability - right.retrievability ||
+        left.lemmaId.localeCompare(right.lemmaId)
+    )
+    .map((card) => card.lemmaId);
 
   // STRANDED ITEMS. Ignoring a due item because the moment does not afford it
   // is correct behaviour, so the pile is tuned in aggregate rather than gated
@@ -163,7 +176,7 @@ export function deriveLearnerProgress(
     .map((card) => ({
       itemId: card.lemmaId,
       daysOverdue: daysOverdue(card, now, DUE_RETRIEVABILITY_FLOOR),
-      isCompetency: isChunkCardKey(card.lemmaId)
+      isCompetency: isExponentCardKey(card.lemmaId)
     }))
     .sort((left, right) => right.daysOverdue - left.daysOverdue);
 

@@ -210,6 +210,31 @@ export function deserializeLearnerProfile(json: string): LearnerProfile {
   };
 }
 
+/**
+ * Competency cards written before the key space was renamed.
+ *
+ * They were keyed `chunk:<chunkId>`; they are now `exponent:<exponentId>`, and
+ * the ids differ too -- exponent ids are generated from the phrase, so no
+ * rewrite maps one onto the other. Nothing reads `chunk:` any more.
+ *
+ * DROPPED RATHER THAN MIGRATED, and rather than left alone. Left alone they
+ * are worse than absent: `exponent:` is what marks a card as a competency, so
+ * a `chunk:` card reads as a WORD everywhere -- it is counted as vocabulary in
+ * the debug state, and it passes the provisional filter, which is how a phrase
+ * could be picked as the target of a comprehension probe about a word that
+ * does not exist.
+ *
+ * The learner loses the review history of phrases they met before the rename.
+ * That is the smaller cost, and it is honest: the alternative is a rewrite
+ * that has to guess which exponent an old chunk became.
+ *
+ * Removable once no store predates the rename -- there is one player and one
+ * machine, so that is a decision rather than a discovery.
+ */
+function isDeadChunkCardKey(cardKey: string): boolean {
+  return cardKey.startsWith("chunk:");
+}
+
 export async function loadLearnerProfile(
   options: LoadLearnerProfileOptions
 ): Promise<LearnerProfile> {
@@ -231,6 +256,7 @@ export async function loadLearnerProfile(
   while (true) {
     const page = await options.cardStore.listPage(cursor, CARD_STORE_PAGE_SIZE);
     for (const card of page.cards) {
+      if (isDeadChunkCardKey(card.lemmaId)) continue;
       lemmaCards[card.lemmaId] = cloneCard(card);
     }
     if (!page.nextCursor) {

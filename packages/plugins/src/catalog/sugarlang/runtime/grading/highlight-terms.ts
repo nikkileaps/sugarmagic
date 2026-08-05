@@ -46,6 +46,7 @@ import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
 import { tokenize } from "../classifier/tokenize";
 import { getCompetencyForExponent } from "../inventory/competency-inventory-loader";
 import { allForms } from "../classifier/word-forms";
+import { exponentCardKey } from "../inventory/card-display-name";
 
 export interface HighlightTerms {
   /** NEW this turn. Drives gold vs blue. */
@@ -236,7 +237,7 @@ export function buildHighlightTerms(args: {
         // The ACT is what was taught, so the credit goes to the competency's
         // chunk rather than to any word inside the phrase. This is the key the
         // card store already uses.
-        creditByTerm[key] = `exponent:${chunkMatch.item.exponentId}`;
+        creditByTerm[key] = exponentCardKey(chunkMatch.item.exponentId);
       }
     } catch {
       // Phrase detection is an affordance. A failure must not cost the line its

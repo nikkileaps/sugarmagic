@@ -48,6 +48,7 @@
 
 import type { LemmaRef } from "../contracts/lexical-prescription";
 import type { LearnerProfile } from "./learner-profile";
+import { isExponentCardKey } from "../inventory/card-display-name";
 
 /** Probe is REQUIRED at or beyond this many turns, or this many turns pending. */
 const HARD_FLOOR_TURNS = 25;
@@ -91,7 +92,9 @@ export function computePendingProvisionalLemmas(
 ): PendingProvisional[] {
   const currentTurn = learner.currentSession?.turns ?? 0;
   return Object.values(learner.lemmaCards)
-    .filter((card) => !card.lemmaId.startsWith("exponent:") && card.provisionalEvidence > 0)
+    .filter(
+      (card) => !isExponentCardKey(card.lemmaId) && card.provisionalEvidence > 0
+    )
     .map((card) => ({
       lemmaRef: {
         lemmaId: card.lemmaId,
