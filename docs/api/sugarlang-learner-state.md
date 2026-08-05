@@ -8,7 +8,7 @@ post-placement calibration window, and the dev-only band override contract.
 
 ## Learner Profile Shape
 
-**File:** `packages/plugins/src/catalog/sugarlang/runtime/contracts/learner-profile.ts`
+**File:** `packages/plugins/src/catalog/sugarlang/runtime/learner/learner-profile.ts`
 
 ```typescript
 interface LearnerProfile {
@@ -31,19 +31,24 @@ prior (`cefrPriorBand`, `priorWeight`), productive knowledge
 provisional-evidence pair (`provisionalEvidence`, capped at 5, and
 `provisionalEvidenceFirstSeenTurn`).
 
-**Chunk cards (085.3):** `lemmaCards` also holds chunk cards alongside
-vocabulary cards. Chunk cards have `lemmaId` prefixed with `"chunk:"` (e.g.
-`"chunk:buenos-dias"`). They track receptive and productive exposure to
-formulaic chunks tied to competencies (greetings, farewells, etc.)
-using the same FSRS fields as vocabulary cards. Because the `"chunk:"` colon
-is unreachable by the normalizer, there is no DB version bump -- chunk cards
-live in the same `lemma-cards` IDB object store as vocabulary cards.
+**Competency cards:** `lemmaCards` also holds competency cards alongside
+vocabulary ones. A competency card is keyed by the exponent the learner met --
+`lemmaId` prefixed with `"exponent:"`, e.g. `"exponent:buenos_dias"` -- and
+tracks receptive and productive exposure with the same FSRS fields as a word.
+The colon is unreachable by the normalizer, so both kinds live in the same
+`lemma-cards` IDB object store with no version bump.
 
-The teacher, probe, and provisional systems exclude chunk cards via a
-`lemmaId.startsWith("chunk:")` guard (`shared.ts: computePendingProvisionalLemmas`,
-`prompt-builder.ts: formatLearnerSummary`). Chunk observations are emitted as
-`chunk-encountered` (NPC speech) and `chunk-produced` (player input) telemetry
-events and update `productiveStrength` / `receptiveStrength` directly.
+The Teacher sees them: `formatLearnerSummary` (`prompt-builder.ts`) walks
+every card and renders each through `cardDisplayName`, which strips the
+`exponent:` prefix. Only the provisional/probe path filters them out
+(`pacing-signals.ts`), because a phrase is not a word to be probed.
+
+Observations are emitted as `chunk-encountered` (NPC speech) and
+`chunk-produced` (player input) telemetry events. They move the card's FSRS
+state -- `stability` and `retrievability` -- the same way a lemma observation
+does.
+
+An exponent is a phrase that performs a competency; see API 016.
 
 The `learnerId` is built in `runtime/runtime-services.ts` as
 `${playerDefinition.definitionId}:${targetLanguage}:${supportLanguage}`, so
@@ -137,7 +142,7 @@ produced in free text during placement (`fsrs.seeded-from-placement`).
 
 **File:** `packages/plugins/src/catalog/sugarlang/runtime/learner/calibration-window.ts`
 -- the single definition; `teacher/calibration-mode.ts` re-exports it for the
-Director's hint surface. Do not duplicate the predicate.
+Teacher's hint surface. Do not duplicate the predicate.
 
 ```typescript
 CALIBRATION_CONFIDENCE_CEILING = 0.65
@@ -208,10 +213,10 @@ __sugarlangDebug.getState()          // SugarlangDebugState snapshot
 
 - `getState()` returns `{ estimatedCefrBand, assessmentStatus,
   cefrConfidence, placementStatus, inCalibration, pinned, pinnedBand,
-  lemmaCards, chunkCards, teachRecords }` (085.3/085.5: the last three are
-  read directly from the card store and teach record store so the debug UI
-  can show chunk card counts and teach-record history without a Studio
-  data source).
+  lemmaCards, exponentCards, teachRecords }` -- the last three are read
+  directly from the card store and teach record store, so the debug UI can
+  show competency card counts and teach-record history without a Studio data
+  source.
 - **Pinning:** the reducer takes a `debugPinnedBand` callback; while a band
   is pinned, observation-driven posterior and `estimatedCefrBand` updates are
   suppressed entirely (FSRS card scheduling and session accumulators still

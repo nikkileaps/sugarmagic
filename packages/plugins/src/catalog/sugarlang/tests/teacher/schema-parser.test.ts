@@ -317,7 +317,7 @@ describe("parseDirective", () => {
     }
     expect(telemetry.emit).toHaveBeenCalledWith(
       expect.objectContaining({
-        kind: "comprehension.director-hard-floor-violated",
+        kind: "comprehension.teacher-hard-floor-violated",
         conversationId: "conversation-1"
       })
     );

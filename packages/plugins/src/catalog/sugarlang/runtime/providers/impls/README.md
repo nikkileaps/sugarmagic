@@ -9,6 +9,6 @@ Current responsibilities:
 
 Dependency rule:
 - provider implementations may depend on contracts, loaders, and learner helpers
-- provider implementations must not depend on director prompt logic or middleware assembly
+- provider implementations must not depend on teacher prompt logic or middleware assembly
 
 The read side lives here; the learner-state write side lives in `runtime/learner/`.

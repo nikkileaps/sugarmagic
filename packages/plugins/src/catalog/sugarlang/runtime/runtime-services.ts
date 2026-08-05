@@ -74,6 +74,8 @@ import {
   type SugarlangLearnerDataResetResult,
   type TeachRecordStore
 } from "./learner";
+import { clearTurnDebugState } from "./debug/turn-debug-state";
+import { isExponentCardKey } from "./inventory/card-display-name";
 import {
   PlacementQuestionnaireLoader
 } from "./placement/placement-questionnaire-loader";
@@ -87,7 +89,6 @@ import {
   emitTelemetry,
   createTelemetryEvent
 } from "./telemetry/telemetry";
-import { OuterLoopScheduler } from "./scheduler/outer-loop-scheduler";
 import type { SugarlangLoggerLike } from "./logger";
 export type { SugarlangLoggerLike } from "./logger";
 import type { CEFRBand } from "./types";
@@ -131,7 +132,6 @@ export interface SugarlangExecutionServices {
   /** 086.5: optional live-render cache (in-memory only; no persistence needed). */
   liveRenderCache?: LiveRenderCache;
   /** 087.1: outer-loop scheduler -- computes the cross-session teach schedule. */
-  outerLoopScheduler: OuterLoopScheduler;
 }
 
 export interface SugarlangDebugState {
@@ -144,8 +144,8 @@ export interface SugarlangDebugState {
   pinnedBand: CEFRBand | null;
   /** 085.3: lemma cards in the learner store (excludes chunk cards). */
   lemmaCards: import("./learner").LemmaCard[];
-  /** 085.3: chunk cards (lemmaId starts with "chunk:") in the learner store. */
-  chunkCards: import("./learner").LemmaCard[];
+  /** 085.3: exponent cards (see isExponentCardKey) in the learner store. */
+  exponentCards: import("./learner").LemmaCard[];
   /** 085.5: teach records written for realized competencies. */
   teachRecords: import("./learner").TeachRecord[];
 }
@@ -493,8 +493,8 @@ export class SugarlangRuntimeServices {
       inCalibration: isInPostPlacementCalibration(profile),
       pinned: this._debugPinnedBand !== null,
       pinnedBand: this._debugPinnedBand,
-      lemmaCards: allCards.filter((c) => !c.lemmaId.startsWith("chunk:")),
-      chunkCards: allCards.filter((c) => c.lemmaId.startsWith("chunk:")),
+      lemmaCards: allCards.filter((c) => !isExponentCardKey(c.lemmaId)),
+      exponentCards: allCards.filter((c) => isExponentCardKey(c.lemmaId)),
       teachRecords
     };
   }
@@ -507,6 +507,10 @@ export class SugarlangRuntimeServices {
     // never again, so without this a reset silently unpinned the band and the
     // learner drifted during observation.
     this._debugPinnedBand = null;
+    // The debug HUD reads module-level state recorded per turn. Without this
+    // it keeps showing the last observation and curriculum facts of the
+    // learner that was just deleted, which reads as "the reset did nothing".
+    clearTurnDebugState();
     // Close the live card-store connections and delete the sugarlang
     // databases through the single shared enforcer (also used by the Studio
     // shell reset button). A blocked delete is reported, not swallowed.
@@ -792,7 +796,6 @@ export class SugarlangRuntimeServices {
       ? new IndexedDBIntentCache({ workspaceId: this.studioWorkspaceId })
       : undefined;
     const liveRenderCache = new LiveRenderCache();
-    const outerLoopScheduler = new OuterLoopScheduler({ telemetry: this.telemetry });
 
     const services: SugarlangExecutionServices = {
       ...languageBundle,
@@ -808,8 +811,7 @@ export class SugarlangRuntimeServices {
       llmClient: this.gatewayClient,
       variantCache,
       intentCache,
-      liveRenderCache,
-      outerLoopScheduler
+      liveRenderCache
     };
     this.executionServices.set(key, services);
 

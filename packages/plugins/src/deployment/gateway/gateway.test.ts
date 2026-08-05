@@ -329,7 +329,7 @@ describe("handleSugarAgentGenerate", () => {
 
   it("090 — purpose:\"teacher\" resolves from the SUGARLANG env var, not the sugaragent dialogue model", async () => {
     // Regression: the Teacher had no purpose, so it silently ran on the cheap
-    // sugaragent dialogue model while `DEFAULT_DIRECTOR_MODEL` sat inert in
+    // sugaragent dialogue model while a default-model constant sat inert in
     // sugarlang. Nothing caught it because nothing asserted the routing.
     process.env["SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL"] = "dialogue-model-x";
     process.env["SUGARMAGIC_SUGARLANG_TEACHER_MODEL"] = "teacher-model-z";

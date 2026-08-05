@@ -26,7 +26,7 @@ import {
 } from "../telemetry/telemetry";
 import {
   ACTIVE_DIRECTIVE_FACT,
-  SUGARLANG_DIRECTOR_WRITER,
+  SUGARLANG_TEACHER_WRITER,
   createActiveDirectiveFactScope
 } from "../learner";
 
@@ -118,7 +118,7 @@ export class DirectiveCache {
 
     // The learner half. This is what closes the loop that already ran end to
     // end and had nobody listening: produce a word -> observe -> FSRS -> the
-    // item's LearningStatus flips -> this key moves -> re-slate against what
+    // item's ItemProgress flips -> this key moves -> re-slate against what
     // they now know.
     if (
       keysNow?.learnerKey !== undefined &&
@@ -163,7 +163,7 @@ export class DirectiveCache {
     this.blackboard.setFact({
       definition: ACTIVE_DIRECTIVE_FACT,
       scope,
-      sourceSystem: SUGARLANG_DIRECTOR_WRITER,
+      sourceSystem: SUGARLANG_TEACHER_WRITER,
       value: {
         ...envelope.value,
         turnsConsumed: envelope.value.turnsConsumed + 1
@@ -183,7 +183,7 @@ export class DirectiveCache {
     this.blackboard.setFact({
       definition: ACTIVE_DIRECTIVE_FACT,
       scope: createActiveDirectiveFactScope(conversationId),
-      sourceSystem: SUGARLANG_DIRECTOR_WRITER,
+      sourceSystem: SUGARLANG_TEACHER_WRITER,
       value: {
         directive,
         issuedAtMs: now,
@@ -205,7 +205,7 @@ export class DirectiveCache {
     this.blackboard.clearFact({
       definition: ACTIVE_DIRECTIVE_FACT,
       scope: createActiveDirectiveFactScope(conversationId),
-      sourceSystem: SUGARLANG_DIRECTOR_WRITER
+      sourceSystem: SUGARLANG_TEACHER_WRITER
     });
     this.cachedConversationIds.delete(conversationId);
     if (this.telemetry) {

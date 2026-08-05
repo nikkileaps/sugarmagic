@@ -16,7 +16,7 @@ order:
 The plugin owns one runtime service graph in
 `packages/plugins/src/catalog/sugarlang/runtime/runtime-services.ts`. The
 middlewares share that service graph rather than constructing their own copies
-of the atlas, classifier, learner store, or director.
+of the atlas, classifier, learner store, or teacher.
 
 The authored placement tag still flows through:
 

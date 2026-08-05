@@ -40,7 +40,8 @@ splice.
 
 ```ts
 {
-  system: string;
+  system: string;              // the blocks joined, for callers that want one string
+  systemBlocks: { text: string; cache: boolean }[];   // what goes on the wire
   user: string;
   cacheMarkers: string[];
 }
@@ -48,7 +49,12 @@ splice.
 
 Budget split:
 
-- cacheable system prompt: role, pedagogical rubric, CEFR descriptors, output schema, hard constraints, comprehension guidance
+- cacheable system prompt, as two blocks: (1) role, pedagogical rubric, output
+  schema, hard constraints, comprehension guidance, pragmatic feedback;
+  (2) the curriculum -- the learner's **band window**, its competencies grouped
+  under their lesson names. Two blocks and not one because they go stale for
+  different reasons: instructions when a prompt constant is edited, the
+  curriculum every time a phrase is authored.
 - dynamic user prompt: the SITUATION (scene concepts, runtime facts, NPC, recent turns) and the LEARNER (state, derived pacing signals), plus turn-shaping hints. These are the two content doors on `TeacherContext`; there is no prescription.
 
 The builder now renders a canonical template from `prompt-template.ts` so the
@@ -101,7 +107,7 @@ sugaragent's config.
 `ClaudeTeacherPolicy` sends **no model id** by default — `options.model` exists
 as a tooling/test escape hatch and is omitted from the request when unset.
 There is intentionally no client-side default constant: the previous
-`DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6"` was never forwarded over the
+A default-model constant was never forwarded over the
 wire, so the Teacher silently ran on the sugaragent *dialogue* model while the
 constant read like configuration. Telemetry records `model: null` when the
 gateway resolved it.
@@ -134,7 +140,7 @@ Current validity rules:
 
 ## Post-Placement Calibration Hint
 
-The old director-owned placement flow is gone. The only remaining calibration
+The old teacher-owned placement flow is gone. The only remaining calibration
 concept is a small post-placement warm-up hint:
 
 - `isInPostPlacementCalibration(learner)` returns true for recently evaluated,

@@ -16,10 +16,10 @@
  *   completely unrelated reasons, and a cached decision is valid only while BOTH
  *   still hold. Two keys, checked independently.
  *
- * WHY `LearningStatus` AND NOT RETRIEVABILITY
+ * WHY `ItemProgress` AND NOT RETRIEVABILITY
  *   Retrievability is a decaying float -- it changes every turn, so a key built
  *   on it would re-plan constantly and put us back on the per-turn treadmill the
- *   situation key removed. `LearningStatus` is five coarse values, so the key
+ *   situation key removed. `ItemProgress` is five coarse values, so the key
  *   moves on a TRANSITION: unseen -> learning when the player first produces a
  *   word, learning -> due when it decays past the floor. That is what
  *   "materially" means.
@@ -31,7 +31,7 @@
  *       -> observe records produced-typed   (sugar-lang-observe-middleware)
  *       -> reducer applies it               (learner-state-reducer)
  *       -> FSRS updates the card
- *       -> getLearningStatus flips          <- this was where it stopped
+ *       -> getItemProgress flips          <- this was where it stopped
  *
  *   Now the flip moves this key, the cached directive retires, and the Teacher
  *   decides again knowing the word landed.
@@ -50,10 +50,10 @@
 
 import { sha256Hex } from "../compile/content-hash";
 import type { LearnerProfile } from "./learner-profile";
-import { getLearningStatus } from "./learning-status";
+import { getItemProgress } from "./item-progress";
 
 /**
- * Digest of the learner's band plus the LearningStatus of every card they hold.
+ * Digest of the learner's band plus the ItemProgress of every card they hold.
  *
  * The band is in the key because a re-estimate changes what is teachable at all
  * -- it moves the out-of-reach boundary for every item at once.
@@ -64,7 +64,7 @@ import { getLearningStatus } from "./learning-status";
 export function learnerKey(learner: LearnerProfile): string {
   const statuses = Object.values(learner.lemmaCards)
     .map((card) => {
-      const status = getLearningStatus({
+      const status = getItemProgress({
         card,
         // The card carries the band it was seeded with, so this needs no atlas.
         itemBand: card.cefrPriorBand,
@@ -74,7 +74,7 @@ export function learnerKey(learner: LearnerProfile): string {
     })
     // `unseen` CARDS ARE OMITTED, and this is load-bearing.
     //
-    // `getLearningStatus` returns "unseen" for a missing card AND for a card
+    // `getItemProgress` returns "unseen" for a missing card AND for a card
     // with no reviews -- they are the same state, so they must digest the same
     // way. Including unseen cards meant the key moved every time a card was
     // merely CREATED, which happens whenever a word is shown; the Teacher then

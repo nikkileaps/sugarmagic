@@ -15,7 +15,7 @@
  *   - resolveSugarlangTelemetrySink
  *
  * Relationships:
- *   - Is the single telemetry contract consumed by middlewares, Director, learner-state, and Studio debug readers.
+ *   - Is the single telemetry contract consumed by middlewares, Teacher, learner-state, and Studio debug readers.
  *   - Owns persistence/query behavior so gameplay producers stay fire-and-forget.
  *
  * Implements: Proposal 001 §v2 Training Path / §Verification, Failure Modes, and Guardrails
@@ -124,12 +124,12 @@ export type TelemetryEvent =
   // emitter; the event type outlived it, so the debug surfaces still declared a
   // shape nothing could ever produce.
   | TelemetryEventOf<
-      "director.invocation-started",
+      "teacher.invocation-started",
       {
         sceneId: string;
         npcId: string | null;
         npcDisplayName: string | null;
-        directorContext: Record<string, unknown>;
+        teacherContext: Record<string, unknown>;
         cacheHit: boolean;
         model?: string | null;
         cacheMarkers?: string[];
@@ -142,7 +142,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "director.invocation-completed",
+      "teacher.invocation-completed",
       {
         sceneId?: string;
         npcId?: string | null;
@@ -151,6 +151,13 @@ export type TelemetryEvent =
         cacheHit: boolean;
         fallback: boolean;
         latencyMs: number;
+        /**
+         * Due items the Teacher was shown this turn and did not choose.
+         * Counting an id across turns turns "due for three weeks" into "due
+         * for three weeks and passed over forty times", which is the fact
+         * that decides whether the stranded pile needs tuning.
+         */
+        dueItemsPassedOver?: string[];
         tokenCost?: {
           inputTokens: number;
           outputTokens: number;
@@ -163,7 +170,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "director.invocation-failed",
+      "teacher.invocation-failed",
       {
         sceneId?: string;
         npcId?: string | null;
@@ -174,7 +181,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "director.cache-hit",
+      "teacher.cache-hit",
       {
         sceneId?: string;
         npcId?: string | null;
@@ -183,7 +190,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "director.invocation-resolved",
+      "teacher.invocation-resolved",
       {
         sceneId?: string;
         npcId?: string | null;
@@ -417,7 +424,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "director.pre-placement-bypass",
+      "teacher.pre-placement-bypass",
       {
         sceneId?: string | null;
         lineId: string;
@@ -570,10 +577,10 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "comprehension.director-hard-floor-violated",
+      "comprehension.teacher-hard-floor-violated",
       {
         sceneId?: string;
-        directorModel?: string | null;
+        teacherModel?: string | null;
         hardFloorReason?: string | null;
       }
     >
@@ -640,7 +647,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "quest-essential.director-targetvocab-contamination",
+      "quest-essential.teacher-targetvocab-contamination",
       {
         sceneId?: string;
         contaminatedLemmas: string[];
@@ -702,26 +709,49 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "scheduler.computed",
+      "learner.progress-derived",
       {
         sceneId: string | null;
-        teachableCount: number;
         isColdStart: boolean;
         learnerBand: string;
+        /** Competencies the learner has been taught. */
+        metCompetencyCount: number;
+        /** Competencies in the inventory they have not. */
+        unmetCompetencyCount: number;
+        /** Cards below the due floor, including competency cards. */
         dueItemCount: number;
-        debtServiceCount: number;
-        introductionCount: number;
-        affinityCount: number;
-        stretchCount: number;
-        topTeachableId: string | null;
-        topTeachableReason: string | null;
+        /**
+         * Due cards split by what they are. A conversation contains far more
+         * words than competencies, so this pool skews toward words as a
+         * learner plays -- which is what decides whether competencies are
+         * being squeezed out of the shared top-N lists in the prompt.
+         */
+        dueCompetencyCount: number;
+        dueWordCount: number;
+        /**
+         * Due cards for a band BELOW the learner's own. A baseline for the
+         * band window (222.14): once the Teacher only sees its current band,
+         * these are the items it can no longer reach to reinforce.
+         */
+        dueBelowLearnerBandCount: number;
+        /**
+         * The most-overdue items, longest first, with how many days each has
+         * been past the due floor. Derived from stability and elapsed time,
+         * not stored.
+         *
+         * This is what answers "these six have been due for three weeks and
+         * were never chosen" -- a count alone shows a pile growing without
+         * saying what is stuck. Capped, with the total beside it so the cap is
+         * never mistaken for the whole.
+         */
+        mostOverdue: Array<{
+          itemId: string;
+          daysOverdue: number;
+          isCompetency: boolean;
+        }>;
+        mostOverdueCap: number;
         /** True when the world-day axis was unavailable and diversity degrades to npc x scene. */
         dayAxisDegraded: boolean;
-        /** 087.3: Estimated fraction of scene lemmas currently known by the learner. */
-        sceneComprehensionRate: number | null;
-        /** 087.3: True when stretch allowance gate was triggered this turn. */
-        stretchAllowanceActive: boolean;
-        /** 087.4: True when fatigueScore >= STRAIN_SUPPRESS_THRESHOLD; introductions suppressed. */
       }
     >
   | TelemetryEventOf<

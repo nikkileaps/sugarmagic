@@ -1,19 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://sugarmagic.dev/sugarlang/schemas/competency-inventory.schema.json",
-  "title": "Sugarlang Function Inventory",
-  "description": "Hand-curated communicative competency inventory keyed to CEFR can-do descriptors.",
+  "title": "Sugarlang Competency Inventory",
+  "description": "GENERATED from data/curriculum/<band>.json and data/languages/<lang>/exponents.json. Never hand-edited. What a learner can do at each CEFR band, and the phrases that perform it in one language.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "lang", "competencies"],
+  "required": ["schemaVersion", "lang", "lessons", "competencies"],
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "const": "1"
+      "const": "2"
     },
     "lang": {
       "type": "string",
       "minLength": 2
+    },
+    "lessons": {
+      "description": "Topics within a band. A lesson is what a situation can match -- a cafe is food, a ticket window is transport.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/lesson" }
     },
     "competencies": {
       "type": "array",
@@ -25,12 +30,35 @@
       "type": "string",
       "enum": ["A1", "A2", "B1", "B2", "C1", "C2"]
     },
-    "inventoryChunk": {
+    "lesson": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["chunkId", "normalizedForm", "surfaceForms", "cefrBand", "constituentLemmas"],
+      "required": ["lessonId", "band", "ordinal", "displayName"],
       "properties": {
-        "chunkId": { "type": "string", "minLength": 1 },
+        "lessonId": { "type": "string", "minLength": 1 },
+        "band": { "$ref": "#/$defs/cefrBand" },
+        "ordinal": {
+          "description": "Position within the band. `A1.5` is band plus ordinal, derived and never stored.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "displayName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "exponent": {
+      "description": "A phrase that performs a competency. Not the same as a chunk: a chunk is any multi-word expression, an exponent performs THIS competency.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exponentId",
+        "normalizedForm",
+        "surfaceForms",
+        "cefrBand",
+        "constituentLemmas",
+        "glossBySurface"
+      ],
+      "properties": {
+        "exponentId": { "type": "string", "minLength": 1 },
         "normalizedForm": { "type": "string", "minLength": 1 },
         "surfaceForms": {
           "type": "array",
@@ -41,15 +69,33 @@
         "constituentLemmas": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "glossBySurface": {
+          "description": "Every surface form to what it means, per support language.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "propertyNames": { "type": "string", "minLength": 2 },
+            "additionalProperties": { "type": "string", "minLength": 1 },
+            "minProperties": 1
+          }
         }
       }
     },
     "competency": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["competencyId", "displayName", "cefrDescriptor", "band", "chunks"],
+      "required": [
+        "competencyId",
+        "lessonId",
+        "displayName",
+        "cefrDescriptor",
+        "band",
+        "exponents"
+      ],
       "properties": {
         "competencyId": { "type": "string", "minLength": 1 },
+        "lessonId": { "type": "string", "minLength": 1 },
         "displayName": { "type": "string", "minLength": 1 },
         "cefrDescriptor": { "type": "string", "minLength": 1 },
         "band": { "$ref": "#/$defs/cefrBand" },
@@ -59,13 +105,13 @@
           "type": "string",
           "enum": ["farewell", "greeting", "gratitude", "acknowledgement"]
         },
-        "chunks": {
+        "exponents": {
           "type": "object",
-          "description": "Realizing chunks per language (BCP-47 key).",
+          "description": "Performing phrases per language (BCP-47 key).",
           "propertyNames": { "type": "string", "minLength": 2 },
           "additionalProperties": {
             "type": "array",
-            "items": { "$ref": "#/$defs/inventoryChunk" }
+            "items": { "$ref": "#/$defs/exponent" }
           }
         }
       }

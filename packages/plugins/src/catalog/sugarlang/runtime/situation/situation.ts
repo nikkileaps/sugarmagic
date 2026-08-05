@@ -59,7 +59,7 @@ import type { RuntimeFact } from "./runtime-fact";
  * to is situation content, one of the two doors, not a third TeacherContext
  * field.
  *
- * Implements: Proposal 001 §3. Director
+ * Implements: Proposal 001 §3. Teacher
  */
 export interface TeacherNpcContext {
   npcDefinitionId: string | null;
@@ -74,7 +74,7 @@ export interface TeacherNpcContext {
  * 090.4: moved here from contracts/providers.ts, same reason as
  * `TeacherNpcContext`.
  *
- * Implements: Proposal 001 §3. Director
+ * Implements: Proposal 001 §3. Teacher
  */
 export interface TeacherRecentTurn {
   turnId: string;

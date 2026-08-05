@@ -11,7 +11,8 @@ one new `languages/<lang>/` directory that satisfies the shared schemas.
 - `languages/<lang>/morphology.json`: surface-form lookup data consumed by lemmatization.
 - `languages/<lang>/placement-questionnaire.json`: plugin-owned canonical placement question bank.
 
-Spanish also ships `languages/es/competency-inventory.json`. Italian also ships
+Spanish also ships `languages/es/exponents.json` and the
+`languages/es/competency-inventory.json` generated from it. Italian also ships
 `languages/it/frequency.json`.
 
 ## Schema References
@@ -20,6 +21,7 @@ Spanish also ships `languages/es/competency-inventory.json`. Italian also ships
 - `../schemas/morphology.schema.json`
 - `../schemas/placement-questionnaire.schema.json`
 - `../schemas/frequency.schema.json`
+- `../schemas/competency-inventory.schema.json`
 
 ## Source Versus Derived
 
@@ -29,14 +31,22 @@ Only two kinds of file live here, and the difference decides how you change one.
 
 - `cefrlex.json` -- the DICTIONARY. One entry per lemma: band, part of speech,
   frequency rank, glosses, and (for verbs) the full paradigm.
-- `competency-inventory.json`, `placement-questionnaire.json`.
+- `exponents.json` -- the PHRASES that perform each competency, in this
+  language. Wordings only; write them spelled correctly, accents and all.
+  Everything else about an exponent is derived.
+- `placement-questionnaire.json`.
 
-**DERIVED. Regenerated from the dictionary, never hand-edited.**
+**DERIVED. Regenerated from the sources above, never hand-edited.**
 
 - `morphology.json` -- the reverse index: `surface form -> lemma`. The
   dictionary answers "what is `hablar`?"; this answers "I found `hablando` in
   this text, what dictionary entry is that?" You need both, because text
   contains surfaces and the dictionary is keyed by headwords.
+- `competency-inventory.json` -- what the runtime loads. Built from the
+  language-neutral curriculum in `../curriculum/` plus this language's
+  `exponents.json`, with every word resolved through `morphology.json`. A
+  phrase whose words do not resolve fails the build rather than shipping a
+  lemma nobody checked.
 
 There is no importer. Dictionaries were seeded once from a CEFR word list and
 everything since is authored and reviewed, so nothing in this repo can overwrite
@@ -57,7 +67,16 @@ rules an author or model follows.
 
    This is total, not incremental -- it discards the old index and rebuilds it
    from the dictionary. So the two cannot drift by hand.
-3. **Run the tests.** The shipped data is validated against the schemas, and
+3. **Rebuild any inventory that depends on it.** Constituent lemmas are
+   resolved through the morphology index, so a dictionary change can move them.
+
+       pnpm exec tsx scripts/data-prep/build-spanish-competency-inventory.ts
+
+   Also rerun this after editing `../curriculum/*.json` or `exponents.json`.
+   `scripts/data-prep/competency-inventory.test.ts` fails if the checked-in
+   file is not exactly what a fresh build produces, so a skipped rebuild or a
+   hand-edit is caught by the suite rather than at the next regeneration.
+4. **Run the tests.** The shipped data is validated against the schemas, and
    `tests/classifier/verb-forms.test.ts` checks the paradigms themselves: six
    slots per tense, provenance present, target-language orthography only.
 
@@ -96,8 +115,16 @@ on a real word, and it writes a card against the wrong headword.
    that language's data came from and what has been reviewed.
 
 Note a language is not playable on the dictionary alone. Italian ships a
-dictionary and a placement bank but has no `competency-inventory.json`, so the
-chunk and competency half of teaching is Spanish-only today.
+dictionary and a placement bank but authors no `exponents.json`, so it has no
+generated `competency-inventory.json` either and the competency half of
+teaching is Spanish-only today.
+
+That absence is deliberate and stays silent at runtime: the loader throws for a
+language it has no inventory for, and every caller catches that and carries on
+with no competencies, which is the same state as an empty curriculum. Making it
+an error would take Italian out of the game entirely to report a gap the game
+already handles. It is loud in the only place it can be fixed -- there is no
+Italian build script to run, because there is nothing yet for it to read.
 
 ## Reference Patterns
 

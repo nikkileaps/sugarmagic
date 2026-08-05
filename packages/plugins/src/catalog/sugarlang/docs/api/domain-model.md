@@ -1,7 +1,7 @@
 # Sugarlang Domain Model
 
 Status: active
-Last verified against code: 2026-07-31 (end of Epic 090)
+Last verified against code: 2026-08-05
 
 How the pieces fit together. For definitions of individual nouns, see
 [domain-terms.md](./domain-terms.md); for the runtime sequence that takes a
@@ -36,8 +36,11 @@ everything downstream carries it out.
 ```mermaid
 erDiagram
     ATLAS ||--o{ LEMMA : "catalogues"
-    COMPETENCY_INVENTORY ||--o{ COMPETENCY : "catalogues"
+    CURRICULUM ||--o{ LESSON : "is organised into"
+    LESSON ||--|| BAND : "sits at"
+    LESSON ||--o{ COMPETENCY : "groups"
     COMPETENCY ||--o{ EXPONENT : "is performed by"
+    COMPETENCY_INVENTORY ||--o{ COMPETENCY : "catalogues, per language"
 
     AUTHORED_CONTENT ||--o{ CONCEPT : "is about"
     CONCEPT }o--o| LEMMA : "may resolve to"
@@ -51,8 +54,9 @@ erDiagram
     SITUATION ||--o{ RUNTIME_FACT : "live half"
     SITUATION ||--o| NPC : "is with"
 
-    LEARNER ||--o{ LEMMA_CARD : "holds"
-    LEMMA_CARD }o--|| LEMMA : "tracks"
+    LEARNER ||--o{ CARD : "holds"
+    CARD }o--o| LEMMA : "tracks"
+    CARD }o--o| EXPONENT : "tracks"
     LEARNER ||--o| PACING_SIGNALS : "derives"
 
     SITUATION ||--|| TEACHER : "is read by"
@@ -129,15 +133,16 @@ prompt -- `(none)` and `(unknown)` -- for exactly this reason.
 ### LEARNER
 
 `LearnerProfile` (`runtime/learner/learner-profile.ts`) -- the estimated band,
-the CEFR posterior, and one `LemmaCard` per word the learner has met, carrying
-review count, stability and retrievability.
+the CEFR posterior, and one card per thing the learner has met, carrying review
+count, stability and retrievability. `lemmaCards` holds both kinds: a word
+under its lemma id, a phrase under `exponent:<exponentId>`.
 
 The profile is **stored**. Nearly everything the Teacher reads about pacing is
 **derived from it on demand** rather than kept alongside it:
 
 - `computePacingSignals` (`runtime/learner/pacing-signals.ts`) -- pending
   provisional lemmas, probe floor state
-- `getLearningStatus` (`runtime/learner/learning-status.ts`) -- `unseen`,
+- `getItemProgress` (`runtime/learner/item-progress.ts`) -- `unseen`,
   `learning`, `due`, `known`, `out-of-reach`
 - `resolveQuestEssentialLemmaRefs` (`runtime/teacher/quest-essential.ts`)
 - `resolveSceneTeachables` (`runtime/contracts/scene-teachable.ts`)
@@ -147,9 +152,10 @@ migrated and kept honest across a save/load, and each of these is cheap to
 recompute. An earlier generation persisted session counters; they came back from
 a save file looking hours old and tripped every cooldown heuristic reading them.
 
-`getLearningStatus` is what turns a card into an action:
+`getItemProgress` is what turns a card into an action. It is total: every
+(card, band) pair yields exactly one value.
 
-| status | what the Teacher does with it |
+| progress | what the Teacher does with it |
 |---|---|
 | `unseen` | candidate to **introduce** |
 | `due` | candidate to **reinforce** |
@@ -192,11 +198,31 @@ are not:
 - The **atlas** -- THE DICTIONARY; the code says "atlas" everywhere and means
   dictionary -- is a lookup. `cheese` -> `queso` is mechanical, and the code
   does it. `LexicalAtlasProvider`, backed by
-  `data/languages/<lang>/cefrlex.json` -- 11,000 entries in Spanish.
-- The **competency inventory** is a menu. Judging that this moment is a chance
-  to practice introducing yourself is pedagogy, and the code does not do it --
-  the Teacher chooses from the inventory
+  `data/languages/<lang>/cefrlex.json` -- 10,618 entries in Spanish.
+- The **competency inventory** is chosen from, not looked up. Judging that this
+  moment is a chance to practice introducing yourself is pedagogy, and the code
+  does not do it -- the Teacher decides
   (`data/languages/<lang>/competency-inventory.json`).
+
+### What the Teacher is shown to choose from
+
+The inventory is the whole curriculum: 65 lessons and 635 competencies across
+A1 to C1. The Teacher is not shown all of it. It sees the **band window** --
+its learner's current band only, grouped under its lesson names.
+
+Both parts earn their place. The window is what keeps the list small enough to
+choose from, and the lesson names are what make the choice legible: `A1.3
+Getting Around: ask-where, ask-directions, ...` says what a bare list of 172
+ids does not.
+
+Neither varies by learner, only by band. That is deliberate and load-bearing:
+the rendered curriculum goes on the wire as a cached block shared by every
+player at that band, so anything learner-specific here would give each player
+their own copy and put one learner's state in front of another.
+
+It costs something. A B1 learner can hold a due A1 card the Teacher can no
+longer see. That is accepted rather than designed around, and measured --
+`dueBelowLearnerBandCount` in the telemetry says how often it happens.
 
 So concepts reach the Teacher as *concepts*, not pre-resolved into a shortlist.
 The Teacher sees what the scene is about and picks; it is not handed a
@@ -219,9 +245,17 @@ Note `runtime/contracts/lexical-prescription.ts` is now only the home of
 - **competency** -- one communicative act. *"Can introduce yourself"*,
   performed by its **exponents**: `me llamo`, `mi nombre es`, `mucho gusto`.
 
-A competency is language-neutral; only its exponents are per-language. A
-competency counts as ONE item against the learner's capacity -- its exponents
-are how the act is performed, not extra things to learn.
+A competency is language-neutral; only its exponents are per-language. It sits
+in a **lesson**, and the lesson in a band.
+
+A competency counts as ONE item against the per-turn introduce cap
+(`slate.introduce.slice(0, getIntroduceCapForBand(band))`) -- its exponents are
+how the act is performed, not extra things to slate.
+
+Memory is tracked one level finer: each exponent gets its own **card**, keyed
+`exponent:<exponentId>`, because knowing `hola` does not mean knowing `buenos
+días`. So the Teacher decides in competencies and the learner model remembers in
+exponents, and those are different granularities on purpose.
 
 ---
 
@@ -341,10 +375,12 @@ realization's word for it.
 
 ## Observation
 
-After a turn, `applyObservation` (`runtime/learner/observations.ts`) folds what
-happened back into the profile: which lemmas were seen, which were produced,
-which comprehension checks passed. That updates the cards the next
-`getLearningStatus` call will read.
+After a turn, the learner state reducer
+(`runtime/learner/learner-state-reducer.ts`) folds what happened back into the
+profile: which lemmas were seen, which were produced, which comprehension
+checks passed. `runtime/learner/observations.ts` is what grades an observation
+on the way in. That updates the cards the next `getItemProgress` call will
+read.
 
 This closes the loop -- the profile the Teacher read at the start of the
 conversation is the profile this turn just changed.

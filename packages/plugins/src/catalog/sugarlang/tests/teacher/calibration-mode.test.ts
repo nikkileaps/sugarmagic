@@ -8,7 +8,7 @@
  *
  * Relationships:
  *   - Exercises ../../runtime/teacher/calibration-mode directly.
- *   - Guards against reviving the old Director-owned placement flow by accident.
+ *   - Guards against reviving the old Teacher-owned placement flow by accident.
  *
  * Implements: Epic 9 Story 9.6
  *

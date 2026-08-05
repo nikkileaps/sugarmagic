@@ -2,18 +2,23 @@
 
 This directory holds the JSON Schema files for sugarlang's plugin-shipped data.
 
-Epic 4 owns the language-data schemas:
+Per-language data:
 
-- `cefrlex.schema.json`
-- `morphology.schema.json`
+- `cefrlex.schema.json` -- the dictionary.
+- `morphology.schema.json` -- the surface-to-lemma index. Generated.
 - `placement-questionnaire.schema.json`
 - `frequency.schema.json`
-- `kelly-subset.schema.json`
 
-Later epics own runtime-persistence or compile-artifact schemas:
+The curriculum, which is language-neutral, and the inventory it produces:
 
-- `learner-profile.schema.json`: Epic 7
-- `scene-lexicon.schema.json`: Epic 6
+- `curriculum-band.schema.json` -- one CEFR band: its lessons and competencies.
+- `competency-inventory.schema.json` -- what the runtime loads for one
+  language. Generated from a curriculum band plus that language's exponents.
+
+Runtime-persistence and compile-artifact schemas:
+
+- `learner-profile.schema.json`
+- `scene-lexicon.schema.json`
 
 Validation workflow:
 
@@ -22,9 +27,14 @@ Validation workflow:
 3. Validate the target JSON payload.
 4. Fail fast on any error; do not silently coerce bad language data.
 
-The canonical automated check for Epic 4 lives in:
+The automated checks live in:
 
-- `packages/plugins/src/catalog/sugarlang/tests/data/language-data-validation.test.ts`
+- `tests/data/language-data-foundation.test.ts` -- dictionaries, morphology,
+  frequency and placement banks for every shipped language.
+- `tests/data/competency-inventory.test.ts` -- the competency inventory, which
+  is validated on its own because it is a generated file and the check is
+  stricter (`strict: true`).
+- `tests/data/curriculum.test.ts` -- the language-neutral curriculum bands.
 
 The checked-in data-prep scripts that regenerate the current snapshots live in:
 

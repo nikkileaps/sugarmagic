@@ -7,7 +7,7 @@
  * WHY THIS FILE EXISTS
  *   Competency teaching has never had an end-to-end test, and that is exactly
  *   how it kept nearly disappearing. Before 090.4 a competency could only reach
- *   teaching by being flattened into a `chunk:` pseudo-lemma and smuggled
+ *   teaching by being flattened into a `exponent:` pseudo-lemma and smuggled
  *   through the lemma channel; removing the prescription block from the prompt
  *   severed that channel instantly and NOTHING failed.
  *
@@ -69,13 +69,22 @@ describe("the Teacher is told which competencies exist", () => {
   // 090.10: the schema has accepted a competencyId since 090.4a, but the prompt
   // never said which ids are real -- so naming one meant guessing, and in
   // practice competencies arrived by being flattened into
-  // `prescription.introduce` instead. That road is what 090.10 deletes, so this
-  // menu is the precondition for deleting it safely.
-  it("lists real competency ids in the user prompt", () => {
-    const prompt = buildTeacherPrompt(createTeacherContext()).user;
+  // `prescription.introduce` instead. That road is what 090.10 deletes, so
+  // showing the real ids is the precondition for deleting it safely.
+  it("lists real competency ids, in the CACHED half", () => {
+    // 222.9 moved the curriculum out of the per-turn half. It is identical on
+    // every call for a language, so there it could never be cached -- and it
+    // was the largest single thing in the turn.
+    const prompt = buildTeacherPrompt(createTeacherContext());
 
-    expect(prompt).toContain("COMPETENCIES THIS CURRICULUM CAN TEACH:");
-    expect(prompt).toContain("ask-where");
+    expect(prompt.system).toContain("COMPETENCIES THIS CURRICULUM CAN TEACH:");
+    expect(prompt.system).toContain("ask-where");
+    expect(prompt.user).not.toContain("COMPETENCIES THIS CURRICULUM CAN TEACH:");
+
+    const curriculum = prompt.systemBlocks.find((block) =>
+      block.text.includes("COMPETENCIES THIS CURRICULUM CAN TEACH:")
+    );
+    expect(curriculum?.cache).toBe(true);
   });
 
   it("names them as the only valid ids, so the model does not invent one", () => {
@@ -87,15 +96,26 @@ describe("the Teacher is told which competencies exist", () => {
   });
 
   it("carries the descriptor, not just the id", () => {
-    // `ask-where` alone does not tell the Teacher what the learner would be able
-    // to DO, which is the whole basis for judging whether this moment calls for it.
-    const section = formatAvailableCompetencies(createTeacherContext());
+    // A bare id does not say what the learner would be able to DO. Since 222.7
+    // the meaning is carried by the LESSON HEADING the id sits under rather
+    // than by a descriptor beside it -- `A1.9 Places and Directions` over
+    // `ask-where` says as much as the can-do sentence did, for a fifth of the
+    // tokens.
+    //
+    // Pinned to A1: `ask-where` is A1 and the band window hides it from the A2
+    // fixture learner.
+    const base = createTeacherContext();
+    const section = formatAvailableCompetencies({
+      ...base,
+      learner: { ...base.learner, estimatedCefrBand: "A1" }
+    });
     const askWhere = section
       .split("\n")
       .find((line) => line.includes("ask-where"));
 
     expect(askWhere).toBeDefined();
-    expect(askWhere!.length).toBeGreaterThan("- ask-where (A1): ".length);
+    // The heading above it is what carries the meaning now.
+    expect(section).toContain("Places and Directions");
   });
 });
 
@@ -157,7 +177,9 @@ describe("a competency can be taught", () => {
       describe
     );
 
-    expect(overlay).toContain("Can greet people in a simple way");
+    // The descriptor comes from the authored curriculum, which is the only
+    // place one is written now -- the inventory is generated from it.
+    expect(overlay).toContain("Can greet someone and respond to a greeting");
     expect(overlay).toContain("hola");
     expect(overlay).not.toContain("Introduce vocabulary (try to use naturally this turn, not their English translations): greet.");
   });

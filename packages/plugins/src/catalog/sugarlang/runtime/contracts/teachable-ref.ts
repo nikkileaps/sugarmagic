@@ -8,7 +8,7 @@
  *   `targetVocab` held `LemmaRef[]`, so the Teacher's world was words. A
  *   competency could only reach teaching through a side door: the scheduler
  *   picked it, `realizeCompetencyChunksFromSchedule` flattened it into
- *   `chunk:<id>` pseudo-lemmas, and those were injected into
+ *   `exponent:<id>` pseudo-lemmas, and those were injected into
  *   `prescription.introduce` so they could ride the lemma channel.
  *
  *   That is why "delete the prescriber" was dangerous: with the slate holding
@@ -21,7 +21,7 @@
  *   door closes because there is a front door.
  *
  * A COMPETENCY IS NOT A WORD, AND THE UNION SAYS SO
- *   `chunk:` pseudo-lemmas were a lie told to a type: a competency was smuggled
+ *   `exponent:` pseudo-lemmas were a lie told to a type: a competency was smuggled
  *   through a field meaning "lemma" by prefixing a string. Anything downstream
  *   that reasoned about lemmas -- the atlas, morphology, card seeding -- had to
  *   special-case a prefix, and anything that forgot silently treated a
@@ -94,7 +94,7 @@ export function competencyRefs(refs: readonly TeachableRef[]): CompetencyRef[] {
  * The bridge from everything that predates the discriminant -- the prescription,
  * quest-essential lemmas, probe targets. Those are genuinely word-shaped, so the
  * lift is honest rather than a cast; what it must NOT be used for is smuggling a
- * competency across by pretending it is a lemma, which is what `chunk:` prefixes
+ * competency across by pretending it is a lemma, which is what `exponent:` prefixes
  * did.
  */
 export function toVocabularyRefs(lemmas: readonly LemmaRef[]): VocabularyRef[] {

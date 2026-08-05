@@ -1,17 +1,17 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/teacher/prompt-builder.ts
  *
- * Purpose: Builds the Director's cacheable system prompt and dynamic user prompt from middleware-owned context.
+ * Purpose: Builds the Teacher's cacheable system prompt and dynamic user prompt from middleware-owned context.
  *
  * Exports:
- *   - DirectorPrompt
- *   - DIRECTOR_SYSTEM_ROLE_PROMPT
- *   - DIRECTOR_PEDAGOGICAL_RUBRIC_PROMPT
- *   - DIRECTOR_CEFR_DESCRIPTORS_PROMPT
- *   - DIRECTOR_OUTPUT_SCHEMA_PROMPT
- *   - DIRECTOR_HARD_CONSTRAINTS_PROMPT
- *   - DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK
- *   - DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK
+ *   - TeacherPrompt
+ *   - TEACHER_SYSTEM_ROLE_PROMPT
+ *   - TEACHER_PEDAGOGICAL_RUBRIC_PROMPT
+ *   - TEACHER_CEFR_DESCRIPTORS_PROMPT
+ *   - TEACHER_OUTPUT_SCHEMA_PROMPT
+ *   - TEACHER_HARD_CONSTRAINTS_PROMPT
+ *   - TEACHER_COMPREHENSION_GUIDANCE_BLOCK
+ *   - TEACHER_PRAGMATIC_FEEDBACK_BLOCK
  *   - buildTeacherPrompt
  *   - estimatePromptTokens
  *   - formatLearnerSummary
@@ -37,15 +37,19 @@ import { EMPTY_NPC_CONTEXT, type RuntimeFact } from "../situation";
 import { computePacingSignals } from "../learner";
 import { resolveSceneTeachables } from "../inventory/scene-teachable-resolver";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
-import type { Competency } from "../contracts/competency-inventory";
+import type { CompetencyInventory } from "../contracts/competency-inventory";
+import {
+  cardDisplayName,
+  isExponentCardKey
+} from "../inventory/card-display-name";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
   TARGET_LANGUAGE_RATIO_TOLERANCE
 } from "./band-envelope";
 import {
-  DIRECTOR_SYSTEM_TEMPLATE,
-  DIRECTOR_USER_TEMPLATE,
-  renderDirectorPromptTemplate
+  TEACHER_SYSTEM_TEMPLATE,
+  TEACHER_USER_TEMPLATE,
+  renderTeacherPromptTemplate
 } from "./prompt-template";
 
 const EMPTY_SECTION = "(none)";
@@ -64,26 +68,50 @@ const MAX_RECENTLY_ACTIVE = 6;
  * How many introduce items the Teacher may put on a slate.
  *
  * A situation-scoped working set, not a per-turn quota -- see the note above
- * DIRECTOR_HARD_CONSTRAINTS_PROMPT. Six is small enough to stay coherent and
+ * TEACHER_HARD_CONSTRAINTS_PROMPT. Six is small enough to stay coherent and
  * large enough that a conversation is not locked to whatever fit its opening
  * line.
  */
 const MAX_SLATE_INTRODUCE = 6;
 
-export interface DirectorPrompt {
+/** One system content block. `cache` marks a caching breakpoint. */
+export interface TeacherPromptBlock {
+  text: string;
+  cache: boolean;
+}
+
+export interface TeacherPrompt {
+  /** The system half as one string. Convenience; `systemBlocks` is what is sent. */
   system: string;
+  systemBlocks: TeacherPromptBlock[];
   user: string;
   cacheMarkers: string[];
 }
 
-export const DIRECTOR_SYSTEM_ROLE_PROMPT = `You are the Sugarlang Teacher.
+export const TEACHER_SYSTEM_ROLE_PROMPT = `You are the Sugarlang Teacher.
 
 Your job is to decide what this learner should be working on in this situation.
 You do not write any line yourself. You return a JSON directive that the
 Generator follows across the turns this situation lasts -- so choose a working
 set that suits the moment, not a single sentence.`;
 
-export const DIRECTOR_PEDAGOGICAL_RUBRIC_PROMPT = `PEDAGOGICAL RUBRIC:
+/**
+ * How to weigh the moment, and how to read the learner's history.
+ *
+ * The counts alone are inert. "greet (met in 4 situations)" with nothing saying
+ * what four means gets ignored, and the Teacher keeps introducing new things
+ * because introducing is the only move it has been told how to make.
+ *
+ * These are starting positions, not measurements -- "roughly half a dozen" is a
+ * guess, and the number the code used to carry was ten, which was also a guess.
+ * The point is to have something concrete to correct once a learner has real
+ * history.
+ *
+ * It has to stay advice about how to READ the facts. The moment it says
+ * "always reinforce below N" it is a deleted threshold back in prose, deciding
+ * from outside the situation.
+ */
+export const TEACHER_PEDAGOGICAL_RUBRIC_PROMPT = `PEDAGOGICAL RUBRIC:
 
 - Preserve the illusion of normal in-character conversation.
 - Prefer the language and length of natural response that fits the moment in the conversation and situation.
@@ -91,9 +119,17 @@ export const DIRECTOR_PEDAGOGICAL_RUBRIC_PROMPT = `PEDAGOGICAL RUBRIC:
 - What you choose should feel organic, not forced. If something does not belong in this situation at all, leave it out.
 - If nothing fits this moment, do NOT force teaching. A brief greeting or short social response is acceptable.
 - Reinforcement words can surface more naturally than new introductions.
-- For low-confidence learners, keep sentence structure simple, but still try to include what you chose to teach.`;
+- For low-confidence learners, keep sentence structure simple, but still try to include what you chose to teach.
 
-export const DIRECTOR_CEFR_DESCRIPTORS_PROMPT = `CEFR DESCRIPTORS:
+READING WHAT THE LEARNER HAS MET
+
+- The count is DISTINCT SITUATIONS -- different people, places and days -- not repetitions. Meeting something five times with one NPC in one room counts once.
+- A competency met in only one or two situations is not owned yet. The learner has seen it in one corner of the world. Using it again HERE, with a different person in a different place, is worth more than introducing something new.
+- A competency met but not seen since is the weakest state there is -- weaker than one never introduced, because the learner has half a memory and nothing to attach it to. Reach for those first when the moment allows.
+- Once something has recurred across roughly half a dozen situations it is becoming reliable. Keep using it where it fits, but do not spend the turn on it.
+- Introducing something new while several competencies sit at one or two situations is usually the worse trade. Breadth without recurrence does not stick.`;
+
+export const TEACHER_CEFR_DESCRIPTORS_PROMPT = `CEFR DESCRIPTORS:
 
 - A1: isolated words, routines, tiny greetings, single-clause turns, heavy support.
 - A2: simple everyday exchanges, short linked clauses.
@@ -123,7 +159,7 @@ const RATIO_GUIDANCE_LINES = [
   "  relaxed and the moment is social. Values outside the band are clamped."
 ].join("\n");
 
-export const DIRECTOR_OUTPUT_SCHEMA_PROMPT = `OUTPUT JSON SCHEMA:
+export const TEACHER_OUTPUT_SCHEMA_PROMPT = `OUTPUT JSON SCHEMA:
 
 Return valid JSON with:
 - targetVocab: { introduce: Teachable[], reinforce: Teachable[], avoid: Teachable[] }
@@ -183,7 +219,7 @@ ${RATIO_GUIDANCE_LINES}
  * choose but on what reaches the agent prompt at once -- which is enforced in
  * `generator-prompt-overlay.ts`, not here.
  */
-export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
+export const TEACHER_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 
 - Choose targetVocab from what this situation makes teachable.
 - Only use lemmas that exist in the target language; never invent words.
@@ -192,7 +228,7 @@ export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 - Target lemmas for comprehension checks must come from the pending provisional list.
 - Keep citedSignals short and factual.`;
 
-export const DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK = `PRAGMATIC FEEDBACK RULES:
+export const TEACHER_PRAGMATIC_FEEDBACK_BLOCK = `PRAGMATIC FEEDBACK RULES:
 
 When a player uses or attempts a competency the NPC has modeled
 (greetings, farewells, expressions of gratitude, acknowledgements, requests):
@@ -205,7 +241,7 @@ When a player uses or attempts a competency the NPC has modeled
 - NEVER punish pragmatic mistakes with scolding, correction-as-correction,
   or breaking the fourth wall. The NPC's job is to model, not to evaluate.`;
 
-export const DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK = `COMPREHENSION CHECKS:
+export const TEACHER_COMPREHENSION_GUIDANCE_BLOCK = `COMPREHENSION CHECKS:
 
 The learner's scheduler tracks committed evidence (real FSRS progress) and
 provisional evidence (unconfirmed read-past exposure). Provisional evidence
@@ -224,15 +260,21 @@ Important rules:
 3. If the probe floor says soft floor reached, probing is recommended.
 4. If the probe floor says hard floor reached, probing is required.`;
 
-const DIRECTOR_CACHE_MARKERS = [
-  "director.system.role",
-  "director.system.rubric",
-  "director.system.cefr",
-  "director.system.schema",
-  "director.system.constraints",
-  "director.system.comprehension-guidance",
-  "director.system.pragmatic-feedback",
-  "director.user.template"
+/**
+ * The cache breakpoints actually sent, in prefix order.
+ *
+ * There used to be eight of these naming individual prompt constants. They were
+ * labels for a mechanism that did not exist -- the call sent one flat
+ * `systemPrompt` string and the markers were passed to the client and dropped.
+ *
+ * Two blocks, because they go stale for different reasons. The instructions
+ * change when someone edits a prompt constant; the curriculum changes every
+ * time a phrase is authored. Splitting them means a day of authoring does not
+ * also throw away the instruction block.
+ */
+const TEACHER_CACHE_MARKERS = [
+  "teacher.system.instructions",
+  "teacher.system.curriculum"
 ] as const;
 
 function listOrNone(values: string[]): string {
@@ -278,35 +320,57 @@ function isA1OrLowerConfidence(context: TeacherContext): boolean {
   );
 }
 
-// 090.4b: `hasEmptyPrescription` deleted with its only caller.
-
 export function estimatePromptTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+/**
+ * The learner's due cards, as decided by `deriveLearnerProgress`.
+ *
+ * Read from `learnerProgress.dueItemIds` rather than re-derived here. Comparing
+ * `retrievability` to the floor looks equivalent and is not: a card the learner
+ * has only ever been SHOWN is never reviewed, so it keeps the prior it was
+ * seeded with -- about 0.82 for a word at their own band -- which sits below
+ * the 0.95 floor forever. `encountered` is the commonest observation there is,
+ * so that comparison reports most of the learner's passive vocabulary as
+ * overdue. They have not forgotten it; they were never tested on it.
+ *
+ * `getItemProgress` already knows this and calls such a card `unseen`
+ * (learner/item-progress.ts). Deriving a second answer here put two
+ * contradictory due lists in one prompt.
+ *
+ * Falls back to no cards rather than to a comparison: with no progress
+ * annotation the honest answer is that we do not know what is due.
+ */
+function dueCards(context: TeacherContext) {
+  const dueIds = new Set(context.learnerProgress?.dueItemIds ?? []);
+  return Object.values(context.learner.lemmaCards).filter((card) =>
+    dueIds.has(card.lemmaId)
+  );
+}
+
 export function formatLearnerSummary(context: TeacherContext): string {
   const learner = context.learner;
-  // Exclude chunk cards ("chunk:" prefix) -- they track pragmatic function acquisition,
-  // not vocabulary, and would pollute the due/active/struggling lists sent to the teacher.
-  const lemmaCardsOnly = Object.values(learner.lemmaCards).filter(
-    (card) => !card.lemmaId.startsWith("chunk:")
-  );
-  const due = lemmaCardsOnly
+  const lang = context.lang.targetLanguage;
+  const cards = Object.values(learner.lemmaCards);
+  const name = (card: { lemmaId: string }) => cardDisplayName(card.lemmaId, lang);
+
+  const due = dueCards(context)
     .sort((left, right) => estimateDueScore(right) - estimateDueScore(left))
     .slice(0, MAX_DUE_LEMMAS)
-    .map((card) => `${card.lemmaId} (ret ${card.retrievability.toFixed(2)})`);
-  const active = lemmaCardsOnly
+    .map((card) => `${name(card)} (ret ${card.retrievability.toFixed(2)})`);
+  const active = cards
     .sort((left, right) => (right.lastReviewedAt ?? 0) - (left.lastReviewedAt ?? 0))
     .slice(0, MAX_RECENTLY_ACTIVE)
-    .map((card) => `${card.lemmaId} (reviews ${card.reviewCount})`);
-  const struggling = lemmaCardsOnly
+    .map((card) => `${name(card)} (reviews ${card.reviewCount})`);
+  const struggling = cards
     .sort((left, right) => {
       const leftScore = left.lapseCount * 10 + left.provisionalEvidence;
       const rightScore = right.lapseCount * 10 + right.provisionalEvidence;
       return rightScore - leftScore;
     })
     .slice(0, MAX_STRUGGLING_LEMMAS)
-    .map((card) => `${card.lemmaId} (lapses ${card.lapseCount})`);
+    .map((card) => `${name(card)} (lapses ${card.lapseCount})`);
 
   return [
     "LEARNER STATE:",
@@ -316,11 +380,49 @@ export function formatLearnerSummary(context: TeacherContext): string {
     `- CEFR confidence: ${learner.assessment.cefrConfidence.toFixed(2)}`,
     `- target/support language: ${context.lang.targetLanguage} / ${context.lang.supportLanguage}`,
     `- session turns: ${learner.currentSession?.turns ?? 0}`,
-    `- known lemma cards: ${lemmaCardsOnly.length}`,
-    `- top due: ${listOrNone(due)}`,
+    `- cards: ${cards.length}`,
+    // (unknown) when there is no progress to read, NOT (none). An empty due
+    // list asserts the learner owes nothing; absent means we could not work it
+    // out. The Teacher acts on those differently, and only one of them is
+    // ever true when the derivation failed.
+    `- top due: ${context.learnerProgress ? listOrNone(due) : UNKNOWN_SECTION}`,
     `- recently active: ${listOrNone(active)}`,
-    `- struggling: ${listOrNone(struggling)}`
+    `- struggling: ${listOrNone(struggling)}`,
+    ...formatCompetencyStandingLines(context)
   ].join("\n");
+}
+
+/**
+ * What the learner has done with the curriculum.
+ *
+ * Counts, not verdicts. "met in 4 situations" is a fact; "needs 6 more" would
+ * be a judgement about what to teach, and the Teacher makes those against the
+ * situation, which is the only place the answer lives.
+ *
+ * The count is DIVERSE encounters -- distinct (npc, scene, day) slots -- so
+ * meeting a competency five times with one NPC in one room counts once. The
+ * wording has to say that: "seen 4x" reads as four repetitions and would
+ * overstate a learner who has only ever met it in one place.
+ *
+ * Competencies are named by id because that is the id space the Teacher must
+ * answer in -- a display name here and an id in the answer is a translation
+ * step nobody asked for.
+ */
+function formatCompetencyStandingLines(context: TeacherContext): string[] {
+  const state = context.learnerProgress;
+  // Absent is not the same claim as "has met nothing", so say so.
+  if (!state) return ["- competencies met: (unknown)"];
+
+  const met = state.met.map((entry) =>
+    entry.encounterCount === 1
+      ? `${entry.competencyId} (met in 1 situation)`
+      : `${entry.competencyId} (met in ${entry.encounterCount} situations)`
+  );
+  // Only what the learner has MET. The unmet list used to be printed here too,
+  // which restated the whole curriculum a second time -- it is already below,
+  // in full, grouped by lesson. Anything absent from this line is unmet, and
+  // the Teacher can see that by looking.
+  return [`- competencies met: ${listOrNone(met)}`];
 }
 
 export function formatRelationshipState(context: TeacherContext): string {
@@ -357,14 +459,9 @@ export function formatSceneSnapshot(context: TeacherContext): string {
 /**
  * The competencies this curriculum can actually teach, by id.
  *
- * 090.10: THE MENU THAT WAS MISSING. `targetVocab` has accepted
- * `{kind: "competency", competencyId}` since 090.4a and the output-shape block
- * shows an example, but the id space was never stated -- so the Teacher could
- * only name a competency by guessing, and in practice competencies reached
- * teaching through a side door instead: the scheduler expanded them into
- * `chunk:` refs and they were injected into `prescription.introduce`. Deleting
- * the prescriber removes that door, so the menu has to exist first or
- * competency teaching stops with nothing failing.
+ * `targetVocab` accepts `{kind: "competency", competencyId}`, so the prompt
+ * has to state which ids exist. Without this list the Teacher can only guess
+ * an id, and a guess fails as an unknown competency.
  *
  * Read at prompt time from the inventory, deliberately: it is ten entries, it
  * is the same read-time resolution `resolveSceneTeachables` already does above,
@@ -376,27 +473,79 @@ export function formatSceneSnapshot(context: TeacherContext): string {
  * not say what the learner would be able to do.
  */
 export function formatAvailableCompetencies(context: TeacherContext): string {
-  let competencies: Competency[] = [];
+  let inventory: CompetencyInventory | null = null;
   try {
-    competencies = loadCompetencyInventory(context.lang.targetLanguage).competencies;
+    inventory = loadCompetencyInventory(context.lang.targetLanguage);
   } catch {
     // A missing or malformed inventory is not fatal to a teaching decision --
     // the Teacher simply has no competencies to choose from this turn, which is
     // the same state as an empty curriculum and reads identically below.
-    competencies = [];
+    inventory = null;
   }
 
+  // THE BAND WINDOW. The Teacher is shown its learner's CURRENT band only.
+  //
+  // Deferred out of 222.7 on purpose: with A1 alone, "band and below plus one
+  // above" was every competency that existed, so a filter would have excluded
+  // nothing and its test would have passed without the filter being written.
+  // With A2 shipped it can exclude something, so it can be tested.
+  //
+  // Current band only rather than band+1 (nikki, 2026-08-05): band+1 was an
+  // idea from when there were ten vocabulary words and no competencies, and
+  // getting enough teachables into a turn was the constraint. It is not any
+  // more -- A1 alone is 172.
+  //
+  // This is the ONLY cut allowed here. It varies by band, never by learner,
+  // because these bytes are cached and shared by every player at that band --
+  // anything learner-specific would give each player their own entry and put
+  // one learner's state in front of another.
+  //
+  // The consequence, accepted and measured rather than designed around: a B1
+  // learner can hold a due A1 card the Teacher can no longer see. 222.13 emits
+  // `dueBelowLearnerBandCount` so that is answerable.
+  const learnerBand = context.learner.estimatedCefrBand;
+  const competencies = (inventory?.competencies ?? []).filter(
+    (competency) => competency.band === learnerBand
+  );
   if (competencies.length === 0) {
     return ["COMPETENCIES THIS CURRICULUM CAN TEACH:", `- ${EMPTY_SECTION}`].join("\n");
+  }
+
+  const byLesson = new Map<string, string[]>();
+  for (const competency of competencies) {
+    const ids = byLesson.get(competency.lessonId) ?? [];
+    ids.push(competency.competencyId);
+    byLesson.set(competency.lessonId, ids);
+  }
+
+  // Lessons in curriculum order; the inventory already sorts them by band then
+  // ordinal. A competency whose lesson is missing would otherwise vanish, so
+  // they are gathered under a final heading rather than dropped.
+  const lines: string[] = [];
+  const placed = new Set<string>();
+  for (const lesson of inventory?.lessons ?? []) {
+    const ids = byLesson.get(lesson.lessonId);
+    if (!ids || ids.length === 0) continue;
+    placed.add(lesson.lessonId);
+    lines.push(`${lesson.band}.${lesson.ordinal} ${lesson.displayName}`);
+    lines.push(`  ${ids.join(", ")}`);
+  }
+  const orphaned = [...byLesson.entries()].filter(([id]) => !placed.has(id));
+  if (orphaned.length > 0) {
+    lines.push("Other");
+    lines.push(`  ${orphaned.flatMap(([, ids]) => ids).join(", ")}`);
   }
 
   return [
     "COMPETENCIES THIS CURRICULUM CAN TEACH:",
     "These are the ONLY valid competencyId values. Never invent one.",
-    ...competencies.map(
-      (competency) =>
-        `- ${competency.competencyId} (${competency.band}): ${competency.cefrDescriptor}`
-    )
+    // Grouped under lesson names, and WITHOUT the can-do descriptors. The
+    // descriptor is the cost -- an id averages 10 characters and its descriptor
+    // 43 -- and a lesson name plus a readable id already carries the meaning:
+    // `A1.6 Buying Things -> ask-price` does not need "Can ask how much
+    // something costs" beside it. The grouping is also what makes a list this
+    // size matchable against a situation: a cafe is Food and Drink.
+    ...lines
   ].join("\n");
 }
 
@@ -637,23 +786,72 @@ export function formatTurnShapingHints(context: TeacherContext): string {
   return ["TURN-SHAPING HINTS:", ...hints.map((hint) => `- ${hint}`)].join("\n");
 }
 
-export function buildTeacherPrompt(context: TeacherContext): DirectorPrompt {
-  const system = renderDirectorPromptTemplate(DIRECTOR_SYSTEM_TEMPLATE, {
-    rolePrompt: DIRECTOR_SYSTEM_ROLE_PROMPT,
-    pedagogicalRubricPrompt: DIRECTOR_PEDAGOGICAL_RUBRIC_PROMPT,
-    cefrDescriptorsPrompt: DIRECTOR_CEFR_DESCRIPTORS_PROMPT,
-    outputSchemaPrompt: DIRECTOR_OUTPUT_SCHEMA_PROMPT,
-    hardConstraintsPrompt: DIRECTOR_HARD_CONSTRAINTS_PROMPT,
-    comprehensionGuidanceBlock: DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK,
-    pragmaticFeedbackBlock: DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK
+/**
+ * How hard the shared top-N lists are squeezing competencies out.
+ *
+ * Words and competencies compete for the same slots, ranked against each
+ * other. A conversation contains far more words than competencies, so the card
+ * pool skews toward words as a learner plays -- and taking the top 8 from a
+ * pool that is mostly words yields mostly words. A greeting at 0.61 loses its
+ * slot to eight words at 0.55, on arithmetic rather than on importance.
+ *
+ * Not a fix, a measurement. The information is not lost -- the competencies
+ * met line is uncapped -- but the narrower fact that one is fading NOW can be.
+ * If this shows competencies routinely cut, the answer is a short line of
+ * their own rather than a shared top-N.
+ */
+export function summarizeDueListPressure(context: TeacherContext): {
+  dueCompetencies: number;
+  dueWords: number;
+  competenciesShown: number;
+  competenciesCut: number;
+} {
+  const cards = dueCards(context);
+  const shown = [...cards]
+    .sort((left, right) => estimateDueScore(right) - estimateDueScore(left))
+    .slice(0, MAX_DUE_LEMMAS);
+
+  const isCompetency = (card: { lemmaId: string }) =>
+    isExponentCardKey(card.lemmaId);
+  const dueCompetencies = cards.filter(isCompetency).length;
+  const competenciesShown = shown.filter(isCompetency).length;
+
+  return {
+    dueCompetencies,
+    dueWords: cards.length - dueCompetencies,
+    competenciesShown,
+    competenciesCut: dueCompetencies - competenciesShown
+  };
+}
+
+export function buildTeacherPrompt(context: TeacherContext): TeacherPrompt {
+  const instructions = renderTeacherPromptTemplate(TEACHER_SYSTEM_TEMPLATE, {
+    rolePrompt: TEACHER_SYSTEM_ROLE_PROMPT,
+    pedagogicalRubricPrompt: TEACHER_PEDAGOGICAL_RUBRIC_PROMPT,
+    cefrDescriptorsPrompt: TEACHER_CEFR_DESCRIPTORS_PROMPT,
+    outputSchemaPrompt: TEACHER_OUTPUT_SCHEMA_PROMPT,
+    hardConstraintsPrompt: TEACHER_HARD_CONSTRAINTS_PROMPT,
+    comprehensionGuidanceBlock: TEACHER_COMPREHENSION_GUIDANCE_BLOCK,
+    pragmaticFeedbackBlock: TEACHER_PRAGMATIC_FEEDBACK_BLOCK
   });
 
-  const user = renderDirectorPromptTemplate(DIRECTOR_USER_TEMPLATE, {
+  // The curriculum sits in the SYSTEM half, not the per-turn half. It is
+  // identical on every call for a language, so in the user half it could never
+  // be cached however anything else was fixed -- and it was the largest single
+  // thing in there.
+  //
+  // Nothing here may depend on the individual learner. A cache entry is matched
+  // by the exact bytes of the prefix, so one learner's state in these blocks
+  // would give every player their own entry -- each a fresh write, costing more
+  // than not caching at all -- and would put that learner's state in front of
+  // whoever else hit it.
+  const curriculum = formatAvailableCompetencies(context);
+
+  const user = renderTeacherPromptTemplate(TEACHER_USER_TEMPLATE, {
     learnerSummary: formatLearnerSummary(context),
     relationshipState: formatRelationshipState(context),
     sceneSnapshot: formatSceneSnapshot(context),
     situation: formatSituation(context),
-    availableCompetencies: formatAvailableCompetencies(context),
     npcContext: formatNpcContext(context),
     gameMoment: formatGameMoment(context),
     recentDialogue: formatRecentDialogue(context),
@@ -661,9 +859,17 @@ export function buildTeacherPrompt(context: TeacherContext): DirectorPrompt {
     turnShapingHints: formatTurnShapingHints(context)
   });
 
+  const systemBlocks = [
+    { text: instructions, cache: true },
+    { text: curriculum, cache: true }
+  ];
+
   return {
-    system,
+    // Kept so callers that want the whole system half as one string still work;
+    // the blocks are what goes on the wire.
+    system: systemBlocks.map((block) => block.text).join("\n\n"),
+    systemBlocks,
     user,
-    cacheMarkers: [...DIRECTOR_CACHE_MARKERS]
+    cacheMarkers: [...TEACHER_CACHE_MARKERS]
   };
 }

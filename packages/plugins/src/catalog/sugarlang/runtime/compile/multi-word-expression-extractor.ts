@@ -60,11 +60,9 @@
  *   `SugarlangAuthoringCompileScheduler` owns debounce and cache-hit skip;
  *   `MultiWordExpressionCache` (still named chunk-cache) owns persistence.
  *
- * NAMING NOTE
- *   The OUTPUT type is still `LexicalChunk`, and learner cards persist a
- *   `chunk:` lemmaId prefix. Those names are load-bearing across 43 files and
- *   in saved player data, so they are deliberately NOT renamed here. This
- *   module's own vocabulary is MWE; the wire type keeps its older name.
+ * The output type is `LexicalChunk`: a chunk is any multi-word expression,
+ * which is what this module finds. A phrase that performs a competency is an
+ * exponent and lives in the competency inventory, not here.
  *
  * Exports:
  *   - MultiWordExpressionExtractor (class)

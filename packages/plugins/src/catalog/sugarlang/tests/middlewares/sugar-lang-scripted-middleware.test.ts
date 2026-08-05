@@ -30,7 +30,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSugarLangScriptedMiddleware } from "../../runtime/middlewares/sugar-lang-scripted-middleware";
 import { CefrLexAtlasProvider } from "../../runtime/providers/impls/cefr-lex-atlas-provider";
-import { SUGARLANG_CONSTRAINT_ANNOTATION } from "../../runtime/middlewares/shared";
+import { SUGARLANG_CONSTRAINT_ANNOTATION,
+  SUGARLANG_LEARNER_PROGRESS_ANNOTATION
+} from "../../runtime/middlewares/shared";
 import { createTestExecution } from "./test-helpers";
 
 /**
@@ -121,17 +123,15 @@ function scriptedExecution(
   return execution;
 }
 
-/** The schedule shape the deleted trigger required: a DUE teachable. */
+/** The learner state the deleted trigger required: a due item. */
 function dueSchedule() {
   return {
-    teachables: [
-      { id: "queso", kind: "vocabulary", teachReason: "due", affinityNpcIds: [] }
-    ],
+    met: [],
+    unmetCompetencyIds: [],
+    dueItemIds: ["queso"],
     isColdStart: false,
     sceneId: "scene-dock",
-    conversationId: "c1",
-    sceneComprehensionRate: 1,
-    stretchAllowanceActive: false
+    conversationId: "c1"
   };
 }
 
@@ -299,7 +299,7 @@ describe("scripted rendering costs nothing", () => {
       services: scriptedServices(llmClient) as never
     });
     const execution = scriptedExecution("target-dominant");
-    execution.annotations["sugarlang.schedule"] = dueSchedule();
+    execution.annotations[SUGARLANG_LEARNER_PROGRESS_ANNOTATION] = dueSchedule();
 
     await middleware.finalize?.(execution, {
       speakerId: "npc-orrin",

@@ -57,7 +57,7 @@ export function createCompetencyDescriber(
         competency.competencyId,
         {
           descriptor: competency.cefrDescriptor,
-          exponents: (competency.chunks[targetLanguage] ?? [])
+          exponents: (competency.exponents[targetLanguage] ?? [])
             .flatMap((chunk) => chunk.surfaceForms.slice(0, 1))
             .slice(0, MAX_EXPONENTS)
         }

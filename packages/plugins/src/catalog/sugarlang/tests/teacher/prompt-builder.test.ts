@@ -17,8 +17,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK,
-  DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK,
+  TEACHER_COMPREHENSION_GUIDANCE_BLOCK,
+  TEACHER_PRAGMATIC_FEEDBACK_BLOCK,
   buildTeacherPrompt,
   estimatePromptTokens,
   formatPendingProvisional
@@ -50,29 +50,34 @@ describe("buildTeacherPrompt", () => {
     const systemTokens = estimatePromptTokens(prompt.system);
     const userTokens = estimatePromptTokens(prompt.user);
 
+    // The system half now carries the curriculum too (222.9) -- ~1600 of
+    // instructions plus ~900 of competency list. Both blocks are cacheable, so
+    // this half is paid for once per language rather than every turn.
     expect(systemTokens).toBeGreaterThan(350);
-    expect(systemTokens).toBeLessThan(1800);
+    expect(systemTokens).toBeLessThan(2800);
     expect(userTokens).toBeGreaterThan(200);
-    expect(userTokens).toBeLessThan(900);
+    // The per-turn half is now ONLY what changes per turn: learner state,
+    // scene, NPC, dialogue. It was 3138 tokens before 222.7 grouped the
+    // competency list and 222.9 moved it into the cached half.
+    expect(userTokens).toBeLessThan(700);
   });
 
   it("returns stable cache markers for the static prompt portion", () => {
     const prompt = buildTeacherPrompt(createTeacherContext());
+    // Two, because they go stale for different reasons: instructions change
+    // when a prompt constant is edited, the curriculum every time a phrase is
+    // authored. There used to be eight naming individual constants, which were
+    // labels for a mechanism that did not exist.
     expect(prompt.cacheMarkers).toEqual([
-      "director.system.role",
-      "director.system.rubric",
-      "director.system.cefr",
-      "director.system.schema",
-      "director.system.constraints",
-      "director.system.comprehension-guidance",
-      "director.system.pragmatic-feedback",
-      "director.user.template"
+      "teacher.system.instructions",
+      "teacher.system.curriculum"
     ]);
+    expect(prompt.systemBlocks.map((block) => block.cache)).toEqual([true, true]);
   });
 
   it("includes the comprehension guidance block verbatim in the system prompt", () => {
     const prompt = buildTeacherPrompt(createTeacherContext());
-    expect(prompt.system).toContain(DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK);
+    expect(prompt.system).toContain(TEACHER_COMPREHENSION_GUIDANCE_BLOCK);
   });
 
   it("formats pending provisional evidence readably", () => {
@@ -148,12 +153,12 @@ describe("buildTeacherPrompt", () => {
 
   it("085.6: includes the pragmatic feedback block verbatim in the system prompt", () => {
     const prompt = buildTeacherPrompt(createTeacherContext());
-    expect(prompt.system).toContain(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK);
+    expect(prompt.system).toContain(TEACHER_PRAGMATIC_FEEDBACK_BLOCK);
   });
 
   it("085.6: pragmatic feedback block prohibits explicit correction", () => {
-    expect(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK).toContain("NEVER");
-    expect(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK).toContain("warmth");
-    expect(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK).toContain("confusion");
+    expect(TEACHER_PRAGMATIC_FEEDBACK_BLOCK).toContain("NEVER");
+    expect(TEACHER_PRAGMATIC_FEEDBACK_BLOCK).toContain("warmth");
+    expect(TEACHER_PRAGMATIC_FEEDBACK_BLOCK).toContain("confusion");
   });
 });

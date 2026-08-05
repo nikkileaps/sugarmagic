@@ -190,7 +190,7 @@ export class ComprehensionMonitorDataSource {
     const probes = await this.listRecentProbes({ sessionId });
     const hardFloorViolationEvents = await this.telemetrySink.query({
       sessionId,
-      eventKinds: ["comprehension.director-hard-floor-violated"]
+      eventKinds: ["comprehension.teacher-hard-floor-violated"]
     });
     const perNpcMap = new Map<string, { npcId: string | null; npcDisplayName: string | null; probeCount: number }>();
     let totalTurnsSinceLastProbe = 0;

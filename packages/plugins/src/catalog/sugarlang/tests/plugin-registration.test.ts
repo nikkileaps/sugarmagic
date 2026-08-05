@@ -39,7 +39,7 @@ describe("sugarlang plugin registration", () => {
 
     expect(instance.pluginId).toBe(SUGARLANG_PLUGIN_ID);
     expect(instance.displayName).toBe(SUGARLANG_DISPLAY_NAME);
-    expect(instance.contributions).toHaveLength(9);
+    expect(instance.contributions).toHaveLength(10);
     expect(instance.contributions.map((entry) => entry.kind)).toEqual([
       "dialogue.entryDecorator",
       // Runtime grading seam. Its absence is what makes the game plain English,
@@ -47,6 +47,10 @@ describe("sugarlang plugin registration", () => {
       "displayText.resolver",
       // Plan 090.1 -- Studio-preview-only readout of the seeded scene context.
       // hostKinds gates it out of published builds; see the card's own tests.
+      "debug.hudCard",
+      // What the teaching system knows about the learner while playing. Also
+      // studio-only. Contributed here rather than built into the HUD so that a
+      // game without sugarlang has no learner card, rather than an empty one.
       "debug.hudCard",
       // The placement assessment as a QUEST FORM. Its presence is what lets an
       // assessment objective open a form without a conversation -- placement

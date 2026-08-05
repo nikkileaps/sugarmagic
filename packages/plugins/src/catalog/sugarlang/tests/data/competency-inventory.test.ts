@@ -1,7 +1,7 @@
 /**
  * packages/plugins/src/catalog/sugarlang/tests/data/competency-inventory.test.ts
  *
- * Purpose: Pins the competency inventory JSON schema, the es seed data, and the runtime loader.
+ * Purpose: Pins the competency inventory JSON schema, the generated es data, and the runtime loader.
  *
  * Exports:
  *   - none
@@ -24,10 +24,12 @@ import competencyInventorySchema from "../../data/schemas/competency-inventory.s
 import {
   CompetencyInventoryLoader,
   buildInterpretLexiconFromInventory,
-  getAllInventoryChunks,
+  getAllInventoryExponents,
   loadCompetencyInventory
 } from "../../runtime/inventory/competency-inventory-loader";
 import { INTERPRET_LEXICON_CATEGORIES } from "../../runtime/contracts/competency-inventory";
+import { createChunkMatcher } from "../../runtime/classifier/chunk-matcher";
+import { tokenize } from "../../runtime/classifier/tokenize";
 
 describe("competency-inventory schema + data", () => {
   const ajv = new Ajv2020({ strict: true });
@@ -43,51 +45,120 @@ describe("competency-inventory schema + data", () => {
     expect(valid).toBe(true);
   });
 
-  it("es inventory has the required item-zero meta-language function", () => {
-    const metaFn = esInventory.competencies.find(
-      (fn) => fn.competencyId === "meta-language"
+  it("es inventory has the required item-zero meta-language competency", () => {
+    const meta = esInventory.competencies.find(
+      (c) => c.competencyId === "meta-language"
     );
-    expect(metaFn).toBeDefined();
-    expect(metaFn!.isItemZero).toBe(true);
-    expect(metaFn!.placementGateBand).toBe("A2");
-    expect(metaFn!.chunks.es.length).toBeGreaterThanOrEqual(4);
+    expect(meta).toBeDefined();
+    expect(meta!.isItemZero).toBe(true);
+    expect(meta!.placementGateBand).toBe("A2");
+    expect(meta!.exponents.es.length).toBeGreaterThanOrEqual(4);
   });
 
-  it("es inventory includes the four interpretLexicon category functions", () => {
+  it("every competency names a lesson the inventory carries", () => {
+    const known = new Set(esInventory.lessons.map((l) => l.lessonId));
+    const orphans = esInventory.competencies
+      .filter((c) => !known.has(c.lessonId))
+      .map((c) => `${c.competencyId} -> ${c.lessonId}`);
+    expect(orphans).toEqual([]);
+  });
+
+  it("es inventory includes the four interpretLexicon category competencies", () => {
     const categories = esInventory.competencies
-      .filter((fn) => fn.interpretLexiconCategory)
-      .map((fn) => fn.interpretLexiconCategory);
+      .filter((c) => c.interpretLexiconCategory)
+      .map((c) => c.interpretLexiconCategory);
 
     for (const required of INTERPRET_LEXICON_CATEGORIES) {
       expect(categories).toContain(required);
     }
   });
 
-  it("every chunk has at least one surfaceForm and one constituentLemma", () => {
-    for (const fn of esInventory.competencies) {
-      for (const [lang, chunks] of Object.entries(fn.chunks)) {
-        for (const chunk of chunks) {
+  it("every exponent has at least one surfaceForm and one constituentLemma", () => {
+    for (const competency of esInventory.competencies) {
+      for (const [lang, exponents] of Object.entries(competency.exponents)) {
+        for (const exponent of exponents) {
           expect(
-            chunk.surfaceForms.length,
-            `${fn.competencyId}/${lang}/${chunk.chunkId} surfaceForms`
+            exponent.surfaceForms.length,
+            `${competency.competencyId}/${lang}/${exponent.exponentId} surfaceForms`
           ).toBeGreaterThan(0);
           expect(
-            chunk.constituentLemmas.length,
-            `${fn.competencyId}/${lang}/${chunk.chunkId} constituentLemmas`
+            exponent.constituentLemmas.length,
+            `${competency.competencyId}/${lang}/${exponent.exponentId} constituentLemmas`
           ).toBeGreaterThan(0);
         }
       }
     }
   });
 
-  it("all chunk normalizedForms are unique within a language", () => {
+  it("all exponent normalizedForms are unique within a language", () => {
     const seen = new Set<string>();
-    for (const fn of esInventory.competencies) {
-      for (const chunk of fn.chunks.es ?? []) {
-        expect(seen.has(chunk.normalizedForm)).toBe(false);
-        seen.add(chunk.normalizedForm);
+    for (const competency of esInventory.competencies) {
+      for (const exponent of competency.exponents.es ?? []) {
+        expect(seen.has(exponent.normalizedForm)).toBe(false);
+        seen.add(exponent.normalizedForm);
       }
     }
+  });
+
+  it("every accented wording also ships deaccented, because players type without accents", () => {
+    const strip = (v: string) =>
+      v.normalize("NFD").replace(/\p{Diacritic}/gu, "").normalize("NFC");
+    for (const competency of esInventory.competencies) {
+      for (const exponent of competency.exponents.es ?? []) {
+        for (const surface of exponent.surfaceForms) {
+          expect(
+            exponent.surfaceForms,
+            `${exponent.exponentId} is missing the deaccented "${strip(surface)}"`
+          ).toContain(strip(surface));
+        }
+      }
+    }
+  });
+});
+
+describe("the matcher can actually find what was authored", () => {
+  it("THE ONE THAT MATTERS: every surface form finds its own exponent", () => {
+    // Authoring a phrase is not the same as the matcher being able to reach
+    // it. Two exponents sharing a surface form both validate -- their ids
+    // differ, so the uniqueness check passes -- but longest-match means only
+    // the longer one is ever returned, and the shorter one lists a spelling it
+    // can never earn credit for. That is how `qué es esto` ended up on both
+    // `meta-language` and `ask-meaning`, and `no me gusta nada` on both
+    // `state-dislike` and `state-food-dislikes`.
+    const exponents = getAllInventoryExponents("es");
+    const matcher = createChunkMatcher(exponents, "es");
+    const unreachable: string[] = [];
+    for (const exponent of exponents) {
+      for (const surface of exponent.surfaceForms) {
+        const hits = matcher.match(tokenize(surface, "es"), surface);
+        if (!hits.some((hit) => hit.item.exponentId === exponent.exponentId)) {
+          unreachable.push(
+            `${exponent.exponentId}: "${surface}" matched ${
+              hits.map((h) => h.item.exponentId).join(", ") || "nothing"
+            }`
+          );
+        }
+      }
+    }
+    expect(unreachable).toEqual([]);
+  });
+
+  it("no phrase is authored under two competencies", () => {
+    const owner = new Map<string, string>();
+    const shared: string[] = [];
+    for (const competency of esInventory.competencies) {
+      for (const exponent of competency.exponents.es ?? []) {
+        for (const surface of exponent.surfaceForms) {
+          const prior = owner.get(surface);
+          if (prior && prior !== competency.competencyId) {
+            shared.push(`"${surface}": ${prior} and ${competency.competencyId}`);
+          } else {
+            owner.set(surface, competency.competencyId);
+          }
+        }
+      }
+    }
+    expect(shared).toEqual([]);
   });
 });
 
@@ -107,26 +178,27 @@ describe("CompetencyInventoryLoader", () => {
     expect(() => loader.load("es")).toThrow(/lang mismatch/);
   });
 
-  it("getChunks returns the expected chunks for greet/es", () => {
+  it("getExponents returns the expected exponents for greet/es", () => {
     const loader = new CompetencyInventoryLoader({ es: esInventory });
-    const chunks = loader.getChunks("greet", "es");
-    expect(chunks.length).toBeGreaterThan(0);
-    const normalizedForms = chunks.map((c) => c.normalizedForm);
+    const exponents = loader.getExponents("greet", "es");
+    expect(exponents.length).toBeGreaterThan(0);
+    const normalizedForms = exponents.map((e) => e.normalizedForm);
     expect(normalizedForms).toContain("hola");
     expect(normalizedForms).toContain("buenos_dias");
   });
 
-  it("getAllChunks returns chunks from all functions", () => {
+  it("getAllExponents returns exponents from every competency", () => {
     const loader = new CompetencyInventoryLoader({ es: esInventory });
-    const allChunks = loader.getAllChunks("es");
-    const allCompetencyChunks = esInventory.competencies.flatMap(
-      (fn) => fn.chunks.es ?? []
+    const all = loader.getAllExponents("es");
+    const expected = esInventory.competencies.reduce(
+      (count, c) => count + (c.exponents.es?.length ?? 0),
+      0
     );
-    expect(allChunks.length).toBe(allCompetencyChunks.length);
+    expect(all.length).toBe(expected);
   });
 
-  it("getAllInventoryChunks convenience fn matches loader output", () => {
-    const all = getAllInventoryChunks("es");
+  it("getAllInventoryExponents convenience fn matches loader output", () => {
+    const all = getAllInventoryExponents("es");
     expect(all.length).toBeGreaterThan(0);
   });
 
@@ -174,14 +246,14 @@ describe("CompetencyInventoryLoader", () => {
     expect(lexicon.gratitude).toContain("gracias");
   });
 
-  it("085.6: item-zero functions do not leak into the four interpretLexicon categories", () => {
+  it("085.6: item-zero competencies do not leak into the four interpretLexicon categories", () => {
     const loader = new CompetencyInventoryLoader({ es: esInventory });
-    const itemZeroFns = esInventory.competencies.filter((fn) => fn.isItemZero === true);
-    expect(itemZeroFns.length).toBeGreaterThan(0);
+    const itemZero = esInventory.competencies.filter((c) => c.isItemZero === true);
+    expect(itemZero.length).toBeGreaterThan(0);
     const lexicon = loader.buildInterpretLexicon("es");
-    for (const fn of itemZeroFns) {
-      const chunkForms = (fn.chunks.es ?? []).flatMap((c) => c.surfaceForms);
-      for (const form of chunkForms) {
+    for (const competency of itemZero) {
+      const forms = (competency.exponents.es ?? []).flatMap((e) => e.surfaceForms);
+      for (const form of forms) {
         for (const category of Object.keys(lexicon)) {
           expect(lexicon[category], `item-zero form "${form}" must not appear in category "${category}"`).not.toContain(form);
         }

@@ -1,5 +1,17 @@
 # Spanish Data
 
+## Target Variety: Latin American Spanish
+
+Decided 2026-08-05. `exponents.json` carries Latin American forms -- `carro`,
+`boleto`, `computadora`, `lentes` -- and `ustedes` rather than `vosotros`.
+
+This governs what the game TEACHES. The dictionary and morphology index still
+carry peninsular forms, including `vosotros` conjugations, because a player may
+type one or meet one in authored text and failing to recognise it would be a
+bug. Production is narrow; recognition is wide.
+
+See `scripts/data-prep/EXPONENT-AUTHORING.md` for the substitution table.
+
 This directory holds the checked-in Spanish language data snapshot for
 sugarlang.
 

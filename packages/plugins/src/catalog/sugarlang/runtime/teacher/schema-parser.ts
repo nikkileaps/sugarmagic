@@ -91,11 +91,11 @@ const SENTENCE_COMPLEXITY_CAPS = [
 const CONFIDENCE_BANDS = ["high", "medium", "low"] as const;
 const PROBE_STYLES = ["recall", "recognition", "production", "none"] as const;
 const PROBE_REASONS = [
-  "director-discretion",
+  "teacher-discretion",
   "soft-floor",
   "hard-floor-turns",
   "hard-floor-lemma-age",
-  "director-deferred-override"
+  "teacher-deferred-override"
 ] as const;
 const ACCEPTABLE_RESPONSE_FORMS = [
   "any",
@@ -123,11 +123,9 @@ const lemmaRefSchema = {
 /**
  * 090.4: what the Teacher may name on the slate -- a word OR a competency.
  *
- * This schema is the thing that makes "introduce ask-where" expressible. While
- * `targetVocab` accepted only `lemmaRefSchema`, a competency could reach
- * teaching in exactly one way: flattened into a `chunk:` pseudo-lemma and
- * smuggled through the lemma channel. The union closes that side door by
- * opening a front one.
+ * This schema is what makes "introduce ask-where" expressible: `targetVocab`
+ * takes a union, so a competency is named directly rather than disguised as a
+ * word.
  *
  * `kind` is REQUIRED on both branches rather than defaulted to "vocabulary".
  * A default would mean a malformed competency silently parses as a word with a
@@ -690,7 +688,7 @@ function enforceDirectiveRequirements(
   const probeFloorState = pacingSignals(context).probeFloorState;
   if (probeFloorState.hardFloorReached && !directive.comprehensionCheck.trigger) {
     maybeEmit(
-      createTelemetryEvent("comprehension.director-hard-floor-violated", {
+      createTelemetryEvent("comprehension.teacher-hard-floor-violated", {
         conversationId: context.conversationId,
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
@@ -828,7 +826,7 @@ export function repairDirective(
     .map((lemma) => lemma.lemmaId);
   if (contaminatedLemmaIds.length > 0) {
     maybeEmit(
-      createTelemetryEvent("quest-essential.director-targetvocab-contamination", {
+      createTelemetryEvent("quest-essential.teacher-targetvocab-contamination", {
         conversationId: context.conversationId,
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
@@ -913,7 +911,7 @@ export function repairDirective(
           : "hard-floor-turns"
         : probeFloorState.softFloorReached
           ? "soft-floor"
-          : "director-discretion"
+          : "teacher-discretion"
     : undefined;
 
   const rawDirectiveLifetime = isRecord(record.directiveLifetime)

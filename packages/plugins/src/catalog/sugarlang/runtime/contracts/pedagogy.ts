@@ -16,9 +16,9 @@
  *
  * Relationships:
  *   - Depends on lexical-prescription and learner-profile contract types.
- *   - Is consumed by the Director, middleware, and SugarAgent integration seams.
+ *   - Is consumed by the Teacher, middleware, and SugarAgent integration seams.
  *
- * Implements: Proposal 001 §3. Director / §Observer Latency Bias and In-Character Comprehension Checks
+ * Implements: Proposal 001 §3. Teacher / §Observer Latency Bias and In-Character Comprehension Checks
  *
  * Status: active
  */
@@ -28,9 +28,9 @@ import type { LemmaRef } from "./lexical-prescription";
 import type { TeachableRef } from "./teachable-ref";
 
 /**
- * High-level support posture the Director chooses for a turn.
+ * High-level support posture the Teacher chooses for a turn.
  *
- * Implements: Proposal 001 §3. Director
+ * Implements: Proposal 001 §3. Teacher
  */
 export type SupportPosture =
   | "anchored"
@@ -39,9 +39,9 @@ export type SupportPosture =
   | "target-only";
 
 /**
- * Conversational interaction style selected by the Director.
+ * Conversational interaction style selected by the Teacher.
  *
- * Implements: Proposal 001 §3. Director / §Receptive vs. Productive Knowledge
+ * Implements: Proposal 001 §3. Teacher / §Receptive vs. Productive Knowledge
  */
 export type InteractionStyle =
   | "listening_first"
@@ -53,14 +53,14 @@ export type InteractionStyle =
 /**
  * Glossing mode authorized for the Generator.
  *
- * Implements: Proposal 001 §3. Director
+ * Implements: Proposal 001 §3. Teacher
  */
 export type GlossingStrategy = "inline" | "parenthetical" | "hover-only" | "none";
 
 /**
  * Sentence-complexity ceiling the Generator should honor for this turn.
  *
- * Implements: Proposal 001 §3. Director
+ * Implements: Proposal 001 §3. Teacher
  */
 export type SentenceComplexityCap = "single-clause" | "two-clause" | "free";
 
@@ -70,14 +70,14 @@ export type SentenceComplexityCap = "single-clause" | "two-clause" | "free";
  * Implements: Proposal 001 §Observer Latency Bias and In-Character Comprehension Checks
  */
 export type ProbeTriggerReason =
-  | "director-discretion"
+  | "teacher-discretion"
   | "soft-floor"
   | "hard-floor-turns"
   | "hard-floor-lemma-age"
-  | "director-deferred-override";
+  | "teacher-deferred-override";
 
 /**
- * Full comprehension-check specification emitted by the Director.
+ * Full comprehension-check specification emitted by the Teacher.
  *
  * Implements: Proposal 001 §Observer Latency Bias and In-Character Comprehension Checks
  */
@@ -93,7 +93,7 @@ export interface ComprehensionCheckSpec {
 /**
  * Cache lifetime and invalidation triggers for a pedagogical directive.
  *
- * Implements: Proposal 001 §3. Director
+ * Implements: Proposal 001 §3. Teacher
  */
 export interface DirectiveLifetime {
   maxTurns: number;
@@ -105,9 +105,9 @@ export interface DirectiveLifetime {
 }
 
 /**
- * Raw Director output prior to merging with the lexical prescription.
+ * Raw Teacher output prior to merging with the lexical prescription.
  *
- * Implements: Proposal 001 §3. Director
+ * Implements: Proposal 001 §3. Teacher
  */
 export interface PedagogicalDirective {
   /**
@@ -137,7 +137,7 @@ export interface PedagogicalDirective {
 /**
  * Final merged constraint written into `execution.annotations["sugarlang.constraint"]`.
  *
- * Implements: Proposal 001 §3. Director / §Pre-Placement Opening Dialog Policy / §Quest-Essential Lemma Exemption
+ * Implements: Proposal 001 §3. Teacher / §Pre-Placement Opening Dialog Policy / §Quest-Essential Lemma Exemption
  */
 export interface SugarlangConstraint {
   targetVocab: {

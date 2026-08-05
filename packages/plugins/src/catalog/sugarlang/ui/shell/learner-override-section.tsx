@@ -186,15 +186,15 @@ export function LearnerOverrideSection(): ReactElement {
             <div>assessment: {state.assessmentStatus} ({(state.cefrConfidence * 100).toFixed(0)}%)</div>
             <div>placement: {state.placementStatus}</div>
             <div>calibration: {state.inCalibration ? "open" : "closed"}</div>
-            <div>lemma cards: {state.lemmaCards.length} | chunk cards: {state.chunkCards.length} | teach records: {state.teachRecords.length}</div>
+            <div>lemma cards: {state.lemmaCards.length} | chunk cards: {state.exponentCards.length} | teach records: {state.teachRecords.length}</div>
           </div>
-          {state.chunkCards.length > 0 && (
+          {state.exponentCards.length > 0 && (
             <details style={{ fontSize: "0.72rem" }}>
               <summary style={{ cursor: "pointer", color: "var(--sm-color-subtext, #6c7086)", marginBottom: "0.25rem" }}>
-                Chunk cards ({state.chunkCards.length})
+                Chunk cards ({state.exponentCards.length})
               </summary>
               <div style={{ fontFamily: "var(--sm-font-mono, monospace)", display: "grid", gap: "0.15rem", paddingLeft: "0.5rem" }}>
-                {state.chunkCards.map((c) => (
+                {state.exponentCards.map((c) => (
                   <div key={c.lemmaId}>{c.lemmaId} [{c.cefrPriorBand}] pro {c.productiveStrength.toFixed(2)}</div>
                 ))}
               </div>

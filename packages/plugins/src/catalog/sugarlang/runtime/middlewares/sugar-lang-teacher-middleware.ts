@@ -49,7 +49,7 @@ import {
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
   SUGARLANG_PREPLACEMENT_LINE_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
-  SUGARLANG_SCHEDULE_ANNOTATION,
+  SUGARLANG_LEARNER_PROGRESS_ANNOTATION,
   extractCharacterVoiceReminder,
   getSugarlangConversationId,
   getSugarlangTelemetryTurnId,
@@ -61,7 +61,7 @@ import {
   shouldRunSugarlangForExecution,
   type SugarlangLoggerLike
 } from "./shared";
-import type { TeachSchedule } from "../scheduler/teach-schedule";
+import type { LearnerProgress } from "../learner/learner-progress";
 import { composeSituation, situationKey } from "../situation";
 import type { TeacherNpcContext, TeacherRecentTurn } from "../situation";
 import {
@@ -69,6 +69,7 @@ import {
   getSentenceComplexityCap,
   postureForBand
 } from "../teacher/band-envelope";
+import { isExponentCardKey } from "../inventory/card-display-name";
 
 // Local structural type matching SugaragentContribution (sugaragent owns the
 // full interface; we mirror only the fields we write -- no import needed).
@@ -272,9 +273,9 @@ export function createSugarLangTeacherMiddleware(
       // would be true every turn, the middleware would return early every turn,
       // and the Teacher would never run again. Nothing would fail; NPCs would
       // just quietly go back to ungraded output.
-      const schedule = execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] as
-        | TeachSchedule
-        | undefined;
+      const learnerProgress = execution.annotations[
+        SUGARLANG_LEARNER_PROGRESS_ANNOTATION
+      ] as LearnerProgress | undefined;
       const prePlacementOpeningLine = execution.annotations[
         SUGARLANG_PREPLACEMENT_LINE_ANNOTATION
       ] as SugarlangConstraint["prePlacementOpeningLine"] | undefined;
@@ -339,7 +340,7 @@ export function createSugarLangTeacherMiddleware(
         directive = createPrePlacementDirective();
         await emitTelemetry(
           telemetry,
-          createTelemetryEvent("director.pre-placement-bypass", {
+          createTelemetryEvent("teacher.pre-placement-bypass", {
             conversationId,
             sessionId,
             turnId: traceTurnId,
@@ -386,6 +387,7 @@ export function createSugarLangTeacherMiddleware(
           ...(situation === null
             ? {}
             : { situation, situationKey: situationKey(situation) }),
+          ...(learnerProgress ? { learnerProgress } : {}),
           lang: {
             targetLanguage: execution.selection.targetLanguage ?? learner.targetLanguage,
             supportLanguage: execution.selection.supportLanguage ?? learner.supportLanguage
@@ -419,7 +421,7 @@ export function createSugarLangTeacherMiddleware(
                   extractCharacterVoiceReminder(npc),
                 triggerReason:
                   directive.comprehensionCheck.triggerReason ??
-                  "director-discretion"
+                  "teacher-discretion"
               }
             }
           : {}),
@@ -476,17 +478,18 @@ export function createSugarLangTeacherMiddleware(
         constraint.targetLanguage,
         constraint.learnerCefr
       );
-      // 087.6: when the schedule drives the directive, publish the top scheduled
-      // lemma ids as retrieveBiasTerms so sugaragent's RetrieveStage can bias the
-      // vector-store query toward topics that exercise what the learner needs to
-      // practice. Fluency items (well-known lemmas recycled for ease) are excluded;
-      // only active teach targets are relevant for retrieval bias.
+      // Bias sugaragent's lore retrieval toward what the learner is due to
+      // practise. Due-ness is a fact about a card, so this survives the
+      // scheduler no longer ranking anything.
+      //
+      // Lemmas only, and the reason is retrieval rather than teaching: these
+      // become vector-store query terms. `queso` finds cheese lore; a
+      // competency id like `ask-where` is not a thing anyone wrote lore about.
       const scheduledBiasTerms: string[] =
-        schedule && !schedule.isColdStart
-          ? schedule.teachables
-              .filter((t) => t.kind === "vocabulary")
+        learnerProgress && !learnerProgress.isColdStart
+          ? learnerProgress.dueItemIds
+              .filter((id) => !isExponentCardKey(id))
               .slice(0, 3)
-              .map((t) => t.id)
           : [];
       const contrib: SugarlangContributionShape = {
         schemaVersion: 1,
@@ -565,11 +568,11 @@ export function createSugarLangTeacherMiddleware(
       if (
         execution.annotations[SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION] === true &&
         directive.comprehensionCheck.trigger &&
-        directive.comprehensionCheck.triggerReason === "director-deferred-override"
+        directive.comprehensionCheck.triggerReason === "teacher-deferred-override"
       ) {
         await emitTelemetry(
           telemetry,
-          createTelemetryEvent("comprehension.director-hard-floor-violated", {
+          createTelemetryEvent("comprehension.teacher-hard-floor-violated", {
             conversationId,
             sessionId,
             turnId: traceTurnId,

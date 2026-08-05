@@ -15,7 +15,7 @@ One file owns the whole contract:
 
 It defines the typed event union, the `TelemetrySink` interface, all four sink
 implementations, and `resolveSugarlangTelemetrySink`. Every producer
-(middlewares, Director, learner reducer, classifier, chunk compiler) emits
+(middlewares, Teacher, learner reducer, classifier, chunk compiler) emits
 through `emitTelemetry`, which is fire-and-forget: a failing sink logs a
 warning and drops the event, never blocking a turn.
 
@@ -70,7 +70,7 @@ Grouped by family, with the producing file (all paths relative to
 | Kind | Producer |
 |---|---|
 | `pre-placement.opening-dialog-turn` | `runtime/middlewares/sugar-lang-context-middleware.ts` |
-| `director.pre-placement-bypass` | `runtime/middlewares/sugar-lang-teacher-middleware.ts` |
+| `teacher.pre-placement-bypass` | `runtime/middlewares/sugar-lang-teacher-middleware.ts` |
 | `verify.pre-placement-bypass` | `runtime/middlewares/sugar-lang-verify-middleware.ts` |
 | `observer.pre-placement-bypass` | `runtime/middlewares/sugar-lang-observe-middleware.ts` |
 | `observer.placement-questionnaire-bypass` | `runtime/middlewares/sugar-lang-observe-middleware.ts` |
@@ -107,18 +107,18 @@ had a card with a numeric `retrievability`. Omitted when no target lemma had
 one. This is the predicted-vs-observed calibration signal: join it against
 `lemmasPassed` / `lemmasFailed` on the same event.
 | `comprehension.probe-language-fallback` | `sugar-lang-observe-middleware.ts` |
-| `comprehension.director-hard-floor-violated` | `sugar-lang-teacher-middleware.ts` and `runtime/teacher/schema-parser.ts` |
+| `comprehension.teacher-hard-floor-violated` | `sugar-lang-teacher-middleware.ts` and `runtime/teacher/schema-parser.ts` |
 
-**Director (teacher)**
+**Teacher (teacher)**
 
 | Kind | Producer |
 |---|---|
-| `director.invocation-started` / `-failed` | `runtime/teacher/policies/llm-teacher-policy.ts` |
-| `director.invocation-completed` | `runtime/teacher/sugar-lang-teacher.ts` and `llm-teacher-policy.ts` |
-| `director.cache-hit` / `director.invocation-resolved` | `runtime/teacher/sugar-lang-teacher.ts` |
+| `teacher.invocation-started` / `-failed` | `runtime/teacher/policies/llm-teacher-policy.ts` |
+| `teacher.invocation-completed` | `runtime/teacher/sugar-lang-teacher.ts` and `llm-teacher-policy.ts` |
+| `teacher.cache-hit` / `teacher.invocation-resolved` | `runtime/teacher/sugar-lang-teacher.ts` |
 | `directive-cache.invalidated` | `runtime/teacher/directive-cache.ts` |
-| `quest-essential.director-forced-glossing` | `runtime/teacher/schema-parser.ts` |
-| `quest-essential.director-targetvocab-contamination` | `runtime/teacher/schema-parser.ts` |
+| `quest-essential.teacher-forced-glossing` | `runtime/teacher/schema-parser.ts` |
+| `quest-essential.teacher-targetvocab-contamination` | `runtime/teacher/schema-parser.ts` |
 
 **Chunk extraction (scene lexicon tier 2)**
 

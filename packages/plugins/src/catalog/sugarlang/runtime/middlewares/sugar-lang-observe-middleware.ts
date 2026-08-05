@@ -26,12 +26,20 @@ import {
 import { tokenize } from "../classifier/tokenize";
 import { lemmatize } from "../classifier/lemmatize";
 import { createChunkMatcher } from "../classifier/chunk-matcher";
+import type { Exponent } from "../contracts/competency-inventory";
+import { observationToOutcome } from "../learner/observations";
+import { recordObservation } from "../debug/turn-debug-state";
 import {
-  getCompetencyForChunk as getInventoryCompetencyForChunk,
-  getAllInventoryChunks
+  getCompetencyForExponent as getInventoryCompetencyForExponent,
+  getAllInventoryExponents
 } from "../inventory/competency-inventory-loader";
+import {
+  competencyIdForCardKey,
+  exponentCardKey,
+  isExponentCardKey
+} from "../inventory/card-display-name";
 import { countDiverseEncounters } from "../learner";
-import { vocabularyRefs } from "../contracts/teachable-ref";
+import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
 import { buildHighlightTerms, focusTermsOf } from "../grading/highlight-terms";
 import { findAmbientSpans } from "../grading/ambient-spans";
 import { traceRealization } from "../teacher/teacher-trace";
@@ -64,7 +72,10 @@ import {
 import type { ChunkMatcher } from "../classifier/chunk-matcher";
 
 // Trie rebuild is O(inventory * avgSurfaceForms). Cache per language so it happens once per session.
-const chunkMatcherCache = new Map<string, ChunkMatcher | null>();
+const chunkMatcherCache = new Map<
+  string,
+  ChunkMatcher<Exponent> | null
+>();
 
 export interface SugarLangObserveMiddlewareDeps {
   services: SugarlangRuntimeServices;
@@ -91,7 +102,7 @@ function collectLemmasFromText(
  *
  * COMPETENCIES ARE NOT SERVED HERE AND THAT IS A KNOWN GAP, not a decision that
  * they do not matter. A competency is evidenced by its exponents appearing in a
- * turn, which is what the chunk matcher finds and what `chunk:` cards used to
+ * turn, which is what the chunk matcher finds and what `exponent:` cards used to
  * approximate by smuggling competencies through this lemma channel. Recording
  * competency evidence properly needs the realization output (090.11) so observe
  * can read what was actually taught rather than re-deriving it.
@@ -105,6 +116,26 @@ function buildTargetLemmaSet(constraint: SugarlangConstraint): Set<string> {
       ...vocabularyRefs(constraint.targetVocab.introduce),
       ...vocabularyRefs(constraint.targetVocab.reinforce)
     ].map((lemma) => lemma.lemmaId)
+  );
+}
+
+/**
+ * Is this card key a competency the Teacher is INTRODUCING this turn?
+ *
+ * A competency card is keyed `exponent:<id>`, so it never appears in the slate's
+ * vocabulary refs and never will -- the slate names the competency, the card
+ * names the exponent. Resolving the chunk back to its competency is the join
+ * the two key spaces need.
+ */
+function isIntroducedCompetencyCard(
+  cardKey: string,
+  lang: string,
+  constraint: SugarlangConstraint
+): boolean {
+  const competencyId = competencyIdForCardKey(cardKey, lang);
+  if (competencyId === null) return false;
+  return competencyRefs(constraint.targetVocab.introduce).some(
+    (ref) => ref.competencyId === competencyId
   );
 }
 
@@ -355,16 +386,16 @@ export function createSugarLangObserveMiddleware(
       // 085.3: Build chunk matcher from the hand-curated competency inventory so dynamic
       // NPC greetings are detected even when the phrase never appears in authored scene text.
       if (!chunkMatcherCache.has(learner.targetLanguage)) {
-        let inventoryChunks: import("../contracts/competency-inventory").InventoryChunk[] = [];
+        let inventoryExponents: Exponent[] = [];
         try {
-          inventoryChunks = getAllInventoryChunks(learner.targetLanguage);
+          inventoryExponents = getAllInventoryExponents(learner.targetLanguage);
         } catch {
           // Missing inventory for this language -- chunk detection skipped.
         }
         chunkMatcherCache.set(
           learner.targetLanguage,
-          inventoryChunks.length > 0
-            ? createChunkMatcher(inventoryChunks, learner.targetLanguage)
+          inventoryExponents.length > 0
+            ? createChunkMatcher(inventoryExponents, learner.targetLanguage)
             : null
         );
       }
@@ -431,18 +462,18 @@ export function createSugarLangObserveMiddleware(
           const chunkMatches = chunkMatcher.match(inputTokens, execution.input.text);
           const observedChunkIds = new Set<string>();
           for (const match of chunkMatches) {
-            if (observedChunkIds.has(match.chunk.chunkId)) continue;
-            observedChunkIds.add(match.chunk.chunkId);
-            playerProducedChunkIds.add(match.chunk.chunkId);
+            if (observedChunkIds.has(match.item.exponentId)) continue;
+            observedChunkIds.add(match.item.exponentId);
+            playerProducedChunkIds.add(match.item.exponentId);
             const observationEvent = createObservationEvent({
               execution,
               lemma: {
-                lemmaId: `chunk:${match.chunk.chunkId}`,
+                lemmaId: exponentCardKey(match.item.exponentId),
                 lang: learner.targetLanguage
               },
               observation: {
                 kind: "chunk-produced",
-                chunkId: match.chunk.chunkId,
+                chunkId: match.item.exponentId,
                 surfaceMatched: match.surfaceMatched,
                 observedAtMs
               }
@@ -485,17 +516,19 @@ export function createSugarLangObserveMiddleware(
       // The term is whatever text the presentation layer highlighted, which
       // reaches here as `lemmaId` with no check that such a lemma exists --
       // `getHoverLemma` validates that it is a string and nothing more. Cards
-      // live in two key spaces: atlas lemmas, and chunks keyed `chunk:<id>`.
+      // live in two key spaces: atlas lemmas, and chunks keyed `exponent:<id>`.
       // A competency exponent surface is in neither, so hovering `buenos dias`
       // writes a card under a key nothing can ever read back. 45 of the 56
       // shipped competency surfaces are not atlas lemmas.
       //
-      // Refusing is the conservative half. Crediting the COMPETENCY the surface
-      // belongs to needs a surface -> chunk map on the annotation, which the
-      // highlight terms do not carry yet; until then no card beats a junk one.
+      // In practice a competency surface no longer arrives raw: the highlight
+      // terms carry a surface-to-chunk map, so the decorator resolves `buenos
+      // dias` to its `exponent:` id before it gets here. This guard is the floor
+      // under that, for anything the map does not cover -- and refusing is
+      // right, because no card beats one filed under a key nothing reads.
       const hoverIsKnown =
         hoverLemma !== null &&
-        (hoverLemma.lemma.lemmaId.startsWith("chunk:") ||
+        (isExponentCardKey(hoverLemma.lemma.lemmaId) ||
           services.atlas.getLemma(
             hoverLemma.lemma.lemmaId,
             hoverLemma.lemma.lang
@@ -512,9 +545,21 @@ export function createSugarLangObserveMiddleware(
         // Distinguish introduce hover (positive first exposure) from reinforce
         // hover (needed help remembering). See observations.ts for the
         // pedagogical rationale behind the different FSRS grades.
-        const isIntroduceHover = vocabularyRefs(constraint.targetVocab.introduce).some(
-          (l) => l.lemmaId === hoverLemma.lemma.lemmaId
-        );
+        //
+        // Competencies are checked as well as words. Checking only
+        // `vocabularyRefs` meant a `exponent:` card could never match, so every
+        // competency hover fell through to "hovered" -- graded Hard, with a
+        // negative productive delta. A learner reaching for a competency the
+        // Teacher was introducing was penalised for engaging with it.
+        const isIntroduceHover =
+          vocabularyRefs(constraint.targetVocab.introduce).some(
+            (l) => l.lemmaId === hoverLemma.lemma.lemmaId
+          ) ||
+          isIntroducedCompetencyCard(
+            hoverLemma.lemma.lemmaId,
+            hoverLemma.lemma.lang,
+            constraint
+          );
         const observationEvent = createObservationEvent({
           execution,
           lemma: hoverLemma.lemma,
@@ -592,8 +637,8 @@ export function createSugarLangObserveMiddleware(
         const introduceIds = new Set(vocabularyRefs(constraint.targetVocab.introduce).map((l) => l.lemmaId));
         for (const { lemmaId } of turnLemmas) {
           if (!lemmaId) continue;
-          // Skip introduce-list lemmas (handled above) and chunk: pseudo-ids.
-          if (introduceIds.has(lemmaId) || lemmaId.startsWith("chunk:")) continue;
+          // Skip introduce-list lemmas (handled above) and exponent ids.
+          if (introduceIds.has(lemmaId) || isExponentCardKey(lemmaId)) continue;
           // Only reinforce lemmas -- ones with an existing card in the snapshot.
           if (!(lemmaId in learner.lemmaCards)) continue;
           try {
@@ -642,32 +687,32 @@ export function createSugarLangObserveMiddleware(
         const observedChunkIds = new Set<string>();
         let teachLineWritten = false;
         for (const match of chunkMatches) {
-          if (observedChunkIds.has(match.chunk.chunkId)) continue;
-          observedChunkIds.add(match.chunk.chunkId);
+          if (observedChunkIds.has(match.item.exponentId)) continue;
+          observedChunkIds.add(match.item.exponentId);
 
           // 085.5: Detect first-teach BEFORE applying the observation (new card = not yet in lemmaCards).
           // Also exclude chunks the player already produced this turn -- learner snapshot is stale.
           const isNewCard =
             !isPlayerTurn &&
-            !(`chunk:${match.chunk.chunkId}` in learner.lemmaCards) &&
-            !playerProducedChunkIds.has(match.chunk.chunkId);
+            !(exponentCardKey(match.item.exponentId) in learner.lemmaCards) &&
+            !playerProducedChunkIds.has(match.item.exponentId);
 
           const observationEvent = createObservationEvent({
             execution,
             lemma: {
-              lemmaId: `chunk:${match.chunk.chunkId}`,
+              lemmaId: exponentCardKey(match.item.exponentId),
               lang: learner.targetLanguage
             },
             observation: isPlayerTurn
               ? {
                   kind: "chunk-produced",
-                  chunkId: match.chunk.chunkId,
+                  chunkId: match.item.exponentId,
                   surfaceMatched: match.surfaceMatched,
                   observedAtMs
                 }
               : {
                   kind: "chunk-encountered",
-                  chunkId: match.chunk.chunkId,
+                  chunkId: match.item.exponentId,
                   surfaceMatched: match.surfaceMatched,
                   observedAtMs
                 }
@@ -681,8 +726,8 @@ export function createSugarLangObserveMiddleware(
           // 085.5: First-teach beat -- write teach-record and annotate the turn once.
           // 087.2: Also create function-level debt at introduction and record encounter paydown
           //   for every NPC chunk match (not just first-teach).
-          const fnEntry = getInventoryCompetencyForChunk(
-            match.chunk.chunkId,
+          const fnEntry = getInventoryCompetencyForExponent(
+            match.item.exponentId,
             learner.targetLanguage
           );
           if (isNewCard && !teachLineWritten && fnEntry) {
@@ -691,7 +736,7 @@ export function createSugarLangObserveMiddleware(
               await services.teachRecordStore.write({
                 competencyId: fnEntry.competencyId,
                 taughtAtMs: observedAtMs,
-                realizingChunkId: match.chunk.chunkId
+                realizingChunkId: match.item.exponentId
               });
               // THE FIRST-TEACH BEAT (085.5): the first classifier-matched
               // encounter of a chunk that realizes a communicative function.
@@ -800,6 +845,18 @@ export function createSugarLangObserveMiddleware(
       }
 
       if (appliedObservations.length > 0) {
+        // One hook for every apply site above: they all push here first. The
+        // debug HUD shows the most recent one, which is what answers "did that
+        // hover do anything" -- the grade is null for passive exposure, and
+        // that null is the answer, not a missing value.
+        const latest = appliedObservations[appliedObservations.length - 1];
+        recordObservation({
+          kind: latest.observation.kind,
+          cardKey: latest.lemma.lemmaId,
+          grade: observationToOutcome(latest.observation).receptiveGrade,
+          observedAtMs: Date.now()
+        });
+
         const updatedProfile = await services.learnerStore.getCurrentProfile();
         const observationSummary = appliedObservations.map((obs) => ({
           lemma: obs.lemma.lemmaId,

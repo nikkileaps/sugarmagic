@@ -21,19 +21,25 @@ import type { LexicalChunk } from "../types";
 import type { Token } from "./tokenize";
 import { tokenize } from "./tokenize";
 
-/** Minimum chunk shape accepted by the matcher -- satisfied by both LexicalChunk and InventoryChunk. */
+/**
+ * Minimum shape the matcher needs. No id: the matcher scans surface forms and
+ * hands back whatever it was given, so a scene chunk keeps its `chunkId` and a
+ * competency's exponent keeps its `exponentId` instead of one borrowing the
+ * other's name.
+ */
 export type ChunkSpec = Pick<
   LexicalChunk,
-  "chunkId" | "normalizedForm" | "surfaceForms" | "cefrBand" | "constituentLemmas"
+  "normalizedForm" | "surfaceForms" | "cefrBand" | "constituentLemmas"
 >;
 
-interface ChunkTrieNode {
-  children: Map<string, ChunkTrieNode>;
-  terminals: ChunkSpec[];
+interface ChunkTrieNode<T extends ChunkSpec> {
+  children: Map<string, ChunkTrieNode<T>>;
+  terminals: T[];
 }
 
-export interface ChunkMatch {
-  chunk: ChunkSpec;
+export interface ChunkMatch<T extends ChunkSpec = ChunkSpec> {
+  /** The item as supplied -- a LexicalChunk, or an Exponent. */
+  item: T;
   normalizedForm: string;
   surfaceMatched: string;
   start: number;
@@ -43,12 +49,12 @@ export interface ChunkMatch {
   tokenIndexes: number[];
 }
 
-export interface ChunkMatcher {
+export interface ChunkMatcher<T extends ChunkSpec = ChunkSpec> {
   /** Pass the same source text that was tokenized, so surfaceMatched slices are accurate. */
-  match: (tokens: Token[], sourceText: string) => ChunkMatch[];
+  match: (tokens: Token[], sourceText: string) => ChunkMatch<T>[];
 }
 
-function createTrieNode(): ChunkTrieNode {
+function createTrieNode<T extends ChunkSpec>(): ChunkTrieNode<T> {
   return {
     children: new Map(),
     terminals: []
@@ -66,13 +72,13 @@ function normalizeChunkTokens(surface: string, lang: string): string[] {
  * sourceText is NOT a constructor argument -- pass it to match() per call
  * so a cached matcher works correctly across different turn texts.
  */
-export function createChunkMatcher(
-  chunks: ChunkSpec[] | undefined,
+export function createChunkMatcher<T extends ChunkSpec>(
+  items: T[] | undefined,
   lang: string
-): ChunkMatcher {
-  const root = createTrieNode();
+): ChunkMatcher<T> {
+  const root = createTrieNode<T>();
 
-  for (const chunk of chunks ?? []) {
+  for (const chunk of items ?? []) {
     const patterns = new Set<string>();
     for (const surface of [chunk.normalizedForm, ...chunk.surfaceForms]) {
       const normalizedTokens = normalizeChunkTokens(surface, lang);
@@ -88,7 +94,7 @@ export function createChunkMatcher(
 
       let cursor = root;
       for (const token of normalizedTokens) {
-        const next = cursor.children.get(token) ?? createTrieNode();
+        const next = cursor.children.get(token) ?? createTrieNode<T>();
         cursor.children.set(token, next);
         cursor = next;
       }
@@ -97,16 +103,16 @@ export function createChunkMatcher(
   }
 
   return {
-    match(tokens: Token[], sourceText: string): ChunkMatch[] {
+    match(tokens: Token[], sourceText: string): ChunkMatch<T>[] {
       const normalizedSourceText = sourceText.normalize("NFC");
-      const matches: ChunkMatch[] = [];
+      const matches: ChunkMatch<T>[] = [];
       let index = 0;
 
       while (index < tokens.length) {
-        let cursor: ChunkTrieNode | undefined = root;
+        let cursor: ChunkTrieNode<T> | undefined = root;
         let candidate:
           | {
-              chunk: ChunkSpec;
+              item: T;
               endIndex: number;
             }
           | undefined;
@@ -131,12 +137,14 @@ export function createChunkMatcher(
             if (leftLength !== rightLength) {
               return rightLength - leftLength;
             }
-            return left.chunkId.localeCompare(right.chunkId);
+            // normalizedForm is unique within a language, so it is a stable
+            // tiebreak and costs the matcher no knowledge of what it holds.
+            return left.normalizedForm.localeCompare(right.normalizedForm);
           })[0];
 
           if (terminal) {
             candidate = {
-              chunk: terminal,
+              item: terminal,
               endIndex: walkIndex
             };
           }
@@ -152,13 +160,13 @@ export function createChunkMatcher(
         const startToken = tokens[index]!;
         const endToken = tokens[candidate.endIndex]!;
         matches.push({
-          chunk: candidate.chunk,
-          normalizedForm: candidate.chunk.normalizedForm,
+          item: candidate.item,
+          normalizedForm: candidate.item.normalizedForm,
           surfaceMatched: normalizedSourceText.slice(startToken.start, endToken.end),
           start: startToken.start,
           end: endToken.end,
-          cefrBand: candidate.chunk.cefrBand,
-          constituentLemmaIds: [...candidate.chunk.constituentLemmas],
+          cefrBand: candidate.item.cefrBand,
+          constituentLemmaIds: [...candidate.item.constituentLemmas],
           tokenIndexes: Array.from(
             { length: candidate.endIndex - index + 1 },
             (_, offset) => index + offset

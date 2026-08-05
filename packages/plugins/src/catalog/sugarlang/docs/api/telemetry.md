@@ -29,8 +29,8 @@ This module is the single source of truth for:
 Core turn events:
 
 - `budgeter.prescription-generated`
-- `director.invocation-started`
-- `director.invocation-completed`
+- `teacher.invocation-started`
+- `teacher.invocation-completed`
 - `classifier.verdict`
 - `chunk.extraction-started`
 - `chunk.extraction-completed`
@@ -53,13 +53,13 @@ Comprehension lifecycle:
 - `comprehension.probe-failed`
 - `comprehension.probe-mixed-result`
 - `comprehension.probe-language-fallback`
-- `comprehension.director-hard-floor-violated`
+- `comprehension.teacher-hard-floor-violated`
 
 Quest-essential visibility:
 
 - `quest-essential.classifier-exempted-lemma`
-- `quest-essential.director-forced-glossing`
-- `quest-essential.director-targetvocab-contamination`
+- `quest-essential.teacher-forced-glossing`
+- `quest-essential.teacher-targetvocab-contamination`
 - `quest-essential.generator-missed-gloss`
 - `quest-essential.generator-missed-required`
 - `quest-essential.compile-diagnostic-deadlock-prone`

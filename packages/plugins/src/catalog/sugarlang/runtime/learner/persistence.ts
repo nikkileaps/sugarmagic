@@ -32,6 +32,7 @@ import type {
   LemmaCard
 } from "../types";
 import { createUniformCefrPosterior } from "./cefr-posterior";
+import { decayedRetrievability } from "./fsrs-adapter";
 import {
   CARD_STORE_PAGE_SIZE,
   type CardStore
@@ -45,6 +46,15 @@ interface LoadLearnerProfileOptions {
   playerEntityId: string;
   cardStore: CardStore;
   fallbackProfile: LearnerProfile;
+  /**
+   * Injectable clock, for decay.
+   *
+   * Retrievability falls with elapsed time and the intervals are days, so a
+   * test that cannot move the clock cannot check any of it. Watching a session
+   * proves nothing either way -- the movement inside one is real and far too
+   * small to see.
+   */
+  now?: number;
 }
 
 interface SaveLearnerProfileOptions {
@@ -200,6 +210,31 @@ export function deserializeLearnerProfile(json: string): LearnerProfile {
   };
 }
 
+/**
+ * Competency cards written before the key space was renamed.
+ *
+ * They were keyed `chunk:<chunkId>`; they are now `exponent:<exponentId>`, and
+ * the ids differ too -- exponent ids are generated from the phrase, so no
+ * rewrite maps one onto the other. Nothing reads `chunk:` any more.
+ *
+ * DROPPED RATHER THAN MIGRATED, and rather than left alone. Left alone they
+ * are worse than absent: `exponent:` is what marks a card as a competency, so
+ * a `chunk:` card reads as a WORD everywhere -- it is counted as vocabulary in
+ * the debug state, and it passes the provisional filter, which is how a phrase
+ * could be picked as the target of a comprehension probe about a word that
+ * does not exist.
+ *
+ * The learner loses the review history of phrases they met before the rename.
+ * That is the smaller cost, and it is honest: the alternative is a rewrite
+ * that has to guess which exponent an old chunk became.
+ *
+ * Removable once no store predates the rename -- there is one player and one
+ * machine, so that is a decision rather than a discovery.
+ */
+function isDeadChunkCardKey(cardKey: string): boolean {
+  return cardKey.startsWith("chunk:");
+}
+
 export async function loadLearnerProfile(
   options: LoadLearnerProfileOptions
 ): Promise<LearnerProfile> {
@@ -221,12 +256,36 @@ export async function loadLearnerProfile(
   while (true) {
     const page = await options.cardStore.listPage(cursor, CARD_STORE_PAGE_SIZE);
     for (const card of page.cards) {
+      if (isDeadChunkCardKey(card.lemmaId)) continue;
       lemmaCards[card.lemmaId] = cloneCard(card);
     }
     if (!page.nextCursor) {
       break;
     }
     cursor = page.nextCursor;
+  }
+
+  // DECAY HAPPENS HERE, on the way out, for every card.
+  //
+  // Retrievability is a function of how long it has been, not a value to store
+  // and trust. It is written as 1 by every graded observation and nothing
+  // lowers it, so a card read straight from the store claims the learner
+  // remembers it perfectly however long ago that was.
+  //
+  // This is the one place worth doing it: every read of a profile comes through
+  // here, so a caller cannot forget. Doing it at each reader instead is how the
+  // stored value and the real one drift, and the drift is invisible -- a stale
+  // 1.0 looks exactly like a fresh one.
+  //
+  // NOT written back. The store keeps what was measured at review time; this is
+  // the derived view. Persisting it would bake a timestamp into the number and
+  // make the next load decay from the wrong instant.
+  const now = options.now ?? Date.now();
+  for (const [lemmaId, card] of Object.entries(lemmaCards)) {
+    lemmaCards[lemmaId] = {
+      ...card,
+      retrievability: decayedRetrievability(card, now)
+    };
   }
 
   return {

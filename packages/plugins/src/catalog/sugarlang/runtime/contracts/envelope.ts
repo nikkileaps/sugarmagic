@@ -34,7 +34,11 @@ import type { SupportPosture } from "./pedagogy";
  * Implements: Proposal 001 §Lexical Chunk Awareness
  */
 export interface VirtualChunkToken {
-  chunkId: string;
+  /**
+   * No id. This carries hits from two different populations -- a scene's
+   * chunks and a competency's exponents -- and normalizedForm is the join key
+   * both are keyed by, so an `id` here could only mean one of them.
+   */
   normalizedForm: string;
   surfaceMatched: string;
   start: number;

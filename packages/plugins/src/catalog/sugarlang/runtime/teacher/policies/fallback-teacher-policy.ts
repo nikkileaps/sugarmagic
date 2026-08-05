@@ -19,7 +19,7 @@ import {
   type TeachableRef
 } from "../../contracts/teachable-ref";
 import { isAvailable, EMPTY_NPC_CONTEXT } from "../../situation";
-import { computePacingSignals, getLearningStatus } from "../../learner";
+import { computePacingSignals, getItemProgress } from "../../learner";
 import { resolveSceneTeachables } from "../../inventory/scene-teachable-resolver";
 import { resolveQuestEssentialLemmaRefs } from "../quest-essential";
 import type {
@@ -184,7 +184,7 @@ function deriveFallbackSlate(context: TeacherContext): {
       lemmaId: teachable.id,
       lang: targetLanguage
     };
-    const status = getLearningStatus({
+    const status = getItemProgress({
       card: context.learner.lemmaCards[teachable.id],
       itemBand: context.atlas.getBand(teachable.id, targetLanguage),
       learnerBand: context.learner.estimatedCefrBand
@@ -227,8 +227,8 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
       : undefined;
     const fallbackSignals = ["fallback:claude-unavailable"];
 
-    if (options?.triggerReasonOverride === "director-deferred-override") {
-      fallbackSignals.push("fallback:director-deferred-override");
+    if (options?.triggerReasonOverride === "teacher-deferred-override") {
+      fallbackSignals.push("fallback:teacher-deferred-override");
     }
 
     return {
@@ -263,7 +263,7 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
       },
       citedSignals: fallbackSignals,
       rationale:
-        options?.triggerReasonOverride === "director-deferred-override"
+        options?.triggerReasonOverride === "teacher-deferred-override"
           ? "Deterministic fallback - Teacher'sLLM ignored a required comprehension probe."
           : "Deterministic fallback - Teacher'sLLM unavailable.",
       confidenceBand:

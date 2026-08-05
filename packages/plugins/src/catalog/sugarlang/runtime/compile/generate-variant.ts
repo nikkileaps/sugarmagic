@@ -43,7 +43,7 @@ import type { LineIntentArtifact } from "../contracts/line-intent";
 import type { BakedLineVariant } from "../contracts/baked-variant";
 import type { SugarlangLLMClient } from "../llm/types";
 import type { LexicalAtlasProvider } from "../types";
-import type { InventoryChunk } from "../contracts/competency-inventory";
+import type { Exponent } from "../contracts/competency-inventory";
 import type { GradedTextSlate } from "../grading/graded-text-service";
 import {
   buildHighlightTerms,
@@ -109,13 +109,13 @@ export async function generateVariant(
   deps: {
     llmClient: SugarlangLLMClient;
     atlas: LexicalAtlasProvider;
-    inventoryChunks: InventoryChunk[];
+    inventoryExponents: Exponent[];
   }
 ): Promise<GenerateVariantResult> {
   const adapter = new GradedTextService({
     llmClient: deps.llmClient,
     atlas: deps.atlas,
-    inventoryChunks: deps.inventoryChunks
+    inventoryExponents: deps.inventoryExponents
   });
 
   // 090.11: POSTURE AND RATIO ARE PASSED, NOT DEFAULTED.
@@ -172,8 +172,8 @@ export async function generateVariant(
         targetLanguage: input.targetLang,
         supportLanguage: input.supportLang ?? "en",
         chunkMatcher:
-          deps.inventoryChunks.length > 0
-            ? createChunkMatcher(deps.inventoryChunks, input.targetLang)
+          deps.inventoryExponents.length > 0
+            ? createChunkMatcher(deps.inventoryExponents, input.targetLang)
             : null
       })
     : null;

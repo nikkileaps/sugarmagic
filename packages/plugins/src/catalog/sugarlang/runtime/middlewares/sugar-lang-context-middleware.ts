@@ -8,7 +8,7 @@
  *
  * Relationships:
  *   - Depends on the Sugarlang runtime service graph plus the ConversationMiddleware interface.
- *   - Writes the per-turn annotations that the Director and later analysis middlewares consume.
+ *   - Writes the per-turn annotations that the Teacher and later analysis middlewares consume.
  *
  * Implements: Proposal 001 §End-to-End Turn Flow / §Placement Interaction Contract
  *
@@ -36,7 +36,7 @@ import {
   SUGARLANG_PENDING_PROVISIONAL_ANNOTATION,
   SUGARLANG_PROBE_FLOOR_ANNOTATION,
   SUGARLANG_QUEST_ESSENTIAL_IDS_ANNOTATION,
-  SUGARLANG_SCHEDULE_ANNOTATION,
+  SUGARLANG_LEARNER_PROGRESS_ANNOTATION,
   buildLearnerSnapshot,
   computePendingProvisionalLemmas,
   computeProbeFloorState,
@@ -47,9 +47,11 @@ import {
   type SugarlangLoggerLike
 } from "./shared";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
-import type { SchedulerBoardView } from "../scheduler/scheduler-board-view";
-import type { TeachSchedule } from "../scheduler/teach-schedule";
-import { realizeCompetencyChunksFromSchedule } from "../scheduler/competency-chunk-realizer";
+import { recordCurriculumState } from "../debug/turn-debug-state";
+import {
+  deriveLearnerProgress,
+  type LearnerProgressInputs
+} from "../learner/learner-progress";
 import type { Competency } from "../contracts/competency-inventory";
 import { getWorldDay } from "@sugarmagic/runtime-core";
 
@@ -149,43 +151,37 @@ export function createSugarLangContextMiddleware(
       // 087.1: outer-loop schedule. Computed from the scene lexicon + learner state
       // that are already in hand. Fail-safe: any error means no annotation, which
       // preserves today's rendering behavior exactly.
-      // availableCompetencies is declared here so it's accessible for the post-prescribe
-      // function-chunk realization step (087.3).
       let availableCompetencies: Competency[] = [];
       try {
         const teachRecords = await services.teachRecordStore.list();
-        const activeDebts = await services.ledgerStore.getActiveDebts();
+        const encounterCounts = await services.ledgerStore.getEncounterCounts();
         try {
           availableCompetencies = loadCompetencyInventory(targetLanguage).competencies;
         } catch {
           // No inventory for this language.
         }
-        const board: SchedulerBoardView = {
+        const board: LearnerProgressInputs = {
           learner: {
             cefrBand: learner.estimatedCefrBand,
-            cefrConfidence: learner.assessment.cefrConfidence,
             lemmaCards: learner.lemmaCards,
           },
           curriculum: {
             introducedCompetencyIds: new Set(teachRecords.map((r) => r.competencyId)),
             availableCompetencies,
-            activeDebts
+            encounterCounts
           },
           scene: {
             sceneId,
-            dayIndex: blackboard ? getWorldDay(blackboard) : null,
-            sceneLemmaIds: (sceneLexicon?.lemmaIds ?? []).filter(
-              (id) => !id.startsWith("chunk:")
-            )
+            dayIndex: blackboard ? getWorldDay(blackboard) : null
           },
-          conversationId: getSugarlangConversationId(execution),
-          npcDefinitionId: execution.selection.npcDefinitionId ?? null,
-          targetLanguage
+          conversationId: getSugarlangConversationId(execution)
         };
-        execution.annotations[SUGARLANG_SCHEDULE_ANNOTATION] =
-          services.outerLoopScheduler.compute(board);
+        const learnerProgress = deriveLearnerProgress(board, deps.telemetry);
+        execution.annotations[SUGARLANG_LEARNER_PROGRESS_ANNOTATION] = learnerProgress;
+        recordCurriculumState(learnerProgress);
       } catch {
-        // Scheduler failure is non-fatal.
+        // Reporting failure is non-fatal: the Teacher runs without learner
+        // facts rather than not at all.
       }
 
       await services.learnerStateReducer.apply({
@@ -227,7 +223,7 @@ export function createSugarLangContextMiddleware(
       //
       // What used to be here: `budgeter.prescribe()` produced a ranked, capped
       // shortlist of lemmas; it was annotated for the teacher middleware, and
-      // scheduled competencies were expanded into `chunk:` pseudo-lemmas and
+      // scheduled competencies were expanded into `exponent:` pseudo-lemmas and
       // INJECTED into `prescription.introduce` so they could ride the lemma
       // channel. That shortlist was not an input to the Teacher's decision, it
       // WAS the decision -- the Teacher could only pick 1-2 items from what a

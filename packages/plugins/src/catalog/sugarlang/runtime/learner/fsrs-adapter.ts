@@ -31,7 +31,9 @@
 import {
   State,
   createEmptyCard,
+  forgetting_curve,
   fsrs,
+  generatorParameters,
   type Card as FsrsCard
 } from "ts-fsrs";
 import type {
@@ -40,6 +42,7 @@ import type {
   LemmaCard,
   ObservationOutcome
 } from "../types";
+import { DESIRED_RETENTION } from "./item-progress";
 import {
   INITIAL_PRODUCTIVE_STRENGTH,
   INITIAL_PROVISIONAL_EVIDENCE,
@@ -103,10 +106,81 @@ function mapFsrsGrade(grade: ObservationOutcome["receptiveGrade"]): 1 | 2 | 3 | 
 
 export function createFsrsEngine(options: { retention?: number } = {}) {
   return fsrs({
-    request_retention: options.retention ?? 0.9,
+    request_retention: options.retention ?? DESIRED_RETENTION,
     enable_fuzz: false,
     enable_short_term: false
   });
+}
+
+/** Weights for the forgetting curve. Same defaults the engine is built with. */
+const FORGETTING_PARAMS = generatorParameters({ enable_fuzz: false }).w;
+
+/**
+ * How well the learner remembers this right now, given how long it has been.
+ *
+ * THIS IS THE THING THAT DID NOT HAPPEN. `applyOutcome` pins retrievability to
+ * 1 on every graded observation and nothing lowered it afterwards, so no card
+ * ever decayed below the due floor by sitting unused and nothing was ever due
+ * for being forgotten. The only function that recomputed it from elapsed time
+ * had no callers -- and threw when called, because it round-trips through an
+ * FSRS card marked `State.Review` with no `last_review`, and the engine does a
+ * date diff on that. Every passively-encountered card is exactly that case.
+ *
+ * So this uses the pure forgetting curve instead. No card conversion, nothing
+ * to mismark, and it does not write `lastReviewedAt` the way the round trip
+ * did -- a decay pass that moves the clock it reads is not a decay pass.
+ *
+ * A card that has never been graded is returned untouched. Its retrievability
+ * is a seeded PRIOR -- a guess from the learner's band about whether they
+ * already know the word -- and a prior does not decay, because there is no
+ * remembering for time to erode. `getItemProgress` reports those as `unseen`
+ * on review count, which is the honest answer.
+ */
+export function decayedRetrievability(card: LemmaCard, now: number): number {
+  if (card.lastReviewedAt === null) return card.retrievability;
+  const elapsedDays = Math.max(0, (now - card.lastReviewedAt) / DAY_MS);
+  return forgetting_curve(
+    FORGETTING_PARAMS,
+    elapsedDays,
+    Math.max(0.1, card.stability)
+  );
+}
+
+/**
+ * How long an item has been due, in days. Negative means not due yet.
+ *
+ * Derived, not stored. Due-ness is a function of stability and elapsed time,
+ * so the moment a card crossed the floor is already implied by what the card
+ * says -- persisting a `becameDueAt` would be a second copy that drifts the
+ * first time the retention target moves.
+ *
+ * Found by bisecting `forgetting_curve` rather than by inverting it in closed
+ * form. The curve is the same function `getItemProgress` asks, so the answer
+ * cannot disagree with whether the item is actually reported due; a
+ * hand-written inverse would be a second implementation of the same maths.
+ */
+export function daysOverdue(
+  card: LemmaCard,
+  now: number,
+  floor: number
+): number {
+  if (card.lastReviewedAt === null) return 0;
+  const stability = Math.max(0.1, card.stability);
+  const elapsedDays = Math.max(0, (now - card.lastReviewedAt) / DAY_MS);
+
+  // Retrievability falls monotonically, so bisect for where it meets the floor.
+  let low = 0;
+  let high = Math.max(elapsedDays, 1);
+  while (forgetting_curve(FORGETTING_PARAMS, high, stability) > floor) {
+    high *= 2;
+    if (high > 36500) return elapsedDays - high; // a century out; stop
+  }
+  for (let step = 0; step < 40; step += 1) {
+    const mid = (low + high) / 2;
+    if (forgetting_curve(FORGETTING_PARAMS, mid, stability) > floor) low = mid;
+    else high = mid;
+  }
+  return elapsedDays - high;
 }
 
 export function lemmaCardToFsrsCard(card: LemmaCard): FsrsCard {

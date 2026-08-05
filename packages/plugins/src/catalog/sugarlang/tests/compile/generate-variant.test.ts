@@ -23,7 +23,7 @@ import {
 } from "../../runtime/compile/generate-variant";
 import type { SugarlangLLMClient, SugarlangLLMRequest } from "../../runtime/llm/types";
 import { createTestAtlasProvider } from "./test-helpers";
-import type { InventoryChunk } from "../../runtime/contracts/competency-inventory";
+import type { Exponent } from "../../runtime/contracts/competency-inventory";
 
 function createStubLLMClient(options: {
   variantText?: string;
@@ -51,7 +51,7 @@ const emptyAtlas = createTestAtlasProvider("es", [
   { lemmaId: "viajero", cefrPriorBand: "A1" }
 ]);
 
-const emptyInventoryChunks: InventoryChunk[] = [];
+const emptyExponents: Exponent[] = [];
 
 const baseInput: GenerateVariantInput = {
   authoredText: "Hello traveler.",
@@ -70,7 +70,7 @@ describe("generateVariant", () => {
     const result = await generateVariant(baseInput, {
       llmClient,
       atlas: emptyAtlas,
-      inventoryChunks: emptyInventoryChunks
+      inventoryExponents: emptyExponents
     });
 
     expect(result.variant).not.toBeNull();
@@ -113,7 +113,7 @@ describe("generateVariant", () => {
           avoid: []
         }
       },
-      { llmClient, atlas, inventoryChunks: emptyInventoryChunks }
+      { llmClient, atlas, inventoryExponents: emptyExponents }
     );
 
     expect(result.variant!.highlight?.focusTerms).toContain("queso");
@@ -131,7 +131,7 @@ describe("generateVariant", () => {
     const result = await generateVariant(baseInput, {
       llmClient,
       atlas: emptyAtlas,
-      inventoryChunks: emptyInventoryChunks
+      inventoryExponents: emptyExponents
     });
 
     expect(result.variant!.highlight).toBeUndefined();
@@ -143,7 +143,7 @@ describe("generateVariant", () => {
     const result = await generateVariant(baseInput, {
       llmClient,
       atlas: emptyAtlas,
-      inventoryChunks: emptyInventoryChunks
+      inventoryExponents: emptyExponents
     });
 
     expect(result.variant).toBeNull();
@@ -157,7 +157,7 @@ describe("generateVariant", () => {
     const result = await generateVariant(baseInput, {
       llmClient,
       atlas: emptyAtlas,
-      inventoryChunks: emptyInventoryChunks
+      inventoryExponents: emptyExponents
     });
 
     expect(result.variant).toBeNull();
@@ -189,7 +189,7 @@ describe("generateVariant", () => {
       {
         llmClient,
         atlas: emptyAtlas,
-        inventoryChunks: emptyInventoryChunks
+        inventoryExponents: emptyExponents
       }
     );
 
@@ -206,7 +206,7 @@ describe("generateVariant", () => {
     const result = await generateVariant(baseInput, {
       llmClient,
       atlas: emptyAtlas,
-      inventoryChunks: emptyInventoryChunks
+      inventoryExponents: emptyExponents
     });
 
     expect(result.variant!.verdict.fidelityPasses).toBe(true);

@@ -517,8 +517,8 @@ describe("end-to-end conversation golden", () => {
     // asked for one.
     await host.submitInput({ kind: "advance" });
 
-    const cacheHits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
-    const newDirectives = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
+    const cacheHits = await telemetry.query({ eventKinds: ["teacher.cache-hit"] });
+    const newDirectives = await telemetry.query({ eventKinds: ["teacher.invocation-resolved"] });
 
     expect(newDirectives.length).toBe(1);
     expect(cacheHits.length).toBeGreaterThan(0);
@@ -857,12 +857,12 @@ describe("end-to-end conversation golden", () => {
     const { CefrLexAtlasProvider } = await import(
       "../../runtime/providers/impls/cefr-lex-atlas-provider"
     );
-    const { getAllInventoryChunks } = await import(
+    const { getAllInventoryExponents } = await import(
       "../../runtime/inventory/competency-inventory-loader"
     );
 
     const atlas = new CefrLexAtlasProvider();
-    const inventoryChunks = getAllInventoryChunks("es");
+    const inventoryExponents = getAllInventoryExponents("es");
     const introduce = [{ lemmaId: "hola", lang: "es" }];
 
     // Verify a Spanish line that contains "hola" -- fidelity floor passes.
@@ -873,7 +873,7 @@ describe("end-to-end conversation golden", () => {
       posture: "target-dominant",
       directedRatio: 0.8,
       introduce,
-      inventoryChunks,
+      inventoryExponents,
       atlas
     });
     // Voice retention is always 1.0 (no voiceSpec at runtime).

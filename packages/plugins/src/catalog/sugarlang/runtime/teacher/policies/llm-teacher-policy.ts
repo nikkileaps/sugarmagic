@@ -19,6 +19,7 @@ import { buildPostPlacementCalibrationHint, isInPostPlacementCalibration } from 
 import { traceTeacherCall } from "../teacher-trace";
 import {
   buildTeacherPrompt,
+  summarizeDueListPressure,
   estimatePromptTokens
 } from "../prompt-builder";
 import { parseDirective, repairDirective } from "../schema-parser";
@@ -36,16 +37,17 @@ import {
 import { EMPTY_NPC_CONTEXT } from "../../situation";
 import { computePacingSignals } from "../../learner";
 import { resolveQuestEssentialLemmaRefs } from "../quest-essential";
+import { competencyIdForCardKey } from "../../inventory/card-display-name";
 
 // NO DEFAULT MODEL ON PURPOSE (2026-07-28). This used to be
-// `DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6"`, which was inert: the gateway
+// `DEFAULT_TEACHER_MODEL = "claude-sonnet-4-6"`, which was inert: the gateway
 // client never forwarded it, so the Teacher silently ran on the sugaragent
 // DIALOGUE model. The model is now resolved server-side from
 // `purpose: "teacher"` -> SUGARMAGIC_SUGARLANG_TEACHER_MODEL. A local constant
 // here would just re-create a lie that reads as configuration.
 const DEFAULT_MAX_TOKENS = 900;
 
-export interface DirectorClaudeClientResult {
+export interface TeacherClaudeClientResult {
   text: string;
   requestId?: string | null;
   inputTokens?: number | null;
@@ -54,23 +56,25 @@ export interface DirectorClaudeClientResult {
   cacheCreationInputTokens?: number | null;
 }
 
-export interface DirectorClaudeClientRequest {
+export interface TeacherClaudeClientRequest {
   /** null => the gateway resolves the model from `purpose: "teacher"`. */
   model: string | null;
   systemPrompt: string;
+  /** System content as cacheable blocks. Preferred over `systemPrompt`. */
+  systemBlocks?: Array<{ text: string; cache?: boolean }>;
   userPrompt: string;
   maxTokens: number;
   cacheMarkers: string[];
 }
 
-export interface DirectorClaudeClient {
+export interface TeacherClaudeClient {
   generateStructuredDirective: (
-    request: DirectorClaudeClientRequest
-  ) => Promise<DirectorClaudeClientResult>;
+    request: TeacherClaudeClientRequest
+  ) => Promise<TeacherClaudeClientResult>;
 }
 
 export interface ClaudeTeacherPolicyOptions {
-  client: DirectorClaudeClient;
+  client: TeacherClaudeClient;
   telemetry?: TelemetrySink;
   logger?: TeacherPolicyLogger;
   /** Escape hatch for tooling/tests. Leave unset in production: the gateway
@@ -109,34 +113,76 @@ export class TeacherInvocationError extends Error {
 }
 
 /**
- * Creates a DirectorClaudeClient backed by sugarlang's own gateway.
+ * Creates a TeacherClaudeClient backed by sugarlang's own gateway.
  * No dependency on sugaragent — all calls go through the gateway proxy.
  */
+/**
+ * Due items the Teacher was shown and did not choose this turn.
+ *
+ * Ids only. Whether the pile is a problem is an aggregate question, and
+ * carrying the whole card here would put learner state in a telemetry payload
+ * that already names the item.
+ */
+function passedOverDueItems(
+  context: TeacherContext,
+  directive: PedagogicalDirective
+): string[] {
+  const due = context.learnerProgress?.dueItemIds ?? [];
+  if (due.length === 0) return [];
+
+  const lang = context.lang.targetLanguage;
+  const chosenLemmas = new Set<string>();
+  const chosenCompetencies = new Set<string>();
+  for (const ref of [
+    ...directive.targetVocab.introduce,
+    ...directive.targetVocab.reinforce
+  ]) {
+    if (ref.kind === "competency") chosenCompetencies.add(ref.competencyId);
+    else chosenLemmas.add(ref.lemmaId);
+  }
+
+  // A due id is a CARD key, so a competency card is `exponent:<exponentId>` and
+  // has to be resolved back to its competency before it can be compared with
+  // what the Teacher chose. Comparing the two id spaces directly matches
+  // nothing, so every competency reads as passed over even when it was picked.
+  return due.filter((itemId) => {
+    const competencyId = competencyIdForCardKey(itemId, lang);
+    return competencyId === null
+      ? !chosenLemmas.has(itemId)
+      : !chosenCompetencies.has(competencyId);
+  });
+}
+
 export function createGatewayTeacherClient(
   gateway: SugarlangLLMClient
-): DirectorClaudeClient {
+): TeacherClaudeClient {
   return {
-    async generateStructuredDirective(request): Promise<DirectorClaudeClientResult> {
+    async generateStructuredDirective(request): Promise<TeacherClaudeClientResult> {
       const response = await gateway.generate({
         // Server-side model routing. Without this the gateway falls through to
         // the sugaragent dialogue model — which is exactly the bug this fixes.
         purpose: "teacher",
         ...(request.model === null ? {} : { model: request.model }),
         systemPrompt: request.systemPrompt,
+        ...(request.systemBlocks ? { systemBlocks: request.systemBlocks } : {}),
         userPrompt: request.userPrompt,
         maxTokens: request.maxTokens
       });
 
       return {
         text: response.text,
-        requestId: response.requestId
+        requestId: response.requestId,
+        inputTokens: response.inputTokens ?? null,
+        outputTokens: response.outputTokens ?? null,
+        cacheReadInputTokens: response.cacheReadInputTokens ?? null,
+        cacheCreationInputTokens: response.cacheCreationInputTokens ?? null
       };
     }
   };
 }
 
 export class ClaudeTeacherPolicy implements TeacherPolicy {
-  private readonly client: DirectorClaudeClient;
+  private readonly client: TeacherClaudeClient;
   private readonly telemetry: TelemetrySink;
   private readonly logger: TeacherPolicyLogger;
   private readonly model: string | null;
@@ -185,7 +231,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
 
     await emitTelemetry(
       this.telemetry,
-      createTelemetryEvent("director.invocation-started", {
+      createTelemetryEvent("teacher.invocation-started", {
         conversationId: context.conversationId,
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
@@ -193,7 +239,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         sceneId,
         npcId: npc.npcDefinitionId,
         npcDisplayName: npc.displayName,
-        directorContext: {
+        teacherContext: {
           calibrationActive: context.calibrationActive,
           citedQuestEssentialCount: resolveQuestEssentialLemmaRefs(
             context.situation,
@@ -201,7 +247,12 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
             context.lang
           ).length,
           pendingProvisionalCount: pendingProvisionalLemmas.length,
-          learnerBand: context.learner.estimatedCefrBand
+          learnerBand: context.learner.estimatedCefrBand,
+          // Whether competencies are being squeezed out of the shared top-N
+          // due list by the far larger pool of word cards. If competenciesCut
+          // is routinely above zero, the answer is a short line of their own
+          // rather than a shared cap.
+          dueListPressure: summarizeDueListPressure(context)
         },
         cacheHit: false,
         model: this.model,
@@ -211,11 +262,12 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       })
     );
 
-    let response: DirectorClaudeClientResult;
+    let response: TeacherClaudeClientResult;
     try {
       response = await this.client.generateStructuredDirective({
         model: this.model,
         systemPrompt: prompt.system,
+        systemBlocks: prompt.systemBlocks,
         userPrompt,
         maxTokens: this.maxTokens,
         cacheMarkers: prompt.cacheMarkers
@@ -231,7 +283,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       });
       await emitTelemetry(
         this.telemetry,
-        createTelemetryEvent("director.invocation-failed", {
+        createTelemetryEvent("teacher.invocation-failed", {
           conversationId: context.conversationId,
           sessionId: context.telemetryContext?.sessionId,
           turnId: context.telemetryContext?.turnId,
@@ -320,7 +372,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       throw new TeacherInvocationError(
         parseResult.error.message,
         parseResult.error.code === "hard_floor_violated"
-          ? "director-deferred-override"
+          ? "teacher-deferred-override"
           : undefined,
         parseResult.error
       );
@@ -333,6 +385,17 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       npcDisplayName: npc.displayName ?? null,
       model: this.model,
       requestId: response.requestId ?? null,
+      // What the call cost, and whether the cached prefix was reused. Without
+      // this a cache hit and a miss look identical from the outside, which is
+      // the state 222.9 found things in.
+      //   cacheRead > 0    the cached prefix was reused
+      //   cacheWrite > 0   the entry was (re)written -- first call, or the
+      //                    prompt constants or curriculum changed
+      //   both 0           the gateway is not applying the breakpoints at all
+      cacheReadTokens: response.cacheReadInputTokens ?? 0,
+      cacheWriteTokens: response.cacheCreationInputTokens ?? 0,
+      inputTokens: response.inputTokens ?? null,
+      outputTokens: response.outputTokens ?? null,
       rawResponseText: response.text,
       parseMode,
       directive
@@ -341,7 +404,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     const endedAt = this.now();
     await emitTelemetry(
       this.telemetry,
-      createTelemetryEvent("director.invocation-completed", {
+      createTelemetryEvent("teacher.invocation-completed", {
         conversationId: context.conversationId,
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
@@ -356,6 +419,15 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         parseMode,
         cacheHit: false,
         fallback: directive.isFallbackDirective,
+        // The other half of the stranded-item question. `mostOverdue` on
+        // `learner.progress-derived` says how long something has been due;
+        // this says it was on offer THIS turn and was not taken. Counting the
+        // same id across turns is what turns "due for three weeks" into "due
+        // for three weeks and passed over forty times".
+        //
+        // Passing over a due item is correct when the moment does not afford
+        // it, so this is a measurement and never a rule.
+        dueItemsPassedOver: passedOverDueItems(context, directive),
         tokenCost: {
           inputTokens:
             response.inputTokens ??

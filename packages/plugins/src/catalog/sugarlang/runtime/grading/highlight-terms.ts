@@ -39,12 +39,14 @@
  */
 
 import type { ChunkMatcher } from "../classifier/chunk-matcher";
+import type { Exponent } from "../contracts/competency-inventory";
 import type { LexicalAtlasProvider } from "../types";
 import type { TeachableRef } from "../contracts/teachable-ref";
 import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
 import { tokenize } from "../classifier/tokenize";
-import { getCompetencyForChunk } from "../inventory/competency-inventory-loader";
+import { getCompetencyForExponent } from "../inventory/competency-inventory-loader";
 import { allForms } from "../classifier/word-forms";
+import { exponentCardKey } from "../inventory/card-display-name";
 
 export interface HighlightTerms {
   /** NEW this turn. Drives gold vs blue. */
@@ -60,14 +62,32 @@ export interface HighlightTerms {
    * several terms map to one teachable. Anything that identifies WHAT WAS
    * TAUGHT rather than where it is on screen needs this -- a hover writes a
    * persisted card, and cards live in two key spaces: an atlas lemma, or a
-   * competency's chunk (`chunk:<id>`). Without it the surface itself becomes
+   * competency's chunk (`exponent:<id>`). Without it the surface itself becomes
    * the key, which nothing can read back.
    *
-   * Deliberately NOT called `lemmaByTerm`: a `chunk:` id is not a lemma, and
+   * Deliberately NOT called `lemmaByTerm`: a `exponent:` id is not a lemma, and
    * `contracts/teachable-ref.ts` calls that prefix a lie told to a type. This
    * is the card key, and the name says so.
    */
   creditByTerm: Record<string, string>;
+}
+
+/**
+ * The key `creditByTerm` and `glosses` are looked up by.
+ *
+ * Both maps are read with the hovered text, and a hover arrives lowercased. So
+ * both must be WRITTEN lowercased, or a term appearing with the line's own
+ * casing is never found. That is not a rare case: `Hola, senor.` puts the
+ * commonest greeting in the language at the start of a sentence.
+ *
+ * Exported so the reader normalizes with this function rather than its own
+ * `toLowerCase`. Two sides deciding independently is what broke it, and a
+ * shared function is what stops it happening again the next time normalization
+ * needs to handle something else -- accents, say, or a trailing punctuation
+ * mark the matcher keeps.
+ */
+export function termKey(term: string): string {
+  return term.toLowerCase();
 }
 
 /**
@@ -97,7 +117,7 @@ export function buildHighlightTerms(args: {
   atlas: LexicalAtlasProvider;
   targetLanguage: string;
   supportLanguage: string;
-  chunkMatcher?: ChunkMatcher | null;
+  chunkMatcher?: ChunkMatcher<Exponent> | null;
 }): HighlightTerms {
   const {
     text,
@@ -146,8 +166,9 @@ export function buildHighlightTerms(args: {
     ];
     for (const term of terms) {
       if (!target.includes(term)) target.push(term);
-      if (gloss && !glosses[term]) glosses[term] = gloss;
-      creditByTerm[term] = lemma.lemmaId;
+      const key = termKey(term);
+      if (gloss && !glosses[key]) glosses[key] = gloss;
+      creditByTerm[key] = lemma.lemmaId;
     }
   };
 
@@ -176,8 +197,8 @@ export function buildHighlightTerms(args: {
     try {
       const tokens = tokenize(text, targetLanguage);
       for (const chunkMatch of chunkMatcher.match(tokens, text)) {
-        const competency = getCompetencyForChunk(
-          chunkMatch.chunk.chunkId,
+        const competency = getCompetencyForExponent(
+          chunkMatch.item.exponentId,
           targetLanguage
         );
         if (!competency) continue;
@@ -195,15 +216,28 @@ export function buildHighlightTerms(args: {
         const surface = chunkMatch.surfaceMatched.trim();
         if (surface.length === 0 || target.includes(surface)) continue;
 
+        // The TERM keeps the line's own casing, because it is displayed and
+        // because span matching is case-insensitive anyway.
         target.push(surface);
-        // The can-do descriptor, because what is being taught is the ACT. "Can
-        // greet people in a simple way" is the useful hover for `buenos dias`;
-        // a word gloss would not be.
-        if (!glosses[surface]) glosses[surface] = competency.cefrDescriptor;
+        // The KEYS do not. A hover arrives lowercased, so a key carrying the
+        // line's casing is never found -- and `Hola` at the start of a sentence
+        // is the common case, not an edge one. The word branch above is keyed
+        // by lemma, which is lowercase by construction, so this side was the
+        // only one that disagreed.
+        const key = termKey(surface);
+        // What the phrase MEANS. A hover answers the player's question, which
+        // is "what did they just say" -- not which competency it belongs to.
+        // Keyed by the surface that matched, so `qué significa` reads "what
+        // does it mean" even though it shares an exponent with `qué es`.
+        const gloss =
+          chunkMatch.item.glossBySurface[surface.toLowerCase()]?.[
+            supportLanguage
+          ];
+        if (gloss && !glosses[key]) glosses[key] = gloss;
         // The ACT is what was taught, so the credit goes to the competency's
         // chunk rather than to any word inside the phrase. This is the key the
-        // card store already uses (observe-middleware:440).
-        creditByTerm[surface] = `chunk:${chunkMatch.chunk.chunkId}`;
+        // card store already uses.
+        creditByTerm[key] = exponentCardKey(chunkMatch.item.exponentId);
       }
     } catch {
       // Phrase detection is an affordance. A failure must not cost the line its

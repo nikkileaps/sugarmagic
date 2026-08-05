@@ -6,6 +6,7 @@
     "targets/**/*.ts",
     "targets/**/*.tsx",
     "packages/**/*.ts",
-    "packages/**/*.tsx"
+    "packages/**/*.tsx",
+    "scripts/**/*.ts"
   ]
 }

@@ -43,7 +43,10 @@ export class SugarlangGatewayClient implements SugarlangLLMClient {
       body: JSON.stringify({
         model: request.model,
         purpose: request.purpose,
+        // Both are sent. The gateway prefers `systemBlocks` when present and
+        // falls back to `systemPrompt`, so an older gateway still works.
         systemPrompt: request.systemPrompt,
+        ...(request.systemBlocks ? { systemBlocks: request.systemBlocks } : {}),
         userPrompt: request.userPrompt,
         maxTokens: request.maxTokens
       })
@@ -57,9 +60,19 @@ export class SugarlangGatewayClient implements SugarlangLLMClient {
     }
 
     const result = (await response.json()) as Record<string, unknown>;
+    // The gateway has always returned these; nothing carried them, so a cache
+    // hit was indistinguishable from a miss at every layer above.
+    const usage = (result.usage ?? {}) as Record<string, unknown>;
+    const count = (key: string): number | null =>
+      typeof usage[key] === "number" ? (usage[key] as number) : null;
+
     return {
       text: typeof result.text === "string" ? result.text : "",
-      requestId: typeof result.requestId === "string" ? result.requestId : null
+      requestId: typeof result.requestId === "string" ? result.requestId : null,
+      inputTokens: count("inputTokens"),
+      outputTokens: count("outputTokens"),
+      cacheReadInputTokens: count("cacheReadInputTokens"),
+      cacheCreationInputTokens: count("cacheCreationInputTokens")
     };
   }
 }

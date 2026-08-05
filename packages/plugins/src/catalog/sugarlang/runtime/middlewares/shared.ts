@@ -84,7 +84,7 @@ export const SUGARLANG_HOVER_LEMMA_ANNOTATION = "sugarlang.hoverLemma";
 export const SUGARLANG_COMPLETED_OBJECTIVE_IDS_ANNOTATION =
   "sugarlang.completedObjectiveNodeIds";
 /** 087.1: outer-loop schedule written by context middleware, read by scripted (087.5) and teacher (087.6). */
-export const SUGARLANG_SCHEDULE_ANNOTATION = "sugarlang.schedule";
+export const SUGARLANG_LEARNER_PROGRESS_ANNOTATION = "sugarlang.learnerProgress";
 
 export const SUGARLANG_LAST_TURN_COMPREHENSION_CHECK_STATE =
   "sugarlang.lastTurnComprehensionCheck";
