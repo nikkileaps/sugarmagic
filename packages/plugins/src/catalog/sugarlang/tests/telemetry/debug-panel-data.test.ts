@@ -25,7 +25,7 @@ describe("DebugPanelDataSource", () => {
     // 090.5: the `budgeter.prescription-generated` emission this started with
     // is gone -- 090.10 deleted its only producer and 090.5 the event type.
     sink.emit(
-      createTelemetryEvent("director.invocation-completed", {
+      createTelemetryEvent("teacher.invocation-completed", {
         conversationId: "conversation-1",
         sessionId: "session-1",
         turnId: "turn-1",

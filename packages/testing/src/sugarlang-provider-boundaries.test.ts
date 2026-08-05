@@ -54,12 +54,12 @@ describe("sugarlang provider boundaries", () => {
 
     expect(
       importLines.some((line) =>
-        /from ["'][^"']*(?:director|budgeter|learner)\//.test(line)
+        /from ["'][^"']*(?:teacher|budgeter|learner)\//.test(line)
       )
     ).toBe(false);
   });
 
-  it("keeps provider impls isolated from director and middleware modules", () => {
+  it("keeps provider impls isolated from teacher and middleware modules", () => {
     const implDirectory = join(
       process.cwd(),
       "packages/plugins/src/catalog/sugarlang/runtime/providers/impls"
@@ -71,7 +71,7 @@ describe("sugarlang provider boundaries", () => {
 
       expect(
         importLines.some((line) =>
-          /from ["'][^"']*(?:director|middlewares)\//.test(line)
+          /from ["'][^"']*(?:teacher|middlewares)\//.test(line)
         ),
         filePath
       ).toBe(false);

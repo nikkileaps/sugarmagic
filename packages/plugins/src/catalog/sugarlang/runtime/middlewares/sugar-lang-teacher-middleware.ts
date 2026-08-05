@@ -339,7 +339,7 @@ export function createSugarLangTeacherMiddleware(
         directive = createPrePlacementDirective();
         await emitTelemetry(
           telemetry,
-          createTelemetryEvent("director.pre-placement-bypass", {
+          createTelemetryEvent("teacher.pre-placement-bypass", {
             conversationId,
             sessionId,
             turnId: traceTurnId,
@@ -420,7 +420,7 @@ export function createSugarLangTeacherMiddleware(
                   extractCharacterVoiceReminder(npc),
                 triggerReason:
                   directive.comprehensionCheck.triggerReason ??
-                  "director-discretion"
+                  "teacher-discretion"
               }
             }
           : {}),
@@ -567,11 +567,11 @@ export function createSugarLangTeacherMiddleware(
       if (
         execution.annotations[SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION] === true &&
         directive.comprehensionCheck.trigger &&
-        directive.comprehensionCheck.triggerReason === "director-deferred-override"
+        directive.comprehensionCheck.triggerReason === "teacher-deferred-override"
       ) {
         await emitTelemetry(
           telemetry,
-          createTelemetryEvent("comprehension.director-hard-floor-violated", {
+          createTelemetryEvent("comprehension.teacher-hard-floor-violated", {
             conversationId,
             sessionId,
             turnId: traceTurnId,

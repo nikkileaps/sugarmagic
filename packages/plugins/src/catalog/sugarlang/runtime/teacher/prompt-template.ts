@@ -4,9 +4,9 @@
  * Purpose: Holds the canonical Teacher prompt templates so Sugarlang has one editable prompt source of truth.
  *
  * Exports:
- *   - DIRECTOR_SYSTEM_TEMPLATE
- *   - DIRECTOR_USER_TEMPLATE
- *   - renderDirectorPromptTemplate
+ *   - TEACHER_SYSTEM_TEMPLATE
+ *   - TEACHER_USER_TEMPLATE
+ *   - renderTeacherPromptTemplate
  *
  * Relationships:
  *   - Is consumed by ./prompt-builder to render structured Teacher prompts from formatted sections.
@@ -19,7 +19,7 @@
 
 const TEMPLATE_SLOT = /\{\{([a-zA-Z0-9_]+)\}\}/g;
 
-export const DIRECTOR_SYSTEM_TEMPLATE = [
+export const TEACHER_SYSTEM_TEMPLATE = [
   "{{rolePrompt}}",
   "{{pedagogicalRubricPrompt}}",
   "{{cefrDescriptorsPrompt}}",
@@ -29,7 +29,7 @@ export const DIRECTOR_SYSTEM_TEMPLATE = [
   "{{pragmaticFeedbackBlock}}"
 ].join("\n\n");
 
-export const DIRECTOR_USER_TEMPLATE = [
+export const TEACHER_USER_TEMPLATE = [
   "{{learnerSummary}}",
   "{{relationshipState}}",
   "{{sceneSnapshot}}",
@@ -56,7 +56,7 @@ export const DIRECTOR_USER_TEMPLATE = [
   "{{turnShapingHints}}"
 ].join("\n\n");
 
-export function renderDirectorPromptTemplate(
+export function renderTeacherPromptTemplate(
   template: string,
   slots: Record<string, string>
 ): string {

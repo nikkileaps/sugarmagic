@@ -1,17 +1,17 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/teacher/prompt-builder.ts
  *
- * Purpose: Builds the Director's cacheable system prompt and dynamic user prompt from middleware-owned context.
+ * Purpose: Builds the Teacher's cacheable system prompt and dynamic user prompt from middleware-owned context.
  *
  * Exports:
- *   - DirectorPrompt
- *   - DIRECTOR_SYSTEM_ROLE_PROMPT
- *   - DIRECTOR_PEDAGOGICAL_RUBRIC_PROMPT
- *   - DIRECTOR_CEFR_DESCRIPTORS_PROMPT
- *   - DIRECTOR_OUTPUT_SCHEMA_PROMPT
- *   - DIRECTOR_HARD_CONSTRAINTS_PROMPT
- *   - DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK
- *   - DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK
+ *   - TeacherPrompt
+ *   - TEACHER_SYSTEM_ROLE_PROMPT
+ *   - TEACHER_PEDAGOGICAL_RUBRIC_PROMPT
+ *   - TEACHER_CEFR_DESCRIPTORS_PROMPT
+ *   - TEACHER_OUTPUT_SCHEMA_PROMPT
+ *   - TEACHER_HARD_CONSTRAINTS_PROMPT
+ *   - TEACHER_COMPREHENSION_GUIDANCE_BLOCK
+ *   - TEACHER_PRAGMATIC_FEEDBACK_BLOCK
  *   - buildTeacherPrompt
  *   - estimatePromptTokens
  *   - formatLearnerSummary
@@ -45,9 +45,9 @@ import {
   TARGET_LANGUAGE_RATIO_TOLERANCE
 } from "./band-envelope";
 import {
-  DIRECTOR_SYSTEM_TEMPLATE,
-  DIRECTOR_USER_TEMPLATE,
-  renderDirectorPromptTemplate
+  TEACHER_SYSTEM_TEMPLATE,
+  TEACHER_USER_TEMPLATE,
+  renderTeacherPromptTemplate
 } from "./prompt-template";
 
 const EMPTY_SECTION = "(none)";
@@ -66,26 +66,26 @@ const MAX_RECENTLY_ACTIVE = 6;
  * How many introduce items the Teacher may put on a slate.
  *
  * A situation-scoped working set, not a per-turn quota -- see the note above
- * DIRECTOR_HARD_CONSTRAINTS_PROMPT. Six is small enough to stay coherent and
+ * TEACHER_HARD_CONSTRAINTS_PROMPT. Six is small enough to stay coherent and
  * large enough that a conversation is not locked to whatever fit its opening
  * line.
  */
 const MAX_SLATE_INTRODUCE = 6;
 
-export interface DirectorPrompt {
+export interface TeacherPrompt {
   system: string;
   user: string;
   cacheMarkers: string[];
 }
 
-export const DIRECTOR_SYSTEM_ROLE_PROMPT = `You are the Sugarlang Teacher.
+export const TEACHER_SYSTEM_ROLE_PROMPT = `You are the Sugarlang Teacher.
 
 Your job is to decide what this learner should be working on in this situation.
 You do not write any line yourself. You return a JSON directive that the
 Generator follows across the turns this situation lasts -- so choose a working
 set that suits the moment, not a single sentence.`;
 
-export const DIRECTOR_PEDAGOGICAL_RUBRIC_PROMPT = `PEDAGOGICAL RUBRIC:
+export const TEACHER_PEDAGOGICAL_RUBRIC_PROMPT = `PEDAGOGICAL RUBRIC:
 
 - Preserve the illusion of normal in-character conversation.
 - Prefer the language and length of natural response that fits the moment in the conversation and situation.
@@ -95,7 +95,7 @@ export const DIRECTOR_PEDAGOGICAL_RUBRIC_PROMPT = `PEDAGOGICAL RUBRIC:
 - Reinforcement words can surface more naturally than new introductions.
 - For low-confidence learners, keep sentence structure simple, but still try to include what you chose to teach.`;
 
-export const DIRECTOR_CEFR_DESCRIPTORS_PROMPT = `CEFR DESCRIPTORS:
+export const TEACHER_CEFR_DESCRIPTORS_PROMPT = `CEFR DESCRIPTORS:
 
 - A1: isolated words, routines, tiny greetings, single-clause turns, heavy support.
 - A2: simple everyday exchanges, short linked clauses.
@@ -125,7 +125,7 @@ const RATIO_GUIDANCE_LINES = [
   "  relaxed and the moment is social. Values outside the band are clamped."
 ].join("\n");
 
-export const DIRECTOR_OUTPUT_SCHEMA_PROMPT = `OUTPUT JSON SCHEMA:
+export const TEACHER_OUTPUT_SCHEMA_PROMPT = `OUTPUT JSON SCHEMA:
 
 Return valid JSON with:
 - targetVocab: { introduce: Teachable[], reinforce: Teachable[], avoid: Teachable[] }
@@ -185,7 +185,7 @@ ${RATIO_GUIDANCE_LINES}
  * choose but on what reaches the agent prompt at once -- which is enforced in
  * `generator-prompt-overlay.ts`, not here.
  */
-export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
+export const TEACHER_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 
 - Choose targetVocab from what this situation makes teachable.
 - Only use lemmas that exist in the target language; never invent words.
@@ -194,7 +194,7 @@ export const DIRECTOR_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 - Target lemmas for comprehension checks must come from the pending provisional list.
 - Keep citedSignals short and factual.`;
 
-export const DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK = `PRAGMATIC FEEDBACK RULES:
+export const TEACHER_PRAGMATIC_FEEDBACK_BLOCK = `PRAGMATIC FEEDBACK RULES:
 
 When a player uses or attempts a competency the NPC has modeled
 (greetings, farewells, expressions of gratitude, acknowledgements, requests):
@@ -207,7 +207,7 @@ When a player uses or attempts a competency the NPC has modeled
 - NEVER punish pragmatic mistakes with scolding, correction-as-correction,
   or breaking the fourth wall. The NPC's job is to model, not to evaluate.`;
 
-export const DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK = `COMPREHENSION CHECKS:
+export const TEACHER_COMPREHENSION_GUIDANCE_BLOCK = `COMPREHENSION CHECKS:
 
 The learner's scheduler tracks committed evidence (real FSRS progress) and
 provisional evidence (unconfirmed read-past exposure). Provisional evidence
@@ -226,15 +226,15 @@ Important rules:
 3. If the probe floor says soft floor reached, probing is recommended.
 4. If the probe floor says hard floor reached, probing is required.`;
 
-const DIRECTOR_CACHE_MARKERS = [
-  "director.system.role",
-  "director.system.rubric",
-  "director.system.cefr",
-  "director.system.schema",
-  "director.system.constraints",
-  "director.system.comprehension-guidance",
-  "director.system.pragmatic-feedback",
-  "director.user.template"
+const TEACHER_CACHE_MARKERS = [
+  "teacher.system.role",
+  "teacher.system.rubric",
+  "teacher.system.cefr",
+  "teacher.system.schema",
+  "teacher.system.constraints",
+  "teacher.system.comprehension-guidance",
+  "teacher.system.pragmatic-feedback",
+  "teacher.user.template"
 ] as const;
 
 function listOrNone(values: string[]): string {
@@ -665,18 +665,18 @@ export function formatTurnShapingHints(context: TeacherContext): string {
   return ["TURN-SHAPING HINTS:", ...hints.map((hint) => `- ${hint}`)].join("\n");
 }
 
-export function buildTeacherPrompt(context: TeacherContext): DirectorPrompt {
-  const system = renderDirectorPromptTemplate(DIRECTOR_SYSTEM_TEMPLATE, {
-    rolePrompt: DIRECTOR_SYSTEM_ROLE_PROMPT,
-    pedagogicalRubricPrompt: DIRECTOR_PEDAGOGICAL_RUBRIC_PROMPT,
-    cefrDescriptorsPrompt: DIRECTOR_CEFR_DESCRIPTORS_PROMPT,
-    outputSchemaPrompt: DIRECTOR_OUTPUT_SCHEMA_PROMPT,
-    hardConstraintsPrompt: DIRECTOR_HARD_CONSTRAINTS_PROMPT,
-    comprehensionGuidanceBlock: DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK,
-    pragmaticFeedbackBlock: DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK
+export function buildTeacherPrompt(context: TeacherContext): TeacherPrompt {
+  const system = renderTeacherPromptTemplate(TEACHER_SYSTEM_TEMPLATE, {
+    rolePrompt: TEACHER_SYSTEM_ROLE_PROMPT,
+    pedagogicalRubricPrompt: TEACHER_PEDAGOGICAL_RUBRIC_PROMPT,
+    cefrDescriptorsPrompt: TEACHER_CEFR_DESCRIPTORS_PROMPT,
+    outputSchemaPrompt: TEACHER_OUTPUT_SCHEMA_PROMPT,
+    hardConstraintsPrompt: TEACHER_HARD_CONSTRAINTS_PROMPT,
+    comprehensionGuidanceBlock: TEACHER_COMPREHENSION_GUIDANCE_BLOCK,
+    pragmaticFeedbackBlock: TEACHER_PRAGMATIC_FEEDBACK_BLOCK
   });
 
-  const user = renderDirectorPromptTemplate(DIRECTOR_USER_TEMPLATE, {
+  const user = renderTeacherPromptTemplate(TEACHER_USER_TEMPLATE, {
     learnerSummary: formatLearnerSummary(context),
     relationshipState: formatRelationshipState(context),
     sceneSnapshot: formatSceneSnapshot(context),
@@ -692,6 +692,6 @@ export function buildTeacherPrompt(context: TeacherContext): DirectorPrompt {
   return {
     system,
     user,
-    cacheMarkers: [...DIRECTOR_CACHE_MARKERS]
+    cacheMarkers: [...TEACHER_CACHE_MARKERS]
   };
 }

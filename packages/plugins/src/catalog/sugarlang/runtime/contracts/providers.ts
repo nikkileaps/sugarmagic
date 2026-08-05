@@ -85,7 +85,7 @@ export interface ActiveQuestEssentialLemma {
 /**
  * Language configuration passed into the teacher.
  *
- * Implements: Proposal 001 §3. Director
+ * Implements: Proposal 001 §3. Teacher
  */
 export interface TeacherLanguageContext {
   targetLanguage: string;
@@ -125,7 +125,7 @@ export interface TeacherLanguageContext {
  * a stateless ADR-010 lookup service (the same category as any other
  * provider), not information about the learner or the world.
  *
- * Implements: Proposal 001 §3. Director / §Observer Latency Bias / §Quest-Essential Lemma Exemption
+ * Implements: Proposal 001 §3. Teacher / §Observer Latency Bias / §Quest-Essential Lemma Exemption
  */
 export interface TeacherContext {
   conversationId: string;
@@ -212,7 +212,7 @@ export interface LearnerPriorProvider {
 /**
  * ADR 010 seam for the LLM-backed teacher policy.
  *
- * Implements: ADR 010 provider boundaries / Proposal 001 §3. Director
+ * Implements: ADR 010 provider boundaries / Proposal 001 §3. Teacher
  */
 export interface TeacherPolicy {
   invoke: (context: TeacherContext) => Promise<PedagogicalDirective>;

@@ -16,7 +16,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import type { DirectorClaudeClientRequest } from "../../runtime/teacher/policies/llm-teacher-policy";
+import type { TeacherClaudeClientRequest } from "../../runtime/teacher/policies/llm-teacher-policy";
 import {
   ClaudeTeacherPolicy,
   TeacherInvocationError,
@@ -76,7 +76,7 @@ describe("createGatewayTeacherClient (090 -- server-side model routing)", () => 
 describe("ClaudeTeacherPolicy", () => {
   it("defaults to no client-side model so the gateway resolves it (090)", async () => {
     const generateStructuredDirective = vi.fn(
-      async (_request: DirectorClaudeClientRequest) => ({
+      async (_request: TeacherClaudeClientRequest) => ({
         text: JSON.stringify(createDirectiveFixture()),
         requestId: null
       })
@@ -163,11 +163,11 @@ describe("ClaudeTeacherPolicy", () => {
     await policy.invoke(createTeacherContext());
 
     const eventKinds = telemetry.emit.mock.calls.map((call) => call[0].kind);
-    expect(eventKinds).toContain("director.invocation-started");
-    expect(eventKinds).toContain("director.invocation-completed");
+    expect(eventKinds).toContain("teacher.invocation-started");
+    expect(eventKinds).toContain("teacher.invocation-completed");
     expect(
       telemetry.emit.mock.calls.find(
-        (call) => call[0].kind === "director.invocation-completed"
+        (call) => call[0].kind === "teacher.invocation-completed"
       )?.[0]
     ).toEqual(
       expect.objectContaining({

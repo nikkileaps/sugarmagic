@@ -227,8 +227,8 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
       : undefined;
     const fallbackSignals = ["fallback:claude-unavailable"];
 
-    if (options?.triggerReasonOverride === "director-deferred-override") {
-      fallbackSignals.push("fallback:director-deferred-override");
+    if (options?.triggerReasonOverride === "teacher-deferred-override") {
+      fallbackSignals.push("fallback:teacher-deferred-override");
     }
 
     return {
@@ -263,7 +263,7 @@ export class FallbackTeacherPolicy implements TeacherPolicy {
       },
       citedSignals: fallbackSignals,
       rationale:
-        options?.triggerReasonOverride === "director-deferred-override"
+        options?.triggerReasonOverride === "teacher-deferred-override"
           ? "Deterministic fallback - Teacher'sLLM ignored a required comprehension probe."
           : "Deterministic fallback - Teacher'sLLM unavailable.",
       confidenceBand:

@@ -11,7 +11,7 @@
  *   - LexicalPrescriptionInput
  *
  * Relationships:
- *   - Is consumed by the Budgeter, Director, middleware, and telemetry stubs.
+ *   - Is consumed by the Budgeter, Teacher, middleware, and telemetry stubs.
  *   - Depends on learner-profile and scene-lexicon contracts for its input shape.
  *
  * Implements: Proposal 001 §1. Lexical Budgeter

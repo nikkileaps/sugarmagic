@@ -82,7 +82,7 @@ describe("SugarLangTeacher", () => {
     const { cache } = createFacade();
     const llmPolicy = {
       invoke: vi.fn(async () => {
-        throw new TeacherInvocationError("hard floor violated", "director-deferred-override");
+        throw new TeacherInvocationError("hard floor violated", "teacher-deferred-override");
       })
     };
     const teacher = new SugarLangTeacher({
@@ -100,7 +100,7 @@ describe("SugarLangTeacher", () => {
 
     expect(directive.isFallbackDirective).toBe(true);
     expect(directive.comprehensionCheck.triggerReason).toBe(
-      "director-deferred-override"
+      "teacher-deferred-override"
     );
     expect(cache.get("conversation-1")?.isFallbackDirective).toBe(true);
   });

@@ -38,14 +38,14 @@ import { computePacingSignals } from "../../learner";
 import { resolveQuestEssentialLemmaRefs } from "../quest-essential";
 
 // NO DEFAULT MODEL ON PURPOSE (2026-07-28). This used to be
-// `DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6"`, which was inert: the gateway
+// `DEFAULT_TEACHER_MODEL = "claude-sonnet-4-6"`, which was inert: the gateway
 // client never forwarded it, so the Teacher silently ran on the sugaragent
 // DIALOGUE model. The model is now resolved server-side from
 // `purpose: "teacher"` -> SUGARMAGIC_SUGARLANG_TEACHER_MODEL. A local constant
 // here would just re-create a lie that reads as configuration.
 const DEFAULT_MAX_TOKENS = 900;
 
-export interface DirectorClaudeClientResult {
+export interface TeacherClaudeClientResult {
   text: string;
   requestId?: string | null;
   inputTokens?: number | null;
@@ -54,7 +54,7 @@ export interface DirectorClaudeClientResult {
   cacheCreationInputTokens?: number | null;
 }
 
-export interface DirectorClaudeClientRequest {
+export interface TeacherClaudeClientRequest {
   /** null => the gateway resolves the model from `purpose: "teacher"`. */
   model: string | null;
   systemPrompt: string;
@@ -63,14 +63,14 @@ export interface DirectorClaudeClientRequest {
   cacheMarkers: string[];
 }
 
-export interface DirectorClaudeClient {
+export interface TeacherClaudeClient {
   generateStructuredDirective: (
-    request: DirectorClaudeClientRequest
-  ) => Promise<DirectorClaudeClientResult>;
+    request: TeacherClaudeClientRequest
+  ) => Promise<TeacherClaudeClientResult>;
 }
 
 export interface ClaudeTeacherPolicyOptions {
-  client: DirectorClaudeClient;
+  client: TeacherClaudeClient;
   telemetry?: TelemetrySink;
   logger?: TeacherPolicyLogger;
   /** Escape hatch for tooling/tests. Leave unset in production: the gateway
@@ -109,14 +109,14 @@ export class TeacherInvocationError extends Error {
 }
 
 /**
- * Creates a DirectorClaudeClient backed by sugarlang's own gateway.
+ * Creates a TeacherClaudeClient backed by sugarlang's own gateway.
  * No dependency on sugaragent — all calls go through the gateway proxy.
  */
 export function createGatewayTeacherClient(
   gateway: SugarlangLLMClient
-): DirectorClaudeClient {
+): TeacherClaudeClient {
   return {
-    async generateStructuredDirective(request): Promise<DirectorClaudeClientResult> {
+    async generateStructuredDirective(request): Promise<TeacherClaudeClientResult> {
       const response = await gateway.generate({
         // Server-side model routing. Without this the gateway falls through to
         // the sugaragent dialogue model — which is exactly the bug this fixes.
@@ -136,7 +136,7 @@ export function createGatewayTeacherClient(
 }
 
 export class ClaudeTeacherPolicy implements TeacherPolicy {
-  private readonly client: DirectorClaudeClient;
+  private readonly client: TeacherClaudeClient;
   private readonly telemetry: TelemetrySink;
   private readonly logger: TeacherPolicyLogger;
   private readonly model: string | null;
@@ -185,7 +185,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
 
     await emitTelemetry(
       this.telemetry,
-      createTelemetryEvent("director.invocation-started", {
+      createTelemetryEvent("teacher.invocation-started", {
         conversationId: context.conversationId,
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,
@@ -193,7 +193,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         sceneId,
         npcId: npc.npcDefinitionId,
         npcDisplayName: npc.displayName,
-        directorContext: {
+        teacherContext: {
           calibrationActive: context.calibrationActive,
           citedQuestEssentialCount: resolveQuestEssentialLemmaRefs(
             context.situation,
@@ -211,7 +211,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       })
     );
 
-    let response: DirectorClaudeClientResult;
+    let response: TeacherClaudeClientResult;
     try {
       response = await this.client.generateStructuredDirective({
         model: this.model,
@@ -231,7 +231,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       });
       await emitTelemetry(
         this.telemetry,
-        createTelemetryEvent("director.invocation-failed", {
+        createTelemetryEvent("teacher.invocation-failed", {
           conversationId: context.conversationId,
           sessionId: context.telemetryContext?.sessionId,
           turnId: context.telemetryContext?.turnId,
@@ -320,7 +320,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       throw new TeacherInvocationError(
         parseResult.error.message,
         parseResult.error.code === "hard_floor_violated"
-          ? "director-deferred-override"
+          ? "teacher-deferred-override"
           : undefined,
         parseResult.error
       );
@@ -341,7 +341,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     const endedAt = this.now();
     await emitTelemetry(
       this.telemetry,
-      createTelemetryEvent("director.invocation-completed", {
+      createTelemetryEvent("teacher.invocation-completed", {
         conversationId: context.conversationId,
         sessionId: context.telemetryContext?.sessionId,
         turnId: context.telemetryContext?.turnId,

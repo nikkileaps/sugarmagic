@@ -202,7 +202,7 @@ Behavior:
 
 ## Teacher'sBoundary
 
-Placement is not Director-owned.
+Placement is not Teacher-owned.
 
 The Teacher'sis bypassed during `opening-dialog` and skipped entirely during the
 `questionnaire` phase. It only re-enters for normal closing-dialog turns after a

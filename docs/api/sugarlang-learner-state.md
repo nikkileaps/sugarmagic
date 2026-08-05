@@ -139,7 +139,7 @@ produced in free text during placement (`fsrs.seeded-from-placement`).
 
 **File:** `packages/plugins/src/catalog/sugarlang/runtime/learner/calibration-window.ts`
 -- the single definition; `teacher/calibration-mode.ts` re-exports it for the
-Director's hint surface. Do not duplicate the predicate.
+Teacher's hint surface. Do not duplicate the predicate.
 
 ```typescript
 CALIBRATION_CONFIDENCE_CEILING = 0.65

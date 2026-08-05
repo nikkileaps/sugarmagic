@@ -8,7 +8,7 @@
  *
  * Relationships:
  *   - Depends on the Sugarlang runtime service graph plus the ConversationMiddleware interface.
- *   - Writes the per-turn annotations that the Director and later analysis middlewares consume.
+ *   - Writes the per-turn annotations that the Teacher and later analysis middlewares consume.
  *
  * Implements: Proposal 001 §End-to-End Turn Flow / §Placement Interaction Contract
  *

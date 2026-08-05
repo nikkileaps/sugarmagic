@@ -17,7 +17,7 @@ import {
 
 const TEST_GLOBAL_FACT = defineBlackboardFact<boolean>({
   key: "test.global-flag",
-  ownerSystem: "director-system",
+  ownerSystem: "teacher-system",
   allowedScopeKinds: ["global"],
   lifecycle: { kind: "persistent" }
 });

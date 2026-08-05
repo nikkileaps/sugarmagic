@@ -46,7 +46,7 @@ export interface SugarLangPluginConfig {
   supportLanguage: SugarlangSupportLanguage;
   debugLogging: boolean;
   /** When false, Sugarlang verify is bypassed. Default is true; set to false or
-   *  use SUGARMAGIC_SUGARLANG_VERIFY_DISABLED=1 only to inspect raw Director +
+   *  use SUGARMAGIC_SUGARLANG_VERIFY_DISABLED=1 only to inspect raw Teacher +
    *  Generate behavior without the post-generation enforcement pass. */
   verifyEnabled: boolean;
   placement: SugarLangPlacementConfig;

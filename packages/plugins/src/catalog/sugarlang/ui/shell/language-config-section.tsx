@@ -150,7 +150,7 @@ export function LanguageConfigSection(
           Debug Logging
         </span>
         <span style={{ fontSize: "0.7rem", color: "var(--sm-color-subtext)" }}>
-          — logs middleware pipeline, classifier, director, and observer traces to console
+          — logs middleware pipeline, classifier, teacher, and observer traces to console
         </span>
       </label>
 

@@ -14,7 +14,7 @@
  * Relationships:
  *   - Depends on learner-profile types only.
  *   - Consumed by the learner-state reducer (weighted in-window updates) and
- *     re-exported by teacher/calibration-mode for the Director's hint surface.
+ *     re-exported by teacher/calibration-mode for the Teacher's hint surface.
  *     One enforcer: do not duplicate this predicate.
  *
  * Implements: Plan 081 story 081.4

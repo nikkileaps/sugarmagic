@@ -517,8 +517,8 @@ describe("end-to-end conversation golden", () => {
     // asked for one.
     await host.submitInput({ kind: "advance" });
 
-    const cacheHits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
-    const newDirectives = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
+    const cacheHits = await telemetry.query({ eventKinds: ["teacher.cache-hit"] });
+    const newDirectives = await telemetry.query({ eventKinds: ["teacher.invocation-resolved"] });
 
     expect(newDirectives.length).toBe(1);
     expect(cacheHits.length).toBeGreaterThan(0);

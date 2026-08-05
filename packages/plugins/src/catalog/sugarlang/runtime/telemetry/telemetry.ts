@@ -15,7 +15,7 @@
  *   - resolveSugarlangTelemetrySink
  *
  * Relationships:
- *   - Is the single telemetry contract consumed by middlewares, Director, learner-state, and Studio debug readers.
+ *   - Is the single telemetry contract consumed by middlewares, Teacher, learner-state, and Studio debug readers.
  *   - Owns persistence/query behavior so gameplay producers stay fire-and-forget.
  *
  * Implements: Proposal 001 §v2 Training Path / §Verification, Failure Modes, and Guardrails
@@ -124,12 +124,12 @@ export type TelemetryEvent =
   // emitter; the event type outlived it, so the debug surfaces still declared a
   // shape nothing could ever produce.
   | TelemetryEventOf<
-      "director.invocation-started",
+      "teacher.invocation-started",
       {
         sceneId: string;
         npcId: string | null;
         npcDisplayName: string | null;
-        directorContext: Record<string, unknown>;
+        teacherContext: Record<string, unknown>;
         cacheHit: boolean;
         model?: string | null;
         cacheMarkers?: string[];
@@ -142,7 +142,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "director.invocation-completed",
+      "teacher.invocation-completed",
       {
         sceneId?: string;
         npcId?: string | null;
@@ -163,7 +163,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "director.invocation-failed",
+      "teacher.invocation-failed",
       {
         sceneId?: string;
         npcId?: string | null;
@@ -174,7 +174,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "director.cache-hit",
+      "teacher.cache-hit",
       {
         sceneId?: string;
         npcId?: string | null;
@@ -183,7 +183,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "director.invocation-resolved",
+      "teacher.invocation-resolved",
       {
         sceneId?: string;
         npcId?: string | null;
@@ -417,7 +417,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "director.pre-placement-bypass",
+      "teacher.pre-placement-bypass",
       {
         sceneId?: string | null;
         lineId: string;
@@ -570,10 +570,10 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "comprehension.director-hard-floor-violated",
+      "comprehension.teacher-hard-floor-violated",
       {
         sceneId?: string;
-        directorModel?: string | null;
+        teacherModel?: string | null;
         hardFloorReason?: string | null;
       }
     >
@@ -640,7 +640,7 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "quest-essential.director-targetvocab-contamination",
+      "quest-essential.teacher-targetvocab-contamination",
       {
         sceneId?: string;
         contaminatedLemmas: string[];

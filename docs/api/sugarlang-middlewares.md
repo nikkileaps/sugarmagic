@@ -64,7 +64,7 @@ There is no prescription to merge. The Lexical Budgeter was deleted in Epic 090
 itself. See the plugin-local
 `docs/api/domain-model.md` for why (a concept is demand, a teachable is supply).
 
-The Director system prompt includes `DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK`
+The Teacher system prompt includes `TEACHER_PRAGMATIC_FEEDBACK_BLOCK`
 (085.6): when the player uses or attempts a communicative function the NPC has
 modeled, the NPC reacts with in-fiction warmth (correct use) or gentle
 confusion (misuse). Explicit correction-as-correction is prohibited. The NPC

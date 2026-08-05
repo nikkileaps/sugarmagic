@@ -17,8 +17,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK,
-  DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK,
+  TEACHER_COMPREHENSION_GUIDANCE_BLOCK,
+  TEACHER_PRAGMATIC_FEEDBACK_BLOCK,
   buildTeacherPrompt,
   estimatePromptTokens,
   formatPendingProvisional
@@ -70,20 +70,20 @@ describe("buildTeacherPrompt", () => {
   it("returns stable cache markers for the static prompt portion", () => {
     const prompt = buildTeacherPrompt(createTeacherContext());
     expect(prompt.cacheMarkers).toEqual([
-      "director.system.role",
-      "director.system.rubric",
-      "director.system.cefr",
-      "director.system.schema",
-      "director.system.constraints",
-      "director.system.comprehension-guidance",
-      "director.system.pragmatic-feedback",
-      "director.user.template"
+      "teacher.system.role",
+      "teacher.system.rubric",
+      "teacher.system.cefr",
+      "teacher.system.schema",
+      "teacher.system.constraints",
+      "teacher.system.comprehension-guidance",
+      "teacher.system.pragmatic-feedback",
+      "teacher.user.template"
     ]);
   });
 
   it("includes the comprehension guidance block verbatim in the system prompt", () => {
     const prompt = buildTeacherPrompt(createTeacherContext());
-    expect(prompt.system).toContain(DIRECTOR_COMPREHENSION_GUIDANCE_BLOCK);
+    expect(prompt.system).toContain(TEACHER_COMPREHENSION_GUIDANCE_BLOCK);
   });
 
   it("formats pending provisional evidence readably", () => {
@@ -159,12 +159,12 @@ describe("buildTeacherPrompt", () => {
 
   it("085.6: includes the pragmatic feedback block verbatim in the system prompt", () => {
     const prompt = buildTeacherPrompt(createTeacherContext());
-    expect(prompt.system).toContain(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK);
+    expect(prompt.system).toContain(TEACHER_PRAGMATIC_FEEDBACK_BLOCK);
   });
 
   it("085.6: pragmatic feedback block prohibits explicit correction", () => {
-    expect(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK).toContain("NEVER");
-    expect(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK).toContain("warmth");
-    expect(DIRECTOR_PRAGMATIC_FEEDBACK_BLOCK).toContain("confusion");
+    expect(TEACHER_PRAGMATIC_FEEDBACK_BLOCK).toContain("NEVER");
+    expect(TEACHER_PRAGMATIC_FEEDBACK_BLOCK).toContain("warmth");
+    expect(TEACHER_PRAGMATIC_FEEDBACK_BLOCK).toContain("confusion");
   });
 });

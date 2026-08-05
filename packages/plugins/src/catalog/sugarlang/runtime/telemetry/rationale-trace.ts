@@ -126,9 +126,9 @@ export class RationaleTraceBuilder {
       turnId
     });
     const sorted = [...events].sort((left, right) => eventTimestamp(left) - eventTimestamp(right));
-      const directiveEvent = firstOfKind(sorted, "director.invocation-completed");
+      const directiveEvent = firstOfKind(sorted, "teacher.invocation-completed");
     // 090.5: the pacing snapshot rides the STARTED event, not the completed one.
-    const directiveStartedEvent = firstOfKind(sorted, "director.invocation-started");
+    const directiveStartedEvent = firstOfKind(sorted, "teacher.invocation-started");
     const verdictEvent = firstOfKind(sorted, "classifier.verdict");
     const chunkHitEvent = firstOfKind(sorted, "chunk.hit-during-classification");
     const repairEvent = firstOfKind(sorted, "verify.repair-triggered");

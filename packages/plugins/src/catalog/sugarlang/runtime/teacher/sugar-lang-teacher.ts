@@ -75,7 +75,7 @@ export class SugarLangTeacher {
     if (cached) {
       await emitTelemetry(
         this.telemetry,
-        createTelemetryEvent("director.cache-hit", {
+        createTelemetryEvent("teacher.cache-hit", {
           conversationId: effectiveContext.conversationId,
           sessionId: effectiveContext.telemetryContext?.sessionId,
           turnId: effectiveContext.telemetryContext?.turnId,
@@ -88,7 +88,7 @@ export class SugarLangTeacher {
       );
       await emitTelemetry(
         this.telemetry,
-        createTelemetryEvent("director.invocation-completed", {
+        createTelemetryEvent("teacher.invocation-completed", {
           conversationId: effectiveContext.conversationId,
           sessionId: effectiveContext.telemetryContext?.sessionId,
           turnId: effectiveContext.telemetryContext?.turnId,
@@ -134,7 +134,7 @@ export class SugarLangTeacher {
     this.cache.set(effectiveContext.conversationId, directive, keysNow);
     await emitTelemetry(
       this.telemetry,
-      createTelemetryEvent("director.invocation-resolved", {
+      createTelemetryEvent("teacher.invocation-resolved", {
         conversationId: effectiveContext.conversationId,
         sessionId: effectiveContext.telemetryContext?.sessionId,
         turnId: effectiveContext.telemetryContext?.turnId,

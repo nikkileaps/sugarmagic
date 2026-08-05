@@ -11,7 +11,7 @@
  *   - Builds on learner test helpers and runtime contract types.
  *   - Is consumed by the Teacher prompt, parser, policy, cache, and facade tests.
  *
- * Implements: Epic 9 director test support
+ * Implements: Epic 9 teacher test support
  *
  * Status: active
  */

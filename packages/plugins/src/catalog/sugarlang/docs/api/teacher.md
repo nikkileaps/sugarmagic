@@ -101,7 +101,7 @@ sugaragent's config.
 `ClaudeTeacherPolicy` sends **no model id** by default — `options.model` exists
 as a tooling/test escape hatch and is omitted from the request when unset.
 There is intentionally no client-side default constant: the previous
-`DEFAULT_DIRECTOR_MODEL = "claude-sonnet-4-6"` was never forwarded over the
+A default-model constant was never forwarded over the
 wire, so the Teacher silently ran on the sugaragent *dialogue* model while the
 constant read like configuration. Telemetry records `model: null` when the
 gateway resolved it.
@@ -134,7 +134,7 @@ Current validity rules:
 
 ## Post-Placement Calibration Hint
 
-The old director-owned placement flow is gone. The only remaining calibration
+The old teacher-owned placement flow is gone. The only remaining calibration
 concept is a small post-placement warm-up hint:
 
 - `isInPostPlacementCalibration(learner)` returns true for recently evaluated,

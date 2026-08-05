@@ -6,7 +6,7 @@
  * Exports:
  *   - SUGARLANG_LEARNER_STATE_WRITER
  *   - SUGARLANG_PLACEMENT_WRITER
- *   - SUGARLANG_DIRECTOR_WRITER
+ *   - SUGARLANG_TEACHER_WRITER
  *   - SUGARLANG_OBSERVER_WRITER
  *   - SugarlangPlacementStatus
  *   - ActiveDirectiveFactValue
@@ -48,7 +48,7 @@ import type { DirectiveLifetime } from "../types";
 
 export const SUGARLANG_LEARNER_STATE_WRITER = "sugarlang.learner-state";
 export const SUGARLANG_PLACEMENT_WRITER = "sugarlang.placement";
-export const SUGARLANG_DIRECTOR_WRITER = "sugarlang.directive";
+export const SUGARLANG_TEACHER_WRITER = "sugarlang.directive";
 export const SUGARLANG_OBSERVER_WRITER = "sugarlang.observer";
 
 export interface SugarlangPlacementStatus {
@@ -118,7 +118,7 @@ export const LEMMA_OBSERVATION_FACT: BlackboardFactDefinition<LemmaObservation[]
 export const ACTIVE_DIRECTIVE_FACT: BlackboardFactDefinition<ActiveDirectiveFactValue> =
   defineBlackboardFact({
     key: "sugarlang.active-directive",
-    ownerSystem: SUGARLANG_DIRECTOR_WRITER,
+    ownerSystem: SUGARLANG_TEACHER_WRITER,
     allowedScopeKinds: ["conversation"],
     lifecycle: { kind: "session" }
   });

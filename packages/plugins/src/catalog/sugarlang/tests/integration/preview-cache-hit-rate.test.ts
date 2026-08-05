@@ -243,8 +243,8 @@ describe("preview directive cache hit rate golden", () => {
     await host.submitInput({ kind: "advance" });
     await host.submitInput({ kind: "advance" });
 
-    const phase1Resolved = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
-    const phase1Hits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
+    const phase1Resolved = await telemetry.query({ eventKinds: ["teacher.invocation-resolved"] });
+    const phase1Hits = await telemetry.query({ eventKinds: ["teacher.cache-hit"] });
     expect(phase1Resolved.length).toBe(1);
     expect(phase1Hits.length).toBe(2);
 
@@ -274,8 +274,8 @@ describe("preview directive cache hit rate golden", () => {
     // advanced anywhere in the world.
     await host.submitInput({ kind: "advance" });
 
-    const phase2Resolved = await telemetry.query({ eventKinds: ["director.invocation-resolved"] });
-    const phase2Hits = await telemetry.query({ eventKinds: ["director.cache-hit"] });
+    const phase2Resolved = await telemetry.query({ eventKinds: ["teacher.invocation-resolved"] });
+    const phase2Hits = await telemetry.query({ eventKinds: ["teacher.cache-hit"] });
 
     // Total across the full run: 1 invocation, 3 hits. The Teacher decided once
     // and that decision served every turn.

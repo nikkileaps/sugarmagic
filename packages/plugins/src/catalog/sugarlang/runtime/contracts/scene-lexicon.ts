@@ -15,7 +15,7 @@
  *
  * Relationships:
  *   - Depends on runtime compile-profile and learner-profile types.
- *   - Is consumed by the compiler, budgeter, and director stubs.
+ *   - Is consumed by the compiler, budgeter, and teacher stubs.
  *
  * Implements: Proposal 001 §Scene Lexicon Compilation: One Compiler, Three Profiles, Preview-First
  *
@@ -65,7 +65,7 @@ export interface SceneAuthorWarning {
 }
 
 /**
- * Per-lemma scene artifact entry used by the Budgeter and Director.
+ * Per-lemma scene artifact entry used by the Budgeter and Teacher.
  *
  * 090.2c DELETED `cefrPriorBand`, `frequencyRank` and `partsOfSpeech` from this
  * type. All three were verbatim copies of atlas data written by

@@ -1,7 +1,7 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/teacher/calibration-mode.ts
  *
- * Purpose: Provides the Director-facing post-placement calibration hint.
+ * Purpose: Provides the Teacher-facing post-placement calibration hint.
  *
  * Exports:
  *   - isInPostPlacementCalibration (re-export; single definition lives in

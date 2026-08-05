@@ -590,11 +590,11 @@ describe("sugarlang runtime contracts", () => {
       Record<CEFRBand, { correct: number; total: number }>
     >();
     expectTypeOf<ProbeTriggerReason>().toEqualTypeOf<
-      | "director-discretion"
+      | "teacher-discretion"
       | "soft-floor"
       | "hard-floor-turns"
       | "hard-floor-lemma-age"
-      | "director-deferred-override"
+      | "teacher-deferred-override"
     >();
     expectTypeOf<FSRSGrade>().toEqualTypeOf<"Again" | "Hard" | "Good" | "Easy">();
   });

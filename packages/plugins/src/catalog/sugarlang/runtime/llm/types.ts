@@ -9,7 +9,7 @@
  *   - SugarlangLLMClient
  *
  * Relationships:
- *   - Is consumed by the Director, chunk extractor, and verify middleware repair path.
+ *   - Is consumed by the Teacher, chunk extractor, and verify middleware repair path.
  *   - Is implemented by SugarlangGatewayClient.
  *
  * Implements: Sugarlang LLM gateway abstraction (independent of sugaragent)
@@ -60,7 +60,7 @@ export interface SugarlangLLMResult {
 
 /**
  * The single LLM abstraction sugarlang uses. Every Claude call in the plugin
- * goes through this interface — Director, chunk extractor, verify repair.
+ * goes through this interface — Teacher, chunk extractor, verify repair.
  * The implementation is always a gateway HTTP client; sugarlang never calls
  * vendor APIs directly.
  */
