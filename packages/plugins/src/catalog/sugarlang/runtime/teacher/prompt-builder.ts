@@ -72,8 +72,16 @@ const MAX_RECENTLY_ACTIVE = 6;
  */
 const MAX_SLATE_INTRODUCE = 6;
 
+/** One system content block. `cache` marks a caching breakpoint. */
+export interface TeacherPromptBlock {
+  text: string;
+  cache: boolean;
+}
+
 export interface TeacherPrompt {
+  /** The system half as one string. Convenience; `systemBlocks` is what is sent. */
   system: string;
+  systemBlocks: TeacherPromptBlock[];
   user: string;
   cacheMarkers: string[];
 }
@@ -250,15 +258,21 @@ Important rules:
 3. If the probe floor says soft floor reached, probing is recommended.
 4. If the probe floor says hard floor reached, probing is required.`;
 
+/**
+ * The cache breakpoints actually sent, in prefix order.
+ *
+ * There used to be eight of these naming individual prompt constants. They were
+ * labels for a mechanism that did not exist -- the call sent one flat
+ * `systemPrompt` string and the markers were passed to the client and dropped.
+ *
+ * Two blocks, because they go stale for different reasons. The instructions
+ * change when someone edits a prompt constant; the curriculum changes every
+ * time a phrase is authored. Splitting them means a day of authoring does not
+ * also throw away the instruction block.
+ */
 const TEACHER_CACHE_MARKERS = [
-  "teacher.system.role",
-  "teacher.system.rubric",
-  "teacher.system.cefr",
-  "teacher.system.schema",
-  "teacher.system.constraints",
-  "teacher.system.comprehension-guidance",
-  "teacher.system.pragmatic-feedback",
-  "teacher.user.template"
+  "teacher.system.instructions",
+  "teacher.system.curriculum"
 ] as const;
 
 function listOrNone(values: string[]): string {
@@ -720,7 +734,7 @@ export function formatTurnShapingHints(context: TeacherContext): string {
 }
 
 export function buildTeacherPrompt(context: TeacherContext): TeacherPrompt {
-  const system = renderTeacherPromptTemplate(TEACHER_SYSTEM_TEMPLATE, {
+  const instructions = renderTeacherPromptTemplate(TEACHER_SYSTEM_TEMPLATE, {
     rolePrompt: TEACHER_SYSTEM_ROLE_PROMPT,
     pedagogicalRubricPrompt: TEACHER_PEDAGOGICAL_RUBRIC_PROMPT,
     cefrDescriptorsPrompt: TEACHER_CEFR_DESCRIPTORS_PROMPT,
@@ -730,12 +744,23 @@ export function buildTeacherPrompt(context: TeacherContext): TeacherPrompt {
     pragmaticFeedbackBlock: TEACHER_PRAGMATIC_FEEDBACK_BLOCK
   });
 
+  // The curriculum sits in the SYSTEM half, not the per-turn half. It is
+  // identical on every call for a language, so in the user half it could never
+  // be cached however anything else was fixed -- and it was the largest single
+  // thing in there.
+  //
+  // Nothing here may depend on the individual learner. A cache entry is matched
+  // by the exact bytes of the prefix, so one learner's state in these blocks
+  // would give every player their own entry -- each a fresh write, costing more
+  // than not caching at all -- and would put that learner's state in front of
+  // whoever else hit it.
+  const curriculum = formatAvailableCompetencies(context);
+
   const user = renderTeacherPromptTemplate(TEACHER_USER_TEMPLATE, {
     learnerSummary: formatLearnerSummary(context),
     relationshipState: formatRelationshipState(context),
     sceneSnapshot: formatSceneSnapshot(context),
     situation: formatSituation(context),
-    availableCompetencies: formatAvailableCompetencies(context),
     npcContext: formatNpcContext(context),
     gameMoment: formatGameMoment(context),
     recentDialogue: formatRecentDialogue(context),
@@ -743,8 +768,16 @@ export function buildTeacherPrompt(context: TeacherContext): TeacherPrompt {
     turnShapingHints: formatTurnShapingHints(context)
   });
 
+  const systemBlocks = [
+    { text: instructions, cache: true },
+    { text: curriculum, cache: true }
+  ];
+
   return {
-    system,
+    // Kept so callers that want the whole system half as one string still work;
+    // the blocks are what goes on the wire.
+    system: systemBlocks.map((block) => block.text).join("\n\n"),
+    systemBlocks,
     user,
     cacheMarkers: [...TEACHER_CACHE_MARKERS]
   };

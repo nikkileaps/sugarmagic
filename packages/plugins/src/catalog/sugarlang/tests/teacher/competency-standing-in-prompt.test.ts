@@ -40,7 +40,22 @@ const STATE: LearnerProgress = {
 };
 
 describe("the curriculum half is shared; the learner half is not", () => {
-  it("THE ONE THAT MATTERS: the curriculum half is identical for two different learners", () => {
+  it("THE ONE THAT MATTERS: EVERY cached block is identical for two different learners", () => {
+    // A cache entry is matched by the exact bytes of the prefix. If anything
+    // learner-specific reached a cached block, every player would get their own
+    // entry -- each a fresh write, costing more than not caching -- and one
+    // player's state would sit in bytes another player hits.
+    const blocksFor = (progress: LearnerProgress) =>
+      buildTeacherPrompt(createTeacherContext({ learnerProgress: progress }))
+        .systemBlocks.filter((block) => block.cache)
+        .map((block) => block.text);
+
+    expect(
+      blocksFor({ ...STATE, met: [{ competencyId: "greet", encounterCount: 9 }] })
+    ).toEqual(blocksFor({ ...STATE, met: [], unmetCompetencyIds: [] }));
+  });
+
+  it("the curriculum half is identical for two different learners", () => {
     // This half is destined for a cache shared by every player at a language
     // (222.9). Anything learner-specific in it would be wrong for everyone who
     // is not the player it was built for, so the split has to hold BEFORE the
@@ -102,7 +117,10 @@ describe("the Teacher can see where the learner stands on the curriculum", () =>
     // curriculum twice. Now the learner half names only what was MET, the
     // curriculum half lists everything grouped by lesson, and the Teacher joins
     // the two -- so unmet is "in the curriculum, absent from the met line".
-    const prompt = promptWith(STATE);
+    const whole = buildTeacherPrompt(
+      createTeacherContext({ learnerProgress: STATE })
+    );
+    const prompt = whole.user;
     const metLine = prompt
       .split("\n")
       .find((line) => line.startsWith("- competencies met:"));
@@ -110,8 +128,9 @@ describe("the Teacher can see where the learner stands on the curriculum", () =>
     expect(metLine).toBeDefined();
     expect(metLine).toContain("greet");
     expect(metLine).not.toContain("ask-where");
-    // ...and it is still offered to the Teacher, in the curriculum half.
-    expect(prompt).toContain("ask-where");
+    // ...and it is still offered to the Teacher -- in the cached curriculum
+    // half now (222.9), which is why this looks at the whole prompt.
+    expect(whole.system).toContain("ask-where");
     expect(prompt).not.toContain("competencies not yet met");
   });
 

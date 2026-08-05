@@ -50,33 +50,29 @@ describe("buildTeacherPrompt", () => {
     const systemTokens = estimatePromptTokens(prompt.system);
     const userTokens = estimatePromptTokens(prompt.user);
 
+    // The system half now carries the curriculum too (222.9) -- ~1600 of
+    // instructions plus ~900 of competency list. Both blocks are cacheable, so
+    // this half is paid for once per language rather than every turn.
     expect(systemTokens).toBeGreaterThan(350);
-    expect(systemTokens).toBeLessThan(1800);
+    expect(systemTokens).toBeLessThan(2800);
     expect(userTokens).toBeGreaterThan(200);
-    // The user half carries the competency list, so it grows with authoring.
-    // 222.7 grouped that list under lesson names and dropped the can-do
-    // descriptors, which were most of its size: a fully authored A1 went from
-    // ~3140 tokens to ~1380.
-    //
-    // It still grows -- nothing filters the list by band -- so this stays a
-    // tripwire. The remaining fixes are a band window (deferred to the epic
-    // that ships A2, where it can actually exclude something) and moving the
-    // list into the cached half (222.9). Raising this number is not one of them.
-    expect(userTokens).toBeLessThan(1700);
+    // The per-turn half is now ONLY what changes per turn: learner state,
+    // scene, NPC, dialogue. It was 3138 tokens before 222.7 grouped the
+    // competency list and 222.9 moved it into the cached half.
+    expect(userTokens).toBeLessThan(700);
   });
 
   it("returns stable cache markers for the static prompt portion", () => {
     const prompt = buildTeacherPrompt(createTeacherContext());
+    // Two, because they go stale for different reasons: instructions change
+    // when a prompt constant is edited, the curriculum every time a phrase is
+    // authored. There used to be eight naming individual constants, which were
+    // labels for a mechanism that did not exist.
     expect(prompt.cacheMarkers).toEqual([
-      "teacher.system.role",
-      "teacher.system.rubric",
-      "teacher.system.cefr",
-      "teacher.system.schema",
-      "teacher.system.constraints",
-      "teacher.system.comprehension-guidance",
-      "teacher.system.pragmatic-feedback",
-      "teacher.user.template"
+      "teacher.system.instructions",
+      "teacher.system.curriculum"
     ]);
+    expect(prompt.systemBlocks.map((block) => block.cache)).toEqual([true, true]);
   });
 
   it("includes the comprehension guidance block verbatim in the system prompt", () => {

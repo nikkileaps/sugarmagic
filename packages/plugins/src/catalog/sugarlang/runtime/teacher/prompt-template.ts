@@ -36,13 +36,6 @@ export const TEACHER_USER_TEMPLATE = [
   // 090.3d: the live half -- what is true in the world right now, as opposed to
   // the scene snapshot above, which is the same on every visit.
   "{{situation}}",
-  // 090.10: the competency MENU. The schema has always let the Teacher name a
-  // competency and the output-shape block gave an example id, but nothing ever
-  // told it WHICH ids exist -- so naming a real one meant guessing. Competencies
-  // reached teaching instead by being flattened into `prescription.introduce`,
-  // which is the road this story deletes. Without the menu, that deletion stops
-  // competency teaching silently.
-  "{{availableCompetencies}}",
   "{{npcContext}}",
   "{{gameMoment}}",
   "{{recentDialogue}}",

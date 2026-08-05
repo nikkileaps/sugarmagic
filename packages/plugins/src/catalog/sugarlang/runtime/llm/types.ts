@@ -49,6 +49,13 @@ export interface SugarlangLLMRequest {
    */
   purpose?: "teacher" | "extraction";
   systemPrompt: string;
+  /**
+   * System content as blocks, with caching breakpoints. When present the
+   * gateway sends Anthropic system blocks and marks `cache: true` ones with
+   * `cache_control: ephemeral`; when absent it falls back to `systemPrompt`,
+   * uncached.
+   */
+  systemBlocks?: Array<{ text: string; cache?: boolean }>;
   userPrompt: string;
   maxTokens?: number;
 }
@@ -56,6 +63,14 @@ export interface SugarlangLLMRequest {
 export interface SugarlangLLMResult {
   text: string;
   requestId: string | null;
+  /**
+   * What the call cost. The gateway has always returned these; nothing carried
+   * them, so a cache hit was indistinguishable from a miss.
+   */
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  cacheReadInputTokens?: number | null;
+  cacheCreationInputTokens?: number | null;
 }
 
 /**

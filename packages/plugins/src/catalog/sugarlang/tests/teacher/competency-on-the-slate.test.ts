@@ -71,11 +71,20 @@ describe("the Teacher is told which competencies exist", () => {
   // practice competencies arrived by being flattened into
   // `prescription.introduce` instead. That road is what 090.10 deletes, so this
   // menu is the precondition for deleting it safely.
-  it("lists real competency ids in the user prompt", () => {
-    const prompt = buildTeacherPrompt(createTeacherContext()).user;
+  it("lists real competency ids, in the CACHED half", () => {
+    // 222.9 moved the curriculum out of the per-turn half. It is identical on
+    // every call for a language, so there it could never be cached -- and it
+    // was the largest single thing in the turn.
+    const prompt = buildTeacherPrompt(createTeacherContext());
 
-    expect(prompt).toContain("COMPETENCIES THIS CURRICULUM CAN TEACH:");
-    expect(prompt).toContain("ask-where");
+    expect(prompt.system).toContain("COMPETENCIES THIS CURRICULUM CAN TEACH:");
+    expect(prompt.system).toContain("ask-where");
+    expect(prompt.user).not.toContain("COMPETENCIES THIS CURRICULUM CAN TEACH:");
+
+    const curriculum = prompt.systemBlocks.find((block) =>
+      block.text.includes("COMPETENCIES THIS CURRICULUM CAN TEACH:")
+    );
+    expect(curriculum?.cache).toBe(true);
   });
 
   it("names them as the only valid ids, so the model does not invent one", () => {

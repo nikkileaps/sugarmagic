@@ -58,6 +58,8 @@ export interface TeacherClaudeClientRequest {
   /** null => the gateway resolves the model from `purpose: "teacher"`. */
   model: string | null;
   systemPrompt: string;
+  /** System content as cacheable blocks. Preferred over `systemPrompt`. */
+  systemBlocks?: Array<{ text: string; cache?: boolean }>;
   userPrompt: string;
   maxTokens: number;
   cacheMarkers: string[];
@@ -123,13 +125,18 @@ export function createGatewayTeacherClient(
         purpose: "teacher",
         ...(request.model === null ? {} : { model: request.model }),
         systemPrompt: request.systemPrompt,
+        ...(request.systemBlocks ? { systemBlocks: request.systemBlocks } : {}),
         userPrompt: request.userPrompt,
         maxTokens: request.maxTokens
       });
 
       return {
         text: response.text,
-        requestId: response.requestId
+        requestId: response.requestId,
+        inputTokens: response.inputTokens ?? null,
+        outputTokens: response.outputTokens ?? null,
+        cacheReadInputTokens: response.cacheReadInputTokens ?? null,
+        cacheCreationInputTokens: response.cacheCreationInputTokens ?? null
       };
     }
   };
@@ -216,6 +223,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       response = await this.client.generateStructuredDirective({
         model: this.model,
         systemPrompt: prompt.system,
+        systemBlocks: prompt.systemBlocks,
         userPrompt,
         maxTokens: this.maxTokens,
         cacheMarkers: prompt.cacheMarkers
@@ -333,6 +341,17 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       npcDisplayName: npc.displayName ?? null,
       model: this.model,
       requestId: response.requestId ?? null,
+      // What the call cost, and whether the cached prefix was reused. Without
+      // this a cache hit and a miss look identical from the outside, which is
+      // the state 222.9 found things in.
+      //   cacheRead > 0    the cached prefix was reused
+      //   cacheWrite > 0   the entry was (re)written -- first call, or the
+      //                    prompt constants or curriculum changed
+      //   both 0           the gateway is not applying the breakpoints at all
+      cacheReadTokens: response.cacheReadInputTokens ?? 0,
+      cacheWriteTokens: response.cacheCreationInputTokens ?? 0,
+      inputTokens: response.inputTokens ?? null,
+      outputTokens: response.outputTokens ?? null,
       rawResponseText: response.text,
       parseMode,
       directive

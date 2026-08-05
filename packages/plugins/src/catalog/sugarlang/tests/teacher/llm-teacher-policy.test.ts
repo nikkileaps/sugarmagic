@@ -56,6 +56,58 @@ describe("createGatewayTeacherClient (090 -- server-side model routing)", () => 
     expect(generate.mock.calls[0]![0]).not.toHaveProperty("model");
   });
 
+  it("forwards system blocks so the gateway can mark a cache breakpoint", async () => {
+    const generate = vi.fn<
+      (request: SugarlangLLMRequest) => Promise<{ text: string; requestId: null }>
+    >(async () => ({ text: "{}", requestId: null }));
+    await createGatewayTeacherClient({ generate }).generateStructuredDirective({
+      model: null,
+      systemPrompt: "s",
+      systemBlocks: [
+        { text: "instructions", cache: true },
+        { text: "curriculum", cache: true }
+      ],
+      userPrompt: "u",
+      maxTokens: 10,
+      cacheMarkers: []
+    });
+
+    expect(generate.mock.calls[0]![0].systemBlocks).toEqual([
+      { text: "instructions", cache: true },
+      { text: "curriculum", cache: true }
+    ]);
+  });
+
+  it("carries cache usage back, so a hit is distinguishable from a miss", async () => {
+    // The gateway has always returned these counts. Nothing carried them, so
+    // every layer above saw a hit and a miss as identical.
+    const generate = vi.fn(async () => ({
+      text: "{}",
+      requestId: "req-1",
+      inputTokens: 40,
+      outputTokens: 12,
+      cacheReadInputTokens: 2400,
+      cacheCreationInputTokens: 0
+    }));
+
+    const result = await createGatewayTeacherClient({
+      generate
+    }).generateStructuredDirective({
+      model: null,
+      systemPrompt: "s",
+      userPrompt: "u",
+      maxTokens: 10,
+      cacheMarkers: []
+    });
+
+    expect(result).toMatchObject({
+      cacheReadInputTokens: 2400,
+      cacheCreationInputTokens: 0,
+      inputTokens: 40,
+      outputTokens: 12
+    });
+  });
+
   it("still forwards an explicit model override for tooling", async () => {
     const generate = vi.fn(async (_request: SugarlangLLMRequest) => ({ text: "{}", requestId: null }));
     await createGatewayTeacherClient({ generate }).generateStructuredDirective({
