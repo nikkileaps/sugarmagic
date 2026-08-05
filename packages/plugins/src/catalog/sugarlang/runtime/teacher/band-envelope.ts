@@ -106,6 +106,30 @@ export function clampRatioToPosture(
  *
  *   A1 3   A2 4   B1 5   B2 5   C1 6   C2 6
  */
+/**
+ * Does a line at this band say the subject pronoun out loud, or drop it?
+ *
+ * Spanish drops it: `Vendo queso` is the natural sentence and `Yo vendo queso`
+ * is emphatic. Forcing it for beginners is a deliberate trade -- pro-drop hides
+ * the person inside a verb ending they cannot parse yet, so their first
+ * sentences would read as "sell cheese" with nobody in them. `yo vendo` makes
+ * I -> yo and sell -> vendo legible, and dropping it later teaches pro-drop as
+ * a real feature rather than one they never noticed was there.
+ *
+ * The cost is a learner who over-generalizes and says `yo` constantly, which
+ * corrects at exactly the band where this stops applying.
+ *
+ * Here rather than beside the word list (`always-target-words.ts`) because it
+ * is band-keyed, and every band-keyed pedagogical number lives in this file.
+ * They are also two different rules wearing one face: WHICH LANGUAGE the
+ * subject is in is always the target one; WHETHER IT IS SAID AT ALL is this.
+ *
+ *   A1 yes   A2 yes   B1+ no
+ */
+export function saysSubjectPronounExplicitly(cefrBand: CEFRBand): boolean {
+  return cefrBand === "A1" || cefrBand === "A2";
+}
+
 export function getIntroduceCapForBand(cefrBand: CEFRBand): number {
   switch (cefrBand) {
     case "A1":

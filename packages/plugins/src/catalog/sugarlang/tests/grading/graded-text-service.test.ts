@@ -27,6 +27,7 @@ import {
 } from "../../runtime/grading/graded-text-service";
 import type { SugarlangLLMClient } from "../../runtime/llm/types";
 import { createTestAtlasProvider } from "../compile/test-helpers";
+import { INFLECT_SLATED_WORDS_PROMPT } from "../../runtime/teacher/slate-prompt";
 
 function createMockClient(...responses: string[]): SugarlangLLMClient {
   let index = 0;
@@ -180,6 +181,26 @@ describe("GradedTextService", () => {
     expect(result.failure?.message).toContain("empty");
   });
 
+  it("tells the baker a slated word is a dictionary form", () => {
+    // Same defect as the agent path and the same fix, in the one module that
+    // exists so both paths phrase it once. A baked line that pasted `vender`
+    // in would be the same wrong Spanish, cached.
+    const prompt = buildAdaptationPrompt({
+      sourceText: "I sell the best cheese in town.",
+      targetLang: "es",
+      band: "A2",
+      guidance: { register: "dialogue line" },
+      teach: {
+        introduce: [{ kind: "vocabulary", lemmaId: "vender", lang: "es" }],
+        reinforce: [],
+        avoid: []
+      }
+    });
+
+    expect(prompt.user).toContain("- vender");
+    expect(prompt.user).toContain(INFLECT_SLATED_WORDS_PROMPT);
+  });
+
   it("090.11: contributes NOTHING to the prompt when there is no slate", () => {
     // THE SAFETY PROPERTY of adding a slate input. Item text and any caller
     // without a scene has no slate, and those callers' prompts must not move by
@@ -324,7 +345,7 @@ describe("GradedTextService", () => {
       })
     ).toMatchInlineSnapshot(`
       {
-        "system": "You are a writer for a language-learning game. Adapt the given English item description into es for a elementary (A2) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a elementary (A2) learner. Write mostly in es -- about 85% -- with brief support-language anchoring only where it aids comprehension. Keep it grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line item description stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
+        "system": "You are a writer for a language-learning game. Adapt the given English item description into es for a elementary (A2) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a elementary (A2) learner. Write mostly in es -- about 85% -- with brief support-language anchoring only where it aids comprehension. Inside a Spanish phrase, these are always Spanish, never English: yo, tú, usted, mi, tu, me, sí, no. Do NOT drop one into an otherwise English sentence -- write "I sell cheese", never "yo sell cheese". If you want one of these words, write the whole phrase around it in Spanish. When you do write a Spanish phrase, say its subject pronoun out loud rather than dropping it, even where a native speaker would leave it out, so the learner can see who is doing the action. Keep it grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line item description stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
         "user": "Target language: es
       Learner level: A2 (elementary (A2))
 
@@ -348,7 +369,7 @@ describe("GradedTextService", () => {
       })
     ).toMatchInlineSnapshot(`
       {
-        "system": "You are a writer for a language-learning game. Adapt the given English dialogue line into es for a intermediate (B1) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a intermediate (B1) learner. Write mostly in es -- about 85% -- with brief support-language anchoring only where it aids comprehension. Keep it grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line dialogue line stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
+        "system": "You are a writer for a language-learning game. Adapt the given English dialogue line into es for a intermediate (B1) learner. Adapt rather than translate: keep what the text must communicate, but re-express it within reach of a intermediate (B1) learner. Write mostly in es -- about 85% -- with brief support-language anchoring only where it aids comprehension. Inside a Spanish phrase, these are always Spanish, never English: yo, tú, usted, mi, tu, me, sí, no. Do NOT drop one into an otherwise English sentence -- write "I sell cheese", never "yo sell cheese". If you want one of these words, write the whole phrase around it in Spanish. Keep it grammatically natural for the learner level. Preserve the length and shape of the original -- a one-line dialogue line stays one line, a paragraph stays a paragraph. Do not add glosses, translations, or explanations inline. Return only the adapted text, nothing else.",
         "user": "Target language: es
       Learner level: B1 (intermediate (B1))
 

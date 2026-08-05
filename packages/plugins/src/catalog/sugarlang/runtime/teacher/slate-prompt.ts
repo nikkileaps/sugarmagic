@@ -18,6 +18,7 @@
  *
  * Exports:
  *   - MAX_PROMPT_REINFORCE
+ *   - INFLECT_SLATED_WORDS_PROMPT
  *   - renderTeachableList
  *
  * Relationships:
@@ -34,6 +35,36 @@
  */
 
 import type { CompetencyRef, TeachableRef } from "../contracts/teachable-ref";
+
+/**
+ * Tells the model that a slated word arrives in DICTIONARY FORM and has to be
+ * put into whatever form the sentence needs.
+ *
+ * WHY THIS IS NEEDED AT ALL. A vocabulary teachable is rendered as its lemma --
+ * the headword you look up. For a noun that is also a form people say, so
+ * `queso` works by luck. For a verb it is the one form nobody says in a
+ * finished sentence, and the model, told to use the word as given, obliges:
+ * "I vender the best queso."
+ *
+ * A competency does not have this problem, because it is rendered with its
+ * exponents -- real sayable phrases. Only the vocabulary half hands over a
+ * dictionary entry and calls it a word to use.
+ *
+ * IT ASKS FOR THE BEHAVIOUR AND DOES NOT NAME THE FORM. Saying "use vendo"
+ * would mean choosing person and tense here -- before the sentence exists --
+ * and that is the lemma+features -> surface generation this system deliberately
+ * does not do. It is also what substitution used to do, and why it was removed.
+ *
+ * IT DOES NOT FORBID THE DICTIONARY FORM, because at these bands the infinitive
+ * is frequently the correct realization: `voy a hablar`, `quiero hablar`,
+ * `tengo que ir` are all right, and a blanket ban would push the model into
+ * `voy a hablo`. The last sentence exists to keep that door open.
+ */
+export const INFLECT_SLATED_WORDS_PROMPT =
+  "The words above are given in dictionary form. Put each one in the form the " +
+  "sentence actually needs -- conjugate verbs for person and tense, and make " +
+  "adjectives agree. The dictionary form is correct only where the grammar " +
+  "genuinely calls for it, such as after another verb.";
 
 /**
  * How many REINFORCE items one prompt may carry.

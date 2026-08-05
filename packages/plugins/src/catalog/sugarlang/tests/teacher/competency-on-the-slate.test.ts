@@ -34,6 +34,7 @@ import {
 import { buildGeneratorPromptOverlay } from "../../runtime/middlewares/generator-prompt-overlay";
 import { createCompetencyDescriber } from "../../runtime/inventory/describe-competency";
 import { getIntroduceCapForBand } from "../../runtime/teacher/band-envelope";
+import { INFLECT_SLATED_WORDS_PROMPT } from "../../runtime/teacher/slate-prompt";
 import {
   competencyRefs,
   vocabularyRefs,
@@ -243,5 +244,48 @@ describe("a competency can be taught", () => {
     );
 
     expect(overlay).toContain("ask where something is (donde esta)");
+  });
+});
+
+describe("a slated word arrives as a dictionary form", () => {
+  it("THE ONE THAT MATTERS: the generator is told to put it in the right form", () => {
+    // "I vender the best queso." The slate hands over `vender` -- the form you
+    // look up -- and the prompt asked the model to use the word as given, so
+    // it did. Nothing in any prompt mentioned conjugation.
+    const overlay = buildGeneratorPromptOverlay(
+      constraintWith([{ kind: "vocabulary", lemmaId: "vender", lang: "es" }]),
+      undefined
+    );
+
+    expect(overlay).toContain("- vender");
+
+    expect(overlay).toContain(INFLECT_SLATED_WORDS_PROMPT);
+    expect(overlay).toContain("conjugate verbs for person and tense");
+  });
+
+  it("the agent path carries the always-target words too", () => {
+    // Both realization paths or neither. A word behaving differently depending
+    // on whether its line was baked is what this pipeline exists to prevent.
+    const overlay = buildGeneratorPromptOverlay(
+      constraintWith([{ kind: "vocabulary", lemmaId: "vender", lang: "es" }]),
+      undefined
+    );
+
+    expect(overlay).toContain("Inside a Spanish phrase");
+    expect(overlay).toContain("yo");
+  });
+
+  it("does not forbid the dictionary form, which is often correct", () => {
+    // `voy a hablar`, `quiero hablar`, `tengo que ir` are all right at these
+    // bands. A blanket ban would push the model into `voy a hablo`.
+    expect(INFLECT_SLATED_WORDS_PROMPT).toContain("only where the grammar");
+    expect(INFLECT_SLATED_WORDS_PROMPT).not.toMatch(/never use the dictionary form/i);
+  });
+
+  it("does not name the form to use, which would mean generating it", () => {
+    // Naming a form means choosing person and tense before the sentence
+    // exists. That is the lemma+features -> surface generation this system
+    // does not do, and what substitution used to do.
+    expect(INFLECT_SLATED_WORDS_PROMPT).not.toMatch(/\buse\s+"?vendo\b/i);
   });
 });
