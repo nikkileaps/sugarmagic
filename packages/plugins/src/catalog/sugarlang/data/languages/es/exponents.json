@@ -649,12 +649,9 @@
       {
         "wordings": [
           {
-            "phrase": "vale",
+            "phrase": "listo",
             "gloss": {
               "en": "okay"
-            },
-            "lemmas": {
-              "vale": "valer"
             }
           }
         ]
@@ -2160,9 +2157,9 @@
       {
         "wordings": [
           {
-            "phrase": "lleva gafas",
+            "phrase": "lleva lentes",
             "gloss": {
-              "en": "he wears glasses"
+              "en": "wears glasses"
             }
           }
         ]
@@ -2566,7 +2563,7 @@
       {
         "wordings": [
           {
-            "phrase": "tengo un coche",
+            "phrase": "tengo un carro",
             "gloss": {
               "en": "I have a car"
             }
@@ -4922,15 +4919,6 @@
             "lemmas": {
               "trabajo": "trabajar"
             }
-          },
-          {
-            "phrase": "trabajo con el ordenador",
-            "gloss": {
-              "en": "I work on the computer"
-            },
-            "lemmas": {
-              "trabajo": "trabajar"
-            }
           }
         ]
       },
@@ -6054,9 +6042,9 @@
       {
         "wordings": [
           {
-            "phrase": "un billete por favor",
+            "phrase": "un boleto por favor",
             "gloss": {
-              "en": "one ticket, please"
+              "en": "a ticket please"
             }
           }
         ]
@@ -6064,7 +6052,7 @@
       {
         "wordings": [
           {
-            "phrase": "quiero un billete",
+            "phrase": "quiero un boleto",
             "gloss": {
               "en": "I want a ticket"
             }
@@ -6074,7 +6062,7 @@
       {
         "wordings": [
           {
-            "phrase": "un billete de ida",
+            "phrase": "un boleto de ida",
             "gloss": {
               "en": "a one-way ticket"
             }
@@ -6094,7 +6082,7 @@
       {
         "wordings": [
           {
-            "phrase": "dónde puedo comprar un billete",
+            "phrase": "dónde puedo comprar un boleto",
             "gloss": {
               "en": "where can I buy a ticket"
             }

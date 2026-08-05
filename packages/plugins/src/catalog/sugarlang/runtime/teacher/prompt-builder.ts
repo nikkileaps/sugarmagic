@@ -37,9 +37,9 @@ import { EMPTY_NPC_CONTEXT, type RuntimeFact } from "../situation";
 import { computePacingSignals } from "../learner";
 import { resolveSceneTeachables } from "../inventory/scene-teachable-resolver";
 import { loadCompetencyInventory } from "../inventory/competency-inventory-loader";
+import type { CompetencyInventory } from "../contracts/competency-inventory";
 import { DUE_RETRIEVABILITY_FLOOR } from "../learner";
 import { cardDisplayName } from "../inventory/card-display-name";
-import type { Competency } from "../contracts/competency-inventory";
 import {
   TARGET_LANGUAGE_RATIO_BY_POSTURE,
   TARGET_LANGUAGE_RATIO_TOLERANCE
@@ -85,6 +85,22 @@ You do not write any line yourself. You return a JSON directive that the
 Generator follows across the turns this situation lasts -- so choose a working
 set that suits the moment, not a single sentence.`;
 
+/**
+ * How to weigh the moment, and how to read the learner's history.
+ *
+ * The counts alone are inert. "greet (met in 4 situations)" with nothing saying
+ * what four means gets ignored, and the Teacher keeps introducing new things
+ * because introducing is the only move it has been told how to make.
+ *
+ * These are starting positions, not measurements -- "roughly half a dozen" is a
+ * guess, and the number the code used to carry was ten, which was also a guess.
+ * The point is to have something concrete to correct once a learner has real
+ * history.
+ *
+ * It has to stay advice about how to READ the facts. The moment it says
+ * "always reinforce below N" it is a deleted threshold back in prose, deciding
+ * from outside the situation.
+ */
 export const TEACHER_PEDAGOGICAL_RUBRIC_PROMPT = `PEDAGOGICAL RUBRIC:
 
 - Preserve the illusion of normal in-character conversation.
@@ -93,7 +109,15 @@ export const TEACHER_PEDAGOGICAL_RUBRIC_PROMPT = `PEDAGOGICAL RUBRIC:
 - What you choose should feel organic, not forced. If something does not belong in this situation at all, leave it out.
 - If nothing fits this moment, do NOT force teaching. A brief greeting or short social response is acceptable.
 - Reinforcement words can surface more naturally than new introductions.
-- For low-confidence learners, keep sentence structure simple, but still try to include what you chose to teach.`;
+- For low-confidence learners, keep sentence structure simple, but still try to include what you chose to teach.
+
+READING WHAT THE LEARNER HAS MET
+
+- The count is DISTINCT SITUATIONS -- different people, places and days -- not repetitions. Meeting something five times with one NPC in one room counts once.
+- A competency met in only one or two situations is not owned yet. The learner has seen it in one corner of the world. Using it again HERE, with a different person in a different place, is worth more than introducing something new.
+- A competency met but not seen since is the weakest state there is -- weaker than one never introduced, because the learner has half a memory and nothing to attach it to. Reach for those first when the moment allows.
+- Once something has recurred across roughly half a dozen situations it is becoming reliable. Keep using it where it fits, but do not spend the turn on it.
+- Introducing something new while several competencies sit at one or two situations is usually the worse trade. Breadth without recurrence does not stick.`;
 
 export const TEACHER_CEFR_DESCRIPTORS_PROMPT = `CEFR DESCRIPTORS:
 
@@ -350,10 +374,11 @@ function formatCompetencyStandingLines(context: TeacherContext): string[] {
       ? `${entry.competencyId} (met in 1 situation)`
       : `${entry.competencyId} (met in ${entry.encounterCount} situations)`
   );
-  return [
-    `- competencies met: ${listOrNone(met)}`,
-    `- competencies not yet met: ${listOrNone([...state.unmetCompetencyIds])}`
-  ];
+  // Only what the learner has MET. The unmet list used to be printed here too,
+  // which restated the whole curriculum a second time -- it is already below,
+  // in full, grouped by lesson. Anything absent from this line is unmet, and
+  // the Teacher can see that by looking.
+  return [`- competencies met: ${listOrNone(met)}`];
 }
 
 export function formatRelationshipState(context: TeacherContext): string {
@@ -404,27 +429,56 @@ export function formatSceneSnapshot(context: TeacherContext): string {
  * not say what the learner would be able to do.
  */
 export function formatAvailableCompetencies(context: TeacherContext): string {
-  let competencies: Competency[] = [];
+  let inventory: CompetencyInventory | null = null;
   try {
-    competencies = loadCompetencyInventory(context.lang.targetLanguage).competencies;
+    inventory = loadCompetencyInventory(context.lang.targetLanguage);
   } catch {
     // A missing or malformed inventory is not fatal to a teaching decision --
     // the Teacher simply has no competencies to choose from this turn, which is
     // the same state as an empty curriculum and reads identically below.
-    competencies = [];
+    inventory = null;
   }
 
+  const competencies = inventory?.competencies ?? [];
   if (competencies.length === 0) {
     return ["COMPETENCIES THIS CURRICULUM CAN TEACH:", `- ${EMPTY_SECTION}`].join("\n");
+  }
+
+  const byLesson = new Map<string, string[]>();
+  for (const competency of competencies) {
+    const ids = byLesson.get(competency.lessonId) ?? [];
+    ids.push(competency.competencyId);
+    byLesson.set(competency.lessonId, ids);
+  }
+
+  // Lessons in curriculum order; the inventory already sorts them by band then
+  // ordinal. A competency whose lesson is missing would otherwise vanish, so
+  // they are gathered under a final heading rather than dropped.
+  const lines: string[] = [];
+  const placed = new Set<string>();
+  for (const lesson of inventory?.lessons ?? []) {
+    const ids = byLesson.get(lesson.lessonId);
+    if (!ids || ids.length === 0) continue;
+    placed.add(lesson.lessonId);
+    lines.push(`${lesson.band}.${lesson.ordinal} ${lesson.displayName}`);
+    lines.push(`  ${ids.join(", ")}`);
+  }
+  const orphaned = [...byLesson.entries()].filter(([id]) => !placed.has(id));
+  if (orphaned.length > 0) {
+    lines.push("Other");
+    lines.push(`  ${orphaned.flatMap(([, ids]) => ids).join(", ")}`);
   }
 
   return [
     "COMPETENCIES THIS CURRICULUM CAN TEACH:",
     "These are the ONLY valid competencyId values. Never invent one.",
-    ...competencies.map(
-      (competency) =>
-        `- ${competency.competencyId} (${competency.band}): ${competency.cefrDescriptor}`
-    )
+    // Grouped under lesson names, and WITHOUT the can-do descriptors. The
+    // descriptor is the cost -- an id averages 10 characters and its descriptor
+    // 43 -- and a lesson name plus a readable id already carries the meaning:
+    // `A1.6 Buying Things -> ask-price` does not need "Can ask how much
+    // something costs" beside it. The grouping is also what makes a list this
+    // size matchable against a situation: a cafe is Food and Drink.
+    ...lines
   ].join("\n");
 }
 

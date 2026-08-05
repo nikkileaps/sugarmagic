@@ -3001,19 +3001,19 @@
             }
           },
           {
-            "exponentId": "lleva_gafas",
-            "normalizedForm": "lleva_gafas",
+            "exponentId": "lleva_lentes",
+            "normalizedForm": "lleva_lentes",
             "surfaceForms": [
-              "lleva gafas"
+              "lleva lentes"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
               "llevar",
-              "gafas"
+              "lente"
             ],
             "glossBySurface": {
-              "lleva gafas": {
-                "en": "he wears glasses"
+              "lleva lentes": {
+                "en": "wears glasses"
               }
             }
           },
@@ -4276,20 +4276,20 @@
       "exponents": {
         "es": [
           {
-            "exponentId": "tengo_un_coche",
-            "normalizedForm": "tengo_un_coche",
+            "exponentId": "tengo_un_carro",
+            "normalizedForm": "tengo_un_carro",
             "surfaceForms": [
-              "tengo un coche",
+              "tengo un carro",
               "tengo una casa"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
               "tener",
-              "coche",
+              "carro",
               "casa"
             ],
             "glossBySurface": {
-              "tengo un coche": {
+              "tengo un carro": {
                 "en": "I have a car"
               },
               "tengo una casa": {
@@ -8882,22 +8882,16 @@
             "exponentId": "trabajo_en_la_computadora",
             "normalizedForm": "trabajo_en_la_computadora",
             "surfaceForms": [
-              "trabajo en la computadora",
-              "trabajo con el ordenador"
+              "trabajo en la computadora"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
               "trabajar",
               "en",
-              "computador",
-              "con",
-              "ordenador"
+              "computador"
             ],
             "glossBySurface": {
               "trabajo en la computadora": {
-                "en": "I work on the computer"
-              },
-              "trabajo con el ordenador": {
                 "en": "I work on the computer"
               }
             }
@@ -11086,54 +11080,54 @@
       "exponents": {
         "es": [
           {
-            "exponentId": "un_billete_por_favor",
-            "normalizedForm": "un_billete_por_favor",
+            "exponentId": "un_boleto_por_favor",
+            "normalizedForm": "un_boleto_por_favor",
             "surfaceForms": [
-              "un billete por favor"
+              "un boleto por favor"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "billete",
+              "boleto",
               "por",
               "favor"
             ],
             "glossBySurface": {
-              "un billete por favor": {
-                "en": "one ticket, please"
+              "un boleto por favor": {
+                "en": "a ticket please"
               }
             }
           },
           {
-            "exponentId": "quiero_un_billete",
-            "normalizedForm": "quiero_un_billete",
+            "exponentId": "quiero_un_boleto",
+            "normalizedForm": "quiero_un_boleto",
             "surfaceForms": [
-              "quiero un billete"
+              "quiero un boleto"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
               "querer",
-              "billete"
+              "boleto"
             ],
             "glossBySurface": {
-              "quiero un billete": {
+              "quiero un boleto": {
                 "en": "I want a ticket"
               }
             }
           },
           {
-            "exponentId": "un_billete_de_ida",
-            "normalizedForm": "un_billete_de_ida",
+            "exponentId": "un_boleto_de_ida",
+            "normalizedForm": "un_boleto_de_ida",
             "surfaceForms": [
-              "un billete de ida"
+              "un boleto de ida"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "billete",
+              "boleto",
               "de",
               "ida"
             ],
             "glossBySurface": {
-              "un billete de ida": {
+              "un boleto de ida": {
                 "en": "a one-way ticket"
               }
             }
@@ -11160,24 +11154,24 @@
             }
           },
           {
-            "exponentId": "donde_puedo_comprar_un_billete",
-            "normalizedForm": "donde_puedo_comprar_un_billete",
+            "exponentId": "donde_puedo_comprar_un_boleto",
+            "normalizedForm": "donde_puedo_comprar_un_boleto",
             "surfaceForms": [
-              "dónde puedo comprar un billete",
-              "donde puedo comprar un billete"
+              "dónde puedo comprar un boleto",
+              "donde puedo comprar un boleto"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
               "dónde",
               "poder",
               "comprar",
-              "billete"
+              "boleto"
             ],
             "glossBySurface": {
-              "dónde puedo comprar un billete": {
+              "dónde puedo comprar un boleto": {
                 "en": "where can I buy a ticket"
               },
-              "donde puedo comprar un billete": {
+              "donde puedo comprar un boleto": {
                 "en": "where can I buy a ticket"
               }
             }
@@ -14288,17 +14282,17 @@
             }
           },
           {
-            "exponentId": "vale",
-            "normalizedForm": "vale",
+            "exponentId": "listo",
+            "normalizedForm": "listo",
             "surfaceForms": [
-              "vale"
+              "listo"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "valer"
+              "listo"
             ],
             "glossBySurface": {
-              "vale": {
+              "listo": {
                 "en": "okay"
               }
             }

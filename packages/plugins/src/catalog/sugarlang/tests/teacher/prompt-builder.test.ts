@@ -53,18 +53,16 @@ describe("buildTeacherPrompt", () => {
     expect(systemTokens).toBeGreaterThan(350);
     expect(systemTokens).toBeLessThan(1800);
     expect(userTokens).toBeGreaterThan(200);
-    // The user half lists every competency the curriculum can teach, and
-    // nothing filters that list -- not by band, not by anything
-    // (`formatAvailableCompetencies` reads the whole inventory). So it grows
-    // with authoring: 29 competencies was ~940 tokens, a fully authored A1
-    // (172) is ~3140, and A2 on top would roughly double it again. Per turn,
-    // uncached, because learner state changes every turn and the list rides in
-    // the same half.
+    // The user half carries the competency list, so it grows with authoring.
+    // 222.7 grouped that list under lesson names and dropped the can-do
+    // descriptors, which were most of its size: a fully authored A1 went from
+    // ~3140 tokens to ~1380.
     //
-    // This ceiling only tracks that number. It is not a budget anyone
-    // designed, and raising it again is not a fix -- the fixes are a band
-    // window on the list and moving it into the cached half.
-    expect(userTokens).toBeLessThan(3400);
+    // It still grows -- nothing filters the list by band -- so this stays a
+    // tripwire. The remaining fixes are a band window (deferred to the epic
+    // that ships A2, where it can actually exclude something) and moving the
+    // list into the cached half (222.9). Raising this number is not one of them.
+    expect(userTokens).toBeLessThan(1700);
   });
 
   it("returns stable cache markers for the static prompt portion", () => {

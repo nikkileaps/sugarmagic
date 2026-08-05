@@ -12,7 +12,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { buildTeacherPrompt } from "../../runtime/teacher/prompt-builder";
+import {
+  buildTeacherPrompt,
+  formatAvailableCompetencies
+} from "../../runtime/teacher/prompt-builder";
+import { loadCompetencyInventory } from "../../runtime/inventory/competency-inventory-loader";
 import { createTeacherContext } from "./test-helpers";
 import { createLemmaCard } from "../learner/test-helpers";
 import type { LearnerProgress } from "../../runtime/learner/learner-progress";
@@ -35,15 +39,80 @@ const STATE: LearnerProgress = {
   conversationId: "conv-1"
 };
 
+describe("the curriculum half is shared; the learner half is not", () => {
+  it("THE ONE THAT MATTERS: the curriculum half is identical for two different learners", () => {
+    // This half is destined for a cache shared by every player at a language
+    // (222.9). Anything learner-specific in it would be wrong for everyone who
+    // is not the player it was built for, so the split has to hold BEFORE the
+    // caching is wired -- otherwise the first cache hit ships one learner's
+    // state to another.
+    const a = formatAvailableCompetencies(
+      createTeacherContext({
+        learnerProgress: {
+          ...STATE,
+          met: [{ competencyId: "greet", encounterCount: 9 }]
+        }
+      })
+    );
+    const b = formatAvailableCompetencies(
+      createTeacherContext({
+        learnerProgress: { ...STATE, met: [], unmetCompetencyIds: [] }
+      })
+    );
+    expect(a).toBe(b);
+  });
+
+  it("groups every competency under its lesson, and invents none", () => {
+    const inventory = loadCompetencyInventory("es");
+    const rendered = formatAvailableCompetencies(createTeacherContext());
+    const known = new Set(inventory.competencies.map((c) => c.competencyId));
+
+    // Every id the Teacher is shown is one it may legally answer with.
+    const listed = rendered
+      .split("\n")
+      .filter((line) => line.startsWith("  "))
+      .flatMap((line) => line.trim().split(", "))
+      .filter(Boolean);
+    expect(listed.filter((id) => !known.has(id))).toEqual([]);
+
+    // ...and nothing was silently dropped by the grouping.
+    expect(new Set(listed).size).toBe(known.size);
+
+    // Lesson headings are present and readable.
+    for (const lesson of inventory.lessons) {
+      expect(rendered).toContain(
+        `${lesson.band}.${lesson.ordinal} ${lesson.displayName}`
+      );
+    }
+  });
+
+  it("drops the can-do descriptors, which were most of the cost", () => {
+    const rendered = formatAvailableCompetencies(createTeacherContext());
+    expect(rendered).toContain("greet");
+    expect(rendered).not.toContain("Can greet someone and respond to a greeting");
+  });
+});
+
 describe("the Teacher can see where the learner stands on the curriculum", () => {
   it("THE POINT: met and not-yet-met are distinguishable", () => {
     // Before this, the prompt listed every competency the curriculum could
     // teach and nothing at all about which ones this learner had seen.
+    //
+    // The unmet list used to be printed here as well, which restated the whole
+    // curriculum twice. Now the learner half names only what was MET, the
+    // curriculum half lists everything grouped by lesson, and the Teacher joins
+    // the two -- so unmet is "in the curriculum, absent from the met line".
     const prompt = promptWith(STATE);
-    expect(prompt).toContain("- competencies met:");
-    expect(prompt).toContain("greet");
-    expect(prompt).toContain("- competencies not yet met:");
+    const metLine = prompt
+      .split("\n")
+      .find((line) => line.startsWith("- competencies met:"));
+
+    expect(metLine).toBeDefined();
+    expect(metLine).toContain("greet");
+    expect(metLine).not.toContain("ask-where");
+    // ...and it is still offered to the Teacher, in the curriculum half.
     expect(prompt).toContain("ask-where");
+    expect(prompt).not.toContain("competencies not yet met");
   });
 
   it("says the count is SITUATIONS, because that is what is counted", () => {

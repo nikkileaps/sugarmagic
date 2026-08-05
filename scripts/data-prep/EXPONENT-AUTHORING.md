@@ -67,6 +67,36 @@ they hover the phrase in a line of dialogue, so write it for them.
 - It cannot be derived. `por favor` from its own words comes out "for favour",
   which is why you write it.
 
+## THE TARGET VARIETY IS LATIN AMERICAN SPANISH
+
+Decided 2026-08-05. Author Latin American forms.
+
+    carro / auto     not  coche          boleto      not  billete
+    computadora      not  ordenador      lentes      not  gafas
+    jugo             not  zumo           celular     not  móvil
+    papa             not  patata         apartamento not  piso
+    manejar          not  conducir       refrigerador not nevera
+    listo, está bien not  vale (as "okay")
+
+**`ustedes`, never `vosotros`,** for plural you. No exponent should carry a
+`-áis` / `-éis` verb form.
+
+Avoid `coger`. It is ordinary in Spain and vulgar across much of Latin America,
+and there is always another verb.
+
+Not everything that looks peninsular is. `¿Cuánto vale?` is ordinary in Latin
+America -- it is `vale` meaning "okay" that is not. Check the sense, not the
+word.
+
+### This is about what we TEACH, not what we understand
+
+The dictionary and the morphology index keep peninsular forms, including the
+`vosotros` conjugations. A player may type one, or meet one in authored text,
+and failing to recognise it would be a bug.
+
+The variety decision governs PRODUCTION -- the phrases we put in an NPC's mouth
+and credit a learner for. Recognition stays wide.
+
 ## SPELLING
 
 **Write correct target-language orthography, accents and all.** `buenos días`,
