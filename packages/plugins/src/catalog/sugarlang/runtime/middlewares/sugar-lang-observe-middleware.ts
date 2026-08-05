@@ -33,6 +33,7 @@ import {
   getCompetencyForExponent as getInventoryCompetencyForExponent,
   getAllInventoryExponents
 } from "../inventory/competency-inventory-loader";
+import { competencyIdForCardKey } from "../inventory/card-display-name";
 import { countDiverseEncounters } from "../learner";
 import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
 import { buildHighlightTerms, focusTermsOf } from "../grading/highlight-terms";
@@ -127,14 +128,10 @@ function isIntroducedCompetencyCard(
   lang: string,
   constraint: SugarlangConstraint
 ): boolean {
-  if (!cardKey.startsWith("exponent:")) return false;
-  const competency = getInventoryCompetencyForExponent(
-    cardKey.slice("exponent:".length),
-    lang
-  );
-  if (!competency) return false;
+  const competencyId = competencyIdForCardKey(cardKey, lang);
+  if (competencyId === null) return false;
   return competencyRefs(constraint.targetVocab.introduce).some(
-    (ref) => ref.competencyId === competency.competencyId
+    (ref) => ref.competencyId === competencyId
   );
 }
 

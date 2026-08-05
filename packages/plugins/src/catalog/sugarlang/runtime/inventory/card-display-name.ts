@@ -11,6 +11,7 @@
  * Exports:
  *   - EXPONENT_CARD_PREFIX
  *   - isChunkCardKey
+ *   - competencyIdForCardKey
  *   - cardDisplayName
  *
  * Relationships:
@@ -27,6 +28,34 @@ export const EXPONENT_CARD_PREFIX = "exponent:";
 /** True when a card key belongs to a competency rather than a word. */
 export function isChunkCardKey(cardKey: string): boolean {
   return cardKey.startsWith(EXPONENT_CARD_PREFIX);
+}
+
+/**
+ * The competency a card key belongs to, or null if it is a word.
+ *
+ * THE JOIN THE TWO KEY SPACES NEED. A card is keyed by its EXPONENT and the
+ * slate names the COMPETENCY, and those ids never coincide -- `greet` is a
+ * competency, `hola` is one of the exponents that performs it. So a card key
+ * can never be compared against a competency id directly; it has to be
+ * resolved first.
+ *
+ * Getting this wrong is silent, which is why it lives in one place: building
+ * `exponent:<competencyId>` produces a well-formed string that simply never
+ * matches any card, so every comparison just quietly returns false.
+ *
+ * Null for an unresolvable exponent as well as for a word -- an inventory edit
+ * can remove one, and a language may have no inventory at all.
+ */
+export function competencyIdForCardKey(
+  cardKey: string,
+  lang: string
+): string | null {
+  if (!isChunkCardKey(cardKey)) return null;
+  const competency = getCompetencyForExponent(
+    cardKey.slice(EXPONENT_CARD_PREFIX.length),
+    lang
+  );
+  return competency?.competencyId ?? null;
 }
 
 /**

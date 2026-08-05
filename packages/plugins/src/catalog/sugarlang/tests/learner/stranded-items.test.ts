@@ -18,6 +18,7 @@ import {
   getItemProgress
 } from "../../runtime/learner/item-progress";
 import { createLemmaCard } from "./test-helpers";
+import type { PedagogicalDirective } from "../../runtime/types";
 
 const DAY = 86_400_000;
 const NOW = 1_800_000_000_000;
@@ -132,5 +133,92 @@ describe("competencies squeezed out of the shared due list", () => {
     // matters over time is `competenciesCut` rising as the word pool grows.
     expect(pressure.competenciesShown).toBe(1);
     expect(pressure.competenciesCut).toBe(0);
+  });
+});
+
+describe("which due items the Teacher passed over", () => {
+  /**
+   * Invokes the real policy with a canned directive and returns the
+   * `dueItemsPassedOver` it reported.
+   *
+   * Through the policy rather than against a helper: the bug this pins was two
+   * id spaces that only meet inside it, and a test calling a helper with
+   * hand-built keys would have agreed with whichever space it was handed.
+   */
+  async function passedOver(
+    dueItemIds: string[],
+    chose: Partial<PedagogicalDirective["targetVocab"]>
+  ): Promise<string[]> {
+    const { ClaudeTeacherPolicy } = await import(
+      "../../runtime/teacher/policies/llm-teacher-policy"
+    );
+    const { createDirectiveFixture, createTeacherContext } = await import(
+      "../teacher/test-helpers"
+    );
+    const { MemoryTelemetrySink } = await import(
+      "../../runtime/telemetry/telemetry"
+    );
+
+    const telemetry = new MemoryTelemetrySink();
+    const directive = createDirectiveFixture({
+      targetVocab: { introduce: [], reinforce: [], avoid: [], ...chose }
+    });
+
+    await new ClaudeTeacherPolicy({
+      telemetry,
+      client: {
+        generateStructuredDirective: async () => ({
+          text: JSON.stringify(directive)
+        })
+      }
+    }).invoke({
+      ...createTeacherContext(),
+      learnerProgress: {
+        met: [],
+        unmetCompetencyIds: [],
+        dueItemIds,
+        isColdStart: false,
+        sceneId: "scene-station",
+        conversationId: "conv-1"
+      }
+    });
+
+    const events = await telemetry.query({});
+    const completed = events.find(
+      (event) => event.kind === "teacher.invocation-completed"
+    );
+    return (completed as unknown as {
+      dueItemsPassedOver: string[];
+    }).dueItemsPassedOver;
+  }
+
+  it("THE ONE THAT MATTERS: a chosen competency is not reported as passed over", async () => {
+    // A card is keyed by its EXPONENT (`exponent:hola`); the slate names the
+    // COMPETENCY (`greet`). The two id spaces are disjoint -- 635 competency
+    // ids and 2526 exponent ids share no member -- so building
+    // `exponent:greet` and comparing it against card keys is well-formed and
+    // matches nothing. Every competency read as passed over even when the
+    // Teacher had just chosen it.
+    expect(
+      await passedOver(["exponent:hola"], {
+        introduce: [{ kind: "competency", competencyId: "greet", lang: "es" }]
+      })
+    ).toEqual([]);
+  });
+
+  it("a competency the Teacher did NOT choose is still reported", async () => {
+    expect(
+      await passedOver(["exponent:hola"], {
+        introduce: [{ kind: "competency", competencyId: "thank", lang: "es" }]
+      })
+    ).toEqual(["exponent:hola"]);
+  });
+
+  it("words still work, which is the half that never broke", async () => {
+    expect(
+      await passedOver(["queso", "anden"], {
+        introduce: [{ kind: "vocabulary", lemmaId: "queso", lang: "es" }]
+      })
+    ).toEqual(["anden"]);
   });
 });

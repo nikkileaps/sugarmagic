@@ -37,6 +37,7 @@ import {
 import { EMPTY_NPC_CONTEXT } from "../../situation";
 import { computePacingSignals } from "../../learner";
 import { resolveQuestEssentialLemmaRefs } from "../quest-essential";
+import { competencyIdForCardKey } from "../../inventory/card-display-name";
 
 // NO DEFAULT MODEL ON PURPOSE (2026-07-28). This used to be
 // `DEFAULT_TEACHER_MODEL = "claude-sonnet-4-6"`, which was inert: the gateway
@@ -129,15 +130,27 @@ function passedOverDueItems(
   const due = context.learnerProgress?.dueItemIds ?? [];
   if (due.length === 0) return [];
 
-  const chosen = new Set<string>();
+  const lang = context.lang.targetLanguage;
+  const chosenLemmas = new Set<string>();
+  const chosenCompetencies = new Set<string>();
   for (const ref of [
     ...directive.targetVocab.introduce,
     ...directive.targetVocab.reinforce
   ]) {
-    if (ref.kind === "competency") chosen.add(`exponent:${ref.competencyId}`);
-    else chosen.add(ref.lemmaId);
+    if (ref.kind === "competency") chosenCompetencies.add(ref.competencyId);
+    else chosenLemmas.add(ref.lemmaId);
   }
-  return due.filter((itemId) => !chosen.has(itemId));
+
+  // A due id is a CARD key, so a competency card is `exponent:<exponentId>` and
+  // has to be resolved back to its competency before it can be compared with
+  // what the Teacher chose. Comparing the two id spaces directly matches
+  // nothing, so every competency reads as passed over even when it was picked.
+  return due.filter((itemId) => {
+    const competencyId = competencyIdForCardKey(itemId, lang);
+    return competencyId === null
+      ? !chosenLemmas.has(itemId)
+      : !chosenCompetencies.has(competencyId);
+  });
 }
 
 export function createGatewayTeacherClient(
