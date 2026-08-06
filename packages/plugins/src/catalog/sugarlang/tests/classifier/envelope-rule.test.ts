@@ -90,15 +90,20 @@ describe("applyEnvelopeRule", () => {
     expect(result.exemptionsApplied).toEqual([]);
   });
 
-  it("fails when coverage drops below the Krashen floor", () => {
+  it("THE DEMOTION: low coverage no longer fails the envelope", () => {
+    // The floor's arithmetic cannot work on a deliberately mixed line -- every
+    // posture but target-only directs an English remainder -- so in live play
+    // it fired on every turn and bought a wrong 5-12s repair each time
+    // (sugarmagic-latency-psm, nikki 2026-08-06). coverageRatio stays on the
+    // profile as an instrument; nothing enforces it.
     const result = applyEnvelopeRule(
       createProfile({
-        coverageRatio: 0.949
+        coverageRatio: 0.1
       }),
       "A1"
     );
 
-    expect(result.withinEnvelope).toBe(false);
+    expect(result.withinEnvelope).toBe(true);
   });
 
   it("fails when a non-exempt lemma exceeds learnerBand + 1", () => {
@@ -209,22 +214,6 @@ describe("applyEnvelopeRule", () => {
     expect(result.violations).toEqual([]);
   });
 
-  it("does not let quest-essential bypass the coverage floor", () => {
-    const result = applyEnvelopeRule(
-      createProfile({
-        coverageRatio: 0.5,
-        outOfEnvelopeLemmas: [createLemma("altar"), createLemma("etéreo")],
-        ceilingExceededLemmas: [createLemma("altar"), createLemma("etéreo")]
-      }),
-      "A1",
-      {
-        questEssentialLemmas: new Set(["altar", "etéreo"])
-      }
-    );
-
-    expect(result.withinEnvelope).toBe(false);
-  });
-
   it("treats introduced chunk constituents as a prescription exemption", () => {
     const result = applyEnvelopeRule(
       createProfile({
@@ -289,21 +278,6 @@ describe("applyEnvelopeRule", () => {
     expect(result.withinEnvelope).toBe(true);
     expect(result.exemptionsApplied).toHaveLength(3);
     expect(result.exemptionsApplied.every((k) => k === "voice-interjection")).toBe(true);
-  });
-
-  it("does not let voice-interjection bypass the coverage floor", () => {
-    const ay = createLemma("ay");
-    const result = applyEnvelopeRule(
-      createProfile({
-        coverageRatio: 0.5,
-        outOfEnvelopeLemmas: [ay],
-        ceilingExceededLemmas: [ay]
-      }),
-      "A1",
-      { voiceInterjections: new Set(["ay"]) }
-    );
-
-    expect(result.withinEnvelope).toBe(false);
   });
 
   it("prefers prescription-introduce over voice-interjection when both apply", () => {

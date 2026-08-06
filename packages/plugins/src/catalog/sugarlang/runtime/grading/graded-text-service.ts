@@ -121,7 +121,7 @@ import type { SugarlangLLMClient } from "../llm/types";
 import type { LexicalAtlasProvider } from "../types";
 import type { Exponent } from "../contracts/competency-inventory";
 import type { CompetencyRef, TeachableRef } from "../contracts/teachable-ref";
-import { applyMixedTextEnvelopePredicate } from "../classifier/envelope-rule";
+import { applyEnvelopeRule } from "../classifier/envelope-rule";
 import { computeLanguageRatioVerdict } from "../classifier/language-ratio";
 import {
   describeLanguageMix,
@@ -595,9 +595,11 @@ export class GradedTextService {
     // No prescription here: must-convey facts are source-language narrative
     // strings, not target lemma ids. The structural allowance + ceiling checks
     // are the meaningful part.
-    const envelopePasses = applyMixedTextEnvelopePredicate(profile, request.band, {
+    // One rule for every path (latency epic): the floor no longer gates, so
+    // the unified rule carries exactly the old mixed-text semantics.
+    const envelopePasses = applyEnvelopeRule(profile, request.band, {
       taughtLemmaIds: null
-    }).passes;
+    }).withinEnvelope;
 
     // Gate 2: language ratio.
     const ratioVerdict = computeLanguageRatioVerdict(

@@ -186,7 +186,7 @@ Run by `generateVariant` on every LLM-generated variant before caching.
 
 | Gate | Implementation | What it checks |
 |------|---------------|----------------|
-| 1. Mixed-text envelope | `applyMixedTextEnvelopePredicate` | Non-exempt violations <= allowance; zero non-exempt ceiling exceedances. No coverage floor (the floor fails English-frame text by design). |
+| 1. Mixed-text envelope | `applyEnvelopeRule` | Non-exempt violations <= allowance; zero non-exempt ceiling exceedances. The coverage floor gates nowhere any more (latency epic, 2026-08-06), so this is the ONE envelope rule for every path. |
 | 2. Language ratio | `computeLanguageRatioVerdict` | Target-language token share meets the directed ratio for the posture. |
 | 3. Voice retention | `computeVoiceRetentionScore` | Score >= 1.0 (no NPC voice spec at bake time -> always 1.0; score becomes meaningful when a voice spec is available). |
 | 4. Fidelity | LLM judge call (`runFidelityCheck`) | All `mustConveyFacts` are present in the generated line. Skipped (passes) when `mustConveyFacts` is empty. On LLM failure: gate fails conservatively. |
@@ -211,15 +211,12 @@ half the introduce lemmaIds must appear as substrings in the rendered text. This
 is a weak floor (substring match, not morphological analysis); it catches
 completely wrong renderings without a model call.
 
-### `applyMixedTextEnvelopePredicate` vs `applyEnvelopeRule`
+### One envelope rule
 
-Mixed-text lines (substituted forms, baked variants) MUST use
-`applyMixedTextEnvelopePredicate`, NOT `applyEnvelopeRule`.
-
-`applyEnvelopeRule` has an unconditional `coverageRatio >= 0.95` floor.
-English-frame tokens fail target-language lemmatization into `unknownTokens`,
-collapsing coverage below the floor for any substituted line. The mixed-text
-predicate has two legs only: violation allowance and ceiling exceedances.
+`applyMixedTextEnvelopePredicate` was deleted when the coverage floor stopped
+gating (latency epic, 2026-08-06): with the floor demoted to a metric, it and
+`applyEnvelopeRule` were the same rule. Every path -- bake, live render, and
+the runtime verify instrument -- now calls `applyEnvelopeRule`.
 
 ## Degradation Order
 

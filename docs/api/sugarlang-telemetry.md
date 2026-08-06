@@ -87,8 +87,7 @@ there is no prescription to emit.
 | `classifier.verdict` | `sugar-lang-verify-middleware.ts` (every checked turn) |
 | `verify.ratio-verdict` | `sugar-lang-verify-middleware.ts`. Carries `learnerCefr`, `directedRatio`, `measuredRatio`, `posture`, `denominator` -- the raw numbers, so any ratio threshold can be recomputed after the fact rather than depending on the categorical `conformance`. |
 | `quest-essential.classifier-exempted-lemma` | `sugar-lang-verify-middleware.ts` |
-| `verify.repair-triggered` | `sugar-lang-verify-middleware.ts` (LLM repair accepted) |
-| `verify.deterministic-bypass` | `sugar-lang-verify-middleware.ts` (turn skips repair because LLM backend was deterministic or turn was moderation-deflected) |
+| `verify.drift-sample` | `sugar-lang-verify-middleware.ts` (per-turn ratio/envelope/voice sample, recorded before anything else; `deterministic: true` marks canned/fallback turns so quality distributions can exclude them) |
 | `observe.observations-applied` | `sugar-lang-observe-middleware.ts` |
 
 **Comprehension probes**
@@ -217,7 +216,6 @@ an event leaves the browser, `stripPii` drops these top-level fields
 (`SERVER_BOUND_PII_FIELDS`):
 
 - `inputText` (classifier.verdict)
-- `originalText`, `repairedText` (verify.repair-triggered)
 - `playerResponseText` (comprehension probe events)
 
 plus one known nested path: `observe.observations-applied` nests player-typed
