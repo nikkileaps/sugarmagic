@@ -350,6 +350,10 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         partialResponse: parseResult.error.partial,
         rawResponseText: response.text
       });
+      // Spike: teacherOut brushes the 900-token cap (867 observed). If the
+      // model is being cut off mid-JSON, every such directive is a local
+      // reconstruction of a truncated slate -- worth knowing how often.
+      noteTurnFact("teacherParse", "repaired");
       directive = repairDirective(parseResult.error.partial, context, {
         telemetry: this.telemetry
       });

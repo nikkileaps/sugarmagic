@@ -521,6 +521,17 @@ export function createSugarLangVerifyMiddleware(
         ratioVerdict.measuredRatio,
         constraint.learnerCefr
       );
+
+      // Spike (sugarmagic-latency-cex): repair fires on EVERY turn, and a story
+      // cannot be written against a symptom. These say which trigger fired and
+      // how far off the line actually landed -- the difference between "the
+      // generator undershoots", "the envelope is too tight", and "the
+      // measurement is wrong" is three different fixes.
+      noteTurnFact(
+        "envelopeRatio",
+        `${ratioVerdict.measuredRatio.toFixed(2)}->${ratioVerdict.directedRatio.toFixed(2)}:${ratioVerdict.conformance}`
+      );
+      noteTurnFact("tooDense", tooDenseToRead);
       if (
         verdict.withinEnvelope &&
         ratioVerdict.conformance !== "under-ratio" &&
