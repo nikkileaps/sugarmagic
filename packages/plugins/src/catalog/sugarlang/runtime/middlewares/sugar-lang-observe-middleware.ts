@@ -71,6 +71,7 @@ import {
 } from "./shared";
 
 import type { ChunkMatcher } from "../classifier/chunk-matcher";
+import { englishCollisionSurfaces } from "../classifier/english-collisions";
 
 // Trie rebuild is O(inventory * avgSurfaceForms). Cache per language so it happens once per session.
 const chunkMatcherCache = new Map<
@@ -86,14 +87,52 @@ export interface SugarLangObserveMiddlewareDeps {
 
 function collectLemmasFromText(
   text: string,
-  lang: string
+  lang: string,
+  chunkMatcher?: ChunkMatcher | null
 ): Array<{ surface: string; lemmaId: string | null }> {
-  return tokenize(text, lang)
-    .filter((token) => token.kind === "word")
-    .map((token) => ({
-      surface: token.surface,
-      lemmaId: lemmatize(token.surface, lang)
-    }));
+  const tokens = tokenize(text, lang);
+
+  // WHICH TOKENS ARE PROVABLY TARGET LANGUAGE.
+  //
+  // A multi-word match is the evidence: "me gusta" is Spanish in a way a bare
+  // "me" never is, because the neighbouring words disambiguate it.
+  const inChunk = new Set<number>();
+  if (chunkMatcher) {
+    for (const match of chunkMatcher.match(tokens, text)) {
+      for (const index of match.tokenIndexes) {
+        inChunk.add(index);
+      }
+    }
+  }
+
+  const collisions = englishCollisionSurfaces(lang);
+
+  return tokens
+    .map((token, index) => ({ token, index }))
+    .filter(({ token }) => token.kind === "word")
+    .map(({ token, index }) => {
+      // THE COLLISION GUARD, STRICTER HERE THAN IN THE CLASSIFIER (ipx).
+      //
+      // 23 of the 24 measured collision surfaces resolve to A1/A2 lemmas --
+      // he->haber, come->comer, ten->tener, dice->decir, sale->salir. Those are
+      // core verbs the Teacher WILL teach, so a card exists for them, and the
+      // credit path below admits any lemma with a card. Typing ordinary English
+      // therefore banked `produced-unprompted` on them: FSRS grade "Easy" and
+      // the largest strength delta in the system, i.e. the single strongest
+      // signal a learner can give. The words most worth learning were the ones
+      // most likely to be silently marked mastered.
+      //
+      // The classifier lets a slated word's forms count, because there a wrong
+      // answer only skews a ratio. Here a wrong answer teaches the scheduler
+      // that a word is known, so the bias is inverted: unless a multi-word
+      // Spanish span proves it, a collision surface resolves to nothing. A
+      // missed credit costs one extra review; a false credit costs the word.
+      const lower = token.surface.normalize("NFC").toLocaleLowerCase();
+      if (collisions.has(lower) && !inChunk.has(index)) {
+        return { surface: token.surface, lemmaId: null };
+      }
+      return { surface: token.surface, lemmaId: lemmatize(token.surface, lang) };
+    });
 }
 
 /**
@@ -415,7 +454,8 @@ export function createSugarLangObserveMiddleware(
         if (execution.input?.kind === "free_text") {
           const lemmaCandidates = collectLemmasFromText(
             execution.input.text,
-            learner.targetLanguage
+            learner.targetLanguage,
+            chunkMatcher
           );
           // Deduplicate: only one observation per lemma per turn.
           const observedLemmaIds = new Set<string>();
@@ -582,7 +622,11 @@ export function createSugarLangObserveMiddleware(
           });
         }
 
-        const turnLemmas = collectLemmasFromText(normalizedTurn.text, learner.targetLanguage);
+        const turnLemmas = collectLemmasFromText(
+          normalizedTurn.text,
+          learner.targetLanguage,
+          chunkMatcher
+        );
         // 087.2: world-day and NPC context for debt paydown signals.
         const blackboardForDebt = deps.services.getBlackboard();
         const debtDayIndex = blackboardForDebt ? getWorldDay(blackboardForDebt) : null;

@@ -601,3 +601,91 @@ describe("hover observations are guarded by the dictionary", () => {
     expect(kinds).toContain("hovered");
   });
 });
+
+describe("English words must not bank credit on Spanish cards (sugarmagic-latency-ipx)", () => {
+  // THE BUG THIS CLOSES. The credit path admits any lemma the learner already
+  // has a card for. Cards get created legitimately -- the Teacher teaches
+  // `haber` -- and from then on typing the English word "he" recorded
+  // `produced-unprompted` on it: FSRS grade "Easy" plus the largest strength
+  // delta in the system. 23 of the 24 measured collision surfaces resolve to
+  // A1/A2 lemmas, including he->haber, come->comer, ten->tener, dice->decir.
+  // So the core verbs were the ones most likely to be silently marked mastered.
+
+  function setup(playerText: string, cardLemmaIds: string[]) {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const lemmaCards = Object.fromEntries(
+      cardLemmaIds.map((lemmaId) => [
+        lemmaId,
+        {
+          lemmaId,
+          lang: "es",
+          cefrPriorBand: "A1",
+          stability: 1,
+          difficulty: 5,
+          retrievability: 0.8,
+          reviewCount: 3,
+          lastReviewedAt: 1,
+          productiveStrength: 0.2
+        }
+      ])
+    );
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi
+            .fn()
+            .mockResolvedValue(createTestLearnerProfile({ lemmaCards } as never))
+        },
+        learnerStateReducer: { apply },
+        atlas: {
+          getLemma: (lemmaId: string) => ({ lemmaId, lang: "es", cefrPriorBand: "A1" })
+        }
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = createBaseConstraint();
+    execution.input = { kind: "free_text", text: playerText } as never;
+    return { middleware, execution, apply };
+  }
+
+  const producedFor = (apply: ReturnType<typeof vi.fn>, lemmaId: string) =>
+    (
+      apply.mock.calls as Array<
+        [{ observationEvent?: { lemma?: { lemmaId: string }; observation: { kind: string } } }]
+      >
+    ).filter(
+      ([e]) =>
+        e.observationEvent?.lemma?.lemmaId === lemmaId &&
+        e.observationEvent.observation.kind.startsWith("produced")
+    );
+
+  it("THE ONE THAT MATTERS: typing English 'he' banks nothing on haber", async () => {
+    const { middleware, execution, apply } = setup("he said the nets were heavy", ["haber"]);
+    await middleware.finalize?.(execution, createTestTurn("Aye."));
+    expect(producedFor(apply, "haber")).toHaveLength(0);
+  });
+
+  it("a whole English sentence banks nothing on any core verb", async () => {
+    // "he can come" would have credited haber, comer -- three of the most
+    // important A1 verbs -- at maximum strength, from ordinary English.
+    const { middleware, execution, apply } = setup("he can come and use ten of them", [
+      "haber",
+      "comer",
+      "usar",
+      "tener"
+    ]);
+    await middleware.finalize?.(execution, createTestTurn("Aye."));
+
+    for (const lemmaId of ["haber", "comer", "usar", "tener"]) {
+      expect(producedFor(apply, lemmaId)).toHaveLength(0);
+    }
+  });
+
+  it("REAL Spanish still earns its credit -- the guard is not a blanket mute", async () => {
+    // The failure mode to avoid is over-correcting into crediting nothing.
+    const { middleware, execution, apply } = setup("quiero queso por favor", ["queso"]);
+    await middleware.finalize?.(execution, createTestTurn("Aqui tienes."));
+    expect(producedFor(apply, "queso").length).toBeGreaterThan(0);
+  });
+});
