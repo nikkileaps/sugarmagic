@@ -684,7 +684,8 @@ async function listVectorStoreFiles(vectorStoreId: string): Promise<Record<strin
  * Is this vector-store file something the lore ingest put there?
  *
  * Every real lore chunk is attached with `page_id` and friends
- * (`uploadChunkToVectorStore`). The health probe attaches with `{ file_id }`
+ * (`chunkAttributes`, applied by `attachChunkBatch`). The health probe
+ * attaches with `{ file_id }`
  * and nothing else. Those are the only two things that attach to this store, so
  * a file carrying no `page_id` did not come from lore.
  *
@@ -757,16 +758,45 @@ async function deleteVectorStoreFile(vectorStoreId: string, vectorStoreFileId: s
   );
 }
 
-async function uploadChunkToVectorStore(
-  vectorStoreId: string,
-  chunk: LoreChunk,
-  onProgress: ((progress: { phase: string; currentChunkId: string; message: string }) => void) | null = null
-): Promise<Record<string, unknown>> {
-  onProgress?.({
-    phase: "uploading",
-    currentChunkId: chunk.chunkId,
-    message: "Uploading chunk " + chunk.chunkId
-  });
+/**
+ * The most files one attach call may carry. The API maximum, verified against
+ * openai-node's `FileBatchCreateParams` ("maximum of 2000 files").
+ */
+const MAX_FILES_PER_BATCH = 2000;
+
+/**
+ * How many chunk files upload at once.
+ *
+ * The uploads are independent, so this is only a politeness/rate-limit dial.
+ * openai-node's own `uploadAndPoll` defaults to 5; 8 is a small step up that
+ * still leaves headroom on a shared key.
+ */
+const UPLOAD_CONCURRENCY = 8;
+
+/** How long one batch may take to index before the ingest calls it stuck. */
+const BATCH_INDEX_DEADLINE_MS = 30 * 60 * 1000;
+const BATCH_POLL_INTERVAL_MS = 2000;
+
+/** The attributes a chunk is attached with. `page_id` is what marks it as lore. */
+export function chunkAttributes(chunk: LoreChunk): Record<string, string> {
+  return {
+    page_id: chunk.pageId,
+    chunk_id: chunk.chunkId,
+    section_slug: chunk.sectionSlug,
+    section_heading: chunk.sectionHeading,
+    title: chunk.title,
+    relative_path: chunk.relativePath
+  };
+}
+
+/**
+ * Uploads one chunk's text and returns its file id. Does NOT attach it.
+ *
+ * Attaching is what the batch does, and separating the two is the whole point:
+ * uploads are independent and can run concurrently, while attaching is one call
+ * for up to 2000 files.
+ */
+async function uploadChunkFile(chunk: LoreChunk): Promise<string> {
   const fileUpload = new FormData();
   fileUpload.append("purpose", "user_data");
   fileUpload.append(
@@ -782,77 +812,180 @@ async function uploadChunkToVectorStore(
     },
     body: fileUpload
   });
-  const uploadPayload = await parseApiJsonResponse(
+  const payload = await parseApiJsonResponse(
     uploadResponse,
     "OpenAI file upload"
   ) as Record<string, unknown>;
+  const fileId = payload["id"];
+  if (typeof fileId !== "string") {
+    throw new Error("OpenAI file upload returned no id for chunk " + chunk.chunkId);
+  }
+  return fileId;
+}
 
-  const attachResponse = await fetch(
-    "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/files",
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
-      },
-      body: JSON.stringify({
-        file_id: uploadPayload["id"],
-        attributes: {
-          page_id: chunk.pageId,
-          chunk_id: chunk.chunkId,
-          section_slug: chunk.sectionSlug,
-          section_heading: chunk.sectionHeading,
-          title: chunk.title,
-          relative_path: chunk.relativePath
-        }
-      })
+/**
+ * Runs `worker` over `items`, at most `limit` at a time, preserving order.
+ *
+ * Deliberately not Promise.all over everything: 7,500 simultaneous uploads is a
+ * different way to fail than 7,500 sequential ones, not a better one.
+ */
+export async function mapWithConcurrency<TIn, TOut>(
+  items: TIn[],
+  limit: number,
+  worker: (item: TIn, index: number) => Promise<TOut>
+): Promise<TOut[]> {
+  const results = new Array<TOut>(items.length);
+  let next = 0;
+  // ONE FAILURE STOPS THE REST. `Promise.all` rejects on the first throw, but
+  // the other runners are still looping -- they keep working, and keep writing
+  // progress, so they overwrite the "failed" state the caller just set with
+  // cheerful "uploaded N / M" messages. The run reads as still going after it
+  // has already lost.
+  let aborted = false;
+
+  async function runner(): Promise<void> {
+    while (!aborted) {
+      const index = next;
+      next += 1;
+      if (index >= items.length) return;
+      try {
+        results[index] = await worker(items[index]!, index);
+      } catch (error) {
+        aborted = true;
+        throw error;
+      }
     }
-  );
-  const vectorStoreFile = await parseApiJsonResponse(
-    attachResponse,
-    "OpenAI vector store file attach"
-  ) as Record<string, unknown>;
+  }
 
-  let attempts = 0;
-  while (attempts < 30) {
-    onProgress?.({
-      phase: "waiting-for-indexing",
-      currentChunkId: chunk.chunkId,
-      message: "Waiting for indexing for " + chunk.chunkId
-    });
-    const statusResponse = await fetch(
-      "https://api.openai.com/v1/vector_stores/" +
-        vectorStoreId +
-        "/files/" +
-        vectorStoreFile["id"],
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, runner)
+  );
+  return results;
+}
+
+/**
+ * Attaches up to `MAX_FILES_PER_BATCH` already-uploaded files in one call and
+ * waits for the batch to finish indexing.
+ *
+ * WHY A BATCH RATHER THAN A FILE AT A TIME. The previous shape uploaded,
+ * attached and then polled EACH chunk to completion before starting the next,
+ * so a 98-chunk ingest cost 98 index waits and took about a quarter of an hour.
+ * The wait is now once per batch instead of once per file.
+ *
+ * The per-chunk poll also had a fixed 30-attempt / 1s deadline, which is what
+ * killed a real ingest at 19/98: one chunk indexed slowly and took the whole
+ * run with it. A batch has its own status, so no single file gets a private
+ * deadline, and the deadline here is sized for a batch rather than for one
+ * small file.
+ *
+ * `files` rather than `file_ids` because the entries carry per-file
+ * `attributes` -- `page_id` is what marks a file as lore, both for retrieval
+ * and for `isLoreVectorStoreFile`. The two parameters are mutually exclusive,
+ * so this is the only form that keeps the metadata.
+ */
+export async function attachChunkBatch(
+  vectorStoreId: string,
+  entries: Array<{ fileId: string; chunk: LoreChunk }>,
+  onProgress: ((indexed: number, total: number) => void) | null = null
+): Promise<number> {
+  // Only the CREATE is retried. Retrying the whole function would re-attach
+  // files that are already attached and leave a second batch running over them.
+  const batchId = await withOpenAIRetry("attach-batch-create", async () => {
+    const createResponse = await fetch(
+      "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/file_batches",
       {
-        method: "GET",
+        method: "POST",
         headers: {
+          "content-type": "application/json",
           authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
-        }
+        },
+        body: JSON.stringify({
+          files: entries.map((entry) => ({
+            file_id: entry.fileId,
+            attributes: chunkAttributes(entry.chunk)
+          }))
+        })
       }
     );
-    const statusPayload = await parseApiJsonResponse(
-      statusResponse,
-      "OpenAI vector store file status"
+    const batch = await parseApiJsonResponse(
+      createResponse,
+      "OpenAI vector store file batch create"
     ) as Record<string, unknown>;
-    if (statusPayload["status"] === "completed") {
-      return vectorStoreFile;
+    const id = batch["id"];
+    if (typeof id !== "string") {
+      throw new Error("OpenAI file batch create returned no id.");
     }
-    if (statusPayload["status"] === "failed" || statusPayload["status"] === "cancelled") {
-      throw new Error(
-        "Vector store file processing failed for " +
-          chunk.chunkId +
-          " with status " +
-          statusPayload["status"]
+    return id;
+  });
+
+  const deadline = Date.now() + BATCH_INDEX_DEADLINE_MS;
+  while (Date.now() < deadline) {
+    let payload: Record<string, unknown>;
+    try {
+      const statusResponse = await fetch(
+        "https://api.openai.com/v1/vector_stores/" +
+          vectorStoreId +
+          "/file_batches/" +
+          batchId,
+        {
+          method: "GET",
+          headers: {
+            authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
+          }
+        }
       );
+      payload = await parseApiJsonResponse(
+        statusResponse,
+        "OpenAI vector store file batch status"
+      ) as Record<string, unknown>;
+    } catch (error) {
+      // A failed STATUS read says nothing about the batch, which is still
+      // indexing server-side. Poll again rather than abandon it -- the deadline
+      // below is what bounds this, not the first transient 503.
+      logInfo("ingest:batch-status-retry", {
+        batchId,
+        reason: error instanceof Error ? error.message : String(error)
+      });
+      await new Promise((resolve) => setTimeout(resolve, BATCH_POLL_INTERVAL_MS));
+      continue;
     }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    attempts += 1;
+
+    const counts = (payload["file_counts"] ?? {}) as Record<string, unknown>;
+    const completed = typeof counts["completed"] === "number" ? counts["completed"] : 0;
+    const failed = typeof counts["failed"] === "number" ? counts["failed"] : 0;
+    onProgress?.(completed, entries.length);
+
+    const status = payload["status"];
+    if (status === "completed" || status === "failed" || status === "cancelled") {
+      // A BATCH IS "completed" WHEN EVERY FILE IS PROCESSED, NOT WHEN EVERY
+      // FILE SUCCEEDED. openai-node's own poll helper says so: "this will
+      // return even if one of the files failed to process, you need to check
+      // batch.file_counts.failed_count to handle this case."
+      //
+      // So the count is the verdict, not the status. Treating `completed` as
+      // success is how an ingest reports 98/98 while silently missing chunks
+      // that no NPC will ever retrieve -- and the failed files keep their
+      // page_id, so the sweep will not surface them either.
+      //
+      // Loud rather than degraded: this is an authoring pass, and a half-built
+      // store that claims to be whole is the failure worth refusing.
+      if (status !== "completed" || failed > 0) {
+        throw new Error(
+          "Vector store file batch " +
+            String(status) +
+            ": " + completed + " indexed, " + failed + " failed of " +
+            entries.length + " files."
+        );
+      }
+      return completed;
+    }
+    await new Promise((resolve) => setTimeout(resolve, BATCH_POLL_INTERVAL_MS));
   }
 
   throw new Error(
-    "Timed out waiting for vector store processing for chunk " + chunk.chunkId
+    "Timed out waiting for vector store batch indexing after " +
+      Math.round(BATCH_INDEX_DEADLINE_MS / 60000) +
+      " minutes."
   );
 }
 
@@ -1613,26 +1746,64 @@ async function runIngestWork(
       }
     }
 
+    // TWO PHASES, NOT ONE PER CHUNK. Upload every chunk file concurrently, then
+    // attach them in batches and wait once per batch. The old shape waited for
+    // each chunk to finish indexing before starting the next, which is what
+    // made 98 chunks take a quarter of an hour and what let one slow chunk end
+    // the run at 19/98.
+    const total = lore.chunks.length;
     let uploadedCount = 0;
-    for (const chunk of lore.chunks) {
-      await withOpenAIRetry("upload-chunk-" + chunk.chunkId, () =>
-        uploadChunkToVectorStore(vectorStoreId, chunk, (progress) => {
-          updateLoreIngestState({
-            phase: progress.phase,
-            currentChunkId: progress.currentChunkId ?? null,
-            message: progress.message,
-            uploadedCount
-          });
-        })
-      );
-      uploadedCount += 1;
+
+    const uploaded = await mapWithConcurrency(
+      lore.chunks,
+      UPLOAD_CONCURRENCY,
+      async (chunk) => {
+        const fileId = await withOpenAIRetry("upload-chunk-" + chunk.chunkId, () =>
+          uploadChunkFile(chunk)
+        );
+        uploadedCount += 1;
+        updateLoreIngestState({
+          phase: "uploading",
+          currentChunkId: chunk.chunkId,
+          uploadedCount,
+          message: "Uploaded " + uploadedCount + " / " + total + " chunks."
+        });
+        return { fileId, chunk };
+      }
+    );
+
+    // `uploadedCount` keeps meaning "chunks safely in the store", so it counts
+    // INDEXED files from here rather than uploaded ones. A file that uploaded
+    // but failed to index is not ingested, and a progress number that says
+    // otherwise is the kind that gets believed.
+    let indexedCount = 0;
+    for (let start = 0; start < uploaded.length; start += MAX_FILES_PER_BATCH) {
+      const slice = uploaded.slice(start, start + MAX_FILES_PER_BATCH);
+      const batchBase = indexedCount;
       updateLoreIngestState({
-        phase: "uploading",
-        currentChunkId: chunk.chunkId,
-        uploadedCount,
-        message: "Uploaded " + uploadedCount + " / " + lore.chunks.length + " chunks."
+        phase: "waiting-for-indexing",
+        currentChunkId: slice[0]?.chunk.chunkId ?? null,
+        uploadedCount: indexedCount,
+        message:
+          "Indexing " + slice.length + " chunks (" + indexedCount + " / " + total + " done)."
       });
+      // Not wrapped in withOpenAIRetry: attachChunkBatch retries its own CREATE
+      // and tolerates transient status reads, and retrying from out here would
+      // re-attach files that are already attached.
+      const indexed = await attachChunkBatch(vectorStoreId, slice, (indexedInBatch) => {
+        updateLoreIngestState({
+          phase: "waiting-for-indexing",
+          uploadedCount: batchBase + indexedInBatch,
+          message:
+            "Indexed " + (batchBase + indexedInBatch) + " / " + total + " chunks."
+        });
+      });
+      // What the batch REPORTED, not how many were handed to it. The two differ
+      // exactly when something failed to index, which is the case this number
+      // exists to make visible.
+      indexedCount += indexed;
     }
+    uploadedCount = indexedCount;
 
     updateLoreIngestState({
       active: false,
