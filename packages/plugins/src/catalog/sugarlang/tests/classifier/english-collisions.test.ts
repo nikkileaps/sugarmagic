@@ -104,7 +104,10 @@ describe("the english-collision guard", () => {
 
   it("membership is pinned; growth is a reviewed diff", () => {
     expect([...collisions].sort()).toEqual([
-      "a", "are", "aroma", "be", "case", "come", "dice", "do", "he", "mate",
+      "a", "are", "aroma", "be", "case", "come", "dice", "do",
+      // 2026-08-06: English "fine" resolved to `finar` ("to pass away", A2).
+      "fine",
+      "he", "mate",
       "me", "no", "okay", "once", "red", "sale",
       // 2026-08-06, post-psm re-measure: English "snack" resolved to the C1
       // Spanish loanword and flagged as a violation in an English frame.
