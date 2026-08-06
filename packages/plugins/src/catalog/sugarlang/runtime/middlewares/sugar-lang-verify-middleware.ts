@@ -549,6 +549,12 @@ export function createSugarLangVerifyMiddleware(
       // thing that fired -- BEFORE the behaviour changes -- so the demotion is
       // made against data rather than a sample of one.
       noteTurnFact("coverage", verdict.profile.coverageRatio.toFixed(2));
+      // en3 baseline leg: voice retention on the ORIGINAL text, same input the
+      // drift-sample event uses.
+      noteTurnFact(
+        "voiceRetention",
+        computeVoiceRetentionScore(normalizedTurn.text, voiceSpec).toFixed(2)
+      );
       noteTurnFact(
         "floorFailed",
         verdict.profile.coverageRatio < ENVELOPE_KRASHEN_FLOOR

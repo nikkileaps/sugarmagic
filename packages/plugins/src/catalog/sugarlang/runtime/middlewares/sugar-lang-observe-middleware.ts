@@ -16,7 +16,7 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
-import { endTurnTimeline } from "@sugarmagic/runtime-core";
+import { endTurnTimeline, noteTurnFact } from "@sugarmagic/runtime-core";
 import { getWorldDay, writeDialogueTeachLine } from "@sugarmagic/runtime-core";
 import {
   createNoOpTelemetrySink,
@@ -43,7 +43,7 @@ import { countDiverseEncounters } from "../learner";
 import { competencyRefs, vocabularyRefs } from "../contracts/teachable-ref";
 import { buildHighlightTerms, focusTermsOf } from "../grading/highlight-terms";
 import { findAmbientSpans } from "../grading/ambient-spans";
-import { traceRealization } from "../teacher/teacher-trace";
+import { realizationOutcome, traceRealization } from "../teacher/teacher-trace";
 import { MorphologyLoader } from "../classifier/morphology-loader";
 import type { LemmaRef, SugarlangConstraint } from "../types";
 import type { SugarlangRuntimeServices } from "../runtime-services";
@@ -1026,6 +1026,16 @@ export function createSugarLangObserveMiddleware(
           const forms = formsByAsked.get(asked) ?? [];
           if (term !== asked) forms.push(term);
           formsByAsked.set(asked, forms);
+        }
+        // en3 baseline leg: did the slate reach the text? Recorded as a fact
+        // regardless of whether tracing is on -- the trace is the explainer,
+        // this is the measurement.
+        {
+          const outcome = realizationOutcome(
+            normalizedTurn.text,
+            [...formsByAsked.entries()].map(([asked, forms]) => ({ asked, forms }))
+          );
+          noteTurnFact("slateLanded", `${outcome.landed}/${outcome.asked}`);
         }
         traceRealization({
           npcDisplayName: execution.selection.npcDisplayName ?? null,

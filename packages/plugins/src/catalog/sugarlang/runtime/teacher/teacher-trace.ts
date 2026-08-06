@@ -239,6 +239,26 @@ export function traceTeacherCall(args: {
  * -- an empty intersection is the single most diagnostic thing here and it is
  * invisible if you only print both sides.
  */
+/**
+ * Which slated things actually reached the text.
+ *
+ * Pure and UNGATED -- extracted from traceRealization (en3) because the
+ * baseline reads these counts, and the trace early-returns when tracing is
+ * disabled. A quality measure that silently stops recording when a debug flag
+ * flips is the empty-dataset trap this epic keeps writing down.
+ */
+export function realizationOutcome<T extends { asked: string; forms: string[] }>(
+  text: string,
+  slate: T[]
+): { asked: number; landed: number; landedEntries: T[] } {
+  const lowered = text.toLocaleLowerCase();
+  const isPresent = (form: string) => lowered.includes(form.toLocaleLowerCase());
+  const landedEntries = slate.filter((entry) =>
+    [entry.asked, ...entry.forms].some(isPresent)
+  );
+  return { asked: slate.length, landed: landedEntries.length, landedEntries };
+}
+
 export function traceRealization(args: {
   npcDisplayName: string | null;
   text: string;
@@ -263,10 +283,9 @@ export function traceRealization(args: {
   const lowered = text.toLocaleLowerCase();
   const isPresent = (form: string) => lowered.includes(form.toLocaleLowerCase());
   // A slated word LANDED if any of its forms is on the page -- `estación`
-  // counts whether the line said `estación` or `estaciones`.
-  const landedEntries = slate.filter((entry) =>
-    [entry.asked, ...entry.forms].some(isPresent)
-  );
+  // counts whether the line said `estación` or `estaciones`. ONE implementation
+  // of that judgment: realizationOutcome, which the en3 baseline also reads.
+  const { landedEntries } = realizationOutcome(text, slate);
   const landed = landedEntries.map((entry) => {
     const surface = [entry.asked, ...entry.forms].find(isPresent);
     return surface && surface !== entry.asked
