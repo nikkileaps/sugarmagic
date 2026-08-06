@@ -32,6 +32,7 @@ import { vocabularyRefs } from "../contracts/teachable-ref";
 import { formatAlwaysTargetWords } from "../teacher/always-target-words";
 import { INFLECT_SLATED_WORDS_PROMPT } from "../teacher/slate-prompt";
 import { describeLanguageMix } from "../teacher/band-envelope";
+import { ENVELOPE_KRASHEN_FLOOR } from "../classifier/envelope-rule";
 import { languageDisplayName } from "../language-names";
 import { exceedsReadabilityCeiling } from "../teacher/band-envelope";
 import {
@@ -543,6 +544,15 @@ export function createSugarLangVerifyMiddleware(
           verdict.violations.map((violation) => violation.lemmaRef.lemmaId).join(",")
         );
       }
+      // Measurement only (nikki, 2026-08-06): the comprehensibility floor is
+      // being demoted from gate to metric in psm. These say how often it is the
+      // thing that fired -- BEFORE the behaviour changes -- so the demotion is
+      // made against data rather than a sample of one.
+      noteTurnFact("coverage", verdict.profile.coverageRatio.toFixed(2));
+      noteTurnFact(
+        "floorFailed",
+        verdict.profile.coverageRatio < ENVELOPE_KRASHEN_FLOOR
+      );
       if (
         verdict.withinEnvelope &&
         ratioVerdict.conformance !== "under-ratio" &&
