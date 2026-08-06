@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  chunkAttributes,
   chunkContentHash,
   indexedChunksByAddress,
   planIncrementalIngest
@@ -28,9 +29,10 @@ function chunk(chunkId: string, embeddingText: string) {
 }
 
 /** A vector-store file as the ingest attaches one. */
-function indexedFile(id: string, chunkId: string, hash: string) {
+function indexedFile(id: string, chunkId: string, hash: string, status = "completed") {
   return {
     id,
+    status,
     attributes: {
       page_id: chunkId.split("#")[0]!,
       chunk_id: chunkId,
@@ -72,8 +74,8 @@ describe("planning an incremental ingest", () => {
       indexedChunksByAddress([indexedFile("file-1", "a#0", hash)])
     );
 
-    expect(plan.replace).toHaveLength(1);
-    expect(plan.replace[0]!.staleFileId).toBe("file-1");
+    expect(plan.upload).toHaveLength(1);
+    expect(plan.remove).toEqual(["file-1"]);
     expect(plan.unchanged).toHaveLength(0);
   });
 
@@ -85,7 +87,6 @@ describe("planning an incremental ingest", () => {
 
     expect(plan.unchanged).toHaveLength(1);
     expect(plan.upload).toHaveLength(0);
-    expect(plan.replace).toHaveLength(0);
     expect(plan.remove).toHaveLength(0);
   });
 
@@ -99,7 +100,6 @@ describe("planning an incremental ingest", () => {
     );
 
     expect(plan.upload).toHaveLength(0);
-    expect(plan.replace).toHaveLength(0);
     expect(plan.remove).toHaveLength(0);
     expect(plan.unchanged).toHaveLength(3);
   });
@@ -107,7 +107,6 @@ describe("planning an incremental ingest", () => {
   it("a new chunk uploads with no stale file to remove", () => {
     const plan = planIncrementalIngest([chunk("new#0", "fresh")], new Map());
     expect(plan.upload).toHaveLength(1);
-    expect(plan.replace).toHaveLength(0);
     expect(plan.remove).toHaveLength(0);
   });
 
@@ -147,7 +146,122 @@ describe("planning an incremental ingest", () => {
       }])
     );
 
-    expect(plan.replace).toHaveLength(1);
-    expect(plan.replace[0]!.staleFileId).toBe("file-old");
+    expect(plan.upload).toHaveLength(1);
+    expect(plan.remove).toEqual(["file-old"]);
+  });
+});
+
+describe("what the manifest is allowed to trust", () => {
+  const text = "A wordlark is made of steam.";
+  const c = chunk("a#0", text);
+  const hash = chunkContentHash(c);
+
+  it("THE ONE THAT MATTERS: a file that FAILED to index is not indexed", () => {
+    // Attributes are set at ATTACH time, before indexing succeeds or fails, so
+    // a failed chunk still carries a correct chunk_id and a matching hash.
+    // Trusting them means the section is unretrievable and every future run
+    // says "nothing to do" -- permanently stale while the tool reports success.
+    // Overwrite could never do this, so getting it wrong is a REGRESSION on the
+    // behaviour incremental replaces.
+    const plan = planIncrementalIngest(
+      [c],
+      indexedChunksByAddress([indexedFile("file-bad", "a#0", hash, "failed")])
+    );
+
+    expect(plan.unchanged).toHaveLength(0);
+    expect(plan.upload).toHaveLength(1);
+    expect(plan.remove).toEqual(["file-bad"]);
+  });
+
+  it("an in-progress file is not indexed either", () => {
+    const plan = planIncrementalIngest(
+      [c],
+      indexedChunksByAddress([indexedFile("file-wip", "a#0", hash, "in_progress")])
+    );
+    expect(plan.upload).toHaveLength(1);
+  });
+
+  it("THE OTHER ONE: two files at one address converge to one", () => {
+    // The stale delete is best-effort and runs after indexing, so two copies at
+    // one address is an ordinary outcome, not an exotic one. A manifest that
+    // keeps only the last file seen makes the other invisible to BOTH
+    // replacement and removal, and it stays retrievable forever.
+    const plan = planIncrementalIngest(
+      [c],
+      indexedChunksByAddress([
+        indexedFile("file-keep", "a#0", hash),
+        indexedFile("file-stale", "a#0", hash)
+      ])
+    );
+
+    expect(plan.unchanged).toHaveLength(1);
+    expect(plan.remove).toEqual(["file-stale"]);
+  });
+
+  it("converges whichever order the duplicates are listed in", () => {
+    const both = [
+      indexedFile("file-a", "a#0", hash),
+      indexedFile("file-b", "a#0", hash)
+    ];
+    const forward = planIncrementalIngest([c], indexedChunksByAddress(both));
+    const backward = planIncrementalIngest([c], indexedChunksByAddress([...both].reverse()));
+
+    expect(forward.remove).toHaveLength(1);
+    expect(backward.remove).toHaveLength(1);
+    expect(forward.unchanged).toHaveLength(1);
+    expect(backward.unchanged).toHaveLength(1);
+  });
+
+  it("an edited chunk removes every old copy, not just one", () => {
+    const plan = planIncrementalIngest(
+      [chunk("a#0", "EDITED")],
+      indexedChunksByAddress([
+        indexedFile("file-1", "a#0", hash),
+        indexedFile("file-2", "a#0", hash)
+      ])
+    );
+
+    expect(plan.upload).toHaveLength(1);
+    expect(plan.remove.sort()).toEqual(["file-1", "file-2"]);
+  });
+
+  it("reports two source sections that collide on one address", () => {
+    // `chunkId` is pageId + slugified heading, and slugify does not
+    // de-duplicate -- two `## Notes` on one page produce one address. Silently
+    // keeping one would drop a section the author wrote, and each run would
+    // fight the last.
+    const plan = planIncrementalIngest(
+      [chunk("a#notes", "first"), chunk("a#notes", "second")],
+      new Map()
+    );
+
+    expect(plan.duplicateAddresses).toEqual(["a#notes"]);
+    expect(plan.upload).toHaveLength(1);
+  });
+});
+
+describe("the round trip between attaching and reading back", () => {
+  it("THE ONE THAT MATTERS: a chunk attached now reads as unchanged later", () => {
+    // The two halves are written in different places and nothing else ties them
+    // together: drop `content_hash` from chunkAttributes and every run
+    // re-uploads everything, silently, with all the unit tests still green.
+    const c = chunk("a#0", "A wordlark is made of steam.");
+    const attached = { id: "file-1", status: "completed", attributes: chunkAttributes(c) };
+
+    const plan = planIncrementalIngest([c], indexedChunksByAddress([attached]));
+
+    expect(plan.unchanged).toHaveLength(1);
+    expect(plan.upload).toHaveLength(0);
+    expect(plan.remove).toHaveLength(0);
+  });
+
+  it("and re-uploads it once its text changes", () => {
+    const before = chunk("a#0", "steam");
+    const attached = { id: "file-1", status: "completed", attributes: chunkAttributes(before) };
+
+    const plan = planIncrementalIngest([chunk("a#0", "mist")], indexedChunksByAddress([attached]));
+
+    expect(plan.upload).toHaveLength(1);
+    expect(plan.remove).toEqual(["file-1"]);
   });
 });

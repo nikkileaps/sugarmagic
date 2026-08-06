@@ -299,7 +299,7 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
       }
 
       const latestStatus =
-        kind === "ingest"
+        kind === "ingest" || kind === "update"
           ? await fetchLoreStatus().catch(() => null)
           : null;
 
@@ -521,7 +521,9 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
         </Box>
       ) : null}
 
-      {actionState.running && actionState.kind === "ingest" && actionState.status?.ingest ? (
+      {actionState.running &&
+      (actionState.kind === "ingest" || actionState.kind === "update") &&
+      actionState.status?.ingest ? (
         <Box
           p="md"
           style={{
