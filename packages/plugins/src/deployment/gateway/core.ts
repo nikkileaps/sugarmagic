@@ -1209,8 +1209,9 @@ export async function handleSugarAgentGenerate(
   // `systemBlocks` is present, the gateway maps it to Anthropic `system`
   // content blocks and marks `cache: true` blocks with cache_control:ephemeral
   // (prompt caching is GA; no beta header). When absent it falls back to the
-  // legacy `systemPrompt` string (sugarlang's teacher/verify/scripted/chunk
-  // calls stay on that path, uncached).
+  // legacy `systemPrompt` string. The sugarlang TEACHER moved to cached
+  // systemBlocks in 222.9 (confirmed in production: cacheRead=2778 on warm
+  // calls); verify/scripted/chunk still send the legacy string, uncached.
   const rawSystemBlocks = Array.isArray(body["systemBlocks"])
     ? (body["systemBlocks"] as unknown[])
     : null;
