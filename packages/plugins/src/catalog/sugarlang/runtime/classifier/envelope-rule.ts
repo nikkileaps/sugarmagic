@@ -122,6 +122,12 @@ export function applyEnvelopeRule(
   const exemptionsApplied: EnvelopeExemptionKind[] = [];
   const violations: LemmaRef[] = [];
 
+  // DEFERRED (sugarmagic-latency-e6n): a fifth exemption for the conversing
+  // NPC's own domain words (`manchego` from the cheese merchant), derived from
+  // his concepts' per-NPC provenance at compile time. Build it only if, after
+  // the classifier stops grading English as Spanish (sugarmagic-latency-psm),
+  // envelopeViolations still names genuine domain words often enough to trip
+  // repairs -- alone they usually fit inside the allowance below.
   for (const lemma of profile.outOfEnvelopeLemmas) {
     const exemption = resolveExemption(lemma, profile, options);
     if (exemption) {
