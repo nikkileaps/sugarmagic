@@ -532,6 +532,17 @@ export function createSugarLangVerifyMiddleware(
         `${ratioVerdict.measuredRatio.toFixed(2)}->${ratioVerdict.directedRatio.toFixed(2)}:${ratioVerdict.conformance}`
       );
       noteTurnFact("tooDense", tooDenseToRead);
+      // The trigger that turned out to be the real one: word-level band
+      // violations. NAME the words -- "withinEnvelope=false" says a repair is
+      // coming, but which lemmas tripped it is the difference between "the
+      // generator reaches above band", "the atlas has gaps", and "an exemption
+      // channel is not covering something it should".
+      if (verdict.violations.length > 0) {
+        noteTurnFact(
+          "envelopeViolations",
+          verdict.violations.map((violation) => violation.lemmaRef.lemmaId).join(",")
+        );
+      }
       if (
         verdict.withinEnvelope &&
         ratioVerdict.conformance !== "under-ratio" &&
