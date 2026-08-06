@@ -61,7 +61,7 @@ interface SugarAgentLorePagesResponse {
 
 interface SugarAgentLoreIngestResponse {
   ok: boolean;
-  mode: "overwrite";
+  mode: "overwrite" | "incremental";
   pageCount: number;
   chunkCount: number;
   uploadedCount: number;
@@ -89,7 +89,7 @@ interface SugarAgentLorePingResponse {
   };
 }
 
-type SugarAgentLoreActionKind = "status" | "pages" | "ingest" | "ping";
+type SugarAgentLoreActionKind = "status" | "update" | "ingest" | "ping";
 
 type SugarAgentCenterPanelProps = PluginWorkspaceViewProps;
 
@@ -167,22 +167,22 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
       kind,
       running: true,
       error: null,
-      ...(kind === "ingest" ? { ingest: null } : {}),
+      ...(kind === "ingest" || kind === "update" ? { ingest: null } : {}),
       ...(kind === "ping" ? { ping: null } : {})
     }));
 
+    // Update and Ingest are the same endpoint; the mode is the whole difference.
+    const isWrite = kind === "update" || kind === "ingest";
     const url =
       kind === "status"
         ? `${proxyBaseUrl}/api/sugaragent/lore/status`
-        : kind === "pages"
-          ? `${proxyBaseUrl}/api/sugaragent/lore/pages`
-          : kind === "ping"
-            ? `${proxyBaseUrl}/api/sugaragent/lore/ping`
-            : `${proxyBaseUrl}/api/sugaragent/lore/ingest`;
+        : kind === "ping"
+          ? `${proxyBaseUrl}/api/sugaragent/lore/ping`
+          : `${proxyBaseUrl}/api/sugaragent/lore/ingest`;
 
     let pollTimer: number | null = null;
     try {
-      if (kind === "ingest") {
+      if (isWrite) {
         try {
           const status = await fetchLoreStatus();
           if (status) {
@@ -212,10 +212,27 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
       }
 
       const response = await fetch(url, {
-        method: kind === "ingest" ? "POST" : "GET",
+        method: isWrite ? "POST" : "GET",
         headers: { "content-type": "application/json" },
-        body: kind === "ingest" ? JSON.stringify({ mode: "overwrite" }) : undefined
+        body: isWrite
+          ? JSON.stringify({ mode: kind === "ingest" ? "overwrite" : "incremental" })
+          : undefined
       });
+      // The discovered-pages list used to have its own button. It is a read of
+      // the SOURCE, not of the store, so it belongs to "what does this look
+      // like right now" rather than being an action of its own -- and a button
+      // called "Refresh Pages" beside two that write to a vector store read as
+      // though it refreshed the index, which it never did.
+      let pagesPayload: unknown = null;
+      if (kind === "status") {
+        try {
+          const pagesResponse = await fetch(`${proxyBaseUrl}/api/sugaragent/lore/pages`);
+          pagesPayload = await pagesResponse.json();
+        } catch {
+          // The status answer is the point; a missing page list must not fail it.
+        }
+      }
+
       const raw = await response.text();
       let payload: unknown = null;
       if (raw.trim()) {
@@ -282,7 +299,7 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
       }
 
       const latestStatus =
-        kind === "ingest"
+        kind === "ingest" || kind === "update"
           ? await fetchLoreStatus().catch(() => null)
           : null;
 
@@ -297,7 +314,11 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
           : kind === "ingest" && current.status
             ? current.status
             : current.status),
-        pages: isLorePagesResponse(payload) ? payload.pages : current.pages,
+        pages: isLorePagesResponse(pagesPayload)
+          ? pagesPayload.pages
+          : isLorePagesResponse(payload)
+            ? payload.pages
+            : current.pages,
         ingest: isLoreIngestResponse(payload) ? payload : current.ingest,
         ping: isLorePingResponse(payload) ? payload : current.ping
       }));
@@ -371,16 +392,16 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
           </Button>
           <Button
             size="xs"
-            variant="light"
+            color="green"
             disabled={actionsDisabled}
-            loading={actionState.running && actionState.kind === "pages"}
-            onClick={() => void runLoreAction("pages")}
+            loading={actionState.running && actionState.kind === "update"}
+            onClick={() => void runLoreAction("update")}
           >
-            Refresh Pages
+            Update Lore
           </Button>
           <Button
             size="xs"
-            color="green"
+            variant="light"
             disabled={actionsDisabled}
             loading={actionState.running && actionState.kind === "ingest"}
             onClick={() => void runLoreAction("ingest")}
@@ -399,7 +420,7 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
         </Group>
         <Text size="xs" c="var(--sm-color-overlay0)">
           {actionsDisabledReason ??
-            "The gateway parses the lore wiki, chunks it, and overwrites the live vector store from this source."}
+            "Update Lore re-indexes only what changed. Ingest Lore clears the vector store and rebuilds every page."}
         </Text>
       </Stack>
 
@@ -500,7 +521,9 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
         </Box>
       ) : null}
 
-      {actionState.running && actionState.kind === "ingest" && actionState.status?.ingest ? (
+      {actionState.running &&
+      (actionState.kind === "ingest" || actionState.kind === "update") &&
+      actionState.status?.ingest ? (
         <Box
           p="md"
           style={{

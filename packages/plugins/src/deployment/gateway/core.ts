@@ -7,6 +7,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, extname, join, relative } from "node:path";
 import {
+  createHash,
   createHmac,
   createPublicKey,
   timingSafeEqual,
@@ -777,7 +778,30 @@ const UPLOAD_CONCURRENCY = 8;
 const BATCH_INDEX_DEADLINE_MS = 30 * 60 * 1000;
 const BATCH_POLL_INTERVAL_MS = 2000;
 
-/** The attributes a chunk is attached with. `page_id` is what marks it as lore. */
+/**
+ * A fingerprint of the text that actually gets embedded.
+ *
+ * OVER `embeddingText` AND NOTHING ELSE. That is the exact string uploaded as
+ * the file body (`uploadChunkFile`), so it is the only input whose change
+ * should force a re-embed. Hashing the id, the filename or the attributes
+ * instead would produce an ingest that looks incremental, finishes in seconds,
+ * and serves stale lore forever -- worse than the full rebuild it replaces.
+ */
+export function chunkContentHash(chunk: LoreChunk): string {
+  return createHash("sha256").update(chunk.embeddingText, "utf8").digest("hex");
+}
+
+/**
+ * The attributes a chunk is attached with.
+ *
+ * `page_id` marks it as lore (`isLoreVectorStoreFile`). `chunk_id` is its
+ * ADDRESS -- stable across an edit, so it keeps meaning "this section" -- and
+ * `content_hash` is its VERSION. Address plus version, like a file path and the
+ * hash of its contents: you do not rename a file because you edited it.
+ *
+ * Seven of an allowed sixteen keys, values well inside the 512-character limit
+ * (openai-node `VectorStoreFile`).
+ */
 export function chunkAttributes(chunk: LoreChunk): Record<string, string> {
   return {
     page_id: chunk.pageId,
@@ -785,8 +809,133 @@ export function chunkAttributes(chunk: LoreChunk): Record<string, string> {
     section_slug: chunk.sectionSlug,
     section_heading: chunk.sectionHeading,
     title: chunk.title,
-    relative_path: chunk.relativePath
+    relative_path: chunk.relativePath,
+    content_hash: chunkContentHash(chunk)
   };
+}
+
+/** One file sitting at a chunk address. */
+interface IndexedChunk {
+  fileId: string;
+  contentHash: string;
+  /** OpenAI's per-file indexing status. Only `completed` is retrievable. */
+  status: string;
+}
+
+/**
+ * Reads the store back as a manifest of what is already indexed.
+ *
+ * The store IS the manifest -- no separate state file to drift out of sync with
+ * it. Only files carrying `page_id` are considered, so a probe leftover or
+ * anything uploaded by hand is invisible here and is left to the sweep rather
+ * than mistaken for a chunk.
+ *
+ * A LIST PER ADDRESS, not one file per address. Two files can share a
+ * `chunk_id` -- a stale copy whose delete failed, a page with two identically
+ * named headings -- and a Map that keeps only the last one seen makes the other
+ * invisible to BOTH replacement and removal, so it stays retrievable forever.
+ * Keeping every copy is what lets the plan converge on one.
+ *
+ * A file with no `content_hash` predates this and is reported with an empty
+ * one, which never matches a real hash -- so it re-uploads once and then
+ * settles. That is the whole migration: no version flag, no backfill.
+ */
+export function indexedChunksByAddress(
+  files: Array<Record<string, unknown>>
+): Map<string, IndexedChunk[]> {
+  const byAddress = new Map<string, IndexedChunk[]>();
+  for (const file of files) {
+    if (!isLoreVectorStoreFile(file)) continue;
+    const id = file["id"];
+    const attributes = file["attributes"] as Record<string, unknown>;
+    const chunkId = attributes["chunk_id"];
+    if (typeof id !== "string" || typeof chunkId !== "string") continue;
+    const hash = attributes["content_hash"];
+    const status = file["status"];
+    const entry: IndexedChunk = {
+      fileId: id,
+      contentHash: typeof hash === "string" ? hash : "",
+      status: typeof status === "string" ? status : "unknown"
+    };
+    byAddress.set(chunkId, [...(byAddress.get(chunkId) ?? []), entry]);
+  }
+  return byAddress;
+}
+
+/**
+ * What an incremental ingest has to do, given the source and what is indexed.
+ *
+ * Pure so the decision can be tested without a vector store: this is the part
+ * that must not be wrong, because getting it wrong either re-uploads everything
+ * (merely slow) or skips a changed chunk (silently stale).
+ *
+ * IT TRUSTS ONLY A COMPLETED FILE WHOSE HASH MATCHES. Attributes are set at
+ * ATTACH time, before indexing succeeds or fails, so a chunk that failed to
+ * index still carries a correct `chunk_id` and a matching `content_hash`.
+ * Counting that as indexed means the section is unretrievable and every future
+ * run reports "nothing to do" -- permanently stale, while the tool says it is
+ * fine. Overwrite could never do that, so trusting the attributes alone would
+ * be a regression on the behaviour this replaces.
+ *
+ * IT CONVERGES ON ONE FILE PER ADDRESS. Every copy beyond the one it keeps goes
+ * on `remove`, so a failed cleanup heals on the next run instead of leaving two
+ * versions of a section retrievable side by side.
+ */
+export function planIncrementalIngest(
+  chunks: LoreChunk[],
+  indexed: Map<string, IndexedChunk[]>
+): {
+  upload: LoreChunk[];
+  unchanged: LoreChunk[];
+  remove: string[];
+  duplicateAddresses: string[];
+} {
+  const upload: LoreChunk[] = [];
+  const unchanged: LoreChunk[] = [];
+  const remove: string[] = [];
+  const duplicateAddresses: string[] = [];
+  const seen = new Set<string>();
+
+  for (const chunk of chunks) {
+    // Two SOURCE chunks at one address: `chunkId` is pageId + section slug and
+    // slugify does not de-duplicate, so two identically named headings on a
+    // page collide. Reported rather than resolved -- silently keeping one would
+    // drop a section the author wrote, and each run would fight the last.
+    if (seen.has(chunk.chunkId)) {
+      duplicateAddresses.push(chunk.chunkId);
+      continue;
+    }
+    seen.add(chunk.chunkId);
+
+    const entries = indexed.get(chunk.chunkId) ?? [];
+    const hash = chunkContentHash(chunk);
+    const usable = entries.filter(
+      (entry) => entry.status === "completed" && entry.contentHash === hash
+    );
+
+    if (usable.length > 0) {
+      unchanged.push(chunk);
+      // Keep one, drop every other copy at this address.
+      const keep = usable[0]!.fileId;
+      for (const entry of entries) {
+        if (entry.fileId !== keep) remove.push(entry.fileId);
+      }
+    } else {
+      // New, edited, or previously failed. Every copy currently there is stale.
+      upload.push(chunk);
+      for (const entry of entries) remove.push(entry.fileId);
+    }
+  }
+
+  // Indexed under an address the source no longer has: the page or section was
+  // deleted, or a heading was renamed. Only lore files reach this map, so
+  // nothing else can be caught by it.
+  for (const [chunkId, entries] of indexed) {
+    if (seen.has(chunkId)) continue;
+    for (const entry of entries) remove.push(entry.fileId);
+  }
+
+  return { upload, unchanged, remove, duplicateAddresses };
 }
 
 /**
@@ -1746,16 +1895,77 @@ async function runIngestWork(
       }
     }
 
+    // ONLY WHAT CHANGED. An overwrite rebuilds the store from scratch; the
+    // normal path asks what is already indexed and does the difference. Editing
+    // one page should cost one page, not the whole wiki -- and a run with
+    // nothing changed should be one list call and no uploads at all.
+    let pending = lore.chunks;
+    let staleFileIds: string[] = [];
+    if (mode !== "overwrite") {
+      updateLoreIngestState({
+        phase: "comparing",
+        message: "Checking which chunks have changed."
+      });
+      const indexed = indexedChunksByAddress(
+        await withOpenAIRetry("list-vector-store-files", () =>
+          listVectorStoreFiles(vectorStoreId)
+        )
+      );
+      const plan = planIncrementalIngest(lore.chunks, indexed);
+      pending = plan.upload;
+      // The stale copies go AFTER the new ones are indexed, not before: a
+      // delete-then-upload leaves the section missing from retrieval if the
+      // upload then fails, and a half-second of two copies is cheaper than a
+      // section that silently vanished.
+      staleFileIds = plan.remove;
+
+      logInfo("ingest:plan", {
+        toUpload: plan.upload.length,
+        unchanged: plan.unchanged.length,
+        toRemove: plan.remove.length,
+        duplicateAddresses: plan.duplicateAddresses.length
+      });
+
+      // An authoring bug, surfaced rather than absorbed: two sections on one
+      // page whose headings slugify the same share a chunk address, so only one
+      // of them can ever be indexed.
+      for (const address of plan.duplicateAddresses) {
+        lore.warnings.push(
+          "Two sections share the chunk address " + address +
+            "; rename one heading or only one will be indexed."
+        );
+      }
+
+      // `uploadedCount` counts this run's work, so `chunkCount` has to as well
+      // or the panel reads "4 / 102" -- two numbers with different
+      // denominators, which looks like a stall rather than a short run. The
+      // SOURCE total stays visible as the top-level `chunkCount` on status.
+      updateLoreIngestState({ chunkCount: pending.length });
+
+      if (pending.length === 0 && staleFileIds.length === 0) {
+        updateLoreIngestState({
+          active: false,
+          phase: "completed",
+          currentChunkId: null,
+          uploadedCount: 0,
+          message:
+            "Nothing to do -- all " + lore.chunks.length + " chunks are already indexed.",
+          completedAt: new Date().toISOString()
+        });
+        return;
+      }
+    }
+
     // TWO PHASES, NOT ONE PER CHUNK. Upload every chunk file concurrently, then
     // attach them in batches and wait once per batch. The old shape waited for
     // each chunk to finish indexing before starting the next, which is what
     // made 98 chunks take a quarter of an hour and what let one slow chunk end
     // the run at 19/98.
-    const total = lore.chunks.length;
+    const total = pending.length;
     let uploadedCount = 0;
 
     const uploaded = await mapWithConcurrency(
-      lore.chunks,
+      pending,
       UPLOAD_CONCURRENCY,
       async (chunk) => {
         const fileId = await withOpenAIRetry("upload-chunk-" + chunk.chunkId, () =>
@@ -1805,12 +2015,34 @@ async function runIngestWork(
     }
     uploadedCount = indexedCount;
 
+    // ONLY NOW. Everything replacing these is indexed and retrievable, so
+    // removing the old copies cannot leave a gap. Best-effort: a stale file
+    // that outlives its replacement is duplicate content, which is worse than
+    // tidy but far better than a missing section -- and it still carries a
+    // page_id and chunk_id, so the next incremental run finds and replaces it.
+    let removedStale = 0;
+    for (const fileId of staleFileIds) {
+      try {
+        await withOpenAIRetry("delete-stale-file", () =>
+          deleteVectorStoreFile(vectorStoreId, fileId)
+        );
+        removedStale += 1;
+      } catch (removeErr) {
+        logInfo("ingest:stale-delete-failed", {
+          fileId,
+          reason: removeErr instanceof Error ? removeErr.message : String(removeErr)
+        });
+      }
+    }
+
     updateLoreIngestState({
       active: false,
       phase: "completed",
       currentChunkId: null,
       uploadedCount,
-      message: "Completed lore ingest.",
+      message:
+        "Completed lore ingest: " + uploadedCount + " chunk(s) indexed" +
+        (removedStale > 0 ? ", " + removedStale + " stale removed" : "") + ".",
       completedAt: new Date().toISOString()
     });
   } catch (error) {
@@ -1842,7 +2074,16 @@ export async function handleSugarAgentLoreIngest(
   }
 
   const body = await readJsonBody(req);
-  const mode = "overwrite";
+  // Incremental by default. `{"mode":"overwrite"}` still rebuilds from scratch,
+  // which is the escape hatch for a store believed to be wrong rather than
+  // merely out of date.
+  //
+  // THE DEFAULT CHANGED. This route used to overwrite whatever the caller sent,
+  // so an existing caller that omits `mode` now gets incremental. That is the
+  // intended behaviour -- Studio's two buttons send the mode explicitly -- but
+  // any other caller relying on the old silence gets the cheaper answer, which
+  // is only wrong if it wanted a rebuild.
+  const mode = body["mode"] === "overwrite" ? "overwrite" : "incremental";
   const vectorStoreId =
     typeof body["vectorStoreId"] === "string" && body["vectorStoreId"].trim()
       ? body["vectorStoreId"].trim()
