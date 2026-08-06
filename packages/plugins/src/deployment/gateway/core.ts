@@ -1373,6 +1373,26 @@ export function buildJudgeUserPrompt(
       ? " Behavior directed by an established directive above is never an IN-CHARACTER violation."
       : "";
 
+  // CONDITIONAL, LIKE EVERY OTHER CONTRIBUTED SECTION. This asks about "the
+  // player's stated level" and "the directives above", both of which only
+  // exist because a language plugin put them there. sugaragent is a
+  // general-purpose NPC dialogue system and does not require sugarlang -- a
+  // game with no language directives must get the plain three-item rubric it
+  // has always got, not a judge quietly assuming a language-learning game.
+  //
+  // Deliberately OUTSIDE the numbered rubric too: the rubric's own preamble
+  // says "each must PASS for overall pass", so a fourth numbered item would
+  // gate the turn, and phase 1 of this reports before it is trusted
+  // (sugarmagic-latency-tsg).
+  const languageBlock =
+    externalDirectives.length > 0
+      ? `SEPARATELY, AND FOR REPORTING ONLY -- this must NOT change 'passed', and a language problem is NOT a violation:\n` +
+        `LANGUAGE FIT: given the directives above, could THIS player read this reply, and did it give them something to learn?\n` +
+        `Judge the reply against the player's stated level, not against what sounds natural to a fluent speaker.\n` +
+        `Set languageFit false only when a real player at that level would be lost, or when the reply taught them nothing it was meant to.\n` +
+        `Mixing the two languages is never itself a language problem.\n\n`
+      : "";
+
   return (
     (worldPremise ? `World premise:\n${worldPremise}\n\n` : "") +
     `NPC persona summary (this is the NPC's established identity — treat all facts here as in-world):\n${personaDigest || "(none)"}\n\n` +
@@ -1385,8 +1405,54 @@ export function buildJudgeUserPrompt(
     `1. IN-CHARACTER: The reply matches the NPC persona voice, temperament, and knowledge level.${inCharacterGuard}\n` +
     `2. WORLD-GROUNDED: The reply does not introduce facts incompatible with the world premise or the NPC persona. Facts stated in either are established and must not be flagged as violations.\n` +
     `3. SAFETY: No out-of-character references to the real world, game mechanics, AI/developer, or secrets.\n\n` +
+    languageBlock +
     `Use the score_reply tool.`
   );
+}
+
+/**
+ * Keeps the language dimension out of the gating verdict.
+ *
+ * REPORTING-ONLY IS ENFORCED HERE, NOT REQUESTED IN THE PROMPT. The prompt
+ * tells the judge a language problem is not a violation and must not change
+ * `passed`; the tool schema tells it not to list one in `violations`. Measured
+ * against the live gateway, the model did BOTH anyway -- an all-English reply
+ * came back as violations: ["LANGUAGE_FIT"], passed: false. That would send
+ * every such turn into Regenerate, which is the outcome phase 1 exists to
+ * avoid until the flag rate is known (sugarmagic-latency-tsg).
+ *
+ * So the boundary is structural. A judge cannot be talked out of gating by
+ * asking nicely; the prompt wording stays because it improves the REPORTED
+ * verdict, not because anything depends on it being obeyed.
+ *
+ * Pure and exported for testability, like buildJudgeUserPrompt.
+ */
+export function enforceLanguageReportingOnly(
+  rawPassed: boolean,
+  rawViolations: string[],
+  repairHint: string | null
+): {
+  passed: boolean;
+  violations: string[];
+  repairHint: string | null;
+  languageOnlyFailure: boolean;
+} {
+  const isLanguageLabel = (label: string): boolean => /language/i.test(label);
+  const violations = rawViolations.filter((label) => !isLanguageLabel(label));
+  const languageOnlyFailure =
+    !rawPassed && violations.length === 0 && rawViolations.some(isLanguageLabel);
+
+  return {
+    // Fail closed on anything unexplained: a false verdict with no violations
+    // at all stays false, because there is no evidence it was about language.
+    passed: rawPassed || languageOnlyFailure,
+    violations,
+    // A language-only failure leaves no repair to make -- the turn passed.
+    // Keeping the hint would hand Regenerate an instruction for a problem that
+    // is not gating, and RegenerateStage reads repairHint verbatim.
+    repairHint: languageOnlyFailure ? null : repairHint,
+    languageOnlyFailure
+  };
 }
 
 export async function handleSugarAgentJudge(
@@ -1463,9 +1529,25 @@ export async function handleSugarAgentJudge(
         repairHint: {
           type: ["string", "null"],
           description: "One-line instruction for how to fix the reply, or null when passed."
+        },
+        // REPORTING ONLY (sugarlang tsg phase 1). Measured over real play before
+        // anything is allowed to act on it; the anti-goal is recreating the
+        // every-turn repair with a smarter judge.
+        languageFit: {
+          type: "boolean",
+          description:
+            "Could this specific player read the reply, and did it teach them what it was meant to? " +
+            "REPORTING ONLY: this must NOT affect 'passed', and must NOT be listed in 'violations'. " +
+            "Default true when no language directives were supplied."
+        },
+        languageNote: {
+          type: ["string", "null"],
+          description:
+            "One line naming the language problem, or null when languageFit is true. " +
+            "Say what a player at their level would trip on."
         }
       },
-      required: ["passed", "violations", "repairHint"]
+      required: ["passed", "violations", "repairHint", "languageFit", "languageNote"]
     }
   };
 
@@ -1501,23 +1583,43 @@ export async function handleSugarAgentJudge(
   }
 
   const input = toolUseBlock.input as Record<string, unknown>;
-  const passed = input["passed"] === true;
-  const violations = Array.isArray(input["violations"])
+  const rawPassed = input["passed"] === true;
+  const rawViolations = Array.isArray(input["violations"])
     ? (input["violations"] as unknown[]).filter((v): v is string => typeof v === "string")
     : [];
   const repairHint =
     typeof input["repairHint"] === "string" ? input["repairHint"].trim() || null : null;
+  // REPORTING ONLY (tsg phase 1): read out, logged, returned -- and deliberately
+  // absent from `passed`. Defaults TRUE when the model omits it, so a judge that
+  // ignores the new field reads as "no language problem" rather than flagging
+  // every turn.
+  const languageFit = input["languageFit"] !== false;
+  const languageNote =
+    typeof input["languageNote"] === "string" ? input["languageNote"].trim() || null : null;
+
+  const { passed, violations, repairHint: effectiveRepairHint, languageOnlyFailure } =
+    enforceLanguageReportingOnly(rawPassed, rawViolations, repairHint);
 
   logInfo("sugaragent.judge", {
     passed,
+    rawPassed,
     violations,
-    repairHint,
+    languageOnlyFailure,
+    repairHint: effectiveRepairHint,
+    languageFit,
+    languageNote,
     model,
     durationMs: Date.now() - startedAt,
     responseIntent
   });
 
-  sendJson(res, 200, { passed, violations, repairHint });
+  sendJson(res, 200, {
+    passed,
+    violations,
+    repairHint: effectiveRepairHint,
+    languageFit,
+    languageNote
+  });
 }
 
 // ---------------------------------------------------------------------------

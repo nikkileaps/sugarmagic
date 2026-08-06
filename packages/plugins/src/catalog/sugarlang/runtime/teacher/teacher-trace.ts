@@ -319,3 +319,32 @@ export function traceRealization(args: {
   );
   /* eslint-enable no-console */
 }
+
+/**
+ * Prints what sugarlang tells the Judge about language, for one turn.
+ *
+ * WHY THIS EXISTS
+ *   The judge prompt is assembled in the GATEWAY, so it never reaches the
+ *   browser console -- there was no way to see what the Judge was actually
+ *   told, only what it decided. This prints the sugarlang half: the criteria
+ *   that go into `externalDirectives`.
+ *
+ *   The other half, the assembled prompt, is deterministic given these
+ *   directives and is pinned by judge-prompts.test.ts. Directives here plus
+ *   the `judge=` / `judgeLanguageFit=` turn facts give send and receive
+ *   without needing gateway logs.
+ *
+ * NOT PRINTED WHEN THERE ARE NO DIRECTIVES, which is itself the signal: it
+ * means the Judge got the plain rubric, with no language section at all.
+ */
+export function traceJudgeDirectives(directives: string[] | undefined): void {
+  if (!directives || directives.length === 0) {
+    return;
+  }
+  /* eslint-disable no-console */
+  console.info("[sugarlang] JUDGE gets these language criteria:");
+  for (const directive of directives) {
+    console.info("  " + directive);
+  }
+  /* eslint-enable no-console */
+}

@@ -18,6 +18,7 @@
  * Status: active
  */
 
+import { noteTurnFact } from "@sugarmagic/runtime-core";
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
 import { QUEST_CONTEXT_ANNOTATION_KEY } from "../quest/quest-context-middleware";
 import type { QuestContextAnnotation } from "../quest/quest-context-middleware";
@@ -146,6 +147,29 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
         skipped: false,
         errorOccurred: false
       };
+
+      // ON THE TIMELINE, NOT ONLY IN DIAGNOSTICS. The verdict has always been
+      // in the diagnostics payload, but the console collapses that object, so
+      // a turn that failed the judge and paid seconds of Regenerate showed
+      // only status:degraded with no readable reason. A flag rate cannot be
+      // measured from something nobody can read (sugarmagic-latency-tsg).
+      noteTurnFact(
+        "judge",
+        output.passed ? "pass" : `FAIL:${output.violations.join(",") || "unspecified"}`
+      );
+      // ALWAYS RECORDED, INCLUDING WHEN IT PASSES. Printing only failures made
+      // absence mean two different things -- "the judge saw no language
+      // problem" and "this gateway predates the language dimension and never
+      // returned one" -- which are indistinguishable in a log and would have
+      // been read as a 0% flag rate either way. That is the measurement tsg
+      // phase 1 exists to take, so it must not be able to lie. Absent now
+      // means only one thing: an old gateway.
+      if (output.languageFit !== undefined) {
+        noteTurnFact(
+          "judgeLanguageFit",
+          output.languageFit ? "true" : `FALSE:${output.languageNote ?? "unspecified"}`
+        );
+      }
 
       return {
         output,

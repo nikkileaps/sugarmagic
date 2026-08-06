@@ -15,7 +15,12 @@
  * Status: active
  */
 
-import { teachableRefKey, toVocabularyRefs } from "../contracts/teachable-ref";
+import {
+  isCompetencyRef,
+  teachableRefKey,
+  toVocabularyRefs
+} from "../contracts/teachable-ref";
+import { traceJudgeDirectives } from "../teacher/teacher-trace";
 import { markTurnPhase } from "@sugarmagic/runtime-core";
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
 import {
@@ -114,18 +119,71 @@ function buildInterpretLexicon(targetLanguage: string): Record<string, string[]>
   }
 }
 
+/**
+ * The slate as plain nouns the Judge can look for in a line.
+ *
+ * Words go through as words; a competency goes through as the ACT it names
+ * ("ask-where" -> "ask where"), because the Judge is reading a line of
+ * dialogue and cannot match an identifier. Capped, because this rides a prompt
+ * that runs every turn and a long list would crowd out the rubric.
+ */
+function judgeSlateLabels(constraint: SugarlangConstraint): string[] {
+  const slated = [...constraint.targetVocab.introduce, ...constraint.targetVocab.reinforce];
+  const labels = slated.map((ref) =>
+    isCompetencyRef(ref) ? ref.competencyId.replace(/-/g, " ") : ref.lemmaId
+  );
+  return [...new Set(labels)].slice(0, 8);
+}
+
+/**
+ * What the Judge is told about the language side of a line.
+ *
+ * TWO JOBS, AND THEY PULL OPPOSITE WAYS (tsg).
+ *
+ * The first sentence is EXCULPATORY and must stay: without it the Judge reads
+ * a half-Spanish line as the NPC breaking character. It licenses the mixing.
+ *
+ * The rest is CRITERIA, and it is the point of tsg: the band, the directed
+ * mix, and what the Teacher asked to be taught, so the Judge can answer "does
+ * this line suit THIS learner" -- the question the deleted deterministic gate
+ * answered badly and no dictionary lookup can answer at all.
+ *
+ * CRITERIA, NEVER JUSTIFICATION. Deliberately absent: the Teacher's
+ * `rationale`. It is post-hoc narration generated after the decisions, and
+ * this channel is framed to the Judge as "behavior directed here is never a
+ * violation" -- so prose landing in it reads as a permission slip and would
+ * anchor the Judge on the intent instead of the line. Facts only.
+ */
 function buildLanguageJudgeDirective(
   targetLanguageRatio: number,
-  targetLanguage: string
+  targetLanguage: string,
+  learnerBand?: string,
+  slated?: string[]
 ): string | null {
   if (targetLanguageRatio <= 0) return null;
   const ratioPercent = Math.round(targetLanguageRatio * 100);
   const langName = languageDisplayName(targetLanguage);
-  return (
+
+  const sentences = [
     `This NPC reply is language-directed for a language-learning player: ` +
-    `about ${ratioPercent}% ${langName} mixed with the support language is intentional game system behavior. ` +
-    `Language choice and language mixing are never IN-CHARACTER violations.`
-  );
+      `about ${ratioPercent}% ${langName} mixed with the support language is intentional game system behavior. ` +
+      `Language choice and language mixing are never IN-CHARACTER violations.`
+  ];
+
+  if (learnerBand) {
+    sentences.push(
+      `The player reads ${langName} at CEFR ${learnerBand}: ` +
+        `${langName} beyond that level is not readable to them, however natural it sounds.`
+    );
+  }
+  if (slated && slated.length > 0) {
+    sentences.push(
+      `This situation is meant to give the player: ${slated.join(", ")}. ` +
+        `Not every one has to appear in every line.`
+    );
+  }
+
+  return sentences.join(" ");
 }
 
 export interface SugarLangTeacherMiddlewareDeps {
@@ -471,7 +529,9 @@ export function createSugarLangTeacherMiddleware(
       execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
       const judgeDirective = buildLanguageJudgeDirective(
         constraint.targetLanguageRatio,
-        constraint.targetLanguage
+        constraint.targetLanguage,
+        constraint.learnerCefr,
+        judgeSlateLabels(constraint)
       );
       const langLexicon = buildInterpretLexicon(constraint.targetLanguage);
       const npcDefId = execution.selection.npcDefinitionId ?? null;
@@ -507,6 +567,7 @@ export function createSugarLangTeacherMiddleware(
         ...(scheduledBiasTerms.length > 0 ? { retrieveBiasTerms: scheduledBiasTerms } : {})
       };
       execution.annotations[SUGARAGENT_CONTRIB_SUGARLANG_KEY] = contrib;
+      traceJudgeDirectives(contrib.judgeDirectives);
       logger.info("Teacher finalized Sugarlang guidance and constraint.", {
         conversationId,
         sessionId,

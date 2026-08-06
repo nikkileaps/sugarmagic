@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { buildJudgeUserPrompt } from "./core";
+import { buildJudgeUserPrompt, enforceLanguageReportingOnly } from "./core";
 
 const BASE_PARAMS = {
   worldPremise: "A cozy fantasy port town called Wordlark Hollow.",
@@ -161,5 +161,142 @@ describe("buildJudgeUserPrompt -- with externalDirectives (084.2 the fix)", () =
     );
     expect(prompt).toContain("1. First directive.");
     expect(prompt).toContain("2. Second directive.");
+  });
+});
+
+describe("the language dimension is REPORTING ONLY (sugarmagic-latency-tsg phase 1)", () => {
+  const prompt = buildJudgeUserPrompt(
+    BASE_PARAMS.worldPremise,
+    BASE_PARAMS.personaDigest,
+    BASE_PARAMS.responseIntent,
+    BASE_PARAMS.worldContext,
+    BASE_PARAMS.loreContextLines,
+    BASE_PARAMS.replyText,
+    ["The player reads Spanish at CEFR A1."]
+  );
+
+  it("THE ONE THAT MATTERS: language sits OUTSIDE the numbered rubric", () => {
+    // The rubric's preamble says "each must PASS for overall pass". A fourth
+    // NUMBERED item would therefore gate the turn -- and phase 1 measures
+    // before it trusts. The anti-goal is recreating the every-turn repair
+    // with a smarter judge.
+    expect(prompt).toContain("FOR REPORTING ONLY");
+    expect(prompt).not.toContain("4. LANGUAGE");
+
+    const rubricStart = prompt.indexOf("Rubric (each must PASS");
+    const languageStart = prompt.indexOf("LANGUAGE FIT:");
+    const safetyStart = prompt.indexOf("3. SAFETY:");
+    expect(rubricStart).toBeGreaterThan(-1);
+    // After the last numbered item, so it cannot read as part of the list.
+    expect(languageStart).toBeGreaterThan(safetyStart);
+  });
+
+  it("tells the judge explicitly not to let language change the verdict", () => {
+    expect(prompt).toContain("must NOT change 'passed'");
+    expect(prompt).toContain("a language problem is NOT a violation");
+  });
+
+  it("judges against the player's level, not against fluent-speaker taste", () => {
+    expect(prompt).toContain("not against what sounds natural to a fluent speaker");
+  });
+
+  it("does not reintroduce language mixing as a fault", () => {
+    // The whole design mixes languages on purpose. A judge flagging that would
+    // fail essentially every turn.
+    expect(prompt).toContain("Mixing the two languages is never itself a language problem");
+  });
+});
+
+describe("sugaragent stands alone: no language plugin, no language prompt", () => {
+  // sugaragent is a general-purpose NPC dialogue system. sugarlang is optional.
+  // A game running sugaragent WITHOUT any language plugin must get the plain
+  // rubric it has always got -- not a judge quietly assuming a
+  // language-learning game and asking about a player level nobody stated.
+  const prompt = buildJudgeUserPrompt(
+    BASE_PARAMS.worldPremise,
+    BASE_PARAMS.personaDigest,
+    BASE_PARAMS.responseIntent,
+    BASE_PARAMS.worldContext,
+    BASE_PARAMS.loreContextLines,
+    BASE_PARAMS.replyText,
+    []
+  );
+
+  it("THE BOUNDARY: no directives means no language section at all", () => {
+    expect(prompt).not.toContain("LANGUAGE FIT");
+    expect(prompt).not.toContain("FOR REPORTING ONLY");
+    expect(prompt).not.toContain("languageFit");
+  });
+
+  it("never mentions a player level nobody supplied", () => {
+    expect(prompt).not.toContain("player's stated level");
+    expect(prompt).not.toContain("the directives above");
+  });
+
+  it("still gets the full three-item rubric and the tool instruction", () => {
+    expect(prompt).toContain("1. IN-CHARACTER:");
+    expect(prompt).toContain("2. WORLD-GROUNDED:");
+    expect(prompt).toContain("3. SAFETY:");
+    expect(prompt).toContain("Use the score_reply tool.");
+  });
+});
+
+describe("reporting-only is enforced in code, because the judge ignores the prompt", () => {
+  // MEASURED, NOT HYPOTHETICAL. Against the live gateway an all-English reply
+  // came back as { passed: false, violations: ["LANGUAGE_FIT"] } despite the
+  // prompt saying a language problem is not a violation and the tool schema
+  // saying it must not be listed. Every such turn would have gone to
+  // Regenerate -- the exact outcome phase 1 exists to avoid.
+
+  it("THE ONE THAT MATTERS: a language-only failure does not fail the turn", () => {
+    const result = enforceLanguageReportingOnly(false, ["LANGUAGE_FIT"], "Add some Spanish.");
+
+    expect(result.passed).toBe(true);
+    expect(result.violations).toEqual([]);
+    expect(result.languageOnlyFailure).toBe(true);
+  });
+
+  it("drops the repair hint too -- there is nothing to repair", () => {
+    // RegenerateStage reads repairHint verbatim; a surviving hint would
+    // describe a problem that is not gating.
+    const result = enforceLanguageReportingOnly(false, ["LANGUAGE_FIT"], "Add some Spanish.");
+    expect(result.repairHint).toBeNull();
+  });
+
+  it("a REAL violation still fails, and keeps its hint", () => {
+    const result = enforceLanguageReportingOnly(false, ["SAFETY"], "Stop mentioning the developer.");
+
+    expect(result.passed).toBe(false);
+    expect(result.violations).toEqual(["SAFETY"]);
+    expect(result.repairHint).toBe("Stop mentioning the developer.");
+  });
+
+  it("a real violation ALONGSIDE a language one still fails, language stripped", () => {
+    // The dangerous middle case: language must not rescue a genuinely bad reply.
+    const result = enforceLanguageReportingOnly(false, ["SAFETY", "LANGUAGE_FIT"], "Fix it.");
+
+    expect(result.passed).toBe(false);
+    expect(result.violations).toEqual(["SAFETY"]);
+    expect(result.languageOnlyFailure).toBe(false);
+    expect(result.repairHint).toBe("Fix it.");
+  });
+
+  it("fails closed when the judge fails a reply but names no violation", () => {
+    // No evidence it was about language, so it is not treated as language.
+    const result = enforceLanguageReportingOnly(false, [], null);
+    expect(result.passed).toBe(false);
+  });
+
+  it("catches label variants, not just the exact string", () => {
+    // The judge invents its own labels; matching one spelling would leak.
+    for (const label of ["LANGUAGE_FIT", "LANGUAGE", "language-fit", "Language Appropriateness"]) {
+      expect(enforceLanguageReportingOnly(false, [label], null).passed).toBe(true);
+    }
+  });
+
+  it("leaves a passing verdict completely alone", () => {
+    const result = enforceLanguageReportingOnly(true, [], null);
+    expect(result.passed).toBe(true);
+    expect(result.violations).toEqual([]);
   });
 });

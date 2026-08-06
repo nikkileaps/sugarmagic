@@ -373,6 +373,9 @@ export interface JudgeResult {
   passed: boolean;
   violations: string[];
   repairHint: string | null;
+  /** REPORTING ONLY (tsg phase 1): never consulted for `passed`. */
+  languageFit?: boolean;
+  languageNote?: string | null;
   /** true when the judge was not invoked (no LLM text, no provider) */
   skipped: boolean;
   /** true when the judge errored; verdict is fail-open (passed: true) */

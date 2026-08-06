@@ -293,6 +293,14 @@ export interface JudgeVerdict {
   passed: boolean;
   violations: string[];
   repairHint: string | null;
+  /**
+   * REPORTING ONLY (sugarlang tsg phase 1): could this specific player read
+   * the reply, and did it teach them what it was meant to. Deliberately not
+   * part of `passed` -- it is measured over real play before anything acts on
+   * it. Optional so an older gateway simply omits it.
+   */
+  languageFit?: boolean;
+  languageNote?: string | null;
 }
 
 export interface JudgeProvider {
