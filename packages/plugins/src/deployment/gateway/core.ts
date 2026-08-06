@@ -7,6 +7,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, extname, join, relative } from "node:path";
 import {
+  createHash,
   createHmac,
   createPublicKey,
   timingSafeEqual,
@@ -777,7 +778,30 @@ const UPLOAD_CONCURRENCY = 8;
 const BATCH_INDEX_DEADLINE_MS = 30 * 60 * 1000;
 const BATCH_POLL_INTERVAL_MS = 2000;
 
-/** The attributes a chunk is attached with. `page_id` is what marks it as lore. */
+/**
+ * A fingerprint of the text that actually gets embedded.
+ *
+ * OVER `embeddingText` AND NOTHING ELSE. That is the exact string uploaded as
+ * the file body (`uploadChunkFile`), so it is the only input whose change
+ * should force a re-embed. Hashing the id, the filename or the attributes
+ * instead would produce an ingest that looks incremental, finishes in seconds,
+ * and serves stale lore forever -- worse than the full rebuild it replaces.
+ */
+export function chunkContentHash(chunk: LoreChunk): string {
+  return createHash("sha256").update(chunk.embeddingText, "utf8").digest("hex");
+}
+
+/**
+ * The attributes a chunk is attached with.
+ *
+ * `page_id` marks it as lore (`isLoreVectorStoreFile`). `chunk_id` is its
+ * ADDRESS -- stable across an edit, so it keeps meaning "this section" -- and
+ * `content_hash` is its VERSION. Address plus version, like a file path and the
+ * hash of its contents: you do not rename a file because you edited it.
+ *
+ * Seven of an allowed sixteen keys, values well inside the 512-character limit
+ * (openai-node `VectorStoreFile`).
+ */
 export function chunkAttributes(chunk: LoreChunk): Record<string, string> {
   return {
     page_id: chunk.pageId,
@@ -785,8 +809,90 @@ export function chunkAttributes(chunk: LoreChunk): Record<string, string> {
     section_slug: chunk.sectionSlug,
     section_heading: chunk.sectionHeading,
     title: chunk.title,
-    relative_path: chunk.relativePath
+    relative_path: chunk.relativePath,
+    content_hash: chunkContentHash(chunk)
   };
+}
+
+/** What is already in the store, keyed by chunk address. */
+interface IndexedChunk {
+  fileId: string;
+  contentHash: string;
+}
+
+/**
+ * Reads the store back as a manifest of what is already indexed.
+ *
+ * The store IS the manifest -- no separate state file to drift out of sync with
+ * it. Only files carrying `page_id` are considered, so a probe leftover or
+ * anything uploaded by hand is invisible here and is left to the sweep rather
+ * than mistaken for a chunk.
+ *
+ * A file with no `content_hash` predates this and is reported with an empty
+ * one, which never matches a real hash -- so it re-uploads once and then
+ * settles. That is the whole migration: no version flag, no backfill.
+ */
+export function indexedChunksByAddress(
+  files: Array<Record<string, unknown>>
+): Map<string, IndexedChunk> {
+  const byAddress = new Map<string, IndexedChunk>();
+  for (const file of files) {
+    if (!isLoreVectorStoreFile(file)) continue;
+    const id = file["id"];
+    const attributes = file["attributes"] as Record<string, unknown>;
+    const chunkId = attributes["chunk_id"];
+    if (typeof id !== "string" || typeof chunkId !== "string") continue;
+    const hash = attributes["content_hash"];
+    byAddress.set(chunkId, {
+      fileId: id,
+      contentHash: typeof hash === "string" ? hash : ""
+    });
+  }
+  return byAddress;
+}
+
+/**
+ * What an incremental ingest has to do, given the source and what is indexed.
+ *
+ * Pure so the decision can be tested without a vector store: this is the part
+ * that must not be wrong, because getting it wrong either re-uploads everything
+ * (merely slow) or skips a changed chunk (silently stale).
+ */
+export function planIncrementalIngest(
+  chunks: LoreChunk[],
+  indexed: Map<string, IndexedChunk>
+): {
+  upload: LoreChunk[];
+  replace: Array<{ chunk: LoreChunk; staleFileId: string }>;
+  unchanged: LoreChunk[];
+  remove: string[];
+} {
+  const upload: LoreChunk[] = [];
+  const replace: Array<{ chunk: LoreChunk; staleFileId: string }> = [];
+  const unchanged: LoreChunk[] = [];
+  const seen = new Set<string>();
+
+  for (const chunk of chunks) {
+    seen.add(chunk.chunkId);
+    const existing = indexed.get(chunk.chunkId);
+    if (!existing) {
+      upload.push(chunk);
+    } else if (existing.contentHash !== chunkContentHash(chunk)) {
+      replace.push({ chunk, staleFileId: existing.fileId });
+    } else {
+      unchanged.push(chunk);
+    }
+  }
+
+  // Indexed under an address the source no longer has: the page or section was
+  // deleted, or a heading was renamed. Only lore files reach this map, so
+  // nothing else can be caught by it.
+  const remove: string[] = [];
+  for (const [chunkId, entry] of indexed) {
+    if (!seen.has(chunkId)) remove.push(entry.fileId);
+  }
+
+  return { upload, replace, unchanged, remove };
 }
 
 /**
@@ -1746,16 +1852,61 @@ async function runIngestWork(
       }
     }
 
+    // ONLY WHAT CHANGED. An overwrite rebuilds the store from scratch; the
+    // normal path asks what is already indexed and does the difference. Editing
+    // one page should cost one page, not the whole wiki -- and a run with
+    // nothing changed should be one list call and no uploads at all.
+    let pending = lore.chunks;
+    let staleFileIds: string[] = [];
+    if (mode !== "overwrite") {
+      updateLoreIngestState({
+        phase: "comparing",
+        message: "Checking which chunks have changed."
+      });
+      const indexed = indexedChunksByAddress(
+        await withOpenAIRetry("list-vector-store-files", () =>
+          listVectorStoreFiles(vectorStoreId)
+        )
+      );
+      const plan = planIncrementalIngest(lore.chunks, indexed);
+      pending = [...plan.upload, ...plan.replace.map((entry) => entry.chunk)];
+      // The stale copies go AFTER the new ones are indexed, not before: a
+      // delete-then-upload leaves the section missing from retrieval if the
+      // upload then fails, and a half-second of two copies is cheaper than a
+      // section that silently vanished.
+      staleFileIds = [...plan.replace.map((entry) => entry.staleFileId), ...plan.remove];
+
+      logInfo("ingest:plan", {
+        newChunks: plan.upload.length,
+        changed: plan.replace.length,
+        unchanged: plan.unchanged.length,
+        removed: plan.remove.length
+      });
+
+      if (pending.length === 0 && staleFileIds.length === 0) {
+        updateLoreIngestState({
+          active: false,
+          phase: "completed",
+          currentChunkId: null,
+          uploadedCount: 0,
+          message:
+            "Nothing to do -- all " + lore.chunks.length + " chunks are already indexed.",
+          completedAt: new Date().toISOString()
+        });
+        return;
+      }
+    }
+
     // TWO PHASES, NOT ONE PER CHUNK. Upload every chunk file concurrently, then
     // attach them in batches and wait once per batch. The old shape waited for
     // each chunk to finish indexing before starting the next, which is what
     // made 98 chunks take a quarter of an hour and what let one slow chunk end
     // the run at 19/98.
-    const total = lore.chunks.length;
+    const total = pending.length;
     let uploadedCount = 0;
 
     const uploaded = await mapWithConcurrency(
-      lore.chunks,
+      pending,
       UPLOAD_CONCURRENCY,
       async (chunk) => {
         const fileId = await withOpenAIRetry("upload-chunk-" + chunk.chunkId, () =>
@@ -1805,12 +1956,34 @@ async function runIngestWork(
     }
     uploadedCount = indexedCount;
 
+    // ONLY NOW. Everything replacing these is indexed and retrievable, so
+    // removing the old copies cannot leave a gap. Best-effort: a stale file
+    // that outlives its replacement is duplicate content, which is worse than
+    // tidy but far better than a missing section -- and it still carries a
+    // page_id and chunk_id, so the next incremental run finds and replaces it.
+    let removedStale = 0;
+    for (const fileId of staleFileIds) {
+      try {
+        await withOpenAIRetry("delete-stale-file", () =>
+          deleteVectorStoreFile(vectorStoreId, fileId)
+        );
+        removedStale += 1;
+      } catch (removeErr) {
+        logInfo("ingest:stale-delete-failed", {
+          fileId,
+          reason: removeErr instanceof Error ? removeErr.message : String(removeErr)
+        });
+      }
+    }
+
     updateLoreIngestState({
       active: false,
       phase: "completed",
       currentChunkId: null,
       uploadedCount,
-      message: "Completed lore ingest.",
+      message:
+        "Completed lore ingest: " + uploadedCount + " chunk(s) indexed" +
+        (removedStale > 0 ? ", " + removedStale + " stale removed" : "") + ".",
       completedAt: new Date().toISOString()
     });
   } catch (error) {
@@ -1842,7 +2015,10 @@ export async function handleSugarAgentLoreIngest(
   }
 
   const body = await readJsonBody(req);
-  const mode = "overwrite";
+  // Incremental by default. `{"mode":"overwrite"}` still rebuilds from scratch,
+  // which is the escape hatch for a store believed to be wrong rather than
+  // merely out of date.
+  const mode = body["mode"] === "overwrite" ? "overwrite" : "incremental";
   const vectorStoreId =
     typeof body["vectorStoreId"] === "string" && body["vectorStoreId"].trim()
       ? body["vectorStoreId"].trim()
