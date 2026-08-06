@@ -16,6 +16,7 @@
  */
 
 import { teachableRefKey, toVocabularyRefs } from "../contracts/teachable-ref";
+import { markTurnPhase } from "@sugarmagic/runtime-core";
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
 import {
   buildGeneratorPromptOverlay,
@@ -372,6 +373,10 @@ export function createSugarLangTeacherMiddleware(
           logger.warn("Skipping Sugarlang teacher middleware - no scene id.");
           return execution;
         }
+        // Spike (sugarmagic-latency-cex). This wraps the WHOLE Teacher step,
+        // cache hits included, because a hit costing ~0 is exactly the fact
+        // worth seeing next to a miss costing seconds.
+        const teacherStartedAt = Date.now();
         directive = await services.teacher.invoke({
           conversationId,
           telemetryContext: {
@@ -394,6 +399,7 @@ export function createSugarLangTeacherMiddleware(
           },
           calibrationActive: false
         });
+        markTurnPhase("Teacher", Date.now() - teacherStartedAt);
       }
 
       const constraint: SugarlangConstraint = {

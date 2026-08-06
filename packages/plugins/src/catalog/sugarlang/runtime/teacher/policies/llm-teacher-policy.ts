@@ -15,6 +15,7 @@
  */
 
 import type { SugarlangLLMClient } from "../../llm/types";
+import { noteTurnFact } from "@sugarmagic/runtime-core";
 import { buildPostPlacementCalibrationHint, isInPostPlacementCalibration } from "../calibration-mode";
 import { traceTeacherCall } from "../teacher-trace";
 import {
@@ -272,6 +273,15 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         maxTokens: this.maxTokens,
         cacheMarkers: prompt.cacheMarkers
       });
+      // Spike (sugarmagic-latency-cex). The Teacher is the largest single cost
+      // in a turn and nothing has ever confirmed its prompt cache actually
+      // hits: the telemetry that would have said so has been 404ing. A cache
+      // read of 0 on a repeat call means 222.9's caching is not working in
+      // production, which would be most of the explanation.
+      noteTurnFact("teacherIn", response.inputTokens ?? -1);
+      noteTurnFact("teacherCacheRead", response.cacheReadInputTokens ?? -1);
+      noteTurnFact("teacherCacheWrite", response.cacheCreationInputTokens ?? -1);
+      noteTurnFact("teacherOut", response.outputTokens ?? -1);
     } catch (error) {
       this.logger.warn("Teacher invocation failed.", {
         conversationId: context.conversationId,

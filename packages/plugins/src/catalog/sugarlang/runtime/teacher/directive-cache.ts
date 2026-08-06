@@ -16,6 +16,7 @@
  */
 
 import {
+  noteTurnFact,
   type RuntimeBlackboard
 } from "@sugarmagic/runtime-core";
 import type { PedagogicalDirective } from "../types";
@@ -112,6 +113,7 @@ export class DirectiveCache {
       current.situationKey !== undefined &&
       current.situationKey !== keysNow.situationKey
     ) {
+      noteTurnFact("teacherCache", "miss:situation_change");
       this.invalidate(conversationId, "situation_change");
       return null;
     }
@@ -125,6 +127,7 @@ export class DirectiveCache {
       current.learnerKey !== undefined &&
       current.learnerKey !== keysNow.learnerKey
     ) {
+      noteTurnFact("teacherCache", "miss:learner_change");
       this.invalidate(conversationId, "learner_change");
       return null;
     }
@@ -139,6 +142,7 @@ export class DirectiveCache {
     }
 
     this.cachedConversationIds.add(conversationId);
+    noteTurnFact("teacherCache", "hit");
     return current.directive;
   }
 

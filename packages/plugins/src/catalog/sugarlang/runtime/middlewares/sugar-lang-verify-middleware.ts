@@ -16,6 +16,7 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
+import { markTurnPhase, noteTurnFact } from "@sugarmagic/runtime-core";
 import {
   createNoOpTelemetrySink,
   createTelemetryEvent,
@@ -201,6 +202,10 @@ async function repairWithBestOfN(
   ].join("\n");
   const voiceRubricLine = voiceSpec ? buildVoiceRubricLine(voiceSpec) : null;
 
+  // Spike: this is a whole extra model call -- n candidates in one request --
+  // and it sits outside every stage, so its cost lands in `(unaccounted)`.
+  noteTurnFact("verifyRepair", true);
+  const repairStartedAt = Date.now();
   const result = await llmClient.generate({
     systemPrompt: [
       `You are editing an NPC line for a ${targetLang}-learning game.`,
@@ -243,6 +248,7 @@ async function repairWithBestOfN(
     ].join("\n"),
     maxTokens: 160 * n + 40
   });
+  markTurnPhase("VerifyRepair", Date.now() - repairStartedAt);
 
   const candidates = parseCandidates(result.text);
   if (candidates.length === 0) {
