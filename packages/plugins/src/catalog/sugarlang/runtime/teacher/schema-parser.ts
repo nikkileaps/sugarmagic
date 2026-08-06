@@ -272,7 +272,15 @@ function stripMarkdownCodeFences(text: string): string {
   return fenceMatch ? fenceMatch[1].trim() : trimmed;
 }
 
-function extractJsonObjectCandidate(text: string): string {
+/**
+ * Pulls the JSON object out of a model response: strips markdown fences, then
+ * slices brace-to-brace so surrounding prose does not break the parse.
+ *
+ * Exported so measurement reads the response the same way parsing does -- a
+ * second copy of this logic reported a healthy directive as truncated
+ * (sugarmagic-latency-bkg).
+ */
+export function extractJsonObjectCandidate(text: string): string {
   const stripped = stripMarkdownCodeFences(text);
   const firstBrace = stripped.indexOf("{");
   const lastBrace = stripped.lastIndexOf("}");

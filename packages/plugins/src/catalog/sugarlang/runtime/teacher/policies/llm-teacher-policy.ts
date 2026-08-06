@@ -15,6 +15,7 @@
  */
 
 import type { SugarlangLLMClient } from "../../llm/types";
+import { traceDirectiveSize } from "../directive-size";
 import { noteTurnFact } from "@sugarmagic/runtime-core";
 import { buildPostPlacementCalibrationHint, isInPostPlacementCalibration } from "../calibration-mode";
 import { traceTeacherCall } from "../teacher-trace";
@@ -282,6 +283,8 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       noteTurnFact("teacherCacheRead", response.cacheReadInputTokens ?? -1);
       noteTurnFact("teacherCacheWrite", response.cacheCreationInputTokens ?? -1);
       noteTurnFact("teacherOut", response.outputTokens ?? -1);
+      // bkg: which FIELDS those output tokens are in. Measure before cutting.
+      traceDirectiveSize(response.text, response.outputTokens ?? null);
     } catch (error) {
       this.logger.warn("Teacher invocation failed.", {
         conversationId: context.conversationId,
@@ -391,6 +394,12 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         parseResult.error
       );
     }
+
+    // The prose bound (prompt-builder) is PROMPT guidance, not schema-enforced:
+    // rejecting a directive over an over-long rationale would spend a whole
+    // re-plan on a debugging note. So record whether the model obeys it.
+    noteTurnFact("teacherRationaleChars", directive.rationale?.length ?? -1);
+    noteTurnFact("teacherCitedSignals", directive.citedSignals?.length ?? -1);
 
     this.logger.info("Teacher response received.", {
       conversationId: context.conversationId,

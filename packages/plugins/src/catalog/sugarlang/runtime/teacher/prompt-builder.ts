@@ -180,8 +180,12 @@ ${RATIO_GUIDANCE_LINES}
 - sentenceComplexityCap: "single-clause" | "two-clause" | "free"
 - comprehensionCheck: { trigger, probeStyle, targetLemmas, triggerReason?, characterVoiceReminder?, acceptableResponseForms? }
 - directiveLifetime: { maxTurns, invalidateOn[] }
-- citedSignals: string[]
-- rationale: string
+- citedSignals: string[] -- at most 3 SHORT tags naming what drove the choice,
+  e.g. ["probe-floor-soft", "greet-unmet-2-situations"]. Tags, not sentences.
+- rationale: string -- ONE sentence, 20 words or fewer, naming the decisive
+  reason. This is a debugging note for a human reading the trace, not an
+  explanation or a justification. Do not restate the slate, the posture, the
+  ratio, or the rubric: all of that is already in the fields above.
 - confidenceBand: "high" | "medium" | "low"
 - isFallbackDirective: false`;
 
@@ -226,7 +230,10 @@ export const TEACHER_HARD_CONSTRAINTS_PROMPT = `HARD CONSTRAINTS:
 - You are choosing a WORKING SET for this whole situation, not a single turn. Pick up to ${MAX_SLATE_INTRODUCE} introduce items that this situation genuinely affords. The NPC will use whichever fit each turn; you do not need to make them all fit one line.
 - If a hard probe floor is active, you must trigger a comprehension check this turn.
 - Target lemmas for comprehension checks must come from the pending provisional list.
-- Keep citedSignals short and factual.`;
+- Keep citedSignals short and factual.
+- rationale and citedSignals are the ONLY prose you write, and they are read by
+  a human debugging a trace, never by the Generator. Every word you spend there
+  delays the player's reply, so spend as few as will say the thing.`;
 
 export const TEACHER_PRAGMATIC_FEEDBACK_BLOCK = `PRAGMATIC FEEDBACK RULES:
 
