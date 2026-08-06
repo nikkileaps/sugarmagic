@@ -836,13 +836,24 @@ export async function mapWithConcurrency<TIn, TOut>(
 ): Promise<TOut[]> {
   const results = new Array<TOut>(items.length);
   let next = 0;
+  // ONE FAILURE STOPS THE REST. `Promise.all` rejects on the first throw, but
+  // the other runners are still looping -- they keep working, and keep writing
+  // progress, so they overwrite the "failed" state the caller just set with
+  // cheerful "uploaded N / M" messages. The run reads as still going after it
+  // has already lost.
+  let aborted = false;
 
   async function runner(): Promise<void> {
-    while (true) {
+    while (!aborted) {
       const index = next;
       next += 1;
       if (index >= items.length) return;
-      results[index] = await worker(items[index]!, index);
+      try {
+        results[index] = await worker(items[index]!, index);
+      } catch (error) {
+        aborted = true;
+        throw error;
+      }
     }
   }
 
@@ -876,50 +887,68 @@ export async function attachChunkBatch(
   vectorStoreId: string,
   entries: Array<{ fileId: string; chunk: LoreChunk }>,
   onProgress: ((indexed: number, total: number) => void) | null = null
-): Promise<void> {
-  const createResponse = await fetch(
-    "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/file_batches",
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
-      },
-      body: JSON.stringify({
-        files: entries.map((entry) => ({
-          file_id: entry.fileId,
-          attributes: chunkAttributes(entry.chunk)
-        }))
-      })
+): Promise<number> {
+  // Only the CREATE is retried. Retrying the whole function would re-attach
+  // files that are already attached and leave a second batch running over them.
+  const batchId = await withOpenAIRetry("attach-batch-create", async () => {
+    const createResponse = await fetch(
+      "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/file_batches",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
+        },
+        body: JSON.stringify({
+          files: entries.map((entry) => ({
+            file_id: entry.fileId,
+            attributes: chunkAttributes(entry.chunk)
+          }))
+        })
+      }
+    );
+    const batch = await parseApiJsonResponse(
+      createResponse,
+      "OpenAI vector store file batch create"
+    ) as Record<string, unknown>;
+    const id = batch["id"];
+    if (typeof id !== "string") {
+      throw new Error("OpenAI file batch create returned no id.");
     }
-  );
-  const batch = await parseApiJsonResponse(
-    createResponse,
-    "OpenAI vector store file batch create"
-  ) as Record<string, unknown>;
-  const batchId = batch["id"];
-  if (typeof batchId !== "string") {
-    throw new Error("OpenAI file batch create returned no id.");
-  }
+    return id;
+  });
 
   const deadline = Date.now() + BATCH_INDEX_DEADLINE_MS;
   while (Date.now() < deadline) {
-    const statusResponse = await fetch(
-      "https://api.openai.com/v1/vector_stores/" +
-        vectorStoreId +
-        "/file_batches/" +
-        batchId,
-      {
-        method: "GET",
-        headers: {
-          authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
+    let payload: Record<string, unknown>;
+    try {
+      const statusResponse = await fetch(
+        "https://api.openai.com/v1/vector_stores/" +
+          vectorStoreId +
+          "/file_batches/" +
+          batchId,
+        {
+          method: "GET",
+          headers: {
+            authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
+          }
         }
-      }
-    );
-    const payload = await parseApiJsonResponse(
-      statusResponse,
-      "OpenAI vector store file batch status"
-    ) as Record<string, unknown>;
+      );
+      payload = await parseApiJsonResponse(
+        statusResponse,
+        "OpenAI vector store file batch status"
+      ) as Record<string, unknown>;
+    } catch (error) {
+      // A failed STATUS read says nothing about the batch, which is still
+      // indexing server-side. Poll again rather than abandon it -- the deadline
+      // below is what bounds this, not the first transient 503.
+      logInfo("ingest:batch-status-retry", {
+        batchId,
+        reason: error instanceof Error ? error.message : String(error)
+      });
+      await new Promise((resolve) => setTimeout(resolve, BATCH_POLL_INTERVAL_MS));
+      continue;
+    }
 
     const counts = (payload["file_counts"] ?? {}) as Record<string, unknown>;
     const completed = typeof counts["completed"] === "number" ? counts["completed"] : 0;
@@ -927,13 +956,28 @@ export async function attachChunkBatch(
     onProgress?.(completed, entries.length);
 
     const status = payload["status"];
-    if (status === "completed") return;
-    if (status === "failed" || status === "cancelled") {
-      throw new Error(
-        "Vector store file batch " +
-          String(status) +
-          " (" + completed + " indexed, " + failed + " failed of " + entries.length + ")."
-      );
+    if (status === "completed" || status === "failed" || status === "cancelled") {
+      // A BATCH IS "completed" WHEN EVERY FILE IS PROCESSED, NOT WHEN EVERY
+      // FILE SUCCEEDED. openai-node's own poll helper says so: "this will
+      // return even if one of the files failed to process, you need to check
+      // batch.file_counts.failed_count to handle this case."
+      //
+      // So the count is the verdict, not the status. Treating `completed` as
+      // success is how an ingest reports 98/98 while silently missing chunks
+      // that no NPC will ever retrieve -- and the failed files keep their
+      // page_id, so the sweep will not surface them either.
+      //
+      // Loud rather than degraded: this is an authoring pass, and a half-built
+      // store that claims to be whole is the failure worth refusing.
+      if (status !== "completed" || failed > 0) {
+        throw new Error(
+          "Vector store file batch " +
+            String(status) +
+            ": " + completed + " indexed, " + failed + " failed of " +
+            entries.length + " files."
+        );
+      }
+      return completed;
     }
     await new Promise((resolve) => setTimeout(resolve, BATCH_POLL_INTERVAL_MS));
   }
@@ -1743,17 +1787,21 @@ async function runIngestWork(
         message:
           "Indexing " + slice.length + " chunks (" + indexedCount + " / " + total + " done)."
       });
-      await withOpenAIRetry("attach-batch-" + start, () =>
-        attachChunkBatch(vectorStoreId, slice, (indexedInBatch) => {
-          updateLoreIngestState({
-            phase: "waiting-for-indexing",
-            uploadedCount: batchBase + indexedInBatch,
-            message:
-              "Indexed " + (batchBase + indexedInBatch) + " / " + total + " chunks."
-          });
-        })
-      );
-      indexedCount += slice.length;
+      // Not wrapped in withOpenAIRetry: attachChunkBatch retries its own CREATE
+      // and tolerates transient status reads, and retrying from out here would
+      // re-attach files that are already attached.
+      const indexed = await attachChunkBatch(vectorStoreId, slice, (indexedInBatch) => {
+        updateLoreIngestState({
+          phase: "waiting-for-indexing",
+          uploadedCount: batchBase + indexedInBatch,
+          message:
+            "Indexed " + (batchBase + indexedInBatch) + " / " + total + " chunks."
+        });
+      });
+      // What the batch REPORTED, not how many were handed to it. The two differ
+      // exactly when something failed to index, which is the case this number
+      // exists to make visible.
+      indexedCount += indexed;
     }
     uploadedCount = indexedCount;
 
