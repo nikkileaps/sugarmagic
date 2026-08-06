@@ -106,6 +106,15 @@ export interface QuestStageDefinition {
   nextStageId: string | null;
   nodeDefinitions: QuestNodeDefinition[];
   entryNodeIds: string[];
+  /**
+   * The time of day this stage takes place at. Set when the stage becomes
+   * active. `null` means the stage leaves the clock alone.
+   *
+   * A stage is usually authored as a scene at a time -- "the dock, late
+   * afternoon" -- so the time belongs to the stage rather than to an action
+   * on whichever node happens to run first.
+   */
+  timeOfDay: TimeOfDayBand | null;
 }
 
 export type QuestRewardType = "xp" | "item" | "currency" | "custom";
@@ -194,6 +203,7 @@ export function createDefaultQuestStageDefinition(
     displayName?: string;
     nodeDefinitions?: QuestNodeDefinition[];
     entryNodeIds?: string[];
+    timeOfDay?: TimeOfDayBand | null;
   } = {}
 ): QuestStageDefinition {
   const defaultNode = createDefaultQuestNodeDefinition();
@@ -209,7 +219,8 @@ export function createDefaultQuestStageDefinition(
     displayName: options.displayName ?? "Start",
     nextStageId: null,
     nodeDefinitions,
-    entryNodeIds: entryNodeIds.length > 0 ? entryNodeIds : [nodeDefinitions[0]!.nodeId]
+    entryNodeIds: entryNodeIds.length > 0 ? entryNodeIds : [nodeDefinitions[0]!.nodeId],
+    timeOfDay: options.timeOfDay ?? null
   };
 }
 
@@ -325,6 +336,7 @@ export function normalizeQuestStageDefinition(
     stageId: stage.stageId ?? defaultStage.stageId,
     displayName: stage.displayName ?? defaultStage.displayName,
     nextStageId: stage.nextStageId ?? null,
+    timeOfDay: stage.timeOfDay ?? null,
     nodeDefinitions: normalizedNodes,
     entryNodeIds:
       entryNodeIds.length > 0

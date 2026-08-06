@@ -306,6 +306,7 @@ export function createTestSceneAuthoringContext(
             displayName: "Stage 1",
             nextStageId: null,
             entryNodeIds: ["objective-altar"],
+            timeOfDay: null,
             nodeDefinitions: [
                 {
                   nodeId: "objective-altar",

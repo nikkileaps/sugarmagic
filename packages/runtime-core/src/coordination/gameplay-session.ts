@@ -1893,6 +1893,7 @@ export function createRuntimeGameplaySessionController(
       questManager.notifyEvent(node.eventName);
     }
   });
+  questManager.setStageTimeOfDayHandler((band) => worldTimeStore.setTimeBand(band));
   questManager.setActionHandler((action) => {
     const numericValue =
       typeof action.value === "number"

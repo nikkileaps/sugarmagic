@@ -42,6 +42,7 @@ import type {
   ItemDefinition,
   NPCDefinition,
   QuestActionDefinition,
+  TimeOfDayBand,
   QuestConditionDefinition,
   QuestDefinition,
   QuestNodeBehavior,
@@ -426,6 +427,21 @@ function QuestConditionEditor({
     </Stack>
   );
 }
+
+/**
+ * Times a stage can be set at. Labels are what the author reads; the value is
+ * the band id that reaches the world clock -- "Noon" stores `midday`.
+ *
+ * The domain also defines `dawn` and `dusk`. They are deliberately not offered
+ * here, and stay reachable through the set-time-of-day quest action.
+ */
+const STAGE_TIME_OF_DAY_OPTIONS: Array<{ value: TimeOfDayBand; label: string }> = [
+  { value: "morning", label: "Morning" },
+  { value: "midday", label: "Noon" },
+  { value: "afternoon", label: "Afternoon" },
+  { value: "evening", label: "Evening" },
+  { value: "night", label: "Night" }
+];
 
 function QuestActionsEditor({
   actions,
@@ -1417,6 +1433,19 @@ export function useQuestWorkspaceView({
               .filter((stage) => stage.stageId !== selectedStage.stageId)
               .map((stage) => ({ value: stage.stageId, label: stage.displayName }))}
             onChange={(value) => updateStage(selectedStage.stageId, (stage) => ({ ...stage, nextStageId: value ?? null }))}
+          />
+          <Select
+            label="Time of Day"
+            clearable
+            placeholder="Leave the clock alone"
+            value={selectedStage.timeOfDay}
+            data={STAGE_TIME_OF_DAY_OPTIONS}
+            onChange={(value) =>
+              updateStage(selectedStage.stageId, (stage) => ({
+                ...stage,
+                timeOfDay: (value as TimeOfDayBand | null) ?? null
+              }))
+            }
           />
           <Switch
             label="Start Stage"
