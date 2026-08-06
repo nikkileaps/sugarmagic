@@ -142,8 +142,37 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
         ...(judgeDirectives.length > 0 ? { externalDirectives: judgeDirectives } : {})
       });
 
+      // PHASE 2: A LANGUAGE FAILURE NOW STOPS THE LINE.
+      //
+      // Phase 1 reported and did nothing. This routes a language failure down
+      // the path a character or safety failure already takes -- Regenerate --
+      // rather than building a second repair mechanism. The gateway keeps
+      // `passed` meaning "the rubric passed" and reports language separately,
+      // so the decision to gate lives here, in the plugin, and flipping it
+      // needs no gateway deploy.
+      //
+      // ONLY WITH A REASON. A false verdict carrying no note gives Regenerate
+      // nothing to act on, and a blind retry is what the story warns against:
+      // it would spend 5-8s to roll the dice again. No note, no gate.
+      //
+      // REVISIT TRIGGER: this was switched on against a 0-of-3 flag rate,
+      // which is barely any data. If `judgeLanguageFit=FALSE` turns out common
+      // in real play, this recreates the every-turn repair the latency epic
+      // just deleted, with a smarter judge doing it. Watch the Regenerate line
+      // on the turn timeline; if it is firing often, take this branch back out
+      // and fix the generator and Teacher prompts instead (sugarmagic-latency-tsg).
+      const languageNote = verdict.languageNote?.trim();
+      const languageFailure = verdict.languageFit === false && !!languageNote;
+
       const output: JudgeResult = {
         ...verdict,
+        passed: verdict.passed && !languageFailure,
+        violations: languageFailure
+          ? [...verdict.violations, `LANGUAGE_FIT: ${languageNote}`]
+          : verdict.violations,
+        // Keep a rubric hint if there is one -- it is about a real violation.
+        // Otherwise the language note IS the instruction.
+        repairHint: verdict.repairHint ?? (languageFailure ? (languageNote ?? null) : null),
         skipped: false,
         errorOccurred: false
       };
@@ -169,6 +198,11 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
           "judgeLanguageFit",
           output.languageFit ? "true" : `FALSE:${output.languageNote ?? "unspecified"}`
         );
+      }
+      // Distinct from a plain FALSE: this says the flag actually cost a
+      // regeneration. It is the number that decides whether phase 2 stays.
+      if (languageFailure) {
+        noteTurnFact("judgeLanguageGated", true);
       }
 
       return {
