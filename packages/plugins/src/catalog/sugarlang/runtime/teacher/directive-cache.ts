@@ -40,6 +40,23 @@ export type InvalidationReason =
   | "player_code_switch"
   | "manual";
 
+/**
+ * What the cache holds for a conversation, and whether it still applies.
+ *
+ * Added by 7gp.1. `peek` answers "is there a usable directive" by destroying
+ * the one that is not -- which is right for a caller that will immediately
+ * re-plan, and useless for one that wants to SERVE the outgoing directive for
+ * one more turn while a replacement is written. This says what is there and
+ * why it is stale, and changes nothing.
+ */
+export interface DirectiveInspection {
+  directive: PedagogicalDirective;
+  /** null when the directive still applies to the keys it was asked about. */
+  staleness: InvalidationReason | null;
+  /** The keys this directive was planned against. */
+  plannedFor: { situationKey?: string; learnerKey?: string };
+}
+
 export interface DirectiveCacheOptions {
   blackboard: RuntimeBlackboard;
   now?: () => number;
@@ -90,16 +107,53 @@ export class DirectiveCache {
     conversationId: string,
     keysNow?: { situationKey?: string; learnerKey?: string }
   ): PedagogicalDirective | null {
+    const inspection = this.inspect(conversationId, keysNow);
+    if (!inspection) {
+      this.cachedConversationIds.delete(conversationId);
+      return null;
+    }
+
+    if (inspection.staleness) {
+      noteTurnFact("teacherCache", `miss:${inspection.staleness}`);
+      this.invalidate(conversationId, inspection.staleness);
+      return null;
+    }
+
+    this.cachedConversationIds.add(conversationId);
+    noteTurnFact("teacherCache", "hit");
+    return inspection.directive;
+  }
+
+  /**
+   * Says what is cached and whether it still applies, WITHOUT changing
+   * anything -- no invalidation, no turn facts, no ageing.
+   *
+   * This holds the staleness rules; `peek` is the destructive reading of the
+   * same answer. One implementation, because two would drift and the whole
+   * point of the two-axis check is that the axes stay distinguishable.
+   */
+  inspect(
+    conversationId: string,
+    keysNow?: { situationKey?: string; learnerKey?: string }
+  ): DirectiveInspection | null {
     const envelope = this.blackboard.getFact(
       ACTIVE_DIRECTIVE_FACT,
       createActiveDirectiveFactScope(conversationId)
     );
     if (!envelope) {
-      this.cachedConversationIds.delete(conversationId);
       return null;
     }
 
     const current = envelope.value;
+    const plannedFor = {
+      ...(current.situationKey === undefined ? {} : { situationKey: current.situationKey }),
+      ...(current.learnerKey === undefined ? {} : { learnerKey: current.learnerKey })
+    };
+    const inspection = (staleness: InvalidationReason | null): DirectiveInspection => ({
+      directive: current.directive,
+      staleness,
+      plannedFor
+    });
 
     // TWO AXES, CHECKED SEPARATELY (090.4).
     //
@@ -108,14 +162,17 @@ export class DirectiveCache {
     // reasons -- a quest advances, or a word finally lands -- and merging them
     // into one key would make "the player learned something" indistinguishable
     // from "the player walked somewhere".
+    //
+    // 7gp.1 gave the distinction a second job: the world axis must block a
+    // turn, the learner axis may be answered a turn late. Order matters --
+    // situation is checked FIRST so a directive stale on both is reported as
+    // the blocking reason, never the deferrable one.
     if (
       keysNow?.situationKey !== undefined &&
       current.situationKey !== undefined &&
       current.situationKey !== keysNow.situationKey
     ) {
-      noteTurnFact("teacherCache", "miss:situation_change");
-      this.invalidate(conversationId, "situation_change");
-      return null;
+      return inspection("situation_change");
     }
 
     // The learner half. This is what closes the loop that already ran end to
@@ -127,9 +184,7 @@ export class DirectiveCache {
       current.learnerKey !== undefined &&
       current.learnerKey !== keysNow.learnerKey
     ) {
-      noteTurnFact("teacherCache", "miss:learner_change");
-      this.invalidate(conversationId, "learner_change");
-      return null;
+      return inspection("learner_change");
     }
 
     // maxTurns survives as a BACKSTOP, not as the policy. If the situation key
@@ -137,13 +192,32 @@ export class DirectiveCache {
     // the player gets one directive forever -- no test fails, nothing logs. This
     // bounds that. It is deliberately long; see the lifetime default.
     if (current.turnsConsumed >= current.lifetime.maxTurns) {
-      this.invalidate(conversationId, "max_turns_exceeded");
-      return null;
+      return inspection("max_turns_exceeded");
     }
 
-    this.cachedConversationIds.add(conversationId);
-    noteTurnFact("teacherCache", "hit");
-    return current.directive;
+    return inspection(null);
+  }
+
+  /**
+   * Ages the live directive by one turn. Split out of `get` so a caller that
+   * served a STALE directive can still spend the turn it was used for.
+   */
+  spendTurn(conversationId: string): void {
+    const scope = createActiveDirectiveFactScope(conversationId);
+    const envelope = this.blackboard.getFact(ACTIVE_DIRECTIVE_FACT, scope);
+    if (!envelope) {
+      return;
+    }
+    this.blackboard.setFact({
+      definition: ACTIVE_DIRECTIVE_FACT,
+      scope,
+      sourceSystem: SUGARLANG_TEACHER_WRITER,
+      value: {
+        ...envelope.value,
+        turnsConsumed: envelope.value.turnsConsumed + 1
+      },
+      updatedAtMs: this.now()
+    });
   }
 
   /**
@@ -157,24 +231,7 @@ export class DirectiveCache {
     if (!directive) {
       return null;
     }
-
-    const scope = createActiveDirectiveFactScope(conversationId);
-    const envelope = this.blackboard.getFact(ACTIVE_DIRECTIVE_FACT, scope);
-    if (!envelope) {
-      return directive;
-    }
-
-    this.blackboard.setFact({
-      definition: ACTIVE_DIRECTIVE_FACT,
-      scope,
-      sourceSystem: SUGARLANG_TEACHER_WRITER,
-      value: {
-        ...envelope.value,
-        turnsConsumed: envelope.value.turnsConsumed + 1
-      },
-      updatedAtMs: this.now()
-    });
-
+    this.spendTurn(conversationId);
     return directive;
   }
 

@@ -109,12 +109,22 @@ export function measureDirectiveSize(
  * telemetry sink 404'd for nine days while everything believed it was
  * recording (sugarmagic-sugardeploy-fc2).
  */
-export function traceDirectiveSize(rawText: string, outputTokens: number | null): void {
+export function traceDirectiveSize(
+  rawText: string,
+  outputTokens: number | null,
+  /**
+   * True for a background re-plan (7gp.1). Labelled because this block prints
+   * mid-turn for work the turn never waited for, and reading it as the current
+   * turn's cost is exactly the wrong conclusion.
+   */
+  backgroundReplan = false
+): void {
+  const tag = backgroundReplan ? "[directive-size BACKGROUND re-plan, off this turn's clock]" : "[directive-size]";
   const report = measureDirectiveSize(rawText, outputTokens);
   /* eslint-disable no-console */
   if (!report) {
     console.info(
-      `[directive-size] MALFORMED directive JSON (${rawText.length} chars, outputTokens=${outputTokens ?? "?"}). Fences are handled, so this is likely truncation at the token cap -- a quality bug, not a latency one.`
+      `${tag} MALFORMED directive JSON (${rawText.length} chars, outputTokens=${outputTokens ?? "?"}). Fences are handled, so this is likely truncation at the token cap -- a quality bug, not a latency one.`
     );
     return;
   }
@@ -127,7 +137,7 @@ export function traceDirectiveSize(rawText: string, outputTokens: number | null)
 
   console.info(
     [
-      `[directive-size] ${report.totalChars} chars total, outputTokens=${report.outputTokens ?? "?"} (token column is an ESTIMATE, apportioned by character share)`,
+      `${tag} ${report.totalChars} chars total, outputTokens=${report.outputTokens ?? "?"} (token column is an ESTIMATE, apportioned by character share)`,
       ...rows
     ].join("\n")
   );

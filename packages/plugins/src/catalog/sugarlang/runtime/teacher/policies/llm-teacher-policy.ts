@@ -16,7 +16,7 @@
 
 import type { SugarlangLLMClient } from "../../llm/types";
 import { traceDirectiveSize } from "../directive-size";
-import { noteTurnFact } from "@sugarmagic/runtime-core";
+import { noteTurnFact as noteGlobalTurnFact } from "@sugarmagic/runtime-core";
 import { buildPostPlacementCalibrationHint, isInPostPlacementCalibration } from "../calibration-mode";
 import { traceTeacherCall } from "../teacher-trace";
 import {
@@ -48,6 +48,24 @@ import { competencyIdForCardKey } from "../../inventory/card-display-name";
 // `purpose: "teacher"` -> SUGARMAGIC_SUGARLANG_TEACHER_MODEL. A local constant
 // here would just re-create a lie that reads as configuration.
 const DEFAULT_MAX_TOKENS = 900;
+
+/**
+ * Records a turn fact unless this call is a background re-plan (7gp.1).
+ *
+ * A background re-plan is on no turn's clock: the player never waited for it.
+ * Its tokens and latency would otherwise be charged to whichever turn happened
+ * to be open when it landed, which is how a latency measurement starts lying.
+ */
+function noteTeacherFact(
+  context: { backgroundReplan?: boolean },
+  key: string,
+  value: string | number | boolean
+): void {
+  if (context.backgroundReplan) {
+    return;
+  }
+  noteGlobalTurnFact(key, value);
+}
 
 export interface TeacherClaudeClientResult {
   text: string;
@@ -279,12 +297,12 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       // hits: the telemetry that would have said so has been 404ing. A cache
       // read of 0 on a repeat call means 222.9's caching is not working in
       // production, which would be most of the explanation.
-      noteTurnFact("teacherIn", response.inputTokens ?? -1);
-      noteTurnFact("teacherCacheRead", response.cacheReadInputTokens ?? -1);
-      noteTurnFact("teacherCacheWrite", response.cacheCreationInputTokens ?? -1);
-      noteTurnFact("teacherOut", response.outputTokens ?? -1);
+      noteTeacherFact(context, "teacherIn", response.inputTokens ?? -1);
+      noteTeacherFact(context, "teacherCacheRead", response.cacheReadInputTokens ?? -1);
+      noteTeacherFact(context, "teacherCacheWrite", response.cacheCreationInputTokens ?? -1);
+      noteTeacherFact(context, "teacherOut", response.outputTokens ?? -1);
       // bkg: which FIELDS those output tokens are in. Measure before cutting.
-      traceDirectiveSize(response.text, response.outputTokens ?? null);
+      traceDirectiveSize(response.text, response.outputTokens ?? null, context.backgroundReplan ?? false);
     } catch (error) {
       this.logger.warn("Teacher invocation failed.", {
         conversationId: context.conversationId,
@@ -356,7 +374,7 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
       // Spike: teacherOut brushes the 900-token cap (867 observed). If the
       // model is being cut off mid-JSON, every such directive is a local
       // reconstruction of a truncated slate -- worth knowing how often.
-      noteTurnFact("teacherParse", "repaired");
+      noteTeacherFact(context, "teacherParse", "repaired");
       directive = repairDirective(parseResult.error.partial, context, {
         telemetry: this.telemetry
       });
@@ -398,8 +416,8 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
     // The prose bound (prompt-builder) is PROMPT guidance, not schema-enforced:
     // rejecting a directive over an over-long rationale would spend a whole
     // re-plan on a debugging note. So record whether the model obeys it.
-    noteTurnFact("teacherRationaleChars", directive.rationale?.length ?? -1);
-    noteTurnFact("teacherCitedSignals", directive.citedSignals?.length ?? -1);
+    noteTeacherFact(context, "teacherRationaleChars", directive.rationale?.length ?? -1);
+    noteTeacherFact(context, "teacherCitedSignals", directive.citedSignals?.length ?? -1);
 
     this.logger.info("Teacher response received.", {
       conversationId: context.conversationId,
