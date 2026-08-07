@@ -54,5 +54,5 @@ From the repo root:
 
 - `pnpm exec tsx scripts/data-prep/derive-italian-frequency.ts`
 - `pnpm exec tsx scripts/data-prep/build-italian-cefrlex.ts`
-- `pnpm exec tsx scripts/data-prep/build-italian-morphology.ts`
+- `pnpm exec tsx scripts/data-prep/build-morphology.ts it`
 - `pnpm exec tsx scripts/data-prep/build-placement-questionnaires.ts`

@@ -53,5 +53,5 @@ every refresh.
 From the repo root:
 
 - `pnpm exec tsx scripts/data-prep/import-elelex.ts`
-- `pnpm exec tsx scripts/data-prep/build-spanish-morphology.ts`
+- `pnpm exec tsx scripts/data-prep/build-morphology.ts es`
 - `pnpm exec tsx scripts/data-prep/build-placement-questionnaires.ts`

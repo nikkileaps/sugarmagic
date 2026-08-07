@@ -10,10 +10,10 @@ and YAML files checked into
 ## Current Workflow
 
 - Spanish atlas snapshot: `import-elelex.ts`
-- Spanish morphology snapshot: `build-spanish-morphology.ts`
+- Morphology snapshot, any language: `build-morphology.ts <lang>`
 - Italian frequency snapshot: `derive-italian-frequency.ts`
 - Italian merged atlas snapshot: `build-italian-cefrlex.ts`
-- Italian morphology snapshot: `build-italian-morphology.ts`
+
 - Shared placement banks: `build-placement-questionnaires.ts`
 
 ## Re-Run

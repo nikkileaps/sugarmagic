@@ -69,8 +69,8 @@ rules an author or model follows.
    is permanent.
 2. **Regenerate morphology.**
 
-       pnpm exec tsx scripts/data-prep/build-spanish-morphology.ts
-       pnpm exec tsx scripts/data-prep/build-italian-morphology.ts
+       pnpm exec tsx scripts/data-prep/build-morphology.ts es
+       pnpm exec tsx scripts/data-prep/build-morphology.ts it
 
    This is total, not incremental -- it discards the old index and rebuilds it
    from the dictionary. So the two cannot drift by hand.

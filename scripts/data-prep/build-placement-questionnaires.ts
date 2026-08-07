@@ -16,17 +16,15 @@
  */
 
 import {
-  buildItalianPlacementQuestionnaire,
-  buildSpanishPlacementQuestionnaire,
-  sugarlangDataPath,
-  writeJsonFile
-} from "./sugarlang-language-data";
+  buildPlacementQuestionnaireFor,
+  registeredLanguages
+} from "./languages/registry";
+import { sugarlangDataPath, writeJsonFile } from "./sugarlang-language-data";
 
-writeJsonFile(
-  sugarlangDataPath("languages", "es", "placement-questionnaire.json"),
-  buildSpanishPlacementQuestionnaire()
-);
-writeJsonFile(
-  sugarlangDataPath("languages", "it", "placement-questionnaire.json"),
-  buildItalianPlacementQuestionnaire()
-);
+// Every registered language, so a new one needs no edit here.
+for (const lang of registeredLanguages()) {
+  writeJsonFile(
+    sugarlangDataPath("languages", lang, "placement-questionnaire.json"),
+    buildPlacementQuestionnaireFor(lang)
+  );
+}

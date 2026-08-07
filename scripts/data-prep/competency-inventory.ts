@@ -11,10 +11,14 @@
  * Relationships:
  *   - Reads data/curriculum/<band>.json and data/languages/<lang>/exponents.json.
  *   - Resolves words through data/languages/<lang>/morphology.json.
+ *   - Takes contractions and function words from ./languages/<lang>.
  *   - Writes data/languages/<lang>/competency-inventory.json.
  *
  * Status: active
  */
+
+import type { LanguageRules } from "./languages/language-rules";
+import { languageRules } from "./languages/registry";
 
 export type CurriculumBandFile = {
   schemaVersion: string;
@@ -90,35 +94,6 @@ type InventoryExponent = {
   glossBySurface: Record<string, Record<string, string>>;
 };
 
-/**
- * Words carrying no lexical content of their own: articles, clitic object and
- * reflexive pronouns, and possessive determiners. A competency counts as in
- * envelope when one of its constituent lemmas is being taught, so leaving `me`
- * or `el` in the list would put half the curriculum in envelope the moment
- * either is prescribed.
- *
- * Prepositions are NOT here. `hasta`, `en`, `por` and `de` are taught as
- * vocabulary at A1 and carry meaning the learner has to acquire.
- */
-const NO_LEXICAL_CONTENT = new Set([
-  "el",
-  "la",
-  "los",
-  "un",
-  "una",
-  "me",
-  "te",
-  "se",
-  "nos",
-  "os",
-  "lo",
-  "le",
-  "les",
-  "mi",
-  "tu",
-  "su"
-]);
-
 export function stripDiacritics(value: string): string {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").normalize("NFC");
 }
@@ -153,12 +128,39 @@ function exponentIdFor(wording: string): string {
     .replace(/\s+/g, "_");
 }
 
-function tokenize(wording: string): string[] {
-  return wording
+/**
+ * The words of a wording, with written contractions expanded into the words
+ * they stand for.
+ *
+ * Stripping the apostrophe and splitting -- which is what this did -- turns
+ * Italian `dov'e` into `dov` and `e`. `dov` is not a word and no dictionary
+ * will ever hold it, so a core A1 phrase could not be authored at all. The
+ * language says what the stub stands for, because the dropped vowel is fixed
+ * per word and guessing it is how non-words get made.
+ *
+ * Spanish supplies no rule and is unaffected: it writes no contractions with
+ * an apostrophe. French will need one for `j'ai` and `l'eau`.
+ */
+function tokenize(wording: string, rules: LanguageRules): string[] {
+  const rawTokens = wording
     .toLowerCase()
-    .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
+    .replace(/[^\p{Letter}\p{Number}\p{Mark}'’\s]/gu, " ")
     .split(/\s+/)
     .filter(Boolean);
+
+  const out: string[] = [];
+  for (const raw of rawTokens) {
+    const expanded = rules.expandWrittenForm?.(raw);
+    if (expanded) {
+      out.push(...expanded);
+      continue;
+    }
+    // Not a contraction this language knows: drop any remaining marks so a
+    // stray quote never becomes part of a token.
+    const bare = raw.replace(/['’]/gu, "");
+    if (bare) out.push(bare);
+  }
+  return out;
 }
 
 export function buildCompetencyInventory(inputs: {
@@ -168,6 +170,7 @@ export function buildCompetencyInventory(inputs: {
 }): CompetencyInventoryFile {
   const { bands, exponents, morphology } = inputs;
   const lang = exponents.lang;
+  const rules = languageRules(lang);
 
   const competencyById = new Map<
     string,
@@ -229,7 +232,7 @@ export function buildCompetencyInventory(inputs: {
           glossBySurface[form] ??= wording.gloss;
         }
 
-        for (const token of tokenize(wording.phrase)) {
+        for (const token of tokenize(wording.phrase, rules)) {
           const lemma =
             wording.lemmas?.[token] ?? morphology.forms[token]?.lemmaId;
           if (!lemma) {
@@ -238,7 +241,11 @@ export function buildCompetencyInventory(inputs: {
             );
             continue;
           }
-          if (NO_LEXICAL_CONTENT.has(lemma)) continue;
+          // The language's own list. It used to be one Spanish list used for
+          // every language, which counted Italian `il`, `ti`, `ci` and `si` as
+          // words an exponent teaches while stripping `su` and `tu`, which
+          // Italian needs.
+          if (rules.functionWords.has(lemma)) continue;
           if (!constituentLemmas.includes(lemma)) constituentLemmas.push(lemma);
         }
       }
