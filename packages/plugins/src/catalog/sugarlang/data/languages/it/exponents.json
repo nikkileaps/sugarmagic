@@ -554,6 +554,16 @@
       {
         "wordings": [
           {
+            "phrase": "ciao ciao",
+            "gloss": {
+              "en": "bye bye"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
             "phrase": "a presto",
             "gloss": {
               "en": "see you soon"
