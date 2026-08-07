@@ -1,7 +1,7 @@
 /**
  * packages/ui/src/components/ToolViewportChrome.tsx
  *
- * Purpose: the Studio-wide tool-viewport paradigm (Blender/
+ * Purpose: the Studio-wide tool-viewport pattern (Blender/
  * Photoshop convention, adopted 2026-07-09): a VERTICAL tool rail
  * on the viewport's left edge (which tool am I holding — icon
  * buttons, mutually exclusive) and a HORIZONTAL options bar

@@ -30,7 +30,7 @@ Only two kinds of file live here, and the difference decides how you change one.
 **SOURCE. Hand-authored, never regenerated wholesale.**
 
 - `cefrlex.json` -- the DICTIONARY. One entry per lemma: band, part of speech,
-  frequency rank, glosses, and (for verbs) the full paradigm.
+  frequency rank, glosses, and (for verbs) the full set of forms.
 - `exponents.json` -- the PHRASES that perform each competency, in this
   language. Wordings only; write them spelled correctly, accents and all.
   Everything else about an exponent is derived.
@@ -84,7 +84,7 @@ rules an author or model follows.
    file is not exactly what a fresh build produces, so a skipped rebuild or a
    hand-edit is caught by the suite rather than at the next regeneration.
 4. **Run the tests.** The shipped data is validated against the schemas, and
-   `tests/classifier/verb-forms.test.ts` checks the paradigms themselves: six
+   `tests/classifier/verb-forms.test.ts` checks the forms themselves: six
    slots per tense, provenance present, target-language orthography only.
 
 ## What Reads This Data
@@ -107,7 +107,7 @@ on a real word, and it writes a card against the wrong headword.
    CEFR-graded word list is a good starting point for lemmas and bands; where
    one does not exist, derive bands from frequency and record that honestly in
    `cefrPriorSource`. Seeding is one-time -- after it, the dictionary is source.
-2. **Author the paradigms.** Verbs need `forms`. Decide the tense scope for the
+2. **Author the forms.** Verbs need `forms`. Decide the tense scope for the
    language before starting: Spanish ships present, preterite and imperfect for
    A1-B1 because the future at those levels is `ir a` + infinitive. Another
    language will differ -- Italian's everyday past is the compound passato
@@ -136,9 +136,9 @@ Italian build script to run, because there is nothing yet for it to read.
 ## Reference Patterns
 
 - Well-resourced pattern: Spanish, seeded from a CEFR-graded lexicon, with
-  hand-authored verb paradigms.
+  hand-authored verb forms.
 - Under-resourced pattern: Italian, seeded from a frequency list with
-  frequency-derived band backfill, and no paradigms yet.
+  frequency-derived band backfill, and no forms yet.
 
 Languages likely feasible with the same architecture include French, German,
 Swedish, Dutch, and English. Languages intentionally out of scope for v1

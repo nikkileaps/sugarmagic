@@ -38,7 +38,7 @@ function playerTurn(text: string): ConversationTurnEnvelope {
   } as unknown as ConversationTurnEnvelope;
 }
 
-/** What the NPC turn carries once a slated verb contributes its paradigm. */
+/** What the NPC turn carries once a slated verb contributes its forms. */
 const HABLAR_HIGHLIGHT = {
   focusTerms: ["hablar", "hablo", "hablas", "habla", "hablé"],
   introduceTerms: ["hablar", "hablo", "hablas", "habla", "hablé"],

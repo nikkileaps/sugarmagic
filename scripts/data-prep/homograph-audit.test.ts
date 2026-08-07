@@ -27,7 +27,7 @@ type Atlas = {
 };
 
 /**
- * Surfaces some verb's paradigm produces. A token that is BOTH a standalone
+ * Surfaces some verb's forms produce. A token that is BOTH a standalone
  * non-verb headword and a form of a verb is the ambiguous class: the index can
  * only return one, and headwords win, so the verb reading is the one that goes
  * missing.

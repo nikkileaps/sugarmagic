@@ -6,7 +6,7 @@
  *
  * Relationships:
  *   - Exercises runtime/grading/highlight-terms.ts against the SHIPPED
- *     dictionary, so a paradigm regression fails here rather than in play.
+ *     dictionary, so a forms regression fails here rather than in play.
  *
  * Status: active
  */
@@ -71,7 +71,7 @@ describe("a slated word contributes every form it can appear as", () => {
     expect(terms.glosses["hablo"]).toBe(terms.glosses["hablar"]);
   });
 
-  it("falls back to the citation form when a word has no paradigm", () => {
+  it("falls back to the citation form when a word has no forms", () => {
     // 584 higher-band verbs and every closed-class word have none. That is
     // today's behaviour and the right fallback -- not an error.
     const terms = build("Es un hecho.", ["que"]);

@@ -8,8 +8,8 @@ plan has NOT earned the locked-plan contract. Do not execute stories against it
 as written -- see "Where this stands" below.
 
 Round 1 falsified the first draft's organizing claim ("this is a data epic") --
-Italian has zero authored paradigms. Round 2 falsified the rewrite's central
-story: paradigms were scoped to verbs when Spanish parity needs nouns and
+Italian has zero authored forms. Round 2 falsified the rewrite's central
+story: forms were scoped to verbs when Spanish parity needs nouns and
 adjectives too, and the deriver story named the wrong pass. Round 3 found five
 more, three of which made a story exit unexecutable as written. See "What the
 review rounds changed".
@@ -26,7 +26,7 @@ Related:
 - `packages/plugins/src/catalog/sugarlang/data/languages/README.md:104-122` --
   the authoritative six-step "Adding A Language" checklist. This epic executes
   it; the first draft skipped steps 2 and 3
-- `scripts/data-prep/DICTIONARY-AUTHORING.md` -- how paradigms get authored.
+- `scripts/data-prep/DICTIONARY-AUTHORING.md` -- how word forms get authored.
   **Carries a documentation bug this epic must fix first: it describes `forms`
   as verbs-only.** See 091.1
 - `scripts/data-prep/EXPONENT-AUTHORING.md` -- how exponents get authored
@@ -41,23 +41,23 @@ Related:
 that "the only genuinely new authoring is `it/exponents.json`." Both were wrong,
 and the draft's own cited source said so: it quoted
 `languages/README.md:110-114` starting mid-sentence at "Decide the tense
-scope..." and dropped the words opening that step -- **"Author the paradigms.
+scope..." and dropped the words opening that step -- **"Author the forms.
 Verbs need `forms`."** The sentence refuting the framing was cut; the one
 supporting it was kept.
 
 **Round 2.** The rewrite fixed the framing and then introduced a defect at the
 center of its own reorganization. Three faces of one mistake:
 
-- It sized paradigm authoring at **1,366 verbs**. That number is correct as a
+- It sized forms authoring at **1,366 verbs**. That number is correct as a
   verb count and wrong as the job: measured `es/cefrlex.json` forms by shape is
   **noun 6,000, adjective 2,336, verb 1,447**, and
   `data/schemas/cefrlex.schema.json` defines noun (`sg`/`pl`) and adjective
-  (`ms`/`fs`/`mp`/`fp`) paradigms as siblings of the verb shape. Italian has
-  **4,507 noun/adj lemmas** with zero paradigms. The old 091.3's own exit
+  (`ms`/`fs`/`mp`/`fp`) forms as siblings of the verb shape. Italian has
+  **4,507 noun/adj lemmas** with zero forms. The old 091.3's own exit
   demanded `problemi` and `sistemi` -- noun plurals no story authored.
 - It said the new deriver should mirror "the Spanish third pass
   (`:751-759`)". **Wrong pass.** `buildSpanishMorphologyData` (`:762-770`) runs
-  TWO: `addSpanishMorphologyForms` (`:556-562`, inverting authored paradigms via
+  TWO: `addSpanishMorphologyForms` (`:556-562`, inverting authored forms via
   `spanishSurfacesOf` `:512-524`) and `addSpanishDerivedForms` (`:751-759`,
   deriving tenses the dictionary does not store).
   `buildItalianMorphologyData` (`:772-776`) runs ONE, in the *second*-pass slot.
@@ -89,7 +89,7 @@ producing line:
   zero apostrophes in 2,896 phrases, so no existing convention covers it.
 
 **The corrected framing:** Italian is missing both halves of the language data.
-The corpus import delivered a lemma list and bands; it did not deliver paradigms
+The corpus import delivered a lemma list and bands; it did not deliver forms
 or a usable morphology, and the dictionary half blocks the exponent half.
 
 ## Where this stands
@@ -102,13 +102,13 @@ themselves when they stopped, so the next one would likely find something too.
 What is stable and can be trusted:
 - **Every measured number.** All three rounds verified the counts independently
   and they held exactly.
-- **The corpus-vs-authored framing**, once corrected for paradigms.
+- **The corpus-vs-authored framing**, once corrected for forms.
 - **The partial-authoring analysis** and why A1-first is required.
 - **The runtime cost analysis** -- the eleven silent catch sites and what each
   costs an Italian player.
 
 What is least settled, and where a fourth round would look:
-- **091.2's true size and tooling.** ~5,900 paradigms with the generation
+- **091.2's true size and tooling.** ~5,900 sets of forms with the generation
   mechanics still only gestured at.
 - **091.3's fourth-tier change to `buildMorphologyData`**, which is a signature
   change to a shared function that no round has reviewed as written.
@@ -138,7 +138,7 @@ the product says so.
 | `english-collisions.json` | 761 bytes / 24 surfaces | **MISSING** |
 
 Italian lemmas by part of speech: **verb 1,366, noun/adjective 4,507, other
-497.** That is the paradigm-authoring job, and it is roughly 5,900 entries, not
+497.** That is the forms-authoring job, and it is roughly 5,900 entries, not
 1,366.
 
 **Italian has no finite verb forms at all.** `sono`, `ho`, `hai`, `ha`, `sto`,
@@ -154,7 +154,7 @@ above. It does not throw -- and that is worse.
 
 **Loud: the token resolves to nothing.** `!lemma` at `:235` appends to
 `failures` and the build throws with the list. This is the case the missing
-paradigms produce, and it is self-announcing.
+missing forms produce, and it is self-announcing.
 
 **Silent: the token resolves to the WRONG lemma.** `costa -> costa` (the noun,
 coast) and `sei -> sei` (the numeral) both resolve today, so no `failures` entry
@@ -183,7 +183,7 @@ either; 091.18 fixes them.
 Provenance fact recorded nowhere and relevant to sizing 091.2: of the 9,783
 Spanish lemmas with forms, **`formsSource` is `generated` for 9,378 and
 `authored` for 405.** `es/README.md:20-22` says the files are "rebuilt from the
-real ELELex Spanish source", concealing that 88% of Spanish paradigms are
+real ELELex Spanish source", concealing that 88% of Spanish forms are
 machine output that, per `DICTIONARY-AUTHORING.md:45`, "nobody has checked."
 Italian is not held to a higher bar than Spanish actually meets.
 
@@ -214,11 +214,11 @@ must include it or the regression test this plan designs would not catch it.
 With that correction, the majority of the rule's noun output is still correct
 Italian. Spanish could
 delete its guesser safely **because the dictionary already held 8,336 noun and
-adjective paradigms**; Italian's holds none. Deleting before authoring drops
+adjective form sets**; Italian's holds none. Deleting before authoring drops
 thousands of correct forms -- including `case` (->casa) and `figure` (->figura),
 which are on this epic's own measured collision list. Per
 `feedback_merge_duplicate_enforcers`: diff the behaviours, keep what the rule
-gets right until authored paradigms cover it, then retire it.
+gets right until authored forms cover it, then retire it.
 
 The genuine defects stand and are what 091.5 pins: non-words (`probleme`,
 `sisteme`, `poete`, `fando`, `fato`) and `teme -> tema`, which claims a finite
@@ -263,7 +263,7 @@ trades pollution for starvation. That is a deliberate, stated cost.
   `EXPONENT-AUTHORING.md`, then reviewed. nikki, 2026-08-07: "the data came from
   you Claude it turns out LLMs are the best way to produce this data. And when I
   have credits with the other AI i'll have it review it."
-- Paradigms are **dictionary-authored** per `DICTIONARY-AUTHORING.md`, which
+- Forms are **dictionary-authored** per `DICTIONARY-AUTHORING.md`, which
   carries the measured argument for a model over a conjugation library
   (`:9-12`). Round 2 confirmed no conjugation library is installed and that the
   argument's mechanism ("stem changes are invisible in the infinitive",
@@ -341,7 +341,7 @@ needs no equivalent. Production narrow, recognition wide still applies.
 
 **Tense scope for A1-B1: OPEN, and it is ONE decision serving two documents.**
 `languages/README.md:110-114` (step 2) and `DICTIONARY-AUTHORING.md:107-111` ask
-the same question, for paradigms and exponents respectively. Settling it twice
+the same question, for forms and exponents respectively. Settling it twice
 is the duplicate-enforcer shape AGENTS.md warns about.
 
 It does not follow from "correct for Italian." That principle settles WHICH form
@@ -350,7 +350,7 @@ settle HOW MUCH belongs at A1-B1. Passato prossimo needs an auxiliary,
 participle agreement and the essere/avere split, so admitting it early costs
 more than the Spanish preterite did. Futuro semplice is the mirror case -- one
 word and common, so possibly cheaper than Spanish's, where `ir a` + infinitive
-covered A1-B1. This decides which paradigms 091.2 authors and the shape of a few
+covered A1-B1. This decides which forms 091.2 authors and the shape of a few
 hundred wordings.
 
 ---
@@ -360,7 +360,7 @@ hundred wordings.
 Dependencies only. No priority ordering is implied.
 
 ### 091.1 Italian authoring decisions, and the verbs-only doc bug
-Settle tense scope for A1-B1 once, covering paradigms and exponents. Record it
+Settle tense scope for A1-B1 once, covering forms and exponents. Record it
 with the settled variety in `it/README.md`; point
 `DICTIONARY-AUTHORING.md:107-111` and `languages/README.md:110-114` at that
 record rather than restating it.
@@ -370,8 +370,8 @@ is authored from these documents and would inherit it:
 `DICTIONARY-AUTHORING.md:35` (`"forms": { ... }, // verbs only`), `:85`
 (`## FORMS (verbs)` -- the doc has no noun or adjective section) and
 `languages/README.md:110` ("Verbs need `forms`") are all stale against
-`cefrlex.schema.json`, which defines noun and adjective paradigms, and against
-8,336 shipped Spanish noun+adjective paradigms.
+`cefrlex.schema.json`, which defines noun and adjective forms, and against
+8,336 shipped Spanish noun+adjective form sets.
 
 `EXPONENT-AUTHORING.md` gets a companion note, not a substitution table: an
 author arriving at the Spanish variety section must not conclude Italian has an
@@ -381,7 +381,7 @@ equivalent list.
 documents defer to it; `DICTIONARY-AUTHORING.md` documents the noun and
 adjective shapes. No code change.
 
-### 091.2 Author Italian paradigms -- verbs, nouns and adjectives
+### 091.2 Author Italian forms -- verbs, nouns and adjectives
 The step `languages/README.md:110` names. Author `forms` per
 `DICTIONARY-AUTHORING.md` at the 091.1 tense scope, with `formsSource` recorded
 honestly per entry. **~5,900 entries: 1,366 verbs and 4,507 noun/adjective
@@ -392,7 +392,7 @@ information no rule can recover (`problema`/`sistema`/`poeta` are masculine
 **Tooling:** `scripts/generate-atlas-glosses.ts` is the existing shape and is
 already language-parameterized (`LANGUAGES = ["es","it"]`, batched through the
 gateway, fill-never-overwrite); `DICTIONARY-AUTHORING.md:21-23` names it. Point
-the paradigm pass at that pattern rather than leaving the mechanics unstated --
+the forms pass at that pattern rather than leaving the mechanics unstated --
 ~5,900 entries is not hand work.
 
 **Split by part of speech, because the exit must test the scope.** Round 3
@@ -407,14 +407,14 @@ defect round 2 found. Two sub-stories with separate coverage floors:
 coverage is reported per part of speech and meets a stated floor for each**, not
 merely non-zero; every entry with `forms` carries `formsSource`; the A1 probe
 list -- `sono`, `ho`, `hai`, `ha`, `sto`, `stai`, `sta`, `vado`, `va`, `chiamo`,
-`chiami`, `parlo`, `capisco` -- is **present in the authored paradigms**; and
+`chiami`, `parlo`, `capisco` -- is **present in the authored forms**; and
 `problema`, `sistema`, `poeta`, `banco`, `parco`, `lago`, `amica` are authored,
 since 091.3's and 091.5's exits name them specifically.
 (Deliberately not "resolves": resolution goes through `it/morphology.json`,
 which does not change until 091.3. `vorrei` is likewise absent from this exit --
 it is conditional, which the schema cannot store, and arrives in 091.4.)
 
-### 091.3 Italian morphology: invert the authored paradigms (second pass)
+### 091.3 Italian morphology: invert the authored forms (second pass)
 Give Italian the pass Spanish has at `addSpanishMorphologyForms` (`:556-562`)
 via `spanishSurfacesOf` (`:512-524`), which handles all three shapes
 (`"pres" in f` / `"sg" in f` / else adjective). This is the slot
@@ -426,13 +426,13 @@ priority tier that does not exist yet.** Round 3 found the previous wording had
 nowhere to put the surviving rule. `buildMorphologyData` (`:615-667`) takes
 exactly two callbacks and runs three passes: headwords (`:639-641`),
 `addLanguageSpecificForms` (`:643-645`), `addDerivedForms` (`:657-661`). If the
-paradigm inverter takes slot 2 and derived tenses take slot 3, folding the rule
+forms inverter takes slot 2 and derived tenses take slot 3, folding the rule
 into slot 2 recreates the documented bug at `:647-656`: "within one pass
 whichever lemma is visited first wins ... Measured: 112 surfaces changed owner."
 
 Concretely, it would break this story's own exit: `tema` is atlas index 341,
 `temere` 1742, so an unauthored `tema` lets the rule claim `teme` before
-`temere`'s paradigm is reached -- and `teme -> tema` is exactly what the exit
+`temere`'s forms are reached -- and `teme -> tema` is exactly what the exit
 forbids.
 
 **So this story owns extending `buildMorphologyData` with a fourth, lowest tier**
@@ -570,13 +570,13 @@ guards nothing.
 
 **A third suite, missed by every earlier draft.**
 `tests/classifier/word-forms.test.ts:16` imports `es/cefrlex.json` and only
-that. It is the paradigm validator -- `languages/README.md:87` names it as the
+that. It is the forms validator -- `languages/README.md:87` names it as the
 step-5 bar -- pinning six slots per tense (`:74`), target-language orthography
-(`:85`) and provenance on every paradigm (`:99-103`, which already asserts no
-entry has `forms` without `formsSource`). 091.2 authors ~5,900 Italian
-paradigms and nothing was extending this. An Italian arm is cheap and directly
+(`:85`) and provenance on every set of forms (`:99-103`, which already asserts no
+entry has `forms` without `formsSource`). 091.2 authors ~5,900 sets of Italian
+forms and nothing was extending this. An Italian arm is cheap and directly
 guards 091.2's "recorded honestly" clause.
-**Depends on:** 091.8 for the inventory suites; **091.2** for the paradigm
+**Depends on:** 091.8 for the inventory suites; **091.2** for the forms
 validator arm, which can land earlier.
 **Exit:** all three suites run green for `it` and fail if
 `it/competency-inventory.json` is hand-edited.
@@ -711,7 +711,7 @@ Owns every doc this epic invalidates or that is already false.
 - **`languages/README.md`** -- carries the epic's central claims and the first
   draft updated none of it. These become false: `:14-16`, `:124-127` ("Italian
   ... authors no `exponents.json`"), `:129-134` ("there is no Italian build
-  script to run" -- 091.6 creates one), `:140-141` ("no paradigms yet" -- 091.2
+  script to run" -- 091.6 creates one), `:140-141` ("no forms yet" -- 091.2
   changes this). Pre-existing defects in the same file: `:3-5` claims "Runtime
   code never branches on language identity", contradicted by the per-language
   static-import maps in **six** loaders (`morphology-loader.ts:80`,
@@ -780,7 +780,7 @@ outside the wording's own competency without an explicit override.
 ### 091.20 Elision and the tokenizer
 `tokenize` (`competency-inventory.ts:156-161`) replaces every non-letter with a
 space. Verified by execution: `dov'è -> ["dov", "è"]`, `c'è -> ["c", "è"]`,
-`un'amica -> ["un", "amica"]`. `dov` and `c` are fragments no paradigm will ever
+`un'amica -> ["un", "amica"]`. `dov` and `c` are fragments no stored form will ever
 produce, so a core A1 exponent throws at `:275`.
 
 **This class does not exist in Spanish** -- measured: **zero apostrophes across

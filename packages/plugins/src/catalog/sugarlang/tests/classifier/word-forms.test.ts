@@ -1,9 +1,9 @@
 /**
  * packages/plugins/src/catalog/sugarlang/tests/classifier/verb-forms.test.ts
  *
- * Purpose: Pins the verb-paradigm contract against the SHIPPED dictionary --
+ * Purpose: Pins the verb-forms contract against the SHIPPED dictionary --
  *   slot order, null handling, and the accessors that exist so nothing indexes
- *   a paradigm array by hand.
+ *   a forms array by hand.
  *
  * Relationships:
  *   - Exercises runtime/classifier/verb-forms.ts against
@@ -28,7 +28,7 @@ const lemmas = (esAtlas as { lemmas: Record<string, { forms?: WordForms }> })
 
 function formsOf(lemmaId: string): VerbForms {
   const forms = lemmas[lemmaId]?.forms;
-  if (!isVerbForms(forms)) throw new Error(`${lemmaId} has no verb paradigm`);
+  if (!isVerbForms(forms)) throw new Error(`${lemmaId} has no verb forms`);
   return forms;
 }
 
@@ -71,7 +71,7 @@ describe("word forms, against the shipped dictionary", () => {
     expect(hablar.filter((f) => f === "hablamos")).toHaveLength(1);
   });
 
-  it("keeps every paradigm six slots wide", () => {
+  it("keeps every tense six slots wide", () => {
     const wrong: string[] = [];
     for (const [lemmaId, entry] of Object.entries(lemmas)) {
       if (!isVerbForms(entry.forms)) continue;
@@ -96,7 +96,7 @@ describe("word forms, against the shipped dictionary", () => {
     expect(wrong).toEqual([]);
   });
 
-  it("marks provenance on every paradigm", () => {
+  it("marks provenance on every set of forms", () => {
     const missing = Object.entries(
       lemmas as Record<string, { forms?: VerbForms; formsSource?: string }>
     )

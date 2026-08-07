@@ -3,7 +3,7 @@
  * way to read them.
  *
  * A dictionary entry stores each tense as a 6-element array. The array is
- * positional for size and lookup speed -- a paradigm is a fixed-shape table, and
+ * positional for size and lookup speed -- the form table is fixed-shape, and
  * naming every cell would triple the file for no information. But a bare index
  * is unreadable and silently wrong when someone miscounts, so NOTHING indexes
  * these arrays directly: every read goes through `formAt` / `PERSON_SLOT` below.
@@ -40,7 +40,7 @@ export const TENSE_KEY = {
 export type TenseName = keyof typeof TENSE_KEY;
 
 /**
- * The paradigm as stored on a dictionary entry.
+ * The forms as stored on a dictionary entry.
  *
  * Always 6 slots per tense, in PERSON_SLOT order. A slot is NULL when that
  * person does not exist for this verb -- `llover` has no first person, because
@@ -101,7 +101,7 @@ export function isAdjectiveForms(
 }
 
 /**
- * Where a paradigm came from, so review is a queue rather than a guess.
+ * Where a word's forms came from, so review is a queue rather than a guess.
  *
  * `generated` is machine output nobody has looked at -- the only state the
  * seeder is allowed to overwrite. `reviewed` means a human or an independent
@@ -111,9 +111,9 @@ export function isAdjectiveForms(
 export type FormsSource = "generated" | "reviewed" | "authored";
 
 /**
- * Read one cell. The only supported way to get a form out of a paradigm.
+ * Read one cell. The only supported way to get a form out of the table.
  *
- * Returns null both for "this verb has no stored paradigm yet" and for "this
+ * Returns null both for "this verb has no stored forms yet" and for "this
  * person does not exist for this verb". Callers treat them the same -- there is
  * no form to show either way -- and a caller that needs to tell them apart
  * should ask whether the entry has forms at all.
@@ -129,7 +129,7 @@ export function formAt(
 }
 
 /**
- * Every surface in a paradigm, deduplicated.
+ * Every surface in a word's forms, deduplicated.
  *
  * This is what the matcher wants: "is any form of this lemma present in this
  * text". Order is not meaningful to the caller, and duplicates are real --

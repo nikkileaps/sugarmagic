@@ -127,7 +127,7 @@ Regular verbs are safe to generate. These are not:
   lexical.
 - **Irregular participles** hide on otherwise-regular verbs: `escrito`, `roto`,
   `visto`, `vuelto`, `descrito`, `envuelto`, `disuelto`, `frito`.
-- **Compounds inherit the base paradigm with a prefix** — `mantener` from
+- **Compounds inherit the base word's forms with a prefix** — `mantener` from
   `tener`, `descomponer` from `poner`. Derive the prefix as
   `lemma.slice(0, -base.length)`; do not hand-write it. (`descomponer` minus
   `poner` is `descom`, not `des`.)
@@ -137,7 +137,7 @@ Regular verbs are safe to generate. These are not:
 - **Skip lemmas with no infinitive ending** — `que`, `no`, `lo`, `va`, `es` are
   verb-tagged in some sources and are not infinitives.
 - **Match accented infinitives.** A filter like `/(ar|er|ir)$/` silently misses
-  `oír`, `reír`, `sonreír`, `freír`. Ask for the whole paradigm of those
+  `oír`, `reír`, `sonreír`, `freír`. Ask for the whole set of forms for those
   explicitly.
 
 ## WHAT DOES NOT BELONG IN A DICTIONARY
@@ -178,7 +178,7 @@ against the language's expected set; do not eyeball it.
    drift. Name the tenses you want or a reviewer will default to
    present/preterite/**future** and never check the imperfect.
 5. **Validate before writing**: six slots per tense, provenance on every
-   paradigm, orthography clean, no new bands, no underscores.
+   forms, orthography clean, no new bands, no underscores.
 
 `packages/plugins/src/catalog/sugarlang/tests/classifier/verb-forms.test.ts`
 already asserts most of that against the shipped data. Run it.
