@@ -706,7 +706,15 @@ export class SugarlangRuntimeServices {
   async getAmbientServices(): Promise<SugarlangExecutionServices | null> {
     const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
     if (!targetLanguage) return null;
-    return this.resolveForLanguages(targetLanguage, "en");
+    // The support language comes from config, NOT a hardcoded "en". The pair
+    // is part of the learnerId (buildLearnerId), so getting it wrong resolves a
+    // DIFFERENT learner profile and card store than a real turn does -- and
+    // anything computed against it would be planned for a learner who does not
+    // exist. getPlacementQuestForm already reads it this way.
+    return this.resolveForLanguages(
+      targetLanguage,
+      this.config.supportLanguage?.trim().toLowerCase() || "en"
+    );
   }
 
   private async resolveForLanguages(
