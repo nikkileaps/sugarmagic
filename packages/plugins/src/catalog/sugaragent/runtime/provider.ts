@@ -121,7 +121,11 @@ function isStalledTurn(
       stage.fallbackReason &&
       stage.fallbackReason !== "generic-only-policy" &&
       // 075.1: judge errors are fail-open; don't let a judge outage 3-strike-close conversations.
-      stage.fallbackReason !== "judge-error"
+      stage.fallbackReason !== "judge-error" &&
+      // tsg: nor a language flag. A too-advanced line is in character, grounded
+      // and safe -- the conversation is not stalled, the teaching just missed.
+      // Closing the session would end it for something the player did not do.
+      stage.fallbackReason !== "judge-language-fail"
   );
   if (hasRealDegradedFallback) {
     return true;
@@ -430,7 +434,11 @@ async function executePipeline(args: {
   );
 
   // Plan 075.2: update consecutive judge-failure counter for the 3-strike governor.
-  if (!judge.skipped && !judge.errorOccurred && !judge.passed) {
+  // tsg: a language-only failure is excluded. At 3 strikes RegenerateStage
+  // stops regenerating and ships buildFallbackReply instead -- a generic
+  // template, which is not better Spanish than the line it replaces. The
+  // governor's remedy does not treat this disease.
+  if (!judge.skipped && !judge.errorOccurred && !judge.passed && !judge.languageOnlyFailure) {
     state.consecutiveJudgeFailures = (state.consecutiveJudgeFailures ?? 0) + 1;
   } else if (!judge.skipped && !judge.errorOccurred) {
     state.consecutiveJudgeFailures = 0;

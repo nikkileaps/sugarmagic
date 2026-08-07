@@ -87,6 +87,7 @@ const QUEST: QuestDefinition = {
       displayName: "Stage 1",
       nextStageId: null,
       entryNodeIds: ["node-1"],
+      timeOfDay: null,
       nodeDefinitions: [ASSESSMENT_NODE, TALK_NODE]
     }
   ]

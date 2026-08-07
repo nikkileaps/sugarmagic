@@ -131,7 +131,6 @@ export class RationaleTraceBuilder {
     const directiveStartedEvent = firstOfKind(sorted, "teacher.invocation-started");
     const verdictEvent = firstOfKind(sorted, "classifier.verdict");
     const chunkHitEvent = firstOfKind(sorted, "chunk.hit-during-classification");
-    const repairEvent = firstOfKind(sorted, "verify.repair-triggered");
     const observeEvent = firstOfKind(sorted, "observe.observations-applied");
     const probeTriggerEvent = firstOfKind(sorted, "comprehension.probe-triggered");
     const probeLifecycle =
@@ -179,14 +178,8 @@ export class RationaleTraceBuilder {
             constraint: verdictEvent.constraint as Record<string, unknown> | undefined
           }
         : null,
-      repair: repairEvent
-        ? {
-            kind: "repair",
-            originalText: repairEvent.originalText,
-            resultText: repairEvent.repairedText ?? null,
-            details: [...repairEvent.violations]
-          }
-        : null,
+      // The repair mechanism was deleted (latency epic); the trace leg with it.
+      repair: null,
       observations:
         observeEvent != null
           ? [observeEvent]

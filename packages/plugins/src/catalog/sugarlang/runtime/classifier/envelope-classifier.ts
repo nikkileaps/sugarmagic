@@ -101,10 +101,29 @@ export interface EnvelopeClassifierCheckOptions {
   /** When provided, the verdict includes a language-ratio dimension. Pass from the constraint. */
   directedRatio?: number;
   supportPosture?: SupportPosture;
+  /**
+   * Inventory exponent surfaces (competency phrases like "me gusta"), matched
+   * as spans alongside the scene chunks. The scene lexicon holds only AUTHORED
+   * text; a competency exponent in a dynamic NPC line is invisible without
+   * these -- the chunk-matcher-uses-inventory lesson, applied here.
+   */
+  inventoryExponents?: readonly InventoryExponentLike[];
+  /** English-collision surfaces (english-collisions.ts). See computeCoverage. */
+  englishCollisions?: Set<string>;
+  /** Single-word surfaces known target-language now: slated words' paradigm forms. */
+  recognizedTargetSurfaces?: Set<string>;
+}
+
+/** The shape the chunk matcher needs; both LexicalChunk and Exponent satisfy it. */
+export interface InventoryExponentLike {
+  normalizedForm: string;
+  surfaceForms: string[];
+  cefrBand: import("../cefr").CEFRBand;
+  constituentLemmas: string[];
 }
 
 const DEFAULT_RULE_LABEL =
-  "coverage>=0.95 && nonExemptCeilingExceeded===0 && nonExemptOutOfEnvelope<=2";
+  "nonExemptCeilingExceeded===0 && nonExemptOutOfEnvelope<=2 (coverage floor is metric-only)";
 
 function compareViolationSeverity(
   left: EnvelopeViolation,
@@ -163,13 +182,19 @@ export class EnvelopeClassifier {
 
   private resolveChunkMatcher(
     lang: string,
-    sceneLexicon: Pick<SceneVocabularyModel, "contentHash" | "chunks"> | null | undefined
+    sceneLexicon: Pick<SceneVocabularyModel, "contentHash" | "chunks"> | null | undefined,
+    inventoryExponents?: readonly InventoryExponentLike[]
   ): ChunkMatcher | null {
-    if (!sceneLexicon?.chunks?.length) {
+    const sceneChunks = sceneLexicon?.chunks ?? [];
+    const exponents = inventoryExponents ?? [];
+    if (sceneChunks.length === 0 && exponents.length === 0) {
       return null;
     }
 
-    const cacheKey = `${lang}:${sceneLexicon.contentHash}`;
+    // The inventory is static per language; the scene varies by contentHash.
+    // Both legs are in the key so a scene without exponents and a scene with
+    // them never share a matcher.
+    const cacheKey = `${lang}:${sceneLexicon?.contentHash ?? "-"}:inv${exponents.length}`;
     const cached = this.chunkMatcherCache.get(cacheKey);
     if (cached) {
       return cached;
@@ -183,7 +208,7 @@ export class EnvelopeClassifier {
       }
     }
 
-    const matcher = createChunkMatcher(sceneLexicon.chunks, lang);
+    const matcher = createChunkMatcher([...sceneChunks, ...exponents], lang);
     this.chunkMatcherCache.set(cacheKey, matcher);
     return matcher;
   }
@@ -199,7 +224,11 @@ export class EnvelopeClassifier {
   ): EnvelopeVerdict {
     const lang = options.lang ?? learner.targetLanguage;
     const tokens = tokenize(text, lang);
-    const chunkMatcher = this.resolveChunkMatcher(lang, options.sceneLexicon);
+    const chunkMatcher = this.resolveChunkMatcher(
+      lang,
+      options.sceneLexicon,
+      options.inventoryExponents
+    );
     const profile = computeCoverage(
       tokens,
       learner,
@@ -209,7 +238,9 @@ export class EnvelopeClassifier {
       options.questEssentialLemmas ?? new Set(),
       chunkMatcher,
       options.sceneLexicon?.chunks,
-      text
+      text,
+      options.englishCollisions,
+      options.recognizedTargetSurfaces
     );
     const ruleResult = this.rule(profile, learner.estimatedCefrBand, {
       taughtLemmaIds: options.taughtLemmaIds,

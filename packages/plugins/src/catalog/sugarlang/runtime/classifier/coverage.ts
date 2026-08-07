@@ -61,7 +61,20 @@ export function computeCoverage(
   questEssentialLemmas: Set<string> = new Set(),
   chunkMatcher?: ChunkMatcher | null,
   sceneChunks?: LexicalChunk[],
-  sourceText?: string
+  sourceText?: string,
+  /**
+   * English spellings that also resolve in target-language morphology
+   * (english-collisions.ts). A token on this list counts as target-language
+   * only inside a recognized span; alone it is treated as unresolved.
+   */
+  englishCollisions?: Set<string>,
+  /**
+   * Single-word surfaces the system independently knows are target-language
+   * right now -- a slated word's paradigm forms, computed by the caller. The
+   * multi-word spans (exponents, scene chunks) are already handled by the
+   * chunk matcher, whose tokens never reach the guard.
+   */
+  recognizedTargetSurfaces?: Set<string>
 ): CoverageProfile {
   const learnerBand = learner.estimatedCefrBand;
   const bandHistogram = createBandHistogram();
@@ -142,6 +155,20 @@ export function computeCoverage(
 
     const lemma = lemmatize(token, learner.targetLanguage, morphologyIndex);
     if (!lemma) {
+      unknownTokens += 1;
+      continue;
+    }
+
+    // THE ENGLISH-COLLISION GUARD (sugarmagic-latency-psm). "too" resolves to
+    // `toar` and "he" to `haber`; on a mixed line that turned English prose
+    // into phantom violations and inflated the measured ratio. A collision
+    // surface counts as target-language only when something else already says
+    // this token is target-language.
+    const lowerSurface = token.surface.normalize("NFC").toLocaleLowerCase();
+    if (
+      englishCollisions?.has(lowerSurface) &&
+      !recognizedTargetSurfaces?.has(lowerSurface)
+    ) {
       unknownTokens += 1;
       continue;
     }

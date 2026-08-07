@@ -4,6 +4,7 @@ import type {
   QuestDefinition,
   QuestNodeDefinition,
   QuestStageDefinition,
+  TimeOfDayBand,
   QuestStageState,
   SaveSlice
 } from "@sugarmagic/domain";
@@ -132,6 +133,7 @@ export class QuestManager {
   private onEvent: QuestRuntimeEventHandler | null = null;
   private onStateChange: (() => void) | null = null;
   private onAction: QuestRuntimeActionHandler | null = null;
+  private onStageTimeOfDay: ((band: TimeOfDayBand) => void) | null = null;
   private onNarrative: QuestRuntimeNarrativeHandler | null = null;
   private getInventoryCount: QuestInventoryCountProvider = () => 0;
   private hasSpellProvider: QuestSpellStateProvider = () => false;
@@ -154,6 +156,11 @@ export class QuestManager {
 
   setActionHandler(handler: QuestRuntimeActionHandler): void {
     this.onAction = handler;
+  }
+
+  /** Wired to worldTimeStore.setTimeBand; see applyStageTimeOfDay. */
+  setStageTimeOfDayHandler(handler: (band: TimeOfDayBand) => void): void {
+    this.onStageTimeOfDay = handler;
   }
 
   setNarrativeHandler(handler: QuestRuntimeNarrativeHandler): void {
@@ -209,6 +216,7 @@ export class QuestManager {
       stageProgress: new Map([[startStage.stageId, createStageProgress(startStage)]])
     };
     this.activeQuests.set(questDefinitionId, state);
+    this.applyStageTimeOfDay(startStage);
     if (!this.trackedQuestDefinitionId) {
       this.trackedQuestDefinitionId = questDefinitionId;
     }
@@ -745,6 +753,7 @@ export class QuestManager {
       state.stageProgress.set(nextStage.stageId, createStageProgress(nextStage));
     }
 
+    this.applyStageTimeOfDay(nextStage);
     this.emitEvent({
       type: "stage-advance",
       questDefinitionId: definition.definitionId,
@@ -752,6 +761,19 @@ export class QuestManager {
       stageDisplayName: nextStage.displayName
     });
     this.refreshQuest(state);
+  }
+
+  /**
+   * Sets the world clock to the stage's time of day, if it declares one.
+   *
+   * A stage is a scene at a time -- "the dock, late afternoon" -- so the time
+   * rides the stage rather than an action on whichever node happens to run
+   * first. Re-entering a stage re-asserts its time; a stage with no time
+   * leaves the clock wherever it was.
+   */
+  private applyStageTimeOfDay(stage: QuestStageDefinition): void {
+    if (!stage.timeOfDay) return;
+    this.onStageTimeOfDay?.(stage.timeOfDay);
   }
 
   private executeActions(actions: QuestActionDefinition[]): void {

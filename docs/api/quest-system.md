@@ -36,7 +36,16 @@ QuestStageDefinition
   nextStageId: string | null    -- null = quest completes after this stage
   nodeDefinitions: QuestNodeDefinition[]
   entryNodeIds: string[]        -- nodes activated when stage starts
+  timeOfDay: TimeOfDayBand|null -- set on the world clock when the stage
+                                   becomes active; null leaves it alone
 ```
+
+A stage is usually a scene at a time -- "the dock, late afternoon" -- so the
+time rides the stage rather than an action on whichever node happens to run
+first. Set in Studio at Design -> Quest -> select a stage -> **Time of Day**;
+the dropdown offers Morning / Noon / Afternoon / Evening / Night (Noon stores
+`midday`). `dawn` and `dusk` are valid bands but are only reachable through the
+`set-time-of-day` action. Re-entering a stage re-asserts its time.
 
 ### Node
 

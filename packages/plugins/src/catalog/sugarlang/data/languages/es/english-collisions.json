@@ -1,0 +1,30 @@
+{
+  "lang": "es",
+  "note": "English spellings that also resolve in the Spanish morphology index. On a mixed-language line these tokens count as Spanish ONLY inside a recognized Spanish span (an exponent surface, a slated word's form, a scene chunk); on their own they are treated as unresolved. Seeded exclusively from measured phantom violations -- see sugarmagic-latency-psm. Membership is pinned by a test; additions must name the measurement that justified them.",
+  "surfaces": [
+    "a",
+    "are",
+    "aroma",
+    "be",
+    "case",
+    "come",
+    "dice",
+    "do",
+    "fine",
+    "he",
+    "mate",
+    "me",
+    "no",
+    "okay",
+    "once",
+    "red",
+    "sale",
+    "snack",
+    "so",
+    "ten",
+    "too",
+    "tour",
+    "use",
+    "vine"
+  ]
+}

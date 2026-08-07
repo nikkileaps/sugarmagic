@@ -229,6 +229,7 @@ describe("compileSugarlangScene", () => {
               displayName: "Stage 2",
               nextStageId: null,
               entryNodeIds: ["objective-altar-2"],
+              timeOfDay: null,
               nodeDefinitions: [
                 {
                   nodeId: "objective-altar-2",

@@ -259,3 +259,171 @@ describe("JudgeStage", () => {
     expect(result.output.skipped).toBe(false);
   });
 });
+
+describe("phase 2: a language failure gates the turn (sugarmagic-latency-tsg)", () => {
+  function provider(verdict: Record<string, unknown>): JudgeProvider {
+    return { judgeReply: vi.fn(async () => verdict as never) };
+  }
+
+  it("THE ONE THAT MATTERS: languageFit false with a reason fails the turn", async () => {
+    // Phase 1 reported this and did nothing. It now goes down the same path a
+    // character or safety failure takes, so Regenerate rewrites the line.
+    const stage = new JudgeStage(
+      provider({
+        passed: true,
+        violations: [],
+        repairHint: null,
+        languageFit: false,
+        languageNote: "Far beyond CEFR A1; the learner cannot parse it."
+      })
+    );
+
+    const result = await stage.execute(
+      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeContext() as never
+    );
+
+    expect(result.output.passed).toBe(false);
+    expect(result.status).toBe("degraded");
+    // The note reaches Regenerate, which reads violations verbatim -- informed,
+    // not a blind retry.
+    expect(result.output.violations.join(" ")).toContain("Far beyond CEFR A1");
+    expect(result.output.repairHint).toContain("cannot parse it");
+  });
+
+  it("NO REASON, NO GATE: a bare false verdict does not spend a regeneration", async () => {
+    // Regenerate would have nothing to act on, so it would just roll the dice
+    // again for 5-8s. That is the outcome this story exists to avoid.
+    const stage = new JudgeStage(
+      provider({
+        passed: true,
+        violations: [],
+        repairHint: null,
+        languageFit: false,
+        languageNote: null
+      })
+    );
+
+    const result = await stage.execute(
+      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeContext() as never
+    );
+
+    expect(result.output.passed).toBe(true);
+    expect(result.status).toBe("ok");
+  });
+
+  it("a passing language verdict changes nothing", async () => {
+    const stage = new JudgeStage(
+      provider({
+        passed: true,
+        violations: [],
+        repairHint: null,
+        languageFit: true,
+        languageNote: null
+      })
+    );
+
+    const result = await stage.execute(
+      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeContext() as never
+    );
+
+    expect(result.output.passed).toBe(true);
+    expect(result.output.violations).toEqual([]);
+  });
+
+  it("keeps the rubric's own repair hint when there is a real violation too", async () => {
+    // The language note must not overwrite an instruction about a genuine
+    // safety or character failure.
+    const stage = new JudgeStage(
+      provider({
+        passed: false,
+        violations: ["SAFETY"],
+        repairHint: "Stop mentioning the developer.",
+        languageFit: false,
+        languageNote: "Too advanced."
+      })
+    );
+
+    const result = await stage.execute(
+      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeContext() as never
+    );
+
+    expect(result.output.passed).toBe(false);
+    expect(result.output.repairHint).toBe("Stop mentioning the developer.");
+    expect(result.output.violations).toContain("SAFETY");
+    expect(result.output.violations.join(" ")).toContain("Too advanced");
+  });
+
+  it("an older gateway that returns no language fields still passes cleanly", async () => {
+    // languageFit undefined must never read as a failure.
+    const stage = new JudgeStage(provider({ passed: true, violations: [], repairHint: null }));
+
+    const result = await stage.execute(
+      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeContext() as never
+    );
+
+    expect(result.output.passed).toBe(true);
+    expect(result.status).toBe("ok");
+  });
+});
+
+describe("mini-review fix: a language failure must not escalate (sugarmagic-latency-tsg)", () => {
+  function provider(verdict: Record<string, unknown>): JudgeProvider {
+    return { judgeReply: vi.fn(async () => verdict as never) };
+  }
+
+  async function run(verdict: Record<string, unknown>) {
+    const stage = new JudgeStage(provider(verdict));
+    return stage.execute(
+      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeContext() as never
+    );
+  }
+
+  it("THE ONE THAT MATTERS: a language-only failure is marked, not treated as a judge failure", async () => {
+    // `judge-fail` feeds two escalators: at 3 the NPC's line is replaced by a
+    // canned template, and at 3 stalls the conversation force-closes. Neither
+    // is a remedy for "too advanced" -- the template is not better Spanish.
+    const result = await run({
+      passed: true,
+      violations: [],
+      repairHint: null,
+      languageFit: false,
+      languageNote: "Far beyond CEFR A1."
+    });
+
+    expect(result.output.passed).toBe(false);
+    expect(result.output.languageOnlyFailure).toBe(true);
+    expect(result.diagnostics.fallbackReason).toBe("judge-language-fail");
+  });
+
+  it("a REAL rubric failure keeps judge-fail and still escalates", async () => {
+    const result = await run({
+      passed: false,
+      violations: ["SAFETY"],
+      repairHint: "Stop.",
+      languageFit: true,
+      languageNote: null
+    });
+
+    expect(result.output.languageOnlyFailure).toBe(false);
+    expect(result.diagnostics.fallbackReason).toBe("judge-fail");
+  });
+
+  it("a rubric failure ALONGSIDE a language one escalates -- language does not shield it", async () => {
+    const result = await run({
+      passed: false,
+      violations: ["SAFETY"],
+      repairHint: "Stop.",
+      languageFit: false,
+      languageNote: "Also too advanced."
+    });
+
+    expect(result.output.languageOnlyFailure).toBe(false);
+    expect(result.diagnostics.fallbackReason).toBe("judge-fail");
+  });
+});

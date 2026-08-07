@@ -560,11 +560,11 @@ describe("end-to-end conversation golden", () => {
 
     // And repair never fired anywhere in the run. (There is no second
     // mechanism: the autoSimplify fallback was deleted 2026-08-02.)
-    const repairs = await telemetry.query({ eventKinds: ["verify.repair-triggered"] });
-    expect(repairs.length).toBe(0);
+    const allEvents = await telemetry.query({});
+    expect(allEvents.filter((e) => (e.kind as string) === "verify.repair-triggered").length).toBe(0);
   });
 
-  it("B2 learner: all-English NPC turn triggers ratio repair (the playtest bug)", async () => {
+  it("B2 learner: an all-English NPC turn ships, with under-ratio recorded (gate removed)", async () => {
     // debugBandOverride:"B2" fires a synthetic PlacementCompletionEvent
     // (confidence=1.0) during the first resolveForExecution call. FallbackTeacherPolicy
     // picks target-dominant posture (confidence >= 0.7) with directedRatio=0.85.
@@ -604,23 +604,24 @@ describe("end-to-end conversation golden", () => {
 
     const turn = await host.submitInput({ kind: "advance" });
 
-    // The repaired Spanish text replaced the all-English original.
-    expect(turn?.text).toBe(repairedSpanishText);
+    // THE GATE IS GONE (sugarmagic-latency-psm; nikki 2026-08-06). The
+    // all-English original SHIPS: verify records the under-ratio verdict and
+    // alters nothing. This test used to assert the repaired Spanish replaced
+    // it -- that rewrite cost 5-12s on essentially every real turn, almost
+    // always on false alarms. The RECORD is now the contract:
+    expect(turn?.text).toBe(allEnglishText);
 
-    // verify.ratio-verdict fired with under-ratio for the all-English original.
+    // verify.ratio-verdict still fires with under-ratio for the all-English
+    // original -- the instrument survives the gate.
     const ratioVerdicts = await telemetry.query({ eventKinds: ["verify.ratio-verdict"] });
     const underRatioVerdicts = ratioVerdicts.filter(
       (v) => (v as unknown as { conformance: string }).conformance === "under-ratio"
     );
     expect(underRatioVerdicts.length).toBeGreaterThan(0);
 
-    // verify.repair-triggered fired and its instruction referenced the target ratio.
-    const repairs = await telemetry.query({ eventKinds: ["verify.repair-triggered"] });
-    expect(repairs.length).toBeGreaterThan(0);
-    const repairEvent = repairs[0] as unknown as { violations: string[] };
-    // Both the fallback policy and the 087.6 schedule-driven realizer read the
-    // shared band-envelope table, so target-dominant is 85% on either path.
-    expect(repairEvent.violations.some((v) => v.includes("85%") && v.includes("Spanish"))).toBe(true);
+    // And no repair event exists any more, anywhere.
+    const allEvents = await telemetry.query({});
+    expect(allEvents.filter((e) => (e.kind as string) === "verify.repair-triggered").length).toBe(0);
   });
 
   it("verify: an unrepairable turn SHIPS UNCHANGED rather than being rewritten", async () => {

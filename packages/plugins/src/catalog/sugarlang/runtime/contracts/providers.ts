@@ -170,6 +170,13 @@ export interface TeacherContext {
   learnerProgress?: LearnerProgress;
   lang: TeacherLanguageContext;
   calibrationActive: boolean;
+  /**
+   * True when this invocation is a background re-plan the player is not
+   * waiting for (7gp.1). Suppresses the turn-timeline facts: its tokens and
+   * latency belong to no turn, and charging them to whichever turn happens to
+   * be open would make the latency measurements lie.
+   */
+  backgroundReplan?: boolean;
 }
 
 /**

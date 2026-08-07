@@ -366,25 +366,6 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "verify.repair-triggered",
-      {
-        sceneId: string;
-        originalText: string;
-        repairedText?: string | null;
-        violations: string[];
-        repairPrompt: string[];
-        candidateCount: number;
-        selectedIndex: number;
-        candidateScores: Array<{
-          score: number;
-          passes: boolean;
-          coverageRatio: number;
-          measuredRatio: number;
-          conformance: string;
-        }>;
-      }
-    >
-  | TelemetryEventOf<
       "observe.observations-applied",
       {
         sceneId: string;
@@ -437,13 +418,6 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "verify.deterministic-bypass",
-      {
-        sceneId?: string | null;
-        reason: string;
-      }
-    >
-  | TelemetryEventOf<
       "verify.drift-sample",
       {
         sceneId: string | null;
@@ -454,6 +428,8 @@ export type TelemetryEvent =
         ratioConformance: string;
         withinEnvelope: boolean;
         voiceRetentionScore: number;
+        /** Canned/fallback turn: exclude from quality distributions. */
+        deterministic: boolean;
       }
     >
   | TelemetryEventOf<

@@ -18,6 +18,7 @@
  * Status: active
  */
 
+import { noteTurnFact } from "@sugarmagic/runtime-core";
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
 import { QUEST_CONTEXT_ANNOTATION_KEY } from "../quest/quest-context-middleware";
 import type { QuestContextAnnotation } from "../quest/quest-context-middleware";
@@ -141,11 +142,70 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
         ...(judgeDirectives.length > 0 ? { externalDirectives: judgeDirectives } : {})
       });
 
+      // PHASE 2: A LANGUAGE FAILURE NOW STOPS THE LINE.
+      //
+      // Phase 1 reported and did nothing. This routes a language failure down
+      // the path a character or safety failure already takes -- Regenerate --
+      // rather than building a second repair mechanism. The gateway keeps
+      // `passed` meaning "the rubric passed" and reports language separately,
+      // so the decision to gate lives here, in the plugin, and flipping it
+      // needs no gateway deploy.
+      //
+      // ONLY WITH A REASON. A false verdict carrying no note gives Regenerate
+      // nothing to act on, and a blind retry is what the story warns against:
+      // it would spend 5-8s to roll the dice again. No note, no gate.
+      //
+      // REVISIT TRIGGER: this was switched on against a 0-of-3 flag rate,
+      // which is barely any data. If `judgeLanguageFit=FALSE` turns out common
+      // in real play, this recreates the every-turn repair the latency epic
+      // just deleted, with a smarter judge doing it. Watch the Regenerate line
+      // on the turn timeline; if it is firing often, take this branch back out
+      // and fix the generator and Teacher prompts instead (sugarmagic-latency-tsg).
+      const languageNote = verdict.languageNote?.trim();
+      const languageFailure = verdict.languageFit === false && !!languageNote;
+
       const output: JudgeResult = {
         ...verdict,
+        passed: verdict.passed && !languageFailure,
+        violations: languageFailure
+          ? [...verdict.violations, `LANGUAGE_FIT: ${languageNote}`]
+          : verdict.violations,
+        // Keep a rubric hint if there is one -- it is about a real violation.
+        // Otherwise the language note IS the instruction.
+        repairHint: verdict.repairHint ?? (languageFailure ? (languageNote ?? null) : null),
+        // Language alone failed this: the rubric itself passed.
+        languageOnlyFailure: languageFailure && verdict.passed,
         skipped: false,
         errorOccurred: false
       };
+
+      // ON THE TIMELINE, NOT ONLY IN DIAGNOSTICS. The verdict has always been
+      // in the diagnostics payload, but the console collapses that object, so
+      // a turn that failed the judge and paid seconds of Regenerate showed
+      // only status:degraded with no readable reason. A flag rate cannot be
+      // measured from something nobody can read (sugarmagic-latency-tsg).
+      noteTurnFact(
+        "judge",
+        output.passed ? "pass" : `FAIL:${output.violations.join(",") || "unspecified"}`
+      );
+      // ALWAYS RECORDED, INCLUDING WHEN IT PASSES. Printing only failures made
+      // absence mean two different things -- "the judge saw no language
+      // problem" and "this gateway predates the language dimension and never
+      // returned one" -- which are indistinguishable in a log and would have
+      // been read as a 0% flag rate either way. That is the measurement tsg
+      // phase 1 exists to take, so it must not be able to lie. Absent now
+      // means only one thing: an old gateway.
+      if (output.languageFit !== undefined) {
+        noteTurnFact(
+          "judgeLanguageFit",
+          output.languageFit ? "true" : `FALSE:${output.languageNote ?? "unspecified"}`
+        );
+      }
+      // Distinct from a plain FALSE: this says the flag actually cost a
+      // regeneration. It is the number that decides whether phase 2 stays.
+      if (languageFailure) {
+        noteTurnFact("judgeLanguageGated", true);
+      }
 
       return {
         output,
@@ -158,7 +218,21 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
             violations: output.violations,
             repairHint: output.repairHint
           },
-          output.passed ? null : "judge-fail"
+          // A DISTINCT REASON, BECAUSE THE LADDER MUST DIVERGE HERE.
+          //
+          // `judge-fail` feeds two escalators: consecutiveJudgeFailures, which
+          // at 3 replaces the NPC's line with a canned template, and
+          // isStalledTurn, which at 3 force-closes the conversation. Both are
+          // right for a reply that is unsafe or out of character. Neither is
+          // right for one that is merely too advanced -- the template is not
+          // better Spanish, so swapping it in trades good dialogue that taught
+          // poorly for worse dialogue that also taught poorly, and hanging up
+          // ends a session the player did nothing to break.
+          //
+          // The recourse for a language failure is: regenerate once, then ship
+          // the line and record the flag. Same principle psm settled -- out of
+          // envelope but grammatical beats in-envelope nonsense.
+          output.passed ? null : output.languageOnlyFailure ? "judge-language-fail" : "judge-fail"
         ),
         status: output.passed ? "ok" : "degraded"
       };

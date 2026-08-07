@@ -16,6 +16,7 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
+import { beginTurnTimeline } from "@sugarmagic/runtime-core";
 import { SugarlangMissingTargetLanguageError } from "../../config";
 import { drainPendingHover } from "../dialogue-entry-decorator";
 import {
@@ -81,6 +82,11 @@ export function createSugarLangContextMiddleware(
     priority: 10,
     stage: "context",
     async prepare(execution) {
+      // Spike (sugarmagic-latency-cex): first thing in a turn, so the timeline
+      // covers the Teacher call too. That call runs before any stage and shows
+      // up in no stage diagnostic, which is why a nine-second turn could only be
+      // explained by hand-reading interleaved console lines.
+      beginTurnTimeline(execution.selection.npcDisplayName ?? "turn");
       if (!shouldRunSugarlangForExecution(execution)) {
         return execution;
       }

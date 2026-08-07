@@ -5,7 +5,7 @@
  *          Runs only the structural/deterministic gates -- NO LLM fidelity
  *          judge on the turn path (bake-only per design).
  *
- *          Gate 1: applyMixedTextEnvelopePredicate (allowance + ceiling legs)
+ *          Gate 1: applyEnvelopeRule (allowance + ceiling legs; floor is metric-only)
  *          Gate 2: computeLanguageRatioVerdict
  *          Gate 3: computeVoiceRetentionScore (voiceSpec null -> 1.0)
  *          Gate 4: Deterministic fidelity floor -- at least half the introduce
@@ -26,7 +26,7 @@ import type { SupportPosture } from "../contracts/pedagogy";
 import type { VariantVerdict } from "../contracts/baked-variant";
 import type { Exponent } from "../contracts/competency-inventory";
 import type { LexicalAtlasProvider } from "../types";
-import { applyMixedTextEnvelopePredicate } from "../classifier/envelope-rule";
+import { applyEnvelopeRule } from "../classifier/envelope-rule";
 import { computeLanguageRatioVerdict } from "../classifier/language-ratio";
 import { computeVoiceRetentionScore } from "../classifier/envelope-classifier";
 import { VOICE_RETENTION_PASS_THRESHOLD } from "./generate-variant";
@@ -99,10 +99,12 @@ export function verifyLiveRender(input: VerifyLiveRenderInput): VariantVerdict {
   );
 
   // Gate 1: Mixed-text envelope predicate (allowance + ceiling; no coverage floor).
-  const envelopeResult = applyMixedTextEnvelopePredicate(profile, band, {
+  // One rule for every path (latency epic): the floor no longer gates, so the
+  // unified rule IS the old mixed-text predicate -- allowance + ceiling.
+  const envelopeResult = applyEnvelopeRule(profile, band, {
     taughtLemmaIds: null
   });
-  const envelopePasses = envelopeResult.passes;
+  const envelopePasses = envelopeResult.withinEnvelope;
 
   // Gate 2: Language ratio.
   const ratioVerdict = computeLanguageRatioVerdict(profile, directedRatio, posture);

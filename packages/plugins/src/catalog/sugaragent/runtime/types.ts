@@ -373,6 +373,24 @@ export interface JudgeResult {
   passed: boolean;
   violations: string[];
   repairHint: string | null;
+  /**
+   * Whether the reply suits the player's language level. Contributed by a
+   * language plugin; absent when none is installed.
+   *
+   * tsg phase 2 lets this fail a turn, so it DOES reach `passed` -- but only
+   * through `languageOnlyFailure`, never through the strike governors.
+   */
+  languageFit?: boolean;
+  languageNote?: string | null;
+  /**
+   * True when language was the ONLY reason this turn failed.
+   *
+   * The escalation ladder must not treat it like a character or safety
+   * failure: a too-advanced line is still in character, grounded and safe, so
+   * the terminal recourse is to ship it, not to swap in a canned template and
+   * eventually close the conversation. See JudgeStage.
+   */
+  languageOnlyFailure?: boolean;
   /** true when the judge was not invoked (no LLM text, no provider) */
   skipped: boolean;
   /** true when the judge errored; verdict is fail-open (passed: true) */

@@ -66,6 +66,25 @@ function resolveFailCeiling(directedRatio: number): number {
  * Returns "under-ratio" when measuredRatio is grossly below the directed target,
  * and "over-ratio" when it is grossly above -- both directions are failures, and
  * only the first one used to exist.
+ *
+ * THIS NUMBER IS AN INSTRUMENT, NOT A BAR. Do not promote it to a gate or a
+ * quality threshold without reading sugarmagic-latency-en3 first.
+ *
+ * Deciding how much of a MIXED line is target language keeps being wrong in a
+ * new way each time the last way is fixed. Morphology homographs (too -> toar,
+ * he -> haber) were fixed by the english-collisions guard; live play then
+ * produced more of them (snack, fine); and then a different cause entirely --
+ * `look` and `sandwich` are genuine Spanish LOANWORDS in the atlas, so English
+ * text collides with a real Spanish lemma and no morphology fix touches it.
+ * The set of failure classes has not closed.
+ *
+ * nikki deferred baselining it on 2026-08-06 for exactly that reason, and the
+ * epic's principle is the general form: code MEASURES, the model JUDGES.
+ * Whether a line suits this learner is the Judge's call (sugarmagic-latency-tsg).
+ *
+ * REVISIT TRIGGER: if the Judge-side language check ever produces a flag rate
+ * that itself needs validating, a trustworthy ratio becomes worth building --
+ * and it will need a real answer to loanwords, not another word list.
  */
 export function computeLanguageRatioVerdict(
   profile: CoverageProfile,

@@ -16,6 +16,7 @@
  */
 
 import type { ConversationMiddleware } from "@sugarmagic/runtime-core";
+import { markTurnPhase, noteTurnFact } from "@sugarmagic/runtime-core";
 import {
   createNoOpTelemetrySink,
   createTelemetryEvent,
@@ -28,9 +29,14 @@ import type { SugarlangRuntimeServices } from "../runtime-services";
 import type { SugarlangConstraint } from "../types";
 import { createSugarlangLogger } from "../logger";
 import { vocabularyRefs } from "../contracts/teachable-ref";
+import { allForms } from "../classifier/word-forms";
+import { englishCollisionSurfaces } from "../classifier/english-collisions";
+import { getAllInventoryExponents } from "../inventory/competency-inventory-loader";
+import type { Exponent } from "../contracts/competency-inventory";
 import { formatAlwaysTargetWords } from "../teacher/always-target-words";
 import { INFLECT_SLATED_WORDS_PROMPT } from "../teacher/slate-prompt";
 import { describeLanguageMix } from "../teacher/band-envelope";
+import { ENVELOPE_KRASHEN_FLOOR } from "../classifier/envelope-rule";
 import { languageDisplayName } from "../language-names";
 import { exceedsReadabilityCeiling } from "../teacher/band-envelope";
 import {
@@ -58,69 +64,21 @@ import {
  * not about what a lexical scan surfaced. Competency refs carry no lemmaId and
  * are filtered out by `vocabularyRefs`.
  */
-function taughtLemmaIds(constraint: SugarlangConstraint): string[] {
-  return vocabularyRefs(constraint.targetVocab.introduce).map((ref) => ref.lemmaId);
-}
-
-export interface SugarLangVerifyMiddlewareDeps {
-  services: SugarlangRuntimeServices;
-  logger?: SugarlangLoggerLike;
-  telemetry?: TelemetrySink;
-}
-
-const REPAIR_CANDIDATE_COUNT = 3;
-// Published diagnostic key from sugaragent's moderation middleware (084.6).
 // Matches MODERATION_DEFLECTED_DIAG_KEY; never import across the plugin boundary.
 const MODERATION_DEFLECTED_DIAG = "moderationDeflected";
 
-interface CandidateScore {
-  score: number;
-  passes: boolean;
-  coverageRatio: number;
-  measuredRatio: number;
-  conformance: RatioConformance;
-  voiceRetentionScore: number;
-}
-
-interface RepairResult {
-  selectedText: string;
-  selectedIndex: number;
-  selectedPasses: boolean;
-  candidateScores: CandidateScore[];
-}
-
-function scoreCandidateVerdict(verdict: EnvelopeVerdict): Omit<CandidateScore, "voiceRetentionScore"> {
-  const directed = verdict.languageRatioVerdict.directedRatio;
-  const measured = verdict.languageRatioVerdict.measuredRatio;
-
-  // 090.4: SCORED ON DISTANCE FROM THE TARGET, not on "did we reach it".
-  //
-  // This was `Math.min(measured / directed, 1)`, which caps at 1 -- so a reply
-  // three times over the directed ratio scored EXACTLY the same as one that hit
-  // it. Overshoot was invisible to selection as well as to the pass gate, so
-  // among several candidates the most over-the-top one could win on coverage
-  // with nothing pulling the other way.
-  const ratioFraction =
-    directed > 0 ? Math.max(0, 1 - Math.abs(measured - directed) / directed) : 1;
-
-  return {
-    score: verdict.profile.coverageRatio * 0.5 + ratioFraction * 0.5,
-    // Both directions fail. `over-ratio` did not exist as a verdict until 090.4,
-    // so "too much target language" was unrejectable -- an A1 learner could be
-    // handed a full-Spanish paragraph and every gate passed it.
-    passes:
-      verdict.withinEnvelope &&
-      verdict.languageRatioVerdict.conformance !== "under-ratio" &&
-      verdict.languageRatioVerdict.conformance !== "over-ratio",
-    coverageRatio: verdict.profile.coverageRatio,
-    measuredRatio: measured,
-    conformance: verdict.languageRatioVerdict.conformance
-  };
+function taughtLemmaIds(constraint: SugarlangConstraint): string[] {
+  return vocabularyRefs(constraint.targetVocab.introduce).map((ref) => ref.lemmaId);
 }
 
 /**
  * Returns [0,1]: fraction of the voice spec's markers (interjections, gesture tags)
  * present in the candidate text. Returns 1 when spec is null (neutral -- no preference).
+ *
+ * SURVIVED the repair-path deletion (latency epic): the repair's candidate
+ * scoring died, but this also feeds the verify.drift-sample telemetry and the
+ * voiceRetention timeline fact, and is re-exported through envelope-classifier
+ * into the bake paths.
  */
 export function computeVoiceRetentionScore(
   text: string,
@@ -143,148 +101,12 @@ export function computeVoiceRetentionScore(
   return checks === 0 ? 1 : retained / checks;
 }
 
-function buildVoiceRubricLine(spec: VoiceChannelSpec): string | null {
-  const parts: string[] = [];
-  if (spec.interjections.length > 0) {
-    parts.push(spec.interjections.join(", "));
-  }
-  if (spec.hasGestureTags) {
-    parts.push("any *...* gesture tags");
-  }
-  if (parts.length === 0) return null;
-  return `Keep the NPC's signature markers verbatim (${parts.join("; ")}) -- these are exempt from simplification.`;
+export interface SugarLangVerifyMiddlewareDeps {
+  services: SugarlangRuntimeServices;
+  logger?: SugarlangLoggerLike;
+  telemetry?: TelemetrySink;
 }
 
-function parseCandidates(text: string): string[] {
-  let cleaned = text.trim();
-  // Strip markdown code fences (```json ... ``` or ``` ... ```) before parsing.
-  const fenceMatch = cleaned.match(/^```(?:json)?\s*([\s\S]*?)```$/s);
-  if (fenceMatch?.[1] !== undefined) {
-    cleaned = fenceMatch[1].trim();
-  }
-  try {
-    const parsed = JSON.parse(cleaned) as unknown;
-    if (Array.isArray(parsed) && parsed.every((c) => typeof c === "string")) {
-      return (parsed as string[]).filter((c) => (c as string).trim().length > 0);
-    }
-  } catch {}
-  // Fallback: treat the whole response as a single candidate
-  return cleaned ? [cleaned] : [];
-}
-
-async function repairWithBestOfN(
-  originalText: string,
-  originalVerdict: EnvelopeVerdict,
-  constraint: SugarlangConstraint,
-  llmClient: SugarlangLLMClient | null,
-  checkCandidate: (text: string) => EnvelopeVerdict,
-  voiceSpec: VoiceChannelSpec | null | undefined,
-  n: number = REPAIR_CANDIDATE_COUNT
-): Promise<RepairResult | null> {
-  if (!llmClient) {
-    return null;
-  }
-
-  const targetLang = languageDisplayName(constraint.targetLanguage);
-  const pct = Math.round(constraint.targetLanguageRatio * 100);
-  // 090.4: the repair prompt talks about WORDS, so it narrows to the vocabulary
-  // half explicitly. `vocabularyRefs` rather than an inline kind check, so this
-  // reads as a decision -- a competency is an act and has no place in "use these
-  // words if natural"; its exponents reach the model through the generator
-  // overlay instead.
-  const vocabContext = [
-    `Forbidden words (use simpler synonyms): ${vocabularyRefs(constraint.targetVocab.avoid).map((l) => l.lemmaId).join(", ") || "(none)"}.`,
-    `Use these words if natural: ${[
-      ...vocabularyRefs(constraint.targetVocab.introduce).map((l) => l.lemmaId),
-      ...vocabularyRefs(constraint.targetVocab.reinforce).map((l) => l.lemmaId)
-    ].join(", ") || "(none)"}. Do not force them.`
-  ].join("\n");
-  const voiceRubricLine = voiceSpec ? buildVoiceRubricLine(voiceSpec) : null;
-
-  const result = await llmClient.generate({
-    systemPrompt: [
-      `You are editing an NPC line for a ${targetLang}-learning game.`,
-      `Say the same thing in simpler, clearer language.`,
-      `Preserve the meaning and any important information.`,
-      `Simplify the expression, never change what is being communicated.`,
-      `Do NOT add inline glosses, parenthetical translations, or line-by-line word pairings.`,
-      `The NPC speaks naturally -- never write a word followed by its translation on the next line.`,
-      ...(voiceRubricLine ? [voiceRubricLine] : []),
-      // THE THIRD PATH THAT WRITES WHAT THE PLAYER READS. Repair rewrites the
-      // turn and assigns the result straight back, so a line that was generated
-      // correctly can be replaced by one that was never told these rules.
-      // Repair fires on ordinary under-ratio turns at the anchored end, which
-      // is exactly the band these rules exist for.
-      ...formatAlwaysTargetWords(
-        constraint.targetLanguage,
-        constraint.learnerCefr,
-        targetLang
-      ),
-      ...(vocabularyRefs(constraint.targetVocab.introduce).length > 0 ||
-      vocabularyRefs(constraint.targetVocab.reinforce).length > 0
-        ? [INFLECT_SLATED_WORDS_PROMPT]
-        : []),
-      `Return exactly ${n} alternative versions as a JSON array.`
-    ].join(" "),
-    userPrompt: [
-      `Original: ${originalText}`,
-      `Learner level: ${constraint.learnerCefr}. Sentence complexity: ${constraint.sentenceComplexityCap}.`,
-      // describeLanguageMix rather than a third phrasing of the same fact --
-      // the bake and the overlay already share it, and this one had drifted to
-      // a bare percentage with none of the posture guidance.
-      describeLanguageMix(
-        constraint.supportPosture,
-        targetLang,
-        constraint.targetLanguageRatio
-      ),
-      vocabContext,
-      ``,
-      `Return a JSON array of exactly ${n} versions, nothing else: ["...", "...", "..."]`
-    ].join("\n"),
-    maxTokens: 160 * n + 40
-  });
-
-  const candidates = parseCandidates(result.text);
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const originalScore = scoreCandidateVerdict(originalVerdict);
-  const scored = candidates.map((text) => ({
-    text,
-    details: {
-      ...scoreCandidateVerdict(checkCandidate(text)),
-      voiceRetentionScore: computeVoiceRetentionScore(text, voiceSpec)
-    } satisfies CandidateScore
-  }));
-
-  // Among passing candidates, prefer the one with highest voice retention
-  const passing = scored.filter((c) => c.details.passes);
-  if (passing.length > 0) {
-    const best = passing.reduce((a, b) =>
-      b.details.voiceRetentionScore > a.details.voiceRetentionScore ? b : a
-    );
-    return {
-      selectedText: best.text,
-      selectedIndex: scored.indexOf(best),
-      selectedPasses: true,
-      candidateScores: scored.map((c) => c.details)
-    };
-  }
-
-  // No passing candidate: use best-scoring by envelope/ratio if it beats the original
-  const best = scored.reduce((a, b) => (b.details.score > a.details.score ? b : a));
-  if (best.details.score > originalScore.score) {
-    return {
-      selectedText: best.text,
-      selectedIndex: scored.indexOf(best),
-      selectedPasses: false,
-      candidateScores: scored.map((c) => c.details)
-    };
-  }
-
-  return null;
-}
 
 export function createSugarLangVerifyMiddleware(
   deps: SugarLangVerifyMiddlewareDeps
@@ -382,6 +204,31 @@ export function createSugarLangVerifyMiddleware(
         voiceSpec && voiceSpec.interjections.length > 0
           ? new Set(voiceSpec.interjections)
           : undefined;
+      // THE HONEST-INSTRUMENT INPUTS (sugarmagic-latency-psm). A slated word's
+      // paradigm forms are target-language wherever they appear; competency
+      // exponents ("me gusta") are matched as spans even in dynamic lines the
+      // scene lexicon never saw; and English-collision spellings count only
+      // inside one of those. Without these, English prose reads as Spanish and
+      // every recorded number lies.
+      const slateForms = new Set<string>();
+      for (const ref of vocabularyRefs([
+        ...constraint.targetVocab.introduce,
+        ...constraint.targetVocab.reinforce
+      ])) {
+        slateForms.add(ref.lemmaId.normalize("NFC").toLocaleLowerCase());
+        for (const form of allForms(
+          services.atlas.getForms(ref.lemmaId, constraint.targetLanguage)
+        )) {
+          slateForms.add(form.normalize("NFC").toLocaleLowerCase());
+        }
+      }
+      let inventoryExponents: Exponent[] | undefined;
+      try {
+        inventoryExponents = getAllInventoryExponents(constraint.targetLanguage);
+      } catch {
+        // No inventory for this language: spans fall back to scene chunks only.
+      }
+
       const verdict = services.classifier.check(normalizedTurn.text, learner, {
         taughtLemmaIds: scene ? taughtLemmaIds(constraint) : null,
         knownEntities: scene ? new Set(scene.properNouns) : new Set(),
@@ -393,7 +240,10 @@ export function createSugarLangVerifyMiddleware(
         sessionId,
         turnId: traceTurnId,
         directedRatio: constraint.targetLanguageRatio,
-        supportPosture: constraint.supportPosture
+        supportPosture: constraint.supportPosture,
+        inventoryExponents,
+        englishCollisions: englishCollisionSurfaces(constraint.targetLanguage),
+        recognizedTargetSurfaces: slateForms
       });
       await emitTelemetry(
         telemetry,
@@ -446,6 +296,13 @@ export function createSugarLangVerifyMiddleware(
         execution.state["sugaragent.session"] as { history?: unknown[] } | undefined
       )?.history;
       const turnIndex = Array.isArray(sessionHistory) ? sessionHistory.length : 0;
+      // Canned/fallback turns are marked ON the sample rather than skipped or
+      // separately evented (the old verify.deterministic-bypass event died with
+      // the gate): unmarked deterministic turns would silently pollute the
+      // distributions the quality baseline reads.
+      const isDeterministic =
+        normalizedTurn.diagnostics?.llmBackend === "deterministic" ||
+        normalizedTurn.diagnostics?.[MODERATION_DEFLECTED_DIAG] === true;
       await emitTelemetry(
         telemetry,
         createTelemetryEvent("verify.drift-sample", {
@@ -459,7 +316,8 @@ export function createSugarLangVerifyMiddleware(
           directedRatio: verdict.languageRatioVerdict.directedRatio,
           ratioConformance: verdict.languageRatioVerdict.conformance,
           withinEnvelope: verdict.withinEnvelope,
-          voiceRetentionScore: computeVoiceRetentionScore(originalTurnText, voiceSpec)
+          voiceRetentionScore: computeVoiceRetentionScore(originalTurnText, voiceSpec),
+          deterministic: isDeterministic
         }),
         logger
       );
@@ -515,127 +373,57 @@ export function createSugarLangVerifyMiddleware(
         ratioVerdict.measuredRatio,
         constraint.learnerCefr
       );
-      if (
-        verdict.withinEnvelope &&
-        ratioVerdict.conformance !== "under-ratio" &&
-        !tooDenseToRead
-      ) {
-        return normalizedTurn;
-      }
 
-      // Deterministic-skip: no repair on canned/fallback turns (084.6).
-      // Classifier + telemetry ran above to keep the metric honest.
-      const isDeterministic =
-        normalizedTurn.diagnostics?.llmBackend === "deterministic" ||
-        normalizedTurn.diagnostics?.[MODERATION_DEFLECTED_DIAG] === true;
-      if (isDeterministic) {
-        await emitTelemetry(
-          telemetry,
-          createTelemetryEvent("verify.deterministic-bypass", {
-            conversationId,
-            sessionId,
-            turnId: traceTurnId,
-            timestamp: Date.now(),
-            sceneId: sceneId ?? null,
-            reason: normalizedTurn.diagnostics?.moderationDeflected === true ? "moderation-deflected" : "deterministic-backend"
-          }),
-          logger
-        );
-        return normalizedTurn;
-      }
-
-      // Build violation labels for telemetry (not used as the repair prompt -- 083.2
-      // uses the SAY IT SIMPLER framing inside repairWithBestOfN).
-      const violationLabels: string[] = [];
-      if (ratioVerdict.conformance === "under-ratio") {
-        const pct = Math.round(constraint.targetLanguageRatio * 100);
-        violationLabels.push(
-          `Rewrite this reply so about ${pct}% of it is in ${languageDisplayName(constraint.targetLanguage)}; keep the meaning.`
-        );
-      }
-      // The other direction. Without this the ceiling triggered a repair whose
-      // violation list was EMPTY -- the model was asked to fix a line and never
-      // told what was wrong with it, which is worse than not repairing at all.
-      if (tooDenseToRead) {
-        const pct = Math.round(constraint.targetLanguageRatio * 100);
-        violationLabels.push(
-          `This is too dense to read at ${constraint.learnerCefr}. Rewrite it with about ${pct}% ${languageDisplayName(constraint.targetLanguage)} and the rest in plain English; keep the meaning.`
-        );
-      }
-      violationLabels.push(
-        ...verdict.violations.map(
-          (violation) => `Remove or simplify "${violation.lemmaRef.lemmaId}".`
-        )
+      // Spike (sugarmagic-latency-cex): repair fires on EVERY turn, and a story
+      // cannot be written against a symptom. These say which trigger fired and
+      // how far off the line actually landed -- the difference between "the
+      // generator undershoots", "the envelope is too tight", and "the
+      // measurement is wrong" is three different fixes.
+      noteTurnFact(
+        "envelopeRatio",
+        `${ratioVerdict.measuredRatio.toFixed(2)}->${ratioVerdict.directedRatio.toFixed(2)}:${ratioVerdict.conformance}`
       );
-      if (!verdict.withinEnvelope && violationLabels.length === 0) {
-        violationLabels.push("Say it simpler using words the learner knows.");
+      noteTurnFact("tooDense", tooDenseToRead);
+      // The trigger that turned out to be the real one: word-level band
+      // violations. NAME the words -- "withinEnvelope=false" says a repair is
+      // coming, but which lemmas tripped it is the difference between "the
+      // generator reaches above band", "the atlas has gaps", and "an exemption
+      // channel is not covering something it should".
+      if (verdict.violations.length > 0) {
+        noteTurnFact(
+          "envelopeViolations",
+          verdict.violations.map((violation) => violation.lemmaRef.lemmaId).join(",")
+        );
       }
-
-      const checkCandidate = (text: string): EnvelopeVerdict =>
-        services.classifier.check(text, learner, {
-          taughtLemmaIds: scene ? taughtLemmaIds(constraint) : null,
-          knownEntities: scene ? new Set(scene.properNouns) : new Set(),
-          questEssentialLemmas: questEssentialLemmaIds ?? new Set<string>(),
-          voiceInterjections,
-          lang: constraint.targetLanguage,
-          sceneLexicon: scene ?? undefined,
-          conversationId,
-          sessionId,
-          turnId: traceTurnId,
-          directedRatio: constraint.targetLanguageRatio,
-          supportPosture: constraint.supportPosture
-        });
-
-      const repairResult = await repairWithBestOfN(
-        normalizedTurn.text,
-        verdict,
-        constraint,
-        services.llmClient,
-        checkCandidate,
-        voiceSpec
+      // Measurement only (nikki, 2026-08-06): the comprehensibility floor is
+      // being demoted from gate to metric in psm. These say how often it is the
+      // thing that fired -- BEFORE the behaviour changes -- so the demotion is
+      // made against data rather than a sample of one.
+      noteTurnFact("coverage", verdict.profile.coverageRatio.toFixed(2));
+      // en3 baseline leg: voice retention on the ORIGINAL text, same input the
+      // drift-sample event uses.
+      noteTurnFact(
+        "voiceRetention",
+        computeVoiceRetentionScore(normalizedTurn.text, voiceSpec).toFixed(2)
       );
-
-      if (repairResult) {
-        normalizedTurn.text = repairResult.selectedText;
-        if (repairResult.selectedPasses) {
-          await emitTelemetry(
-            telemetry,
-            createTelemetryEvent("verify.repair-triggered", {
-              conversationId,
-              sessionId,
-              turnId: traceTurnId,
-              timestamp: Date.now(),
-              sceneId: sceneId ?? "",
-              originalText: originalTurnText,
-              repairedText: repairResult.selectedText,
-              violations: violationLabels,
-              repairPrompt: violationLabels,
-              candidateCount: repairResult.candidateScores.length,
-              selectedIndex: repairResult.selectedIndex,
-              candidateScores: repairResult.candidateScores
-            }),
-            logger
-          );
-        }
-        return normalizedTurn;
-      }
-
-      // repairResult is null: no candidate beat the original, SO THE ORIGINAL
-      // SHIPS. Out of envelope, but grammatical and meaningful.
+      noteTurnFact(
+        "floorFailed",
+        verdict.profile.coverageRatio < ENVELOPE_KRASHEN_FLOOR
+      );
+      // THE ENVELOPE NO LONGER GATES (sugarmagic-latency-psm; nikki,
+      // 2026-08-06). Everything above is computed and recorded; nothing below
+      // this line alters the turn. Measured before the change, the
+      // deterministic gate fired on ~100% of turns -- essentially always
+      // wrongly (English homographs, and a comprehension floor whose
+      // arithmetic cannot work on deliberately mixed lines) -- and every
+      // firing bought a 5-12s repair call, so the player nearly always read a
+      // repair candidate instead of the generator's line. Language-quality
+      // judgment moves to the Judge (latency epic, judge story).
       //
-      // 2026-08-02 DELETED the autoSimplify fallback that used to run here. It
-      // rewrote the finished line in place, swapping each out-of-band lemma for
-      // a lower-band one -- and `entry.lemmaId` is a bare CITATION FORM, so for
-      // a verb it spliced in another verb's infinitive. The substitution table
-      // was chosen by band and part of speech with no notion of meaning: 2,996
-      // lemmas mapped to `el`, 910 to `y`, so `sostener` became "and". It
-      // produced sentences that passed a band check and meant nothing.
-      //
-      // Untaught but correct beats rewritten into nonsense -- the same rule the
-      // scripted path took on 2026-07-31 and item text took in story 1. The
-      // verdict still records the failure, so nothing is hidden by shipping the
-      // original.
-
+      // REVISIT TRIGGER: if the now-honest telemetry shows genuinely
+      // incomprehensible lines shipping (not mixed-text artifacts),
+      // accelerate the judge story's gating phase rather than resurrecting a
+      // deterministic gate here.
       return normalizedTurn;
     }
   };

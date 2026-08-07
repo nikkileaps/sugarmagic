@@ -280,10 +280,10 @@ export const GOAL_SURFACED_COUNT_FACT = defineBlackboardFact<number>({
  * Plan 074 §074.2' -- world clock facts.
  *
  * Written ONLY by worldTimeStore callbacks wired in gameplay-session.ts.
- * The sole write path is quest actions (set-time-of-day / advance-day)
- * dispatched through QuestManager -> gameplay-session.setActionHandler ->
- * worldTimeStore. Direct setFact calls outside that path will throw
- * (assertWriteAllowed enforces the ownerSystem).
+ * Quest authoring drives it two ways, both landing on worldTimeStore:
+ * a stage's `timeOfDay` (set when the stage becomes active) and the
+ * set-time-of-day / advance-day quest actions. Direct setFact calls outside
+ * that path will throw (assertWriteAllowed enforces the ownerSystem).
  */
 export const WORLD_TIME_SOURCE_SYSTEM = "world-time-system";
 

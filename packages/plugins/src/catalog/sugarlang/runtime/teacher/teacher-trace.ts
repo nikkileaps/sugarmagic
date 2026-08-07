@@ -239,6 +239,26 @@ export function traceTeacherCall(args: {
  * -- an empty intersection is the single most diagnostic thing here and it is
  * invisible if you only print both sides.
  */
+/**
+ * Which slated things actually reached the text.
+ *
+ * Pure and UNGATED -- extracted from traceRealization (en3) because the
+ * baseline reads these counts, and the trace early-returns when tracing is
+ * disabled. A quality measure that silently stops recording when a debug flag
+ * flips is the empty-dataset trap this epic keeps writing down.
+ */
+export function realizationOutcome<T extends { asked: string; forms: string[] }>(
+  text: string,
+  slate: T[]
+): { asked: number; landed: number; landedEntries: T[] } {
+  const lowered = text.toLocaleLowerCase();
+  const isPresent = (form: string) => lowered.includes(form.toLocaleLowerCase());
+  const landedEntries = slate.filter((entry) =>
+    [entry.asked, ...entry.forms].some(isPresent)
+  );
+  return { asked: slate.length, landed: landedEntries.length, landedEntries };
+}
+
 export function traceRealization(args: {
   npcDisplayName: string | null;
   text: string;
@@ -263,10 +283,9 @@ export function traceRealization(args: {
   const lowered = text.toLocaleLowerCase();
   const isPresent = (form: string) => lowered.includes(form.toLocaleLowerCase());
   // A slated word LANDED if any of its forms is on the page -- `estación`
-  // counts whether the line said `estación` or `estaciones`.
-  const landedEntries = slate.filter((entry) =>
-    [entry.asked, ...entry.forms].some(isPresent)
-  );
+  // counts whether the line said `estación` or `estaciones`. ONE implementation
+  // of that judgment: realizationOutcome, which the en3 baseline also reads.
+  const { landedEntries } = realizationOutcome(text, slate);
   const landed = landedEntries.map((entry) => {
     const surface = [entry.asked, ...entry.forms].find(isPresent);
     return surface && surface !== entry.asked
@@ -298,5 +317,34 @@ export function traceRealization(args: {
       console.info("text:", text);
     }
   );
+  /* eslint-enable no-console */
+}
+
+/**
+ * Prints what sugarlang tells the Judge about language, for one turn.
+ *
+ * WHY THIS EXISTS
+ *   The judge prompt is assembled in the GATEWAY, so it never reaches the
+ *   browser console -- there was no way to see what the Judge was actually
+ *   told, only what it decided. This prints the sugarlang half: the criteria
+ *   that go into `externalDirectives`.
+ *
+ *   The other half, the assembled prompt, is deterministic given these
+ *   directives and is pinned by judge-prompts.test.ts. Directives here plus
+ *   the `judge=` / `judgeLanguageFit=` turn facts give send and receive
+ *   without needing gateway logs.
+ *
+ * NOT PRINTED WHEN THERE ARE NO DIRECTIVES, which is itself the signal: it
+ * means the Judge got the plain rubric, with no language section at all.
+ */
+export function traceJudgeDirectives(directives: string[] | undefined): void {
+  if (!directives || directives.length === 0) {
+    return;
+  }
+  /* eslint-disable no-console */
+  console.info("[sugarlang] JUDGE gets these language criteria:");
+  for (const directive of directives) {
+    console.info("  " + directive);
+  }
   /* eslint-enable no-console */
 }

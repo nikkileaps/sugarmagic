@@ -7,7 +7,6 @@
  *   - ENVELOPE_KRASHEN_FLOOR
  *   - ENVELOPE_OUT_OF_ENVELOPE_ALLOWANCE
  *   - applyEnvelopeRule
- *   - applyMixedTextEnvelopePredicate
  *
  * Relationships:
  *   - Depends on the envelope contract types.
@@ -28,16 +27,6 @@ import type {
   LemmaRef
 } from "../types";
 
-/**
- * Result from the mixed-text envelope predicate.
- * Mirrors EnvelopeRuleResult but uses `passes` instead of `withinEnvelope`
- * to make the no-floor distinction explicit at the call site.
- */
-export interface MixedTextEnvelopePredicateResult {
-  passes: boolean;
-  violations: LemmaRef[];
-  exemptionsApplied: EnvelopeExemptionKind[];
-}
 
 /**
  * The 95% comprehension floor follows Nation (2001) and the proposal's
@@ -105,10 +94,19 @@ function resolveExemption(
 }
 
 /**
- * Applies Proposal 001's deterministic envelope rule:
- * - coverage must remain at or above 95%
+ * Applies the deterministic envelope rule (Proposal 001, amended by
+ * sugarmagic-latency-7gp 2026-08-06):
  * - non-exempt lemmas may not exceed learnerBand + 1
  * - at most two non-exempt out-of-band lemmas are tolerated
+ *
+ * THE 95% COVERAGE FLOOR NO LONGER GATES. Its arithmetic cannot work on a
+ * deliberately mixed line -- every posture except target-only directs an
+ * English remainder that lands in unknownTokens -- so in live play it fired on
+ * every turn and paid for a 5-12s repair each time, essentially always
+ * wrongly. `coverageRatio` is still computed and recorded as an instrument
+ * (the floorFailed timeline fact); nothing enforces it. Nothing in this
+ * codebase asks "can the learner comprehend this line" as a GATE any more --
+ * that judgment moves to the Judge (latency epic, judge story).
  *
  * The quest-essential exemption is the Linguistic Deadlock fix added in
  * Proposal 001 §Quest-Essential Lemma Exemption.
@@ -140,65 +138,11 @@ export function applyEnvelopeRule(
   );
 
   const withinEnvelope =
-    profile.coverageRatio >= ENVELOPE_KRASHEN_FLOOR &&
     nonExemptCeilingExceeded.length === 0 &&
     violations.length <= ENVELOPE_OUT_OF_ENVELOPE_ALLOWANCE;
 
   return {
     withinEnvelope,
-    violations,
-    exemptionsApplied
-  };
-}
-
-/**
- * Mixed-text envelope predicate for anchored/supported postures.
- *
- * Same exemption logic as applyEnvelopeRule but intentionally omits the
- * ENVELOPE_KRASHEN_FLOOR coverage check. English-frame tokens in a diglot-
- * woven line fail target lemmatization into unknownTokens, which collapses
- * the coverage ratio well below 0.95. The floor is only meaningful for pure
- * target-language text -- for mixed-text lines the two structural legs
- * (allowance and ceiling) are sufficient.
- *
- * Leg 1: non-exempt out-of-envelope violations <= ENVELOPE_OUT_OF_ENVELOPE_ALLOWANCE
- * Leg 2: zero non-exempt ceiling exceedances
- *
- * Implements: Plan 086 story 086.2
- */
-export function applyMixedTextEnvelopePredicate(
-  profile: CoverageProfile,
-  learnerBand: CEFRBand,
-  options: EnvelopeRuleOptions = {}
-): MixedTextEnvelopePredicateResult {
-  void learnerBand; // learnerBand reserved for future per-band allowance tuning
-  const exemptedLemmaIds = new Set<string>();
-  const exemptionsApplied: EnvelopeExemptionKind[] = [];
-  const violations: LemmaRef[] = [];
-
-  for (const lemma of profile.outOfEnvelopeLemmas) {
-    const exemption = resolveExemption(lemma, profile, options);
-    if (exemption) {
-      exemptedLemmaIds.add(lemma.lemmaId);
-      exemptionsApplied.push(exemption);
-      continue;
-    }
-
-    violations.push(lemma);
-  }
-
-  const nonExemptCeilingExceeded = profile.ceilingExceededLemmas.filter(
-    (lemma) =>
-      !exemptedLemmaIds.has(lemma.lemmaId) &&
-      resolveExemption(lemma, profile, options) === null
-  );
-
-  const passes =
-    violations.length <= ENVELOPE_OUT_OF_ENVELOPE_ALLOWANCE &&
-    nonExemptCeilingExceeded.length === 0;
-
-  return {
-    passes,
     violations,
     exemptionsApplied
   };
