@@ -1,0 +1,606 @@
+{
+  "schemaVersion": 1,
+  "lang": "it",
+  "exponents": {
+    "greet": [
+      {
+        "wordings": [
+          {
+            "phrase": "ciao",
+            "gloss": {
+              "en": "hi"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buongiorno",
+            "gloss": {
+              "en": "good morning"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buonasera",
+            "gloss": {
+              "en": "good evening"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "salve",
+            "gloss": {
+              "en": "hello"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-how-are-you": [
+      {
+        "wordings": [
+          {
+            "phrase": "come stai",
+            "gloss": {
+              "en": "how are you"
+            }
+          },
+          {
+            "phrase": "come sta",
+            "gloss": {
+              "en": "how are you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come va",
+            "gloss": {
+              "en": "how's it going"
+            }
+          }
+        ]
+      }
+    ],
+    "say-how-i-am": [
+      {
+        "wordings": [
+          {
+            "phrase": "bene",
+            "gloss": {
+              "en": "well"
+            }
+          },
+          {
+            "phrase": "molto bene",
+            "gloss": {
+              "en": "very well"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non c'è male",
+            "gloss": {
+              "en": "not bad"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "così così",
+            "gloss": {
+              "en": "so-so"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "male",
+            "gloss": {
+              "en": "badly"
+            }
+          }
+        ]
+      }
+    ],
+    "introduce-self": [
+      {
+        "wordings": [
+          {
+            "phrase": "piacere",
+            "gloss": {
+              "en": "pleased to meet you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "molto lieto",
+            "gloss": {
+              "en": "delighted to meet you"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-name": [
+      {
+        "wordings": [
+          {
+            "phrase": "come ti chiami",
+            "gloss": {
+              "en": "what's your name"
+            }
+          },
+          {
+            "phrase": "come si chiama",
+            "gloss": {
+              "en": "what is your name"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qual è il tuo nome",
+            "gloss": {
+              "en": "what is your name"
+            }
+          }
+        ]
+      }
+    ],
+    "state-name": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi chiamo",
+            "gloss": {
+              "en": "my name is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il mio nome è",
+            "gloss": {
+              "en": "my name is"
+            }
+          }
+        ]
+      }
+    ],
+    "introduce-other": [
+      {
+        "wordings": [
+          {
+            "phrase": "ti presento",
+            "gloss": {
+              "en": "let me introduce you to"
+            }
+          },
+          {
+            "phrase": "le presento",
+            "gloss": {
+              "en": "may I introduce you to"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo è",
+            "gloss": {
+              "en": "this is (a man)"
+            }
+          },
+          {
+            "phrase": "questa è",
+            "gloss": {
+              "en": "this is (a woman)"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-origin": [
+      {
+        "wordings": [
+          {
+            "phrase": "di dove sei",
+            "gloss": {
+              "en": "where are you from"
+            },
+            "lemmas": {
+              "sei": "essere"
+            }
+          },
+          {
+            "phrase": "di dov'è",
+            "gloss": {
+              "en": "where are you from"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sei di qui",
+            "gloss": {
+              "en": "are you from around here"
+            },
+            "lemmas": {
+              "sei": "essere"
+            }
+          }
+        ]
+      }
+    ],
+    "state-origin": [
+      {
+        "wordings": [
+          {
+            "phrase": "sono di",
+            "gloss": {
+              "en": "I'm from"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vengo da",
+            "gloss": {
+              "en": "I come from"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-residence": [
+      {
+        "wordings": [
+          {
+            "phrase": "dove abiti",
+            "gloss": {
+              "en": "where do you live"
+            }
+          },
+          {
+            "phrase": "dove abita",
+            "gloss": {
+              "en": "where do you live"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abiti qui vicino",
+            "gloss": {
+              "en": "do you live near here"
+            }
+          }
+        ]
+      }
+    ],
+    "state-residence": [
+      {
+        "wordings": [
+          {
+            "phrase": "abito a",
+            "gloss": {
+              "en": "I live in"
+            },
+            "lemmas": {
+              "abito": "abitare"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abito qui vicino",
+            "gloss": {
+              "en": "I live nearby"
+            },
+            "lemmas": {
+              "abito": "abitare"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono di qui",
+            "gloss": {
+              "en": "I'm from here"
+            }
+          }
+        ]
+      }
+    ],
+    "address-politely": [
+      {
+        "wordings": [
+          {
+            "phrase": "signore",
+            "gloss": {
+              "en": "sir"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "signora",
+            "gloss": {
+              "en": "madam"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "signorina",
+            "gloss": {
+              "en": "miss"
+            }
+          }
+        ]
+      }
+    ],
+    "say-please": [
+      {
+        "wordings": [
+          {
+            "phrase": "per favore",
+            "gloss": {
+              "en": "please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per piacere",
+            "gloss": {
+              "en": "please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per cortesia",
+            "gloss": {
+              "en": "if you would be so kind"
+            }
+          }
+        ]
+      }
+    ],
+    "thank": [
+      {
+        "wordings": [
+          {
+            "phrase": "grazie",
+            "gloss": {
+              "en": "thank you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "grazie mille",
+            "gloss": {
+              "en": "thanks a million"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "molte grazie",
+            "gloss": {
+              "en": "thank you very much"
+            }
+          }
+        ]
+      }
+    ],
+    "respond-to-thanks": [
+      {
+        "wordings": [
+          {
+            "phrase": "prego",
+            "gloss": {
+              "en": "you're welcome"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "di niente",
+            "gloss": {
+              "en": "don't mention it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "figurati",
+            "gloss": {
+              "en": "not at all"
+            }
+          }
+        ]
+      }
+    ],
+    "apologize": [
+      {
+        "wordings": [
+          {
+            "phrase": "scusa",
+            "gloss": {
+              "en": "sorry"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi dispiace",
+            "gloss": {
+              "en": "I'm sorry"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "chiedo scusa",
+            "gloss": {
+              "en": "I apologize"
+            }
+          }
+        ]
+      }
+    ],
+    "get-attention": [
+      {
+        "wordings": [
+          {
+            "phrase": "scusi",
+            "gloss": {
+              "en": "excuse me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi scusi",
+            "gloss": {
+              "en": "pardon me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "senta",
+            "gloss": {
+              "en": "excuse me (calling out)"
+            }
+          }
+        ]
+      }
+    ],
+    "farewell": [
+      {
+        "wordings": [
+          {
+            "phrase": "arrivederci",
+            "gloss": {
+              "en": "goodbye"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a presto",
+            "gloss": {
+              "en": "see you soon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a dopo",
+            "gloss": {
+              "en": "see you later"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a domani",
+            "gloss": {
+              "en": "see you tomorrow"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ci vediamo",
+            "gloss": {
+              "en": "see you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buona notte",
+            "gloss": {
+              "en": "good night"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

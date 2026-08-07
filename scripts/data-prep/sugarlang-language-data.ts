@@ -30,12 +30,12 @@ type AtlasPriorSource =
   | "kelly";
 
 /** Six slots in person order 1s,2s,3s,1p,2p,3p; null where the form does not exist. */
-type ParadigmRow = Array<string | null>;
+type FormsRow = Array<string | null>;
 
 interface AtlasVerbForms {
-  pres: ParadigmRow;
-  pret: ParadigmRow;
-  imp: ParadigmRow;
+  pres: FormsRow;
+  pret: FormsRow;
+  imp: FormsRow;
   ger: string;
   part: string;
 }
@@ -445,7 +445,7 @@ const IMPERFECT_SUBJUNCTIVE = ["ra", "ras", "ra", "ramos", "rais", "ran"];
 /**
  * Tenses the dictionary does not store but the language needs.
  *
- * The stored paradigm is present, preterite and imperfect. That leaves out
+ * The stored forms are present, preterite and imperfect. That leaves out
  * three things a beginner meets constantly:
  *
  *   PRESENT SUBJUNCTIVE, which is also the `usted` imperative -- `disculpe`,
@@ -509,7 +509,9 @@ function spanishDerivedTenses(entry: AtlasLemmaEntry): string[] {
   return out;
 }
 
-function spanishSurfacesOf(entry: AtlasLemmaEntry): string[] {
+/** Branches on the SHAPE of `forms`, not on the language, so every language
+ *  with authored forms inverts through here. */
+function authoredSurfacesOf(entry: AtlasLemmaEntry): string[] {
   const f = entry.forms;
   if (!f) return [entry.lemmaId];
   const raw: Array<string | null | undefined> =
@@ -557,17 +559,39 @@ function addSpanishMorphologyForms(
   forms: Record<string, MorphologyEntry>,
   entry: AtlasLemmaEntry
 ): void {
-  for (const surface of spanishSurfacesOf(entry)) {
+  for (const surface of authoredSurfacesOf(entry)) {
     addMorphologyEntry(forms, surface, entry.lemmaId, entry.partsOfSpeech);
   }
 }
 
-/** Italian has no authored paradigms yet, so every verb takes the rule path. */
+/**
+ * AUTHORED FORMS WIN; THE RULE IS THE FALLBACK FOR LEMMAS THAT HAVE NONE.
+ *
+ * Italian is authored a lesson at a time -- writing the exponents for a lesson
+ * surfaces the words it needs, and those get forms. So the dictionary is
+ * partly authored and partly bare at every point until it is finished, and both
+ * kinds have to produce forms in the same pass.
+ *
+ * The rule is kept rather than deleted because it is right more often than not
+ * for nouns: `-o` and `-e` lemmas take `-i`, which covers most of them. It is
+ * wrong for masculine `-a` nouns (`problema` -> `probleme`, real `problemi`)
+ * and for the velar class, where Italian inserts an `h` (`banco` -> `banci`,
+ * real `banchi`). Every lemma with authored forms stops going through
+ * it, so those errors retire as the dictionary fills rather than all at once.
+ */
 function addItalianMorphologyForms(
   forms: Record<string, MorphologyEntry>,
   entry: AtlasLemmaEntry
 ): void {
   const { lemmaId, partsOfSpeech } = entry;
+
+  if (entry.forms) {
+    for (const surface of authoredSurfacesOf(entry)) {
+      addMorphologyEntry(forms, surface, lemmaId, partsOfSpeech);
+    }
+    return;
+  }
+
   addMorphologyEntry(forms, lemmaId, lemmaId, partsOfSpeech);
 
   if (partsOfSpeech.includes("verb")) {

@@ -38539,21 +38539,112 @@
         "noun"
       ]
     },
+    "sono": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "è": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "siamo": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "siete": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "fui": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "fosti": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "fu": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "fummo": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "foste": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "furono": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "ero": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "eri": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "eravamo": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "eravate": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "erano": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
     "essendo": {
-      "lemmaId": "essere",
-      "partsOfSpeech": [
-        "verb",
-        "noun"
-      ]
-    },
-    "essuto": {
-      "lemmaId": "essere",
-      "partsOfSpeech": [
-        "verb",
-        "noun"
-      ]
-    },
-    "esseri": {
       "lemmaId": "essere",
       "partsOfSpeech": [
         "verb",
@@ -38590,7 +38681,21 @@
         "noun"
       ]
     },
+    "questa": {
+      "lemmaId": "questo",
+      "partsOfSpeech": [
+        "adjective",
+        "pronoun"
+      ]
+    },
     "questi": {
+      "lemmaId": "questo",
+      "partsOfSpeech": [
+        "adjective",
+        "pronoun"
+      ]
+    },
+    "queste": {
       "lemmaId": "questo",
       "partsOfSpeech": [
         "adjective",
@@ -38713,6 +38818,114 @@
         "verb"
       ]
     },
+    "vado": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vai": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "va": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andiamo": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andate": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vanno": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andai": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andasti": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andò": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andammo": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andaste": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andarono": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andavo": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andavi": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andava": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andavamo": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andavate": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andavano": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "andando": {
       "lemmaId": "andare",
       "partsOfSpeech": [
@@ -38773,6 +38986,114 @@
       "lemmaId": "caso",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "sto": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stai": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sta": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stiamo": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "state": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stanno": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stetti": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stesti": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stette": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stemmo": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "steste": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stettero": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stavo": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stavi": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stava": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stavamo": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stavate": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "stavano": {
+      "lemmaId": "stare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "stando": {
@@ -38854,13 +39175,115 @@
         "noun"
       ]
     },
-    "vedendo": {
+    "vedo": {
       "lemmaId": "vedere",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "veduto": {
+    "vedi": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vede": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vediamo": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedete": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedono": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vidi": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedesti": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vide": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedemmo": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedeste": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "videro": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedevo": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedevi": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedeva": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedevamo": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedevate": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedevano": {
+      "lemmaId": "vedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vedendo": {
       "lemmaId": "vedere",
       "partsOfSpeech": [
         "verb"
@@ -38872,7 +39295,23 @@
         "noun"
       ]
     },
+    "molta": {
+      "lemmaId": "molto",
+      "partsOfSpeech": [
+        "adverb",
+        "pronoun",
+        "adjective"
+      ]
+    },
     "molti": {
+      "lemmaId": "molto",
+      "partsOfSpeech": [
+        "adverb",
+        "pronoun",
+        "adjective"
+      ]
+    },
+    "molte": {
       "lemmaId": "molto",
       "partsOfSpeech": [
         "adverb",
@@ -39004,6 +39443,108 @@
         "verb"
       ]
     },
+    "presento": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presenta": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentiamo": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentate": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentano": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentai": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentasti": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentò": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentammo": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentaste": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentarono": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentavo": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentavi": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentava": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentavamo": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentavate": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presentavano": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "presentando": {
       "lemmaId": "presentare",
       "partsOfSpeech": [
@@ -39108,13 +39649,121 @@
         "noun"
       ]
     },
+    "chiedo": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedi": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiede": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiediamo": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedete": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedono": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiesi": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedesti": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiese": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedemmo": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedeste": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiesero": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedevo": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedevi": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedeva": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedevamo": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedevate": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiedevano": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "chiedendo": {
       "lemmaId": "chiedere",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "chieduto": {
+    "chiesto": {
       "lemmaId": "chiedere",
       "partsOfSpeech": [
         "verb"
@@ -39237,13 +39886,121 @@
         "adjective"
       ]
     },
+    "vengo": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vieni": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viene": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "veniamo": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venite": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vengono": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venni": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venisti": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venne": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venimmo": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "veniste": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vennero": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venivo": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venivi": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "veniva": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venivamo": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venivate": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venivano": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "venendo": {
       "lemmaId": "venire",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "venito": {
+    "venuto": {
       "lemmaId": "venire",
       "partsOfSpeech": [
         "verb"
@@ -39451,6 +40208,132 @@
         "verb"
       ]
     },
+    "sento": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "senti": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sente": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentiamo": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentite": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentono": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentii": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentisti": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentì": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentimmo": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentiste": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentirono": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentivo": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentivi": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentiva": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentivamo": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentivate": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentivano": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
     "sentendo": {
       "lemmaId": "sentire",
       "partsOfSpeech": [
@@ -39459,13 +40342,6 @@
       ]
     },
     "sentito": {
-      "lemmaId": "sentire",
-      "partsOfSpeech": [
-        "verb",
-        "noun"
-      ]
-    },
-    "sentiri": {
       "lemmaId": "sentire",
       "partsOfSpeech": [
         "verb",
@@ -39905,6 +40781,114 @@
         "noun"
       ]
     },
+    "chiamo": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiami": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiama": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamiamo": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamate": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamano": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamai": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamasti": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamò": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamammo": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamaste": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamarono": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamavo": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamavi": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamava": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamavamo": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamavate": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiamavano": {
+      "lemmaId": "chiamare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "chiamando": {
       "lemmaId": "chiamare",
       "partsOfSpeech": [
@@ -39981,7 +40965,21 @@
         "verb"
       ]
     },
+    "buona": {
+      "lemmaId": "buono",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
     "buoni": {
+      "lemmaId": "buono",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
+    "buone": {
       "lemmaId": "buono",
       "partsOfSpeech": [
         "adjective",
@@ -43127,12 +44125,6 @@
       "lemmaId": "sostituire",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "chiese": {
-      "lemmaId": "chiesa",
-      "partsOfSpeech": [
-        "noun"
       ]
     },
     "formando": {
@@ -48712,6 +49704,108 @@
         "adjective"
       ]
     },
+    "scuso": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusi": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusiamo": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusate": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusano": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusai": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusasti": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusò": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusammo": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusaste": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusarono": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusavo": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusavi": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusava": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusavamo": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusavate": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scusavano": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "scusando": {
       "lemmaId": "scusare",
       "partsOfSpeech": [
@@ -51172,6 +52266,108 @@
         "noun"
       ]
     },
+    "abiti": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abita": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitiamo": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitate": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitano": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitai": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitasti": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitò": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitammo": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitaste": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitarono": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitavo": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitavi": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitava": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitavamo": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitavate": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitavano": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "abitando": {
       "lemmaId": "abitare",
       "partsOfSpeech": [
@@ -53511,6 +54707,108 @@
       "lemmaId": "schermo",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "figuro": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figuri": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figuriamo": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figurate": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figurano": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figurai": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figurasti": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figurò": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figurammo": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figuraste": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figurarono": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figuravo": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figuravi": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figurava": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figuravamo": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figuravate": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "figuravano": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "figurando": {
@@ -56068,13 +57366,121 @@
         "noun"
       ]
     },
+    "dispiaccio": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiaci": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiace": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacciamo": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacete": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacciono": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacqui": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacesti": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacque": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacemmo": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiaceste": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacquero": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacevo": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacevi": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiaceva": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacevamo": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacevate": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiacevano": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "dispiacendo": {
       "lemmaId": "dispiacere",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "dispiacuto": {
+    "dispiaciuto": {
       "lemmaId": "dispiacere",
       "partsOfSpeech": [
         "verb"
@@ -57672,12 +59078,6 @@
         "adjective"
       ]
     },
-    "chiamate": {
-      "lemmaId": "chiamata",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
     "transitorii": {
       "lemmaId": "transitorio",
       "partsOfSpeech": [
@@ -58522,12 +59922,6 @@
     },
     "continenti": {
       "lemmaId": "continente",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
-    "abiti": {
-      "lemmaId": "abito",
       "partsOfSpeech": [
         "noun"
       ]
