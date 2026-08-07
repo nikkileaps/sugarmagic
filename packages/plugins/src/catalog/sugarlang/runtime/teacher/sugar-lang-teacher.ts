@@ -46,8 +46,17 @@ export class SugarLangTeacher {
   private readonly llmPolicy: TeacherPolicy;
   private readonly fallbackPolicy: FallbackTeacherPolicy;
   private readonly cache: DirectiveCache;
-  /** Conversations with a background re-plan in flight. See scheduleBackgroundReplan. */
-  private readonly replansInFlight = new Set<string>();
+  /**
+   * The Teacher call currently in flight for a conversation, if any.
+   *
+   * A MAP RATHER THAN A SET so a real turn can JOIN a call already running
+   * instead of starting a second one. Measured on a fresh game: the region
+   * warm-up starts on the first frame and takes ~9s, the player reached the NPC
+   * before it landed, and the turn made its own blocking call -- 16.8s, the
+   * exact cost the warm-up exists to remove. Joining converts the remainder of
+   * the head start into saved wall-clock.
+   */
+  private readonly teacherCallsInFlight = new Map<string, Promise<unknown>>();
   private readonly telemetry: TelemetrySink;
 
   constructor(options: SugarLangTeacherOptions) {
@@ -137,6 +146,33 @@ export class SugarLangTeacher {
       return cached;
     }
 
+    // JOIN A CALL ALREADY RUNNING RATHER THAN STARTING A SECOND ONE.
+    //
+    // The region warm-up begins on the first frame after load and takes ~9s.
+    // Measured on a fresh game: the player reached the NPC before it landed,
+    // this path started its own blocking call, and the turn cost 16.8s -- the
+    // exact cost the warm-up exists to remove. Whatever head start the warm-up
+    // had is wall-clock this turn does not have to spend again.
+    //
+    // Re-check the cache afterwards rather than using the joined call's result
+    // directly: the normal two-axis validity rules then decide whether that
+    // directive suits this turn, instead of this path having to reason about a
+    // directive planned for a slightly different context. If it does not suit,
+    // fall through and make the call that was always going to be needed.
+    const inFlight = this.teacherCallsInFlight.get(effectiveContext.conversationId);
+    if (inFlight) {
+      await inFlight.catch(() => undefined);
+      const joined = this.cache.get(effectiveContext.conversationId, keysNow);
+      if (joined) {
+        traceTeacherDirective({
+          context: effectiveContext,
+          directive: joined,
+          source: "cache"
+        });
+        return joined;
+      }
+    }
+
     let directive: PedagogicalDirective;
     let outcome: "llm" | "fallback" = "llm";
 
@@ -208,7 +244,7 @@ export class SugarLangTeacher {
     // ONE Teacher call in flight per conversation, whatever its purpose -- a
     // warm-up and a background re-plan racing on the same slot would spend two
     // calls to answer one question.
-    if (this.replansInFlight.has(conversationId)) {
+    if (this.teacherCallsInFlight.has(conversationId)) {
       return "in-flight";
     }
 
@@ -224,14 +260,12 @@ export class SugarLangTeacher {
       return "fresh";
     }
 
-    this.replansInFlight.add(conversationId);
+    // `backgroundReplan` keeps this call's tokens and latency off whatever turn
+    // happens to be open. Nobody is waiting on it -- until a turn joins it.
+    const call = this.llmPolicy.invoke({ ...context, backgroundReplan: true });
+    this.teacherCallsInFlight.set(conversationId, call);
     try {
-      // `backgroundReplan` keeps this call's tokens and latency off whatever
-      // turn happens to be open. Nobody is waiting on it.
-      const directive = await this.llmPolicy.invoke({
-        ...context,
-        backgroundReplan: true
-      });
+      const directive = await call;
 
       // RE-CHECK BEFORE WRITING. A real conversation may have started while
       // this was in flight and done its own blocking call -- with the actual
@@ -250,7 +284,7 @@ export class SugarLangTeacher {
       // Includes a disposed blackboard when the region unloaded mid-call.
       return "failed";
     } finally {
-      this.replansInFlight.delete(conversationId);
+      this.teacherCallsInFlight.delete(conversationId);
     }
   }
 
@@ -272,14 +306,15 @@ export class SugarLangTeacher {
     plannedFor: { situationKey?: string; learnerKey?: string }
   ): void {
     const conversationId = context.conversationId;
-    if (this.replansInFlight.has(conversationId)) {
+    if (this.teacherCallsInFlight.has(conversationId)) {
       return;
     }
-    this.replansInFlight.add(conversationId);
-    void this.runBackgroundReplan(context, plannedFor)
+    const replan = this.runBackgroundReplan(context, plannedFor);
+    this.teacherCallsInFlight.set(conversationId, replan);
+    void replan
       .catch(() => undefined)
       .finally(() => {
-        this.replansInFlight.delete(conversationId);
+        this.teacherCallsInFlight.delete(conversationId);
       });
   }
 

@@ -353,3 +353,45 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
     expect(cache.inspect(CONVERSATION)).toBeNull();
   });
 });
+
+describe("a turn joins a warm-up already in flight (sugarmagic-latency-00m)", () => {
+  it("THE ONE THAT MATTERS: it waits for the warm call instead of starting a second one", async () => {
+    // Measured on a fresh game: the warm-up started on the first frame, the
+    // player reached the NPC before it landed, the turn made its OWN blocking
+    // call, and cost 16.8s. Joining spends only the warm-up's remainder.
+    const warmed = createDirectiveFixture({ rationale: "from the warm-up" });
+    const { invoke, release } = deferredPolicy(warmed);
+    const { teacher } = createTeacher(invoke as never);
+    const context = contextHere();
+
+    const warming = teacher.warmConversation(context);
+    // The player presses interact while the warm-up is still running.
+    const turn = teacher.invoke(context);
+
+    release();
+    const served = await turn;
+    await warming;
+
+    expect(served.rationale).toBe("from the warm-up");
+    // ONE call total, not two.
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls through and makes its own call when the joined warm-up failed", async () => {
+    // A failing warm-up must never leave a turn with nothing.
+    let attempt = 0;
+    const invoke = vi.fn(async () => {
+      attempt += 1;
+      if (attempt === 1) throw new TeacherInvocationError("warm failed");
+      return createDirectiveFixture({ rationale: "the turn's own" });
+    });
+    const { teacher } = createTeacher(invoke as never);
+    const context = contextHere();
+
+    await teacher.warmConversation(context);
+    const served = await teacher.invoke(context);
+
+    expect(served.rationale).toBe("the turn's own");
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+});
