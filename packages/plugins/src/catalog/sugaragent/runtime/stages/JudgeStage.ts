@@ -173,6 +173,8 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
         // Keep a rubric hint if there is one -- it is about a real violation.
         // Otherwise the language note IS the instruction.
         repairHint: verdict.repairHint ?? (languageFailure ? (languageNote ?? null) : null),
+        // Language alone failed this: the rubric itself passed.
+        languageOnlyFailure: languageFailure && verdict.passed,
         skipped: false,
         errorOccurred: false
       };
@@ -216,7 +218,21 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
             violations: output.violations,
             repairHint: output.repairHint
           },
-          output.passed ? null : "judge-fail"
+          // A DISTINCT REASON, BECAUSE THE LADDER MUST DIVERGE HERE.
+          //
+          // `judge-fail` feeds two escalators: consecutiveJudgeFailures, which
+          // at 3 replaces the NPC's line with a canned template, and
+          // isStalledTurn, which at 3 force-closes the conversation. Both are
+          // right for a reply that is unsafe or out of character. Neither is
+          // right for one that is merely too advanced -- the template is not
+          // better Spanish, so swapping it in trades good dialogue that taught
+          // poorly for worse dialogue that also taught poorly, and hanging up
+          // ends a session the player did nothing to break.
+          //
+          // The recourse for a language failure is: regenerate once, then ship
+          // the line and record the flag. Same principle psm settled -- out of
+          // envelope but grammatical beats in-envelope nonsense.
+          output.passed ? null : output.languageOnlyFailure ? "judge-language-fail" : "judge-fail"
         ),
         status: output.passed ? "ok" : "degraded"
       };

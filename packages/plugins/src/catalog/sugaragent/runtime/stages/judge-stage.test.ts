@@ -370,3 +370,60 @@ describe("phase 2: a language failure gates the turn (sugarmagic-latency-tsg)", 
     expect(result.status).toBe("ok");
   });
 });
+
+describe("mini-review fix: a language failure must not escalate (sugarmagic-latency-tsg)", () => {
+  function provider(verdict: Record<string, unknown>): JudgeProvider {
+    return { judgeReply: vi.fn(async () => verdict as never) };
+  }
+
+  async function run(verdict: Record<string, unknown>) {
+    const stage = new JudgeStage(provider(verdict));
+    return stage.execute(
+      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeContext() as never
+    );
+  }
+
+  it("THE ONE THAT MATTERS: a language-only failure is marked, not treated as a judge failure", async () => {
+    // `judge-fail` feeds two escalators: at 3 the NPC's line is replaced by a
+    // canned template, and at 3 stalls the conversation force-closes. Neither
+    // is a remedy for "too advanced" -- the template is not better Spanish.
+    const result = await run({
+      passed: true,
+      violations: [],
+      repairHint: null,
+      languageFit: false,
+      languageNote: "Far beyond CEFR A1."
+    });
+
+    expect(result.output.passed).toBe(false);
+    expect(result.output.languageOnlyFailure).toBe(true);
+    expect(result.diagnostics.fallbackReason).toBe("judge-language-fail");
+  });
+
+  it("a REAL rubric failure keeps judge-fail and still escalates", async () => {
+    const result = await run({
+      passed: false,
+      violations: ["SAFETY"],
+      repairHint: "Stop.",
+      languageFit: true,
+      languageNote: null
+    });
+
+    expect(result.output.languageOnlyFailure).toBe(false);
+    expect(result.diagnostics.fallbackReason).toBe("judge-fail");
+  });
+
+  it("a rubric failure ALONGSIDE a language one escalates -- language does not shield it", async () => {
+    const result = await run({
+      passed: false,
+      violations: ["SAFETY"],
+      repairHint: "Stop.",
+      languageFit: false,
+      languageNote: "Also too advanced."
+    });
+
+    expect(result.output.languageOnlyFailure).toBe(false);
+    expect(result.diagnostics.fallbackReason).toBe("judge-fail");
+  });
+});

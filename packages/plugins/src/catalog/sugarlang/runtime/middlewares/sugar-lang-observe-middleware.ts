@@ -88,7 +88,22 @@ export interface SugarLangObserveMiddlewareDeps {
 function collectLemmasFromText(
   text: string,
   lang: string,
-  chunkMatcher?: ChunkMatcher | null
+  chunkMatcher?: ChunkMatcher | null,
+  /**
+   * Lemmas something else already established are in play right now -- the
+   * slate for an NPC line, the probe's own targets for a probe answer.
+   *
+   * WHY A RESCUE EXISTS AT ALL. The bare guard is right for player free text,
+   * where a false credit teaches the scheduler a word is known. It is WRONG
+   * everywhere the collision surface is the likeliest reading: when the
+   * Teacher directed `comer` this turn and the NPC's line contains "come",
+   * that is far more likely to be the Spanish it was told to teach than a
+   * stray English verb -- and muting it stalls the loop, because the word
+   * never earns its encounter and gets introduced forever.
+   *
+   * Empty for player free text, deliberately. That is the path ipx measured.
+   */
+  trustedLemmaIds?: Set<string>
 ): Array<{ surface: string; lemmaId: string | null }> {
   const tokens = tokenize(text, lang);
 
@@ -128,10 +143,13 @@ function collectLemmasFromText(
       // Spanish span proves it, a collision surface resolves to nothing. A
       // missed credit costs one extra review; a false credit costs the word.
       const lower = token.surface.normalize("NFC").toLocaleLowerCase();
-      if (collisions.has(lower) && !inChunk.has(index)) {
+      const lemmaId = lemmatize(token.surface, lang);
+      const proven =
+        inChunk.has(index) || (lemmaId !== null && trustedLemmaIds?.has(lemmaId) === true);
+      if (collisions.has(lower) && !proven) {
         return { surface: token.surface, lemmaId: null };
       }
-      return { surface: token.surface, lemmaId: lemmatize(token.surface, lang) };
+      return { surface: token.surface, lemmaId };
     });
 }
 
@@ -261,7 +279,14 @@ export function createSugarLangObserveMiddleware(
             }
           }
           const responseLemmas = new Set(
-            collectLemmasFromText(execution.input.text, learner.targetLanguage)
+            // The probe NAMED these lemmas, so a collision surface resolving to
+            // one of them is the answer, not a stray English word. Without this
+            // a correct "ten" for `tener` scored as a miss -- and every one of
+            // the core verbs (tener, comer, decir, salir, venir) is a collision
+            // surface, so probes on the most important words always failed.
+            collectLemmasFromText(execution.input.text, learner.targetLanguage, null, new Set(
+              storedCheck.targetLemmas.map((lemma) => lemma.lemmaId)
+            ))
               .map((entry) => entry.lemmaId)
               .filter((lemmaId): lemmaId is string => typeof lemmaId === "string")
           );
@@ -625,7 +650,12 @@ export function createSugarLangObserveMiddleware(
         const turnLemmas = collectLemmasFromText(
           normalizedTurn.text,
           learner.targetLanguage,
-          chunkMatcher
+          chunkMatcher,
+          // The Teacher directed these words for this situation, so a matching
+          // surface in the NPC's own line is the Spanish it was told to teach.
+          // This grants `encountered` only -- grade, zero productive strength --
+          // never the produced-* credit that ipx was about.
+          buildTargetLemmaSet(constraint)
         );
         // 087.2: world-day and NPC context for debt paydown signals.
         const blackboardForDebt = deps.services.getBlackboard();

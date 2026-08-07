@@ -689,3 +689,98 @@ describe("English words must not bank credit on Spanish cards (sugarmagic-latenc
     expect(producedFor(apply, "queso").length).toBeGreaterThan(0);
   });
 });
+
+describe("mini-review fix: the collision guard must not starve the teaching loop", () => {
+  // The bare guard was right for player free text and wrong everywhere the
+  // collision surface is the LIKELIEST reading. Every core Spanish verb has a
+  // colliding form -- come/comer, ten/tener, dice/decir, sale/salir -- so
+  // muting them unconditionally broke NPC exposure and probe grading.
+
+  function setup(opts: {
+    npcText?: string;
+    playerText?: string;
+    introduce?: string[];
+    cards?: string[];
+  }) {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const lemmaCards = Object.fromEntries(
+      (opts.cards ?? []).map((lemmaId) => [
+        lemmaId,
+        {
+          lemmaId,
+          lang: "es",
+          cefrPriorBand: "A1",
+          stability: 1,
+          difficulty: 5,
+          retrievability: 0.8,
+          reviewCount: 3,
+          lastReviewedAt: 1,
+          productiveStrength: 0.2
+        }
+      ])
+    );
+    const services = createServicesStub({
+      resolveForExecution: () => ({
+        learnerStore: {
+          getCurrentProfile: vi
+            .fn()
+            .mockResolvedValue(createTestLearnerProfile({ lemmaCards } as never))
+        },
+        learnerStateReducer: { apply },
+        atlas: {
+          getLemma: (lemmaId: string) => ({ lemmaId, lang: "es", cefrPriorBand: "A1" }),
+          getGloss: () => null,
+          getForms: () => undefined,
+          getBand: () => "A1"
+        }
+      })
+    });
+    const middleware = createSugarLangObserveMiddleware({ services: services as never });
+    const execution = createTestExecution();
+    const constraint = createBaseConstraint();
+    if (opts.introduce) {
+      constraint.targetVocab.introduce = opts.introduce.map((lemmaId) => ({
+        kind: "vocabulary",
+        lemmaId,
+        lang: "es"
+      })) as never;
+    }
+    execution.annotations[SUGARLANG_CONSTRAINT_ANNOTATION] = constraint;
+    if (opts.playerText !== undefined) {
+      execution.input = { kind: "free_text", text: opts.playerText } as never;
+    }
+    return { middleware, execution, apply };
+  }
+
+  const eventsFor = (apply: ReturnType<typeof vi.fn>, lemmaId: string, kindPrefix: string) =>
+    (
+      apply.mock.calls as Array<
+        [{ observationEvent?: { lemma?: { lemmaId: string }; observation: { kind: string } } }]
+      >
+    ).filter(
+      ([e]) =>
+        e.observationEvent?.lemma?.lemmaId === lemmaId &&
+        e.observationEvent.observation.kind.startsWith(kindPrefix)
+    );
+
+  it("THE STALL: a slated word in the NPC's own line still earns its encounter", async () => {
+    // Finnick says Spanish "come" while `comer` is slated. Muting this meant
+    // the word never paid down its debt and got introduced forever.
+    const { middleware, execution, apply } = setup({ introduce: ["comer"] });
+    await middleware.finalize?.(execution, createTestTurn("El pescador come pan."));
+    expect(eventsFor(apply, "comer", "encountered").length).toBeGreaterThan(0);
+  });
+
+  it("player free text stays strict -- the slate does NOT rescue it", async () => {
+    // This is the path ipx measured, where a false credit is `produced-*`:
+    // FSRS "Easy" and the largest strength delta in the system.
+    const { middleware, execution, apply } = setup({
+      playerText: "he can come to the dock",
+      introduce: ["comer", "haber"],
+      cards: ["comer", "haber"]
+    });
+    await middleware.finalize?.(execution, createTestTurn("Aye."));
+    expect(eventsFor(apply, "comer", "produced")).toHaveLength(0);
+    expect(eventsFor(apply, "haber", "produced")).toHaveLength(0);
+  });
+});

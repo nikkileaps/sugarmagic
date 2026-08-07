@@ -12,7 +12,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { buildJudgeUserPrompt, enforceLanguageReportingOnly } from "./core";
+import {
+  buildJudgeUserPrompt,
+  buildLanguageToolFields,
+  enforceLanguageReportingOnly
+} from "./core";
 
 const BASE_PARAMS = {
   worldPremise: "A cozy fantasy port town called Wordlark Hollow.",
@@ -298,5 +302,58 @@ describe("reporting-only is enforced in code, because the judge ignores the prom
     const result = enforceLanguageReportingOnly(true, [], null);
     expect(result.passed).toBe(true);
     expect(result.violations).toEqual([]);
+  });
+});
+
+describe("mini-review fixes: the language dimension cannot void a real verdict", () => {
+  it("THE HOLE: a SAFETY violation that merely MENTIONS language still fails", () => {
+    // /language/i over the whole label matched this, stripped it, called it a
+    // language-only failure and force-flipped passed to true -- so a genuine
+    // safety failure would have shipped. `violations` is an unconstrained
+    // string array and the judge writes free text, so this is reachable.
+    const result = enforceLanguageReportingOnly(
+      false,
+      ["SAFETY: crude language about the developer"],
+      "Remove it."
+    );
+
+    expect(result.passed).toBe(false);
+    expect(result.violations).toEqual(["SAFETY: crude language about the developer"]);
+    expect(result.repairHint).toBe("Remove it.");
+  });
+
+  it("an IN-CHARACTER violation about formal language still fails", () => {
+    const result = enforceLanguageReportingOnly(
+      false,
+      ["IN-CHARACTER: language too formal for this NPC"],
+      null
+    );
+    expect(result.passed).toBe(false);
+  });
+
+  it("still catches the real language labels", () => {
+    for (const label of ["LANGUAGE_FIT", "LANGUAGE", "language-fit", "Language appropriateness"]) {
+      expect(enforceLanguageReportingOnly(false, [label], null).passed).toBe(true);
+    }
+  });
+});
+
+describe("mini-review fix: no language plugin, no language fields to answer", () => {
+  it("THE BOUNDARY: the tool schema omits the language fields without directives", () => {
+    // They used to be unconditionally required, so a game with no language
+    // plugin had to answer a question its prompt never asked -- and the client
+    // gates on languageFit === false, so an invented answer could fail a turn
+    // in a game with no notion of language.
+    const { properties, required } = buildLanguageToolFields(false);
+
+    expect(properties).toEqual({});
+    expect(required).toEqual([]);
+  });
+
+  it("and includes them when a language plugin did contribute", () => {
+    const { properties, required } = buildLanguageToolFields(true);
+
+    expect(Object.keys(properties).sort()).toEqual(["languageFit", "languageNote"]);
+    expect(required).toEqual(["languageFit", "languageNote"]);
   });
 });
