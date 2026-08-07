@@ -240,3 +240,116 @@ describe("running the Teacher off the critical path", () => {
     expect(cache.inspect(CONVERSATION)).toBeNull();
   });
 });
+
+describe("warming a conversation that has not happened yet (sugarmagic-latency-00m)", () => {
+  const SITUATION_NOW = "situation-here";
+
+  function warmSetup(llmInvoke: () => Promise<PedagogicalDirective>) {
+    const { teacher, cache } = createTeacher(llmInvoke as never);
+    const context = createTeacherContext({
+      conversationId: CONVERSATION,
+      situationKey: SITUATION_NOW
+    });
+    return { teacher, cache, context };
+  }
+
+  it("THE ONE THAT MATTERS: an empty slot gets filled", async () => {
+    // This is the whole feature -- the first turn of a conversation reads a
+    // directive instead of waiting ~10s for one.
+    const planned = createDirectiveFixture({ rationale: "warmed" });
+    const { teacher, cache, context } = warmSetup(async () => planned);
+
+    expect(await teacher.warmConversation(context)).toBe("warmed");
+    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("warmed");
+  });
+
+  it("does not spend a call on a slot that is already fresh", async () => {
+    const invoke = vi.fn(async () => createDirectiveFixture());
+    const { teacher, cache, context } = warmSetup(invoke as never);
+    cache.set(CONVERSATION, createDirectiveFixture({ rationale: "already here" }), {
+      situationKey: SITUATION_NOW,
+      learnerKey: "matching"
+    });
+
+    // learnerKey differs from the fixture's real one, so this is learner-stale
+    // at worst -- which is served instantly anyway. Either way: no call.
+    const outcome = await teacher.warmConversation(context);
+
+    expect(outcome).toBe("fresh");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("REFILLS a world-stale slot, because that one would block the next turn", async () => {
+    const planned = createDirectiveFixture({ rationale: "refilled" });
+    const invoke = vi.fn(async () => planned);
+    const { teacher, cache, context } = warmSetup(invoke as never);
+    cache.set(CONVERSATION, createDirectiveFixture({ rationale: "for elsewhere" }), {
+      situationKey: "a-DIFFERENT-situation",
+      learnerKey: "whatever"
+    });
+
+    expect(await teacher.warmConversation(context)).toBe("warmed");
+    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("refilled");
+  });
+
+  it("NEVER AGES A REAL DIRECTIVE -- it must not go through invoke()", async () => {
+    // invoke() on a hit calls spendTurn, charging the player a turn they never
+    // took. That is the bug `peek` was split out of `get` to prevent.
+    const invoke = vi.fn(async () => createDirectiveFixture());
+    const { teacher, cache, context } = warmSetup(invoke as never);
+    cache.set(CONVERSATION, createDirectiveFixture(), {
+      situationKey: SITUATION_NOW,
+      learnerKey: "x"
+    });
+    const before = cache.inspect(CONVERSATION);
+
+    await teacher.warmConversation(context);
+
+    // turnsConsumed is not exposed on the inspection, so assert via the fact
+    // that a subsequent read still sees the same directive un-aged.
+    expect(cache.inspect(CONVERSATION)?.directive).toEqual(before?.directive);
+  });
+
+  it("THE DANGEROUS RACE: does not clobber a directive a real turn just wrote", async () => {
+    // The player walked up mid-warm and their turn did its own blocking call
+    // with the actual NPC and conversation history. That directive is better;
+    // `set` would overwrite it and reset its turn counter.
+    const { invoke, release } = deferredPolicy(
+      createDirectiveFixture({ rationale: "the warm one" })
+    );
+    const { teacher, cache, context } = warmSetup(invoke as never);
+
+    const warming = teacher.warmConversation(context);
+    cache.set(CONVERSATION, createDirectiveFixture({ rationale: "the real one" }), {
+      situationKey: SITUATION_NOW,
+      learnerKey: "from-the-real-turn"
+    });
+    release();
+
+    expect(await warming).toBe("skipped");
+    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("the real one");
+  });
+
+  it("one call in flight per conversation", async () => {
+    const { invoke, release } = deferredPolicy(createDirectiveFixture());
+    const { teacher, context } = warmSetup(invoke as never);
+
+    const first = teacher.warmConversation(context);
+    expect(await teacher.warmConversation(context)).toBe("in-flight");
+
+    release();
+    await first;
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failing warm-up returns failed and does not throw", async () => {
+    // Nothing awaits this in production; an unhandled rejection would surface
+    // as a crash unrelated to any turn.
+    const { teacher, cache, context } = warmSetup(async () => {
+      throw new TeacherInvocationError("gateway down");
+    });
+
+    expect(await teacher.warmConversation(context)).toBe("failed");
+    expect(cache.inspect(CONVERSATION)).toBeNull();
+  });
+});

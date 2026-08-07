@@ -178,6 +178,83 @@ export class SugarLangTeacher {
   }
 
   /**
+   * Pre-computes a directive for a conversation that has not happened yet, so
+   * its FIRST turn is a cache hit instead of a ~10s blocking Teacher call
+   * (sugarmagic-latency-00m).
+   *
+   * WHY THIS IS NOT `invoke`. `invoke` on a hit runs `cache.get`, which calls
+   * `spendTurn` -- ageing a real directive by a turn the player never took,
+   * the exact bug `peek` was split out of `get` to prevent. A warm-up reads
+   * with `inspect` (pure) and writes with `set`, and never touches the turn
+   * counter.
+   *
+   * WHAT IT WARMS, AND WHAT IT LEAVES ALONE:
+   *   - nothing cached, or STALE ON THE WORLD -> warm. A world-stale directive
+   *     blocks the next turn, so refilling it is the whole point.
+   *   - stale on the LEARNER only -> LEAVE IT. That one is served instantly and
+   *     re-planned in the background (7gp.1), so the first turn is already fast
+   *     and a warm call would buy nothing.
+   *   - fresh -> leave it.
+   *
+   * Returns what it did, so a caller can log or test it. Never throws: a
+   * warm-up that fails leaves the first turn merely slow, which is today's
+   * behaviour, and a background failure must never surface as an unhandled
+   * rejection.
+   */
+  async warmConversation(
+    context: TeacherContext
+  ): Promise<"fresh" | "warmed" | "in-flight" | "skipped" | "failed"> {
+    const conversationId = context.conversationId;
+    // ONE Teacher call in flight per conversation, whatever its purpose -- a
+    // warm-up and a background re-plan racing on the same slot would spend two
+    // calls to answer one question.
+    if (this.replansInFlight.has(conversationId)) {
+      return "in-flight";
+    }
+
+    const keys = {
+      ...(context.situationKey === undefined
+        ? {}
+        : { situationKey: context.situationKey }),
+      learnerKey: learnerKey(context.learner)
+    };
+
+    const before = this.cache.inspect(conversationId, keys);
+    if (before && (before.staleness === null || before.staleness === "learner_change")) {
+      return "fresh";
+    }
+
+    this.replansInFlight.add(conversationId);
+    try {
+      // `backgroundReplan` keeps this call's tokens and latency off whatever
+      // turn happens to be open. Nobody is waiting on it.
+      const directive = await this.llmPolicy.invoke({
+        ...context,
+        backgroundReplan: true
+      });
+
+      // RE-CHECK BEFORE WRITING. A real conversation may have started while
+      // this was in flight and done its own blocking call -- with the actual
+      // NPC, recent turns and probe state. That directive is strictly better
+      // than this one, and `set` overwrites unconditionally and resets
+      // turnsConsumed, so writing over it would destroy good data and hand the
+      // player a plan built from less.
+      const after = this.cache.inspect(conversationId, keys);
+      if (after && after.staleness !== "situation_change") {
+        return "skipped";
+      }
+
+      this.cache.set(conversationId, directive, keys);
+      return "warmed";
+    } catch {
+      // Includes a disposed blackboard when the region unloaded mid-call.
+      return "failed";
+    } finally {
+      this.replansInFlight.delete(conversationId);
+    }
+  }
+
+  /**
    * Starts a re-plan that the current turn does not wait for.
    *
    * ONE PER CONVERSATION. A fast player can send three turns inside an ~11s

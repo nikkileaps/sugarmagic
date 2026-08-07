@@ -281,6 +281,14 @@ export interface RuntimeGameplaySessionControllerOptions {
 }
 
 export interface RuntimeGameplaySessionController {
+  /**
+   * The runtime context a conversation with this NPC would get right now; null
+   * for no NPC. See the builder's own comment -- anything pre-computing a value
+   * a later turn reads must go through this rather than rebuild it.
+   */
+  buildConversationRuntimeContext: (
+    npcDefinitionId: string | null
+  ) => ConversationRuntimeContext;
   readonly dialogueManager: DialogueManager;
   readonly questManager: QuestManager;
   readonly inventoryManager: InventoryManager;
@@ -2402,6 +2410,16 @@ export function createRuntimeGameplaySessionController(
   return {
     dialogueManager,
     questManager,
+    /**
+     * The runtime context a conversation with this NPC would get right now
+     * (null for no NPC).
+     *
+     * Exposed so a plugin can pre-compute something a real turn will later
+     * read -- the Teacher warm-up (sugarmagic-latency-00m) has to produce a
+     * situation key IDENTICAL to the turn's, and the only way to guarantee
+     * that is to call the same builder rather than reconstruct it.
+     */
+    buildConversationRuntimeContext,
     inventoryManager,
     casterManager,
     npcBehaviorSystem,
@@ -2645,7 +2663,9 @@ export function createRuntimeGameplayAssembly(
       documentDefinitions: options.documentDefinitions,
       npcDefinitions: options.npcDefinitions,
       dialogueDefinitions: options.dialogueDefinitions,
-      questDefinitions: options.questDefinitions
+      questDefinitions: options.questDefinitions,
+      buildConversationRuntimeContext:
+        gameplaySession.buildConversationRuntimeContext
     });
     options.world.addSystem(new RuntimePluginSystem(pluginManager));
   }

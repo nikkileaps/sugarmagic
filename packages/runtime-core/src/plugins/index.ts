@@ -17,6 +17,7 @@
  */
 
 import type { RuntimeBootModel, RuntimeHostKind } from "../index";
+import type { ConversationRuntimeContext } from "../conversation";
 import type {
   ConversationMiddleware,
   ConversationProvider,
@@ -393,6 +394,17 @@ export type RuntimePluginContribution =
   | ProfileStoreContribution;
 
 export interface RuntimePluginContext {
+  /**
+   * The runtime context a conversation with this NPC would get right now; pass
+   * null when there is no NPC. Absent when the host did not supply one.
+   *
+   * A plugin that pre-computes anything a later turn will read must build its
+   * inputs THROUGH THIS, not by reconstructing them -- two constructions drift,
+   * and the drift is silent (sugarmagic-latency-00m).
+   */
+  buildConversationRuntimeContext?: (
+    npcDefinitionId: string | null
+  ) => ConversationRuntimeContext;
   boot: RuntimeBootModel;
   pluginBootPayloads?: Record<string, unknown>;
   blackboard?: RuntimeBlackboard;
