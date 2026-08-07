@@ -994,4 +994,44 @@ describe("end-to-end conversation golden", () => {
     expect(capturedConstraint).toBeDefined();
     expect(Array.isArray(capturedConstraint?.targetVocab?.introduce)).toBe(true);
   });
+
+  // 091.9. Before this, an Italian game ran, never errored, and taught no
+  // competencies at all: the loader threw for a language it had no inventory
+  // for and all eleven callers caught it and carried on. Nothing reported it.
+  //
+  // The band is pinned because `prompt-builder` selects competencies by EXACT
+  // band, and only A1 is authored -- an unpinned run would pass or fail on
+  // wherever the learner happened to land.
+  it("an Italian conversation reaches the Teacher with Italian competencies", async () => {
+    const { telemetry, host } = makeSharedSetup(
+      { targetLanguage: "it", debugBandOverride: "A1" },
+      "Ciao, benvenuto."
+    );
+
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc-orrin",
+      npcDisplayName: "Orrin",
+      targetLanguage: "it",
+      supportLanguage: "en"
+    });
+
+    await host.submitInput({ kind: "advance" });
+    // A phrase lesson 1 authored, typed the way a player would.
+    await host.submitInput({ kind: "free_text", text: "mi chiamo Nikki" });
+
+    // ASSERT ON THE COMPETENCY COUNT, NOT ON THE TURN SUCCEEDING. An Italian
+    // turn completed perfectly well before this story -- the loader threw and
+    // every caller swallowed it -- so "no error" proves nothing. This count is
+    // derived straight from the inventory, so it is zero without it.
+    const progress = await telemetry.query({
+      eventKinds: ["learner.progress-derived"]
+    });
+    expect(progress.length).toBeGreaterThan(0);
+
+    const unmet = progress.map(
+      (event) => (event as unknown as { unmetCompetencyCount: number }).unmetCompetencyCount
+    );
+    expect(Math.max(...unmet)).toBeGreaterThan(0);
+  });
 });

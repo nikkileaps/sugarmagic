@@ -22,6 +22,7 @@
  */
 
 import esInventoryData from "../../data/languages/es/competency-inventory.json";
+import itInventoryData from "../../data/languages/it/competency-inventory.json";
 import type {
   CompetencyInventory,
   Competency,
@@ -74,8 +75,19 @@ function assertValidInventory(
   }
 }
 
+/**
+ * Italian is authored a lesson at a time, so its inventory holds whatever has
+ * been written so far -- one lesson today. That is a legitimate state, not a
+ * half-built one: `buildCompetencyInventory` emits only the competencies a
+ * language has exponents for, and only the lessons those fill.
+ *
+ * The consequence to know about: `prompt-builder` selects competencies by
+ * EXACT band, so a learner placed above A1 sees none of these until the higher
+ * bands are authored.
+ */
 const DEFAULT_INVENTORY_DATA: Partial<Record<string, unknown>> = {
-  es: esInventoryData
+  es: esInventoryData,
+  it: itInventoryData
 };
 
 export class CompetencyInventoryLoader {
