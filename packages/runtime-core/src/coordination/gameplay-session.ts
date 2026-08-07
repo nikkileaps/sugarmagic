@@ -987,12 +987,22 @@ export function createRuntimeGameplaySessionController(
     return false;
   }
 
-  const runtimeBlackboardConversationMiddleware: ConversationMiddleware = {
-    middlewareId: "runtime.blackboard-context",
-    displayName: "Runtime Blackboard Context",
-    priority: -100,
-    stage: "context",
-    prepare(context) {
+  /**
+   * Builds the runtime half of a conversation's context: where things are, what
+   * the quest is doing, what time it is, what the player knows.
+   *
+   * EXTRACTED FROM THE MIDDLEWARE, AND THE EXTRACTION IS LOAD-BEARING
+   * (sugarmagic-latency-00m). The Teacher's situation key is built from quest
+   * stage, objectives and time of day, all of which live here. Anything that
+   * wants to pre-compute a directive -- a warm-up before a conversation exists
+   * -- must produce a key IDENTICAL to the one the real turn will produce, and
+   * two separate constructions would drift until the keys silently stopped
+   * matching. So there is one builder, parameterized by NPC rather than split
+   * in half: pass null for a caller that has no conversation yet.
+   */
+  function buildConversationRuntimeContext(
+    npcDefinitionId: string | null
+  ): ConversationRuntimeContext {
       const trackedQuest = getTrackedQuestFact(blackboard);
       const activeQuestStage = trackedQuest
         ? getActiveQuestStage(blackboard, trackedQuest.questId)
@@ -1012,39 +1022,39 @@ export function createRuntimeGameplaySessionController(
         blackboard,
         playerDefinition.definitionId
       );
-      const npcLocation = context.selection.npcDefinitionId
-        ? getEntityLocation(blackboard, context.selection.npcDefinitionId)
+      const npcLocation = npcDefinitionId
+        ? getEntityLocation(blackboard, npcDefinitionId)
         : null;
-      const npcPosition = context.selection.npcDefinitionId
-        ? getEntityPosition(blackboard, context.selection.npcDefinitionId)
+      const npcPosition = npcDefinitionId
+        ? getEntityPosition(blackboard, npcDefinitionId)
         : null;
-      const npcArea = context.selection.npcDefinitionId
-        ? getEntityCurrentArea(blackboard, context.selection.npcDefinitionId)
+      const npcArea = npcDefinitionId
+        ? getEntityCurrentArea(blackboard, npcDefinitionId)
         : null;
-      const npcPlayerRelation = context.selection.npcDefinitionId
+      const npcPlayerRelation = npcDefinitionId
         ? getEntityPlayerSpatialRelation(
             blackboard,
-            context.selection.npcDefinitionId
+            npcDefinitionId
           )
         : null;
-      const npcMovement = context.selection.npcDefinitionId
-        ? getEntityMovement(blackboard, context.selection.npcDefinitionId)
+      const npcMovement = npcDefinitionId
+        ? getEntityMovement(blackboard, npcDefinitionId)
         : null;
-      const npcCurrentTask = context.selection.npcDefinitionId
+      const npcCurrentTask = npcDefinitionId
         ? (npcBehaviorSystem?.getCurrentTask(
-            context.selection.npcDefinitionId
+            npcDefinitionId
           ) ?? null)
         : null;
-      const npcCurrentActivity = context.selection.npcDefinitionId
+      const npcCurrentActivity = npcDefinitionId
         ? getEntityCurrentActivity(
             blackboard,
-            context.selection.npcDefinitionId
+            npcDefinitionId
           )
         : null;
-      const npcCurrentGoal = context.selection.npcDefinitionId
-        ? getEntityCurrentGoal(blackboard, context.selection.npcDefinitionId)
+      const npcCurrentGoal = npcDefinitionId
+        ? getEntityCurrentGoal(blackboard, npcDefinitionId)
         : null;
-      const npcBehavior = context.selection.npcDefinitionId
+      const npcBehavior = npcDefinitionId
         ? {
             movement: npcMovement,
             task: npcCurrentTask,
@@ -1080,9 +1090,40 @@ export function createRuntimeGameplaySessionController(
         recentWorldEvents: recentEventCollector.getRecentEvents()
       };
 
+    return {
+      here:
+        playerLocation?.location ??
+        npcLocation?.location ??
+        buildActiveRegionLocationReference(),
+      playerLocation,
+      playerPosition,
+      npcLocation,
+      npcPosition,
+      playerArea,
+      npcArea,
+      npcPlayerRelation,
+      npcBehavior,
+      trackedQuest,
+      activeQuestStage,
+      activeQuestObjectives,
+      goalSurfacedCount,
+      timeOfDay: getTimeOfDayBand(blackboard),
+      knownFacts: getPlayerKnownFacts(blackboard),
+      recentWorldEvents: recentEventCollector.getRecentEvents()
+    };
+  }
+
+  const runtimeBlackboardConversationMiddleware: ConversationMiddleware = {
+    middlewareId: "runtime.blackboard-context",
+    displayName: "Runtime Blackboard Context",
+    priority: -100,
+    stage: "context",
+    prepare(context) {
       return {
         ...context,
-        runtimeContext
+        runtimeContext: buildConversationRuntimeContext(
+          context.selection.npcDefinitionId ?? null
+        )
       };
     }
   };
