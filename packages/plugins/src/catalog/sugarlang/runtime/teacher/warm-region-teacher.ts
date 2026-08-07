@@ -33,6 +33,16 @@
  *   alternative was inventing a readiness signal, and a wrong one fails
  *   silently by never warming at all.
  *
+ * WHY THERE IS NO CONVERSATION-END HOOK
+ *   The plan called for re-warming when a conversation ends, because a
+ *   conversation can advance a quest and quest stage IS in the situation key --
+ *   which would invalidate every other NPC's slot and make the next first turn
+ *   slow again. That is a real case, and the key check already covers it: the
+ *   quest fact moves, the next check sees a different key, and every slot is
+ *   refilled within one interval. Wiring `dialogueManager.setOnEnd` would have
+ *   meant a new plugin-boundary signal to say something the key already says.
+ *   `invalidate()` remains for a caller that ever needs to force it.
+ *
  * Exports:
  *   - createRegionTeacherWarmer
  *
@@ -57,7 +67,8 @@ export interface RegionWarmerDeps {
 }
 
 export interface RegionTeacherWarmer {
-  /** Drive from the plugin's per-frame update. Cheap between intervals. */
+  /** Drive from the plugin's per-frame update, in MILLISECONDS. The runtime
+   *  frame delta is in seconds -- convert at the call site. */
   tick: (deltaMs: number) => void;
   /** Forget what was warmed, so the next tick re-warms. For a conversation
    *  ending: it may have advanced a quest, which moves the key. */

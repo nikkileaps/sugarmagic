@@ -16,6 +16,7 @@
  * Status: active
  */
 
+import { composeRegionContents } from "@sugarmagic/domain";
 import type {
   DocumentDefinition,
   DialogueDefinition,
@@ -54,6 +55,7 @@ import { DefaultSugarlangSceneLexiconStore } from "./compile/scene-lexicon-store
 import type { SceneContextModel } from "./contracts/scene-context";
 import { getSugarlangRuntimeSceneContext } from "./compile/runtime-cache-state";
 import { createSceneAuthoringContext } from "./compile/scene-traversal";
+import { composeSituation, situationKey } from "./situation";
 import {
   ClaudeTeacherPolicy,
   TeacherInvocationError,
@@ -168,6 +170,9 @@ interface LanguageBundle {
 
 interface BoundRuntimeContext {
   blackboard: RuntimeBlackboard;
+  /** Host-supplied builder for the runtime half of a conversation context.
+   *  Anything pre-computing a value a later turn reads must go through it. */
+  buildConversationRuntimeContext?: RuntimePluginContext["buildConversationRuntimeContext"];
   activeRegion: RegionDocument | null;
   /** Plan 058 §058.1 — presences compile from the composed
    *  Scene overlay, not the region document. */
@@ -281,7 +286,10 @@ export class SugarlangRuntimeServices {
       documentDefinitions: context.documentDefinitions ?? [],
       npcDefinitions: context.npcDefinitions ?? [],
       dialogueDefinitions: context.dialogueDefinitions ?? [],
-      questDefinitions: context.questDefinitions ?? []
+      questDefinitions: context.questDefinitions ?? [],
+      ...(context.buildConversationRuntimeContext
+        ? { buildConversationRuntimeContext: context.buildConversationRuntimeContext }
+        : {})
     };
 
     // Seed the band pin from config HERE, at bind, rather than waiting for a
@@ -701,6 +709,94 @@ export class SugarlangRuntimeServices {
     // The quest flags and the completion event, for the host to apply. These
     // used to ride on the conversation turn's proposedActions.
     return emitPlacementCompleted(scoreResult);
+  }
+
+  /**
+   * The NPCs in the loaded region whose directive slot a conversation would
+   * actually read.
+   *
+   * SCRIPTED-MODE NPCS ARE EXCLUDED. The teacher middleware returns before
+   * `teacher.invoke` for scripted dialogue, so their slot is never read and
+   * warming one is a call spent on nothing.
+   */
+  listWarmableNpcIds(): string[] {
+    const bound = this.boundContext;
+    if (!bound) return [];
+    // COMPOSED, not base and not overlay. `composeRegionContents` is the same
+    // call the host makes; reading `activeRegion.npcPresences` alone silently
+    // drops every Scene-scoped NPC, and reading the overlay alone drops the
+    // base ones.
+    if (!bound.activeRegion) return [];
+    const presences =
+      composeRegionContents(bound.activeRegion, bound.activeScene).npcPresences ?? [];
+    const agentIds = new Set(
+      bound.npcDefinitions
+        .filter((npc) => npc.interactionMode === "agent")
+        .map((npc) => npc.definitionId)
+    );
+    const present = presences
+      .map((presence: { npcDefinitionId: string }) => presence.npcDefinitionId)
+      .filter((id: string) => agentIds.has(id));
+    return [...new Set(present)];
+  }
+
+  /**
+   * Warms the Teacher's directive slot for every agent-mode NPC in the loaded
+   * region, so the first conversation with any of them starts fast
+   * (sugarmagic-latency-00m).
+   *
+   * Returns null when the world cannot be asked yet -- no bound runtime, no
+   * services, no region, or no builder from the host. The caller treats null
+   * as "try again next tick" rather than an error, because at boot several of
+   * these are legitimately absent for a while.
+   */
+  async buildRegionWarmContext(): Promise<{
+    situationKey: string;
+    warm: (npcDefinitionId: string) => Promise<unknown>;
+  } | null> {
+    const bound = this.boundContext;
+    if (!bound) return null;
+    const buildRuntimeContext = bound.buildConversationRuntimeContext;
+    if (!buildRuntimeContext) return null;
+
+    const services = await this.getAmbientServices();
+    if (!services) return null;
+
+    const learner = await services.learnerStore.getCurrentProfile();
+    if (!learner) return null;
+
+    // NPC-LESS ON PURPOSE. `situation.npc` is not in the situation key, and the
+    // Teacher receives only ids and a display name from it today -- so one
+    // region-level directive is faithful to what it actually does. Borrowing
+    // one NPC's identity for all of them would be a fiction with no upside.
+    const runtimeContext = buildRuntimeContext(null);
+    const sceneId = runtimeContext.here?.sceneId ?? null;
+    if (!sceneId) return null;
+
+    const sceneContext = getSugarlangRuntimeSceneContext(sceneId);
+    const situation = composeSituation({
+      sceneId,
+      sceneContext: sceneContext ?? null,
+      runtimeContext
+    });
+
+    return {
+      situationKey: situationKey(situation),
+      warm: (npcDefinitionId: string) =>
+        services.teacher.warmConversation({
+          // The slot is addressed by NPC id -- see getSugarlangConversationId.
+          conversationId: npcDefinitionId,
+          learner,
+          atlas: services.atlas,
+          situation,
+          situationKey: situationKey(situation),
+          lang: {
+            targetLanguage: learner.targetLanguage,
+            supportLanguage: learner.supportLanguage
+          },
+          calibrationActive: false
+        })
+    };
   }
 
   async getAmbientServices(): Promise<SugarlangExecutionServices | null> {
