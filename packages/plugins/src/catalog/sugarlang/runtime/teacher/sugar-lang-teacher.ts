@@ -56,7 +56,10 @@ export class SugarLangTeacher {
    * exact cost the warm-up exists to remove. Joining converts the remainder of
    * the head start into saved wall-clock.
    */
-  private readonly teacherCallsInFlight = new Map<string, Promise<unknown>>();
+  private readonly teacherCallsInFlight = new Map<
+    string,
+    { keys: { situationKey?: string; learnerKey?: string }; promise: Promise<unknown> }
+  >();
   private readonly telemetry: TelemetrySink;
 
   constructor(options: SugarLangTeacherOptions) {
@@ -160,8 +163,23 @@ export class SugarLangTeacher {
     // directive planned for a slightly different context. If it does not suit,
     // fall through and make the call that was always going to be needed.
     const inFlight = this.teacherCallsInFlight.get(effectiveContext.conversationId);
-    if (inFlight) {
-      await inFlight.catch(() => undefined);
+    // ONLY JOIN A CALL PLANNED FOR THE SAME WORLD.
+    //
+    // Joining blindly is worse than not joining at all: if the in-flight call
+    // was planned for a different situation, the post-join cache read misses on
+    // situation_change and the turn makes its own call anyway -- so it pays the
+    // remainder of that call PLUS a full one. The branch's own boot case
+    // produces exactly that key mismatch, because the first warm can run before
+    // the save restore and key against default "morning" and a null quest.
+    //
+    // The learner axis is deliberately NOT compared: a directive stale only on
+    // the learner is servable (7gp.1), so joining one is still a win.
+    const joinable =
+      inFlight && inFlight.keys.situationKey === effectiveContext.situationKey
+        ? inFlight.promise
+        : null;
+    if (joinable) {
+      await joinable.catch(() => undefined);
       const joined = this.cache.get(effectiveContext.conversationId, keysNow);
       if (joined) {
         traceTeacherDirective({
@@ -214,9 +232,9 @@ export class SugarLangTeacher {
   }
 
   /**
-   * Pre-computes a directive for a conversation that has not happened yet, so
-   * its FIRST turn is a cache hit instead of a ~10s blocking Teacher call
-   * (sugarmagic-latency-00m).
+   * Pre-computes ONE directive for a whole region's NPCs, so the FIRST turn of
+   * a conversation with any of them is a cache hit instead of a ~10s blocking
+   * Teacher call (sugarmagic-latency-00m).
    *
    * WHY THIS IS NOT `invoke`. `invoke` on a hit runs `cache.get`, which calls
    * `spendTurn` -- ageing a real directive by a turn the player never took,
@@ -237,17 +255,10 @@ export class SugarLangTeacher {
    * behaviour, and a background failure must never surface as an unhandled
    * rejection.
    */
-  async warmConversation(
+  async warmConversations(
+    conversationIds: readonly string[],
     context: TeacherContext
-  ): Promise<"fresh" | "warmed" | "in-flight" | "skipped" | "failed"> {
-    const conversationId = context.conversationId;
-    // ONE Teacher call in flight per conversation, whatever its purpose -- a
-    // warm-up and a background re-plan racing on the same slot would spend two
-    // calls to answer one question.
-    if (this.teacherCallsInFlight.has(conversationId)) {
-      return "in-flight";
-    }
-
+  ): Promise<"fresh" | "warmed" | "skipped" | "in-flight" | "failed"> {
     const keys = {
       ...(context.situationKey === undefined
         ? {}
@@ -255,36 +266,59 @@ export class SugarLangTeacher {
       learnerKey: learnerKey(context.learner)
     };
 
-    const before = this.cache.inspect(conversationId, keys);
-    if (before && (before.staleness === null || before.staleness === "learner_change")) {
-      return "fresh";
+    // Which slots would actually block a first turn. A slot stale only on the
+    // LEARNER is left alone: it is served instantly and re-planned in the
+    // background (7gp.1), so warming it buys nothing.
+    const needsWarming = conversationIds.filter((conversationId) => {
+      if (this.teacherCallsInFlight.has(conversationId)) return false;
+      const before = this.cache.inspect(conversationId, keys);
+      return !before || before.staleness === "situation_change";
+    });
+    if (needsWarming.length === 0) {
+      return conversationIds.some((id) => this.teacherCallsInFlight.has(id))
+        ? "in-flight"
+        : "fresh";
     }
 
-    // `backgroundReplan` keeps this call's tokens and latency off whatever turn
-    // happens to be open. Nobody is waiting on it -- until a turn joins it.
+    // ONE CALL, N WRITES -- and this is the whole point.
+    //
+    // The directive cache is scoped per conversation
+    // (createActiveDirectiveFactScope -> ("conversation", conversationId)), so
+    // a directive written for NPC A is invisible to NPC B. An earlier version
+    // looped `warmConversation` per NPC believing the later ones would hit
+    // cache; they cannot, so a region with N NPCs fired N full ~9s Teacher
+    // calls, and did it again on every time-of-day or quest-stage change.
+    //
+    // The directive does not depend on the NPC anyway -- the situation key has
+    // no per-NPC axis and the Teacher receives only ids and a display name
+    // (sugarmagic-teaching-rnw) -- so ONE plan is correct for all of them.
+    // Registered under every id so a turn with any of these NPCs can join it.
     const call = this.llmPolicy.invoke({ ...context, backgroundReplan: true });
-    this.teacherCallsInFlight.set(conversationId, call);
+    for (const conversationId of needsWarming) {
+      this.teacherCallsInFlight.set(conversationId, { keys, promise: call });
+    }
     try {
       const directive = await call;
-
-      // RE-CHECK BEFORE WRITING. A real conversation may have started while
-      // this was in flight and done its own blocking call -- with the actual
-      // NPC, recent turns and probe state. That directive is strictly better
-      // than this one, and `set` overwrites unconditionally and resets
-      // turnsConsumed, so writing over it would destroy good data and hand the
-      // player a plan built from less.
-      const after = this.cache.inspect(conversationId, keys);
-      if (after && after.staleness !== "situation_change") {
-        return "skipped";
+      let written = 0;
+      for (const conversationId of needsWarming) {
+        // Re-check per slot: a real conversation may have started meanwhile and
+        // written a better directive, built with the actual NPC and history.
+        const after = this.cache.inspect(conversationId, keys);
+        if (after && after.staleness !== "situation_change") continue;
+        this.cache.set(conversationId, directive, keys);
+        written += 1;
       }
-
-      this.cache.set(conversationId, directive, keys);
-      return "warmed";
+      // "skipped" when every slot was claimed while the call was in flight --
+      // reported rather than folded into "warmed", so a test can tell the
+      // clobber guard fired.
+      return written > 0 ? "warmed" : "skipped";
     } catch {
       // Includes a disposed blackboard when the region unloaded mid-call.
       return "failed";
     } finally {
-      this.teacherCallsInFlight.delete(conversationId);
+      for (const conversationId of needsWarming) {
+        this.teacherCallsInFlight.delete(conversationId);
+      }
     }
   }
 
@@ -310,7 +344,7 @@ export class SugarLangTeacher {
       return;
     }
     const replan = this.runBackgroundReplan(context, plannedFor);
-    this.teacherCallsInFlight.set(conversationId, replan);
+    this.teacherCallsInFlight.set(conversationId, { keys: plannedFor, promise: replan });
     void replan
       .catch(() => undefined)
       .finally(() => {

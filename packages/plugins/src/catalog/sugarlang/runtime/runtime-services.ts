@@ -752,7 +752,7 @@ export class SugarlangRuntimeServices {
    */
   async buildRegionWarmContext(): Promise<{
     situationKey: string;
-    warm: (npcDefinitionId: string) => Promise<unknown>;
+    warmAll: (npcDefinitionIds: readonly string[]) => Promise<unknown>;
   } | null> {
     const bound = this.boundContext;
     if (!bound) return null;
@@ -782,10 +782,15 @@ export class SugarlangRuntimeServices {
 
     return {
       situationKey: situationKey(situation),
-      warm: (npcDefinitionId: string) =>
-        services.teacher.warmConversation({
-          // The slot is addressed by NPC id -- see getSugarlangConversationId.
-          conversationId: npcDefinitionId,
+      // ONE call for however many NPCs need it -- the directive does not depend
+      // on which NPC it is served through, and the per-conversation cache scope
+      // means a per-NPC loop would bill a full Teacher call each time.
+      warmAll: (npcDefinitionIds: readonly string[]) =>
+        services.teacher.warmConversations(npcDefinitionIds, {
+          // Slots are addressed by NPC id -- see getSugarlangConversationId.
+          // `conversationId` here is only the context's own field; the ids
+          // above are what actually get written.
+          conversationId: npcDefinitionIds[0] ?? "warm",
           learner,
           atlas: services.atlas,
           situation,

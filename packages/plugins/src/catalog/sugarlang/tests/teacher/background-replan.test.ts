@@ -259,7 +259,7 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
     const planned = createDirectiveFixture({ rationale: "warmed" });
     const { teacher, cache, context } = warmSetup(async () => planned);
 
-    expect(await teacher.warmConversation(context)).toBe("warmed");
+    expect(await teacher.warmConversations([CONVERSATION], context)).toBe("warmed");
     expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("warmed");
   });
 
@@ -273,7 +273,7 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
 
     // learnerKey differs from the fixture's real one, so this is learner-stale
     // at worst -- which is served instantly anyway. Either way: no call.
-    const outcome = await teacher.warmConversation(context);
+    const outcome = await teacher.warmConversations([CONVERSATION], context);
 
     expect(outcome).toBe("fresh");
     expect(invoke).not.toHaveBeenCalled();
@@ -288,7 +288,7 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
       learnerKey: "whatever"
     });
 
-    expect(await teacher.warmConversation(context)).toBe("warmed");
+    expect(await teacher.warmConversations([CONVERSATION], context)).toBe("warmed");
     expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("refilled");
   });
 
@@ -303,7 +303,7 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
     });
     const before = cache.inspect(CONVERSATION);
 
-    await teacher.warmConversation(context);
+    await teacher.warmConversations([CONVERSATION], context);
 
     // turnsConsumed is not exposed on the inspection, so assert via the fact
     // that a subsequent read still sees the same directive un-aged.
@@ -319,7 +319,7 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
     );
     const { teacher, cache, context } = warmSetup(invoke as never);
 
-    const warming = teacher.warmConversation(context);
+    const warming = teacher.warmConversations([CONVERSATION], context);
     cache.set(CONVERSATION, createDirectiveFixture({ rationale: "the real one" }), {
       situationKey: SITUATION_NOW,
       learnerKey: "from-the-real-turn"
@@ -334,8 +334,8 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
     const { invoke, release } = deferredPolicy(createDirectiveFixture());
     const { teacher, context } = warmSetup(invoke as never);
 
-    const first = teacher.warmConversation(context);
-    expect(await teacher.warmConversation(context)).toBe("in-flight");
+    const first = teacher.warmConversations([CONVERSATION], context);
+    expect(await teacher.warmConversations([CONVERSATION], context)).toBe("in-flight");
 
     release();
     await first;
@@ -349,7 +349,7 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
       throw new TeacherInvocationError("gateway down");
     });
 
-    expect(await teacher.warmConversation(context)).toBe("failed");
+    expect(await teacher.warmConversations([CONVERSATION], context)).toBe("failed");
     expect(cache.inspect(CONVERSATION)).toBeNull();
   });
 });
@@ -364,7 +364,7 @@ describe("a turn joins a warm-up already in flight (sugarmagic-latency-00m)", ()
     const { teacher } = createTeacher(invoke as never);
     const context = contextHere();
 
-    const warming = teacher.warmConversation(context);
+    const warming = teacher.warmConversations([CONVERSATION], context);
     // The player presses interact while the warm-up is still running.
     const turn = teacher.invoke(context);
 
@@ -388,10 +388,86 @@ describe("a turn joins a warm-up already in flight (sugarmagic-latency-00m)", ()
     const { teacher } = createTeacher(invoke as never);
     const context = contextHere();
 
-    await teacher.warmConversation(context);
+    await teacher.warmConversations([CONVERSATION], context);
     const served = await teacher.invoke(context);
 
     expect(served.rationale).toBe("the turn's own");
     expect(invoke).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("mini-review fixes: cost and the join (sugarmagic-latency-00m)", () => {
+  it("THE COST BUG: warming N NPCs spends ONE Teacher call, not N", async () => {
+    // The directive cache is scoped per conversation
+    // (createActiveDirectiveFactScope -> ("conversation", conversationId)), so
+    // NPC B's slot can never be a cache hit off NPC A's. An earlier version
+    // looped per NPC believing otherwise: a region with 5 NPCs fired 5 full
+    // ~9s Teacher calls, repeating on every time-of-day and quest change.
+    const invoke = vi.fn(async () => createDirectiveFixture({ rationale: "one plan" }));
+    const { teacher, cache } = createTeacher(invoke as never);
+    const context = contextHere();
+
+    const outcome = await teacher.warmConversations(["npc-a", "npc-b", "npc-c"], context);
+
+    expect(outcome).toBe("warmed");
+    expect(invoke).toHaveBeenCalledTimes(1);
+    // ...and every slot got filled from that one call.
+    for (const npcId of ["npc-a", "npc-b", "npc-c"]) {
+      expect(cache.inspect(npcId)?.directive.rationale).toBe("one plan");
+    }
+  });
+
+  it("skips slots that are already fresh, and spends nothing when all are", async () => {
+    const invoke = vi.fn(async () => createDirectiveFixture());
+    const { teacher, cache } = createTeacher(invoke as never);
+    const context = contextHere();
+    for (const npcId of ["npc-a", "npc-b"]) {
+      cache.set(npcId, createDirectiveFixture({ rationale: "already here" }), {
+        situationKey: SITUATION_KEY,
+        learnerKey: "whatever"
+      });
+    }
+
+    expect(await teacher.warmConversations(["npc-a", "npc-b"], context)).toBe("fresh");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("THE JOIN BUG: does not join a call planned for a DIFFERENT world", async () => {
+    // Joining blindly is worse than not joining: the post-join cache read
+    // misses on situation_change and the turn calls anyway -- paying the
+    // in-flight remainder PLUS a full call. The boot case produces exactly this
+    // mismatch, because the first warm runs before the save restore.
+    //
+    // ASSERTS ORDER, NOT JUST OUTCOME. An earlier version of this test checked
+    // only which directive was served, which passes whether or not the turn
+    // waited -- it proved nothing. What matters is that the turn resolves while
+    // the mismatched call is STILL BLOCKED.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let call = 0;
+    const invoke = vi.fn(async () => {
+      call += 1;
+      if (call === 1) {
+        await gate;
+        return createDirectiveFixture({ rationale: "stale world" });
+      }
+      return createDirectiveFixture({ rationale: "the turn's own" });
+    });
+    const { teacher } = createTeacher(invoke as never);
+
+    const warming = teacher.warmConversations(
+      [CONVERSATION],
+      createTeacherContext({ conversationId: CONVERSATION, situationKey: "the-OLD-situation" })
+    );
+
+    // The blocked call is never released before the turn is awaited. If the
+    // turn joined it, this would hang rather than fail.
+    const served = await teacher.invoke(contextHere());
+
+    expect(served.rationale).toBe("the turn's own");
+    expect(invoke).toHaveBeenCalledTimes(2);
+
+    release();
+    await warming;
   });
 });

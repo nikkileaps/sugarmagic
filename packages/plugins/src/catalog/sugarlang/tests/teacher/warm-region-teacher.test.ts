@@ -12,13 +12,13 @@ import { createRegionTeacherWarmer } from "../../runtime/teacher/warm-region-tea
 
 function setup(keys: string[]) {
   let index = 0;
-  const warm = vi.fn(async (_npcId: string) => undefined);
+  const warm = vi.fn(async (_npcIds: readonly string[]) => undefined);
   const warmer = createRegionTeacherWarmer({
     listWarmableNpcIds: () => ["npc-a", "npc-b"],
     buildWarmContext: async () => {
       const situationKey = keys[Math.min(index, keys.length - 1)]!;
       index += 1;
-      return { situationKey, warm };
+      return { situationKey, warmAll: warm };
     }
   });
   return { warmer, warm };
@@ -35,15 +35,16 @@ describe("the region teacher warmer", () => {
     // 16ms frames: a second of gameplay must not trigger 60 checks.
     for (let i = 0; i < 60; i++) warmer.tick(16);
     await settle();
-    expect(warm.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(warm.mock.calls.length).toBeLessThanOrEqual(1);
   });
 
   it("THE ONE THAT MATTERS: warms every NPC in the region once", async () => {
     const { warmer, warm } = setup(["k1"]);
     warmer.tick(2000);
     await settle();
-    expect(warm).toHaveBeenCalledTimes(2);
-    expect(warm.mock.calls.map((c) => c[0])).toEqual(["npc-a", "npc-b"]);
+    // ONE call, handed every id at once -- not one call per NPC.
+    expect(warm).toHaveBeenCalledTimes(1);
+    expect(warm.mock.calls[0]![0]).toEqual(["npc-a", "npc-b"]);
   });
 
   it("does not re-warm while the world is unchanged", async () => {
@@ -52,7 +53,7 @@ describe("the region teacher warmer", () => {
     await settle();
     warmer.tick(2000);
     await settle();
-    expect(warm).toHaveBeenCalledTimes(2);
+    expect(warm).toHaveBeenCalledTimes(1);
   });
 
   it("RE-WARMS when the world moves -- which is also how a pre-restore warm self-corrects", async () => {
@@ -64,7 +65,7 @@ describe("the region teacher warmer", () => {
     await settle();
     warmer.tick(2000);
     await settle();
-    expect(warm).toHaveBeenCalledTimes(4);
+    expect(warm).toHaveBeenCalledTimes(2);
   });
 
   it("invalidate() forces a re-warm -- for a conversation that may have advanced a quest", async () => {
@@ -74,18 +75,18 @@ describe("the region teacher warmer", () => {
     warmer.invalidate();
     warmer.tick(2000);
     await settle();
-    expect(warm).toHaveBeenCalledTimes(4);
+    expect(warm).toHaveBeenCalledTimes(2);
   });
 
   it("never overlaps two runs", async () => {
     let release!: () => void;
     const gate = new Promise<void>((r) => (release = r));
-    const warm = vi.fn(async () => {
+    const warm = vi.fn(async (_npcIds: readonly string[]) => {
       await gate;
     });
     const warmer = createRegionTeacherWarmer({
       listWarmableNpcIds: () => ["npc-a"],
-      buildWarmContext: async () => ({ situationKey: "k1", warm })
+      buildWarmContext: async () => ({ situationKey: "k1", warmAll: warm })
     });
 
     warmer.tick(2000);
@@ -106,7 +107,7 @@ describe("the region teacher warmer", () => {
   });
 
   it("does nothing when the world is not ready to be asked", async () => {
-    const warm = vi.fn(async () => undefined);
+    const warm = vi.fn(async (_npcIds: readonly string[]) => undefined);
     const warmer = createRegionTeacherWarmer({
       listWarmableNpcIds: () => ["npc-a"],
       buildWarmContext: async () => null

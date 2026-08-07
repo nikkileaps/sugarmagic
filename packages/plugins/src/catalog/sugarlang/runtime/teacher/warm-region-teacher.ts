@@ -20,7 +20,14 @@
  *   axis in it. The Teacher also barely differentiates by NPC today: it
  *   receives a uuid, a display name and a lore page ID, never the page
  *   (sugarmagic-teaching-rnw). So one call, written into every present NPC's
- *   slot, is faithful to what the Teacher actually does. If rnw lands and
+ *   slot, is faithful to what the Teacher actually does.
+ *
+ *   THIS IS ENFORCED BY `warmConversations`, WHICH TAKES ALL THE IDS AT ONCE.
+ *   An earlier version looped a per-NPC warm and claimed the later calls would
+ *   hit cache. They cannot: the directive cache is scoped per conversation, so
+ *   a region with N NPCs billed N full Teacher calls and repeated the set on
+ *   every time-of-day and quest-stage change. Caught in review before it
+ *   shipped; do not reintroduce a per-NPC loop here. If rnw lands and
  *   directives become genuinely NPC-specific, THIS MUST BECOME ONE CALL PER
  *   NPC, and the cost question it currently sidesteps comes back.
  *
@@ -62,7 +69,11 @@ export interface RegionWarmerDeps {
   /** Builds the situation key and teacher context for an NPC-less situation.
    *  Returns null when the world is not ready to be asked. */
   buildWarmContext: () => Promise<
-    { situationKey: string; warm: (npcId: string) => Promise<unknown> } | null
+    {
+      situationKey: string;
+      /** ONE Teacher call for all of them -- see the module header. */
+      warmAll: (npcIds: readonly string[]) => Promise<unknown>;
+    } | null
   >;
 }
 
@@ -101,14 +112,12 @@ export function createRegionTeacherWarmer(
     const npcIds = deps.listWarmableNpcIds();
     if (npcIds.length === 0) return;
 
-    // Sequential, not parallel. One Teacher call serves the whole region, so
-    // there is nothing to parallelise -- and the calls after the first are
-    // cache-warm anyway. Bursting would matter only if this ever became
-    // per-NPC, which is when a concurrency cap becomes load-bearing.
-    for (const npcId of npcIds) {
-      if (disposed) return;
-      await built.warm(npcId);
-    }
+    // ONE call, handed every id at once. An earlier version looped per NPC
+    // believing the calls after the first would hit cache -- they cannot: the
+    // directive cache is scoped per conversation, so a region with N NPCs fired
+    // N full ~9s Teacher calls, repeating on every time-of-day and quest-stage
+    // change. Caught in review before it shipped.
+    await built.warmAll(npcIds);
     if (!disposed) {
       warmedForKey = built.situationKey;
     }
