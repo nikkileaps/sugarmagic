@@ -269,10 +269,15 @@ export class SugarLangTeacher {
     // Which slots would actually block a first turn. A slot stale only on the
     // LEARNER is left alone: it is served instantly and re-planned in the
     // background (7gp.1), so warming it buys nothing.
+    // What each slot holds NOW, so the write after the call can be a
+    // compare-and-set rather than a blind overwrite.
+    const claimedBefore = new Map<string, string | undefined>();
     const needsWarming = conversationIds.filter((conversationId) => {
       if (this.teacherCallsInFlight.has(conversationId)) return false;
       const before = this.cache.inspect(conversationId, keys);
-      return !before || before.staleness === "situation_change";
+      if (before && before.staleness !== "situation_change") return false;
+      claimedBefore.set(conversationId, before?.plannedFor.situationKey);
+      return true;
     });
     if (needsWarming.length === 0) {
       return conversationIds.some((id) => this.teacherCallsInFlight.has(id))
@@ -301,10 +306,20 @@ export class SugarLangTeacher {
       const directive = await call;
       let written = 0;
       for (const conversationId of needsWarming) {
-        // Re-check per slot: a real conversation may have started meanwhile and
-        // written a better directive, built with the actual NPC and history.
-        const after = this.cache.inspect(conversationId, keys);
-        if (after && after.staleness !== "situation_change") continue;
+        // COMPARE-AND-SET: write only if nothing claimed this slot while the
+        // call was in flight.
+        //
+        // The previous check asked `inspect(id, keys).staleness !==
+        // "situation_change"` and was INVERTED for the case it named. When a
+        // real turn wrote a directive for a NEWER world, inspecting with these
+        // (older) warm keys reports exactly `situation_change` -- so the guard
+        // concluded the slot was free and overwrote the better, newer
+        // directive. Comparing what is there against what was there when the
+        // call started cannot invert: unchanged means unclaimed.
+        const after = this.cache.inspect(conversationId);
+        if (after?.plannedFor.situationKey !== claimedBefore.get(conversationId)) {
+          continue;
+        }
         this.cache.set(conversationId, directive, keys);
         written += 1;
       }

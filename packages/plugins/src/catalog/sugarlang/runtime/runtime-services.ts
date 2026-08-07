@@ -752,7 +752,8 @@ export class SugarlangRuntimeServices {
    */
   async buildRegionWarmContext(): Promise<{
     situationKey: string;
-    warmAll: (npcDefinitionIds: readonly string[]) => Promise<unknown>;
+    /** Returns the warm outcome so the caller can retry a failure. */
+    warmAll: (npcDefinitionIds: readonly string[]) => Promise<string>;
   } | null> {
     const bound = this.boundContext;
     if (!bound) return null;
@@ -761,9 +762,6 @@ export class SugarlangRuntimeServices {
 
     const services = await this.getAmbientServices();
     if (!services) return null;
-
-    const learner = await services.learnerStore.getCurrentProfile();
-    if (!learner) return null;
 
     // NPC-LESS ON PURPOSE. `situation.npc` is not in the situation key, and the
     // Teacher receives only ids and a display name from it today -- so one
@@ -781,12 +779,20 @@ export class SugarlangRuntimeServices {
     });
 
     return {
+      // THE KEY IS COMPUTED WITHOUT THE LEARNER, deliberately. The situation
+      // key is scene + hash + quest + objectives + time -- no learner axis. The
+      // learner profile is loaded only inside warmAll, i.e. only when the key
+      // actually moved and a call is really going to happen. Loading it up here
+      // paged the whole IndexedDB card store on every 2s tick, forever, for a
+      // check that almost always decides to do nothing.
       situationKey: situationKey(situation),
       // ONE call for however many NPCs need it -- the directive does not depend
       // on which NPC it is served through, and the per-conversation cache scope
       // means a per-NPC loop would bill a full Teacher call each time.
-      warmAll: (npcDefinitionIds: readonly string[]) =>
-        services.teacher.warmConversations(npcDefinitionIds, {
+      warmAll: async (npcDefinitionIds: readonly string[]) => {
+        const learner = await services.learnerStore.getCurrentProfile();
+        if (!learner) return "failed" as const;
+        return services.teacher.warmConversations(npcDefinitionIds, {
           // Slots are addressed by NPC id -- see getSugarlangConversationId.
           // `conversationId` here is only the context's own field; the ids
           // above are what actually get written.
@@ -800,22 +806,30 @@ export class SugarlangRuntimeServices {
             supportLanguage: learner.supportLanguage
           },
           calibrationActive: false
-        })
+        });
+      }
     };
   }
 
   async getAmbientServices(): Promise<SugarlangExecutionServices | null> {
     const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
     if (!targetLanguage) return null;
-    // The support language comes from config, NOT a hardcoded "en". The pair
-    // is part of the learnerId (buildLearnerId), so getting it wrong resolves a
-    // DIFFERENT learner profile and card store than a real turn does -- and
-    // anything computed against it would be planned for a learner who does not
-    // exist. getPlacementQuestForm already reads it this way.
-    return this.resolveForLanguages(
-      targetLanguage,
-      this.config.supportLanguage?.trim().toLowerCase() || "en"
-    );
+    // "en" HERE IS DELIBERATE, AND IT IS NOT THE SAME CHOICE getPlacementQuestForm
+    // MAKES. This must match what a TURN resolves, because a turn is who reads
+    // anything computed here: getSelectionLanguages (:205) is
+    // `selection.supportLanguage || "en"` and never consults config. The pair is
+    // part of buildLearnerId, so diverging resolves a different learner profile
+    // and card store -- a warmed directive would be planned for one learner and
+    // read by another.
+    //
+    // I changed this to config.supportLanguage earlier in this branch believing
+    // the hardcode was a bug. It was not: it is the turn path's fallback, and
+    // config was the divergence. Reverted after review.
+    //
+    // THE REAL GAP, unaddressed here: if a selection DOES carry a support
+    // language, a turn gets it and this still says "en". Fixing that needs the
+    // ambient path to know the selection, which it structurally does not.
+    return this.resolveForLanguages(targetLanguage, "en");
   }
 
   private async resolveForLanguages(

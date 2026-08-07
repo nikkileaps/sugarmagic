@@ -301,6 +301,11 @@ export function createSugarlangPlugin(
       }
     },
     async dispose() {
+      // Stop the warmer FIRST: a ~9s Teacher call in flight would otherwise
+      // land and write into a torn-down blackboard. Its own test asserts this
+      // guarantee, and until this line existed the guarantee was untested
+      // behaviour that production never invoked.
+      regionWarmer.dispose();
       // 081.2: flush buffered telemetry on conversation/plugin teardown so
       // the session tail is not lost, then tear down sink timers/listeners.
       await flushTelemetry(telemetry, logger);

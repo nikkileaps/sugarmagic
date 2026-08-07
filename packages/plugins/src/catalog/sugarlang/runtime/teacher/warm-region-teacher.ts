@@ -56,8 +56,6 @@
  * Status: active
  */
 
-import type { SugarLangTeacher } from "./sugar-lang-teacher";
-
 /** Minimum gap between checks. Deciding whether to warm costs ~12 blackboard
  *  reads, which is fine twice a second and not fine at 60fps. */
 const CHECK_INTERVAL_MS = 2000;
@@ -71,8 +69,9 @@ export interface RegionWarmerDeps {
   buildWarmContext: () => Promise<
     {
       situationKey: string;
-      /** ONE Teacher call for all of them -- see the module header. */
-      warmAll: (npcIds: readonly string[]) => Promise<unknown>;
+      /** ONE Teacher call for all of them -- see the module header. Returns
+       *  "failed" when nothing could be warmed, so the caller can retry. */
+      warmAll: (npcIds: readonly string[]) => Promise<string>;
     } | null
   >;
 }
@@ -87,15 +86,7 @@ export interface RegionTeacherWarmer {
   dispose: () => void;
 }
 
-/**
- * `teacher` is unused by this module directly -- warming goes through the
- * caller's `warm` closure so this file never has to know about contexts. Kept
- * in the signature so the dependency is visible at the call site.
- */
-export function createRegionTeacherWarmer(
-  deps: RegionWarmerDeps,
-  _teacher?: SugarLangTeacher
-): RegionTeacherWarmer {
+export function createRegionTeacherWarmer(deps: RegionWarmerDeps): RegionTeacherWarmer {
   let sinceLastCheckMs = CHECK_INTERVAL_MS;
   let warmedForKey: string | null = null;
   let running = false;
@@ -117,8 +108,13 @@ export function createRegionTeacherWarmer(
     // directive cache is scoped per conversation, so a region with N NPCs fired
     // N full ~9s Teacher calls, repeating on every time-of-day and quest-stage
     // change. Caught in review before it shipped.
-    await built.warmAll(npcIds);
-    if (!disposed) {
+    const outcome = await built.warmAll(npcIds);
+    // ONLY REMEMBER A STATE THAT ACTUALLY GOT WARMED. Marking it regardless
+    // meant a failed warm -- gateway down, model erroring -- was recorded as
+    // done and never retried until the world moved, which on a fixed region
+    // can be a long time. Leaving it unset costs one retry per interval, which
+    // is the correct behaviour for a transient failure.
+    if (!disposed && outcome !== "failed") {
       warmedForKey = built.situationKey;
     }
   }

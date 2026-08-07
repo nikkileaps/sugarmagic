@@ -301,13 +301,14 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
       situationKey: SITUATION_NOW,
       learnerKey: "x"
     });
-    const before = cache.inspect(CONVERSATION);
+    // WATCH THE AGEING CALL ITSELF. The previous version compared the directive
+    // object before and after, which is identical whether or not the turn
+    // counter moved -- it asserted nothing and passed with the bug present.
+    const spendTurn = vi.spyOn(cache, "spendTurn");
 
     await teacher.warmConversations([CONVERSATION], context);
 
-    // turnsConsumed is not exposed on the inspection, so assert via the fact
-    // that a subsequent read still sees the same directive un-aged.
-    expect(cache.inspect(CONVERSATION)?.directive).toEqual(before?.directive);
+    expect(spendTurn).not.toHaveBeenCalled();
   });
 
   it("THE DANGEROUS RACE: does not clobber a directive a real turn just wrote", async () => {
@@ -469,5 +470,47 @@ describe("mini-review fixes: cost and the join (sugarmagic-latency-00m)", () => 
 
     release();
     await warming;
+  });
+});
+
+describe("mini-review round 2: the warm write is a compare-and-set", () => {
+  it("THE INVERTED GUARD: does not overwrite a directive written for a NEWER world", async () => {
+    // The old check asked `inspect(id, warmKeys).staleness !== "situation_change"`.
+    // When a real turn wrote a directive for a NEWER situation, inspecting with
+    // the older warm keys reports exactly situation_change -- so the guard read
+    // "slot is free" and clobbered the better directive. This is the case the
+    // guard was named for and the one it got backwards.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const invoke = vi.fn(async () => {
+      await gate;
+      return createDirectiveFixture({ rationale: "the stale warm" });
+    });
+    const { teacher, cache } = createTeacher(invoke as never);
+
+    const warming = teacher.warmConversations([CONVERSATION], contextHere());
+
+    // The world moves and a real turn writes a directive for the new one.
+    cache.set(CONVERSATION, createDirectiveFixture({ rationale: "newer, for the new world" }), {
+      situationKey: "the-NEW-situation",
+      learnerKey: "from-the-real-turn"
+    });
+
+    release();
+    expect(await warming).toBe("skipped");
+    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("newer, for the new world");
+  });
+
+  it("still refills a slot nothing else claimed", async () => {
+    // The guard must not over-correct into never writing.
+    const invoke = vi.fn(async () => createDirectiveFixture({ rationale: "refilled" }));
+    const { teacher, cache } = createTeacher(invoke as never);
+    cache.set(CONVERSATION, createDirectiveFixture({ rationale: "for elsewhere" }), {
+      situationKey: "an-OLD-situation",
+      learnerKey: "x"
+    });
+
+    expect(await teacher.warmConversations([CONVERSATION], contextHere())).toBe("warmed");
+    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("refilled");
   });
 });

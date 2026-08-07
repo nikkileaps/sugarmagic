@@ -1076,28 +1076,6 @@ export function createRuntimeGameplaySessionController(
         ? getGoalSurfacedCount(blackboard, trackedQuest.questId)
         : null;
 
-      const runtimeContext: ConversationRuntimeContext = {
-        here:
-          playerLocation?.location ??
-          npcLocation?.location ??
-          buildActiveRegionLocationReference(),
-        playerLocation,
-        playerPosition,
-        npcLocation,
-        npcPosition,
-        playerArea,
-        npcArea,
-        npcPlayerRelation,
-        npcBehavior,
-        trackedQuest,
-        activeQuestStage,
-        activeQuestObjectives,
-        goalSurfacedCount,
-        timeOfDay: getTimeOfDayBand(blackboard),
-        knownFacts: getPlayerKnownFacts(blackboard),
-        recentWorldEvents: recentEventCollector.getRecentEvents()
-      };
-
     return {
       here:
         playerLocation?.location ??

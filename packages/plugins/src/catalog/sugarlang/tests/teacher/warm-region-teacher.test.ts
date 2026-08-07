@@ -12,7 +12,7 @@ import { createRegionTeacherWarmer } from "../../runtime/teacher/warm-region-tea
 
 function setup(keys: string[]) {
   let index = 0;
-  const warm = vi.fn(async (_npcIds: readonly string[]) => undefined);
+  const warm = vi.fn(async (_npcIds: readonly string[]) => "warmed");
   const warmer = createRegionTeacherWarmer({
     listWarmableNpcIds: () => ["npc-a", "npc-b"],
     buildWarmContext: async () => {
@@ -35,7 +35,9 @@ describe("the region teacher warmer", () => {
     // 16ms frames: a second of gameplay must not trigger 60 checks.
     for (let i = 0; i < 60; i++) warmer.tick(16);
     await settle();
-    expect(warm.mock.calls.length).toBeLessThanOrEqual(1);
+    // EXACTLY one. `toBeLessThanOrEqual(1)` passed at zero, so a warmer that
+    // never warmed at all would have satisfied its own throttle test.
+    expect(warm).toHaveBeenCalledTimes(1);
   });
 
   it("THE ONE THAT MATTERS: warms every NPC in the region once", async () => {
@@ -83,6 +85,7 @@ describe("the region teacher warmer", () => {
     const gate = new Promise<void>((r) => (release = r));
     const warm = vi.fn(async (_npcIds: readonly string[]) => {
       await gate;
+      return "warmed";
     });
     const warmer = createRegionTeacherWarmer({
       listWarmableNpcIds: () => ["npc-a"],
@@ -107,7 +110,7 @@ describe("the region teacher warmer", () => {
   });
 
   it("does nothing when the world is not ready to be asked", async () => {
-    const warm = vi.fn(async (_npcIds: readonly string[]) => undefined);
+    const warm = vi.fn(async (_npcIds: readonly string[]) => "warmed");
     const warmer = createRegionTeacherWarmer({
       listWarmableNpcIds: () => ["npc-a"],
       buildWarmContext: async () => null
@@ -115,5 +118,40 @@ describe("the region teacher warmer", () => {
     warmer.tick(2000);
     await settle();
     expect(warm).not.toHaveBeenCalled();
+  });
+});
+
+describe("mini-review: a failed warm is retried", () => {
+  it("does not remember a world state whose warm failed", async () => {
+    // Marking it regardless meant a gateway outage was recorded as "done" and
+    // never retried until the world moved -- which, on a region fixed for the
+    // session, can be the rest of the session.
+    const warm = vi.fn(async (_npcIds: readonly string[]) => "failed");
+    const warmer = createRegionTeacherWarmer({
+      listWarmableNpcIds: () => ["npc-a"],
+      buildWarmContext: async () => ({ situationKey: "k1", warmAll: warm })
+    });
+
+    warmer.tick(2000);
+    await settle();
+    warmer.tick(2000);
+    await settle();
+
+    expect(warm).toHaveBeenCalledTimes(2);
+  });
+
+  it("does remember one that succeeded", async () => {
+    const warm = vi.fn(async (_npcIds: readonly string[]) => "warmed");
+    const warmer = createRegionTeacherWarmer({
+      listWarmableNpcIds: () => ["npc-a"],
+      buildWarmContext: async () => ({ situationKey: "k1", warmAll: warm })
+    });
+
+    warmer.tick(2000);
+    await settle();
+    warmer.tick(2000);
+    await settle();
+
+    expect(warm).toHaveBeenCalledTimes(1);
   });
 });
