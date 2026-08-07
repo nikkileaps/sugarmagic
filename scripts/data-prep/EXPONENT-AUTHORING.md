@@ -181,7 +181,7 @@ competencies overlap -- raise it rather than authoring around it.
 ## AFTER YOU WRITE A LESSON
 
 ```
-pnpm exec tsx scripts/data-prep/build-spanish-competency-inventory.ts
+pnpm exec tsx scripts/data-prep/build-competency-inventory.ts <lang>
 pnpm vitest run scripts/data-prep packages/plugins/src/catalog/sugarlang/tests/data
 ```
 

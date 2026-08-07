@@ -77,7 +77,7 @@ rules an author or model follows.
 3. **Rebuild any inventory that depends on it.** Constituent lemmas are
    resolved through the morphology index, so a dictionary change can move them.
 
-       pnpm exec tsx scripts/data-prep/build-spanish-competency-inventory.ts
+       pnpm exec tsx scripts/data-prep/build-competency-inventory.ts es
 
    Also rerun this after editing `../curriculum/*.json` or `exponents.json`.
    `scripts/data-prep/competency-inventory.test.ts` fails if the checked-in

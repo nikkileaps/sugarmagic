@@ -18,7 +18,7 @@ plus one language's authored exponents; nothing here is hand-edited.
 |------|------|
 | Authored curriculum (language-neutral) | `packages/plugins/src/catalog/sugarlang/data/curriculum/<band>.json` |
 | Authored phrases (per language) | `packages/plugins/src/catalog/sugarlang/data/languages/es/exponents.json` |
-| Generator | `scripts/data-prep/build-spanish-competency-inventory.ts` |
+| Generator | `scripts/data-prep/build-competency-inventory.ts <lang>` |
 | Generated data | `packages/plugins/src/catalog/sugarlang/data/languages/es/competency-inventory.json` |
 | JSON schema | `packages/plugins/src/catalog/sugarlang/data/schemas/competency-inventory.schema.json` |
 | TypeScript contracts | `packages/plugins/src/catalog/sugarlang/runtime/contracts/competency-inventory.ts` |
@@ -28,7 +28,7 @@ plus one language's authored exponents; nothing here is hand-edited.
 ## Regenerating
 
 ```
-pnpm exec tsx scripts/data-prep/build-spanish-competency-inventory.ts
+pnpm exec tsx scripts/data-prep/build-competency-inventory.ts es
 ```
 
 Rerun after editing any of its three inputs:
@@ -228,7 +228,7 @@ same underscore-lowercased convention.
 
 1. Author `data/languages/<lang>/exponents.json` -- wordings only, spelled
    correctly. The competency ids must already exist in the curriculum.
-2. Add a build script alongside `build-spanish-competency-inventory.ts` and run
+2. Run `build-competency-inventory.ts <lang>`, which needs no new script, and run
    it. Unresolvable words fail there, which is the point.
 3. Import the generated file in `competency-inventory-loader.ts` and add it to
    `DEFAULT_INVENTORY_DATA`.

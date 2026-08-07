@@ -104,7 +104,7 @@ export interface Competency {
  *
  * GENERATED. Built from data/curriculum/<band>.json and
  * data/languages/<lang>/exponents.json by
- * scripts/data-prep/build-spanish-competency-inventory.ts. Do not hand-edit.
+ * scripts/data-prep/build-competency-inventory.ts. Do not hand-edit.
  */
 export interface CompetencyInventory {
   schemaVersion: "2";
