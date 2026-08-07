@@ -406,12 +406,182 @@ function buildItalianQuestionnaire(): PlacementQuestionnaire {
     ]
   };
 }
+/**
+ * Verbs whose present subjunctive is not built off the `io` stem, given in
+ * full. Everything else in the language is regular here, including the ones
+ * that look irregular: `vengo` -> `venga`, `dico` -> `dica`, `faccio` ->
+ * `faccia`.
+ */
+const ITALIAN_IRREGULAR_SUBJUNCTIVE: Record<string, string[]> = {
+  essere: ["sia", "sia", "sia", "siamo", "siate", "siano"],
+  avere: ["abbia", "abbia", "abbia", "abbiamo", "abbiate", "abbiano"],
+  andare: ["vada", "vada", "vada", "andiamo", "andiate", "vadano"],
+  dare: ["dia", "dia", "dia", "diamo", "diate", "diano"],
+  stare: ["stia", "stia", "stia", "stiamo", "stiate", "stiano"],
+  sapere: ["sappia", "sappia", "sappia", "sappiamo", "sappiate", "sappiano"],
+  volere: ["voglia", "voglia", "voglia", "vogliamo", "vogliate", "vogliano"],
+  potere: ["possa", "possa", "possa", "possiamo", "possiate", "possano"],
+  dovere: ["debba", "debba", "debba", "dobbiamo", "dobbiate", "debbano"]
+};
+
+/**
+ * Verbs whose future and conditional are not built on the infinitive. Every
+ * other verb is, which is why these are a list and not a rule.
+ */
+const ITALIAN_IRREGULAR_FUTURE_STEM: Record<string, string> = {
+  essere: "sar",
+  avere: "avr",
+  andare: "andr",
+  volere: "vorr",
+  potere: "potr",
+  dovere: "dovr",
+  sapere: "sapr",
+  vedere: "vedr",
+  venire: "verr",
+  fare: "far",
+  stare: "star",
+  dare: "dar",
+  rimanere: "rimarr",
+  tenere: "terr",
+  bere: "berr",
+  vivere: "vivr",
+  cadere: "cadr"
+};
+
+/** Pronouns that attach to the end of a verb: `dirmi`, `figurati`, `farlo`. */
+const ITALIAN_CLITICS = [
+  "mi",
+  "ti",
+  "si",
+  "ci",
+  "vi",
+  "lo",
+  "la",
+  "li",
+  "le",
+  "ne"
+];
+
+const SUBJUNCTIVE_ARE = ["i", "i", "i", "", "", "ino"];
+const SUBJUNCTIVE_ERE_IRE = ["a", "a", "a", "", "", "ano"];
+const CONDITIONAL = ["ei", "esti", "ebbe", "emmo", "este", "ebbero"];
+const FUTURE = ["ò", "ai", "à", "emo", "ete", "anno"];
+
+/** `parlare` -> `parler`, `prendere` -> `prender`, `sentire` -> `sentir`. */
+function italianFutureStem(lemmaId: string): string | null {
+  const irregular = ITALIAN_IRREGULAR_FUTURE_STEM[lemmaId];
+  if (irregular) return irregular;
+  if (lemmaId.endsWith("are")) return `${lemmaId.slice(0, -3)}er`;
+  if (lemmaId.endsWith("ere") || lemmaId.endsWith("ire")) {
+    return lemmaId.slice(0, -1);
+  }
+  return null;
+}
+
+/**
+ * Tenses the dictionary does not store but the language needs.
+ *
+ * The stored forms are present, passato remoto, imperfect, gerund and past
+ * participle. That leaves out three things a beginner meets immediately:
+ *
+ *   PRESENT SUBJUNCTIVE, which is also the polite `Lei` command -- `senta`,
+ *   `scusi`, `dica`. A1 politeness is largely polite commands, and lesson 1
+ *   could not resolve `senta` before this.
+ *
+ *   CONDITIONAL, which is how wanting is said politely -- `vorrei`, `potrei`.
+ *
+ *   FUTURE, one word rather than a periphrasis.
+ *
+ * All three are derived rather than authored because they ARE derivable, and
+ * asking an author to write `senta` beside `sento` would be asking them to
+ * restate a rule the language already follows.
+ *
+ * Returns nothing for an entry with no stored forms, so this never invents
+ * anything for the thousands of Italian lemmas still awaiting them.
+ */
+function italianDerivedTenses(entry: AtlasLemmaEntry): string[] {
+  const f = entry.forms;
+  if (!f || !("pres" in f)) return [];
+  const out: string[] = [];
+
+  const irregular = ITALIAN_IRREGULAR_SUBJUNCTIVE[entry.lemmaId];
+  if (irregular) {
+    out.push(...irregular);
+  } else {
+    const io = f.pres[0];
+    const noi = f.pres[3];
+    if (typeof io === "string" && io.endsWith("o")) {
+      const stem = io.slice(0, -1);
+      const isAre = entry.lemmaId.endsWith("are");
+      const endings = isAre ? SUBJUNCTIVE_ARE : SUBJUNCTIVE_ERE_IRE;
+      out.push(`${stem}${endings[0]}`, `${stem}${endings[5]}`);
+      // The two plural persons are NOT built off the `io` stem. For an -isc-
+      // verb that stem carries the infix, and `capisciamo` is not a word --
+      // the real forms are `capiamo` and `capiate`. First person plural is
+      // identical to the present indicative, so the dictionary already has it.
+      if (typeof noi === "string") out.push(noi);
+      const bare = entry.lemmaId.slice(0, -3);
+      if (bare) out.push(`${bare}iate`);
+    }
+  }
+
+  const futureStem = italianFutureStem(entry.lemmaId);
+  if (futureStem) {
+    out.push(...CONDITIONAL.map((ending) => `${futureStem}${ending}`));
+    out.push(...FUTURE.map((ending) => `${futureStem}${ending}`));
+  }
+
+  return out;
+}
+
+/**
+ * Pronouns attached to the end of a verb.
+ *
+ * Italian attaches them to the infinitive (`dirmi`, `chiamarsi`, `farlo`) and
+ * to the informal command (`figurati`, `dimmi`). The infinitive drops its
+ * final `-e` first, which is why this works off a stem rather than the lemma.
+ *
+ * The informal command is the third-person singular present for `-are` verbs
+ * and the second-person singular for the rest, so it is read from the stored
+ * forms rather than guessed.
+ */
+function addItalianExtraForms(
+  forms: Record<string, MorphologyEntry>,
+  entry: AtlasLemmaEntry
+): void {
+  const f = entry.forms;
+  const { lemmaId, partsOfSpeech } = entry;
+  if (!partsOfSpeech.includes("verb")) return;
+  if (!/(are|ere|ire)$/.test(lemmaId)) return;
+
+  const bases: string[] = [lemmaId.slice(0, -1)];
+  if (f && "pres" in f) {
+    const command = lemmaId.endsWith("are") ? f.pres[2] : f.pres[1];
+    if (typeof command === "string") bases.push(command);
+  }
+
+  for (const base of bases) {
+    for (const clitic of ITALIAN_CLITICS) {
+      addMorphologyEntry(forms, `${base}${clitic}`, lemmaId, partsOfSpeech);
+    }
+  }
+}
+
+function addItalianDerivedForms(
+  forms: Record<string, MorphologyEntry>,
+  entry: AtlasLemmaEntry
+): void {
+  for (const surface of italianDerivedTenses(entry)) {
+    addMorphologyEntry(forms, surface, entry.lemmaId, entry.partsOfSpeech);
+  }
+  addItalianExtraForms(forms, entry);
+}
+
 export const italianRules: LanguageRules = {
   lang: "it",
   functionWords: FUNCTION_WORDS,
   expandWrittenForm: expandItalianWrittenForm,
   addMorphologyForms: addItalianMorphologyForms,
-  // No third pass yet. Polite imperatives (`senta`) and attached pronouns
-  // (`figurati`) need one; 091.7 owns it, scoped by what the lessons surface.
+  addDerivedForms: addItalianDerivedForms,
   buildPlacementQuestionnaire: buildItalianQuestionnaire
 };
