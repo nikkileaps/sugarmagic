@@ -46,8 +46,20 @@ export class SugarLangTeacher {
   private readonly llmPolicy: TeacherPolicy;
   private readonly fallbackPolicy: FallbackTeacherPolicy;
   private readonly cache: DirectiveCache;
-  /** Conversations with a background re-plan in flight. See scheduleBackgroundReplan. */
-  private readonly replansInFlight = new Set<string>();
+  /**
+   * The Teacher call currently in flight for a conversation, if any.
+   *
+   * A MAP RATHER THAN A SET so a real turn can JOIN a call already running
+   * instead of starting a second one. Measured on a fresh game: the region
+   * warm-up starts on the first frame and takes ~9s, the player reached the NPC
+   * before it landed, and the turn made its own blocking call -- 16.8s, the
+   * exact cost the warm-up exists to remove. Joining converts the remainder of
+   * the head start into saved wall-clock.
+   */
+  private readonly teacherCallsInFlight = new Map<
+    string,
+    { keys: { situationKey?: string; learnerKey?: string }; promise: Promise<unknown> }
+  >();
   private readonly telemetry: TelemetrySink;
 
   constructor(options: SugarLangTeacherOptions) {
@@ -137,6 +149,48 @@ export class SugarLangTeacher {
       return cached;
     }
 
+    // JOIN A CALL ALREADY RUNNING RATHER THAN STARTING A SECOND ONE.
+    //
+    // The region warm-up begins on the first frame after load and takes ~9s.
+    // Measured on a fresh game: the player reached the NPC before it landed,
+    // this path started its own blocking call, and the turn cost 16.8s -- the
+    // exact cost the warm-up exists to remove. Whatever head start the warm-up
+    // had is wall-clock this turn does not have to spend again.
+    //
+    // Re-check the cache afterwards rather than using the joined call's result
+    // directly: the normal two-axis validity rules then decide whether that
+    // directive suits this turn, instead of this path having to reason about a
+    // directive planned for a slightly different context. If it does not suit,
+    // fall through and make the call that was always going to be needed.
+    const inFlight = this.teacherCallsInFlight.get(effectiveContext.conversationId);
+    // ONLY JOIN A CALL PLANNED FOR THE SAME WORLD.
+    //
+    // Joining blindly is worse than not joining at all: if the in-flight call
+    // was planned for a different situation, the post-join cache read misses on
+    // situation_change and the turn makes its own call anyway -- so it pays the
+    // remainder of that call PLUS a full one. The branch's own boot case
+    // produces exactly that key mismatch, because the first warm can run before
+    // the save restore and key against default "morning" and a null quest.
+    //
+    // The learner axis is deliberately NOT compared: a directive stale only on
+    // the learner is servable (7gp.1), so joining one is still a win.
+    const joinable =
+      inFlight && inFlight.keys.situationKey === effectiveContext.situationKey
+        ? inFlight.promise
+        : null;
+    if (joinable) {
+      await joinable.catch(() => undefined);
+      const joined = this.cache.get(effectiveContext.conversationId, keysNow);
+      if (joined) {
+        traceTeacherDirective({
+          context: effectiveContext,
+          directive: joined,
+          source: "cache"
+        });
+        return joined;
+      }
+    }
+
     let directive: PedagogicalDirective;
     let outcome: "llm" | "fallback" = "llm";
 
@@ -178,6 +232,112 @@ export class SugarLangTeacher {
   }
 
   /**
+   * Pre-computes ONE directive for a whole region's NPCs, so the FIRST turn of
+   * a conversation with any of them is a cache hit instead of a ~10s blocking
+   * Teacher call (sugarmagic-latency-00m).
+   *
+   * WHY THIS IS NOT `invoke`. `invoke` on a hit runs `cache.get`, which calls
+   * `spendTurn` -- ageing a real directive by a turn the player never took,
+   * the exact bug `peek` was split out of `get` to prevent. A warm-up reads
+   * with `inspect` (pure) and writes with `set`, and never touches the turn
+   * counter.
+   *
+   * WHAT IT WARMS, AND WHAT IT LEAVES ALONE:
+   *   - nothing cached, or STALE ON THE WORLD -> warm. A world-stale directive
+   *     blocks the next turn, so refilling it is the whole point.
+   *   - stale on the LEARNER only -> LEAVE IT. That one is served instantly and
+   *     re-planned in the background (7gp.1), so the first turn is already fast
+   *     and a warm call would buy nothing.
+   *   - fresh -> leave it.
+   *
+   * Returns what it did, so a caller can log or test it. Never throws: a
+   * warm-up that fails leaves the first turn merely slow, which is today's
+   * behaviour, and a background failure must never surface as an unhandled
+   * rejection.
+   */
+  async warmConversations(
+    conversationIds: readonly string[],
+    context: TeacherContext
+  ): Promise<"fresh" | "warmed" | "skipped" | "in-flight" | "failed"> {
+    const keys = {
+      ...(context.situationKey === undefined
+        ? {}
+        : { situationKey: context.situationKey }),
+      learnerKey: learnerKey(context.learner)
+    };
+
+    // Which slots would actually block a first turn. A slot stale only on the
+    // LEARNER is left alone: it is served instantly and re-planned in the
+    // background (7gp.1), so warming it buys nothing.
+    // What each slot holds NOW, so the write after the call can be a
+    // compare-and-set rather than a blind overwrite.
+    const claimedBefore = new Map<string, string | undefined>();
+    const needsWarming = conversationIds.filter((conversationId) => {
+      if (this.teacherCallsInFlight.has(conversationId)) return false;
+      const before = this.cache.inspect(conversationId, keys);
+      if (before && before.staleness !== "situation_change") return false;
+      claimedBefore.set(conversationId, before?.plannedFor.situationKey);
+      return true;
+    });
+    if (needsWarming.length === 0) {
+      return conversationIds.some((id) => this.teacherCallsInFlight.has(id))
+        ? "in-flight"
+        : "fresh";
+    }
+
+    // ONE CALL, N WRITES -- and this is the whole point.
+    //
+    // The directive cache is scoped per conversation
+    // (createActiveDirectiveFactScope -> ("conversation", conversationId)), so
+    // a directive written for NPC A is invisible to NPC B. An earlier version
+    // looped `warmConversation` per NPC believing the later ones would hit
+    // cache; they cannot, so a region with N NPCs fired N full ~9s Teacher
+    // calls, and did it again on every time-of-day or quest-stage change.
+    //
+    // The directive does not depend on the NPC anyway -- the situation key has
+    // no per-NPC axis and the Teacher receives only ids and a display name
+    // (sugarmagic-teaching-rnw) -- so ONE plan is correct for all of them.
+    // Registered under every id so a turn with any of these NPCs can join it.
+    const call = this.llmPolicy.invoke({ ...context, backgroundReplan: true });
+    for (const conversationId of needsWarming) {
+      this.teacherCallsInFlight.set(conversationId, { keys, promise: call });
+    }
+    try {
+      const directive = await call;
+      let written = 0;
+      for (const conversationId of needsWarming) {
+        // COMPARE-AND-SET: write only if nothing claimed this slot while the
+        // call was in flight.
+        //
+        // The previous check asked `inspect(id, keys).staleness !==
+        // "situation_change"` and was INVERTED for the case it named. When a
+        // real turn wrote a directive for a NEWER world, inspecting with these
+        // (older) warm keys reports exactly `situation_change` -- so the guard
+        // concluded the slot was free and overwrote the better, newer
+        // directive. Comparing what is there against what was there when the
+        // call started cannot invert: unchanged means unclaimed.
+        const after = this.cache.inspect(conversationId);
+        if (after?.plannedFor.situationKey !== claimedBefore.get(conversationId)) {
+          continue;
+        }
+        this.cache.set(conversationId, directive, keys);
+        written += 1;
+      }
+      // "skipped" when every slot was claimed while the call was in flight --
+      // reported rather than folded into "warmed", so a test can tell the
+      // clobber guard fired.
+      return written > 0 ? "warmed" : "skipped";
+    } catch {
+      // Includes a disposed blackboard when the region unloaded mid-call.
+      return "failed";
+    } finally {
+      for (const conversationId of needsWarming) {
+        this.teacherCallsInFlight.delete(conversationId);
+      }
+    }
+  }
+
+  /**
    * Starts a re-plan that the current turn does not wait for.
    *
    * ONE PER CONVERSATION. A fast player can send three turns inside an ~11s
@@ -195,14 +355,15 @@ export class SugarLangTeacher {
     plannedFor: { situationKey?: string; learnerKey?: string }
   ): void {
     const conversationId = context.conversationId;
-    if (this.replansInFlight.has(conversationId)) {
+    if (this.teacherCallsInFlight.has(conversationId)) {
       return;
     }
-    this.replansInFlight.add(conversationId);
-    void this.runBackgroundReplan(context, plannedFor)
+    const replan = this.runBackgroundReplan(context, plannedFor);
+    this.teacherCallsInFlight.set(conversationId, { keys: plannedFor, promise: replan });
+    void replan
       .catch(() => undefined)
       .finally(() => {
-        this.replansInFlight.delete(conversationId);
+        this.teacherCallsInFlight.delete(conversationId);
       });
   }
 

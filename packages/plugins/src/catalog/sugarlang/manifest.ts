@@ -20,6 +20,7 @@
  */
 
 import type { DiscoveredPluginDefinition } from "../../sdk";
+import { createRegionTeacherWarmer } from "./runtime/teacher/warm-region-teacher";
 import type { RuntimePluginFactoryContext } from "../../runtime";
 import {
   createDeploymentRequirementId,
@@ -240,11 +241,30 @@ export function createSugarlangPlugin(
       } as ConversationMiddlewareContribution;
     })];
 
+  // Pre-fills the Teacher's directive slot for the region's NPCs so the FIRST
+  // turn of a conversation is a cache hit rather than a ~10s blocking call
+  // (sugarmagic-latency-00m). Driven from `update` rather than `init` on
+  // purpose: init runs BEFORE the save restore, so a directive planned there
+  // would be keyed against default "morning" and a null quest and would never
+  // match a real turn. The warmer re-warms when the key moves, so a too-early
+  // attempt corrects itself at the cost of one wasted call.
+  const regionWarmer = createRegionTeacherWarmer({
+    listWarmableNpcIds: () => services.listWarmableNpcIds(),
+    buildWarmContext: () => services.buildRegionWarmContext()
+  });
+
   return {
     pluginId: context.configuration.pluginId,
     displayName: SUGARLANG_DISPLAY_NAME,
     contributions,
     blackboardFactDefinitions: SUGARLANG_BLACKBOARD_FACT_DEFINITIONS,
+    update(deltaSeconds) {
+      // The runtime's frame delta is SECONDS (runtimeHost.ts: (now - lastTime)
+      // / 1000). The warmer counts milliseconds, so this converts. Passing
+      // seconds straight through would make the 2s check fire after ~33
+      // minutes of play -- a feature that looks wired and never runs.
+      regionWarmer.tick(deltaSeconds * 1000);
+    },
     async init(runtimeContext) {
       services.bindRuntime(runtimeContext);
       const bootPayload = runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID];
@@ -281,6 +301,11 @@ export function createSugarlangPlugin(
       }
     },
     async dispose() {
+      // Stop the warmer FIRST: a ~9s Teacher call in flight would otherwise
+      // land and write into a torn-down blackboard. Its own test asserts this
+      // guarantee, and until this line existed the guarantee was untested
+      // behaviour that production never invoked.
+      regionWarmer.dispose();
       // 081.2: flush buffered telemetry on conversation/plugin teardown so
       // the session tail is not lost, then tear down sink timers/listeners.
       await flushTelemetry(telemetry, logger);
