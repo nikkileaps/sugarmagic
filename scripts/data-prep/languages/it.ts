@@ -114,6 +114,12 @@ const APOCOPE: Record<string, string> = {
 };
 
 /**
+ * `a`, `e` and `o` grow a `d` before a vowel so two vowels do not collide:
+ * `ad arrivare`, `ed ecco`. Nothing is dropped, so this is neither elision nor
+ * shortening -- it is the same word spelled longer, and the spelling is what
+ * an author writes.
+ */
+/**
  * A clitic pronoun shifts its `i` to `e` when another clitic follows it:
  * `mi lo` is written `me lo`, `ci la` is `ce la`. Hence `non ce la faccio`.
  *
@@ -122,6 +128,12 @@ const APOCOPE: Record<string, string> = {
  * because the rule is one rule, and the entries that duplicate a headword are
  * inert -- a headword is claimed first and keeps its own answer.
  */
+const EUPHONIC_D: Record<string, string[]> = {
+  a: ["ad"],
+  e: ["ed"],
+  o: ["od"]
+};
+
 const CLITIC_VARIANTS: Record<string, string[]> = {
   mi: ["me"],
   ti: ["te"],
@@ -674,6 +686,10 @@ function addItalianDerivedForms(
 
   for (const variant of CLITIC_VARIANTS[entry.lemmaId] ?? []) {
     addMorphologyEntry(forms, variant, entry.lemmaId, entry.partsOfSpeech);
+  }
+
+  for (const grown of EUPHONIC_D[entry.lemmaId] ?? []) {
+    addMorphologyEntry(forms, grown, entry.lemmaId, entry.partsOfSpeech);
   }
 }
 

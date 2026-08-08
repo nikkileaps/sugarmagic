@@ -4467,7 +4467,7 @@
       {
         "wordings": [
           {
-            "phrase": "lavoro da casa",
+            "phrase": "lavoro a casa",
             "gloss": {
               "en": "I work at home"
             }
@@ -8297,6 +8297,6572 @@
             "phrase": "è un'altra cosa",
             "gloss": {
               "en": "it's something else"
+            }
+          }
+        ]
+      }
+    ],
+    "say-what-happened": [
+      {
+        "wordings": [
+          {
+            "phrase": "ieri sono andato al mercato",
+            "gloss": {
+              "en": "yesterday I went to the market"
+            }
+          },
+          {
+            "phrase": "ieri sono andata al mercato",
+            "gloss": {
+              "en": "yesterday I went to the market"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "poi siamo andati a mangiare",
+            "gloss": {
+              "en": "then we went to eat"
+            }
+          },
+          {
+            "phrase": "dopo siamo andati a mangiare",
+            "gloss": {
+              "en": "afterwards we went to eat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "alla fine siamo tornati a casa",
+            "gloss": {
+              "en": "in the end we went back home"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abbiamo avuto un problema",
+            "gloss": {
+              "en": "we had a problem"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è successo niente",
+            "gloss": {
+              "en": "nothing happened"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-past-weekend": [
+      {
+        "wordings": [
+          {
+            "phrase": "nel fine settimana sono andato al mare",
+            "gloss": {
+              "en": "at the weekend I went to the beach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ho fatto niente di speciale",
+            "gloss": {
+              "en": "I didn't do anything special"
+            }
+          },
+          {
+            "phrase": "non abbiamo fatto niente di speciale",
+            "gloss": {
+              "en": "we didn't do anything special"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono rimasto a casa",
+            "gloss": {
+              "en": "I stayed home"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono uscito con i miei amici",
+            "gloss": {
+              "en": "I went out with my friends"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi sono riposato tutto il fine settimana",
+            "gloss": {
+              "en": "I rested all weekend"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-past-holiday": [
+      {
+        "wordings": [
+          {
+            "phrase": "siamo stati una settimana al mare",
+            "gloss": {
+              "en": "we spent a week at the beach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è stato un viaggio molto bello",
+            "gloss": {
+              "en": "it was a very nice trip"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abbiamo viaggiato in aereo",
+            "gloss": {
+              "en": "we travelled by plane"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siamo stati in un albergo",
+            "gloss": {
+              "en": "we stayed in a hotel"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abbiamo visto molti posti",
+            "gloss": {
+              "en": "we saw a lot of places"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-what-someone-did": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa hai fatto",
+            "gloss": {
+              "en": "what did you do"
+            }
+          },
+          {
+            "phrase": "cosa hai fatto ieri",
+            "gloss": {
+              "en": "what did you do yesterday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa è successo",
+            "gloss": {
+              "en": "what happened"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "com'è andata",
+            "gloss": {
+              "en": "how did it go"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dove sei andato",
+            "gloss": {
+              "en": "where did you go"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con chi sei andato",
+            "gloss": {
+              "en": "who did you go with"
+            }
+          }
+        ]
+      }
+    ],
+    "say-when-something-happened": [
+      {
+        "wordings": [
+          {
+            "phrase": "è stato ieri",
+            "gloss": {
+              "en": "it was yesterday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "due anni fa",
+            "gloss": {
+              "en": "two years ago"
+            }
+          },
+          {
+            "phrase": "una settimana fa",
+            "gloss": {
+              "en": "a week ago"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'anno scorso",
+            "gloss": {
+              "en": "last year"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "molto tempo fa",
+            "gloss": {
+              "en": "a long time ago"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'altro ieri",
+            "gloss": {
+              "en": "the day before yesterday"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-childhood": [
+      {
+        "wordings": [
+          {
+            "phrase": "sono cresciuto in un paese piccolo",
+            "gloss": {
+              "en": "I grew up in a small town"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "da bambino vivevo in campagna",
+            "gloss": {
+              "en": "as a child I lived in the countryside"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono nato in città",
+            "gloss": {
+              "en": "I was born in the city"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abitavamo vicino al mare",
+            "gloss": {
+              "en": "we lived near the sea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la mia famiglia era molto grande",
+            "gloss": {
+              "en": "my family was very big"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-life-events": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi sono sposato cinque anni fa",
+            "gloss": {
+              "en": "I got married five years ago"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho finito la scuola a diciotto anni",
+            "gloss": {
+              "en": "I finished school at eighteen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è nato il mio primo figlio",
+            "gloss": {
+              "en": "my first child was born"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi sono trasferito in un'altra città",
+            "gloss": {
+              "en": "I moved to another city"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho cominciato a lavorare molto giovane",
+            "gloss": {
+              "en": "I started working very young"
+            }
+          }
+        ]
+      }
+    ],
+    "say-how-long": [
+      {
+        "wordings": [
+          {
+            "phrase": "è durato due ore",
+            "gloss": {
+              "en": "it lasted two hours"
+            }
+          },
+          {
+            "phrase": "è durato tutto il pomeriggio",
+            "gloss": {
+              "en": "it lasted all afternoon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono stato lì tre anni",
+            "gloss": {
+              "en": "I was there for three years"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ci ho messo un'ora",
+            "gloss": {
+              "en": "it took me an hour"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per molto tempo",
+            "gloss": {
+              "en": "for a long time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è stato poco fa",
+            "gloss": {
+              "en": "it was not long ago"
+            }
+          }
+        ]
+      }
+    ],
+    "tell-a-short-story": [
+      {
+        "wordings": [
+          {
+            "phrase": "ti racconto una cosa",
+            "gloss": {
+              "en": "let me tell you something"
+            }
+          },
+          {
+            "phrase": "ti racconto cosa è successo",
+            "gloss": {
+              "en": "let me tell you what happened"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non crederai cosa è successo",
+            "gloss": {
+              "en": "you won't believe what happened"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "e allora ho capito",
+            "gloss": {
+              "en": "and then I realised"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "alla fine è andato tutto bene",
+            "gloss": {
+              "en": "in the end it all turned out fine"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è stato molto strano",
+            "gloss": {
+              "en": "it was really strange"
+            }
+          }
+        ]
+      }
+    ],
+    "say-what-they-used-to-do": [
+      {
+        "wordings": [
+          {
+            "phrase": "prima giocavo a calcio",
+            "gloss": {
+              "en": "I used to play football"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quando ero bambino andavo spesso al parco",
+            "gloss": {
+              "en": "when I was a child I went to the park a lot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non esco più come prima",
+            "gloss": {
+              "en": "I don't go out as much as I used to"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lavoravo il sabato",
+            "gloss": {
+              "en": "I used to work on Saturdays"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prima vivevo in campagna",
+            "gloss": {
+              "en": "I used to live in the countryside"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-experience": [
+      {
+        "wordings": [
+          {
+            "phrase": "sei mai andato in treno",
+            "gloss": {
+              "en": "have you ever travelled by train"
+            }
+          },
+          {
+            "phrase": "hai mai viaggiato in aereo",
+            "gloss": {
+              "en": "have you ever travelled by plane"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hai provato il cibo di qui",
+            "gloss": {
+              "en": "have you tried the food here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sei già stato qui",
+            "gloss": {
+              "en": "have you been here before"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hai già visto il centro",
+            "gloss": {
+              "en": "have you seen the centre yet"
+            }
+          }
+        ]
+      }
+    ],
+    "say-they-have-done-something": [
+      {
+        "wordings": [
+          {
+            "phrase": "non ci sono mai stato",
+            "gloss": {
+              "en": "I've never been there"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'ho già fatto",
+            "gloss": {
+              "en": "I've already done it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non l'ho ancora fatto",
+            "gloss": {
+              "en": "I haven't done it yet"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho già lavorato su questo",
+            "gloss": {
+              "en": "I've worked on that before"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sì, l'ho provato",
+            "gloss": {
+              "en": "yes, I've tried it"
+            }
+          }
+        ]
+      }
+    ],
+    "state-plan": [
+      {
+        "wordings": [
+          {
+            "phrase": "stasera vado a studiare",
+            "gloss": {
+              "en": "I'm going to study tonight"
+            }
+          },
+          {
+            "phrase": "domani vado a lavorare",
+            "gloss": {
+              "en": "tomorrow I'm going to work"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "penso di viaggiare l'anno prossimo",
+            "gloss": {
+              "en": "I'm planning to travel next year"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "andiamo a cena fuori",
+            "gloss": {
+              "en": "we're going to eat out"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho programmi per sabato",
+            "gloss": {
+              "en": "I have plans for Saturday"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-plans": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa fai",
+            "gloss": {
+              "en": "what are you going to do"
+            }
+          },
+          {
+            "phrase": "cosa fai domani",
+            "gloss": {
+              "en": "what are you going to do tomorrow"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hai programmi per il fine settimana",
+            "gloss": {
+              "en": "do you have plans for the weekend"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa pensi di fare",
+            "gloss": {
+              "en": "what are you planning to do"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "esci stasera",
+            "gloss": {
+              "en": "are you going out tonight"
+            }
+          }
+        ]
+      }
+    ],
+    "arrange-to-meet": [
+      {
+        "wordings": [
+          {
+            "phrase": "ci vediamo alle otto",
+            "gloss": {
+              "en": "let's meet at eight"
+            }
+          },
+          {
+            "phrase": "ci vediamo all'entrata",
+            "gloss": {
+              "en": "let's meet at the entrance"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ci troviamo al parco",
+            "gloss": {
+              "en": "let's meet at the park"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a che ora ci vediamo",
+            "gloss": {
+              "en": "what time shall we meet"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dove ci troviamo",
+            "gloss": {
+              "en": "where shall we meet"
+            }
+          }
+        ]
+      }
+    ],
+    "suggest-an-activity": [
+      {
+        "wordings": [
+          {
+            "phrase": "andiamo al cinema",
+            "gloss": {
+              "en": "let's go to the cinema"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vuoi prendere un caffè",
+            "gloss": {
+              "en": "do you want to get a coffee"
+            }
+          },
+          {
+            "phrase": "vuoi uscire a cena",
+            "gloss": {
+              "en": "do you want to go out for dinner"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "potremmo andare a camminare",
+            "gloss": {
+              "en": "we could go for a walk"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "perché non andiamo al mare",
+            "gloss": {
+              "en": "why don't we go to the beach"
+            }
+          }
+        ]
+      }
+    ],
+    "agree-to-a-plan": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi sembra perfetto",
+            "gloss": {
+              "en": "that sounds perfect"
+            }
+          },
+          {
+            "phrase": "mi sembra molto bene",
+            "gloss": {
+              "en": "that suits me fine"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ci sarò",
+            "gloss": {
+              "en": "I'll be there"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per me va bene",
+            "gloss": {
+              "en": "that works for me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "benissimo, ci vediamo lì",
+            "gloss": {
+              "en": "great, see you there"
+            }
+          }
+        ]
+      }
+    ],
+    "propose-alternative": [
+      {
+        "wordings": [
+          {
+            "phrase": "meglio alle sette",
+            "gloss": {
+              "en": "better at seven"
+            }
+          },
+          {
+            "phrase": "meglio domenica",
+            "gloss": {
+              "en": "better on Sunday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "possiamo vederci un altro giorno",
+            "gloss": {
+              "en": "we could meet another day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che ne dici di sabato",
+            "gloss": {
+              "en": "how about Saturday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "preferisci più tardi",
+            "gloss": {
+              "en": "would you rather it were later"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "e se andiamo presto",
+            "gloss": {
+              "en": "what if we go early instead"
+            }
+          }
+        ]
+      }
+    ],
+    "decline-with-reason": [
+      {
+        "wordings": [
+          {
+            "phrase": "non posso, devo lavorare",
+            "gloss": {
+              "en": "I can't, I have to work"
+            }
+          },
+          {
+            "phrase": "non posso, ho un altro impegno",
+            "gloss": {
+              "en": "I can't, I have another commitment"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quel giorno sono occupato",
+            "gloss": {
+              "en": "I'm busy that day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi piacerebbe ma non posso",
+            "gloss": {
+              "en": "I'd love to but I can't"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questa volta non posso",
+            "gloss": {
+              "en": "I can't this time"
+            }
+          }
+        ]
+      }
+    ],
+    "change-an-arrangement": [
+      {
+        "wordings": [
+          {
+            "phrase": "possiamo cambiare l'ora",
+            "gloss": {
+              "en": "could we change the time"
+            }
+          },
+          {
+            "phrase": "possiamo cambiare giorno",
+            "gloss": {
+              "en": "could we change the day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "scusa, ma devo annullare",
+            "gloss": {
+              "en": "sorry, but I have to cancel"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "possiamo fare un altro giorno",
+            "gloss": {
+              "en": "could we make it another day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "scusa, devo cambiare l'appuntamento",
+            "gloss": {
+              "en": "sorry, I have to change the appointment"
+            }
+          }
+        ]
+      }
+    ],
+    "confirm-an-arrangement": [
+      {
+        "wordings": [
+          {
+            "phrase": "allora ci vediamo venerdì",
+            "gloss": {
+              "en": "so we'll see each other on Friday"
+            }
+          },
+          {
+            "phrase": "alle sei allora",
+            "gloss": {
+              "en": "six o'clock then"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è sempre valido",
+            "gloss": {
+              "en": "is it still on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "confermo l'appuntamento",
+            "gloss": {
+              "en": "I'm confirming the appointment"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tutto pronto per domani",
+            "gloss": {
+              "en": "all set for tomorrow"
+            }
+          }
+        ]
+      }
+    ],
+    "say-what-they-would-like": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi piacerebbe viaggiare di più",
+            "gloss": {
+              "en": "I'd like to travel more"
+            }
+          },
+          {
+            "phrase": "mi piacerebbe imparare un'altra lingua",
+            "gloss": {
+              "en": "I'd like to learn another language"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei vivere vicino al mare",
+            "gloss": {
+              "en": "I'd like to live near the sea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi piacerebbe avere una casa grande",
+            "gloss": {
+              "en": "I'd love to have a big house"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un giorno voglio tornare",
+            "gloss": {
+              "en": "one day I want to come back"
+            }
+          }
+        ]
+      }
+    ],
+    "state-intention-a2": [
+      {
+        "wordings": [
+          {
+            "phrase": "comincio il mese prossimo",
+            "gloss": {
+              "en": "I'm going to start next month"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "penso di cercare un altro lavoro presto",
+            "gloss": {
+              "en": "I'm planning to look for another job soon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'anno prossimo vado a studiare",
+            "gloss": {
+              "en": "next year I'm going to study"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "voglio finire questo questa settimana",
+            "gloss": {
+              "en": "I want to finish this this week"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-their-job": [
+      {
+        "wordings": [
+          {
+            "phrase": "lavoro con i computer",
+            "gloss": {
+              "en": "I work with computers"
+            }
+          },
+          {
+            "phrase": "lavoro con i bambini",
+            "gloss": {
+              "en": "I work with children"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi occupo dei clienti",
+            "gloss": {
+              "en": "I look after the customers"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono cameriere in un ristorante",
+            "gloss": {
+              "en": "I'm a waiter in a restaurant"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi occupo delle vendite",
+            "gloss": {
+              "en": "I'm in charge of sales"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-someone-job": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa fai nel tuo lavoro",
+            "gloss": {
+              "en": "what do you do in your job"
+            }
+          },
+          {
+            "phrase": "in cosa consiste il tuo lavoro",
+            "gloss": {
+              "en": "what does your job involve"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti piace il tuo lavoro",
+            "gloss": {
+              "en": "do you like your job"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lavori nei fine settimana",
+            "gloss": {
+              "en": "do you work weekends"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "da quando lavori lì",
+            "gloss": {
+              "en": "how long have you worked there"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-workplace": [
+      {
+        "wordings": [
+          {
+            "phrase": "è un ufficio piccolo",
+            "gloss": {
+              "en": "it's a small office"
+            }
+          },
+          {
+            "phrase": "è un negozio in centro",
+            "gloss": {
+              "en": "it's a shop downtown"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siamo otto persone",
+            "gloss": {
+              "en": "there are eight of us"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il posto è molto tranquillo",
+            "gloss": {
+              "en": "the place is very quiet"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lavoro da casa",
+            "gloss": {
+              "en": "I work from home"
+            }
+          }
+        ]
+      }
+    ],
+    "state-working-hours": [
+      {
+        "wordings": [
+          {
+            "phrase": "lavoro dalle nove alle sei",
+            "gloss": {
+              "en": "I work from nine to six"
+            }
+          },
+          {
+            "phrase": "lavoro dal lunedì al venerdì",
+            "gloss": {
+              "en": "I work Monday to Friday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lavoro quaranta ore alla settimana",
+            "gloss": {
+              "en": "I work forty hours a week"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "faccio il turno di notte",
+            "gloss": {
+              "en": "I'm on the night shift"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il sabato non lavoro",
+            "gloss": {
+              "en": "I don't work Saturdays"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-studies": [
+      {
+        "wordings": [
+          {
+            "phrase": "studio medicina",
+            "gloss": {
+              "en": "I study medicine"
+            }
+          },
+          {
+            "phrase": "studio legge all'università",
+            "gloss": {
+              "en": "I study law at the university"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono al secondo anno",
+            "gloss": {
+              "en": "I'm in my second year"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "seguo un corso di inglese",
+            "gloss": {
+              "en": "I take English classes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "faccio un corso di cucina",
+            "gloss": {
+              "en": "I'm doing a cooking course"
+            }
+          }
+        ]
+      }
+    ],
+    "say-why-studying": [
+      {
+        "wordings": [
+          {
+            "phrase": "studio per diventare infermiera",
+            "gloss": {
+              "en": "I'm studying to be a nurse"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo studio perché mi piace",
+            "gloss": {
+              "en": "I'm studying it because I like it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "voglio trovare un lavoro migliore",
+            "gloss": {
+              "en": "I want to get a better job"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi serve per il mio lavoro",
+            "gloss": {
+              "en": "I need it for my job"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-work-experience": [
+      {
+        "wordings": [
+          {
+            "phrase": "prima lavoravo in un ristorante",
+            "gloss": {
+              "en": "I used to work in a restaurant"
+            }
+          },
+          {
+            "phrase": "ho lavorato due anni in un negozio",
+            "gloss": {
+              "en": "I worked in a shop for two years"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho lavorato come cameriere",
+            "gloss": {
+              "en": "I've worked as a waiter"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono stato insegnante per molto tempo",
+            "gloss": {
+              "en": "I was a teacher for a long time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ho mai lavorato in un ufficio",
+            "gloss": {
+              "en": "I've never worked in an office"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-time-off": [
+      {
+        "wordings": [
+          {
+            "phrase": "posso chiedere venerdì libero",
+            "gloss": {
+              "en": "could I ask for Friday off"
+            }
+          },
+          {
+            "phrase": "mi servono dei giorni liberi",
+            "gloss": {
+              "en": "I need a few days off"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei prendere le ferie la prossima settimana",
+            "gloss": {
+              "en": "I'd like to take next week off"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso uscire presto oggi",
+            "gloss": {
+              "en": "could I leave early today"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho una visita medica",
+            "gloss": {
+              "en": "I have a doctor's appointment"
+            }
+          }
+        ]
+      }
+    ],
+    "explain-being-late": [
+      {
+        "wordings": [
+          {
+            "phrase": "scusa per il ritardo",
+            "gloss": {
+              "en": "sorry for being late"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'era molto traffico",
+            "gloss": {
+              "en": "there was a lot of traffic"
+            }
+          },
+          {
+            "phrase": "ho perso l'autobus",
+            "gloss": {
+              "en": "I missed the bus"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è suonata la sveglia",
+            "gloss": {
+              "en": "my alarm didn't go off"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ieri ero malato",
+            "gloss": {
+              "en": "I was ill yesterday"
+            }
+          }
+        ]
+      }
+    ],
+    "state-a-skill": [
+      {
+        "wordings": [
+          {
+            "phrase": "sono bravo a cucinare",
+            "gloss": {
+              "en": "I'm good at cooking"
+            }
+          },
+          {
+            "phrase": "sono bravo con le lingue",
+            "gloss": {
+              "en": "I'm good at languages"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono bravo con i computer",
+            "gloss": {
+              "en": "I'm good with computers"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "so guidare",
+            "gloss": {
+              "en": "I know how to drive"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho esperienza nelle vendite",
+            "gloss": {
+              "en": "I have experience in sales"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "parlo tre lingue",
+            "gloss": {
+              "en": "I speak three languages"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-their-home": [
+      {
+        "wordings": [
+          {
+            "phrase": "vivo in un appartamento piccolo",
+            "gloss": {
+              "en": "I live in a small apartment"
+            }
+          },
+          {
+            "phrase": "vivo in una casa con giardino",
+            "gloss": {
+              "en": "I live in a house with a garden"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ha due camere e una cucina",
+            "gloss": {
+              "en": "it has two bedrooms and a kitchen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il soggiorno è molto grande",
+            "gloss": {
+              "en": "the living room is very big"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un piano alto",
+            "gloss": {
+              "en": "it's on a high floor"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-neighbourhood": [
+      {
+        "wordings": [
+          {
+            "phrase": "è un quartiere tranquillo",
+            "gloss": {
+              "en": "it's a quiet neighbourhood"
+            }
+          },
+          {
+            "phrase": "il quartiere è un po' rumoroso",
+            "gloss": {
+              "en": "the neighbourhood is a bit noisy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vivo in centro",
+            "gloss": {
+              "en": "I live downtown"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "i vicini sono molto gentili",
+            "gloss": {
+              "en": "the neighbours are very kind"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è in periferia",
+            "gloss": {
+              "en": "it's on the outskirts"
+            }
+          }
+        ]
+      }
+    ],
+    "say-what-is-nearby": [
+      {
+        "wordings": [
+          {
+            "phrase": "c'è un supermercato vicino",
+            "gloss": {
+              "en": "there's a supermarket nearby"
+            }
+          },
+          {
+            "phrase": "c'è una scuola dietro l'angolo",
+            "gloss": {
+              "en": "there's a school around the corner"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il parco è a due isolati",
+            "gloss": {
+              "en": "the park is two blocks away"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho una farmacia di fronte",
+            "gloss": {
+              "en": "there's a pharmacy across the street"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la fermata dell'autobus è molto vicina",
+            "gloss": {
+              "en": "the bus stop is very close"
+            }
+          }
+        ]
+      }
+    ],
+    "compare-places-to-live": [
+      {
+        "wordings": [
+          {
+            "phrase": "la città è più cara del paese",
+            "gloss": {
+              "en": "the city is more expensive than the town"
+            }
+          },
+          {
+            "phrase": "la campagna è più tranquilla della città",
+            "gloss": {
+              "en": "the countryside is quieter than the city"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qui c'è meno rumore",
+            "gloss": {
+              "en": "there's less noise here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "preferisco vivere in centro",
+            "gloss": {
+              "en": "I'd rather live downtown"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il paese è meglio per i bambini",
+            "gloss": {
+              "en": "the town is better for children"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-how-they-travel": [
+      {
+        "wordings": [
+          {
+            "phrase": "vado in autobus",
+            "gloss": {
+              "en": "I go by bus"
+            }
+          },
+          {
+            "phrase": "vado a piedi",
+            "gloss": {
+              "en": "I walk"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vado sempre in bicicletta",
+            "gloss": {
+              "en": "I always cycle"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prendo la metro tutti i giorni",
+            "gloss": {
+              "en": "I take the metro every day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "guido fino al lavoro",
+            "gloss": {
+              "en": "I drive to work"
+            }
+          }
+        ]
+      }
+    ],
+    "give-multi-step-directions": [
+      {
+        "wordings": [
+          {
+            "phrase": "vai dritto e gira a sinistra",
+            "gloss": {
+              "en": "go straight on and turn left"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prendi la seconda strada a destra",
+            "gloss": {
+              "en": "take the second street on the right"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "attraversa la piazza e continua fino al semaforo",
+            "gloss": {
+              "en": "cross the square and carry on to the traffic light"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cammina due isolati e poi gira",
+            "gloss": {
+              "en": "walk two blocks and then turn"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-a-local-problem": [
+      {
+        "wordings": [
+          {
+            "phrase": "c'è molto rumore di notte",
+            "gloss": {
+              "en": "there's a lot of noise at night"
+            }
+          },
+          {
+            "phrase": "c'è molto traffico di mattina",
+            "gloss": {
+              "en": "there's a lot of traffic in the morning"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non raccolgono la spazzatura",
+            "gloss": {
+              "en": "they don't collect the rubbish"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la strada è in lavori",
+            "gloss": {
+              "en": "the street is under repair"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "manca la luce in strada",
+            "gloss": {
+              "en": "the street has no lighting"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-an-area": [
+      {
+        "wordings": [
+          {
+            "phrase": "com'è il quartiere",
+            "gloss": {
+              "en": "what's the neighbourhood like"
+            }
+          },
+          {
+            "phrase": "com'è la zona",
+            "gloss": {
+              "en": "what's the area like"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ci sono negozi vicino",
+            "gloss": {
+              "en": "are there shops nearby"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è molto rumore lì",
+            "gloss": {
+              "en": "is it noisy there"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "si vive bene lì",
+            "gloss": {
+              "en": "is it a good place to live"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-a-town": [
+      {
+        "wordings": [
+          {
+            "phrase": "è un paese piccolo e tranquillo",
+            "gloss": {
+              "en": "it's a small, quiet town"
+            }
+          },
+          {
+            "phrase": "è una città molto bella",
+            "gloss": {
+              "en": "it's a very pretty city"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è una piazza in centro",
+            "gloss": {
+              "en": "there's a square in the centre"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non c'è molto da fare",
+            "gloss": {
+              "en": "there isn't much to do"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è il mercato la domenica",
+            "gloss": {
+              "en": "there's a market on Sundays"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un bel posto per camminare",
+            "gloss": {
+              "en": "it's a good place to walk"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-a-different-one": [
+      {
+        "wordings": [
+          {
+            "phrase": "ce l'ha in un altro colore",
+            "gloss": {
+              "en": "do you have it in another colour"
+            }
+          },
+          {
+            "phrase": "ha una taglia più grande",
+            "gloss": {
+              "en": "do you have it in a bigger size"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è un altro modello",
+            "gloss": {
+              "en": "is there another model"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me ne dà un altro per favore",
+            "gloss": {
+              "en": "another one please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo non è quello che voglio",
+            "gloss": {
+              "en": "this isn't the one I want"
+            }
+          }
+        ]
+      }
+    ],
+    "compare-two-products": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo è più economico",
+            "gloss": {
+              "en": "this one is cheaper"
+            }
+          },
+          {
+            "phrase": "questo è più caro dell'altro",
+            "gloss": {
+              "en": "this one is more expensive than the other"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quale è meglio",
+            "gloss": {
+              "en": "which one is better"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "preferisco l'altro",
+            "gloss": {
+              "en": "I prefer the other one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prendo quello piccolo",
+            "gloss": {
+              "en": "I'll take the small one"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-returns": [
+      {
+        "wordings": [
+          {
+            "phrase": "si può restituire",
+            "gloss": {
+              "en": "can it be returned"
+            }
+          },
+          {
+            "phrase": "accettate i resi",
+            "gloss": {
+              "en": "do you accept returns"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso cambiarlo con un altro",
+            "gloss": {
+              "en": "can I exchange this for another one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quanti giorni ho per restituirlo",
+            "gloss": {
+              "en": "how many days do I have to return it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "serve lo scontrino",
+            "gloss": {
+              "en": "do I need the receipt"
+            }
+          }
+        ]
+      }
+    ],
+    "return-an-item": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei restituire questo",
+            "gloss": {
+              "en": "I'd like to return this"
+            }
+          },
+          {
+            "phrase": "vengo a restituire questa camicia",
+            "gloss": {
+              "en": "I've come to return this shirt"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ecco lo scontrino",
+            "gloss": {
+              "en": "here's the receipt"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi sta bene",
+            "gloss": {
+              "en": "it didn't fit me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me l'hanno regalato e non mi serve",
+            "gloss": {
+              "en": "it was a gift and it's no use to me"
+            }
+          }
+        ]
+      }
+    ],
+    "complain-simply": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo non va bene",
+            "gloss": {
+              "en": "this isn't right"
+            }
+          },
+          {
+            "phrase": "questo non è quello che ho ordinato",
+            "gloss": {
+              "en": "this isn't what I ordered"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei parlare con il responsabile",
+            "gloss": {
+              "en": "I'd like to speak to the manager"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "voglio indietro i soldi",
+            "gloss": {
+              "en": "I want my money back"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho aspettato molto tempo",
+            "gloss": {
+              "en": "I waited a long time"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-payment": [
+      {
+        "wordings": [
+          {
+            "phrase": "accettate la carta",
+            "gloss": {
+              "en": "do you take cards"
+            }
+          },
+          {
+            "phrase": "accettate la carta di credito",
+            "gloss": {
+              "en": "do you take credit cards"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come posso pagare",
+            "gloss": {
+              "en": "how can I pay"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "solo contanti",
+            "gloss": {
+              "en": "cash only"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso pagare con bonifico",
+            "gloss": {
+              "en": "can I pay by transfer"
+            }
+          }
+        ]
+      }
+    ],
+    "post-a-parcel": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei spedire questo pacco",
+            "gloss": {
+              "en": "I'd like to send this parcel"
+            }
+          },
+          {
+            "phrase": "vorrei spedire una lettera",
+            "gloss": {
+              "en": "I'd like to send a letter"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quanto costa spedire questo",
+            "gloss": {
+              "en": "how much does it cost to send this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quanto ci mette ad arrivare",
+            "gloss": {
+              "en": "how long does it take to arrive"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi serve un francobollo",
+            "gloss": {
+              "en": "I need a stamp"
+            }
+          }
+        ]
+      }
+    ],
+    "open-an-account": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei aprire un conto",
+            "gloss": {
+              "en": "I'd like to open an account"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi può aiutare con il modulo",
+            "gloss": {
+              "en": "could you help me with the form"
+            }
+          },
+          {
+            "phrase": "come lo compilo",
+            "gloss": {
+              "en": "how do I fill this in"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dove firmo",
+            "gloss": {
+              "en": "where do I sign"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quali documenti servono",
+            "gloss": {
+              "en": "what documents do I need"
+            }
+          }
+        ]
+      }
+    ],
+    "book-an-appointment": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei prendere un appuntamento",
+            "gloss": {
+              "en": "I'd like to make an appointment"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ha qualcosa per domani",
+            "gloss": {
+              "en": "do you have anything for tomorrow"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "può essere martedì",
+            "gloss": {
+              "en": "could it be Tuesday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a che ora ha libero",
+            "gloss": {
+              "en": "what time do you have free"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-when-ready": [
+      {
+        "wordings": [
+          {
+            "phrase": "quando sarà pronto",
+            "gloss": {
+              "en": "when will it be ready"
+            }
+          },
+          {
+            "phrase": "per quando lo avete",
+            "gloss": {
+              "en": "when will you have it ready"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quanto tempo ci vuole",
+            "gloss": {
+              "en": "how long does it take"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi avvisate quando è pronto",
+            "gloss": {
+              "en": "will you let me know when it's ready"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quando lo consegnate",
+            "gloss": {
+              "en": "when do you deliver it"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-a-fault": [
+      {
+        "wordings": [
+          {
+            "phrase": "è rotto",
+            "gloss": {
+              "en": "it's broken"
+            }
+          },
+          {
+            "phrase": "non funziona",
+            "gloss": {
+              "en": "it doesn't work"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "fa un rumore strano",
+            "gloss": {
+              "en": "it makes a strange noise"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "manca un pezzo",
+            "gloss": {
+              "en": "it's missing a piece"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non si accende",
+            "gloss": {
+              "en": "it won't turn on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "si è rotto il primo giorno",
+            "gloss": {
+              "en": "it broke on the first day"
+            }
+          }
+        ]
+      }
+    ],
+    "book-a-table": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei prenotare un tavolo",
+            "gloss": {
+              "en": "I'd like to reserve a table"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un tavolo per due per favore",
+            "gloss": {
+              "en": "a table for two, please"
+            }
+          },
+          {
+            "phrase": "un tavolo per quattro persone",
+            "gloss": {
+              "en": "a table for four people"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è per stasera alle otto",
+            "gloss": {
+              "en": "it's for tonight at eight"
+            }
+          },
+          {
+            "phrase": "per sabato alle nove",
+            "gloss": {
+              "en": "for Saturday at nine"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un tavolo fuori se si può",
+            "gloss": {
+              "en": "a table outside if possible"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-a-recommendation": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa mi consiglia",
+            "gloss": {
+              "en": "what do you recommend"
+            }
+          },
+          {
+            "phrase": "cosa mi consigli",
+            "gloss": {
+              "en": "what do you recommend"
+            }
+          },
+          {
+            "phrase": "cosa ci consiglia",
+            "gloss": {
+              "en": "what do you recommend for us"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qual è la specialità della casa",
+            "gloss": {
+              "en": "what is the house speciality"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa c'è di buono oggi",
+            "gloss": {
+              "en": "what's good today"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qual è il piatto migliore",
+            "gloss": {
+              "en": "which is the best dish"
+            }
+          },
+          {
+            "phrase": "qual è il piatto più tipico",
+            "gloss": {
+              "en": "which dish is the most traditional"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-a-dish": [
+      {
+        "wordings": [
+          {
+            "phrase": "come si prepara",
+            "gloss": {
+              "en": "how is it made"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è piccante",
+            "gloss": {
+              "en": "is it spicy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con cosa viene",
+            "gloss": {
+              "en": "what does it come with"
+            }
+          },
+          {
+            "phrase": "viene con il riso",
+            "gloss": {
+              "en": "does it come with rice"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un piatto freddo o caldo",
+            "gloss": {
+              "en": "is it a cold dish or a hot one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è la salsa",
+            "gloss": {
+              "en": "does it have sauce on it"
+            }
+          }
+        ]
+      }
+    ],
+    "state-food-restriction": [
+      {
+        "wordings": [
+          {
+            "phrase": "non posso mangiare il glutine",
+            "gloss": {
+              "en": "I can't eat gluten"
+            }
+          },
+          {
+            "phrase": "non posso mangiare i latticini",
+            "gloss": {
+              "en": "I can't eat dairy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono allergico alle arachidi",
+            "gloss": {
+              "en": "I'm allergic to peanuts"
+            }
+          },
+          {
+            "phrase": "sono allergica ai frutti di mare",
+            "gloss": {
+              "en": "I'm allergic to shellfish"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mangio il maiale",
+            "gloss": {
+              "en": "I don't eat pork"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il piccante mi fa male",
+            "gloss": {
+              "en": "spicy food doesn't agree with me"
+            }
+          }
+        ]
+      }
+    ],
+    "order-for-others": [
+      {
+        "wordings": [
+          {
+            "phrase": "per lui un caffè",
+            "gloss": {
+              "en": "a coffee for him"
+            }
+          },
+          {
+            "phrase": "per lei una zuppa",
+            "gloss": {
+              "en": "a soup for her"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vogliamo due zuppe",
+            "gloss": {
+              "en": "we want two soups"
+            }
+          },
+          {
+            "phrase": "ci porta due birre per favore",
+            "gloss": {
+              "en": "bring us two beers, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lui vuole il pollo e io il pesce",
+            "gloss": {
+              "en": "he wants chicken and I'll have fish"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per tutti e due lo stesso",
+            "gloss": {
+              "en": "the same for both of us"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-something-missing": [
+      {
+        "wordings": [
+          {
+            "phrase": "manca il pane",
+            "gloss": {
+              "en": "the bread is missing"
+            }
+          },
+          {
+            "phrase": "ci manca una forchetta",
+            "gloss": {
+              "en": "we're missing a fork"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il mio piatto non è ancora arrivato",
+            "gloss": {
+              "en": "my dish still hasn't come"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho ordinato una zuppa da un po'",
+            "gloss": {
+              "en": "I ordered a soup a while ago"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ci hanno portato l'acqua",
+            "gloss": {
+              "en": "they didn't bring us the water"
+            }
+          }
+        ]
+      }
+    ],
+    "send-a-dish-back": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo è freddo",
+            "gloss": {
+              "en": "this is cold"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "credo che ci sia un errore",
+            "gloss": {
+              "en": "I think there's been a mistake"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la carne è cruda",
+            "gloss": {
+              "en": "the meat is raw"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo è troppo salato",
+            "gloss": {
+              "en": "this is very salty"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-to-split-the-bill": [
+      {
+        "wordings": [
+          {
+            "phrase": "possiamo pagare separatamente",
+            "gloss": {
+              "en": "can we pay separately"
+            }
+          },
+          {
+            "phrase": "può farci due conti",
+            "gloss": {
+              "en": "could you charge us separately"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ci fa un conto unico",
+            "gloss": {
+              "en": "could you charge it all together"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ognuno paga il suo",
+            "gloss": {
+              "en": "everyone pays for their own"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "pago io",
+            "gloss": {
+              "en": "it's on me"
+            }
+          }
+        ]
+      }
+    ],
+    "compliment-the-food": [
+      {
+        "wordings": [
+          {
+            "phrase": "era tutto delizioso",
+            "gloss": {
+              "en": "everything was delicious"
+            }
+          },
+          {
+            "phrase": "era tutto molto buono",
+            "gloss": {
+              "en": "it was all really tasty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il pesce era freschissimo",
+            "gloss": {
+              "en": "the fish was very fresh"
+            }
+          },
+          {
+            "phrase": "il dolce era molto buono",
+            "gloss": {
+              "en": "the dessert was very good"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi è piaciuto molto il dolce",
+            "gloss": {
+              "en": "I loved the dessert"
+            }
+          },
+          {
+            "phrase": "mi è piaciuto tutto",
+            "gloss": {
+              "en": "I loved everything"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "complimenti al cuoco",
+            "gloss": {
+              "en": "compliments to the cook"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-a-meal-they-had": [
+      {
+        "wordings": [
+          {
+            "phrase": "ieri ho mangiato al ristorante",
+            "gloss": {
+              "en": "yesterday I ate at a restaurant"
+            }
+          },
+          {
+            "phrase": "abbiamo cenato da mia sorella",
+            "gloss": {
+              "en": "we had dinner at my sister's"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "abbiamo mangiato pesce e riso",
+            "gloss": {
+              "en": "we had fish and rice"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la cena era molto buona",
+            "gloss": {
+              "en": "the dinner was really good"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho mangiato troppo",
+            "gloss": {
+              "en": "I ate too much"
+            }
+          }
+        ]
+      }
+    ],
+    "book-travel": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei un biglietto per sabato",
+            "gloss": {
+              "en": "I want a ticket for Saturday"
+            }
+          },
+          {
+            "phrase": "un biglietto per domani mattina",
+            "gloss": {
+              "en": "a ticket for tomorrow morning"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei prenotare un volo",
+            "gloss": {
+              "en": "I'd like to book a flight"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "due biglietti di andata e ritorno per domenica",
+            "gloss": {
+              "en": "two return tickets for Sunday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per il treno delle otto",
+            "gloss": {
+              "en": "for the eight o'clock train"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-connections": [
+      {
+        "wordings": [
+          {
+            "phrase": "è diretto",
+            "gloss": {
+              "en": "is it direct"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "devo cambiare treno",
+            "gloss": {
+              "en": "do I have to change trains"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dove devo cambiare",
+            "gloss": {
+              "en": "where do I have to change"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il treno è diretto o bisogna cambiare",
+            "gloss": {
+              "en": "is the train direct or do you have to change"
+            }
+          },
+          {
+            "phrase": "bisogna cambiare in capitale",
+            "gloss": {
+              "en": "do you have to change in the capital"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-journey-length": [
+      {
+        "wordings": [
+          {
+            "phrase": "quanto dura il viaggio",
+            "gloss": {
+              "en": "how long does the journey take"
+            }
+          },
+          {
+            "phrase": "quanto ci vuole",
+            "gloss": {
+              "en": "how long does it take"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il viaggio dura due ore",
+            "gloss": {
+              "en": "the journey takes two hours"
+            }
+          },
+          {
+            "phrase": "sono tre ore",
+            "gloss": {
+              "en": "it's three hours"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quanto manca all'arrivo",
+            "gloss": {
+              "en": "how much longer until we arrive"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-a-delay": [
+      {
+        "wordings": [
+          {
+            "phrase": "il treno delle otto è cancellato",
+            "gloss": {
+              "en": "the eight o'clock train is cancelled"
+            }
+          },
+          {
+            "phrase": "il volo è stato cancellato",
+            "gloss": {
+              "en": "the flight was cancelled"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è un ritardo di un'ora",
+            "gloss": {
+              "en": "there's an hour's delay"
+            }
+          },
+          {
+            "phrase": "il treno arriva con un'ora di ritardo",
+            "gloss": {
+              "en": "the train is arriving an hour late"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "parte in ritardo",
+            "gloss": {
+              "en": "it's leaving late"
+            }
+          }
+        ]
+      }
+    ],
+    "report-a-missed-connection": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho perso il treno",
+            "gloss": {
+              "en": "I missed the train"
+            }
+          },
+          {
+            "phrase": "ho perso il volo",
+            "gloss": {
+              "en": "I missed my flight"
+            }
+          },
+          {
+            "phrase": "ho perso l'ultimo autobus",
+            "gloss": {
+              "en": "I missed the last bus"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono arrivato tardi e ho perso la coincidenza",
+            "gloss": {
+              "en": "I arrived late and missed my connection"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa posso fare",
+            "gloss": {
+              "en": "what can I do"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è un altro treno oggi",
+            "gloss": {
+              "en": "is there another train today"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-alternative-route": [
+      {
+        "wordings": [
+          {
+            "phrase": "c'è un altro modo per arrivare",
+            "gloss": {
+              "en": "is there another way to get there"
+            }
+          },
+          {
+            "phrase": "c'è un'altra strada",
+            "gloss": {
+              "en": "is there another route"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso andare in autobus",
+            "gloss": {
+              "en": "can I go by bus"
+            }
+          },
+          {
+            "phrase": "si può arrivare in taxi",
+            "gloss": {
+              "en": "can you get there by taxi"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qual è il modo migliore per arrivare",
+            "gloss": {
+              "en": "what's the best way to get there"
+            }
+          }
+        ]
+      }
+    ],
+    "check-in-somewhere": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho una prenotazione a mio nome",
+            "gloss": {
+              "en": "I have a reservation under my name"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei una camera per due notti",
+            "gloss": {
+              "en": "I want a room for two nights"
+            }
+          },
+          {
+            "phrase": "mi fermo tre notti",
+            "gloss": {
+              "en": "I'm staying three nights"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ecco il mio passaporto",
+            "gloss": {
+              "en": "here's my passport"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siamo due persone",
+            "gloss": {
+              "en": "there are two of us"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-a-problem-with-a-room": [
+      {
+        "wordings": [
+          {
+            "phrase": "non c'è acqua calda",
+            "gloss": {
+              "en": "there's no hot water"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'aria condizionata non funziona",
+            "gloss": {
+              "en": "the air conditioning doesn't work"
+            }
+          },
+          {
+            "phrase": "la luce non funziona",
+            "gloss": {
+              "en": "the light doesn't work"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la camera è molto fredda",
+            "gloss": {
+              "en": "the room is very cold"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la finestra non si chiude",
+            "gloss": {
+              "en": "the window doesn't close"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è molto rumore",
+            "gloss": {
+              "en": "there's a lot of noise"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-facilities": [
+      {
+        "wordings": [
+          {
+            "phrase": "la colazione è inclusa",
+            "gloss": {
+              "en": "is breakfast included"
+            }
+          },
+          {
+            "phrase": "a che ora è la colazione",
+            "gloss": {
+              "en": "what time is breakfast"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "avete il parcheggio",
+            "gloss": {
+              "en": "do you have parking"
+            }
+          },
+          {
+            "phrase": "avete internet",
+            "gloss": {
+              "en": "do you have internet"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è la piscina",
+            "gloss": {
+              "en": "is there a pool"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-a-journey": [
+      {
+        "wordings": [
+          {
+            "phrase": "il viaggio è stato molto lungo",
+            "gloss": {
+              "en": "the journey was very long"
+            }
+          },
+          {
+            "phrase": "è stato un viaggio tranquillo",
+            "gloss": {
+              "en": "it was a quiet journey"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siamo andati in treno",
+            "gloss": {
+              "en": "we went by train"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siamo arrivati di sera",
+            "gloss": {
+              "en": "we arrived at night"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la strada era molto bella",
+            "gloss": {
+              "en": "the road there was beautiful"
+            }
+          }
+        ]
+      }
+    ],
+    "report-lost-property": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho perso lo zaino",
+            "gloss": {
+              "en": "I lost my backpack"
+            }
+          },
+          {
+            "phrase": "ho perso il passaporto",
+            "gloss": {
+              "en": "I've lost my passport"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho lasciato la borsa sul treno",
+            "gloss": {
+              "en": "I left my bag on the train"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è uno zaino blu",
+            "gloss": {
+              "en": "it's a blue backpack"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dentro c'è un computer",
+            "gloss": {
+              "en": "there's a computer inside"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-symptoms": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi fa male la schiena da ieri",
+            "gloss": {
+              "en": "my back has hurt since yesterday"
+            }
+          },
+          {
+            "phrase": "mi fa male l'orecchio",
+            "gloss": {
+              "en": "my ear hurts"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho la tosse",
+            "gloss": {
+              "en": "I have a cough"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho la febbre da due giorni",
+            "gloss": {
+              "en": "I've had a fever for two days"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non riesco a dormire bene",
+            "gloss": {
+              "en": "I can't sleep properly"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi gira la testa",
+            "gloss": {
+              "en": "I feel dizzy"
+            }
+          }
+        ]
+      }
+    ],
+    "make-a-medical-appointment": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei un appuntamento con il medico",
+            "gloss": {
+              "en": "I want an appointment with the doctor"
+            }
+          },
+          {
+            "phrase": "devo vedere un medico oggi",
+            "gloss": {
+              "en": "I need to see a doctor today"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è per un dolore alla schiena",
+            "gloss": {
+              "en": "it's about a back pain"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è qualcosa per domani",
+            "gloss": {
+              "en": "is there anything for tomorrow"
+            }
+          },
+          {
+            "phrase": "può essere questo pomeriggio",
+            "gloss": {
+              "en": "could it be this afternoon"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-simple-advice": [
+      {
+        "wordings": [
+          {
+            "phrase": "deve riposare",
+            "gloss": {
+              "en": "you need to rest"
+            }
+          },
+          {
+            "phrase": "riposi a letto",
+            "gloss": {
+              "en": "rest in bed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "beva molta acqua",
+            "gloss": {
+              "en": "drink plenty of water"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non esca oggi",
+            "gloss": {
+              "en": "don't go out today"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mangi poco e lentamente",
+            "gloss": {
+              "en": "eat little and slowly"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-medicine": [
+      {
+        "wordings": [
+          {
+            "phrase": "quante volte al giorno",
+            "gloss": {
+              "en": "how many times a day"
+            }
+          },
+          {
+            "phrase": "quante pastiglie",
+            "gloss": {
+              "en": "how many pills"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come prendo questa medicina",
+            "gloss": {
+              "en": "how do I take this medicine"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prima o dopo i pasti",
+            "gloss": {
+              "en": "before or after eating"
+            }
+          },
+          {
+            "phrase": "prenda la pastiglia con il cibo",
+            "gloss": {
+              "en": "take the pill with food"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per quanti giorni",
+            "gloss": {
+              "en": "for how many days"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-an-accident": [
+      {
+        "wordings": [
+          {
+            "phrase": "sono caduto per strada",
+            "gloss": {
+              "en": "I fell over in the street"
+            }
+          },
+          {
+            "phrase": "è caduto dalle scale",
+            "gloss": {
+              "en": "he fell down the stairs"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi sono tagliato la mano",
+            "gloss": {
+              "en": "I cut my hand"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho battuto la testa",
+            "gloss": {
+              "en": "I hit my head"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi sono bruciato con l'acqua calda",
+            "gloss": {
+              "en": "I burnt myself with hot water"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è stato un incidente in macchina",
+            "gloss": {
+              "en": "it was a car accident"
+            }
+          }
+        ]
+      }
+    ],
+    "state-an-allergy": [
+      {
+        "wordings": [
+          {
+            "phrase": "sono allergico alla penicillina",
+            "gloss": {
+              "en": "I'm allergic to penicillin"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho l'asma",
+            "gloss": {
+              "en": "I have asthma"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono diabetico",
+            "gloss": {
+              "en": "I'm diabetic"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prendo una medicina per il cuore",
+            "gloss": {
+              "en": "I take medicine for my heart"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-urgent-help": [
+      {
+        "wordings": [
+          {
+            "phrase": "chiami un'ambulanza",
+            "gloss": {
+              "en": "call an ambulance"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un'emergenza",
+            "gloss": {
+              "en": "it's an emergency"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi serve un medico adesso",
+            "gloss": {
+              "en": "I need a doctor now"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il mio amico non respira",
+            "gloss": {
+              "en": "my friend can't breathe"
+            }
+          },
+          {
+            "phrase": "c'è stato un incidente",
+            "gloss": {
+              "en": "there's been an accident"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-habits-and-health": [
+      {
+        "wordings": [
+          {
+            "phrase": "dormo otto ore",
+            "gloss": {
+              "en": "I sleep eight hours"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "faccio sport tre volte alla settimana",
+            "gloss": {
+              "en": "I exercise three times a week"
+            }
+          },
+          {
+            "phrase": "cammino tutti i giorni",
+            "gloss": {
+              "en": "I walk every day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mangio molta frutta",
+            "gloss": {
+              "en": "I eat a lot of fruit"
+            }
+          },
+          {
+            "phrase": "non mangio quasi mai verdura",
+            "gloss": {
+              "en": "I hardly eat any vegetables"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non fumo",
+            "gloss": {
+              "en": "I don't smoke"
+            }
+          }
+        ]
+      }
+    ],
+    "say-they-are-feeling-better": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi sento meglio di ieri",
+            "gloss": {
+              "en": "I feel better than yesterday"
+            }
+          },
+          {
+            "phrase": "sto molto meglio",
+            "gloss": {
+              "en": "I'm much better"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sto peggio",
+            "gloss": {
+              "en": "I'm worse"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi fa più male",
+            "gloss": {
+              "en": "it doesn't hurt anymore"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono sempre uguale",
+            "gloss": {
+              "en": "I'm still the same"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-a-person-in-detail": [
+      {
+        "wordings": [
+          {
+            "phrase": "è alta e ha i capelli neri",
+            "gloss": {
+              "en": "she's tall and has black hair"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è molto simpatica e parla molto",
+            "gloss": {
+              "en": "she's very nice and talks a lot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ha la barba e porta gli occhiali",
+            "gloss": {
+              "en": "he has a beard and wears glasses"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un uomo anziano molto tranquillo",
+            "gloss": {
+              "en": "he's an older man, very calm"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è magro ed è sempre di buon umore",
+            "gloss": {
+              "en": "he's slim and always in a good mood"
+            }
+          }
+        ]
+      }
+    ],
+    "compare-two-people": [
+      {
+        "wordings": [
+          {
+            "phrase": "mio fratello è più alto di me",
+            "gloss": {
+              "en": "my brother is taller than me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lei è meno timida di lui",
+            "gloss": {
+              "en": "she's less shy than him"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siamo alti uguale",
+            "gloss": {
+              "en": "we're the same height"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è simpatico come suo padre",
+            "gloss": {
+              "en": "he's as nice as his father"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lui è più grande di lei",
+            "gloss": {
+              "en": "he's older than her"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-an-object-in-detail": [
+      {
+        "wordings": [
+          {
+            "phrase": "è una scatola di legno",
+            "gloss": {
+              "en": "it's a wooden box"
+            }
+          },
+          {
+            "phrase": "è una borsa grande di stoffa",
+            "gloss": {
+              "en": "it's a big cloth bag"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è piccolo e serve ad aprire le bottiglie",
+            "gloss": {
+              "en": "it's small and it's for opening bottles"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è di metallo e pesa molto",
+            "gloss": {
+              "en": "it's metal and it's very heavy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è rotondo e di plastica",
+            "gloss": {
+              "en": "it's round and made of plastic"
+            }
+          }
+        ]
+      }
+    ],
+    "compare-two-things": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo è più economico di quello",
+            "gloss": {
+              "en": "this one is cheaper than that one"
+            }
+          },
+          {
+            "phrase": "costa meno dell'altro",
+            "gloss": {
+              "en": "it costs less than the other one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il treno è più veloce dell'autobus",
+            "gloss": {
+              "en": "the train is faster than the bus"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questa casa è più grande dell'altra",
+            "gloss": {
+              "en": "this house is bigger than the other one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è caro uguale",
+            "gloss": {
+              "en": "it's just as expensive"
+            }
+          }
+        ]
+      }
+    ],
+    "say-which-is-best": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo è il migliore",
+            "gloss": {
+              "en": "this one is the best"
+            }
+          },
+          {
+            "phrase": "è il migliore di tutti",
+            "gloss": {
+              "en": "it's the best of them all"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il più economico è questo",
+            "gloss": {
+              "en": "the cheapest one is this one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questa è la scelta migliore",
+            "gloss": {
+              "en": "this is the best option"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il peggiore è quello",
+            "gloss": {
+              "en": "the worst one is that one"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-a-place-in-detail": [
+      {
+        "wordings": [
+          {
+            "phrase": "è un paese piccolo vicino al mare",
+            "gloss": {
+              "en": "it's a small town near the sea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ci sono molti negozi e un mercato grande",
+            "gloss": {
+              "en": "there are lots of shops and a big market"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è tranquillo e molto bello d'estate",
+            "gloss": {
+              "en": "it's quiet and very pretty in summer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è in montagna e fa freddo",
+            "gloss": {
+              "en": "it's up in the mountains and it's cold"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è una città grande con molta vita",
+            "gloss": {
+              "en": "it's a big city with a lot going on"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-how-something-changed": [
+      {
+        "wordings": [
+          {
+            "phrase": "prima era un paese piccolo",
+            "gloss": {
+              "en": "it used to be a small town"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "adesso c'è più gente",
+            "gloss": {
+              "en": "there are more people now"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è cambiato molto",
+            "gloss": {
+              "en": "it has changed a lot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è più come prima",
+            "gloss": {
+              "en": "it isn't what it used to be"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-a-picture": [
+      {
+        "wordings": [
+          {
+            "phrase": "ci sono due persone in spiaggia",
+            "gloss": {
+              "en": "there are two people on the beach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un bambino sta giocando",
+            "gloss": {
+              "en": "a boy is playing"
+            }
+          },
+          {
+            "phrase": "una donna sta leggendo",
+            "gloss": {
+              "en": "a woman is reading"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "nella foto si vede una casa",
+            "gloss": {
+              "en": "in the photo you can see a house"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "in fondo ci sono le montagne",
+            "gloss": {
+              "en": "in the background there are mountains"
+            }
+          }
+        ]
+      }
+    ],
+    "estimate-and-approximate": [
+      {
+        "wordings": [
+          {
+            "phrase": "più o meno venti",
+            "gloss": {
+              "en": "about twenty"
+            }
+          },
+          {
+            "phrase": "più o meno un'ora",
+            "gloss": {
+              "en": "about an hour"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "una decina di minuti",
+            "gloss": {
+              "en": "ten minutes or so"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "circa trenta persone",
+            "gloss": {
+              "en": "around thirty people"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quasi un'ora",
+            "gloss": {
+              "en": "almost an hour"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "intorno a cento",
+            "gloss": {
+              "en": "around a hundred"
+            }
+          }
+        ]
+      }
+    ],
+    "give-opinion-with-reason": [
+      {
+        "wordings": [
+          {
+            "phrase": "credo che sia molto buono perché è economico",
+            "gloss": {
+              "en": "I think it's very good because it's cheap"
+            }
+          },
+          {
+            "phrase": "mi sembra molto buono perché è economico",
+            "gloss": {
+              "en": "it seems very good to me because it's cheap"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi piace perché è molto caro",
+            "gloss": {
+              "en": "I don't like it because it's very expensive"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per me è il migliore perché è più veloce",
+            "gloss": {
+              "en": "for me it's the best because it's faster"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "penso che sia difficile perché c'è poco tempo",
+            "gloss": {
+              "en": "I think it's hard because there's little time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "secondo me è una buona idea",
+            "gloss": {
+              "en": "in my opinion it's a good idea"
+            }
+          }
+        ]
+      }
+    ],
+    "agree-with-reason": [
+      {
+        "wordings": [
+          {
+            "phrase": "sono d'accordo perché è più economico",
+            "gloss": {
+              "en": "I agree because it's cheaper"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hai ragione perché non c'è molto tempo",
+            "gloss": {
+              "en": "you're right because there isn't much time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sì, e poi è più facile",
+            "gloss": {
+              "en": "yes, and besides it's easier"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "penso lo stesso perché è meglio",
+            "gloss": {
+              "en": "I think the same because it's better"
+            }
+          },
+          {
+            "phrase": "anche io la vedo così",
+            "gloss": {
+              "en": "I see it that way too"
+            }
+          }
+        ]
+      }
+    ],
+    "disagree-politely": [
+      {
+        "wordings": [
+          {
+            "phrase": "non sono così sicuro perché è molto caro",
+            "gloss": {
+              "en": "I'm not so sure because it's very expensive"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "può essere, ma io la vedo diversamente",
+            "gloss": {
+              "en": "maybe, but I see it differently"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "scusa, ma non penso lo stesso",
+            "gloss": {
+              "en": "sorry, but I don't think the same"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "capisco, ma per me non è così",
+            "gloss": {
+              "en": "I understand, but for me it isn't like that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non del tutto, perché c'è poca gente",
+            "gloss": {
+              "en": "not entirely, because there are few people"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-how-they-felt": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi sono sentito molto bene",
+            "gloss": {
+              "en": "I felt really good"
+            }
+          },
+          {
+            "phrase": "mi sono sentito molto male",
+            "gloss": {
+              "en": "I felt really bad"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è stata un'esperienza molto bella",
+            "gloss": {
+              "en": "it was a really lovely experience"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi è piaciuto molto",
+            "gloss": {
+              "en": "I liked it a lot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ero molto nervoso",
+            "gloss": {
+              "en": "I was very nervous"
+            }
+          },
+          {
+            "phrase": "ero molto stanco",
+            "gloss": {
+              "en": "I was very tired"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi è dispiaciuto molto",
+            "gloss": {
+              "en": "it made me really sad"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-someone-opinion": [
+      {
+        "wordings": [
+          {
+            "phrase": "che ne pensi",
+            "gloss": {
+              "en": "what do you think of it"
+            }
+          },
+          {
+            "phrase": "che ne pensa",
+            "gloss": {
+              "en": "what do you think of it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa pensi di questo",
+            "gloss": {
+              "en": "what do you think about this"
+            }
+          },
+          {
+            "phrase": "cosa pensa di questo",
+            "gloss": {
+              "en": "what do you think about this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qual è la tua opinione",
+            "gloss": {
+              "en": "what's your opinion"
+            }
+          },
+          {
+            "phrase": "qual è la sua opinione",
+            "gloss": {
+              "en": "what's your opinion"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti è piaciuto",
+            "gloss": {
+              "en": "did you like it"
+            }
+          },
+          {
+            "phrase": "le è piaciuto",
+            "gloss": {
+              "en": "did you like it"
+            }
+          }
+        ]
+      }
+    ],
+    "express-preference-with-reason": [
+      {
+        "wordings": [
+          {
+            "phrase": "preferisco il treno perché è più veloce",
+            "gloss": {
+              "en": "I prefer the train because it's faster"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi piace di più l'estate perché fa caldo",
+            "gloss": {
+              "en": "I like summer better because it's warm"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "preferisco andare a piedi perché è vicino",
+            "gloss": {
+              "en": "I'd rather walk because it's close"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per me è meglio l'altro perché è più economico",
+            "gloss": {
+              "en": "the other one is better for me because it's cheaper"
+            }
+          }
+        ]
+      }
+    ],
+    "express-hope-or-worry": [
+      {
+        "wordings": [
+          {
+            "phrase": "spero di sì",
+            "gloss": {
+              "en": "I hope so"
+            }
+          },
+          {
+            "phrase": "spero di no",
+            "gloss": {
+              "en": "I hope not"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "spero che vada tutto bene",
+            "gloss": {
+              "en": "I hope everything goes well"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "magari hai fortuna",
+            "gloss": {
+              "en": "I hope you have luck"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono un po' preoccupato",
+            "gloss": {
+              "en": "I'm a little worried"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho paura di arrivare tardi",
+            "gloss": {
+              "en": "I'm afraid of arriving late"
+            }
+          }
+        ]
+      }
+    ],
+    "react-to-news": [
+      {
+        "wordings": [
+          {
+            "phrase": "che bella notizia",
+            "gloss": {
+              "en": "what good news"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono molto contento",
+            "gloss": {
+              "en": "I'm very glad"
+            }
+          },
+          {
+            "phrase": "sono contento per te",
+            "gloss": {
+              "en": "I'm happy for you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi dispiace molto",
+            "gloss": {
+              "en": "I'm so sorry"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che peccato",
+            "gloss": {
+              "en": "what a shame"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ma non mi dire",
+            "gloss": {
+              "en": "you don't say"
+            }
+          }
+        ]
+      }
+    ],
+    "express-regret": [
+      {
+        "wordings": [
+          {
+            "phrase": "non avrei dovuto dirlo",
+            "gloss": {
+              "en": "I shouldn't have said that"
+            }
+          },
+          {
+            "phrase": "non avrei dovuto farlo",
+            "gloss": {
+              "en": "I shouldn't have done that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi dispiace davvero",
+            "gloss": {
+              "en": "I really regret it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non doveva succedere",
+            "gloss": {
+              "en": "I wish it hadn't happened"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è stato un errore",
+            "gloss": {
+              "en": "it was a mistake"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "avrei dovuto andare",
+            "gloss": {
+              "en": "I should have gone"
+            }
+          }
+        ]
+      }
+    ],
+    "say-they-are-not-sure": [
+      {
+        "wordings": [
+          {
+            "phrase": "non sono sicuro di questo",
+            "gloss": {
+              "en": "I'm not sure about that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non so cosa dire",
+            "gloss": {
+              "en": "I don't know what to say"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dipende, non mi è chiaro",
+            "gloss": {
+              "en": "it depends, it isn't clear to me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non lo so perché non l'ho visto",
+            "gloss": {
+              "en": "I don't know because I haven't seen it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "credo di sì, ma non sono sicuro",
+            "gloss": {
+              "en": "I think so, but I'm not sure"
+            }
+          }
+        ]
+      }
+    ],
+    "make-small-talk": [
+      {
+        "wordings": [
+          {
+            "phrase": "com'è andato il fine settimana",
+            "gloss": {
+              "en": "how was the weekend"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come va tutto",
+            "gloss": {
+              "en": "how's everything going"
+            }
+          },
+          {
+            "phrase": "come va il lavoro",
+            "gloss": {
+              "en": "how's work going"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che caldo oggi",
+            "gloss": {
+              "en": "it's so hot today"
+            }
+          },
+          {
+            "phrase": "che freddo oggi",
+            "gloss": {
+              "en": "it's so cold today"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa c'è di nuovo",
+            "gloss": {
+              "en": "what's new"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come sta la famiglia",
+            "gloss": {
+              "en": "how's the family"
+            }
+          }
+        ]
+      }
+    ],
+    "invite-with-detail": [
+      {
+        "wordings": [
+          {
+            "phrase": "ti invito a cena sabato alle otto",
+            "gloss": {
+              "en": "I'm inviting you to dinner on Saturday at eight"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è una festa a casa mia venerdì",
+            "gloss": {
+              "en": "there's a party at my place on Friday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vuoi venire al mio compleanno domenica",
+            "gloss": {
+              "en": "do you want to come to my birthday on Sunday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "andiamo al cinema stasera alle nove",
+            "gloss": {
+              "en": "let's go to the cinema tonight at nine"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la cena è alle otto a casa mia",
+            "gloss": {
+              "en": "dinner is at eight at my place"
+            }
+          }
+        ]
+      }
+    ],
+    "respond-to-an-invitation": [
+      {
+        "wordings": [
+          {
+            "phrase": "sì, volentieri",
+            "gloss": {
+              "en": "yes, gladly"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "certo, ci sarò io",
+            "gloss": {
+              "en": "sure, I'll be there"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi piacerebbe, grazie",
+            "gloss": {
+              "en": "I'd love to, thank you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi dispiace, quel giorno non posso",
+            "gloss": {
+              "en": "sorry, I can't that day"
+            }
+          }
+        ]
+      }
+    ],
+    "apologise-with-explanation": [
+      {
+        "wordings": [
+          {
+            "phrase": "scusa per il ritardo, c'era molto traffico",
+            "gloss": {
+              "en": "sorry for being late, there was a lot of traffic"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi dispiace, me ne sono dimenticato",
+            "gloss": {
+              "en": "I'm sorry, I forgot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "scusi il ritardo, il treno è arrivato tardi",
+            "gloss": {
+              "en": "sorry for the delay, the train arrived late"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "scusa, non ti ho sentito",
+            "gloss": {
+              "en": "sorry, I didn't hear you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mille scuse, non era mia intenzione",
+            "gloss": {
+              "en": "a thousand apologies, I didn't mean to"
+            }
+          }
+        ]
+      }
+    ],
+    "thank-for-something-specific": [
+      {
+        "wordings": [
+          {
+            "phrase": "grazie per il tuo aiuto",
+            "gloss": {
+              "en": "thanks for your help"
+            }
+          },
+          {
+            "phrase": "grazie per il suo aiuto",
+            "gloss": {
+              "en": "thanks for your help"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "grazie per il regalo",
+            "gloss": {
+              "en": "thanks for the present"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "grazie mille per essere venuto",
+            "gloss": {
+              "en": "thank you very much for coming"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "grazie di tutto",
+            "gloss": {
+              "en": "thanks for everything"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti ringrazio molto",
+            "gloss": {
+              "en": "I'm very grateful to you"
+            }
+          }
+        ]
+      }
+    ],
+    "congratulate": [
+      {
+        "wordings": [
+          {
+            "phrase": "congratulazioni",
+            "gloss": {
+              "en": "congratulations"
+            }
+          },
+          {
+            "phrase": "auguri",
+            "gloss": {
+              "en": "congratulations"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "complimenti",
+            "gloss": {
+              "en": "well done"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buon compleanno",
+            "gloss": {
+              "en": "happy birthday to you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che bello, te lo meriti",
+            "gloss": {
+              "en": "that's great, you deserve it"
+            }
+          }
+        ]
+      }
+    ],
+    "offer-help": [
+      {
+        "wordings": [
+          {
+            "phrase": "ti aiuto",
+            "gloss": {
+              "en": "I'll help you"
+            }
+          },
+          {
+            "phrase": "la aiuto",
+            "gloss": {
+              "en": "I'll help you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vuoi che ti aiuti",
+            "gloss": {
+              "en": "do you want me to help you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso aiutare in qualcosa",
+            "gloss": {
+              "en": "can I help with anything"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti porto la valigia",
+            "gloss": {
+              "en": "I'll carry your suitcase"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo faccio io",
+            "gloss": {
+              "en": "I'll do it"
+            }
+          }
+        ]
+      }
+    ],
+    "accept-or-refuse-help": [
+      {
+        "wordings": [
+          {
+            "phrase": "sì, grazie mille",
+            "gloss": {
+              "en": "yes please, thank you very much"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "grazie, sei molto gentile",
+            "gloss": {
+              "en": "thank you, that's very kind of you"
+            }
+          },
+          {
+            "phrase": "grazie, è molto gentile",
+            "gloss": {
+              "en": "thank you, that's very kind of you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "no grazie, faccio da solo",
+            "gloss": {
+              "en": "no thanks, I can manage on my own"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "grazie, ma non c'è bisogno",
+            "gloss": {
+              "en": "thanks, but there's no need"
+            }
+          }
+        ]
+      }
+    ],
+    "introduce-two-people": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo è il mio amico, lavora con me",
+            "gloss": {
+              "en": "this is my friend, he works with me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questa è mia sorella, studia italiano",
+            "gloss": {
+              "en": "this is my sister, she's studying Spanish"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "le presento il mio capo",
+            "gloss": {
+              "en": "let me introduce you to my boss"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vi conoscete già",
+            "gloss": {
+              "en": "you two already know each other"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un amico di mio fratello",
+            "gloss": {
+              "en": "he's a friend of my brother's"
+            }
+          }
+        ]
+      }
+    ],
+    "take-leave-politely": [
+      {
+        "wordings": [
+          {
+            "phrase": "beh, devo andare",
+            "gloss": {
+              "en": "well, I have to go"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è stato un piacere parlare con te",
+            "gloss": {
+              "en": "it was nice talking with you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è tardi, vado",
+            "gloss": {
+              "en": "it's late now, I'm off"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buona giornata",
+            "gloss": {
+              "en": "have a good day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "piacere, a dopo",
+            "gloss": {
+              "en": "a pleasure, see you later"
+            }
+          }
+        ]
+      }
+    ],
+    "pass-on-a-message": [
+      {
+        "wordings": [
+          {
+            "phrase": "ti manda i saluti",
+            "gloss": {
+              "en": "he sends you his regards"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi ha detto che non può venire",
+            "gloss": {
+              "en": "he told me he can't come"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dice che arriva tardi",
+            "gloss": {
+              "en": "she says she's arriving late"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi ha chiesto di dirti una cosa",
+            "gloss": {
+              "en": "he asked me to tell you something"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho un messaggio per te",
+            "gloss": {
+              "en": "I have a message for you"
+            }
+          }
+        ]
+      }
+    ],
+    "give-simple-instructions": [
+      {
+        "wordings": [
+          {
+            "phrase": "prima apri la porta e poi entra",
+            "gloss": {
+              "en": "first open the door and then come in"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mescola tutto e aspetta cinque minuti",
+            "gloss": {
+              "en": "mix everything and wait five minutes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vai dritto e poi attraversa la strada",
+            "gloss": {
+              "en": "keep going straight and then cross the street"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "premi il bottone e aspetta",
+            "gloss": {
+              "en": "press the button and wait"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "apri la scatola e togli la carta",
+            "gloss": {
+              "en": "open the box and take out the paper"
+            }
+          }
+        ]
+      }
+    ],
+    "follow-multi-step-instructions": [
+      {
+        "wordings": [
+          {
+            "phrase": "capito, prima questo e poi l'altro",
+            "gloss": {
+              "en": "got it, first this and then the other"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "va bene, sono tre passi",
+            "gloss": {
+              "en": "all right, it's three steps"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho già fatto il primo passo",
+            "gloss": {
+              "en": "I've already done the first step"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "e dopo cosa faccio",
+            "gloss": {
+              "en": "and what do I do after that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "bene, prima apro la porta e poi entro",
+            "gloss": {
+              "en": "okay, first I open the door and then I go in"
+            }
+          }
+        ]
+      }
+    ],
+    "give-advice": [
+      {
+        "wordings": [
+          {
+            "phrase": "dovresti riposare",
+            "gloss": {
+              "en": "you should rest"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "io al posto tuo andrei dal medico",
+            "gloss": {
+              "en": "if I were you, I'd go to the doctor"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti consiglio di andare dal medico",
+            "gloss": {
+              "en": "I recommend you go to the doctor"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la cosa migliore è aspettare un po'",
+            "gloss": {
+              "en": "the best thing is to wait a bit"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "devi parlare con lui",
+            "gloss": {
+              "en": "you have to talk to him"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-advice": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa devo fare",
+            "gloss": {
+              "en": "what should I do"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tu cosa faresti",
+            "gloss": {
+              "en": "what would you do"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi puoi dare un consiglio",
+            "gloss": {
+              "en": "can you give me some advice"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa mi consigli di fare",
+            "gloss": {
+              "en": "what do you advise me"
+            }
+          }
+        ]
+      }
+    ],
+    "warn-someone": [
+      {
+        "wordings": [
+          {
+            "phrase": "attento allo scalino",
+            "gloss": {
+              "en": "watch out for the step"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "attento, è caldo",
+            "gloss": {
+              "en": "careful, it's hot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non toccare quello",
+            "gloss": {
+              "en": "don't touch that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "occhio al cane",
+            "gloss": {
+              "en": "watch out for the dog"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "attento, il pavimento è bagnato",
+            "gloss": {
+              "en": "careful, the floor is wet"
+            }
+          }
+        ]
+      }
+    ],
+    "explain-how-something-works": [
+      {
+        "wordings": [
+          {
+            "phrase": "serve ad aprire la porta",
+            "gloss": {
+              "en": "it's for opening the door"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "si usa per cucinare",
+            "gloss": {
+              "en": "it's used for cooking"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "premi questo bottone e si accende",
+            "gloss": {
+              "en": "press this button and it turns on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "funziona a pile",
+            "gloss": {
+              "en": "it runs on batteries"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è molto facile da usare",
+            "gloss": {
+              "en": "it's very easy to use"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-someone-to-do-something": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi passi l'acqua per favore",
+            "gloss": {
+              "en": "could you pass me the water, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "potresti aprire la porta",
+            "gloss": {
+              "en": "could you open the door"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti dispiace aspettare un momento",
+            "gloss": {
+              "en": "would you mind waiting a moment"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi fai un favore",
+            "gloss": {
+              "en": "would you do me a favour"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se non è un problema, mi aiuti",
+            "gloss": {
+              "en": "if it's no trouble, could you help me"
+            }
+          }
+        ]
+      }
+    ],
+    "state-a-rule": [
+      {
+        "wordings": [
+          {
+            "phrase": "qui non si può fumare",
+            "gloss": {
+              "en": "you can't smoke here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è permesso entrare con i cani",
+            "gloss": {
+              "en": "dogs aren't allowed in"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "bisogna pagare all'ingresso",
+            "gloss": {
+              "en": "you have to pay at the entrance"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "si può entrare con i bambini",
+            "gloss": {
+              "en": "children are allowed in"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è vietato fare rumore dopo le dieci",
+            "gloss": {
+              "en": "making noise after ten is not allowed"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-to-rephrase": [
+      {
+        "wordings": [
+          {
+            "phrase": "me lo puoi dire in un altro modo",
+            "gloss": {
+              "en": "can you say it to me another way"
+            }
+          },
+          {
+            "phrase": "me lo può dire in un altro modo",
+            "gloss": {
+              "en": "can you say it to me another way"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come si dice in un altro modo",
+            "gloss": {
+              "en": "how do you say it another way"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me lo spieghi un'altra volta",
+            "gloss": {
+              "en": "can you explain it to me again"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa vuol dire in parole semplici",
+            "gloss": {
+              "en": "what does that mean in simple words"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "puoi usare parole più facili",
+            "gloss": {
+              "en": "can you use easier words"
+            }
+          }
+        ]
+      }
+    ],
+    "rephrase-themselves": [
+      {
+        "wordings": [
+          {
+            "phrase": "lo dico in un altro modo",
+            "gloss": {
+              "en": "let me put it another way"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cioè, non posso andare",
+            "gloss": {
+              "en": "that is to say, I can't go"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "in altre parole, non è facile",
+            "gloss": {
+              "en": "in other words, it isn't easy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "insomma, è più caro",
+            "gloss": {
+              "en": "I mean, it's more expensive"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "anzi, è il contrario",
+            "gloss": {
+              "en": "or rather, it's the other way round"
+            }
+          }
+        ]
+      }
+    ],
+    "check-they-were-understood": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi capisci",
+            "gloss": {
+              "en": "do you understand me"
+            }
+          },
+          {
+            "phrase": "mi capisce",
+            "gloss": {
+              "en": "do you understand me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è tutto chiaro",
+            "gloss": {
+              "en": "is that clear"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi spiego",
+            "gloss": {
+              "en": "am I making myself clear"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hai capito",
+            "gloss": {
+              "en": "did you get it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi segui",
+            "gloss": {
+              "en": "are you following me"
+            }
+          }
+        ]
+      }
+    ],
+    "summarise-to-confirm": [
+      {
+        "wordings": [
+          {
+            "phrase": "allora dici che non puoi venire",
+            "gloss": {
+              "en": "so you're saying you can't come"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quindi è più caro",
+            "gloss": {
+              "en": "so it's more expensive, then"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se ho capito bene, è alle quattro",
+            "gloss": {
+              "en": "if I understood right, it's at four"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è così, vero",
+            "gloss": {
+              "en": "that's it, right"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "allora bisogna pagare prima",
+            "gloss": {
+              "en": "so you have to pay beforehand"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-spelling-or-writing": [
+      {
+        "wordings": [
+          {
+            "phrase": "me lo scrivi per favore",
+            "gloss": {
+              "en": "could you write it down for me, please"
+            }
+          },
+          {
+            "phrase": "me lo scrive per favore",
+            "gloss": {
+              "en": "could you write it down for me, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me lo può scrivere qui",
+            "gloss": {
+              "en": "can you write it here for me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo scrivi su un foglio",
+            "gloss": {
+              "en": "can you write it on a piece of paper"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "puoi segnare l'indirizzo",
+            "gloss": {
+              "en": "can you note down the address"
+            }
+          }
+        ]
+      }
+    ],
+    "interrupt-politely": [
+      {
+        "wordings": [
+          {
+            "phrase": "scusa per l'interruzione",
+            "gloss": {
+              "en": "sorry for interrupting"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso fare una domanda",
+            "gloss": {
+              "en": "may I ask a question"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "scusa, una domanda veloce",
+            "gloss": {
+              "en": "sorry, one quick question"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "scusa un momento",
+            "gloss": {
+              "en": "excuse me a moment"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "solo una cosa",
+            "gloss": {
+              "en": "just one thing"
+            }
+          }
+        ]
+      }
+    ],
+    "buy-thinking-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "vediamo",
+            "gloss": {
+              "en": "let's see"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "beh",
+            "gloss": {
+              "en": "well"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è che, come dire",
+            "gloss": {
+              "en": "it's just, how do I put it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un momento per favore",
+            "gloss": {
+              "en": "one moment, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ehm, non so",
+            "gloss": {
+              "en": "um, I don't know"
+            }
+          }
+        ]
+      }
+    ],
+    "signal-partial-understanding": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho capito la prima parte ma non l'ultima",
+            "gloss": {
+              "en": "I got the first part but not the last one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ho capito quella parola",
+            "gloss": {
+              "en": "I didn't get that word"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho capito quasi tutto",
+            "gloss": {
+              "en": "I understood almost all of it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'ultima parte non l'ho sentita",
+            "gloss": {
+              "en": "I didn't hear the last part"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho capito solo l'inizio",
+            "gloss": {
+              "en": "I only understood the beginning"
             }
           }
         ]
