@@ -38581,6 +38581,24 @@
         "adjective"
       ]
     },
+    "allergico": {
+      "lemmaId": "allergico",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "vegetariano": {
+      "lemmaId": "vegetariano",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "frizzante": {
+      "lemmaId": "frizzante",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
     "sono": {
       "lemmaId": "essere",
       "partsOfSpeech": [
@@ -42909,6 +42927,114 @@
         "noun"
       ]
     },
+    "contengo": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contieni": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contiene": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "conteniamo": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenete": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contengono": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenni": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenesti": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenne": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenemmo": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "conteneste": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contennero": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenevo": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenevi": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "conteneva": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenevamo": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenevate": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenevano": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "contenendo": {
       "lemmaId": "contenere",
       "partsOfSpeech": [
@@ -45170,6 +45296,132 @@
         "adjective"
       ]
     },
+    "piaccio": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaci": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piace": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacciamo": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacete": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacciono": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacqui": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacesti": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacque": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacemmo": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaceste": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacquero": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacevo": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacevi": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaceva": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacevamo": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacevate": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacevano": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
     "piacendo": {
       "lemmaId": "piacere",
       "partsOfSpeech": [
@@ -45177,14 +45429,7 @@
         "noun"
       ]
     },
-    "piacuto": {
-      "lemmaId": "piacere",
-      "partsOfSpeech": [
-        "verb",
-        "noun"
-      ]
-    },
-    "piaceri": {
+    "piaciuto": {
       "lemmaId": "piacere",
       "partsOfSpeech": [
         "verb",
@@ -48993,6 +49238,114 @@
       "lemmaId": "peso",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "mangio": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangi": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangia": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiamo": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiate": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiano": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiai": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiasti": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiò": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiammo": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiaste": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiarono": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiavo": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiavi": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiava": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiavamo": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiavate": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiavano": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "mangiando": {
@@ -60958,7 +61311,19 @@
         "noun"
       ]
     },
-    "secci": {
+    "secca": {
+      "lemmaId": "secco",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "secchi": {
+      "lemmaId": "secco",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "secche": {
       "lemmaId": "secco",
       "partsOfSpeech": [
         "adjective"
@@ -64597,6 +64962,114 @@
       "lemmaId": "rotta",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "adoro": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adori": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adora": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoriamo": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorate": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorano": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorai": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorasti": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorò": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorammo": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoraste": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorarono": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoravo": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoravi": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorava": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoravamo": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoravate": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoravano": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "adorando": {
@@ -81280,6 +81753,48 @@
         "adjective"
       ]
     },
+    "allergica": {
+      "lemmaId": "allergico",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "allergici": {
+      "lemmaId": "allergico",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "allergiche": {
+      "lemmaId": "allergico",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "vegetariana": {
+      "lemmaId": "vegetariano",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "vegetariani": {
+      "lemmaId": "vegetariano",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "vegetariane": {
+      "lemmaId": "vegetariano",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "frizzanti": {
+      "lemmaId": "frizzante",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
     "del": {
       "lemmaId": "di",
       "partsOfSpeech": [
@@ -81751,13 +82266,13 @@
         "noun"
       ]
     },
-    "faccii": {
+    "facci": {
       "lemmaId": "fare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "facciino": {
+    "faccino": {
       "lemmaId": "fare",
       "partsOfSpeech": [
         "verb"
@@ -85556,13 +86071,7 @@
         "verb"
       ]
     },
-    "lascii": {
-      "lemmaId": "lasciare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
-    "lasciino": {
+    "lascino": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
@@ -89124,6 +89633,96 @@
         "verb"
       ]
     },
+    "contenga": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contengano": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "conteniate": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenerei": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "conteneresti": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenerebbe": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "conteneremmo": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenereste": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenerebbero": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenerò": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenerai": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenerà": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "conteneremo": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenerete": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "conteneranno": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "contenermi": {
       "lemmaId": "contenere",
       "partsOfSpeech": [
@@ -89179,6 +89778,78 @@
       ]
     },
     "contenerne": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contienimi": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contieniti": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contienisi": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contienici": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contienivi": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contienilo": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contienila": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contienili": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contienile": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contienine": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenuta": {
+      "lemmaId": "contenere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "contenute": {
       "lemmaId": "contenere",
       "partsOfSpeech": [
         "verb"
@@ -93882,6 +94553,111 @@
         "verb"
       ]
     },
+    "piaccia": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacciano": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaciate": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacerei": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaceresti": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacerebbe": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaceremmo": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacereste": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacerebbero": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacerò": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacerai": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacerà": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaceremo": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacerete": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaceranno": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
     "piacermi": {
       "lemmaId": "piacere",
       "partsOfSpeech": [
@@ -93946,6 +94722,97 @@
       ]
     },
     "piacerne": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacimi": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaciti": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacisi": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacici": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacivi": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacilo": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacila": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacili": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacile": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piacine": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaciuta": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaciuti": {
+      "lemmaId": "piacere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "piaciute": {
       "lemmaId": "piacere",
       "partsOfSpeech": [
         "verb",
@@ -102168,6 +103035,90 @@
         "verb"
       ]
     },
+    "mangino": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiiate": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangierei": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangieresti": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangierebbe": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangieremmo": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiereste": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangierebbero": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangierò": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangierai": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangierà": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangieremo": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangierete": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangieranno": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "mangiarmi": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
@@ -102223,6 +103174,66 @@
       ]
     },
     "mangiarne": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiami": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiati": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiasi": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiaci": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangialo": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiala": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiali": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiale": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiane": {
+      "lemmaId": "mangiare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mangiata": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
@@ -130558,6 +131569,90 @@
         "verb"
       ]
     },
+    "adorino": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoriate": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorerei": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoreresti": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorerebbe": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoreremmo": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorereste": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorerebbero": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorerò": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorerai": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorerà": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoreremo": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorerete": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoreranno": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "adorarmi": {
       "lemmaId": "adorare",
       "partsOfSpeech": [
@@ -130613,6 +131708,66 @@
       ]
     },
     "adorarne": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorami": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorati": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorasi": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoraci": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adoralo": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorala": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorali": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorale": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorane": {
+      "lemmaId": "adorare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "adorata": {
       "lemmaId": "adorare",
       "partsOfSpeech": [
         "verb"

@@ -2255,6 +2255,536 @@
           }
         ]
       }
+    ],
+    "name-food-and-drink": [
+      {
+        "wordings": [
+          {
+            "phrase": "il pane",
+            "gloss": {
+              "en": "the bread"
+            }
+          },
+          {
+            "phrase": "pane",
+            "gloss": {
+              "en": "bread"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il caffè",
+            "gloss": {
+              "en": "the coffee"
+            }
+          },
+          {
+            "phrase": "un caffè",
+            "gloss": {
+              "en": "a coffee"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la carne",
+            "gloss": {
+              "en": "the meat"
+            }
+          },
+          {
+            "phrase": "carne",
+            "gloss": {
+              "en": "meat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il pesce",
+            "gloss": {
+              "en": "the fish"
+            }
+          },
+          {
+            "phrase": "pesce",
+            "gloss": {
+              "en": "fish"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la frutta",
+            "gloss": {
+              "en": "the fruit"
+            }
+          },
+          {
+            "phrase": "frutta",
+            "gloss": {
+              "en": "fruit"
+            }
+          }
+        ]
+      }
+    ],
+    "state-food-likes": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi piace il caffè",
+            "gloss": {
+              "en": "I like coffee"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi piace molto",
+            "gloss": {
+              "en": "I really like it"
+            }
+          },
+          {
+            "phrase": "adoro",
+            "gloss": {
+              "en": "I love it"
+            }
+          }
+        ]
+      }
+    ],
+    "state-food-dislikes": [
+      {
+        "wordings": [
+          {
+            "phrase": "non mi piace",
+            "gloss": {
+              "en": "I don't like it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi piacciono",
+            "gloss": {
+              "en": "I don't like them"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi piace il pesce",
+            "gloss": {
+              "en": "I don't like fish"
+            }
+          }
+        ]
+      }
+    ],
+    "say-hungry-or-thirsty": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho fame",
+            "gloss": {
+              "en": "I'm hungry"
+            }
+          },
+          {
+            "phrase": "ho molta fame",
+            "gloss": {
+              "en": "I'm very hungry"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho sete",
+            "gloss": {
+              "en": "I'm thirsty"
+            }
+          },
+          {
+            "phrase": "ho molta sete",
+            "gloss": {
+              "en": "I'm very thirsty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ho fame",
+            "gloss": {
+              "en": "I'm not hungry"
+            }
+          }
+        ]
+      }
+    ],
+    "order-item": [
+      {
+        "wordings": [
+          {
+            "phrase": "un caffè per favore",
+            "gloss": {
+              "en": "a coffee, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei un caffè",
+            "gloss": {
+              "en": "I'd like a coffee"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per me un caffè",
+            "gloss": {
+              "en": "a coffee for me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi porta un caffè",
+            "gloss": {
+              "en": "could I have a coffee"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-ingredients": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa c'è dentro",
+            "gloss": {
+              "en": "what's in it"
+            }
+          },
+          {
+            "phrase": "cosa contiene",
+            "gloss": {
+              "en": "what does it have in it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "di cosa è fatto",
+            "gloss": {
+              "en": "what's it made of"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è la carne",
+            "gloss": {
+              "en": "does it have meat in it"
+            }
+          },
+          {
+            "phrase": "c'è il formaggio",
+            "gloss": {
+              "en": "does it have cheese in it"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-water": [
+      {
+        "wordings": [
+          {
+            "phrase": "acqua per favore",
+            "gloss": {
+              "en": "water, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un bicchiere d'acqua",
+            "gloss": {
+              "en": "a glass of water"
+            }
+          },
+          {
+            "phrase": "un bicchiere d'acqua per favore",
+            "gloss": {
+              "en": "a glass of water, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "acqua naturale",
+            "gloss": {
+              "en": "still water"
+            }
+          },
+          {
+            "phrase": "acqua frizzante",
+            "gloss": {
+              "en": "sparkling water"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi porta dell'acqua",
+            "gloss": {
+              "en": "could you bring me some water"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-the-bill": [
+      {
+        "wordings": [
+          {
+            "phrase": "il conto",
+            "gloss": {
+              "en": "the bill"
+            }
+          },
+          {
+            "phrase": "il conto per favore",
+            "gloss": {
+              "en": "the bill, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi porta il conto",
+            "gloss": {
+              "en": "could you bring me the bill"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quant'è in tutto",
+            "gloss": {
+              "en": "how much is it altogether"
+            }
+          }
+        ]
+      }
+    ],
+    "read-a-menu": [
+      {
+        "wordings": [
+          {
+            "phrase": "il menu",
+            "gloss": {
+              "en": "the menu"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la lista",
+            "gloss": {
+              "en": "the menu"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "le bevande",
+            "gloss": {
+              "en": "drinks"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "i dolci",
+            "gloss": {
+              "en": "desserts"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la specialità della casa",
+            "gloss": {
+              "en": "the house speciality"
+            }
+          }
+        ]
+      }
+    ],
+    "state-dietary-need": [
+      {
+        "wordings": [
+          {
+            "phrase": "sono vegetariano",
+            "gloss": {
+              "en": "I'm vegetarian (a man speaking)"
+            }
+          },
+          {
+            "phrase": "sono vegetariana",
+            "gloss": {
+              "en": "I'm vegetarian (a woman speaking)"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mangio carne",
+            "gloss": {
+              "en": "I don't eat meat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "senza zucchero",
+            "gloss": {
+              "en": "without sugar"
+            }
+          },
+          {
+            "phrase": "senza sale",
+            "gloss": {
+              "en": "without salt"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono allergico alla frutta secca",
+            "gloss": {
+              "en": "I'm allergic to nuts"
+            }
+          }
+        ]
+      }
+    ],
+    "give-opinion-on-food": [
+      {
+        "wordings": [
+          {
+            "phrase": "è buono",
+            "gloss": {
+              "en": "it's tasty"
+            }
+          },
+          {
+            "phrase": "è molto buono",
+            "gloss": {
+              "en": "it's really tasty"
+            }
+          },
+          {
+            "phrase": "che buono",
+            "gloss": {
+              "en": "how tasty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è delizioso",
+            "gloss": {
+              "en": "it's delicious"
+            }
+          },
+          {
+            "phrase": "delizioso",
+            "gloss": {
+              "en": "delicious"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è ottimo",
+            "gloss": {
+              "en": "it's very good"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è male",
+            "gloss": {
+              "en": "it's not bad"
+            }
+          }
+        ]
+      }
     ]
   }
 }

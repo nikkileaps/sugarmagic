@@ -25,6 +25,12 @@
       "band": "A1",
       "ordinal": 4,
       "displayName": "Immediate Surroundings"
+    },
+    {
+      "lessonId": "food-and-drink",
+      "band": "A1",
+      "ordinal": 5,
+      "displayName": "Food and Drink"
     }
   ],
   "competencies": [
@@ -4298,6 +4304,974 @@
               },
               "laggiu": {
                 "en": "over there"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-for-the-bill",
+      "lessonId": "food-and-drink",
+      "displayName": "Ask for the bill",
+      "cefrDescriptor": "Can ask for the bill.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "il_conto",
+            "normalizedForm": "il_conto",
+            "surfaceForms": [
+              "il conto",
+              "il conto per favore"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "conto",
+              "per",
+              "favore"
+            ],
+            "glossBySurface": {
+              "il conto": {
+                "en": "the bill"
+              },
+              "il conto per favore": {
+                "en": "the bill, please"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_porta_il_conto",
+            "normalizedForm": "mi_porta_il_conto",
+            "surfaceForms": [
+              "mi porta il conto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "porta",
+              "conto"
+            ],
+            "glossBySurface": {
+              "mi porta il conto": {
+                "en": "could you bring me the bill"
+              }
+            }
+          },
+          {
+            "exponentId": "quante_in_tutto",
+            "normalizedForm": "quante_in_tutto",
+            "surfaceForms": [
+              "quant'è in tutto",
+              "quant'e in tutto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quanto",
+              "essere",
+              "in",
+              "tutto"
+            ],
+            "glossBySurface": {
+              "quant'è in tutto": {
+                "en": "how much is it altogether"
+              },
+              "quant'e in tutto": {
+                "en": "how much is it altogether"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-for-water",
+      "lessonId": "food-and-drink",
+      "displayName": "Ask for water",
+      "cefrDescriptor": "Can ask for water.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "acqua_per_favore",
+            "normalizedForm": "acqua_per_favore",
+            "surfaceForms": [
+              "acqua per favore"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "acqua",
+              "per",
+              "favore"
+            ],
+            "glossBySurface": {
+              "acqua per favore": {
+                "en": "water, please"
+              }
+            }
+          },
+          {
+            "exponentId": "un_bicchiere_dacqua",
+            "normalizedForm": "un_bicchiere_dacqua",
+            "surfaceForms": [
+              "un bicchiere d'acqua",
+              "un bicchiere d'acqua per favore"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "bicchiere",
+              "di",
+              "acqua",
+              "per",
+              "favore"
+            ],
+            "glossBySurface": {
+              "un bicchiere d'acqua": {
+                "en": "a glass of water"
+              },
+              "un bicchiere d'acqua per favore": {
+                "en": "a glass of water, please"
+              }
+            }
+          },
+          {
+            "exponentId": "acqua_naturale",
+            "normalizedForm": "acqua_naturale",
+            "surfaceForms": [
+              "acqua naturale",
+              "acqua frizzante"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "acqua",
+              "naturale",
+              "frizzante"
+            ],
+            "glossBySurface": {
+              "acqua naturale": {
+                "en": "still water"
+              },
+              "acqua frizzante": {
+                "en": "sparkling water"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_porta_dellacqua",
+            "normalizedForm": "mi_porta_dellacqua",
+            "surfaceForms": [
+              "mi porta dell'acqua"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "porta",
+              "di",
+              "acqua"
+            ],
+            "glossBySurface": {
+              "mi porta dell'acqua": {
+                "en": "could you bring me some water"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-ingredients",
+      "lessonId": "food-and-drink",
+      "displayName": "Ask what something contains",
+      "cefrDescriptor": "Can ask what an item contains.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "cosa_ce_dentro",
+            "normalizedForm": "cosa_ce_dentro",
+            "surfaceForms": [
+              "cosa c'è dentro",
+              "cosa c'e dentro",
+              "cosa contiene"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "essere",
+              "dentro",
+              "contenere"
+            ],
+            "glossBySurface": {
+              "cosa c'è dentro": {
+                "en": "what's in it"
+              },
+              "cosa c'e dentro": {
+                "en": "what's in it"
+              },
+              "cosa contiene": {
+                "en": "what does it have in it"
+              }
+            }
+          },
+          {
+            "exponentId": "di_cosa_e_fatto",
+            "normalizedForm": "di_cosa_e_fatto",
+            "surfaceForms": [
+              "di cosa è fatto",
+              "di cosa e fatto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "di",
+              "cosa",
+              "essere",
+              "fatto"
+            ],
+            "glossBySurface": {
+              "di cosa è fatto": {
+                "en": "what's it made of"
+              },
+              "di cosa e fatto": {
+                "en": "what's it made of"
+              }
+            }
+          },
+          {
+            "exponentId": "ce_la_carne",
+            "normalizedForm": "ce_la_carne",
+            "surfaceForms": [
+              "c'è la carne",
+              "c'e la carne",
+              "c'è il formaggio",
+              "c'e il formaggio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "carne",
+              "formaggio"
+            ],
+            "glossBySurface": {
+              "c'è la carne": {
+                "en": "does it have meat in it"
+              },
+              "c'e la carne": {
+                "en": "does it have meat in it"
+              },
+              "c'è il formaggio": {
+                "en": "does it have cheese in it"
+              },
+              "c'e il formaggio": {
+                "en": "does it have cheese in it"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "give-opinion-on-food",
+      "lessonId": "food-and-drink",
+      "displayName": "Give an opinion on food",
+      "cefrDescriptor": "Can express a simple opinion about food.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_buono",
+            "normalizedForm": "e_buono",
+            "surfaceForms": [
+              "è buono",
+              "e buono",
+              "è molto buono",
+              "e molto buono",
+              "che buono"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "buono",
+              "molto",
+              "che"
+            ],
+            "glossBySurface": {
+              "è buono": {
+                "en": "it's tasty"
+              },
+              "e buono": {
+                "en": "it's tasty"
+              },
+              "è molto buono": {
+                "en": "it's really tasty"
+              },
+              "e molto buono": {
+                "en": "it's really tasty"
+              },
+              "che buono": {
+                "en": "how tasty"
+              }
+            }
+          },
+          {
+            "exponentId": "e_delizioso",
+            "normalizedForm": "e_delizioso",
+            "surfaceForms": [
+              "è delizioso",
+              "e delizioso",
+              "delizioso"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "delizioso"
+            ],
+            "glossBySurface": {
+              "è delizioso": {
+                "en": "it's delicious"
+              },
+              "e delizioso": {
+                "en": "it's delicious"
+              },
+              "delizioso": {
+                "en": "delicious"
+              }
+            }
+          },
+          {
+            "exponentId": "e_ottimo",
+            "normalizedForm": "e_ottimo",
+            "surfaceForms": [
+              "è ottimo",
+              "e ottimo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "ottimo"
+            ],
+            "glossBySurface": {
+              "è ottimo": {
+                "en": "it's very good"
+              },
+              "e ottimo": {
+                "en": "it's very good"
+              }
+            }
+          },
+          {
+            "exponentId": "non_e_male",
+            "normalizedForm": "non_e_male",
+            "surfaceForms": [
+              "non è male",
+              "non e male"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "essere",
+              "male"
+            ],
+            "glossBySurface": {
+              "non è male": {
+                "en": "it's not bad"
+              },
+              "non e male": {
+                "en": "it's not bad"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-food-and-drink",
+      "lessonId": "food-and-drink",
+      "displayName": "Name foods and drinks",
+      "cefrDescriptor": "Can recognize and name common foods and drinks.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "il_pane",
+            "normalizedForm": "il_pane",
+            "surfaceForms": [
+              "il pane",
+              "pane"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "pane"
+            ],
+            "glossBySurface": {
+              "il pane": {
+                "en": "the bread"
+              },
+              "pane": {
+                "en": "bread"
+              }
+            }
+          },
+          {
+            "exponentId": "il_caffe",
+            "normalizedForm": "il_caffe",
+            "surfaceForms": [
+              "il caffè",
+              "il caffe",
+              "un caffè",
+              "un caffe"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "caffè"
+            ],
+            "glossBySurface": {
+              "il caffè": {
+                "en": "the coffee"
+              },
+              "il caffe": {
+                "en": "the coffee"
+              },
+              "un caffè": {
+                "en": "a coffee"
+              },
+              "un caffe": {
+                "en": "a coffee"
+              }
+            }
+          },
+          {
+            "exponentId": "la_carne",
+            "normalizedForm": "la_carne",
+            "surfaceForms": [
+              "la carne",
+              "carne"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "carne"
+            ],
+            "glossBySurface": {
+              "la carne": {
+                "en": "the meat"
+              },
+              "carne": {
+                "en": "meat"
+              }
+            }
+          },
+          {
+            "exponentId": "il_pesce",
+            "normalizedForm": "il_pesce",
+            "surfaceForms": [
+              "il pesce",
+              "pesce"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "pesce"
+            ],
+            "glossBySurface": {
+              "il pesce": {
+                "en": "the fish"
+              },
+              "pesce": {
+                "en": "fish"
+              }
+            }
+          },
+          {
+            "exponentId": "la_frutta",
+            "normalizedForm": "la_frutta",
+            "surfaceForms": [
+              "la frutta",
+              "frutta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "frutta"
+            ],
+            "glossBySurface": {
+              "la frutta": {
+                "en": "the fruit"
+              },
+              "frutta": {
+                "en": "fruit"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "order-item",
+      "lessonId": "food-and-drink",
+      "displayName": "Order food or drink",
+      "cefrDescriptor": "Can ask for and order one or more simple items.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "un_caffe_per_favore",
+            "normalizedForm": "un_caffe_per_favore",
+            "surfaceForms": [
+              "un caffè per favore",
+              "un caffe per favore"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "caffè",
+              "per",
+              "favore"
+            ],
+            "glossBySurface": {
+              "un caffè per favore": {
+                "en": "a coffee, please"
+              },
+              "un caffe per favore": {
+                "en": "a coffee, please"
+              }
+            }
+          },
+          {
+            "exponentId": "vorrei_un_caffe",
+            "normalizedForm": "vorrei_un_caffe",
+            "surfaceForms": [
+              "vorrei un caffè",
+              "vorrei un caffe"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "caffè"
+            ],
+            "glossBySurface": {
+              "vorrei un caffè": {
+                "en": "I'd like a coffee"
+              },
+              "vorrei un caffe": {
+                "en": "I'd like a coffee"
+              }
+            }
+          },
+          {
+            "exponentId": "per_me_un_caffe",
+            "normalizedForm": "per_me_un_caffe",
+            "surfaceForms": [
+              "per me un caffè",
+              "per me un caffe"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "per",
+              "me",
+              "caffè"
+            ],
+            "glossBySurface": {
+              "per me un caffè": {
+                "en": "a coffee for me"
+              },
+              "per me un caffe": {
+                "en": "a coffee for me"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_porta_un_caffe",
+            "normalizedForm": "mi_porta_un_caffe",
+            "surfaceForms": [
+              "mi porta un caffè",
+              "mi porta un caffe"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "porta",
+              "caffè"
+            ],
+            "glossBySurface": {
+              "mi porta un caffè": {
+                "en": "could I have a coffee"
+              },
+              "mi porta un caffe": {
+                "en": "could I have a coffee"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "read-a-menu",
+      "lessonId": "food-and-drink",
+      "displayName": "Understand a menu",
+      "cefrDescriptor": "Can understand a simple menu.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "il_menu",
+            "normalizedForm": "il_menu",
+            "surfaceForms": [
+              "il menu"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "menu"
+            ],
+            "glossBySurface": {
+              "il menu": {
+                "en": "the menu"
+              }
+            }
+          },
+          {
+            "exponentId": "la_lista",
+            "normalizedForm": "la_lista",
+            "surfaceForms": [
+              "la lista"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "lista"
+            ],
+            "glossBySurface": {
+              "la lista": {
+                "en": "the menu"
+              }
+            }
+          },
+          {
+            "exponentId": "le_bevande",
+            "normalizedForm": "le_bevande",
+            "surfaceForms": [
+              "le bevande"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "le",
+              "bevanda"
+            ],
+            "glossBySurface": {
+              "le bevande": {
+                "en": "drinks"
+              }
+            }
+          },
+          {
+            "exponentId": "i_dolci",
+            "normalizedForm": "i_dolci",
+            "surfaceForms": [
+              "i dolci"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "i",
+              "dolce"
+            ],
+            "glossBySurface": {
+              "i dolci": {
+                "en": "desserts"
+              }
+            }
+          },
+          {
+            "exponentId": "la_specialita_della_casa",
+            "normalizedForm": "la_specialita_della_casa",
+            "surfaceForms": [
+              "la specialità della casa",
+              "la specialita della casa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "specialità",
+              "di",
+              "casa"
+            ],
+            "glossBySurface": {
+              "la specialità della casa": {
+                "en": "the house speciality"
+              },
+              "la specialita della casa": {
+                "en": "the house speciality"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-hungry-or-thirsty",
+      "lessonId": "food-and-drink",
+      "displayName": "Say they are hungry or thirsty",
+      "cefrDescriptor": "Can say that they are hungry or thirsty.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "ho_fame",
+            "normalizedForm": "ho_fame",
+            "surfaceForms": [
+              "ho fame",
+              "ho molta fame"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "fame",
+              "molto"
+            ],
+            "glossBySurface": {
+              "ho fame": {
+                "en": "I'm hungry"
+              },
+              "ho molta fame": {
+                "en": "I'm very hungry"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_sete",
+            "normalizedForm": "ho_sete",
+            "surfaceForms": [
+              "ho sete",
+              "ho molta sete"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "sete",
+              "molto"
+            ],
+            "glossBySurface": {
+              "ho sete": {
+                "en": "I'm thirsty"
+              },
+              "ho molta sete": {
+                "en": "I'm very thirsty"
+              }
+            }
+          },
+          {
+            "exponentId": "non_ho_fame",
+            "normalizedForm": "non_ho_fame",
+            "surfaceForms": [
+              "non ho fame"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "avere",
+              "fame"
+            ],
+            "glossBySurface": {
+              "non ho fame": {
+                "en": "I'm not hungry"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-dietary-need",
+      "lessonId": "food-and-drink",
+      "displayName": "State a dietary need",
+      "cefrDescriptor": "Can state a basic dietary preference or restriction.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "sono_vegetariano",
+            "normalizedForm": "sono_vegetariano",
+            "surfaceForms": [
+              "sono vegetariano",
+              "sono vegetariana"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "vegetariano"
+            ],
+            "glossBySurface": {
+              "sono vegetariano": {
+                "en": "I'm vegetarian (a man speaking)"
+              },
+              "sono vegetariana": {
+                "en": "I'm vegetarian (a woman speaking)"
+              }
+            }
+          },
+          {
+            "exponentId": "non_mangio_carne",
+            "normalizedForm": "non_mangio_carne",
+            "surfaceForms": [
+              "non mangio carne"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "mangiare",
+              "carne"
+            ],
+            "glossBySurface": {
+              "non mangio carne": {
+                "en": "I don't eat meat"
+              }
+            }
+          },
+          {
+            "exponentId": "senza_zucchero",
+            "normalizedForm": "senza_zucchero",
+            "surfaceForms": [
+              "senza zucchero",
+              "senza sale"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "senza",
+              "zucchero",
+              "sale"
+            ],
+            "glossBySurface": {
+              "senza zucchero": {
+                "en": "without sugar"
+              },
+              "senza sale": {
+                "en": "without salt"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_allergico_alla_frutta_secca",
+            "normalizedForm": "sono_allergico_alla_frutta_secca",
+            "surfaceForms": [
+              "sono allergico alla frutta secca"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "allergico",
+              "a",
+              "frutta",
+              "secco"
+            ],
+            "glossBySurface": {
+              "sono allergico alla frutta secca": {
+                "en": "I'm allergic to nuts"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-food-dislikes",
+      "lessonId": "food-and-drink",
+      "displayName": "Say what they do not like",
+      "cefrDescriptor": "Can say what they do not like to eat or drink.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "non_mi_piace",
+            "normalizedForm": "non_mi_piace",
+            "surfaceForms": [
+              "non mi piace"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "piacere"
+            ],
+            "glossBySurface": {
+              "non mi piace": {
+                "en": "I don't like it"
+              }
+            }
+          },
+          {
+            "exponentId": "non_mi_piacciono",
+            "normalizedForm": "non_mi_piacciono",
+            "surfaceForms": [
+              "non mi piacciono"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "piacere"
+            ],
+            "glossBySurface": {
+              "non mi piacciono": {
+                "en": "I don't like them"
+              }
+            }
+          },
+          {
+            "exponentId": "non_mi_piace_il_pesce",
+            "normalizedForm": "non_mi_piace_il_pesce",
+            "surfaceForms": [
+              "non mi piace il pesce"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "piacere",
+              "pesce"
+            ],
+            "glossBySurface": {
+              "non mi piace il pesce": {
+                "en": "I don't like fish"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-food-likes",
+      "lessonId": "food-and-drink",
+      "displayName": "Say what they like to eat",
+      "cefrDescriptor": "Can say what they like to eat or drink.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "mi_piace_il_caffe",
+            "normalizedForm": "mi_piace_il_caffe",
+            "surfaceForms": [
+              "mi piace il caffè",
+              "mi piace il caffe"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piacere",
+              "caffè"
+            ],
+            "glossBySurface": {
+              "mi piace il caffè": {
+                "en": "I like coffee"
+              },
+              "mi piace il caffe": {
+                "en": "I like coffee"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_piace_molto",
+            "normalizedForm": "mi_piace_molto",
+            "surfaceForms": [
+              "mi piace molto",
+              "adoro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piacere",
+              "molto",
+              "adorare"
+            ],
+            "glossBySurface": {
+              "mi piace molto": {
+                "en": "I really like it"
+              },
+              "adoro": {
+                "en": "I love it"
               }
             }
           }

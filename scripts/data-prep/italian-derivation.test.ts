@@ -82,6 +82,24 @@ describe("derived Italian forms are real words", () => {
     expect(out).not.toContain("capisciate");
   });
 
+  it("THE OTHER ONE THAT WOULD BE WRONG: -giare and -ciare absorb the subjunctive i", () => {
+    // `mangiare`'s io stem is already `mangi`, so adding the ending gives
+    // `mangii` and `mangiino`. Neither is a word; the real forms are `mangi`
+    // and `mangino`. Every -giare and -ciare verb is in this class.
+    expect(lemmaOf("mangi")).toBe("mangiare");
+    expect(lemmaOf("mangino")).toBe("mangiare");
+    expect(index["mangii"]).toBeUndefined();
+    expect(index["mangiino"]).toBeUndefined();
+
+    expect(lemmaOf("lasci")).toBe("lasciare");
+    expect(lemmaOf("lascino")).toBe("lasciare");
+    expect(index["lascii"]).toBeUndefined();
+
+    // The ordinary case must keep its ending.
+    expect(lemmaOf("parli")).toBe("parlare");
+    expect(lemmaOf("parlino")).toBe("parlare");
+  });
+
   it("builds the conditional and future, regular and irregular", () => {
     for (const [surface, lemma] of [
       ["sentirei", "sentire"],

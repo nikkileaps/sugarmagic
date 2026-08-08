@@ -5161,7 +5161,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "contain"
-      }
+      },
+      "forms": {
+        "pres": [
+          "contengo",
+          "contieni",
+          "contiene",
+          "conteniamo",
+          "contenete",
+          "contengono"
+        ],
+        "pret": [
+          "contenni",
+          "contenesti",
+          "contenne",
+          "contenemmo",
+          "conteneste",
+          "contennero"
+        ],
+        "imp": [
+          "contenevo",
+          "contenevi",
+          "conteneva",
+          "contenevamo",
+          "contenevate",
+          "contenevano"
+        ],
+        "ger": "contenendo",
+        "part": "contenuto"
+      },
+      "formsSource": "authored"
     },
     "controllo": {
       "lemmaId": "controllo",
@@ -9639,7 +9668,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "please, like"
-      }
+      },
+      "forms": {
+        "pres": [
+          "piaccio",
+          "piaci",
+          "piace",
+          "piacciamo",
+          "piacete",
+          "piacciono"
+        ],
+        "pret": [
+          "piacqui",
+          "piacesti",
+          "piacque",
+          "piacemmo",
+          "piaceste",
+          "piacquero"
+        ],
+        "imp": [
+          "piacevo",
+          "piacevi",
+          "piaceva",
+          "piacevamo",
+          "piacevate",
+          "piacevano"
+        ],
+        "ger": "piacendo",
+        "part": "piaciuto"
+      },
+      "formsSource": "authored"
     },
     "interessare": {
       "lemmaId": "interessare",
@@ -17104,7 +17162,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "eat"
-      }
+      },
+      "forms": {
+        "pres": [
+          "mangio",
+          "mangi",
+          "mangia",
+          "mangiamo",
+          "mangiate",
+          "mangiano"
+        ],
+        "pret": [
+          "mangiai",
+          "mangiasti",
+          "mangiò",
+          "mangiammo",
+          "mangiaste",
+          "mangiarono"
+        ],
+        "imp": [
+          "mangiavo",
+          "mangiavi",
+          "mangiava",
+          "mangiavamo",
+          "mangiavate",
+          "mangiavano"
+        ],
+        "ger": "mangiando",
+        "part": "mangiato"
+      },
+      "formsSource": "authored"
     },
     "riunione": {
       "lemmaId": "riunione",
@@ -40837,7 +40924,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "dry"
-      }
+      },
+      "forms": {
+        "ms": "secco",
+        "fs": "secca",
+        "mp": "secchi",
+        "fp": "secche"
+      },
+      "formsSource": "authored"
     },
     "prioritario": {
       "lemmaId": "prioritario",
@@ -48483,7 +48577,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "worship, adore"
-      }
+      },
+      "forms": {
+        "pres": [
+          "adoro",
+          "adori",
+          "adora",
+          "adoriamo",
+          "adorate",
+          "adorano"
+        ],
+        "pret": [
+          "adorai",
+          "adorasti",
+          "adorò",
+          "adorammo",
+          "adoraste",
+          "adorarono"
+        ],
+        "imp": [
+          "adoravo",
+          "adoravi",
+          "adorava",
+          "adoravamo",
+          "adoravate",
+          "adoravano"
+        ],
+        "ger": "adorando",
+        "part": "adorato"
+      },
+      "formsSource": "authored"
     },
     "mortale": {
       "lemmaId": "mortale",
@@ -84098,6 +84221,66 @@
       "glosses": {
         "en": "shy"
       }
+    },
+    "allergico": {
+      "lemmaId": "allergico",
+      "lang": "it",
+      "cefrPriorBand": "A2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adjective"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "allergic"
+      },
+      "forms": {
+        "ms": "allergico",
+        "fs": "allergica",
+        "mp": "allergici",
+        "fp": "allergiche"
+      },
+      "formsSource": "authored"
+    },
+    "vegetariano": {
+      "lemmaId": "vegetariano",
+      "lang": "it",
+      "cefrPriorBand": "A2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adjective"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "vegetarian"
+      },
+      "forms": {
+        "ms": "vegetariano",
+        "fs": "vegetariana",
+        "mp": "vegetariani",
+        "fp": "vegetariane"
+      },
+      "formsSource": "authored"
+    },
+    "frizzante": {
+      "lemmaId": "frizzante",
+      "lang": "it",
+      "cefrPriorBand": "A2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adjective"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "sparkling, fizzy"
+      },
+      "forms": {
+        "ms": "frizzante",
+        "fs": null,
+        "mp": "frizzanti",
+        "fp": null
+      },
+      "formsSource": "authored"
     }
   }
 }

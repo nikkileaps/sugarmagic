@@ -68,6 +68,8 @@ const FUNCTION_WORDS = new Set([
  */
 const ELIDED_STUBS: Record<string, string> = {
   c: "ci",
+  d: "di",
+  quant: "quanto",
   // `l'` is `lo` before a masculine word and `la` before a feminine one, and
   // the stub cannot say which. Answering `lo` always is safe HERE because both
   // are function words: whichever it is, it is dropped from the words an
@@ -542,7 +544,15 @@ function italianDerivedTenses(entry: AtlasLemmaEntry): string[] {
       const stem = io.slice(0, -1);
       const isAre = entry.lemmaId.endsWith("are");
       const endings = isAre ? SUBJUNCTIVE_ARE : SUBJUNCTIVE_ERE_IRE;
-      out.push(`${stem}${endings[0]}`, `${stem}${endings[5]}`);
+      // A stem already ending in `i` ABSORBS the subjunctive `i` rather than
+      // doubling it: `mangiare` gives `mangi` and `mangino`, never `mangii`
+      // and `mangiino`. Every -giare and -ciare verb is in this class, and
+      // adding the ending blindly wrote a non-word for all of them.
+      const absorbs = isAre && stem.endsWith("i");
+      out.push(
+        absorbs ? stem : `${stem}${endings[0]}`,
+        absorbs ? `${stem}no` : `${stem}${endings[5]}`
+      );
       // The two plural persons are NOT built off the `io` stem. For an -isc-
       // verb that stem carries the infix, and `capisciamo` is not a word --
       // the real forms are `capiamo` and `capiate`. First person plural is
