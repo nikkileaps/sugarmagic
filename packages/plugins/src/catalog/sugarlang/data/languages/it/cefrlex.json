@@ -647,7 +647,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "only, solely"
-      }
+      },
+      "forms": {
+        "ms": "solo",
+        "fs": "sola",
+        "mp": "soli",
+        "fp": "sole"
+      },
+      "formsSource": "authored"
     },
     "parte": {
       "lemmaId": "parte",
@@ -1125,7 +1132,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "find, locate"
-      }
+      },
+      "forms": {
+        "pres": [
+          "trovo",
+          "trovi",
+          "trova",
+          "troviamo",
+          "trovate",
+          "trovano"
+        ],
+        "pret": [
+          "trovai",
+          "trovasti",
+          "trovò",
+          "trovammo",
+          "trovaste",
+          "trovarono"
+        ],
+        "imp": [
+          "trovavo",
+          "trovavi",
+          "trovava",
+          "trovavamo",
+          "trovavate",
+          "trovavano"
+        ],
+        "ger": "trovando",
+        "part": "trovato"
+      },
+      "formsSource": "authored"
     },
     "giorno": {
       "lemmaId": "giorno",
@@ -1402,7 +1438,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "last, ultimate"
-      }
+      },
+      "forms": {
+        "ms": "ultimo",
+        "fs": "ultima",
+        "mp": "ultimi",
+        "fp": "ultime"
+      },
+      "formsSource": "authored"
     },
     "proprio": {
       "lemmaId": "proprio",
@@ -4747,7 +4790,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "enter"
-      }
+      },
+      "forms": {
+        "pres": [
+          "entro",
+          "entri",
+          "entra",
+          "entriamo",
+          "entrate",
+          "entrano"
+        ],
+        "pret": [
+          "entrai",
+          "entrasti",
+          "entrò",
+          "entrammo",
+          "entraste",
+          "entrarono"
+        ],
+        "imp": [
+          "entravo",
+          "entravi",
+          "entrava",
+          "entravamo",
+          "entravate",
+          "entravano"
+        ],
+        "ger": "entrando",
+        "part": "entrato"
+      },
+      "formsSource": "authored"
     },
     "funzione": {
       "lemmaId": "funzione",
@@ -5022,7 +5094,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "leave, depart"
-      }
+      },
+      "forms": {
+        "pres": [
+          "parto",
+          "parti",
+          "parte",
+          "partiamo",
+          "partite",
+          "partono"
+        ],
+        "pret": [
+          "partii",
+          "partisti",
+          "partì",
+          "partimmo",
+          "partiste",
+          "partirono"
+        ],
+        "imp": [
+          "partivo",
+          "partivi",
+          "partiva",
+          "partivamo",
+          "partivate",
+          "partivano"
+        ],
+        "ger": "partendo",
+        "part": "partito"
+      },
+      "formsSource": "authored"
     },
     "formazione": {
       "lemmaId": "formazione",
@@ -5562,7 +5663,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "next, forthcoming"
-      }
+      },
+      "forms": {
+        "ms": "prossimo",
+        "fs": "prossima",
+        "mp": "prossimi",
+        "fp": "prossime"
+      },
+      "formsSource": "authored"
     },
     "misura": {
       "lemmaId": "misura",
@@ -6190,7 +6298,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "lose"
-      }
+      },
+      "forms": {
+        "pres": [
+          "perdo",
+          "perdi",
+          "perde",
+          "perdiamo",
+          "perdete",
+          "perdono"
+        ],
+        "pret": [
+          "persi",
+          "perdesti",
+          "perse",
+          "perdemmo",
+          "perdeste",
+          "persero"
+        ],
+        "imp": [
+          "perdevo",
+          "perdevi",
+          "perdeva",
+          "perdevamo",
+          "perdevate",
+          "perdevano"
+        ],
+        "ger": "perdendo",
+        "part": "perso"
+      },
+      "formsSource": "authored"
     },
     "marzo": {
       "lemmaId": "marzo",
@@ -8393,7 +8530,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "lack, miss"
-      }
+      },
+      "forms": {
+        "pres": [
+          "manco",
+          "manchi",
+          "manca",
+          "manchiamo",
+          "mancate",
+          "mancano"
+        ],
+        "pret": [
+          "mancai",
+          "mancasti",
+          "mancò",
+          "mancammo",
+          "mancaste",
+          "mancarono"
+        ],
+        "imp": [
+          "mancavo",
+          "mancavi",
+          "mancava",
+          "mancavamo",
+          "mancavate",
+          "mancavano"
+        ],
+        "ger": "mancando",
+        "part": "mancato"
+      },
+      "formsSource": "authored"
     },
     "riferire": {
       "lemmaId": "riferire",
@@ -9216,7 +9382,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "stop, halt"
-      }
+      },
+      "forms": {
+        "pres": [
+          "fermo",
+          "fermi",
+          "ferma",
+          "fermiamo",
+          "fermate",
+          "fermano"
+        ],
+        "pret": [
+          "fermai",
+          "fermasti",
+          "fermò",
+          "fermammo",
+          "fermaste",
+          "fermarono"
+        ],
+        "imp": [
+          "fermavo",
+          "fermavi",
+          "fermava",
+          "fermavamo",
+          "fermavate",
+          "fermavano"
+        ],
+        "ger": "fermando",
+        "part": "fermato"
+      },
+      "formsSource": "authored"
     },
     "confermare": {
       "lemmaId": "confermare",
@@ -9897,7 +10092,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "wait, expect"
-      }
+      },
+      "forms": {
+        "pres": [
+          "aspetto",
+          "aspetti",
+          "aspetta",
+          "aspettiamo",
+          "aspettate",
+          "aspettano"
+        ],
+        "pret": [
+          "aspettai",
+          "aspettasti",
+          "aspettò",
+          "aspettammo",
+          "aspettaste",
+          "aspettarono"
+        ],
+        "imp": [
+          "aspettavo",
+          "aspettavi",
+          "aspettava",
+          "aspettavamo",
+          "aspettavate",
+          "aspettavano"
+        ],
+        "ger": "aspettando",
+        "part": "aspettato"
+      },
+      "formsSource": "authored"
     },
     "film": {
       "lemmaId": "film",
@@ -12288,7 +12512,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "black"
-      }
+      },
+      "forms": {
+        "ms": "nero",
+        "fs": "nera",
+        "mp": "neri",
+        "fp": "nere"
+      },
+      "formsSource": "authored"
     },
     "colore": {
       "lemmaId": "colore",
@@ -16103,7 +16334,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "turn, rotate"
-      }
+      },
+      "forms": {
+        "pres": [
+          "giro",
+          "giri",
+          "gira",
+          "giriamo",
+          "girate",
+          "girano"
+        ],
+        "pret": [
+          "girai",
+          "girasti",
+          "girò",
+          "girammo",
+          "giraste",
+          "girarono"
+        ],
+        "imp": [
+          "giravo",
+          "giravi",
+          "girava",
+          "giravamo",
+          "giravate",
+          "giravano"
+        ],
+        "ger": "girando",
+        "part": "girato"
+      },
+      "formsSource": "authored"
     },
     "corrispondere": {
       "lemmaId": "corrispondere",
@@ -22650,7 +22910,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "cross, traverse"
-      }
+      },
+      "forms": {
+        "pres": [
+          "attraverso",
+          "attraversi",
+          "attraversa",
+          "attraversiamo",
+          "attraversate",
+          "attraversano"
+        ],
+        "pret": [
+          "attraversai",
+          "attraversasti",
+          "attraversò",
+          "attraversammo",
+          "attraversaste",
+          "attraversarono"
+        ],
+        "imp": [
+          "attraversavo",
+          "attraversavi",
+          "attraversava",
+          "attraversavamo",
+          "attraversavate",
+          "attraversavano"
+        ],
+        "ger": "attraversando",
+        "part": "attraversato"
+      },
+      "formsSource": "authored"
     },
     "candidato": {
       "lemmaId": "candidato",
@@ -84864,6 +85153,19 @@
       "cefrPriorSource": "claude-classified",
       "glosses": {
         "en": "hobby"
+      }
+    },
+    "bus": {
+      "lemmaId": "bus",
+      "lang": "it",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "bus"
       }
     }
   }

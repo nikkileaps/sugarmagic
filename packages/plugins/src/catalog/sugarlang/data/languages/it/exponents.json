@@ -4293,6 +4293,9 @@
             "phrase": "parte alle due",
             "gloss": {
               "en": "it leaves at two"
+            },
+            "lemmas": {
+              "parte": "partire"
             }
           }
         ]
@@ -4833,6 +4836,1127 @@
             "phrase": "una volta alla settimana",
             "gloss": {
               "en": "once a week"
+            }
+          }
+        ]
+      }
+    ],
+    "name-public-places": [
+      {
+        "wordings": [
+          {
+            "phrase": "la banca",
+            "gloss": {
+              "en": "the bank"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la farmacia",
+            "gloss": {
+              "en": "the pharmacy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il mercato",
+            "gloss": {
+              "en": "the market"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la piazza",
+            "gloss": {
+              "en": "the square"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'ospedale",
+            "gloss": {
+              "en": "the hospital"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-where": [
+      {
+        "wordings": [
+          {
+            "phrase": "dov'è",
+            "gloss": {
+              "en": "where is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dove si trova",
+            "gloss": {
+              "en": "whereabouts is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sa dov'è",
+            "gloss": {
+              "en": "do you know where it is"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-left-and-right": [
+      {
+        "wordings": [
+          {
+            "phrase": "a sinistra",
+            "gloss": {
+              "en": "on the left"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a destra",
+            "gloss": {
+              "en": "on the right"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la prima a destra",
+            "gloss": {
+              "en": "the first one on the right"
+            }
+          },
+          {
+            "phrase": "la prima a sinistra",
+            "gloss": {
+              "en": "the first one on the left"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-straight-ahead": [
+      {
+        "wordings": [
+          {
+            "phrase": "sempre dritto",
+            "gloss": {
+              "en": "straight ahead"
+            }
+          },
+          {
+            "phrase": "dritto",
+            "gloss": {
+              "en": "straight on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vada dritto",
+            "gloss": {
+              "en": "go straight ahead"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "più avanti",
+            "gloss": {
+              "en": "further ahead"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-near-and-far": [
+      {
+        "wordings": [
+          {
+            "phrase": "vicino",
+            "gloss": {
+              "en": "nearby"
+            }
+          },
+          {
+            "phrase": "molto vicino",
+            "gloss": {
+              "en": "very near"
+            }
+          },
+          {
+            "phrase": "qui vicino",
+            "gloss": {
+              "en": "near here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lontano",
+            "gloss": {
+              "en": "far"
+            }
+          },
+          {
+            "phrase": "molto lontano",
+            "gloss": {
+              "en": "very far"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a due minuti",
+            "gloss": {
+              "en": "two minutes away"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-landmarks": [
+      {
+        "wordings": [
+          {
+            "phrase": "di fronte alla chiesa",
+            "gloss": {
+              "en": "opposite the church"
+            }
+          },
+          {
+            "phrase": "di fronte alla piazza",
+            "gloss": {
+              "en": "opposite the square"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "all'angolo",
+            "gloss": {
+              "en": "on the corner"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dietro la chiesa",
+            "gloss": {
+              "en": "behind the church"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "davanti alla farmacia",
+            "gloss": {
+              "en": "in front of the pharmacy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tra la banca e la piazza",
+            "gloss": {
+              "en": "between the bank and the square"
+            }
+          }
+        ]
+      }
+    ],
+    "give-directions": [
+      {
+        "wordings": [
+          {
+            "phrase": "giri a destra",
+            "gloss": {
+              "en": "turn right"
+            },
+            "lemmas": {
+              "giri": "girare"
+            }
+          },
+          {
+            "phrase": "gira a destra",
+            "gloss": {
+              "en": "turn right"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "giri a sinistra",
+            "gloss": {
+              "en": "turn left"
+            },
+            "lemmas": {
+              "giri": "girare"
+            }
+          },
+          {
+            "phrase": "gira a sinistra",
+            "gloss": {
+              "en": "turn left"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vada sempre dritto",
+            "gloss": {
+              "en": "keep going straight"
+            }
+          },
+          {
+            "phrase": "va sempre dritto",
+            "gloss": {
+              "en": "keep going straight"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "attraversi la strada",
+            "gloss": {
+              "en": "cross the street"
+            }
+          },
+          {
+            "phrase": "attraversa la strada",
+            "gloss": {
+              "en": "cross the street"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prenda la prima strada",
+            "gloss": {
+              "en": "take the first street"
+            }
+          }
+        ]
+      }
+    ],
+    "follow-directions": [
+      {
+        "wordings": [
+          {
+            "phrase": "da questa parte",
+            "gloss": {
+              "en": "this way"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          },
+          {
+            "phrase": "venga da questa parte",
+            "gloss": {
+              "en": "come this way"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "aspetti qui",
+            "gloss": {
+              "en": "wait here"
+            }
+          },
+          {
+            "phrase": "aspetta qui",
+            "gloss": {
+              "en": "wait here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prego",
+            "gloss": {
+              "en": "come in"
+            }
+          },
+          {
+            "phrase": "prego, entri",
+            "gloss": {
+              "en": "come in, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "venga con me",
+            "gloss": {
+              "en": "come with me"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-if-nearby": [
+      {
+        "wordings": [
+          {
+            "phrase": "è vicino",
+            "gloss": {
+              "en": "is it near"
+            }
+          },
+          {
+            "phrase": "è vicino da qui",
+            "gloss": {
+              "en": "is it near here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è lontano",
+            "gloss": {
+              "en": "is it far"
+            }
+          },
+          {
+            "phrase": "è molto lontano",
+            "gloss": {
+              "en": "is it very far"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "si trova qui vicino",
+            "gloss": {
+              "en": "is it nearby"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è una farmacia qui vicino",
+            "gloss": {
+              "en": "is there a pharmacy around here"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-how-to-get-there": [
+      {
+        "wordings": [
+          {
+            "phrase": "come arrivo",
+            "gloss": {
+              "en": "how do I get there"
+            }
+          },
+          {
+            "phrase": "come arrivo alla stazione",
+            "gloss": {
+              "en": "how do I get to the station"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "da che parte si va",
+            "gloss": {
+              "en": "which way is it"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come si va",
+            "gloss": {
+              "en": "how do you get there"
+            }
+          },
+          {
+            "phrase": "come si va al mare",
+            "gloss": {
+              "en": "how do you get to the beach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come posso arrivare",
+            "gloss": {
+              "en": "how can I get there"
+            }
+          }
+        ]
+      }
+    ],
+    "state-destination": [
+      {
+        "wordings": [
+          {
+            "phrase": "vado alla stazione",
+            "gloss": {
+              "en": "I'm going to the station"
+            }
+          },
+          {
+            "phrase": "vado in piazza",
+            "gloss": {
+              "en": "I'm going to the square"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vado a casa",
+            "gloss": {
+              "en": "I'm going home"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "andiamo al mare",
+            "gloss": {
+              "en": "we're going to the beach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "io vado",
+            "gloss": {
+              "en": "I'm off"
+            }
+          }
+        ]
+      }
+    ],
+    "state-where-coming-from": [
+      {
+        "wordings": [
+          {
+            "phrase": "vengo da casa",
+            "gloss": {
+              "en": "I'm coming from home"
+            }
+          },
+          {
+            "phrase": "vengo da scuola",
+            "gloss": {
+              "en": "I'm coming from school"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "torno dall'ufficio",
+            "gloss": {
+              "en": "I'm on my way back from the office"
+            }
+          },
+          {
+            "phrase": "torno dal mare",
+            "gloss": {
+              "en": "I'm on my way back from the beach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono appena arrivato",
+            "gloss": {
+              "en": "I've just arrived"
+            }
+          }
+        ]
+      }
+    ],
+    "read-signs": [
+      {
+        "wordings": [
+          {
+            "phrase": "entrata",
+            "gloss": {
+              "en": "entrance"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "uscita",
+            "gloss": {
+              "en": "exit"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vietato fumare",
+            "gloss": {
+              "en": "no smoking"
+            }
+          }
+        ]
+      }
+    ],
+    "name-transport": [
+      {
+        "wordings": [
+          {
+            "phrase": "l'autobus",
+            "gloss": {
+              "en": "the bus"
+            }
+          },
+          {
+            "phrase": "il bus",
+            "gloss": {
+              "en": "the bus"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il treno",
+            "gloss": {
+              "en": "the train"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la metro",
+            "gloss": {
+              "en": "the underground"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il taxi",
+            "gloss": {
+              "en": "the taxi"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'aereo",
+            "gloss": {
+              "en": "the plane"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-where-service-goes": [
+      {
+        "wordings": [
+          {
+            "phrase": "dove va questo autobus",
+            "gloss": {
+              "en": "where does this bus go"
+            }
+          },
+          {
+            "phrase": "dove va questo treno",
+            "gloss": {
+              "en": "where does this train go"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "va alla stazione",
+            "gloss": {
+              "en": "does it go to the station"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo autobus va in piazza",
+            "gloss": {
+              "en": "does this bus go to the square"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-departure-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "a che ora parte",
+            "gloss": {
+              "en": "what time does it leave"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          },
+          {
+            "phrase": "a che ora parte il treno",
+            "gloss": {
+              "en": "what time does the train leave"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quando parte",
+            "gloss": {
+              "en": "when does it leave"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quando parte il prossimo",
+            "gloss": {
+              "en": "when does the next one leave"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-departure-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "parte tra due minuti",
+            "gloss": {
+              "en": "it leaves in two minutes"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il prossimo parte alle quattro",
+            "gloss": {
+              "en": "the next one leaves at four"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "parte adesso",
+            "gloss": {
+              "en": "it's leaving now"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          }
+        ]
+      }
+    ],
+    "buy-ticket": [
+      {
+        "wordings": [
+          {
+            "phrase": "un biglietto per favore",
+            "gloss": {
+              "en": "a ticket please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei un biglietto",
+            "gloss": {
+              "en": "I want a ticket"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un biglietto di sola andata",
+            "gloss": {
+              "en": "a one-way ticket"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "due biglietti di andata e ritorno",
+            "gloss": {
+              "en": "two return tickets"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dove posso comprare un biglietto",
+            "gloss": {
+              "en": "where can I buy a ticket"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-where-platform": [
+      {
+        "wordings": [
+          {
+            "phrase": "dov'è il binario",
+            "gloss": {
+              "en": "where is the platform"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "da che binario parte",
+            "gloss": {
+              "en": "which platform does it leave from"
+            },
+            "lemmas": {
+              "parte": "partire"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qual è il binario",
+            "gloss": {
+              "en": "which platform is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dov'è la fermata",
+            "gloss": {
+              "en": "where is the stop"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dove si ferma l'autobus",
+            "gloss": {
+              "en": "where does the bus stop"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-announcement": [
+      {
+        "wordings": [
+          {
+            "phrase": "attenzione passeggeri",
+            "gloss": {
+              "en": "attention, passengers"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ultima chiamata",
+            "gloss": {
+              "en": "final call"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il treno è in ritardo",
+            "gloss": {
+              "en": "the train is delayed"
+            }
+          },
+          {
+            "phrase": "il volo è in ritardo",
+            "gloss": {
+              "en": "the flight is delayed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prossima fermata",
+            "gloss": {
+              "en": "next stop"
+            }
+          }
+        ]
+      }
+    ],
+    "name-luggage": [
+      {
+        "wordings": [
+          {
+            "phrase": "la valigia",
+            "gloss": {
+              "en": "the suitcase"
+            }
+          },
+          {
+            "phrase": "una valigia",
+            "gloss": {
+              "en": "a suitcase"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo zaino",
+            "gloss": {
+              "en": "the backpack"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il bagaglio",
+            "gloss": {
+              "en": "the luggage"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la borsa",
+            "gloss": {
+              "en": "the bag"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-missing-luggage": [
+      {
+        "wordings": [
+          {
+            "phrase": "non trovo la mia valigia",
+            "gloss": {
+              "en": "I can't find my suitcase"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho perso la mia valigia",
+            "gloss": {
+              "en": "I lost my suitcase"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la mia valigia non c'è",
+            "gloss": {
+              "en": "my suitcase isn't here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "manca una valigia",
+            "gloss": {
+              "en": "a suitcase is missing"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è una valigia nera",
+            "gloss": {
+              "en": "it's a black suitcase"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-travel-help": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi sono perso",
+            "gloss": {
+              "en": "I'm lost"
+            }
+          },
+          {
+            "phrase": "mi sono persa",
+            "gloss": {
+              "en": "I'm lost"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho bisogno di un taxi",
+            "gloss": {
+              "en": "I need a taxi"
             }
           }
         ]

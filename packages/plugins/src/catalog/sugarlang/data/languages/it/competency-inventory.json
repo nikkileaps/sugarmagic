@@ -49,6 +49,18 @@
       "band": "A1",
       "ordinal": 8,
       "displayName": "Daily Life"
+    },
+    {
+      "lessonId": "places",
+      "band": "A1",
+      "ordinal": 9,
+      "displayName": "Places and Directions"
+    },
+    {
+      "lessonId": "transport-and-tickets",
+      "band": "A1",
+      "ordinal": 10,
+      "displayName": "Transport and Tickets"
     }
   ],
   "competencies": [
@@ -6736,7 +6748,7 @@
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "parte",
+              "partire",
               "a",
               "due"
             ],
@@ -8987,6 +8999,1989 @@
               },
               "studio all'universita": {
                 "en": "I study at the university"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-how-to-get-there",
+      "lessonId": "places",
+      "displayName": "Ask how to reach a place",
+      "cefrDescriptor": "Can ask how to reach a location.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "come_arrivo",
+            "normalizedForm": "come_arrivo",
+            "surfaceForms": [
+              "come arrivo",
+              "come arrivo alla stazione"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "arrivo",
+              "a",
+              "stazione"
+            ],
+            "glossBySurface": {
+              "come arrivo": {
+                "en": "how do I get there"
+              },
+              "come arrivo alla stazione": {
+                "en": "how do I get to the station"
+              }
+            }
+          },
+          {
+            "exponentId": "da_che_parte_si_va",
+            "normalizedForm": "da_che_parte_si_va",
+            "surfaceForms": [
+              "da che parte si va"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "da",
+              "che",
+              "partire",
+              "andare"
+            ],
+            "glossBySurface": {
+              "da che parte si va": {
+                "en": "which way is it"
+              }
+            }
+          },
+          {
+            "exponentId": "come_si_va",
+            "normalizedForm": "come_si_va",
+            "surfaceForms": [
+              "come si va",
+              "come si va al mare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "andare",
+              "a",
+              "mare"
+            ],
+            "glossBySurface": {
+              "come si va": {
+                "en": "how do you get there"
+              },
+              "come si va al mare": {
+                "en": "how do you get to the beach"
+              }
+            }
+          },
+          {
+            "exponentId": "come_posso_arrivare",
+            "normalizedForm": "come_posso_arrivare",
+            "surfaceForms": [
+              "come posso arrivare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "potere",
+              "arrivare"
+            ],
+            "glossBySurface": {
+              "come posso arrivare": {
+                "en": "how can I get there"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-if-nearby",
+      "lessonId": "places",
+      "displayName": "Ask whether somewhere is near",
+      "cefrDescriptor": "Can ask whether a place is nearby.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_vicino",
+            "normalizedForm": "e_vicino",
+            "surfaceForms": [
+              "è vicino",
+              "e vicino",
+              "è vicino da qui",
+              "e vicino da qui"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "vicino",
+              "da",
+              "qui"
+            ],
+            "glossBySurface": {
+              "è vicino": {
+                "en": "is it near"
+              },
+              "e vicino": {
+                "en": "is it near"
+              },
+              "è vicino da qui": {
+                "en": "is it near here"
+              },
+              "e vicino da qui": {
+                "en": "is it near here"
+              }
+            }
+          },
+          {
+            "exponentId": "e_lontano",
+            "normalizedForm": "e_lontano",
+            "surfaceForms": [
+              "è lontano",
+              "e lontano",
+              "è molto lontano",
+              "e molto lontano"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "lontano",
+              "molto"
+            ],
+            "glossBySurface": {
+              "è lontano": {
+                "en": "is it far"
+              },
+              "e lontano": {
+                "en": "is it far"
+              },
+              "è molto lontano": {
+                "en": "is it very far"
+              },
+              "e molto lontano": {
+                "en": "is it very far"
+              }
+            }
+          },
+          {
+            "exponentId": "si_trova_qui_vicino",
+            "normalizedForm": "si_trova_qui_vicino",
+            "surfaceForms": [
+              "si trova qui vicino"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "trovare",
+              "qui",
+              "vicino"
+            ],
+            "glossBySurface": {
+              "si trova qui vicino": {
+                "en": "is it nearby"
+              }
+            }
+          },
+          {
+            "exponentId": "ce_una_farmacia_qui_vicino",
+            "normalizedForm": "ce_una_farmacia_qui_vicino",
+            "surfaceForms": [
+              "c'è una farmacia qui vicino",
+              "c'e una farmacia qui vicino"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "farmacia",
+              "qui",
+              "vicino"
+            ],
+            "glossBySurface": {
+              "c'è una farmacia qui vicino": {
+                "en": "is there a pharmacy around here"
+              },
+              "c'e una farmacia qui vicino": {
+                "en": "is there a pharmacy around here"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-where",
+      "lessonId": "places",
+      "displayName": "Ask where a place is",
+      "cefrDescriptor": "Can ask where a place or person is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "dove",
+            "normalizedForm": "dove",
+            "surfaceForms": [
+              "dov'è",
+              "dov'e"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dove",
+              "essere"
+            ],
+            "glossBySurface": {
+              "dov'è": {
+                "en": "where is it"
+              },
+              "dov'e": {
+                "en": "where is it"
+              }
+            }
+          },
+          {
+            "exponentId": "dove_si_trova",
+            "normalizedForm": "dove_si_trova",
+            "surfaceForms": [
+              "dove si trova"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dove",
+              "trovare"
+            ],
+            "glossBySurface": {
+              "dove si trova": {
+                "en": "whereabouts is it"
+              }
+            }
+          },
+          {
+            "exponentId": "sa_dove",
+            "normalizedForm": "sa_dove",
+            "surfaceForms": [
+              "sa dov'è",
+              "sa dov'e"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sapere",
+              "dove",
+              "essere"
+            ],
+            "glossBySurface": {
+              "sa dov'è": {
+                "en": "do you know where it is"
+              },
+              "sa dov'e": {
+                "en": "do you know where it is"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "follow-directions",
+      "lessonId": "places",
+      "displayName": "Follow simple directions",
+      "cefrDescriptor": "Can follow a one-step instruction or direction.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "da_questa_parte",
+            "normalizedForm": "da_questa_parte",
+            "surfaceForms": [
+              "da questa parte",
+              "venga da questa parte"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "da",
+              "questo",
+              "partire",
+              "venire"
+            ],
+            "glossBySurface": {
+              "da questa parte": {
+                "en": "this way"
+              },
+              "venga da questa parte": {
+                "en": "come this way"
+              }
+            }
+          },
+          {
+            "exponentId": "aspetti_qui",
+            "normalizedForm": "aspetti_qui",
+            "surfaceForms": [
+              "aspetti qui",
+              "aspetta qui"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "aspetto",
+              "qui",
+              "aspettare"
+            ],
+            "glossBySurface": {
+              "aspetti qui": {
+                "en": "wait here"
+              },
+              "aspetta qui": {
+                "en": "wait here"
+              }
+            }
+          },
+          {
+            "exponentId": "prego",
+            "normalizedForm": "prego",
+            "surfaceForms": [
+              "prego",
+              "prego, entri"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "prego",
+              "entrare"
+            ],
+            "glossBySurface": {
+              "prego": {
+                "en": "come in"
+              },
+              "prego, entri": {
+                "en": "come in, please"
+              }
+            }
+          },
+          {
+            "exponentId": "venga_con_me",
+            "normalizedForm": "venga_con_me",
+            "surfaceForms": [
+              "venga con me"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "venire",
+              "con",
+              "me"
+            ],
+            "glossBySurface": {
+              "venga con me": {
+                "en": "come with me"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "give-directions",
+      "lessonId": "places",
+      "displayName": "Give simple directions",
+      "cefrDescriptor": "Can give one-step directions.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "giri_a_destra",
+            "normalizedForm": "giri_a_destra",
+            "surfaceForms": [
+              "giri a destra",
+              "gira a destra"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "girare",
+              "a",
+              "destra"
+            ],
+            "glossBySurface": {
+              "giri a destra": {
+                "en": "turn right"
+              },
+              "gira a destra": {
+                "en": "turn right"
+              }
+            }
+          },
+          {
+            "exponentId": "giri_a_sinistra",
+            "normalizedForm": "giri_a_sinistra",
+            "surfaceForms": [
+              "giri a sinistra",
+              "gira a sinistra"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "girare",
+              "a",
+              "sinistra"
+            ],
+            "glossBySurface": {
+              "giri a sinistra": {
+                "en": "turn left"
+              },
+              "gira a sinistra": {
+                "en": "turn left"
+              }
+            }
+          },
+          {
+            "exponentId": "vada_sempre_dritto",
+            "normalizedForm": "vada_sempre_dritto",
+            "surfaceForms": [
+              "vada sempre dritto",
+              "va sempre dritto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "sempre",
+              "dritto"
+            ],
+            "glossBySurface": {
+              "vada sempre dritto": {
+                "en": "keep going straight"
+              },
+              "va sempre dritto": {
+                "en": "keep going straight"
+              }
+            }
+          },
+          {
+            "exponentId": "attraversi_la_strada",
+            "normalizedForm": "attraversi_la_strada",
+            "surfaceForms": [
+              "attraversi la strada",
+              "attraversa la strada"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "attraversare",
+              "strada"
+            ],
+            "glossBySurface": {
+              "attraversi la strada": {
+                "en": "cross the street"
+              },
+              "attraversa la strada": {
+                "en": "cross the street"
+              }
+            }
+          },
+          {
+            "exponentId": "prenda_la_prima_strada",
+            "normalizedForm": "prenda_la_prima_strada",
+            "surfaceForms": [
+              "prenda la prima strada"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "prendere",
+              "prima",
+              "strada"
+            ],
+            "glossBySurface": {
+              "prenda la prima strada": {
+                "en": "take the first street"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-public-places",
+      "lessonId": "places",
+      "displayName": "Name public places",
+      "cefrDescriptor": "Can identify common public places.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "la_banca",
+            "normalizedForm": "la_banca",
+            "surfaceForms": [
+              "la banca"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "banca"
+            ],
+            "glossBySurface": {
+              "la banca": {
+                "en": "the bank"
+              }
+            }
+          },
+          {
+            "exponentId": "la_farmacia",
+            "normalizedForm": "la_farmacia",
+            "surfaceForms": [
+              "la farmacia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "farmacia"
+            ],
+            "glossBySurface": {
+              "la farmacia": {
+                "en": "the pharmacy"
+              }
+            }
+          },
+          {
+            "exponentId": "il_mercato",
+            "normalizedForm": "il_mercato",
+            "surfaceForms": [
+              "il mercato"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mercato"
+            ],
+            "glossBySurface": {
+              "il mercato": {
+                "en": "the market"
+              }
+            }
+          },
+          {
+            "exponentId": "la_piazza",
+            "normalizedForm": "la_piazza",
+            "surfaceForms": [
+              "la piazza"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piazza"
+            ],
+            "glossBySurface": {
+              "la piazza": {
+                "en": "the square"
+              }
+            }
+          },
+          {
+            "exponentId": "lospedale",
+            "normalizedForm": "lospedale",
+            "surfaceForms": [
+              "l'ospedale"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ospedale"
+            ],
+            "glossBySurface": {
+              "l'ospedale": {
+                "en": "the hospital"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "read-signs",
+      "lessonId": "places",
+      "displayName": "Understand signs",
+      "cefrDescriptor": "Can recognize basic signs and very short notices.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "entrata",
+            "normalizedForm": "entrata",
+            "surfaceForms": [
+              "entrata"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "entrata"
+            ],
+            "glossBySurface": {
+              "entrata": {
+                "en": "entrance"
+              }
+            }
+          },
+          {
+            "exponentId": "uscita",
+            "normalizedForm": "uscita",
+            "surfaceForms": [
+              "uscita"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "uscita"
+            ],
+            "glossBySurface": {
+              "uscita": {
+                "en": "exit"
+              }
+            }
+          },
+          {
+            "exponentId": "vietato_fumare",
+            "normalizedForm": "vietato_fumare",
+            "surfaceForms": [
+              "vietato fumare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "vietato",
+              "fumare"
+            ],
+            "glossBySurface": {
+              "vietato fumare": {
+                "en": "no smoking"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-destination",
+      "lessonId": "places",
+      "displayName": "Say where they are going",
+      "cefrDescriptor": "Can say where they are going.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "vado_alla_stazione",
+            "normalizedForm": "vado_alla_stazione",
+            "surfaceForms": [
+              "vado alla stazione",
+              "vado in piazza"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "a",
+              "stazione",
+              "in",
+              "piazza"
+            ],
+            "glossBySurface": {
+              "vado alla stazione": {
+                "en": "I'm going to the station"
+              },
+              "vado in piazza": {
+                "en": "I'm going to the square"
+              }
+            }
+          },
+          {
+            "exponentId": "vado_a_casa",
+            "normalizedForm": "vado_a_casa",
+            "surfaceForms": [
+              "vado a casa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "a",
+              "casa"
+            ],
+            "glossBySurface": {
+              "vado a casa": {
+                "en": "I'm going home"
+              }
+            }
+          },
+          {
+            "exponentId": "andiamo_al_mare",
+            "normalizedForm": "andiamo_al_mare",
+            "surfaceForms": [
+              "andiamo al mare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "a",
+              "mare"
+            ],
+            "glossBySurface": {
+              "andiamo al mare": {
+                "en": "we're going to the beach"
+              }
+            }
+          },
+          {
+            "exponentId": "io_vado",
+            "normalizedForm": "io_vado",
+            "surfaceForms": [
+              "io vado"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "io",
+              "andare"
+            ],
+            "glossBySurface": {
+              "io vado": {
+                "en": "I'm off"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-where-coming-from",
+      "lessonId": "places",
+      "displayName": "Say where they have come from",
+      "cefrDescriptor": "Can say where they are coming from.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "vengo_da_casa",
+            "normalizedForm": "vengo_da_casa",
+            "surfaceForms": [
+              "vengo da casa",
+              "vengo da scuola"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "venire",
+              "da",
+              "casa",
+              "scuola"
+            ],
+            "glossBySurface": {
+              "vengo da casa": {
+                "en": "I'm coming from home"
+              },
+              "vengo da scuola": {
+                "en": "I'm coming from school"
+              }
+            }
+          },
+          {
+            "exponentId": "torno_dallufficio",
+            "normalizedForm": "torno_dallufficio",
+            "surfaceForms": [
+              "torno dall'ufficio",
+              "torno dal mare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "tornare",
+              "da",
+              "ufficio",
+              "mare"
+            ],
+            "glossBySurface": {
+              "torno dall'ufficio": {
+                "en": "I'm on my way back from the office"
+              },
+              "torno dal mare": {
+                "en": "I'm on my way back from the beach"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_appena_arrivato",
+            "normalizedForm": "sono_appena_arrivato",
+            "surfaceForms": [
+              "sono appena arrivato"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "appena",
+              "arrivare"
+            ],
+            "glossBySurface": {
+              "sono appena arrivato": {
+                "en": "I've just arrived"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-landmarks",
+      "lessonId": "places",
+      "displayName": "Understand landmark directions",
+      "cefrDescriptor": "Can understand basic landmark references.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "di_fronte_alla_chiesa",
+            "normalizedForm": "di_fronte_alla_chiesa",
+            "surfaceForms": [
+              "di fronte alla chiesa",
+              "di fronte alla piazza"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "di",
+              "fronte",
+              "a",
+              "chiesa",
+              "piazza"
+            ],
+            "glossBySurface": {
+              "di fronte alla chiesa": {
+                "en": "opposite the church"
+              },
+              "di fronte alla piazza": {
+                "en": "opposite the square"
+              }
+            }
+          },
+          {
+            "exponentId": "allangolo",
+            "normalizedForm": "allangolo",
+            "surfaceForms": [
+              "all'angolo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "angolo"
+            ],
+            "glossBySurface": {
+              "all'angolo": {
+                "en": "on the corner"
+              }
+            }
+          },
+          {
+            "exponentId": "dietro_la_chiesa",
+            "normalizedForm": "dietro_la_chiesa",
+            "surfaceForms": [
+              "dietro la chiesa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dietro",
+              "chiesa"
+            ],
+            "glossBySurface": {
+              "dietro la chiesa": {
+                "en": "behind the church"
+              }
+            }
+          },
+          {
+            "exponentId": "davanti_alla_farmacia",
+            "normalizedForm": "davanti_alla_farmacia",
+            "surfaceForms": [
+              "davanti alla farmacia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "davanti",
+              "a",
+              "farmacia"
+            ],
+            "glossBySurface": {
+              "davanti alla farmacia": {
+                "en": "in front of the pharmacy"
+              }
+            }
+          },
+          {
+            "exponentId": "tra_la_banca_e_la_piazza",
+            "normalizedForm": "tra_la_banca_e_la_piazza",
+            "surfaceForms": [
+              "tra la banca e la piazza"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "tra",
+              "banca",
+              "e",
+              "piazza"
+            ],
+            "glossBySurface": {
+              "tra la banca e la piazza": {
+                "en": "between the bank and the square"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-left-and-right",
+      "lessonId": "places",
+      "displayName": "Understand left and right",
+      "cefrDescriptor": "Can understand left and right.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "a_sinistra",
+            "normalizedForm": "a_sinistra",
+            "surfaceForms": [
+              "a sinistra"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "sinistra"
+            ],
+            "glossBySurface": {
+              "a sinistra": {
+                "en": "on the left"
+              }
+            }
+          },
+          {
+            "exponentId": "a_destra",
+            "normalizedForm": "a_destra",
+            "surfaceForms": [
+              "a destra"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "destra"
+            ],
+            "glossBySurface": {
+              "a destra": {
+                "en": "on the right"
+              }
+            }
+          },
+          {
+            "exponentId": "la_prima_a_destra",
+            "normalizedForm": "la_prima_a_destra",
+            "surfaceForms": [
+              "la prima a destra",
+              "la prima a sinistra"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "prima",
+              "a",
+              "destra",
+              "sinistra"
+            ],
+            "glossBySurface": {
+              "la prima a destra": {
+                "en": "the first one on the right"
+              },
+              "la prima a sinistra": {
+                "en": "the first one on the left"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-near-and-far",
+      "lessonId": "places",
+      "displayName": "Understand near and far",
+      "cefrDescriptor": "Can understand near and far.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "vicino",
+            "normalizedForm": "vicino",
+            "surfaceForms": [
+              "vicino",
+              "molto vicino",
+              "qui vicino"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "vicino",
+              "molto",
+              "qui"
+            ],
+            "glossBySurface": {
+              "vicino": {
+                "en": "nearby"
+              },
+              "molto vicino": {
+                "en": "very near"
+              },
+              "qui vicino": {
+                "en": "near here"
+              }
+            }
+          },
+          {
+            "exponentId": "lontano",
+            "normalizedForm": "lontano",
+            "surfaceForms": [
+              "lontano",
+              "molto lontano"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "lontano",
+              "molto"
+            ],
+            "glossBySurface": {
+              "lontano": {
+                "en": "far"
+              },
+              "molto lontano": {
+                "en": "very far"
+              }
+            }
+          },
+          {
+            "exponentId": "a_due_minuti",
+            "normalizedForm": "a_due_minuti",
+            "surfaceForms": [
+              "a due minuti"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "due",
+              "minuto"
+            ],
+            "glossBySurface": {
+              "a due minuti": {
+                "en": "two minutes away"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-straight-ahead",
+      "lessonId": "places",
+      "displayName": "Understand straight ahead",
+      "cefrDescriptor": "Can understand straight ahead.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "sempre_dritto",
+            "normalizedForm": "sempre_dritto",
+            "surfaceForms": [
+              "sempre dritto",
+              "dritto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sempre",
+              "dritto"
+            ],
+            "glossBySurface": {
+              "sempre dritto": {
+                "en": "straight ahead"
+              },
+              "dritto": {
+                "en": "straight on"
+              }
+            }
+          },
+          {
+            "exponentId": "vada_dritto",
+            "normalizedForm": "vada_dritto",
+            "surfaceForms": [
+              "vada dritto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "dritto"
+            ],
+            "glossBySurface": {
+              "vada dritto": {
+                "en": "go straight ahead"
+              }
+            }
+          },
+          {
+            "exponentId": "piu_avanti",
+            "normalizedForm": "piu_avanti",
+            "surfaceForms": [
+              "più avanti",
+              "piu avanti"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "più",
+              "avanti"
+            ],
+            "glossBySurface": {
+              "più avanti": {
+                "en": "further ahead"
+              },
+              "piu avanti": {
+                "en": "further ahead"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-departure-time",
+      "lessonId": "transport-and-tickets",
+      "displayName": "Ask when transport leaves",
+      "cefrDescriptor": "Can ask when transportation leaves.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "a_che_ora_parte",
+            "normalizedForm": "a_che_ora_parte",
+            "surfaceForms": [
+              "a che ora parte",
+              "a che ora parte il treno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "che",
+              "ora",
+              "partire",
+              "treno"
+            ],
+            "glossBySurface": {
+              "a che ora parte": {
+                "en": "what time does it leave"
+              },
+              "a che ora parte il treno": {
+                "en": "what time does the train leave"
+              }
+            }
+          },
+          {
+            "exponentId": "quando_parte",
+            "normalizedForm": "quando_parte",
+            "surfaceForms": [
+              "quando parte"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quando",
+              "partire"
+            ],
+            "glossBySurface": {
+              "quando parte": {
+                "en": "when does it leave"
+              }
+            }
+          },
+          {
+            "exponentId": "quando_parte_il_prossimo",
+            "normalizedForm": "quando_parte_il_prossimo",
+            "surfaceForms": [
+              "quando parte il prossimo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quando",
+              "partire",
+              "prossimo"
+            ],
+            "glossBySurface": {
+              "quando parte il prossimo": {
+                "en": "when does the next one leave"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-travel-help",
+      "lessonId": "transport-and-tickets",
+      "displayName": "Ask for travel help",
+      "cefrDescriptor": "Can ask for basic travel assistance.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "mi_sono_perso",
+            "normalizedForm": "mi_sono_perso",
+            "surfaceForms": [
+              "mi sono perso",
+              "mi sono persa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "perso",
+              "perdere"
+            ],
+            "glossBySurface": {
+              "mi sono perso": {
+                "en": "I'm lost"
+              },
+              "mi sono persa": {
+                "en": "I'm lost"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_bisogno_di_un_taxi",
+            "normalizedForm": "ho_bisogno_di_un_taxi",
+            "surfaceForms": [
+              "ho bisogno di un taxi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "bisogno",
+              "di",
+              "taxi"
+            ],
+            "glossBySurface": {
+              "ho bisogno di un taxi": {
+                "en": "I need a taxi"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-where-platform",
+      "lessonId": "transport-and-tickets",
+      "displayName": "Ask where a platform is",
+      "cefrDescriptor": "Can ask where a platform or stop is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "dove_il_binario",
+            "normalizedForm": "dove_il_binario",
+            "surfaceForms": [
+              "dov'è il binario",
+              "dov'e il binario"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dove",
+              "essere",
+              "binario"
+            ],
+            "glossBySurface": {
+              "dov'è il binario": {
+                "en": "where is the platform"
+              },
+              "dov'e il binario": {
+                "en": "where is the platform"
+              }
+            }
+          },
+          {
+            "exponentId": "da_che_binario_parte",
+            "normalizedForm": "da_che_binario_parte",
+            "surfaceForms": [
+              "da che binario parte"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "da",
+              "che",
+              "binario",
+              "partire"
+            ],
+            "glossBySurface": {
+              "da che binario parte": {
+                "en": "which platform does it leave from"
+              }
+            }
+          },
+          {
+            "exponentId": "qual_e_il_binario",
+            "normalizedForm": "qual_e_il_binario",
+            "surfaceForms": [
+              "qual è il binario",
+              "qual e il binario"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quale",
+              "essere",
+              "binario"
+            ],
+            "glossBySurface": {
+              "qual è il binario": {
+                "en": "which platform is it"
+              },
+              "qual e il binario": {
+                "en": "which platform is it"
+              }
+            }
+          },
+          {
+            "exponentId": "dove_la_fermata",
+            "normalizedForm": "dove_la_fermata",
+            "surfaceForms": [
+              "dov'è la fermata",
+              "dov'e la fermata"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dove",
+              "essere",
+              "fermata"
+            ],
+            "glossBySurface": {
+              "dov'è la fermata": {
+                "en": "where is the stop"
+              },
+              "dov'e la fermata": {
+                "en": "where is the stop"
+              }
+            }
+          },
+          {
+            "exponentId": "dove_si_ferma_lautobus",
+            "normalizedForm": "dove_si_ferma_lautobus",
+            "surfaceForms": [
+              "dove si ferma l'autobus"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dove",
+              "fermare",
+              "autobus"
+            ],
+            "glossBySurface": {
+              "dove si ferma l'autobus": {
+                "en": "where does the bus stop"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-where-service-goes",
+      "lessonId": "transport-and-tickets",
+      "displayName": "Ask where a service goes",
+      "cefrDescriptor": "Can ask where a bus or train goes.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "dove_va_questo_autobus",
+            "normalizedForm": "dove_va_questo_autobus",
+            "surfaceForms": [
+              "dove va questo autobus",
+              "dove va questo treno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dove",
+              "andare",
+              "questo",
+              "autobus",
+              "treno"
+            ],
+            "glossBySurface": {
+              "dove va questo autobus": {
+                "en": "where does this bus go"
+              },
+              "dove va questo treno": {
+                "en": "where does this train go"
+              }
+            }
+          },
+          {
+            "exponentId": "va_alla_stazione",
+            "normalizedForm": "va_alla_stazione",
+            "surfaceForms": [
+              "va alla stazione"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "a",
+              "stazione"
+            ],
+            "glossBySurface": {
+              "va alla stazione": {
+                "en": "does it go to the station"
+              }
+            }
+          },
+          {
+            "exponentId": "questo_autobus_va_in_piazza",
+            "normalizedForm": "questo_autobus_va_in_piazza",
+            "surfaceForms": [
+              "questo autobus va in piazza"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "questo",
+              "autobus",
+              "andare",
+              "in",
+              "piazza"
+            ],
+            "glossBySurface": {
+              "questo autobus va in piazza": {
+                "en": "does this bus go to the square"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "buy-ticket",
+      "lessonId": "transport-and-tickets",
+      "displayName": "Ask for a ticket",
+      "cefrDescriptor": "Can ask for a ticket.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "un_biglietto_per_favore",
+            "normalizedForm": "un_biglietto_per_favore",
+            "surfaceForms": [
+              "un biglietto per favore"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "biglietto",
+              "per",
+              "favore"
+            ],
+            "glossBySurface": {
+              "un biglietto per favore": {
+                "en": "a ticket please"
+              }
+            }
+          },
+          {
+            "exponentId": "vorrei_un_biglietto",
+            "normalizedForm": "vorrei_un_biglietto",
+            "surfaceForms": [
+              "vorrei un biglietto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "biglietto"
+            ],
+            "glossBySurface": {
+              "vorrei un biglietto": {
+                "en": "I want a ticket"
+              }
+            }
+          },
+          {
+            "exponentId": "un_biglietto_di_sola_andata",
+            "normalizedForm": "un_biglietto_di_sola_andata",
+            "surfaceForms": [
+              "un biglietto di sola andata"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "biglietto",
+              "di",
+              "solo",
+              "andare"
+            ],
+            "glossBySurface": {
+              "un biglietto di sola andata": {
+                "en": "a one-way ticket"
+              }
+            }
+          },
+          {
+            "exponentId": "due_biglietti_di_andata_e_ritorno",
+            "normalizedForm": "due_biglietti_di_andata_e_ritorno",
+            "surfaceForms": [
+              "due biglietti di andata e ritorno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "due",
+              "biglietto",
+              "di",
+              "andare",
+              "e",
+              "ritorno"
+            ],
+            "glossBySurface": {
+              "due biglietti di andata e ritorno": {
+                "en": "two return tickets"
+              }
+            }
+          },
+          {
+            "exponentId": "dove_posso_comprare_un_biglietto",
+            "normalizedForm": "dove_posso_comprare_un_biglietto",
+            "surfaceForms": [
+              "dove posso comprare un biglietto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dove",
+              "potere",
+              "comprare",
+              "biglietto"
+            ],
+            "glossBySurface": {
+              "dove posso comprare un biglietto": {
+                "en": "where can I buy a ticket"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-missing-luggage",
+      "lessonId": "transport-and-tickets",
+      "displayName": "Describe missing luggage",
+      "cefrDescriptor": "Can describe missing luggage simply.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "non_trovo_la_mia_valigia",
+            "normalizedForm": "non_trovo_la_mia_valigia",
+            "surfaceForms": [
+              "non trovo la mia valigia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "trovare",
+              "mio",
+              "valigia"
+            ],
+            "glossBySurface": {
+              "non trovo la mia valigia": {
+                "en": "I can't find my suitcase"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_perso_la_mia_valigia",
+            "normalizedForm": "ho_perso_la_mia_valigia",
+            "surfaceForms": [
+              "ho perso la mia valigia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "perso",
+              "mio",
+              "valigia"
+            ],
+            "glossBySurface": {
+              "ho perso la mia valigia": {
+                "en": "I lost my suitcase"
+              }
+            }
+          },
+          {
+            "exponentId": "la_mia_valigia_non_ce",
+            "normalizedForm": "la_mia_valigia_non_ce",
+            "surfaceForms": [
+              "la mia valigia non c'è",
+              "la mia valigia non c'e"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "valigia",
+              "non",
+              "essere"
+            ],
+            "glossBySurface": {
+              "la mia valigia non c'è": {
+                "en": "my suitcase isn't here"
+              },
+              "la mia valigia non c'e": {
+                "en": "my suitcase isn't here"
+              }
+            }
+          },
+          {
+            "exponentId": "manca_una_valigia",
+            "normalizedForm": "manca_una_valigia",
+            "surfaceForms": [
+              "manca una valigia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mancare",
+              "valigia"
+            ],
+            "glossBySurface": {
+              "manca una valigia": {
+                "en": "a suitcase is missing"
+              }
+            }
+          },
+          {
+            "exponentId": "e_una_valigia_nera",
+            "normalizedForm": "e_una_valigia_nera",
+            "surfaceForms": [
+              "è una valigia nera",
+              "e una valigia nera"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "valigia",
+              "nero"
+            ],
+            "glossBySurface": {
+              "è una valigia nera": {
+                "en": "it's a black suitcase"
+              },
+              "e una valigia nera": {
+                "en": "it's a black suitcase"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-luggage",
+      "lessonId": "transport-and-tickets",
+      "displayName": "Identify luggage",
+      "cefrDescriptor": "Can identify personal luggage.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "la_valigia",
+            "normalizedForm": "la_valigia",
+            "surfaceForms": [
+              "la valigia",
+              "una valigia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "valigia"
+            ],
+            "glossBySurface": {
+              "la valigia": {
+                "en": "the suitcase"
+              },
+              "una valigia": {
+                "en": "a suitcase"
+              }
+            }
+          },
+          {
+            "exponentId": "lo_zaino",
+            "normalizedForm": "lo_zaino",
+            "surfaceForms": [
+              "lo zaino"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "zaino"
+            ],
+            "glossBySurface": {
+              "lo zaino": {
+                "en": "the backpack"
+              }
+            }
+          },
+          {
+            "exponentId": "il_bagaglio",
+            "normalizedForm": "il_bagaglio",
+            "surfaceForms": [
+              "il bagaglio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "bagaglio"
+            ],
+            "glossBySurface": {
+              "il bagaglio": {
+                "en": "the luggage"
+              }
+            }
+          },
+          {
+            "exponentId": "la_borsa",
+            "normalizedForm": "la_borsa",
+            "surfaceForms": [
+              "la borsa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "borsa"
+            ],
+            "glossBySurface": {
+              "la borsa": {
+                "en": "the bag"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-transport",
+      "lessonId": "transport-and-tickets",
+      "displayName": "Name forms of transport",
+      "cefrDescriptor": "Can identify common forms of transportation.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "lautobus",
+            "normalizedForm": "lautobus",
+            "surfaceForms": [
+              "l'autobus",
+              "il bus"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "autobus",
+              "bus"
+            ],
+            "glossBySurface": {
+              "l'autobus": {
+                "en": "the bus"
+              },
+              "il bus": {
+                "en": "the bus"
+              }
+            }
+          },
+          {
+            "exponentId": "il_treno",
+            "normalizedForm": "il_treno",
+            "surfaceForms": [
+              "il treno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "treno"
+            ],
+            "glossBySurface": {
+              "il treno": {
+                "en": "the train"
+              }
+            }
+          },
+          {
+            "exponentId": "la_metro",
+            "normalizedForm": "la_metro",
+            "surfaceForms": [
+              "la metro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "metro"
+            ],
+            "glossBySurface": {
+              "la metro": {
+                "en": "the underground"
+              }
+            }
+          },
+          {
+            "exponentId": "il_taxi",
+            "normalizedForm": "il_taxi",
+            "surfaceForms": [
+              "il taxi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "taxi"
+            ],
+            "glossBySurface": {
+              "il taxi": {
+                "en": "the taxi"
+              }
+            }
+          },
+          {
+            "exponentId": "laereo",
+            "normalizedForm": "laereo",
+            "surfaceForms": [
+              "l'aereo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "aereo"
+            ],
+            "glossBySurface": {
+              "l'aereo": {
+                "en": "the plane"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-announcement",
+      "lessonId": "transport-and-tickets",
+      "displayName": "Understand an announcement",
+      "cefrDescriptor": "Can extract a familiar fact from a basic travel announcement.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "attenzione_passeggeri",
+            "normalizedForm": "attenzione_passeggeri",
+            "surfaceForms": [
+              "attenzione passeggeri"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "attenzione",
+              "passeggero"
+            ],
+            "glossBySurface": {
+              "attenzione passeggeri": {
+                "en": "attention, passengers"
+              }
+            }
+          },
+          {
+            "exponentId": "ultima_chiamata",
+            "normalizedForm": "ultima_chiamata",
+            "surfaceForms": [
+              "ultima chiamata"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ultimo",
+              "chiamata"
+            ],
+            "glossBySurface": {
+              "ultima chiamata": {
+                "en": "final call"
+              }
+            }
+          },
+          {
+            "exponentId": "il_treno_e_in_ritardo",
+            "normalizedForm": "il_treno_e_in_ritardo",
+            "surfaceForms": [
+              "il treno è in ritardo",
+              "il treno e in ritardo",
+              "il volo è in ritardo",
+              "il volo e in ritardo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "treno",
+              "essere",
+              "in",
+              "ritardo",
+              "volo"
+            ],
+            "glossBySurface": {
+              "il treno è in ritardo": {
+                "en": "the train is delayed"
+              },
+              "il treno e in ritardo": {
+                "en": "the train is delayed"
+              },
+              "il volo è in ritardo": {
+                "en": "the flight is delayed"
+              },
+              "il volo e in ritardo": {
+                "en": "the flight is delayed"
+              }
+            }
+          },
+          {
+            "exponentId": "prossima_fermata",
+            "normalizedForm": "prossima_fermata",
+            "surfaceForms": [
+              "prossima fermata"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "prossimo",
+              "fermata"
+            ],
+            "glossBySurface": {
+              "prossima fermata": {
+                "en": "next stop"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-departure-time",
+      "lessonId": "transport-and-tickets",
+      "displayName": "Understand a departure time",
+      "cefrDescriptor": "Can understand a simple stated departure time.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "parte_tra_due_minuti",
+            "normalizedForm": "parte_tra_due_minuti",
+            "surfaceForms": [
+              "parte tra due minuti"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "partire",
+              "tra",
+              "due",
+              "minuto"
+            ],
+            "glossBySurface": {
+              "parte tra due minuti": {
+                "en": "it leaves in two minutes"
+              }
+            }
+          },
+          {
+            "exponentId": "il_prossimo_parte_alle_quattro",
+            "normalizedForm": "il_prossimo_parte_alle_quattro",
+            "surfaceForms": [
+              "il prossimo parte alle quattro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "prossimo",
+              "partire",
+              "a",
+              "quattro"
+            ],
+            "glossBySurface": {
+              "il prossimo parte alle quattro": {
+                "en": "the next one leaves at four"
+              }
+            }
+          },
+          {
+            "exponentId": "parte_adesso",
+            "normalizedForm": "parte_adesso",
+            "surfaceForms": [
+              "parte adesso"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "partire",
+              "adesso"
+            ],
+            "glossBySurface": {
+              "parte adesso": {
+                "en": "it's leaving now"
               }
             }
           }

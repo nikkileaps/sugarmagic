@@ -38611,6 +38611,12 @@
         "noun"
       ]
     },
+    "bus": {
+      "lemmaId": "bus",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
     "sono": {
       "lemmaId": "essere",
       "partsOfSpeech": [
@@ -39291,6 +39297,13 @@
         "pronoun"
       ]
     },
+    "sola": {
+      "lemmaId": "solo",
+      "partsOfSpeech": [
+        "adverb",
+        "adjective"
+      ]
+    },
     "soli": {
       "lemmaId": "solo",
       "partsOfSpeech": [
@@ -39861,6 +39874,114 @@
         "verb"
       ]
     },
+    "trovo": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovi": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trova": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troviamo": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovate": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovano": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovai": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovasti": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovò": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovammo": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovaste": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovarono": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovavo": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovavi": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovava": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovavamo": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovavate": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovavano": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "trovando": {
       "lemmaId": "trovare",
       "partsOfSpeech": [
@@ -40210,7 +40331,21 @@
         "adjective"
       ]
     },
+    "ultima": {
+      "lemmaId": "ultimo",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
     "ultimi": {
+      "lemmaId": "ultimo",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
+    "ultime": {
       "lemmaId": "ultimo",
       "partsOfSpeech": [
         "adjective",
@@ -43336,6 +43471,108 @@
         "verb"
       ]
     },
+    "entri": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entra": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entriamo": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrate": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrano": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrai": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrasti": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrò": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrammo": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entraste": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrarono": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entravo": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entravi": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrava": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entravamo": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entravate": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entravano": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "entrando": {
       "lemmaId": "entrare",
       "partsOfSpeech": [
@@ -43706,6 +43943,96 @@
         "adjective"
       ]
     },
+    "partiamo": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partite": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partono": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partii": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partisti": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partì": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partimmo": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partiste": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partirono": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partivo": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partivi": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partiva": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partivamo": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partivate": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partivano": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "partendo": {
       "lemmaId": "partire",
       "partsOfSpeech": [
@@ -44056,7 +44383,19 @@
         "noun"
       ]
     },
+    "prossima": {
+      "lemmaId": "prossimo",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
     "prossimi": {
+      "lemmaId": "prossimo",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "prossime": {
       "lemmaId": "prossimo",
       "partsOfSpeech": [
         "adjective"
@@ -44383,6 +44722,108 @@
       "lemmaId": "culturale",
       "partsOfSpeech": [
         "adjective"
+      ]
+    },
+    "perdo": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdi": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perde": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdiamo": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdete": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "persi": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdesti": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perse": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdemmo": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdeste": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "persero": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdevo": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdevi": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdeva": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdevamo": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdevate": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdevano": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "perdendo": {
@@ -45803,6 +46244,114 @@
         "noun"
       ]
     },
+    "manco": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "manchi": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "manca": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "manchiamo": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancate": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancano": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancai": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancasti": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancò": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancammo": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancaste": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancarono": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancavo": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancavi": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancava": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancavamo": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancavate": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancavano": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "mancando": {
       "lemmaId": "mancare",
       "partsOfSpeech": [
@@ -46327,6 +46876,108 @@
         "verb"
       ]
     },
+    "fermi": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ferma": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermiamo": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermate": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermano": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermai": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermasti": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermò": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermammo": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermaste": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermarono": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermavo": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermavi": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermava": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermavamo": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermavate": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermavano": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "fermando": {
       "lemmaId": "fermare",
       "partsOfSpeech": [
@@ -46716,6 +47367,102 @@
       "lemmaId": "gente",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "aspetta": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettiamo": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettate": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettano": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettai": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettasti": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettò": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettammo": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettaste": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettarono": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettavo": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettavi": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettava": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettavamo": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettavate": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettavano": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "aspettando": {
@@ -48134,7 +48881,21 @@
         "noun"
       ]
     },
+    "nera": {
+      "lemmaId": "nero",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
     "neri": {
+      "lemmaId": "nero",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
+    "nere": {
       "lemmaId": "nero",
       "partsOfSpeech": [
         "adjective",
@@ -48417,12 +49178,6 @@
       "lemmaId": "iscrivere",
       "partsOfSpeech": [
         "verb"
-      ]
-    },
-    "entrate": {
-      "lemmaId": "entrata",
-      "partsOfSpeech": [
-        "noun"
       ]
     },
     "esterni": {
@@ -49971,6 +50726,102 @@
     },
     "diriguto": {
       "lemmaId": "dirigere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "gira": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "giriamo": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girate": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girano": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girai": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girasti": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girò": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girammo": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "giraste": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girarono": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "giravo": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "giravi": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girava": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "giravamo": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "giravate": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "giravano": {
+      "lemmaId": "girare",
       "partsOfSpeech": [
         "verb"
       ]
@@ -51894,12 +52745,6 @@
         "verb"
       ]
     },
-    "partite": {
-      "lemmaId": "partita",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
     "rifiuti": {
       "lemmaId": "rifiuto",
       "partsOfSpeech": [
@@ -52770,12 +53615,6 @@
       "lemmaId": "copertura",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "fermi": {
-      "lemmaId": "fermo",
-      "partsOfSpeech": [
-        "adjective"
       ]
     },
     "penali": {
@@ -53767,6 +54606,108 @@
       "partsOfSpeech": [
         "adjective",
         "noun"
+      ]
+    },
+    "attraversi": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversa": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversiamo": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversate": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversano": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversai": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversasti": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversò": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversammo": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversaste": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversarono": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversavo": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversavi": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversava": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversavamo": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversavate": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversavano": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "attraversando": {
@@ -65119,12 +66060,6 @@
     },
     "comprensivi": {
       "lemmaId": "comprensivo",
-      "partsOfSpeech": [
-        "adjective"
-      ]
-    },
-    "persi": {
-      "lemmaId": "perso",
       "partsOfSpeech": [
         "adjective"
       ]
@@ -77902,12 +78837,6 @@
         "noun"
       ]
     },
-    "fermate": {
-      "lemmaId": "fermata",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
     "fessure": {
       "lemmaId": "fessura",
       "partsOfSpeech": [
@@ -86050,6 +86979,90 @@
         "verb"
       ]
     },
+    "trovino": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troviate": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troverei": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troveresti": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troverebbe": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troveremmo": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovereste": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troverebbero": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troverò": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troverai": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troverà": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troveremo": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troverete": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "troveranno": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "trovarmi": {
       "lemmaId": "trovare",
       "partsOfSpeech": [
@@ -86099,6 +87112,66 @@
       ]
     },
     "trovarne": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovami": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovati": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovasi": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovaci": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovalo": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovala": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovali": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovale": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovane": {
+      "lemmaId": "trovare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "trovata": {
       "lemmaId": "trovare",
       "partsOfSpeech": [
         "verb"
@@ -91870,6 +92943,90 @@
         "verb"
       ]
     },
+    "entrino": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entriate": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrerei": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entreresti": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrerebbe": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entreremmo": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrereste": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrerebbero": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrerò": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrerai": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrerà": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entreremo": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrerete": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entreranno": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "entrarmi": {
       "lemmaId": "entrare",
       "partsOfSpeech": [
@@ -91925,6 +93082,60 @@
       ]
     },
     "entrarne": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrami": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrati": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrasi": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entraci": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entralo": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrala": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrali": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrale": {
+      "lemmaId": "entrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "entrane": {
       "lemmaId": "entrare",
       "partsOfSpeech": [
         "verb"
@@ -92608,6 +93819,96 @@
         "verb"
       ]
     },
+    "parta": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partano": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partiate": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partirei": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partiresti": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partirebbe": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partiremmo": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partireste": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partirebbero": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partirò": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partirai": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partirà": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partiremo": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partirete": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partiranno": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "partirmi": {
       "lemmaId": "partire",
       "partsOfSpeech": [
@@ -92663,6 +93964,54 @@
       ]
     },
     "partirne": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partimi": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partisi": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partici": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partilo": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partila": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partili": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partile": {
+      "lemmaId": "partire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "partine": {
       "lemmaId": "partire",
       "partsOfSpeech": [
         "verb"
@@ -93844,6 +95193,96 @@
         "verb"
       ]
     },
+    "perda": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdano": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdiate": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderei": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderesti": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderebbe": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderemmo": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdereste": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderebbero": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderò": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderai": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderà": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderemo": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderete": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perderanno": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "perdermi": {
       "lemmaId": "perdere",
       "partsOfSpeech": [
@@ -93893,6 +95332,72 @@
       ]
     },
     "perderne": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdimi": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perditi": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdisi": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdici": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdivi": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdilo": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdila": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdili": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdile": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "perdine": {
+      "lemmaId": "perdere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "persa": {
       "lemmaId": "perdere",
       "partsOfSpeech": [
         "verb"
@@ -96448,6 +97953,90 @@
         "verb"
       ]
     },
+    "manchino": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "manchiate": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancerei": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "manceresti": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancerebbe": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "manceremmo": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancereste": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancerebbero": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancerò": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancerai": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancerà": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "manceremo": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancerete": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "manceranno": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "mancarmi": {
       "lemmaId": "mancare",
       "partsOfSpeech": [
@@ -96503,6 +98092,66 @@
       ]
     },
     "mancarne": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancami": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancati": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancasi": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancaci": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancalo": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancala": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancali": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancale": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancane": {
+      "lemmaId": "mancare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "mancata": {
       "lemmaId": "mancare",
       "partsOfSpeech": [
         "verb"
@@ -97768,6 +99417,90 @@
         "verb"
       ]
     },
+    "fermino": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermiate": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermerei": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermeresti": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermerebbe": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermeremmo": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermereste": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermerebbero": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermerò": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermerai": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermerà": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermeremo": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermerete": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermeranno": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "fermarmi": {
       "lemmaId": "fermare",
       "partsOfSpeech": [
@@ -97817,6 +99550,60 @@
       ]
     },
     "fermarne": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermami": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermati": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermasi": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermaci": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermalo": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermala": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermali": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermale": {
+      "lemmaId": "fermare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fermane": {
       "lemmaId": "fermare",
       "partsOfSpeech": [
         "verb"
@@ -98518,6 +100305,90 @@
         "verb"
       ]
     },
+    "aspettino": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettiate": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetterei": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetteresti": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetterebbe": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetteremmo": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettereste": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetterebbero": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetterò": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetterai": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetterà": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetteremo": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetterete": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspetteranno": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "aspettarmi": {
       "lemmaId": "aspettare",
       "partsOfSpeech": [
@@ -98573,6 +100444,66 @@
       ]
     },
     "aspettarne": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettami": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettati": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettasi": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettaci": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettalo": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettala": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettali": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettale": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettane": {
+      "lemmaId": "aspettare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aspettata": {
       "lemmaId": "aspettare",
       "partsOfSpeech": [
         "verb"
@@ -105562,6 +107493,90 @@
         "verb"
       ]
     },
+    "girino": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "giriate": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girerei": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "gireresti": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girerebbe": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "gireremmo": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girereste": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girerebbero": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girerò": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girerai": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girerà": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "gireremo": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girerete": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "gireranno": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "girarmi": {
       "lemmaId": "girare",
       "partsOfSpeech": [
@@ -105611,6 +107626,66 @@
       ]
     },
     "girarne": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girami": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girati": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girasi": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "giraci": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "giralo": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girala": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girali": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girale": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girane": {
+      "lemmaId": "girare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "girata": {
       "lemmaId": "girare",
       "partsOfSpeech": [
         "verb"
@@ -112748,6 +114823,90 @@
         "verb"
       ]
     },
+    "attraversino": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversiate": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverserei": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverseresti": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverserebbe": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverseremmo": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversereste": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverserebbero": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverserò": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverserai": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverserà": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverseremo": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverserete": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraverseranno": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "attraversarmi": {
       "lemmaId": "attraversare",
       "partsOfSpeech": [
@@ -112803,6 +114962,66 @@
       ]
     },
     "attraversarne": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversami": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversati": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversasi": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversaci": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversalo": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversala": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversali": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversale": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversane": {
+      "lemmaId": "attraversare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "attraversata": {
       "lemmaId": "attraversare",
       "partsOfSpeech": [
         "verb"
