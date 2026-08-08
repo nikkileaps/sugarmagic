@@ -71,8 +71,11 @@ const ELIDED_STUBS: Record<string, string> = {
   c: "ci",
   com: "come",
   d: "di",
+  n: "ne",
+  nient: "niente",
   dall: "dalla",
   quant: "quanto",
+  vent: "venti",
   // `l'` is `lo` before a masculine word and `la` before a feminine one, and
   // the stub cannot say which. Answering `lo` always is safe HERE because both
   // are function words: whichever it is, it is dropped from the words an
@@ -109,8 +112,11 @@ const APOCOPE: Record<string, string> = {
   quel: "quello",
   // `mal di testa`, `mal di gola`: `male` drops its vowel before `di`.
   mal: "male",
-  // `vuol dire`: `vuole` drops its vowel before another verb.
-  vuol: "volere"
+  // `vuol dire`, `poter fare`: a verb drops its final vowel before
+  // another verb.
+  vuol: "volere",
+  poter: "potere",
+  qualcun: "qualcuno"
 };
 
 /**
@@ -119,6 +125,23 @@ const APOCOPE: Record<string, string> = {
  * shortening -- it is the same word spelled longer, and the spelling is what
  * an author writes.
  */
+const EUPHONIC_D: Record<string, string[]> = {
+  a: ["ad"],
+  e: ["ed"],
+  o: ["od"]
+};
+
+/**
+ * `quello` and `bello` change shape before the word they modify, the same way
+ * the definite article does: `quel giorno`, `quei giorni`, `quegli anni`. The
+ * dictionary stores the four gender-and-number forms, so the article-shaped
+ * ones are derived here.
+ */
+const DETERMINER_VARIANTS: Record<string, string[]> = {
+  quello: ["quei", "quegli"],
+  bello: ["bei", "begli"]
+};
+
 /**
  * A clitic pronoun shifts its `i` to `e` when another clitic follows it:
  * `mi lo` is written `me lo`, `ci la` is `ce la`. Hence `non ce la faccio`.
@@ -128,12 +151,6 @@ const APOCOPE: Record<string, string> = {
  * because the rule is one rule, and the entries that duplicate a headword are
  * inert -- a headword is claimed first and keeps its own answer.
  */
-const EUPHONIC_D: Record<string, string[]> = {
-  a: ["ad"],
-  e: ["ed"],
-  o: ["od"]
-};
-
 const CLITIC_VARIANTS: Record<string, string[]> = {
   mi: ["me"],
   ti: ["te"],
@@ -491,6 +508,19 @@ const ITALIAN_IRREGULAR_SUBJUNCTIVE: Record<string, string[]> = {
 };
 
 /**
+ * Verbs whose imperfect subjunctive is not built off the imperfect stem.
+ * Everything else in the language is, including the ones that look irregular:
+ * `facevo` gives `facessi`, `dicevo` gives `dicessi`, `bevevo` gives `bevessi`.
+ */
+const ITALIAN_IRREGULAR_IMPERFECT_SUBJUNCTIVE: Record<string, string[]> = {
+  essere: ["fossi", "fossi", "fosse", "fossimo", "foste", "fossero"],
+  stare: ["stessi", "stessi", "stesse", "stessimo", "steste", "stessero"],
+  dare: ["dessi", "dessi", "desse", "dessimo", "deste", "dessero"]
+};
+
+const IMPERFECT_SUBJUNCTIVE = ["ssi", "ssi", "sse", "ssimo", "ste", "ssero"];
+
+/**
  * Verbs whose future and conditional are not built on the infinitive. Every
  * other verb is, which is why these are a list and not a rule.
  */
@@ -534,8 +564,9 @@ const CONDITIONAL = ["ei", "esti", "ebbe", "emmo", "este", "ebbero"];
 const FUTURE = ["ò", "ai", "à", "emo", "ete", "anno"];
 
 /**
- * Italian keeps a `c` or `g` HARD across a following `i` or `e`, and writes an
- * `h` to do it: `cercare` gives `cerchi`, not `cerci`; `pagare` gives `paghi`.
+ * Italian keeps a `c` or `g` HARD before a following `e` or `i`, and writes an
+ * `h` to do it: `cercare` gives `cerchi` and `cercherò`, never `cerci` or
+ * `cercerò`.
  *
  * Without this the subjunctive -- which is also the polite command, so
  * ordinary language -- came out a non-word for every -care and -gare verb, and
@@ -543,7 +574,7 @@ const FUTURE = ["ò", "ai", "à", "emo", "ete", "anno"];
  * `amiche` in the plural, which is why authored noun and adjective forms carry
  * it too.
  */
-function keepHardBeforeI(stem: string): string {
+function keepHardBeforeFrontVowel(stem: string): string {
   return /[cg]$/.test(stem) ? `${stem}h` : stem;
 }
 
@@ -551,7 +582,11 @@ function keepHardBeforeI(stem: string): string {
 function italianFutureStem(lemmaId: string): string | null {
   const irregular = ITALIAN_IRREGULAR_FUTURE_STEM[lemmaId];
   if (irregular) return irregular;
-  if (lemmaId.endsWith("are")) return `${lemmaId.slice(0, -3)}er`;
+  // The ending starts with `e`, so a stem in `c` or `g` needs its `h`:
+  // `dimenticare` gives `dimenticherò`, not `dimenticerò`.
+  if (lemmaId.endsWith("are")) {
+    return `${keepHardBeforeFrontVowel(lemmaId.slice(0, -3))}er`;
+  }
   if (lemmaId.endsWith("ere") || lemmaId.endsWith("ire")) {
     return lemmaId.slice(0, -1);
   }
@@ -599,7 +634,7 @@ function italianDerivedTenses(entry: AtlasLemmaEntry): string[] {
       // and `mangiino`. Every -giare and -ciare verb is in this class, and
       // adding the ending blindly wrote a non-word for all of them.
       const absorbs = isAre && stem.endsWith("i");
-      const spelled = isAre ? keepHardBeforeI(stem) : stem;
+      const spelled = isAre ? keepHardBeforeFrontVowel(stem) : stem;
       out.push(
         absorbs ? stem : `${spelled}${endings[0]}`,
         absorbs ? `${stem}no` : `${spelled}${endings[5]}`
@@ -611,7 +646,26 @@ function italianDerivedTenses(entry: AtlasLemmaEntry): string[] {
       if (typeof noi === "string") out.push(noi);
       // Same respelling here: `cercare` gives `cerchiate`, not `cerciate`.
       const bare = entry.lemmaId.slice(0, -3);
-      if (bare) out.push(`${keepHardBeforeI(bare)}iate`);
+      if (bare) out.push(`${keepHardBeforeFrontVowel(bare)}iate`);
+    }
+  }
+
+  // Imperfect subjunctive, off the IMPERFECT stem: `parlavo` -> `parlassi`.
+  // That stem is the right one because it already carries the archaic base the
+  // irregular verbs are built on -- `facevo` gives `facessi` and `dicevo`
+  // gives `dicessi`, which building off the infinitive would not.
+  //
+  // It pairs with the conditional to say what would happen: `se avessi tempo,
+  // andrei`. Deliberately absent from A1 and A2, which is why nothing before
+  // B1 needed it.
+  const irregularImperfect = ITALIAN_IRREGULAR_IMPERFECT_SUBJUNCTIVE[entry.lemmaId];
+  if (irregularImperfect) {
+    out.push(...irregularImperfect);
+  } else {
+    const iWas = f.imp[0];
+    if (typeof iWas === "string" && iWas.endsWith("vo")) {
+      const stem = iWas.slice(0, -2);
+      out.push(...IMPERFECT_SUBJUNCTIVE.map((ending) => `${stem}${ending}`));
     }
   }
 
@@ -648,6 +702,10 @@ function addItalianExtraForms(
   if (f && "pres" in f) {
     const command = lemmaId.endsWith("are") ? f.pres[2] : f.pres[1];
     if (typeof command === "string") bases.push(command);
+    // The WE-imperative takes them too: `parliamone`, `andiamocene`. It is
+    // the same form as the present, so it is read rather than derived.
+    const together = f.pres[3];
+    if (typeof together === "string") bases.push(together);
   }
 
   for (const base of bases) {
@@ -690,6 +748,10 @@ function addItalianDerivedForms(
 
   for (const grown of EUPHONIC_D[entry.lemmaId] ?? []) {
     addMorphologyEntry(forms, grown, entry.lemmaId, entry.partsOfSpeech);
+  }
+
+  for (const shaped of DETERMINER_VARIANTS[entry.lemmaId] ?? []) {
+    addMorphologyEntry(forms, shaped, entry.lemmaId, entry.partsOfSpeech);
   }
 }
 

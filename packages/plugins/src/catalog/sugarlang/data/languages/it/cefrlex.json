@@ -482,7 +482,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "all, entire"
-      }
+      },
+      "forms": {
+        "ms": "tutto",
+        "fs": "tutta",
+        "mp": "tutti",
+        "fp": "tutte"
+      },
+      "formsSource": "authored"
     },
     "dovere": {
       "lemmaId": "dovere",
@@ -737,7 +744,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "new"
-      }
+      },
+      "forms": {
+        "ms": "nuovo",
+        "fs": "nuova",
+        "mp": "nuovi",
+        "fp": "nuove"
+      },
+      "formsSource": "authored"
     },
     "numero": {
       "lemmaId": "numero",
@@ -1467,7 +1481,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "different, various"
-      }
+      },
+      "forms": {
+        "ms": "diverso",
+        "fs": "diversa",
+        "mp": "diversi",
+        "fp": "diverse"
+      },
+      "formsSource": "authored"
     },
     "ultimo": {
       "lemmaId": "ultimo",
@@ -2115,7 +2136,12 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "problem"
-      }
+      },
+      "forms": {
+        "sg": "problema",
+        "pl": "problemi"
+      },
+      "formsSource": "authored"
     },
     "chiedere": {
       "lemmaId": "chiedere",
@@ -2293,7 +2319,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "make, render"
-      }
+      },
+      "forms": {
+        "pres": [
+          "rendo",
+          "rendi",
+          "rende",
+          "rendiamo",
+          "rendete",
+          "rendono"
+        ],
+        "pret": [
+          "resi",
+          "rendesti",
+          "rese",
+          "rendemmo",
+          "rendeste",
+          "resero"
+        ],
+        "imp": [
+          "rendevo",
+          "rendevi",
+          "rendeva",
+          "rendevamo",
+          "rendevate",
+          "rendevano"
+        ],
+        "ger": "rendendo",
+        "part": "reso"
+      },
+      "formsSource": "authored"
     },
     "diritto": {
       "lemmaId": "diritto",
@@ -2928,7 +2983,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "remember"
-      }
+      },
+      "forms": {
+        "pres": [
+          "ricordo",
+          "ricordi",
+          "ricorda",
+          "ricordiamo",
+          "ricordate",
+          "ricordano"
+        ],
+        "pret": [
+          "ricordai",
+          "ricordasti",
+          "ricordò",
+          "ricordammo",
+          "ricordaste",
+          "ricordarono"
+        ],
+        "imp": [
+          "ricordavo",
+          "ricordavi",
+          "ricordava",
+          "ricordavamo",
+          "ricordavate",
+          "ricordavano"
+        ],
+        "ger": "ricordando",
+        "part": "ricordato"
+      },
+      "formsSource": "authored"
     },
     "considerare": {
       "lemmaId": "considerare",
@@ -3155,7 +3239,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "pass"
-      }
+      },
+      "forms": {
+        "pres": [
+          "passo",
+          "passi",
+          "passa",
+          "passiamo",
+          "passate",
+          "passano"
+        ],
+        "pret": [
+          "passai",
+          "passasti",
+          "passò",
+          "passammo",
+          "passaste",
+          "passarono"
+        ],
+        "imp": [
+          "passavo",
+          "passavi",
+          "passava",
+          "passavamo",
+          "passavate",
+          "passavano"
+        ],
+        "ger": "passando",
+        "part": "passato"
+      },
+      "formsSource": "authored"
     },
     "riuscire": {
       "lemmaId": "riuscire",
@@ -3320,7 +3433,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "become"
-      }
+      },
+      "forms": {
+        "pres": [
+          "divento",
+          "diventi",
+          "diventa",
+          "diventiamo",
+          "diventate",
+          "diventano"
+        ],
+        "pret": [
+          "diventai",
+          "diventasti",
+          "diventò",
+          "diventammo",
+          "diventaste",
+          "diventarono"
+        ],
+        "imp": [
+          "diventavo",
+          "diventavi",
+          "diventava",
+          "diventavamo",
+          "diventavate",
+          "diventavano"
+        ],
+        "ger": "diventando",
+        "part": "diventato"
+      },
+      "formsSource": "authored"
     },
     "atto": {
       "lemmaId": "atto",
@@ -4594,7 +4736,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "propose"
-      }
+      },
+      "forms": {
+        "pres": [
+          "propongo",
+          "proponi",
+          "propone",
+          "proponiamo",
+          "proponete",
+          "propongono"
+        ],
+        "pret": [
+          "proposi",
+          "proponesti",
+          "propose",
+          "proponemmo",
+          "proponeste",
+          "proposero"
+        ],
+        "imp": [
+          "proponevo",
+          "proponevi",
+          "proponeva",
+          "proponevamo",
+          "proponevate",
+          "proponevano"
+        ],
+        "ger": "proponendo",
+        "part": "proposto"
+      },
+      "formsSource": "authored"
     },
     "usare": {
       "lemmaId": "usare",
@@ -4822,7 +4993,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "remain, stay"
-      }
+      },
+      "forms": {
+        "pres": [
+          "resto",
+          "resti",
+          "resta",
+          "restiamo",
+          "restate",
+          "restano"
+        ],
+        "pret": [
+          "restai",
+          "restasti",
+          "restò",
+          "restammo",
+          "restaste",
+          "restarono"
+        ],
+        "imp": [
+          "restavo",
+          "restavi",
+          "restava",
+          "restavamo",
+          "restavate",
+          "restavano"
+        ],
+        "ger": "restando",
+        "part": "restato"
+      },
+      "formsSource": "authored"
     },
     "realtà": {
       "lemmaId": "realtà",
@@ -5629,7 +5829,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "require, ask"
-      }
+      },
+      "forms": {
+        "pres": [
+          "richiedo",
+          "richiedi",
+          "richiede",
+          "richiediamo",
+          "richiedete",
+          "richiedono"
+        ],
+        "pret": [
+          "richiesi",
+          "richiedesti",
+          "richiese",
+          "richiedemmo",
+          "richiedeste",
+          "richiesero"
+        ],
+        "imp": [
+          "richiedevo",
+          "richiedevi",
+          "richiedeva",
+          "richiedevamo",
+          "richiedevate",
+          "richiedevano"
+        ],
+        "ger": "richiedendo",
+        "part": "richiesto"
+      },
+      "formsSource": "authored"
     },
     "fa": {
       "lemmaId": "fa",
@@ -6363,7 +6592,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "assume, hire"
-      }
+      },
+      "forms": {
+        "pres": [
+          "assumo",
+          "assumi",
+          "assume",
+          "assumiamo",
+          "assumete",
+          "assumono"
+        ],
+        "pret": [
+          "assunsi",
+          "assumesti",
+          "assunse",
+          "assumemmo",
+          "assumeste",
+          "assunsero"
+        ],
+        "imp": [
+          "assumevo",
+          "assumevi",
+          "assumeva",
+          "assumevamo",
+          "assumevate",
+          "assumevano"
+        ],
+        "ger": "assumendo",
+        "part": "assunto"
+      },
+      "formsSource": "authored"
     },
     "specifico": {
       "lemmaId": "specifico",
@@ -6932,7 +7190,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "full"
-      }
+      },
+      "forms": {
+        "ms": "pieno",
+        "fs": "piena",
+        "mp": "pieni",
+        "fp": "piene"
+      },
+      "formsSource": "authored"
     },
     "ambiente": {
       "lemmaId": "ambiente",
@@ -6958,7 +7223,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "entire, whole"
-      }
+      },
+      "forms": {
+        "ms": "intero",
+        "fs": "intera",
+        "mp": "interi",
+        "fp": "intere"
+      },
+      "formsSource": "authored"
     },
     "cioè": {
       "lemmaId": "cioè",
@@ -7119,7 +7391,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "change"
-      }
+      },
+      "forms": {
+        "pres": [
+          "cambio",
+          "cambi",
+          "cambia",
+          "cambiamo",
+          "cambiate",
+          "cambiano"
+        ],
+        "pret": [
+          "cambiai",
+          "cambiasti",
+          "cambiò",
+          "cambiammo",
+          "cambiaste",
+          "cambiarono"
+        ],
+        "imp": [
+          "cambiavo",
+          "cambiavi",
+          "cambiava",
+          "cambiavamo",
+          "cambiavate",
+          "cambiavano"
+        ],
+        "ger": "cambiando",
+        "part": "cambiato"
+      },
+      "formsSource": "authored"
     },
     "scegliere": {
       "lemmaId": "scegliere",
@@ -7132,7 +7433,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "choose, select"
-      }
+      },
+      "forms": {
+        "pres": [
+          "scelgo",
+          "scegli",
+          "sceglie",
+          "scegliamo",
+          "scegliete",
+          "scelgono"
+        ],
+        "pret": [
+          "scelsi",
+          "scegliesti",
+          "scelse",
+          "scegliemmo",
+          "sceglieste",
+          "scelsero"
+        ],
+        "imp": [
+          "sceglievo",
+          "sceglievi",
+          "sceglieva",
+          "sceglievamo",
+          "sceglievate",
+          "sceglievano"
+        ],
+        "ger": "scegliendo",
+        "part": "scelto"
+      },
+      "formsSource": "authored"
     },
     "occasione": {
       "lemmaId": "occasione",
@@ -7371,7 +7701,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "finish, end"
-      }
+      },
+      "forms": {
+        "pres": [
+          "finisco",
+          "finisci",
+          "finisce",
+          "finiamo",
+          "finite",
+          "finiscono"
+        ],
+        "pret": [
+          "finii",
+          "finisti",
+          "finì",
+          "finimmo",
+          "finiste",
+          "finirono"
+        ],
+        "imp": [
+          "finivo",
+          "finivi",
+          "finiva",
+          "finivamo",
+          "finivate",
+          "finivano"
+        ],
+        "ger": "finendo",
+        "part": "finito"
+      },
+      "formsSource": "authored"
     },
     "libro": {
       "lemmaId": "libro",
@@ -7622,7 +7981,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "past, last"
-      }
+      },
+      "forms": {
+        "ms": "scorso",
+        "fs": "scorsa",
+        "mp": "scorsi",
+        "fp": "scorse"
+      },
+      "formsSource": "authored"
     },
     "guerra": {
       "lemmaId": "guerra",
@@ -9507,7 +9873,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "be worth, count"
-      }
+      },
+      "forms": {
+        "pres": [
+          "valgo",
+          "vali",
+          "vale",
+          "valiamo",
+          "valete",
+          "valgono"
+        ],
+        "pret": [
+          "valsi",
+          "valesti",
+          "valse",
+          "valemmo",
+          "valeste",
+          "valsero"
+        ],
+        "imp": [
+          "valevo",
+          "valevi",
+          "valeva",
+          "valevamo",
+          "valevate",
+          "valevano"
+        ],
+        "ger": "valendo",
+        "part": "valso"
+      },
+      "formsSource": "authored"
     },
     "ex": {
       "lemmaId": "ex",
@@ -9880,7 +10275,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "help, aid"
-      }
+      },
+      "forms": {
+        "pres": [
+          "aiuto",
+          "aiuti",
+          "aiuta",
+          "aiutiamo",
+          "aiutate",
+          "aiutano"
+        ],
+        "pret": [
+          "aiutai",
+          "aiutasti",
+          "aiutò",
+          "aiutammo",
+          "aiutaste",
+          "aiutarono"
+        ],
+        "imp": [
+          "aiutavo",
+          "aiutavi",
+          "aiutava",
+          "aiutavamo",
+          "aiutavate",
+          "aiutavano"
+        ],
+        "ger": "aiutando",
+        "part": "aiutato"
+      },
+      "formsSource": "authored"
     },
     "fermare": {
       "lemmaId": "fermare",
@@ -10889,7 +11313,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "your"
-      }
+      },
+      "forms": {
+        "ms": "vostro",
+        "fs": "vostra",
+        "mp": "vostri",
+        "fp": "vostre"
+      },
+      "formsSource": "authored"
     },
     "piacere": {
       "lemmaId": "piacere",
@@ -10945,7 +11376,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "interest, concern"
-      }
+      },
+      "forms": {
+        "pres": [
+          "interesso",
+          "interessi",
+          "interessa",
+          "interessiamo",
+          "interessate",
+          "interessano"
+        ],
+        "pret": [
+          "interessai",
+          "interessasti",
+          "interessò",
+          "interessammo",
+          "interessaste",
+          "interessarono"
+        ],
+        "imp": [
+          "interessavo",
+          "interessavi",
+          "interessava",
+          "interessavamo",
+          "interessavate",
+          "interessavano"
+        ],
+        "ger": "interessando",
+        "part": "interessato"
+      },
+      "formsSource": "authored"
     },
     "ampio": {
       "lemmaId": "ampio",
@@ -11079,7 +11539,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "tell, recount"
-      }
+      },
+      "forms": {
+        "pres": [
+          "racconto",
+          "racconti",
+          "racconta",
+          "raccontiamo",
+          "raccontate",
+          "raccontano"
+        ],
+        "pret": [
+          "raccontai",
+          "raccontasti",
+          "raccontò",
+          "raccontammo",
+          "raccontaste",
+          "raccontarono"
+        ],
+        "imp": [
+          "raccontavo",
+          "raccontavi",
+          "raccontava",
+          "raccontavamo",
+          "raccontavate",
+          "raccontavano"
+        ],
+        "ger": "raccontando",
+        "part": "raccontato"
+      },
+      "formsSource": "authored"
     },
     "parere": {
       "lemmaId": "parere",
@@ -11876,7 +12365,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "ancient, old"
-      }
+      },
+      "forms": {
+        "ms": "antico",
+        "fs": "antica",
+        "mp": "antichi",
+        "fp": "antiche"
+      },
+      "formsSource": "authored"
     },
     "fonte": {
       "lemmaId": "fonte",
@@ -12210,7 +12706,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "admit, allow"
-      }
+      },
+      "forms": {
+        "pres": [
+          "ammetto",
+          "ammetti",
+          "ammette",
+          "ammettiamo",
+          "ammettete",
+          "ammettono"
+        ],
+        "pret": [
+          "ammisi",
+          "ammettesti",
+          "ammise",
+          "ammettemmo",
+          "ammetteste",
+          "ammisero"
+        ],
+        "imp": [
+          "ammettevo",
+          "ammettevi",
+          "ammetteva",
+          "ammettevamo",
+          "ammettevate",
+          "ammettevano"
+        ],
+        "ger": "ammettendo",
+        "part": "ammesso"
+      },
+      "formsSource": "authored"
     },
     "continuo": {
       "lemmaId": "continuo",
@@ -12369,7 +12894,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "solve, resolve"
-      }
+      },
+      "forms": {
+        "pres": [
+          "risolvo",
+          "risolvi",
+          "risolve",
+          "risolviamo",
+          "risolvete",
+          "risolvono"
+        ],
+        "pret": [
+          "risolsi",
+          "risolvesti",
+          "risolse",
+          "risolvemmo",
+          "risolveste",
+          "risolsero"
+        ],
+        "imp": [
+          "risolvevo",
+          "risolvevi",
+          "risolveva",
+          "risolvevamo",
+          "risolvevate",
+          "risolvevano"
+        ],
+        "ger": "risolvendo",
+        "part": "risolto"
+      },
+      "formsSource": "authored"
     },
     "notte": {
       "lemmaId": "notte",
@@ -12845,7 +13399,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "forget"
-      }
+      },
+      "forms": {
+        "pres": [
+          "dimentico",
+          "dimentichi",
+          "dimentica",
+          "dimentichiamo",
+          "dimenticate",
+          "dimenticano"
+        ],
+        "pret": [
+          "dimenticai",
+          "dimenticasti",
+          "dimenticò",
+          "dimenticammo",
+          "dimenticaste",
+          "dimenticarono"
+        ],
+        "imp": [
+          "dimenticavo",
+          "dimenticavi",
+          "dimenticava",
+          "dimenticavamo",
+          "dimenticavate",
+          "dimenticavano"
+        ],
+        "ger": "dimenticando",
+        "part": "dimenticato"
+      },
+      "formsSource": "authored"
     },
     "scolastico": {
       "lemmaId": "scolastico",
@@ -13980,7 +14563,12 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "doubt"
-      }
+      },
+      "forms": {
+        "sg": "dubbio",
+        "pl": "dubbi"
+      },
+      "formsSource": "authored"
     },
     "moderno": {
       "lemmaId": "moderno",
@@ -14281,7 +14869,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "listen"
-      }
+      },
+      "forms": {
+        "pres": [
+          "ascolto",
+          "ascolti",
+          "ascolta",
+          "ascoltiamo",
+          "ascoltate",
+          "ascoltano"
+        ],
+        "pret": [
+          "ascoltai",
+          "ascoltasti",
+          "ascoltò",
+          "ascoltammo",
+          "ascoltaste",
+          "ascoltarono"
+        ],
+        "imp": [
+          "ascoltavo",
+          "ascoltavi",
+          "ascoltava",
+          "ascoltavamo",
+          "ascoltavate",
+          "ascoltavano"
+        ],
+        "ger": "ascoltando",
+        "part": "ascoltato"
+      },
+      "formsSource": "authored"
     },
     "contatto": {
       "lemmaId": "contatto",
@@ -14582,7 +15199,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "control, check"
-      }
+      },
+      "forms": {
+        "pres": [
+          "controllo",
+          "controlli",
+          "controlla",
+          "controlliamo",
+          "controllate",
+          "controllano"
+        ],
+        "pret": [
+          "controllai",
+          "controllasti",
+          "controllò",
+          "controllammo",
+          "controllaste",
+          "controllarono"
+        ],
+        "imp": [
+          "controllavo",
+          "controllavi",
+          "controllava",
+          "controllavamo",
+          "controllavate",
+          "controllavano"
+        ],
+        "ger": "controllando",
+        "part": "controllato"
+      },
+      "formsSource": "authored"
     },
     "che": {
       "lemmaId": "che",
@@ -14894,7 +15540,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "health, sanitary"
-      }
+      },
+      "forms": {
+        "ms": "sanitario",
+        "fs": "sanitaria",
+        "mp": "sanitari",
+        "fp": "sanitarie"
+      },
+      "formsSource": "authored"
     },
     "capitale": {
       "lemmaId": "capitale",
@@ -14959,7 +15612,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "improve"
-      }
+      },
+      "forms": {
+        "pres": [
+          "miglioro",
+          "migliori",
+          "migliora",
+          "miglioriamo",
+          "migliorate",
+          "migliorano"
+        ],
+        "pret": [
+          "migliorai",
+          "migliorasti",
+          "migliorò",
+          "migliorammo",
+          "miglioraste",
+          "migliorarono"
+        ],
+        "imp": [
+          "miglioravo",
+          "miglioravi",
+          "migliorava",
+          "miglioravamo",
+          "miglioravate",
+          "miglioravano"
+        ],
+        "ger": "migliorando",
+        "part": "migliorato"
+      },
+      "formsSource": "authored"
     },
     "profilo": {
       "lemmaId": "profilo",
@@ -15845,7 +16527,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "count, matter"
-      }
+      },
+      "forms": {
+        "pres": [
+          "conto",
+          "conti",
+          "conta",
+          "contiamo",
+          "contate",
+          "contano"
+        ],
+        "pret": [
+          "contai",
+          "contasti",
+          "contò",
+          "contammo",
+          "contaste",
+          "contarono"
+        ],
+        "imp": [
+          "contavo",
+          "contavi",
+          "contava",
+          "contavamo",
+          "contavate",
+          "contavano"
+        ],
+        "ger": "contando",
+        "part": "contato"
+      },
+      "formsSource": "authored"
     },
     "toccare": {
       "lemmaId": "toccare",
@@ -15858,7 +16569,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "touch"
-      }
+      },
+      "forms": {
+        "pres": [
+          "tocco",
+          "tocchi",
+          "tocca",
+          "tocchiamo",
+          "toccate",
+          "toccano"
+        ],
+        "pret": [
+          "toccai",
+          "toccasti",
+          "toccò",
+          "toccammo",
+          "toccaste",
+          "toccarono"
+        ],
+        "imp": [
+          "toccavo",
+          "toccavi",
+          "toccava",
+          "toccavamo",
+          "toccavate",
+          "toccavano"
+        ],
+        "ger": "toccando",
+        "part": "toccato"
+      },
+      "formsSource": "authored"
     },
     "ricorso": {
       "lemmaId": "ricorso",
@@ -15897,7 +16637,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "convince"
-      }
+      },
+      "forms": {
+        "pres": [
+          "convinco",
+          "convinci",
+          "convince",
+          "convinciamo",
+          "convincete",
+          "convincono"
+        ],
+        "pret": [
+          "convinsi",
+          "convincesti",
+          "convinse",
+          "convincemmo",
+          "convinceste",
+          "convinsero"
+        ],
+        "imp": [
+          "convincevo",
+          "convincevi",
+          "convinceva",
+          "convincevamo",
+          "convincevate",
+          "convincevano"
+        ],
+        "ger": "convincendo",
+        "part": "convinto"
+      },
+      "formsSource": "authored"
     },
     "produttivo": {
       "lemmaId": "produttivo",
@@ -16278,7 +17047,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "climb, go up"
-      }
+      },
+      "forms": {
+        "pres": [
+          "salgo",
+          "sali",
+          "sale",
+          "saliamo",
+          "salite",
+          "salgono"
+        ],
+        "pret": [
+          "salii",
+          "salisti",
+          "salì",
+          "salimmo",
+          "saliste",
+          "salirono"
+        ],
+        "imp": [
+          "salivo",
+          "salivi",
+          "saliva",
+          "salivamo",
+          "salivate",
+          "salivano"
+        ],
+        "ger": "salendo",
+        "part": "salito"
+      },
+      "formsSource": "authored"
     },
     "acquistare": {
       "lemmaId": "acquistare",
@@ -16343,7 +17141,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "care for, treat"
-      }
+      },
+      "forms": {
+        "pres": [
+          "curo",
+          "curi",
+          "cura",
+          "curiamo",
+          "curate",
+          "curano"
+        ],
+        "pret": [
+          "curai",
+          "curasti",
+          "curò",
+          "curammo",
+          "curaste",
+          "curarono"
+        ],
+        "imp": [
+          "curavo",
+          "curavi",
+          "curava",
+          "curavamo",
+          "curavate",
+          "curavano"
+        ],
+        "ger": "curando",
+        "part": "curato"
+      },
+      "formsSource": "authored"
     },
     "dibattito": {
       "lemmaId": "dibattito",
@@ -16706,7 +17533,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "risk, venture"
-      }
+      },
+      "forms": {
+        "pres": [
+          "rischio",
+          "rischi",
+          "rischia",
+          "rischiamo",
+          "rischiate",
+          "rischiano"
+        ],
+        "pret": [
+          "rischiai",
+          "rischiasti",
+          "rischiò",
+          "rischiammo",
+          "rischiaste",
+          "rischiarono"
+        ],
+        "imp": [
+          "rischiavo",
+          "rischiavi",
+          "rischiava",
+          "rischiavamo",
+          "rischiavate",
+          "rischiavano"
+        ],
+        "ger": "rischiando",
+        "part": "rischiato"
+      },
+      "formsSource": "authored"
     },
     "segnare": {
       "lemmaId": "segnare",
@@ -17862,7 +18718,12 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "advantage, benefit"
-      }
+      },
+      "forms": {
+        "sg": "vantaggio",
+        "pl": "vantaggi"
+      },
+      "formsSource": "authored"
     },
     "patrimonio": {
       "lemmaId": "patrimonio",
@@ -18202,7 +19063,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "learn"
-      }
+      },
+      "forms": {
+        "pres": [
+          "imparo",
+          "impari",
+          "impara",
+          "impariamo",
+          "imparate",
+          "imparano"
+        ],
+        "pret": [
+          "imparai",
+          "imparasti",
+          "imparò",
+          "imparammo",
+          "imparaste",
+          "impararono"
+        ],
+        "imp": [
+          "imparavo",
+          "imparavi",
+          "imparava",
+          "imparavamo",
+          "imparavate",
+          "imparavano"
+        ],
+        "ger": "imparando",
+        "part": "imparato"
+      },
+      "formsSource": "authored"
     },
     "difendere": {
       "lemmaId": "difendere",
@@ -18255,7 +19145,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "push, drive"
-      }
+      },
+      "forms": {
+        "pres": [
+          "spingo",
+          "spingi",
+          "spinge",
+          "spingiamo",
+          "spingete",
+          "spingono"
+        ],
+        "pret": [
+          "spinsi",
+          "spingesti",
+          "spinse",
+          "spingemmo",
+          "spingeste",
+          "spinsero"
+        ],
+        "imp": [
+          "spingevo",
+          "spingevi",
+          "spingeva",
+          "spingevamo",
+          "spingevate",
+          "spingevano"
+        ],
+        "ger": "spingendo",
+        "part": "spinto"
+      },
+      "formsSource": "authored"
     },
     "sogno": {
       "lemmaId": "sogno",
@@ -19218,7 +20137,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "correct"
-      }
+      },
+      "forms": {
+        "pres": [
+          "correggo",
+          "correggi",
+          "corregge",
+          "correggiamo",
+          "correggete",
+          "correggono"
+        ],
+        "pret": [
+          "corressi",
+          "correggesti",
+          "corresse",
+          "correggemmo",
+          "correggeste",
+          "corressero"
+        ],
+        "imp": [
+          "correggevo",
+          "correggevi",
+          "correggeva",
+          "correggevamo",
+          "correggevate",
+          "correggevano"
+        ],
+        "ger": "correggendo",
+        "part": "corretto"
+      },
+      "formsSource": "authored"
     },
     "mattina": {
       "lemmaId": "mattina",
@@ -19257,7 +20205,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "transfer"
-      }
+      },
+      "forms": {
+        "pres": [
+          "trasferisco",
+          "trasferisci",
+          "trasferisce",
+          "trasferiamo",
+          "trasferite",
+          "trasferiscono"
+        ],
+        "pret": [
+          "trasferii",
+          "trasferisti",
+          "trasferì",
+          "trasferimmo",
+          "trasferiste",
+          "trasferirono"
+        ],
+        "imp": [
+          "trasferivo",
+          "trasferivi",
+          "trasferiva",
+          "trasferivamo",
+          "trasferivate",
+          "trasferivano"
+        ],
+        "ger": "trasferendo",
+        "part": "trasferito"
+      },
+      "formsSource": "authored"
     },
     "copia": {
       "lemmaId": "copia",
@@ -20165,7 +21142,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "strange"
-      }
+      },
+      "forms": {
+        "ms": "strano",
+        "fs": "strana",
+        "mp": "strani",
+        "fp": "strane"
+      },
+      "formsSource": "authored"
     },
     "giunta": {
       "lemmaId": "giunta",
@@ -22032,7 +23016,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "worry, concern"
-      }
+      },
+      "forms": {
+        "pres": [
+          "preoccupo",
+          "preoccupi",
+          "preoccupa",
+          "preoccupiamo",
+          "preoccupate",
+          "preoccupano"
+        ],
+        "pret": [
+          "preoccupai",
+          "preoccupasti",
+          "preoccupò",
+          "preoccupammo",
+          "preoccupaste",
+          "preoccuparono"
+        ],
+        "imp": [
+          "preoccupavo",
+          "preoccupavi",
+          "preoccupava",
+          "preoccupavamo",
+          "preoccupavate",
+          "preoccupavano"
+        ],
+        "ger": "preoccupando",
+        "part": "preoccupato"
+      },
+      "formsSource": "authored"
     },
     "idoneo": {
       "lemmaId": "idoneo",
@@ -22332,7 +23345,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "good, skilled"
-      }
+      },
+      "forms": {
+        "ms": "bravo",
+        "fs": "brava",
+        "mp": "bravi",
+        "fp": "brave"
+      },
+      "formsSource": "authored"
     },
     "forum": {
       "lemmaId": "forum",
@@ -23357,7 +24377,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "cost"
-      }
+      },
+      "forms": {
+        "pres": [
+          "costo",
+          "costi",
+          "costa",
+          "costiamo",
+          "costate",
+          "costano"
+        ],
+        "pret": [
+          "costai",
+          "costasti",
+          "costò",
+          "costammo",
+          "costaste",
+          "costarono"
+        ],
+        "imp": [
+          "costavo",
+          "costavi",
+          "costava",
+          "costavamo",
+          "costavate",
+          "costavano"
+        ],
+        "ger": "costando",
+        "part": "costato"
+      },
+      "formsSource": "authored"
     },
     "equilibrio": {
       "lemmaId": "equilibrio",
@@ -24041,7 +25090,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "appreciate, value"
-      }
+      },
+      "forms": {
+        "pres": [
+          "apprezzo",
+          "apprezzi",
+          "apprezza",
+          "apprezziamo",
+          "apprezzate",
+          "apprezzano"
+        ],
+        "pret": [
+          "apprezzai",
+          "apprezzasti",
+          "apprezzò",
+          "apprezzammo",
+          "apprezzaste",
+          "apprezzarono"
+        ],
+        "imp": [
+          "apprezzavo",
+          "apprezzavi",
+          "apprezzava",
+          "apprezzavamo",
+          "apprezzavate",
+          "apprezzavano"
+        ],
+        "ger": "apprezzando",
+        "part": "apprezzato"
+      },
+      "formsSource": "authored"
     },
     "rinnovare": {
       "lemmaId": "rinnovare",
@@ -25683,7 +26761,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "import, matter"
-      }
+      },
+      "forms": {
+        "pres": [
+          "importo",
+          "importi",
+          "importa",
+          "importiamo",
+          "importate",
+          "importano"
+        ],
+        "pret": [
+          "importai",
+          "importasti",
+          "importò",
+          "importammo",
+          "importaste",
+          "importarono"
+        ],
+        "imp": [
+          "importavo",
+          "importavi",
+          "importava",
+          "importavamo",
+          "importavate",
+          "importavano"
+        ],
+        "ger": "importando",
+        "part": "importato"
+      },
+      "formsSource": "authored"
     },
     "genova": {
       "lemmaId": "genova",
@@ -29335,7 +30442,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "greet, hello"
-      }
+      },
+      "forms": {
+        "pres": [
+          "saluto",
+          "saluti",
+          "saluta",
+          "salutiamo",
+          "salutate",
+          "salutano"
+        ],
+        "pret": [
+          "salutai",
+          "salutasti",
+          "salutò",
+          "salutammo",
+          "salutaste",
+          "salutarono"
+        ],
+        "imp": [
+          "salutavo",
+          "salutavi",
+          "salutava",
+          "salutavamo",
+          "salutavate",
+          "salutavano"
+        ],
+        "ger": "salutando",
+        "part": "salutato"
+      },
+      "formsSource": "authored"
     },
     "delegare": {
       "lemmaId": "delegare",
@@ -29439,7 +30575,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "return, restore"
-      }
+      },
+      "forms": {
+        "pres": [
+          "restituisco",
+          "restituisci",
+          "restituisce",
+          "restituiamo",
+          "restituite",
+          "restituiscono"
+        ],
+        "pret": [
+          "restituii",
+          "restituisti",
+          "restituì",
+          "restituimmo",
+          "restituiste",
+          "restituirono"
+        ],
+        "imp": [
+          "restituivo",
+          "restituivi",
+          "restituiva",
+          "restituivamo",
+          "restituivate",
+          "restituivano"
+        ],
+        "ger": "restituendo",
+        "part": "restituito"
+      },
+      "formsSource": "authored"
     },
     "mobile": {
       "lemmaId": "mobile",
@@ -30348,7 +31513,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "stop, quit"
-      }
+      },
+      "forms": {
+        "pres": [
+          "smetto",
+          "smetti",
+          "smette",
+          "smettiamo",
+          "smettete",
+          "smettono"
+        ],
+        "pret": [
+          "smisi",
+          "smettesti",
+          "smise",
+          "smettemmo",
+          "smetteste",
+          "smisero"
+        ],
+        "imp": [
+          "smettevo",
+          "smettevi",
+          "smetteva",
+          "smettevamo",
+          "smettevate",
+          "smettevano"
+        ],
+        "ger": "smettendo",
+        "part": "smesso"
+      },
+      "formsSource": "authored"
     },
     "buttare": {
       "lemmaId": "buttare",
@@ -30635,7 +31829,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "agree, suit"
-      }
+      },
+      "forms": {
+        "pres": [
+          "convengo",
+          "convieni",
+          "conviene",
+          "conveniamo",
+          "convenite",
+          "convengono"
+        ],
+        "pret": [
+          "convenni",
+          "convenisti",
+          "convenne",
+          "convenimmo",
+          "conveniste",
+          "convennero"
+        ],
+        "imp": [
+          "convenivo",
+          "convenivi",
+          "conveniva",
+          "convenivamo",
+          "convenivate",
+          "convenivano"
+        ],
+        "ger": "convenendo",
+        "part": "convenuto"
+      },
+      "formsSource": "authored"
     },
     "protesta": {
       "lemmaId": "protesta",
@@ -31015,7 +32238,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "insist, persist"
-      }
+      },
+      "forms": {
+        "pres": [
+          "insisto",
+          "insisti",
+          "insiste",
+          "insistiamo",
+          "insistete",
+          "insistono"
+        ],
+        "pret": [
+          "insistei",
+          "insistesti",
+          "insisté",
+          "insistemmo",
+          "insisteste",
+          "insisterono"
+        ],
+        "imp": [
+          "insistevo",
+          "insistevi",
+          "insisteva",
+          "insistevamo",
+          "insistevate",
+          "insistevano"
+        ],
+        "ger": "insistendo",
+        "part": "insistuto"
+      },
+      "formsSource": "authored"
     },
     "celebrare": {
       "lemmaId": "celebrare",
@@ -31159,7 +32411,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "travel, journey"
-      }
+      },
+      "forms": {
+        "pres": [
+          "viaggio",
+          "viaggi",
+          "viaggia",
+          "viaggiamo",
+          "viaggiate",
+          "viaggiano"
+        ],
+        "pret": [
+          "viaggiai",
+          "viaggiasti",
+          "viaggiò",
+          "viaggiammo",
+          "viaggiaste",
+          "viaggiarono"
+        ],
+        "imp": [
+          "viaggiavo",
+          "viaggiavi",
+          "viaggiava",
+          "viaggiavamo",
+          "viaggiavate",
+          "viaggiavano"
+        ],
+        "ger": "viaggiando",
+        "part": "viaggiato"
+      },
+      "formsSource": "authored"
     },
     "senatore": {
       "lemmaId": "senatore",
@@ -36123,7 +37404,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "annul, cancel"
-      }
+      },
+      "forms": {
+        "pres": [
+          "annullo",
+          "annulli",
+          "annulla",
+          "annulliamo",
+          "annullate",
+          "annullano"
+        ],
+        "pret": [
+          "annullai",
+          "annullasti",
+          "annullò",
+          "annullammo",
+          "annullaste",
+          "annullarono"
+        ],
+        "imp": [
+          "annullavo",
+          "annullavi",
+          "annullava",
+          "annullavamo",
+          "annullavate",
+          "annullavano"
+        ],
+        "ger": "annullando",
+        "part": "annullato"
+      },
+      "formsSource": "authored"
     },
     "odierno": {
       "lemmaId": "odierno",
@@ -36409,7 +37719,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "expire, lapse"
-      }
+      },
+      "forms": {
+        "pres": [
+          "scado",
+          "scadi",
+          "scade",
+          "scadiamo",
+          "scadete",
+          "scadono"
+        ],
+        "pret": [
+          "scaddi",
+          "scadesti",
+          "scadde",
+          "scademmo",
+          "scadeste",
+          "scaddero"
+        ],
+        "imp": [
+          "scadevo",
+          "scadevi",
+          "scadeva",
+          "scadevamo",
+          "scadevate",
+          "scadevano"
+        ],
+        "ger": "scadendo",
+        "part": "scaduto"
+      },
+      "formsSource": "authored"
     },
     "oriente": {
       "lemmaId": "oriente",
@@ -38396,7 +39735,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "motivate, justify"
-      }
+      },
+      "forms": {
+        "pres": [
+          "motivo",
+          "motivi",
+          "motiva",
+          "motiviamo",
+          "motivate",
+          "motivano"
+        ],
+        "pret": [
+          "motivai",
+          "motivasti",
+          "motivò",
+          "motivammo",
+          "motivaste",
+          "motivarono"
+        ],
+        "imp": [
+          "motivavo",
+          "motivavi",
+          "motivava",
+          "motivavamo",
+          "motivavate",
+          "motivavano"
+        ],
+        "ger": "motivando",
+        "part": "motivato"
+      },
+      "formsSource": "authored"
     },
     "statistico": {
       "lemmaId": "statistico",
@@ -38971,7 +40339,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "endure, tolerate"
-      }
+      },
+      "forms": {
+        "pres": [
+          "sopporto",
+          "sopporti",
+          "sopporta",
+          "sopportiamo",
+          "sopportate",
+          "sopportano"
+        ],
+        "pret": [
+          "sopportai",
+          "sopportasti",
+          "sopportò",
+          "sopportammo",
+          "sopportaste",
+          "sopportarono"
+        ],
+        "imp": [
+          "sopportavo",
+          "sopportavi",
+          "sopportava",
+          "sopportavamo",
+          "sopportavate",
+          "sopportavano"
+        ],
+        "ger": "sopportando",
+        "part": "sopportato"
+      },
+      "formsSource": "authored"
     },
     "piattaforma": {
       "lemmaId": "piattaforma",
@@ -43773,7 +45170,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "admire"
-      }
+      },
+      "forms": {
+        "pres": [
+          "ammiro",
+          "ammiri",
+          "ammira",
+          "ammiriamo",
+          "ammirate",
+          "ammirano"
+        ],
+        "pret": [
+          "ammirai",
+          "ammirasti",
+          "ammirò",
+          "ammirammo",
+          "ammiraste",
+          "ammirarono"
+        ],
+        "imp": [
+          "ammiravo",
+          "ammiravi",
+          "ammirava",
+          "ammiravamo",
+          "ammiravate",
+          "ammiravano"
+        ],
+        "ger": "ammirando",
+        "part": "ammirato"
+      },
+      "formsSource": "authored"
     },
     "copyright": {
       "lemmaId": "copyright",
@@ -46339,7 +47765,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "detach, separate"
-      }
+      },
+      "forms": {
+        "pres": [
+          "stacco",
+          "stacchi",
+          "stacca",
+          "stacchiamo",
+          "staccate",
+          "staccano"
+        ],
+        "pret": [
+          "staccai",
+          "staccasti",
+          "staccò",
+          "staccammo",
+          "staccaste",
+          "staccarono"
+        ],
+        "imp": [
+          "staccavo",
+          "staccavi",
+          "staccava",
+          "staccavamo",
+          "staccavate",
+          "staccavano"
+        ],
+        "ger": "staccando",
+        "part": "staccato"
+      },
+      "formsSource": "authored"
     },
     "profitto": {
       "lemmaId": "profitto",
@@ -47123,7 +48578,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "celebrate"
-      }
+      },
+      "forms": {
+        "pres": [
+          "festeggio",
+          "festeggi",
+          "festeggia",
+          "festeggiamo",
+          "festeggiate",
+          "festeggiano"
+        ],
+        "pret": [
+          "festeggiai",
+          "festeggiasti",
+          "festeggiò",
+          "festeggiammo",
+          "festeggiaste",
+          "festeggiarono"
+        ],
+        "imp": [
+          "festeggiavo",
+          "festeggiavi",
+          "festeggiava",
+          "festeggiavamo",
+          "festeggiavate",
+          "festeggiavano"
+        ],
+        "ger": "festeggiando",
+        "part": "festeggiato"
+      },
+      "formsSource": "authored"
     },
     "dose": {
       "lemmaId": "dose",
@@ -47735,7 +49219,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "arrange, settle"
-      }
+      },
+      "forms": {
+        "pres": [
+          "sistemo",
+          "sistemi",
+          "sistema",
+          "sistemiamo",
+          "sistemate",
+          "sistemano"
+        ],
+        "pret": [
+          "sistemai",
+          "sistemasti",
+          "sistemò",
+          "sistemammo",
+          "sistemaste",
+          "sistemarono"
+        ],
+        "imp": [
+          "sistemavo",
+          "sistemavi",
+          "sistemava",
+          "sistemavamo",
+          "sistemavate",
+          "sistemavano"
+        ],
+        "ger": "sistemando",
+        "part": "sistemato"
+      },
+      "formsSource": "authored"
     },
     "latino": {
       "lemmaId": "latino",
@@ -52323,7 +53836,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "courageous, brave"
-      }
+      },
+      "forms": {
+        "ms": "coraggioso",
+        "fs": "coraggiosa",
+        "mp": "coraggiosi",
+        "fp": "coraggiose"
+      },
+      "formsSource": "authored"
     },
     "offendere": {
       "lemmaId": "offendere",
@@ -56696,7 +58216,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "reconsider"
-      }
+      },
+      "forms": {
+        "pres": [
+          "ripenso",
+          "ripensi",
+          "ripensa",
+          "ripensiamo",
+          "ripensate",
+          "ripensano"
+        ],
+        "pret": [
+          "ripensai",
+          "ripensasti",
+          "ripensò",
+          "ripensammo",
+          "ripensaste",
+          "ripensarono"
+        ],
+        "imp": [
+          "ripensavo",
+          "ripensavi",
+          "ripensava",
+          "ripensavamo",
+          "ripensavate",
+          "ripensavano"
+        ],
+        "ger": "ripensando",
+        "part": "ripensato"
+      },
+      "formsSource": "authored"
     },
     "fornitore": {
       "lemmaId": "fornitore",
@@ -57583,7 +59132,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "generous"
-      }
+      },
+      "forms": {
+        "ms": "generoso",
+        "fs": "generosa",
+        "mp": "generosi",
+        "fp": "generose"
+      },
+      "formsSource": "authored"
     },
     "cartaceo": {
       "lemmaId": "cartaceo",
@@ -59237,7 +60793,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "frighten, scare"
-      }
+      },
+      "forms": {
+        "pres": [
+          "spavento",
+          "spaventi",
+          "spaventa",
+          "spaventiamo",
+          "spaventate",
+          "spaventano"
+        ],
+        "pret": [
+          "spaventai",
+          "spaventasti",
+          "spaventò",
+          "spaventammo",
+          "spaventaste",
+          "spaventarono"
+        ],
+        "imp": [
+          "spaventavo",
+          "spaventavi",
+          "spaventava",
+          "spaventavamo",
+          "spaventavate",
+          "spaventavano"
+        ],
+        "ger": "spaventando",
+        "part": "spaventato"
+      },
+      "formsSource": "authored"
     },
     "selvaggio": {
       "lemmaId": "selvaggio",
@@ -87184,6 +88769,241 @@
       "glosses": {
         "en": "you (plural object); there"
       }
+    },
+    "felicissimo": {
+      "lemmaId": "felicissimo",
+      "lang": "it",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adjective"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "overjoyed"
+      },
+      "forms": {
+        "ms": "felicissimo",
+        "fs": "felicissima",
+        "mp": "felicissimi",
+        "fp": "felicissime"
+      },
+      "formsSource": "authored"
+    },
+    "reclamo": {
+      "lemmaId": "reclamo",
+      "lang": "it",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "complaint"
+      },
+      "forms": {
+        "sg": "reclamo",
+        "pl": "reclami"
+      },
+      "formsSource": "authored"
+    },
+    "rattristarsi": {
+      "lemmaId": "rattristarsi",
+      "lang": "it",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "to become sad"
+      },
+      "forms": {
+        "pres": [
+          "rattristaro",
+          "rattristari",
+          "rattristara",
+          "rattristariamo",
+          "rattristarate",
+          "rattristarano"
+        ],
+        "pret": [
+          "rattristarai",
+          "rattristarasti",
+          "rattristarò",
+          "rattristarammo",
+          "rattristaraste",
+          "rattristararono"
+        ],
+        "imp": [
+          "rattristaravo",
+          "rattristaravi",
+          "rattristarava",
+          "rattristaravamo",
+          "rattristaravate",
+          "rattristaravano"
+        ],
+        "ger": "rattristarando",
+        "part": "rattristarato"
+      },
+      "formsSource": "authored"
+    },
+    "svantaggio": {
+      "lemmaId": "svantaggio",
+      "lang": "it",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "drawback"
+      },
+      "forms": {
+        "sg": "svantaggio",
+        "pl": "svantaggi"
+      },
+      "formsSource": "authored"
+    },
+    "impaziente": {
+      "lemmaId": "impaziente",
+      "lang": "it",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adjective"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "impatient"
+      },
+      "forms": {
+        "ms": "impaziente",
+        "fs": null,
+        "mp": "impazienti",
+        "fp": null
+      },
+      "formsSource": "authored"
+    },
+    "ah": {
+      "lemmaId": "ah",
+      "lang": "it",
+      "cefrPriorBand": "A2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "interjection"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "ah, oh"
+      }
+    },
+    "pop": {
+      "lemmaId": "pop",
+      "lang": "it",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "pop music"
+      }
+    },
+    "alcol": {
+      "lemmaId": "alcol",
+      "lang": "it",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "alcohol"
+      }
+    },
+    "ambulatorio": {
+      "lemmaId": "ambulatorio",
+      "lang": "it",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "clinic, surgery"
+      },
+      "forms": {
+        "sg": "ambulatorio",
+        "pl": "ambulatori"
+      },
+      "formsSource": "authored"
+    },
+    "dimagrire": {
+      "lemmaId": "dimagrire",
+      "lang": "it",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "to lose weight"
+      },
+      "forms": {
+        "pres": [
+          "dimagrisco",
+          "dimagrisci",
+          "dimagrisce",
+          "dimagriamo",
+          "dimagrite",
+          "dimagriscono"
+        ],
+        "pret": [
+          "dimagrii",
+          "dimagristi",
+          "dimagrì",
+          "dimagrimmo",
+          "dimagriste",
+          "dimagrirono"
+        ],
+        "imp": [
+          "dimagrivo",
+          "dimagrivi",
+          "dimagriva",
+          "dimagrivamo",
+          "dimagrivate",
+          "dimagrivano"
+        ],
+        "ger": "dimagrendo",
+        "part": "dimagrito"
+      },
+      "formsSource": "authored"
+    },
+    "chiacchierata": {
+      "lemmaId": "chiacchierata",
+      "lang": "it",
+      "cefrPriorBand": "B1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "a chat"
+      },
+      "forms": {
+        "sg": "chiacchierata",
+        "pl": "chiacchierate"
+      },
+      "formsSource": "authored"
     }
   }
 }

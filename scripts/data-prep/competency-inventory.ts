@@ -205,18 +205,28 @@ function tokenize(wording: string, rules: LanguageRules): string[] {
   // before it was ever consulted. Caught by new-language.test.ts, which is
   // what that test is for.
   const chunks = wording.toLowerCase().split(/\s+/).filter(Boolean);
+  const bare = (value: string) =>
+    value.replace(/[^\p{Letter}\p{Number}\p{Mark}]/gu, "");
 
   const out: string[] = [];
   for (const chunk of chunks) {
     const expanded = rules.expandWrittenForm?.(chunk);
     if (expanded) {
-      out.push(...expanded);
+      // STRIP THE EXPANDED PARTS TOO. A contraction can sit against
+      // punctuation -- `d'accordo,` -- and the comma rode along on the second
+      // half, so the word after any elision at the end of a clause failed to
+      // resolve. The language returns words; making them clean is this
+      // function's job, not every language's.
+      for (const part of expanded) {
+        const cleaned = bare(part);
+        if (cleaned) out.push(cleaned);
+      }
       continue;
     }
     // Not something this language expands, so what is left is one word plus
     // whatever punctuation it was written next to.
-    const bare = chunk.replace(/[^\p{Letter}\p{Number}\p{Mark}]/gu, "");
-    if (bare) out.push(bare);
+    const cleaned = bare(chunk);
+    if (cleaned) out.push(cleaned);
   }
   return out;
 }

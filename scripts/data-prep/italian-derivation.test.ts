@@ -114,6 +114,22 @@ describe("derived Italian forms are real words", () => {
     expect(index["cerciate"]).toBeUndefined();
   });
 
+  it("the SAME respelling in the future and conditional, which was missed for a band", () => {
+    // The subjunctive fix only looked at an `i` ending. The future and
+    // conditional endings start with `e`, need the same `h`, and did not get
+    // it -- so `cercerò` sat in the index as a non-word through all of A1 and
+    // A2 while `cercherò` was missing. Found by probing, not by a failure.
+    expect(lemmaOf("cercherò")).toBe("cercare");
+    expect(lemmaOf("pagherò")).toBe("pagare");
+    expect(lemmaOf("spiegherei")).toBe("spiegare");
+    expect(index["cercerò"]).toBeUndefined();
+    expect(index["pagerò"]).toBeUndefined();
+
+    // A stem that does not end in c or g must NOT grow one.
+    expect(lemmaOf("parlerò")).toBe("parlare");
+    expect(index["parlherò"]).toBeUndefined();
+  });
+
   it("builds the conditional and future, regular and irregular", () => {
     for (const [surface, lemma] of [
       ["sentirei", "sentire"],
