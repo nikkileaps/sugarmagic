@@ -105,7 +105,26 @@ const APOCOPE: Record<string, string> = {
   gran: "grande",
   san: "santo",
   bel: "bello",
-  quel: "quello"
+  quel: "quello",
+  // `mal di testa`, `mal di gola`: `male` drops its vowel before `di`.
+  mal: "male"
+};
+
+/**
+ * A clitic pronoun shifts its `i` to `e` when another clitic follows it:
+ * `mi lo` is written `me lo`, `ci la` is `ce la`. Hence `non ce la faccio`.
+ *
+ * `me`, `te` and `se` happen to be dictionary entries in their own right and
+ * so already resolve; `ce` and `ve` do not. The whole family is listed anyway
+ * because the rule is one rule, and the entries that duplicate a headword are
+ * inert -- a headword is claimed first and keeps its own answer.
+ */
+const CLITIC_VARIANTS: Record<string, string[]> = {
+  mi: ["me"],
+  ti: ["te"],
+  ci: ["ce"],
+  vi: ["ve"],
+  si: ["se"]
 };
 
 /**
@@ -648,6 +667,10 @@ function addItalianDerivedForms(
   // `coi` and `col` are optional spellings nobody has to use.
   for (const fused of ARTICULATED_PREPOSITIONS[entry.lemmaId] ?? []) {
     addMorphologyEntry(forms, fused, entry.lemmaId, entry.partsOfSpeech);
+  }
+
+  for (const variant of CLITIC_VARIANTS[entry.lemmaId] ?? []) {
+    addMorphologyEntry(forms, variant, entry.lemmaId, entry.partsOfSpeech);
   }
 }
 

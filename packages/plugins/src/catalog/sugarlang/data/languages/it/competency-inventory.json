@@ -61,6 +61,18 @@
       "band": "A1",
       "ordinal": 10,
       "displayName": "Transport and Tickets"
+    },
+    {
+      "lessonId": "weather",
+      "band": "A1",
+      "ordinal": 11,
+      "displayName": "Weather and Environment"
+    },
+    {
+      "lessonId": "body-and-feeling-unwell",
+      "band": "A1",
+      "ordinal": 12,
+      "displayName": "The Body and Feeling Unwell"
     }
   ],
   "competencies": [
@@ -10982,6 +10994,1614 @@
             "glossBySurface": {
               "parte adesso": {
                 "en": "it's leaving now"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-about-weather",
+      "lessonId": "weather",
+      "displayName": "Ask about the weather",
+      "cefrDescriptor": "Can ask about the weather.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "che_tempo_fa",
+            "normalizedForm": "che_tempo_fa",
+            "surfaceForms": [
+              "che tempo fa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "tempo",
+              "fa"
+            ],
+            "glossBySurface": {
+              "che tempo fa": {
+                "en": "what's the weather like"
+              }
+            }
+          },
+          {
+            "exponentId": "come_il_tempo",
+            "normalizedForm": "come_il_tempo",
+            "surfaceForms": [
+              "com'è il tempo",
+              "com'e il tempo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "essere",
+              "tempo"
+            ],
+            "glossBySurface": {
+              "com'è il tempo": {
+                "en": "how's the weather"
+              },
+              "com'e il tempo": {
+                "en": "how's the weather"
+              }
+            }
+          },
+          {
+            "exponentId": "piovera",
+            "normalizedForm": "piovera",
+            "surfaceForms": [
+              "pioverà",
+              "piovera"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piovere"
+            ],
+            "glossBySurface": {
+              "pioverà": {
+                "en": "is it going to rain"
+              },
+              "piovera": {
+                "en": "is it going to rain"
+              }
+            }
+          },
+          {
+            "exponentId": "che_tempo_fara",
+            "normalizedForm": "che_tempo_fara",
+            "surfaceForms": [
+              "che tempo farà",
+              "che tempo fara"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "tempo",
+              "fare"
+            ],
+            "glossBySurface": {
+              "che tempo farà": {
+                "en": "what's the weather going to be like"
+              },
+              "che tempo fara": {
+                "en": "what's the weather going to be like"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-surroundings",
+      "lessonId": "weather",
+      "displayName": "Describe the surroundings",
+      "cefrDescriptor": "Can describe the immediate environment simply.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "ci_sono_molti_alberi",
+            "normalizedForm": "ci_sono_molti_alberi",
+            "surfaceForms": [
+              "ci sono molti alberi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "molto",
+              "albero"
+            ],
+            "glossBySurface": {
+              "ci sono molti alberi": {
+                "en": "there are a lot of trees"
+              }
+            }
+          },
+          {
+            "exponentId": "e_molto_bello",
+            "normalizedForm": "e_molto_bello",
+            "surfaceForms": [
+              "è molto bello",
+              "e molto bello"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "molto",
+              "bello"
+            ],
+            "glossBySurface": {
+              "è molto bello": {
+                "en": "it's very pretty"
+              },
+              "e molto bello": {
+                "en": "it's very pretty"
+              }
+            }
+          },
+          {
+            "exponentId": "ce_molta_gente",
+            "normalizedForm": "ce_molta_gente",
+            "surfaceForms": [
+              "c'è molta gente",
+              "c'e molta gente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "molto",
+              "gente"
+            ],
+            "glossBySurface": {
+              "c'è molta gente": {
+                "en": "there are a lot of people"
+              },
+              "c'e molta gente": {
+                "en": "there are a lot of people"
+              }
+            }
+          },
+          {
+            "exponentId": "e_un_posto_tranquillo",
+            "normalizedForm": "e_un_posto_tranquillo",
+            "surfaceForms": [
+              "è un posto tranquillo",
+              "e un posto tranquillo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "posto",
+              "tranquillo"
+            ],
+            "glossBySurface": {
+              "è un posto tranquillo": {
+                "en": "it's a quiet place"
+              },
+              "e un posto tranquillo": {
+                "en": "it's a quiet place"
+              }
+            }
+          },
+          {
+            "exponentId": "non_ce_nessuno",
+            "normalizedForm": "non_ce_nessuno",
+            "surfaceForms": [
+              "non c'è nessuno",
+              "non c'e nessuno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "essere",
+              "nessuno"
+            ],
+            "glossBySurface": {
+              "non c'è nessuno": {
+                "en": "there's nobody here"
+              },
+              "non c'e nessuno": {
+                "en": "there's nobody here"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-animals-and-plants",
+      "lessonId": "weather",
+      "displayName": "Name animals and plants",
+      "cefrDescriptor": "Can identify familiar animals and plants.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "il_cane",
+            "normalizedForm": "il_cane",
+            "surfaceForms": [
+              "il cane"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cane"
+            ],
+            "glossBySurface": {
+              "il cane": {
+                "en": "the dog"
+              }
+            }
+          },
+          {
+            "exponentId": "il_gatto",
+            "normalizedForm": "il_gatto",
+            "surfaceForms": [
+              "il gatto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "gatto"
+            ],
+            "glossBySurface": {
+              "il gatto": {
+                "en": "the cat"
+              }
+            }
+          },
+          {
+            "exponentId": "luccello",
+            "normalizedForm": "luccello",
+            "surfaceForms": [
+              "l'uccello",
+              "gli uccelli"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "uccello"
+            ],
+            "glossBySurface": {
+              "l'uccello": {
+                "en": "the bird"
+              },
+              "gli uccelli": {
+                "en": "the birds"
+              }
+            }
+          },
+          {
+            "exponentId": "lalbero",
+            "normalizedForm": "lalbero",
+            "surfaceForms": [
+              "l'albero",
+              "gli alberi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "albero"
+            ],
+            "glossBySurface": {
+              "l'albero": {
+                "en": "the tree"
+              },
+              "gli alberi": {
+                "en": "the trees"
+              }
+            }
+          },
+          {
+            "exponentId": "il_fiore",
+            "normalizedForm": "il_fiore",
+            "surfaceForms": [
+              "il fiore",
+              "i fiori"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fiore",
+              "i",
+              "fiori"
+            ],
+            "glossBySurface": {
+              "il fiore": {
+                "en": "the flower"
+              },
+              "i fiori": {
+                "en": "the flowers"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-landscape",
+      "lessonId": "weather",
+      "displayName": "Name landscape features",
+      "cefrDescriptor": "Can recognize common landscape words.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "la_montagna",
+            "normalizedForm": "la_montagna",
+            "surfaceForms": [
+              "la montagna",
+              "le montagne"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "montagna",
+              "le"
+            ],
+            "glossBySurface": {
+              "la montagna": {
+                "en": "the mountain"
+              },
+              "le montagne": {
+                "en": "the mountains"
+              }
+            }
+          },
+          {
+            "exponentId": "il_fiume",
+            "normalizedForm": "il_fiume",
+            "surfaceForms": [
+              "il fiume"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fiume"
+            ],
+            "glossBySurface": {
+              "il fiume": {
+                "en": "the river"
+              }
+            }
+          },
+          {
+            "exponentId": "il_mare",
+            "normalizedForm": "il_mare",
+            "surfaceForms": [
+              "il mare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mare"
+            ],
+            "glossBySurface": {
+              "il mare": {
+                "en": "the sea"
+              }
+            }
+          },
+          {
+            "exponentId": "la_spiaggia",
+            "normalizedForm": "la_spiaggia",
+            "surfaceForms": [
+              "la spiaggia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "spiaggia"
+            ],
+            "glossBySurface": {
+              "la spiaggia": {
+                "en": "the beach"
+              }
+            }
+          },
+          {
+            "exponentId": "il_bosco",
+            "normalizedForm": "il_bosco",
+            "surfaceForms": [
+              "il bosco"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "bosco"
+            ],
+            "glossBySurface": {
+              "il bosco": {
+                "en": "the forest"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-seasons",
+      "lessonId": "weather",
+      "displayName": "Name the seasons",
+      "cefrDescriptor": "Can identify the basic seasons.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "la_primavera",
+            "normalizedForm": "la_primavera",
+            "surfaceForms": [
+              "la primavera"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "primavera"
+            ],
+            "glossBySurface": {
+              "la primavera": {
+                "en": "spring"
+              }
+            }
+          },
+          {
+            "exponentId": "lestate",
+            "normalizedForm": "lestate",
+            "surfaceForms": [
+              "l'estate"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "estate"
+            ],
+            "glossBySurface": {
+              "l'estate": {
+                "en": "summer"
+              }
+            }
+          },
+          {
+            "exponentId": "lautunno",
+            "normalizedForm": "lautunno",
+            "surfaceForms": [
+              "l'autunno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "autunno"
+            ],
+            "glossBySurface": {
+              "l'autunno": {
+                "en": "autumn"
+              }
+            }
+          },
+          {
+            "exponentId": "linverno",
+            "normalizedForm": "linverno",
+            "surfaceForms": [
+              "l'inverno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "inverno"
+            ],
+            "glossBySurface": {
+              "l'inverno": {
+                "en": "winter"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-weather",
+      "lessonId": "weather",
+      "displayName": "Name weather conditions",
+      "cefrDescriptor": "Can identify common weather conditions.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "il_sole",
+            "normalizedForm": "il_sole",
+            "surfaceForms": [
+              "il sole"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sole"
+            ],
+            "glossBySurface": {
+              "il sole": {
+                "en": "the sun"
+              }
+            }
+          },
+          {
+            "exponentId": "la_pioggia",
+            "normalizedForm": "la_pioggia",
+            "surfaceForms": [
+              "la pioggia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "pioggia"
+            ],
+            "glossBySurface": {
+              "la pioggia": {
+                "en": "the rain"
+              }
+            }
+          },
+          {
+            "exponentId": "la_neve",
+            "normalizedForm": "la_neve",
+            "surfaceForms": [
+              "la neve"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "neve"
+            ],
+            "glossBySurface": {
+              "la neve": {
+                "en": "the snow"
+              }
+            }
+          },
+          {
+            "exponentId": "il_vento",
+            "normalizedForm": "il_vento",
+            "surfaceForms": [
+              "il vento"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "vento"
+            ],
+            "glossBySurface": {
+              "il vento": {
+                "en": "the wind"
+              }
+            }
+          },
+          {
+            "exponentId": "le_nuvole",
+            "normalizedForm": "le_nuvole",
+            "surfaceForms": [
+              "le nuvole"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "le",
+              "nuvola"
+            ],
+            "glossBySurface": {
+              "le nuvole": {
+                "en": "the clouds"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-hot-or-cold",
+      "lessonId": "weather",
+      "displayName": "Say it is hot or cold",
+      "cefrDescriptor": "Can say whether it is hot or cold.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "fa_caldo",
+            "normalizedForm": "fa_caldo",
+            "surfaceForms": [
+              "fa caldo",
+              "fa molto caldo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fa",
+              "caldo",
+              "molto"
+            ],
+            "glossBySurface": {
+              "fa caldo": {
+                "en": "it's hot"
+              },
+              "fa molto caldo": {
+                "en": "it's very hot"
+              }
+            }
+          },
+          {
+            "exponentId": "fa_freddo",
+            "normalizedForm": "fa_freddo",
+            "surfaceForms": [
+              "fa freddo",
+              "fa molto freddo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fa",
+              "freddo",
+              "molto"
+            ],
+            "glossBySurface": {
+              "fa freddo": {
+                "en": "it's cold"
+              },
+              "fa molto freddo": {
+                "en": "it's very cold"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-weather",
+      "lessonId": "weather",
+      "displayName": "Say what the weather is like",
+      "cefrDescriptor": "Can say what the weather is like.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "ce_il_sole",
+            "normalizedForm": "ce_il_sole",
+            "surfaceForms": [
+              "c'è il sole",
+              "c'e il sole"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "sole"
+            ],
+            "glossBySurface": {
+              "c'è il sole": {
+                "en": "it's sunny"
+              },
+              "c'e il sole": {
+                "en": "it's sunny"
+              }
+            }
+          },
+          {
+            "exponentId": "sta_piovendo",
+            "normalizedForm": "sta_piovendo",
+            "surfaceForms": [
+              "sta piovendo",
+              "piove"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "stare",
+              "piovere"
+            ],
+            "glossBySurface": {
+              "sta piovendo": {
+                "en": "it's raining"
+              },
+              "piove": {
+                "en": "it's raining"
+              }
+            }
+          },
+          {
+            "exponentId": "e_nuvoloso",
+            "normalizedForm": "e_nuvoloso",
+            "surfaceForms": [
+              "è nuvoloso",
+              "e nuvoloso"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "nuvoloso"
+            ],
+            "glossBySurface": {
+              "è nuvoloso": {
+                "en": "it's cloudy"
+              },
+              "e nuvoloso": {
+                "en": "it's cloudy"
+              }
+            }
+          },
+          {
+            "exponentId": "ce_vento",
+            "normalizedForm": "ce_vento",
+            "surfaceForms": [
+              "c'è vento",
+              "c'e vento"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "vento"
+            ],
+            "glossBySurface": {
+              "c'è vento": {
+                "en": "it's windy"
+              },
+              "c'e vento": {
+                "en": "it's windy"
+              }
+            }
+          },
+          {
+            "exponentId": "fa_brutto_tempo",
+            "normalizedForm": "fa_brutto_tempo",
+            "surfaceForms": [
+              "fa brutto tempo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fa",
+              "brutto",
+              "tempo"
+            ],
+            "glossBySurface": {
+              "fa brutto tempo": {
+                "en": "the weather is bad"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-weather-preference",
+      "lessonId": "weather",
+      "displayName": "Say which weather they prefer",
+      "cefrDescriptor": "Can express a simple weather preference.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "mi_piace_il_sole",
+            "normalizedForm": "mi_piace_il_sole",
+            "surfaceForms": [
+              "mi piace il sole"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piacere",
+              "sole"
+            ],
+            "glossBySurface": {
+              "mi piace il sole": {
+                "en": "I like the sun"
+              }
+            }
+          },
+          {
+            "exponentId": "non_mi_piace_la_pioggia",
+            "normalizedForm": "non_mi_piace_la_pioggia",
+            "surfaceForms": [
+              "non mi piace la pioggia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "piacere",
+              "pioggia"
+            ],
+            "glossBySurface": {
+              "non mi piace la pioggia": {
+                "en": "I don't like the rain"
+              }
+            }
+          },
+          {
+            "exponentId": "preferisco_lestate",
+            "normalizedForm": "preferisco_lestate",
+            "surfaceForms": [
+              "preferisco l'estate"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "preferire",
+              "estate"
+            ],
+            "glossBySurface": {
+              "preferisco l'estate": {
+                "en": "I prefer summer"
+              }
+            }
+          },
+          {
+            "exponentId": "adoro_la_neve",
+            "normalizedForm": "adoro_la_neve",
+            "surfaceForms": [
+              "adoro la neve"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "adorare",
+              "neve"
+            ],
+            "glossBySurface": {
+              "adoro la neve": {
+                "en": "I love the snow"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-for-help",
+      "lessonId": "body-and-feeling-unwell",
+      "displayName": "Ask for help",
+      "cefrDescriptor": "Can ask for basic help.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "aiuto",
+            "normalizedForm": "aiuto",
+            "surfaceForms": [
+              "aiuto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "aiuto"
+            ],
+            "glossBySurface": {
+              "aiuto": {
+                "en": "help"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_bisogno_di_aiuto",
+            "normalizedForm": "ho_bisogno_di_aiuto",
+            "surfaceForms": [
+              "ho bisogno di aiuto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "bisogno",
+              "di",
+              "aiuto"
+            ],
+            "glossBySurface": {
+              "ho bisogno di aiuto": {
+                "en": "I need help"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_puoi_aiutare",
+            "normalizedForm": "mi_puoi_aiutare",
+            "surfaceForms": [
+              "mi puoi aiutare",
+              "mi può aiutare",
+              "mi puo aiutare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "potere",
+              "aiutare"
+            ],
+            "glossBySurface": {
+              "mi puoi aiutare": {
+                "en": "can you help me"
+              },
+              "mi può aiutare": {
+                "en": "could you help me"
+              },
+              "mi puo aiutare": {
+                "en": "could you help me"
+              }
+            }
+          },
+          {
+            "exponentId": "aiuto_presto",
+            "normalizedForm": "aiuto_presto",
+            "surfaceForms": [
+              "aiuto, presto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "aiuto",
+              "presto"
+            ],
+            "glossBySurface": {
+              "aiuto, presto": {
+                "en": "help! (emergency)"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-how-someone-feels",
+      "lessonId": "body-and-feeling-unwell",
+      "displayName": "Ask how someone feels",
+      "cefrDescriptor": "Can ask how someone is feeling.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "come_ti_senti",
+            "normalizedForm": "come_ti_senti",
+            "surfaceForms": [
+              "come ti senti",
+              "come si sente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "sentire"
+            ],
+            "glossBySurface": {
+              "come ti senti": {
+                "en": "how do you feel"
+              },
+              "come si sente": {
+                "en": "how do you feel"
+              }
+            }
+          },
+          {
+            "exponentId": "ti_senti_bene",
+            "normalizedForm": "ti_senti_bene",
+            "surfaceForms": [
+              "ti senti bene"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sentire",
+              "bene"
+            ],
+            "glossBySurface": {
+              "ti senti bene": {
+                "en": "do you feel alright"
+              }
+            }
+          },
+          {
+            "exponentId": "cosa_ti_succede",
+            "normalizedForm": "cosa_ti_succede",
+            "surfaceForms": [
+              "cosa ti succede"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "succedere"
+            ],
+            "glossBySurface": {
+              "cosa ti succede": {
+                "en": "what's wrong"
+              }
+            }
+          },
+          {
+            "exponentId": "stai_bene",
+            "normalizedForm": "stai_bene",
+            "surfaceForms": [
+              "stai bene"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "stare",
+              "bene"
+            ],
+            "glossBySurface": {
+              "stai bene": {
+                "en": "are you okay"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "express-tiredness",
+      "lessonId": "body-and-feeling-unwell",
+      "displayName": "Say they are tired",
+      "cefrDescriptor": "Can express tiredness.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "sono_stanco",
+            "normalizedForm": "sono_stanco",
+            "surfaceForms": [
+              "sono stanco",
+              "sono stanca"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "stanco"
+            ],
+            "glossBySurface": {
+              "sono stanco": {
+                "en": "I'm tired"
+              },
+              "sono stanca": {
+                "en": "I'm tired"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_sonno",
+            "normalizedForm": "ho_sonno",
+            "surfaceForms": [
+              "ho sonno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "sonno"
+            ],
+            "glossBySurface": {
+              "ho sonno": {
+                "en": "I'm sleepy"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_bisogno_di_riposare",
+            "normalizedForm": "ho_bisogno_di_riposare",
+            "surfaceForms": [
+              "ho bisogno di riposare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "bisogno",
+              "di",
+              "riposare"
+            ],
+            "glossBySurface": {
+              "ho bisogno di riposare": {
+                "en": "I need to rest"
+              }
+            }
+          },
+          {
+            "exponentId": "non_ce_la_faccio_piu",
+            "normalizedForm": "non_ce_la_faccio_piu",
+            "surfaceForms": [
+              "non ce la faccio più",
+              "non ce la faccio piu"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "fare",
+              "più"
+            ],
+            "glossBySurface": {
+              "non ce la faccio più": {
+                "en": "I can't go on"
+              },
+              "non ce la faccio piu": {
+                "en": "I can't go on"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "follow-helper-instruction",
+      "lessonId": "body-and-feeling-unwell",
+      "displayName": "Follow a helper's instruction",
+      "cefrDescriptor": "Can understand a simple instruction from someone helping them.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "vieni_con_me",
+            "normalizedForm": "vieni_con_me",
+            "surfaceForms": [
+              "vieni con me"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "venire",
+              "con",
+              "me"
+            ],
+            "glossBySurface": {
+              "vieni con me": {
+                "en": "come with me"
+              }
+            }
+          },
+          {
+            "exponentId": "apri_la_bocca",
+            "normalizedForm": "apri_la_bocca",
+            "surfaceForms": [
+              "apri la bocca"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "aprire",
+              "bocca"
+            ],
+            "glossBySurface": {
+              "apri la bocca": {
+                "en": "open your mouth"
+              }
+            }
+          },
+          {
+            "exponentId": "respira",
+            "normalizedForm": "respira",
+            "surfaceForms": [
+              "respira"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "respirare"
+            ],
+            "glossBySurface": {
+              "respira": {
+                "en": "breathe"
+              }
+            }
+          },
+          {
+            "exponentId": "stai_tranquillo",
+            "normalizedForm": "stai_tranquillo",
+            "surfaceForms": [
+              "stai tranquillo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "stare",
+              "tranquillo"
+            ],
+            "glossBySurface": {
+              "stai tranquillo": {
+                "en": "easy now"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-body-parts",
+      "lessonId": "body-and-feeling-unwell",
+      "displayName": "Name body parts",
+      "cefrDescriptor": "Can identify basic body parts.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "testa",
+            "normalizedForm": "testa",
+            "surfaceForms": [
+              "testa",
+              "la testa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "testa"
+            ],
+            "glossBySurface": {
+              "testa": {
+                "en": "head"
+              },
+              "la testa": {
+                "en": "the head"
+              }
+            }
+          },
+          {
+            "exponentId": "stomaco",
+            "normalizedForm": "stomaco",
+            "surfaceForms": [
+              "stomaco",
+              "lo stomaco"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "stomaco"
+            ],
+            "glossBySurface": {
+              "stomaco": {
+                "en": "stomach"
+              },
+              "lo stomaco": {
+                "en": "the stomach"
+              }
+            }
+          },
+          {
+            "exponentId": "gola",
+            "normalizedForm": "gola",
+            "surfaceForms": [
+              "gola",
+              "la gola"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "gola"
+            ],
+            "glossBySurface": {
+              "gola": {
+                "en": "throat"
+              },
+              "la gola": {
+                "en": "the throat"
+              }
+            }
+          },
+          {
+            "exponentId": "mano",
+            "normalizedForm": "mano",
+            "surfaceForms": [
+              "mano",
+              "la mano",
+              "le mani"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mano",
+              "le"
+            ],
+            "glossBySurface": {
+              "mano": {
+                "en": "hand"
+              },
+              "la mano": {
+                "en": "the hand"
+              },
+              "le mani": {
+                "en": "the hands"
+              }
+            }
+          },
+          {
+            "exponentId": "piede",
+            "normalizedForm": "piede",
+            "surfaceForms": [
+              "piede",
+              "il piede",
+              "i piedi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piede",
+              "i"
+            ],
+            "glossBySurface": {
+              "piede": {
+                "en": "foot"
+              },
+              "il piede": {
+                "en": "the foot"
+              },
+              "i piedi": {
+                "en": "the feet"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "recognize-safety-words",
+      "lessonId": "body-and-feeling-unwell",
+      "displayName": "Recognize safety words",
+      "cefrDescriptor": "Can recognize essential health and safety words.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "attenzione",
+            "normalizedForm": "attenzione",
+            "surfaceForms": [
+              "attenzione"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "attenzione"
+            ],
+            "glossBySurface": {
+              "attenzione": {
+                "en": "careful"
+              }
+            }
+          },
+          {
+            "exponentId": "pericolo",
+            "normalizedForm": "pericolo",
+            "surfaceForms": [
+              "pericolo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "pericolo"
+            ],
+            "glossBySurface": {
+              "pericolo": {
+                "en": "danger"
+              }
+            }
+          },
+          {
+            "exponentId": "emergenza",
+            "normalizedForm": "emergenza",
+            "surfaceForms": [
+              "emergenza"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "emergenza"
+            ],
+            "glossBySurface": {
+              "emergenza": {
+                "en": "emergency"
+              }
+            }
+          },
+          {
+            "exponentId": "farmacia",
+            "normalizedForm": "farmacia",
+            "surfaceForms": [
+              "farmacia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "farmacia"
+            ],
+            "glossBySurface": {
+              "farmacia": {
+                "en": "pharmacy"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-how-they-feel",
+      "lessonId": "body-and-feeling-unwell",
+      "displayName": "Say they feel well or unwell",
+      "cefrDescriptor": "Can say that they feel well or unwell.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "mi_sento_bene",
+            "normalizedForm": "mi_sento_bene",
+            "surfaceForms": [
+              "mi sento bene",
+              "mi sento male"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sentire",
+              "bene",
+              "male"
+            ],
+            "glossBySurface": {
+              "mi sento bene": {
+                "en": "I feel well"
+              },
+              "mi sento male": {
+                "en": "I feel bad"
+              }
+            }
+          },
+          {
+            "exponentId": "non_mi_sento_bene",
+            "normalizedForm": "non_mi_sento_bene",
+            "surfaceForms": [
+              "non mi sento bene"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "sentire",
+              "bene"
+            ],
+            "glossBySurface": {
+              "non mi sento bene": {
+                "en": "I don't feel well"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_malato",
+            "normalizedForm": "sono_malato",
+            "surfaceForms": [
+              "sono malato",
+              "sono malata"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "malato"
+            ],
+            "glossBySurface": {
+              "sono malato": {
+                "en": "I'm ill"
+              },
+              "sono malata": {
+                "en": "I'm ill"
+              }
+            }
+          },
+          {
+            "exponentId": "sto_meglio",
+            "normalizedForm": "sto_meglio",
+            "surfaceForms": [
+              "sto meglio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "stare",
+              "meglio"
+            ],
+            "glossBySurface": {
+              "sto meglio": {
+                "en": "I'm better"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_la_febbre",
+            "normalizedForm": "ho_la_febbre",
+            "surfaceForms": [
+              "ho la febbre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "febbre"
+            ],
+            "glossBySurface": {
+              "ho la febbre": {
+                "en": "I have a fever"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-it-hurts",
+      "lessonId": "body-and-feeling-unwell",
+      "displayName": "Say something hurts",
+      "cefrDescriptor": "Can say that something hurts.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "mi_fa_male_la_testa",
+            "normalizedForm": "mi_fa_male_la_testa",
+            "surfaceForms": [
+              "mi fa male la testa",
+              "mi fa male lo stomaco",
+              "mi fa male la gola"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fa",
+              "male",
+              "testa",
+              "stomaco",
+              "gola"
+            ],
+            "glossBySurface": {
+              "mi fa male la testa": {
+                "en": "my head hurts"
+              },
+              "mi fa male lo stomaco": {
+                "en": "my stomach hurts"
+              },
+              "mi fa male la gola": {
+                "en": "my throat hurts"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_fa_male_qui",
+            "normalizedForm": "mi_fa_male_qui",
+            "surfaceForms": [
+              "mi fa male qui"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fa",
+              "male",
+              "qui"
+            ],
+            "glossBySurface": {
+              "mi fa male qui": {
+                "en": "it hurts here"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_fanno_male_i_piedi",
+            "normalizedForm": "mi_fanno_male_i_piedi",
+            "surfaceForms": [
+              "mi fanno male i piedi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fare",
+              "male",
+              "i",
+              "piede"
+            ],
+            "glossBySurface": {
+              "mi fanno male i piedi": {
+                "en": "my feet hurt"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_mal_di_testa",
+            "normalizedForm": "ho_mal_di_testa",
+            "surfaceForms": [
+              "ho mal di testa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "male",
+              "di",
+              "testa"
+            ],
+            "glossBySurface": {
+              "ho mal di testa": {
+                "en": "I have a headache"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-immediate-need",
+      "lessonId": "body-and-feeling-unwell",
+      "displayName": "State an immediate need",
+      "cefrDescriptor": "Can state a basic immediate need.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "ho_freddo",
+            "normalizedForm": "ho_freddo",
+            "surfaceForms": [
+              "ho freddo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "freddo"
+            ],
+            "glossBySurface": {
+              "ho freddo": {
+                "en": "I'm cold"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_caldo",
+            "normalizedForm": "ho_caldo",
+            "surfaceForms": [
+              "ho caldo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "caldo"
+            ],
+            "glossBySurface": {
+              "ho caldo": {
+                "en": "I'm hot"
               }
             }
           }

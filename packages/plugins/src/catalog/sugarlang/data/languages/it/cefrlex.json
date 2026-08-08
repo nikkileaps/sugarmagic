@@ -11766,7 +11766,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "happen, occur"
-      }
+      },
+      "forms": {
+        "pres": [
+          "succedo",
+          "succedi",
+          "succede",
+          "succediamo",
+          "succedete",
+          "succedono"
+        ],
+        "pret": [
+          "successi",
+          "succedesti",
+          "successe",
+          "succedemmo",
+          "succedeste",
+          "successero"
+        ],
+        "imp": [
+          "succedevo",
+          "succedevi",
+          "succedeva",
+          "succedevamo",
+          "succedevate",
+          "succedevano"
+        ],
+        "ger": "succedendo",
+        "part": "successo"
+      },
+      "formsSource": "authored"
     },
     "mare": {
       "lemmaId": "mare",
@@ -14504,7 +14533,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "prefer"
-      }
+      },
+      "forms": {
+        "pres": [
+          "preferisco",
+          "preferisci",
+          "preferisce",
+          "preferiamo",
+          "preferite",
+          "preferiscono"
+        ],
+        "pret": [
+          "preferii",
+          "preferisti",
+          "preferì",
+          "preferimmo",
+          "preferiste",
+          "preferirono"
+        ],
+        "imp": [
+          "preferivo",
+          "preferivi",
+          "preferiva",
+          "preferivamo",
+          "preferivate",
+          "preferivano"
+        ],
+        "ger": "preferendo",
+        "part": "preferito"
+      },
+      "formsSource": "authored"
     },
     "foto": {
       "lemmaId": "foto",
@@ -36165,7 +36223,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "tired, weary"
-      }
+      },
+      "forms": {
+        "ms": "stanco",
+        "fs": "stanca",
+        "mp": "stanchi",
+        "fp": "stanche"
+      },
+      "formsSource": "authored"
     },
     "candidare": {
       "lemmaId": "candidare",
@@ -41286,7 +41351,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "sick person, patient"
-      }
+      },
+      "forms": {
+        "ms": "malato",
+        "fs": "malata",
+        "mp": "malati",
+        "fp": "malate"
+      },
+      "formsSource": "authored"
     },
     "parzialmente": {
       "lemmaId": "parzialmente",
@@ -46780,7 +46852,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "breathe"
-      }
+      },
+      "forms": {
+        "pres": [
+          "respiro",
+          "respiri",
+          "respira",
+          "respiriamo",
+          "respirate",
+          "respirano"
+        ],
+        "pret": [
+          "respirai",
+          "respirasti",
+          "respirò",
+          "respirammo",
+          "respiraste",
+          "respirarono"
+        ],
+        "imp": [
+          "respiravo",
+          "respiravi",
+          "respirava",
+          "respiravamo",
+          "respiravate",
+          "respiravano"
+        ],
+        "ger": "respirando",
+        "part": "respirato"
+      },
+      "formsSource": "authored"
     },
     "sopravvivenza": {
       "lemmaId": "sopravvivenza",
@@ -58366,7 +58467,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "rain"
-      }
+      },
+      "forms": {
+        "pres": [
+          "piovo",
+          "piovi",
+          "piove",
+          "pioviamo",
+          "piovete",
+          "piovono"
+        ],
+        "pret": [
+          "piovvi",
+          "piovesti",
+          "piovve",
+          "piovemmo",
+          "pioveste",
+          "piovvero"
+        ],
+        "imp": [
+          "piovevo",
+          "piovevi",
+          "pioveva",
+          "piovevamo",
+          "piovevate",
+          "piovevano"
+        ],
+        "ger": "piovendo",
+        "part": "piovuto"
+      },
+      "formsSource": "authored"
     },
     "sovietico": {
       "lemmaId": "sovietico",

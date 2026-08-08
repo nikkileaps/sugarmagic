@@ -5961,6 +5961,918 @@
           }
         ]
       }
+    ],
+    "name-weather": [
+      {
+        "wordings": [
+          {
+            "phrase": "il sole",
+            "gloss": {
+              "en": "the sun"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la pioggia",
+            "gloss": {
+              "en": "the rain"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la neve",
+            "gloss": {
+              "en": "the snow"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il vento",
+            "gloss": {
+              "en": "the wind"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "le nuvole",
+            "gloss": {
+              "en": "the clouds"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-weather": [
+      {
+        "wordings": [
+          {
+            "phrase": "che tempo fa",
+            "gloss": {
+              "en": "what's the weather like"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "com'è il tempo",
+            "gloss": {
+              "en": "how's the weather"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "pioverà",
+            "gloss": {
+              "en": "is it going to rain"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che tempo farà",
+            "gloss": {
+              "en": "what's the weather going to be like"
+            }
+          }
+        ]
+      }
+    ],
+    "state-weather": [
+      {
+        "wordings": [
+          {
+            "phrase": "c'è il sole",
+            "gloss": {
+              "en": "it's sunny"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sta piovendo",
+            "gloss": {
+              "en": "it's raining"
+            }
+          },
+          {
+            "phrase": "piove",
+            "gloss": {
+              "en": "it's raining"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è nuvoloso",
+            "gloss": {
+              "en": "it's cloudy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è vento",
+            "gloss": {
+              "en": "it's windy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "fa brutto tempo",
+            "gloss": {
+              "en": "the weather is bad"
+            }
+          }
+        ]
+      }
+    ],
+    "name-seasons": [
+      {
+        "wordings": [
+          {
+            "phrase": "la primavera",
+            "gloss": {
+              "en": "spring"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'estate",
+            "gloss": {
+              "en": "summer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'autunno",
+            "gloss": {
+              "en": "autumn"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'inverno",
+            "gloss": {
+              "en": "winter"
+            }
+          }
+        ]
+      }
+    ],
+    "say-hot-or-cold": [
+      {
+        "wordings": [
+          {
+            "phrase": "fa caldo",
+            "gloss": {
+              "en": "it's hot"
+            }
+          },
+          {
+            "phrase": "fa molto caldo",
+            "gloss": {
+              "en": "it's very hot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "fa freddo",
+            "gloss": {
+              "en": "it's cold"
+            }
+          },
+          {
+            "phrase": "fa molto freddo",
+            "gloss": {
+              "en": "it's very cold"
+            }
+          }
+        ]
+      }
+    ],
+    "state-weather-preference": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi piace il sole",
+            "gloss": {
+              "en": "I like the sun"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi piace la pioggia",
+            "gloss": {
+              "en": "I don't like the rain"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "preferisco l'estate",
+            "gloss": {
+              "en": "I prefer summer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "adoro la neve",
+            "gloss": {
+              "en": "I love the snow"
+            }
+          }
+        ]
+      }
+    ],
+    "name-landscape": [
+      {
+        "wordings": [
+          {
+            "phrase": "la montagna",
+            "gloss": {
+              "en": "the mountain"
+            }
+          },
+          {
+            "phrase": "le montagne",
+            "gloss": {
+              "en": "the mountains"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il fiume",
+            "gloss": {
+              "en": "the river"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il mare",
+            "gloss": {
+              "en": "the sea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la spiaggia",
+            "gloss": {
+              "en": "the beach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il bosco",
+            "gloss": {
+              "en": "the forest"
+            }
+          }
+        ]
+      }
+    ],
+    "name-animals-and-plants": [
+      {
+        "wordings": [
+          {
+            "phrase": "il cane",
+            "gloss": {
+              "en": "the dog"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il gatto",
+            "gloss": {
+              "en": "the cat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'uccello",
+            "gloss": {
+              "en": "the bird"
+            }
+          },
+          {
+            "phrase": "gli uccelli",
+            "gloss": {
+              "en": "the birds"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'albero",
+            "gloss": {
+              "en": "the tree"
+            }
+          },
+          {
+            "phrase": "gli alberi",
+            "gloss": {
+              "en": "the trees"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il fiore",
+            "gloss": {
+              "en": "the flower"
+            }
+          },
+          {
+            "phrase": "i fiori",
+            "gloss": {
+              "en": "the flowers"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-surroundings": [
+      {
+        "wordings": [
+          {
+            "phrase": "ci sono molti alberi",
+            "gloss": {
+              "en": "there are a lot of trees"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è molto bello",
+            "gloss": {
+              "en": "it's very pretty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è molta gente",
+            "gloss": {
+              "en": "there are a lot of people"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un posto tranquillo",
+            "gloss": {
+              "en": "it's a quiet place"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non c'è nessuno",
+            "gloss": {
+              "en": "there's nobody here"
+            }
+          }
+        ]
+      }
+    ],
+    "say-how-they-feel": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi sento bene",
+            "gloss": {
+              "en": "I feel well"
+            }
+          },
+          {
+            "phrase": "mi sento male",
+            "gloss": {
+              "en": "I feel bad"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi sento bene",
+            "gloss": {
+              "en": "I don't feel well"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono malato",
+            "gloss": {
+              "en": "I'm ill"
+            }
+          },
+          {
+            "phrase": "sono malata",
+            "gloss": {
+              "en": "I'm ill"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sto meglio",
+            "gloss": {
+              "en": "I'm better"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho la febbre",
+            "gloss": {
+              "en": "I have a fever"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-how-someone-feels": [
+      {
+        "wordings": [
+          {
+            "phrase": "come ti senti",
+            "gloss": {
+              "en": "how do you feel"
+            }
+          },
+          {
+            "phrase": "come si sente",
+            "gloss": {
+              "en": "how do you feel"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti senti bene",
+            "gloss": {
+              "en": "do you feel alright"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa ti succede",
+            "gloss": {
+              "en": "what's wrong"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "stai bene",
+            "gloss": {
+              "en": "are you okay"
+            }
+          }
+        ]
+      }
+    ],
+    "name-body-parts": [
+      {
+        "wordings": [
+          {
+            "phrase": "testa",
+            "gloss": {
+              "en": "head"
+            }
+          },
+          {
+            "phrase": "la testa",
+            "gloss": {
+              "en": "the head"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "stomaco",
+            "gloss": {
+              "en": "stomach"
+            }
+          },
+          {
+            "phrase": "lo stomaco",
+            "gloss": {
+              "en": "the stomach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "gola",
+            "gloss": {
+              "en": "throat"
+            }
+          },
+          {
+            "phrase": "la gola",
+            "gloss": {
+              "en": "the throat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mano",
+            "gloss": {
+              "en": "hand"
+            }
+          },
+          {
+            "phrase": "la mano",
+            "gloss": {
+              "en": "the hand"
+            }
+          },
+          {
+            "phrase": "le mani",
+            "gloss": {
+              "en": "the hands"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "piede",
+            "gloss": {
+              "en": "foot"
+            }
+          },
+          {
+            "phrase": "il piede",
+            "gloss": {
+              "en": "the foot"
+            }
+          },
+          {
+            "phrase": "i piedi",
+            "gloss": {
+              "en": "the feet"
+            }
+          }
+        ]
+      }
+    ],
+    "say-it-hurts": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi fa male la testa",
+            "gloss": {
+              "en": "my head hurts"
+            }
+          },
+          {
+            "phrase": "mi fa male lo stomaco",
+            "gloss": {
+              "en": "my stomach hurts"
+            }
+          },
+          {
+            "phrase": "mi fa male la gola",
+            "gloss": {
+              "en": "my throat hurts"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi fa male qui",
+            "gloss": {
+              "en": "it hurts here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi fanno male i piedi",
+            "gloss": {
+              "en": "my feet hurt"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho mal di testa",
+            "gloss": {
+              "en": "I have a headache"
+            }
+          }
+        ]
+      }
+    ],
+    "express-tiredness": [
+      {
+        "wordings": [
+          {
+            "phrase": "sono stanco",
+            "gloss": {
+              "en": "I'm tired"
+            }
+          },
+          {
+            "phrase": "sono stanca",
+            "gloss": {
+              "en": "I'm tired"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho sonno",
+            "gloss": {
+              "en": "I'm sleepy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho bisogno di riposare",
+            "gloss": {
+              "en": "I need to rest"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ce la faccio più",
+            "gloss": {
+              "en": "I can't go on"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-for-help": [
+      {
+        "wordings": [
+          {
+            "phrase": "aiuto",
+            "gloss": {
+              "en": "help"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho bisogno di aiuto",
+            "gloss": {
+              "en": "I need help"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi puoi aiutare",
+            "gloss": {
+              "en": "can you help me"
+            }
+          },
+          {
+            "phrase": "mi può aiutare",
+            "gloss": {
+              "en": "could you help me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "aiuto, presto",
+            "gloss": {
+              "en": "help! (emergency)"
+            }
+          }
+        ]
+      }
+    ],
+    "follow-helper-instruction": [
+      {
+        "wordings": [
+          {
+            "phrase": "vieni con me",
+            "gloss": {
+              "en": "come with me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "apri la bocca",
+            "gloss": {
+              "en": "open your mouth"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "respira",
+            "gloss": {
+              "en": "breathe"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "stai tranquillo",
+            "gloss": {
+              "en": "easy now"
+            }
+          }
+        ]
+      }
+    ],
+    "state-immediate-need": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho freddo",
+            "gloss": {
+              "en": "I'm cold"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho caldo",
+            "gloss": {
+              "en": "I'm hot"
+            }
+          }
+        ]
+      }
+    ],
+    "recognize-safety-words": [
+      {
+        "wordings": [
+          {
+            "phrase": "attenzione",
+            "gloss": {
+              "en": "careful"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "pericolo",
+            "gloss": {
+              "en": "danger"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "emergenza",
+            "gloss": {
+              "en": "emergency"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "farmacia",
+            "gloss": {
+              "en": "pharmacy"
+            }
+          }
+        ]
+      }
     ]
   }
 }

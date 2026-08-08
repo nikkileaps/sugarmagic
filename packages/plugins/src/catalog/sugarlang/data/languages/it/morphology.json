@@ -48493,13 +48493,109 @@
         "noun"
       ]
     },
-    "succedendo": {
+    "succedo": {
       "lemmaId": "succedere",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "succeduto": {
+    "succedi": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succede": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succediamo": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedete": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedono": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedesti": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "successe": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedemmo": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedeste": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "successero": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedevo": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedevi": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedeva": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedevamo": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedevate": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedevano": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedendo": {
       "lemmaId": "succedere",
       "partsOfSpeech": [
         "verb"
@@ -49801,6 +49897,114 @@
       "lemmaId": "banca",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "preferisco": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferisci": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferisce": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiamo": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferite": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscono": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferii": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferisti": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferì": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferimmo": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiste": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferirono": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferivo": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferivi": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiva": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferivamo": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferivate": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferivano": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "preferendo": {
@@ -61417,7 +61621,19 @@
         "adjective"
       ]
     },
-    "stanci": {
+    "stanca": {
+      "lemmaId": "stanco",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "stanchi": {
+      "lemmaId": "stanco",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "stanche": {
       "lemmaId": "stanco",
       "partsOfSpeech": [
         "adjective"
@@ -63932,7 +64148,21 @@
         "verb"
       ]
     },
+    "malata": {
+      "lemmaId": "malato",
+      "partsOfSpeech": [
+        "noun",
+        "adjective"
+      ]
+    },
     "malati": {
+      "lemmaId": "malato",
+      "partsOfSpeech": [
+        "noun",
+        "adjective"
+      ]
+    },
+    "malate": {
       "lemmaId": "malato",
       "partsOfSpeech": [
         "noun",
@@ -66544,6 +66774,102 @@
       "lemmaId": "ragionamento",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "respira": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respiriamo": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirate": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirano": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirai": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirasti": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirò": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirammo": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respiraste": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirarono": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respiravo": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respiravi": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirava": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respiravamo": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respiravate": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respiravano": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "respirando": {
@@ -72140,6 +72466,114 @@
       "lemmaId": "fastidio",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "piovo": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovi": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piove": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioviamo": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovete": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovono": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovvi": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovesti": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovve": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovemmo": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioveste": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovvero": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovevo": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovevi": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioveva": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovevamo": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovevate": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovevano": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "piovendo": {
@@ -102657,6 +103091,96 @@
         "verb"
       ]
     },
+    "succeda": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedano": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succediate": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederei": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederesti": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederebbe": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederemmo": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedereste": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederebbero": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederò": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederai": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederà": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederemo": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederete": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succederanno": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "succedermi": {
       "lemmaId": "succedere",
       "partsOfSpeech": [
@@ -102712,6 +103236,72 @@
       ]
     },
     "succederne": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedimi": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succediti": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedisi": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedici": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedivi": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedilo": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedila": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedili": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedile": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "succedine": {
+      "lemmaId": "succedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "successa": {
       "lemmaId": "succedere",
       "partsOfSpeech": [
         "verb"
@@ -104763,6 +105353,13 @@
         "verb"
       ]
     },
+    "ce": {
+      "lemmaId": "ci",
+      "partsOfSpeech": [
+        "adverb",
+        "pronoun"
+      ]
+    },
     "pigliarmi": {
       "lemmaId": "pigliare",
       "partsOfSpeech": [
@@ -105351,6 +105948,96 @@
         "verb"
       ]
     },
+    "preferisca": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscano": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiate": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferirei": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiresti": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferirebbe": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiremmo": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferireste": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferirebbero": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferirò": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferirai": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferirà": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiremo": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferirete": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiranno": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "preferirmi": {
       "lemmaId": "preferire",
       "partsOfSpeech": [
@@ -105406,6 +106093,72 @@
       ]
     },
     "preferirne": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscimi": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferisciti": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscisi": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscici": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscivi": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscilo": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscila": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscili": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscile": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferiscine": {
+      "lemmaId": "preferire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "preferita": {
       "lemmaId": "preferire",
       "partsOfSpeech": [
         "verb"
@@ -136367,6 +137120,90 @@
         "verb"
       ]
     },
+    "respirino": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respiriate": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirerei": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respireresti": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirerebbe": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respireremmo": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirereste": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirerebbero": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirerò": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirerai": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirerà": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respireremo": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirerete": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respireranno": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "respirarmi": {
       "lemmaId": "respirare",
       "partsOfSpeech": [
@@ -136422,6 +137259,66 @@
       ]
     },
     "respirarne": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirami": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirati": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirasi": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respiraci": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respiralo": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirala": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirali": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirale": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirane": {
+      "lemmaId": "respirare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "respirata": {
       "lemmaId": "respirare",
       "partsOfSpeech": [
         "verb"
@@ -145553,6 +146450,96 @@
         "verb"
       ]
     },
+    "piova": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovano": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioviate": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioverei": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioveresti": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioverebbe": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioveremmo": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovereste": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioverebbero": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioverò": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioverai": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioverà": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioveremo": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioverete": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioveranno": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "piovermi": {
       "lemmaId": "piovere",
       "partsOfSpeech": [
@@ -145608,6 +146595,84 @@
       ]
     },
     "pioverne": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovimi": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pioviti": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovisi": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovici": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovivi": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovilo": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovila": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovili": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovile": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovine": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovuta": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovuti": {
+      "lemmaId": "piovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "piovute": {
       "lemmaId": "piovere",
       "partsOfSpeech": [
         "verb"
