@@ -37,6 +37,18 @@
       "band": "A1",
       "ordinal": 6,
       "displayName": "Buying Things"
+    },
+    {
+      "lessonId": "time",
+      "band": "A1",
+      "ordinal": 7,
+      "displayName": "Time and Scheduling"
+    },
+    {
+      "lessonId": "daily-life",
+      "band": "A1",
+      "ordinal": 8,
+      "displayName": "Daily Life"
     }
   ],
   "competencies": [
@@ -6326,6 +6338,2655 @@
             "glossBySurface": {
               "ecco a lei": {
                 "en": "here you are"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-opening-time",
+      "lessonId": "time",
+      "displayName": "Ask when a place opens",
+      "cefrDescriptor": "Can ask when a place opens or closes.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "a_che_ora_aprite",
+            "normalizedForm": "a_che_ora_aprite",
+            "surfaceForms": [
+              "a che ora aprite",
+              "a che ora apre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "che",
+              "ora",
+              "aprire"
+            ],
+            "glossBySurface": {
+              "a che ora aprite": {
+                "en": "what time do you open"
+              },
+              "a che ora apre": {
+                "en": "what time does it open"
+              }
+            }
+          },
+          {
+            "exponentId": "a_che_ora_chiudete",
+            "normalizedForm": "a_che_ora_chiudete",
+            "surfaceForms": [
+              "a che ora chiudete"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "che",
+              "ora",
+              "chiudere"
+            ],
+            "glossBySurface": {
+              "a che ora chiudete": {
+                "en": "what time do you close"
+              }
+            }
+          },
+          {
+            "exponentId": "quando_aprite",
+            "normalizedForm": "quando_aprite",
+            "surfaceForms": [
+              "quando aprite",
+              "quando chiudete"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quando",
+              "aprire",
+              "chiudere"
+            ],
+            "glossBySurface": {
+              "quando aprite": {
+                "en": "when do you open"
+              },
+              "quando chiudete": {
+                "en": "when do you close"
+              }
+            }
+          },
+          {
+            "exponentId": "fino_a_che_ora",
+            "normalizedForm": "fino_a_che_ora",
+            "surfaceForms": [
+              "fino a che ora"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fino",
+              "a",
+              "che",
+              "ora"
+            ],
+            "glossBySurface": {
+              "fino a che ora": {
+                "en": "until what time"
+              }
+            }
+          },
+          {
+            "exponentId": "aprite_la_domenica",
+            "normalizedForm": "aprite_la_domenica",
+            "surfaceForms": [
+              "aprite la domenica"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "aprire",
+              "domenica"
+            ],
+            "glossBySurface": {
+              "aprite la domenica": {
+                "en": "are you open on Sundays"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-the-time",
+      "lessonId": "time",
+      "displayName": "Ask the time",
+      "cefrDescriptor": "Can ask what time it is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "che_ore_sono",
+            "normalizedForm": "che_ore_sono",
+            "surfaceForms": [
+              "che ore sono",
+              "che ora è",
+              "che ora e"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "ora",
+              "essere"
+            ],
+            "glossBySurface": {
+              "che ore sono": {
+                "en": "what time is it"
+              },
+              "che ora è": {
+                "en": "what time is it"
+              },
+              "che ora e": {
+                "en": "what time is it"
+              }
+            }
+          },
+          {
+            "exponentId": "ha_lora",
+            "normalizedForm": "ha_lora",
+            "surfaceForms": [
+              "ha l'ora"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "ora"
+            ],
+            "glossBySurface": {
+              "ha l'ora": {
+                "en": "have you got the time"
+              }
+            }
+          },
+          {
+            "exponentId": "sa_che_ore_sono",
+            "normalizedForm": "sa_che_ore_sono",
+            "surfaceForms": [
+              "sa che ore sono"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sapere",
+              "che",
+              "ora",
+              "essere"
+            ],
+            "glossBySurface": {
+              "sa che ore sono": {
+                "en": "do you know what time it is"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_dice_lora",
+            "normalizedForm": "mi_dice_lora",
+            "surfaceForms": [
+              "mi dice l'ora"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dire",
+              "ora"
+            ],
+            "glossBySurface": {
+              "mi dice l'ora": {
+                "en": "could you tell me the time"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-what-day",
+      "lessonId": "time",
+      "displayName": "Ask what day something happens",
+      "cefrDescriptor": "Can ask what day something happens.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "che_giorno_e_oggi",
+            "normalizedForm": "che_giorno_e_oggi",
+            "surfaceForms": [
+              "che giorno è oggi",
+              "che giorno e oggi",
+              "che giorno è",
+              "che giorno e"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "giorno",
+              "essere",
+              "oggi"
+            ],
+            "glossBySurface": {
+              "che giorno è oggi": {
+                "en": "what day is it today"
+              },
+              "che giorno e oggi": {
+                "en": "what day is it today"
+              },
+              "che giorno è": {
+                "en": "what day is it"
+              },
+              "che giorno e": {
+                "en": "what day is it"
+              }
+            }
+          },
+          {
+            "exponentId": "che_data_e_oggi",
+            "normalizedForm": "che_data_e_oggi",
+            "surfaceForms": [
+              "che data è oggi",
+              "che data e oggi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "data",
+              "essere",
+              "oggi"
+            ],
+            "glossBySurface": {
+              "che data è oggi": {
+                "en": "what's the date today"
+              },
+              "che data e oggi": {
+                "en": "what's the date today"
+              }
+            }
+          },
+          {
+            "exponentId": "quando_e",
+            "normalizedForm": "quando_e",
+            "surfaceForms": [
+              "quando è",
+              "quando e"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quando",
+              "essere"
+            ],
+            "glossBySurface": {
+              "quando è": {
+                "en": "when is it"
+              },
+              "quando e": {
+                "en": "when is it"
+              }
+            }
+          },
+          {
+            "exponentId": "quando_comincia",
+            "normalizedForm": "quando_comincia",
+            "surfaceForms": [
+              "quando comincia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quando",
+              "cominciare"
+            ],
+            "glossBySurface": {
+              "quando comincia": {
+                "en": "when does it start"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "give-a-date",
+      "lessonId": "time",
+      "displayName": "Give a date",
+      "cefrDescriptor": "Can give a simple date.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "oggi_e_sabato",
+            "normalizedForm": "oggi_e_sabato",
+            "surfaceForms": [
+              "oggi è sabato",
+              "oggi e sabato"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "oggi",
+              "essere",
+              "sabato"
+            ],
+            "glossBySurface": {
+              "oggi è sabato": {
+                "en": "today is Saturday"
+              },
+              "oggi e sabato": {
+                "en": "today is Saturday"
+              }
+            }
+          },
+          {
+            "exponentId": "e_il_due_gennaio",
+            "normalizedForm": "e_il_due_gennaio",
+            "surfaceForms": [
+              "è il due gennaio",
+              "e il due gennaio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "due",
+              "gennaio"
+            ],
+            "glossBySurface": {
+              "è il due gennaio": {
+                "en": "it's the second of January"
+              },
+              "e il due gennaio": {
+                "en": "it's the second of January"
+              }
+            }
+          },
+          {
+            "exponentId": "il_quattro_marzo",
+            "normalizedForm": "il_quattro_marzo",
+            "surfaceForms": [
+              "il quattro marzo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quattro",
+              "marzo"
+            ],
+            "glossBySurface": {
+              "il quattro marzo": {
+                "en": "the fourth of March"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "read-a-timetable",
+      "lessonId": "time",
+      "displayName": "Understand a timetable",
+      "cefrDescriptor": "Can understand a simple timetable.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "parte_alle_due",
+            "normalizedForm": "parte_alle_due",
+            "surfaceForms": [
+              "parte alle due"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "parte",
+              "a",
+              "due"
+            ],
+            "glossBySurface": {
+              "parte alle due": {
+                "en": "it leaves at two"
+              }
+            }
+          },
+          {
+            "exponentId": "arriva_alle_quattro",
+            "normalizedForm": "arriva_alle_quattro",
+            "surfaceForms": [
+              "arriva alle quattro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "arrivare",
+              "a",
+              "quattro"
+            ],
+            "glossBySurface": {
+              "arriva alle quattro": {
+                "en": "it arrives at four"
+              }
+            }
+          },
+          {
+            "exponentId": "il_prossimo_treno",
+            "normalizedForm": "il_prossimo_treno",
+            "surfaceForms": [
+              "il prossimo treno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "prossimo",
+              "treno"
+            ],
+            "glossBySurface": {
+              "il prossimo treno": {
+                "en": "the next train"
+              }
+            }
+          },
+          {
+            "exponentId": "partenze",
+            "normalizedForm": "partenze",
+            "surfaceForms": [
+              "partenze",
+              "arrivi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "partenza",
+              "arrivare"
+            ],
+            "glossBySurface": {
+              "partenze": {
+                "en": "departures"
+              },
+              "arrivi": {
+                "en": "arrivals"
+              }
+            }
+          },
+          {
+            "exponentId": "ogni_mezzora",
+            "normalizedForm": "ogni_mezzora",
+            "surfaceForms": [
+              "ogni mezz'ora"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ogni",
+              "mezzora"
+            ],
+            "glossBySurface": {
+              "ogni mezz'ora": {
+                "en": "every half hour"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-early-or-late",
+      "lessonId": "time",
+      "displayName": "Say they are early or late",
+      "cefrDescriptor": "Can say whether they are early or late.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_tardi",
+            "normalizedForm": "e_tardi",
+            "surfaceForms": [
+              "è tardi",
+              "e tardi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "tardi"
+            ],
+            "glossBySurface": {
+              "è tardi": {
+                "en": "it's late"
+              },
+              "e tardi": {
+                "en": "it's late"
+              }
+            }
+          },
+          {
+            "exponentId": "e_presto",
+            "normalizedForm": "e_presto",
+            "surfaceForms": [
+              "è presto",
+              "e presto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "presto"
+            ],
+            "glossBySurface": {
+              "è presto": {
+                "en": "it's early"
+              },
+              "e presto": {
+                "en": "it's early"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_in_ritardo",
+            "normalizedForm": "sono_in_ritardo",
+            "surfaceForms": [
+              "sono in ritardo",
+              "farò tardi",
+              "faro tardi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "in",
+              "ritardo",
+              "fare",
+              "tardi"
+            ],
+            "glossBySurface": {
+              "sono in ritardo": {
+                "en": "I'm late"
+              },
+              "farò tardi": {
+                "en": "I'm going to be late"
+              },
+              "faro tardi": {
+                "en": "I'm going to be late"
+              }
+            }
+          },
+          {
+            "exponentId": "sei_in_anticipo",
+            "normalizedForm": "sei_in_anticipo",
+            "surfaceForms": [
+              "sei in anticipo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sei",
+              "in",
+              "anticipo"
+            ],
+            "glossBySurface": {
+              "sei in anticipo": {
+                "en": "you're early"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_in_orario",
+            "normalizedForm": "sono_in_orario",
+            "surfaceForms": [
+              "sono in orario"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "in",
+              "orario"
+            ],
+            "glossBySurface": {
+              "sono in orario": {
+                "en": "I'm on time"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-when",
+      "lessonId": "time",
+      "displayName": "Say when something happens",
+      "cefrDescriptor": "Can say when an activity happens.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "il_fine_settimana",
+            "normalizedForm": "il_fine_settimana",
+            "surfaceForms": [
+              "il fine settimana",
+              "nel fine settimana"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fine",
+              "settimana",
+              "in"
+            ],
+            "glossBySurface": {
+              "il fine settimana": {
+                "en": "the weekend"
+              },
+              "nel fine settimana": {
+                "en": "at the weekend"
+              }
+            }
+          },
+          {
+            "exponentId": "durante_la_settimana",
+            "normalizedForm": "durante_la_settimana",
+            "surfaceForms": [
+              "durante la settimana"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "durante",
+              "settimana"
+            ],
+            "glossBySurface": {
+              "durante la settimana": {
+                "en": "during the week"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-schedule",
+      "lessonId": "time",
+      "displayName": "State a daily schedule",
+      "cefrDescriptor": "Can state a basic daily schedule.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "tempo_libero",
+            "normalizedForm": "tempo_libero",
+            "surfaceForms": [
+              "tempo libero",
+              "il mio tempo libero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "tempo",
+              "libero",
+              "mio"
+            ],
+            "glossBySurface": {
+              "tempo libero": {
+                "en": "free time"
+              },
+              "il mio tempo libero": {
+                "en": "my free time"
+              }
+            }
+          },
+          {
+            "exponentId": "dal_lunedi_al_venerdi",
+            "normalizedForm": "dal_lunedi_al_venerdi",
+            "surfaceForms": [
+              "dal lunedì al venerdì",
+              "dal lunedì al venerdi",
+              "dal lunedi al venerdì",
+              "dal lunedi al venerdi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "da",
+              "lunedì",
+              "a",
+              "venerdì"
+            ],
+            "glossBySurface": {
+              "dal lunedì al venerdì": {
+                "en": "Monday to Friday"
+              },
+              "dal lunedì al venerdi": {
+                "en": "Monday to Friday"
+              },
+              "dal lunedi al venerdì": {
+                "en": "Monday to Friday"
+              },
+              "dal lunedi al venerdi": {
+                "en": "Monday to Friday"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-the-time",
+      "lessonId": "time",
+      "displayName": "Tell the time",
+      "cefrDescriptor": "Can say what time it is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_luna",
+            "normalizedForm": "e_luna",
+            "surfaceForms": [
+              "è l'una",
+              "e l'una"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere"
+            ],
+            "glossBySurface": {
+              "è l'una": {
+                "en": "it's one o'clock"
+              },
+              "e l'una": {
+                "en": "it's one o'clock"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_le_tre",
+            "normalizedForm": "sono_le_tre",
+            "surfaceForms": [
+              "sono le tre",
+              "sono le sette",
+              "sono le dieci"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "le",
+              "tre",
+              "sette",
+              "dieci"
+            ],
+            "glossBySurface": {
+              "sono le tre": {
+                "en": "it's three o'clock"
+              },
+              "sono le sette": {
+                "en": "it's seven o'clock"
+              },
+              "sono le dieci": {
+                "en": "it's ten o'clock"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_le_cinque_e_mezza",
+            "normalizedForm": "sono_le_cinque_e_mezza",
+            "surfaceForms": [
+              "sono le cinque e mezza"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "le",
+              "cinque",
+              "e",
+              "mezzo"
+            ],
+            "glossBySurface": {
+              "sono le cinque e mezza": {
+                "en": "it's half past five"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_le_otto_e_un_quarto",
+            "normalizedForm": "sono_le_otto_e_un_quarto",
+            "surfaceForms": [
+              "sono le otto e un quarto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "le",
+              "otto",
+              "e",
+              "quarto"
+            ],
+            "glossBySurface": {
+              "sono le otto e un quarto": {
+                "en": "it's quarter past eight"
+              }
+            }
+          },
+          {
+            "exponentId": "e_mezzogiorno",
+            "normalizedForm": "e_mezzogiorno",
+            "surfaceForms": [
+              "è mezzogiorno",
+              "e mezzogiorno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "mezzogiorno"
+            ],
+            "glossBySurface": {
+              "è mezzogiorno": {
+                "en": "it's midday"
+              },
+              "e mezzogiorno": {
+                "en": "it's midday"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-appointment",
+      "lessonId": "time",
+      "displayName": "Understand an appointment time",
+      "cefrDescriptor": "Can understand a simple appointment time.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "alle_quattro",
+            "normalizedForm": "alle_quattro",
+            "surfaceForms": [
+              "alle quattro",
+              "all'una"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "quattro"
+            ],
+            "glossBySurface": {
+              "alle quattro": {
+                "en": "at four o'clock"
+              },
+              "all'una": {
+                "en": "at one o'clock"
+              }
+            }
+          },
+          {
+            "exponentId": "alle_quattro_del_pomeriggio",
+            "normalizedForm": "alle_quattro_del_pomeriggio",
+            "surfaceForms": [
+              "alle quattro del pomeriggio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "quattro",
+              "di",
+              "pomeriggio"
+            ],
+            "glossBySurface": {
+              "alle quattro del pomeriggio": {
+                "en": "at four in the afternoon"
+              }
+            }
+          },
+          {
+            "exponentId": "sabato_alle_due",
+            "normalizedForm": "sabato_alle_due",
+            "surfaceForms": [
+              "sabato alle due"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sabato",
+              "a",
+              "due"
+            ],
+            "glossBySurface": {
+              "sabato alle due": {
+                "en": "on Saturday at two"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_un_appuntamento",
+            "normalizedForm": "ho_un_appuntamento",
+            "surfaceForms": [
+              "ho un appuntamento",
+              "l'appuntamento è alle quattro",
+              "l'appuntamento e alle quattro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "appuntamento",
+              "essere",
+              "a",
+              "quattro"
+            ],
+            "glossBySurface": {
+              "ho un appuntamento": {
+                "en": "I have an appointment"
+              },
+              "l'appuntamento è alle quattro": {
+                "en": "the appointment is at four"
+              },
+              "l'appuntamento e alle quattro": {
+                "en": "the appointment is at four"
+              }
+            }
+          },
+          {
+            "exponentId": "ci_vediamo_alle_due",
+            "normalizedForm": "ci_vediamo_alle_due",
+            "surfaceForms": [
+              "ci vediamo alle due"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "vedere",
+              "a",
+              "due"
+            ],
+            "glossBySurface": {
+              "ci vediamo alle due": {
+                "en": "let's meet at two"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-days",
+      "lessonId": "time",
+      "displayName": "Understand days of the week",
+      "cefrDescriptor": "Can recognize the days of the week.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "lunedi",
+            "normalizedForm": "lunedi",
+            "surfaceForms": [
+              "lunedì",
+              "lunedi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "lunedì"
+            ],
+            "glossBySurface": {
+              "lunedì": {
+                "en": "Monday"
+              },
+              "lunedi": {
+                "en": "Monday"
+              }
+            }
+          },
+          {
+            "exponentId": "martedi",
+            "normalizedForm": "martedi",
+            "surfaceForms": [
+              "martedì",
+              "martedi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "martedì"
+            ],
+            "glossBySurface": {
+              "martedì": {
+                "en": "Tuesday"
+              },
+              "martedi": {
+                "en": "Tuesday"
+              }
+            }
+          },
+          {
+            "exponentId": "mercoledi",
+            "normalizedForm": "mercoledi",
+            "surfaceForms": [
+              "mercoledì",
+              "mercoledi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mercoledì"
+            ],
+            "glossBySurface": {
+              "mercoledì": {
+                "en": "Wednesday"
+              },
+              "mercoledi": {
+                "en": "Wednesday"
+              }
+            }
+          },
+          {
+            "exponentId": "giovedi",
+            "normalizedForm": "giovedi",
+            "surfaceForms": [
+              "giovedì",
+              "giovedi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "giovedì"
+            ],
+            "glossBySurface": {
+              "giovedì": {
+                "en": "Thursday"
+              },
+              "giovedi": {
+                "en": "Thursday"
+              }
+            }
+          },
+          {
+            "exponentId": "venerdi",
+            "normalizedForm": "venerdi",
+            "surfaceForms": [
+              "venerdì",
+              "venerdi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "venerdì"
+            ],
+            "glossBySurface": {
+              "venerdì": {
+                "en": "Friday"
+              },
+              "venerdi": {
+                "en": "Friday"
+              }
+            }
+          },
+          {
+            "exponentId": "sabato",
+            "normalizedForm": "sabato",
+            "surfaceForms": [
+              "sabato"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sabato"
+            ],
+            "glossBySurface": {
+              "sabato": {
+                "en": "Saturday"
+              }
+            }
+          },
+          {
+            "exponentId": "domenica",
+            "normalizedForm": "domenica",
+            "surfaceForms": [
+              "domenica"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "domenica"
+            ],
+            "glossBySurface": {
+              "domenica": {
+                "en": "Sunday"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-months",
+      "lessonId": "time",
+      "displayName": "Understand months",
+      "cefrDescriptor": "Can recognize the months.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "gennaio",
+            "normalizedForm": "gennaio",
+            "surfaceForms": [
+              "gennaio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "gennaio"
+            ],
+            "glossBySurface": {
+              "gennaio": {
+                "en": "January"
+              }
+            }
+          },
+          {
+            "exponentId": "febbraio",
+            "normalizedForm": "febbraio",
+            "surfaceForms": [
+              "febbraio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "febbraio"
+            ],
+            "glossBySurface": {
+              "febbraio": {
+                "en": "February"
+              }
+            }
+          },
+          {
+            "exponentId": "marzo",
+            "normalizedForm": "marzo",
+            "surfaceForms": [
+              "marzo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "marzo"
+            ],
+            "glossBySurface": {
+              "marzo": {
+                "en": "March"
+              }
+            }
+          },
+          {
+            "exponentId": "aprile",
+            "normalizedForm": "aprile",
+            "surfaceForms": [
+              "aprile"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "aprile"
+            ],
+            "glossBySurface": {
+              "aprile": {
+                "en": "April"
+              }
+            }
+          },
+          {
+            "exponentId": "maggio",
+            "normalizedForm": "maggio",
+            "surfaceForms": [
+              "maggio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "maggio"
+            ],
+            "glossBySurface": {
+              "maggio": {
+                "en": "May"
+              }
+            }
+          },
+          {
+            "exponentId": "giugno",
+            "normalizedForm": "giugno",
+            "surfaceForms": [
+              "giugno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "giugno"
+            ],
+            "glossBySurface": {
+              "giugno": {
+                "en": "June"
+              }
+            }
+          },
+          {
+            "exponentId": "luglio",
+            "normalizedForm": "luglio",
+            "surfaceForms": [
+              "luglio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "luglio"
+            ],
+            "glossBySurface": {
+              "luglio": {
+                "en": "July"
+              }
+            }
+          },
+          {
+            "exponentId": "agosto",
+            "normalizedForm": "agosto",
+            "surfaceForms": [
+              "agosto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "agosto"
+            ],
+            "glossBySurface": {
+              "agosto": {
+                "en": "August"
+              }
+            }
+          },
+          {
+            "exponentId": "settembre",
+            "normalizedForm": "settembre",
+            "surfaceForms": [
+              "settembre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "settembre"
+            ],
+            "glossBySurface": {
+              "settembre": {
+                "en": "September"
+              }
+            }
+          },
+          {
+            "exponentId": "ottobre",
+            "normalizedForm": "ottobre",
+            "surfaceForms": [
+              "ottobre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ottobre"
+            ],
+            "glossBySurface": {
+              "ottobre": {
+                "en": "October"
+              }
+            }
+          },
+          {
+            "exponentId": "novembre",
+            "normalizedForm": "novembre",
+            "surfaceForms": [
+              "novembre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "novembre"
+            ],
+            "glossBySurface": {
+              "novembre": {
+                "en": "November"
+              }
+            }
+          },
+          {
+            "exponentId": "dicembre",
+            "normalizedForm": "dicembre",
+            "surfaceForms": [
+              "dicembre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dicembre"
+            ],
+            "glossBySurface": {
+              "dicembre": {
+                "en": "December"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-numbers",
+      "lessonId": "time",
+      "displayName": "Understand numbers",
+      "cefrDescriptor": "Can recognize and understand numbers.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "zero",
+            "normalizedForm": "zero",
+            "surfaceForms": [
+              "zero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "zero"
+            ],
+            "glossBySurface": {
+              "zero": {
+                "en": "zero"
+              }
+            }
+          },
+          {
+            "exponentId": "uno",
+            "normalizedForm": "uno",
+            "surfaceForms": [
+              "uno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [],
+            "glossBySurface": {
+              "uno": {
+                "en": "one"
+              }
+            }
+          },
+          {
+            "exponentId": "due",
+            "normalizedForm": "due",
+            "surfaceForms": [
+              "due"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "due"
+            ],
+            "glossBySurface": {
+              "due": {
+                "en": "two"
+              }
+            }
+          },
+          {
+            "exponentId": "tre",
+            "normalizedForm": "tre",
+            "surfaceForms": [
+              "tre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "tre"
+            ],
+            "glossBySurface": {
+              "tre": {
+                "en": "three"
+              }
+            }
+          },
+          {
+            "exponentId": "quattro",
+            "normalizedForm": "quattro",
+            "surfaceForms": [
+              "quattro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quattro"
+            ],
+            "glossBySurface": {
+              "quattro": {
+                "en": "four"
+              }
+            }
+          },
+          {
+            "exponentId": "cinque",
+            "normalizedForm": "cinque",
+            "surfaceForms": [
+              "cinque"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cinque"
+            ],
+            "glossBySurface": {
+              "cinque": {
+                "en": "five"
+              }
+            }
+          },
+          {
+            "exponentId": "sei",
+            "normalizedForm": "sei",
+            "surfaceForms": [
+              "sei"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sei"
+            ],
+            "glossBySurface": {
+              "sei": {
+                "en": "six"
+              }
+            }
+          },
+          {
+            "exponentId": "sette",
+            "normalizedForm": "sette",
+            "surfaceForms": [
+              "sette"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sette"
+            ],
+            "glossBySurface": {
+              "sette": {
+                "en": "seven"
+              }
+            }
+          },
+          {
+            "exponentId": "otto",
+            "normalizedForm": "otto",
+            "surfaceForms": [
+              "otto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "otto"
+            ],
+            "glossBySurface": {
+              "otto": {
+                "en": "eight"
+              }
+            }
+          },
+          {
+            "exponentId": "nove",
+            "normalizedForm": "nove",
+            "surfaceForms": [
+              "nove"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "nove"
+            ],
+            "glossBySurface": {
+              "nove": {
+                "en": "nine"
+              }
+            }
+          },
+          {
+            "exponentId": "dieci",
+            "normalizedForm": "dieci",
+            "surfaceForms": [
+              "dieci"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dieci"
+            ],
+            "glossBySurface": {
+              "dieci": {
+                "en": "ten"
+              }
+            }
+          },
+          {
+            "exponentId": "undici",
+            "normalizedForm": "undici",
+            "surfaceForms": [
+              "undici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "undici"
+            ],
+            "glossBySurface": {
+              "undici": {
+                "en": "eleven"
+              }
+            }
+          },
+          {
+            "exponentId": "dodici",
+            "normalizedForm": "dodici",
+            "surfaceForms": [
+              "dodici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dodici"
+            ],
+            "glossBySurface": {
+              "dodici": {
+                "en": "twelve"
+              }
+            }
+          },
+          {
+            "exponentId": "tredici",
+            "normalizedForm": "tredici",
+            "surfaceForms": [
+              "tredici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "tredici"
+            ],
+            "glossBySurface": {
+              "tredici": {
+                "en": "thirteen"
+              }
+            }
+          },
+          {
+            "exponentId": "quattordici",
+            "normalizedForm": "quattordici",
+            "surfaceForms": [
+              "quattordici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quattordici"
+            ],
+            "glossBySurface": {
+              "quattordici": {
+                "en": "fourteen"
+              }
+            }
+          },
+          {
+            "exponentId": "quindici",
+            "normalizedForm": "quindici",
+            "surfaceForms": [
+              "quindici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quindici"
+            ],
+            "glossBySurface": {
+              "quindici": {
+                "en": "fifteen"
+              }
+            }
+          },
+          {
+            "exponentId": "venti",
+            "normalizedForm": "venti",
+            "surfaceForms": [
+              "venti"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "venti"
+            ],
+            "glossBySurface": {
+              "venti": {
+                "en": "twenty"
+              }
+            }
+          },
+          {
+            "exponentId": "trenta",
+            "normalizedForm": "trenta",
+            "surfaceForms": [
+              "trenta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "trenta"
+            ],
+            "glossBySurface": {
+              "trenta": {
+                "en": "thirty"
+              }
+            }
+          },
+          {
+            "exponentId": "quaranta",
+            "normalizedForm": "quaranta",
+            "surfaceForms": [
+              "quaranta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quaranta"
+            ],
+            "glossBySurface": {
+              "quaranta": {
+                "en": "forty"
+              }
+            }
+          },
+          {
+            "exponentId": "cinquanta",
+            "normalizedForm": "cinquanta",
+            "surfaceForms": [
+              "cinquanta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cinquanta"
+            ],
+            "glossBySurface": {
+              "cinquanta": {
+                "en": "fifty"
+              }
+            }
+          },
+          {
+            "exponentId": "cento",
+            "normalizedForm": "cento",
+            "surfaceForms": [
+              "cento"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cento"
+            ],
+            "glossBySurface": {
+              "cento": {
+                "en": "a hundred"
+              }
+            }
+          },
+          {
+            "exponentId": "mille",
+            "normalizedForm": "mille",
+            "surfaceForms": [
+              "mille"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mille"
+            ],
+            "glossBySurface": {
+              "mille": {
+                "en": "a thousand"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-parts-of-day",
+      "lessonId": "time",
+      "displayName": "Distinguish parts of the day",
+      "cefrDescriptor": "Can distinguish morning, afternoon and evening.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "di_mattina",
+            "normalizedForm": "di_mattina",
+            "surfaceForms": [
+              "di mattina"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "di",
+              "mattina"
+            ],
+            "glossBySurface": {
+              "di mattina": {
+                "en": "in the morning"
+              }
+            }
+          },
+          {
+            "exponentId": "di_pomeriggio",
+            "normalizedForm": "di_pomeriggio",
+            "surfaceForms": [
+              "di pomeriggio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "di",
+              "pomeriggio"
+            ],
+            "glossBySurface": {
+              "di pomeriggio": {
+                "en": "in the afternoon"
+              }
+            }
+          },
+          {
+            "exponentId": "di_sera",
+            "normalizedForm": "di_sera",
+            "surfaceForms": [
+              "di sera"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "di",
+              "sera"
+            ],
+            "glossBySurface": {
+              "di sera": {
+                "en": "in the evening"
+              }
+            }
+          },
+          {
+            "exponentId": "stamattina",
+            "normalizedForm": "stamattina",
+            "surfaceForms": [
+              "stamattina",
+              "questo pomeriggio",
+              "stasera"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "stamattina",
+              "questo",
+              "pomeriggio",
+              "stasera"
+            ],
+            "glossBySurface": {
+              "stamattina": {
+                "en": "this morning"
+              },
+              "questo pomeriggio": {
+                "en": "this afternoon"
+              },
+              "stasera": {
+                "en": "tonight"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-about-hobbies",
+      "lessonId": "daily-life",
+      "displayName": "Ask about hobbies",
+      "cefrDescriptor": "Can ask about someone's hobbies.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "cosa_ti_piace_fare",
+            "normalizedForm": "cosa_ti_piace_fare",
+            "surfaceForms": [
+              "cosa ti piace fare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "piacere",
+              "fare"
+            ],
+            "glossBySurface": {
+              "cosa ti piace fare": {
+                "en": "what do you like to do"
+              }
+            }
+          },
+          {
+            "exponentId": "cosa_fai_nel_tempo_libero",
+            "normalizedForm": "cosa_fai_nel_tempo_libero",
+            "surfaceForms": [
+              "cosa fai nel tempo libero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "fare",
+              "in",
+              "tempo",
+              "libero"
+            ],
+            "glossBySurface": {
+              "cosa fai nel tempo libero": {
+                "en": "what do you do in your free time"
+              }
+            }
+          },
+          {
+            "exponentId": "hai_un_hobby",
+            "normalizedForm": "hai_un_hobby",
+            "surfaceForms": [
+              "hai un hobby"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "hobby"
+            ],
+            "glossBySurface": {
+              "hai un hobby": {
+                "en": "do you have a hobby"
+              }
+            }
+          },
+          {
+            "exponentId": "pratichi_uno_sport",
+            "normalizedForm": "pratichi_uno_sport",
+            "surfaceForms": [
+              "pratichi uno sport"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "praticare",
+              "sport"
+            ],
+            "glossBySurface": {
+              "pratichi uno sport": {
+                "en": "do you play a sport"
+              }
+            }
+          },
+          {
+            "exponentId": "ti_piace_il_calcio",
+            "normalizedForm": "ti_piace_il_calcio",
+            "surfaceForms": [
+              "ti piace il calcio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piacere",
+              "calcio"
+            ],
+            "glossBySurface": {
+              "ti piace il calcio": {
+                "en": "do you like football"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-about-routine",
+      "lessonId": "daily-life",
+      "displayName": "Ask what someone usually does",
+      "cefrDescriptor": "Can ask what someone normally does.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "cosa_fai_tutti_i_giorni",
+            "normalizedForm": "cosa_fai_tutti_i_giorni",
+            "surfaceForms": [
+              "cosa fai tutti i giorni"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "fare",
+              "tutto",
+              "i",
+              "giorno"
+            ],
+            "glossBySurface": {
+              "cosa fai tutti i giorni": {
+                "en": "what do you do every day"
+              }
+            }
+          },
+          {
+            "exponentId": "a_che_ora_ti_alzi",
+            "normalizedForm": "a_che_ora_ti_alzi",
+            "surfaceForms": [
+              "a che ora ti alzi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "che",
+              "ora",
+              "alzare"
+            ],
+            "glossBySurface": {
+              "a che ora ti alzi": {
+                "en": "what time do you get up"
+              }
+            }
+          },
+          {
+            "exponentId": "cosa_fai_di_mattina",
+            "normalizedForm": "cosa_fai_di_mattina",
+            "surfaceForms": [
+              "cosa fai di mattina",
+              "cosa fai di pomeriggio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "fare",
+              "di",
+              "mattina",
+              "pomeriggio"
+            ],
+            "glossBySurface": {
+              "cosa fai di mattina": {
+                "en": "what do you do in the morning"
+              },
+              "cosa fai di pomeriggio": {
+                "en": "what do you do in the afternoon"
+              }
+            }
+          },
+          {
+            "exponentId": "come_la_tua_giornata",
+            "normalizedForm": "come_la_tua_giornata",
+            "surfaceForms": [
+              "com'è la tua giornata",
+              "com'e la tua giornata"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "essere",
+              "tuo",
+              "giornata"
+            ],
+            "glossBySurface": {
+              "com'è la tua giornata": {
+                "en": "what is your day like"
+              },
+              "com'e la tua giornata": {
+                "en": "what is your day like"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-routine",
+      "lessonId": "daily-life",
+      "displayName": "Describe a daily routine",
+      "cefrDescriptor": "Can describe a simple daily routine.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "mi_alzo_presto",
+            "normalizedForm": "mi_alzo_presto",
+            "surfaceForms": [
+              "mi alzo presto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "alzare",
+              "presto"
+            ],
+            "glossBySurface": {
+              "mi alzo presto": {
+                "en": "I get up early"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_lavo_la_mattina",
+            "normalizedForm": "mi_lavo_la_mattina",
+            "surfaceForms": [
+              "mi lavo la mattina"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "lavare",
+              "mattina"
+            ],
+            "glossBySurface": {
+              "mi lavo la mattina": {
+                "en": "I shower in the morning"
+              }
+            }
+          },
+          {
+            "exponentId": "faccio_colazione_a_casa",
+            "normalizedForm": "faccio_colazione_a_casa",
+            "surfaceForms": [
+              "faccio colazione a casa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fare",
+              "colazione",
+              "a",
+              "casa"
+            ],
+            "glossBySurface": {
+              "faccio colazione a casa": {
+                "en": "I have breakfast at home"
+              }
+            }
+          },
+          {
+            "exponentId": "vado_a_letto_presto",
+            "normalizedForm": "vado_a_letto_presto",
+            "surfaceForms": [
+              "vado a letto presto",
+              "vado a letto tardi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "a",
+              "letto",
+              "presto",
+              "tardi"
+            ],
+            "glossBySurface": {
+              "vado a letto presto": {
+                "en": "I go to bed early"
+              },
+              "vado a letto tardi": {
+                "en": "I go to bed late"
+              }
+            }
+          },
+          {
+            "exponentId": "torno_a_casa_di_pomeriggio",
+            "normalizedForm": "torno_a_casa_di_pomeriggio",
+            "surfaceForms": [
+              "torno a casa di pomeriggio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "tornare",
+              "a",
+              "casa",
+              "di",
+              "pomeriggio"
+            ],
+            "glossBySurface": {
+              "torno a casa di pomeriggio": {
+                "en": "I come home in the afternoon"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-school-activities",
+      "lessonId": "daily-life",
+      "displayName": "Describe school activities",
+      "cefrDescriptor": "Can describe common school activities.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "studio_italiano",
+            "normalizedForm": "studio_italiano",
+            "surfaceForms": [
+              "studio italiano"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "studio",
+              "italiano"
+            ],
+            "glossBySurface": {
+              "studio italiano": {
+                "en": "I study Italian"
+              }
+            }
+          },
+          {
+            "exponentId": "vado_a_lezione",
+            "normalizedForm": "vado_a_lezione",
+            "surfaceForms": [
+              "vado a lezione"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "a",
+              "lezione"
+            ],
+            "glossBySurface": {
+              "vado a lezione": {
+                "en": "I go to class"
+              }
+            }
+          },
+          {
+            "exponentId": "faccio_i_compiti",
+            "normalizedForm": "faccio_i_compiti",
+            "surfaceForms": [
+              "faccio i compiti"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fare",
+              "i",
+              "compito"
+            ],
+            "glossBySurface": {
+              "faccio i compiti": {
+                "en": "I do my homework"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_un_esame",
+            "normalizedForm": "ho_un_esame",
+            "surfaceForms": [
+              "ho un esame"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "esame"
+            ],
+            "glossBySurface": {
+              "ho un esame": {
+                "en": "I have an exam"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-work-activities",
+      "lessonId": "daily-life",
+      "displayName": "Describe work activities",
+      "cefrDescriptor": "Can describe common work activities.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "lavoro_al_computer",
+            "normalizedForm": "lavoro_al_computer",
+            "surfaceForms": [
+              "lavoro al computer"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "lavoro",
+              "a",
+              "computer"
+            ],
+            "glossBySurface": {
+              "lavoro al computer": {
+                "en": "I work on the computer"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_una_riunione",
+            "normalizedForm": "ho_una_riunione",
+            "surfaceForms": [
+              "ho una riunione"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "riunione"
+            ],
+            "glossBySurface": {
+              "ho una riunione": {
+                "en": "I have a meeting"
+              }
+            }
+          },
+          {
+            "exponentId": "rispondo_al_telefono",
+            "normalizedForm": "rispondo_al_telefono",
+            "surfaceForms": [
+              "rispondo al telefono"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "rispondere",
+              "a",
+              "telefono"
+            ],
+            "glossBySurface": {
+              "rispondo al telefono": {
+                "en": "I answer the phone"
+              }
+            }
+          },
+          {
+            "exponentId": "comincio_presto",
+            "normalizedForm": "comincio_presto",
+            "surfaceForms": [
+              "comincio presto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cominciare",
+              "presto"
+            ],
+            "glossBySurface": {
+              "comincio presto": {
+                "en": "I start early"
+              }
+            }
+          },
+          {
+            "exponentId": "esco_dallufficio_tardi",
+            "normalizedForm": "esco_dallufficio_tardi",
+            "surfaceForms": [
+              "esco dall'ufficio tardi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "uscire",
+              "da",
+              "ufficio",
+              "tardi"
+            ],
+            "glossBySurface": {
+              "esco dall'ufficio tardi": {
+                "en": "I leave the office late"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "express-ability",
+      "lessonId": "daily-life",
+      "displayName": "Say what they can do",
+      "cefrDescriptor": "Can express ability using basic language.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "so_nuotare",
+            "normalizedForm": "so_nuotare",
+            "surfaceForms": [
+              "so nuotare",
+              "so cucinare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sapere",
+              "nuotare",
+              "cucinare"
+            ],
+            "glossBySurface": {
+              "so nuotare": {
+                "en": "I can swim"
+              },
+              "so cucinare": {
+                "en": "I can cook"
+              }
+            }
+          },
+          {
+            "exponentId": "posso_aiutare",
+            "normalizedForm": "posso_aiutare",
+            "surfaceForms": [
+              "posso aiutare",
+              "ti posso aiutare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "potere",
+              "aiutare"
+            ],
+            "glossBySurface": {
+              "posso aiutare": {
+                "en": "I can help"
+              },
+              "ti posso aiutare": {
+                "en": "I can help you"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "express-inability",
+      "lessonId": "daily-life",
+      "displayName": "Say what they cannot do",
+      "cefrDescriptor": "Can express inability using basic language.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "non_posso",
+            "normalizedForm": "non_posso",
+            "surfaceForms": [
+              "non posso"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "potere"
+            ],
+            "glossBySurface": {
+              "non posso": {
+                "en": "I can't"
+              }
+            }
+          },
+          {
+            "exponentId": "non_so_nuotare",
+            "normalizedForm": "non_so_nuotare",
+            "surfaceForms": [
+              "non so nuotare",
+              "non so cucinare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "sapere",
+              "nuotare",
+              "cucinare"
+            ],
+            "glossBySurface": {
+              "non so nuotare": {
+                "en": "I can't swim"
+              },
+              "non so cucinare": {
+                "en": "I can't cook"
+              }
+            }
+          },
+          {
+            "exponentId": "non_parlo_inglese",
+            "normalizedForm": "non_parlo_inglese",
+            "surfaceForms": [
+              "non parlo inglese"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "parlare",
+              "inglese"
+            ],
+            "glossBySurface": {
+              "non parlo inglese": {
+                "en": "I don't speak English"
+              }
+            }
+          },
+          {
+            "exponentId": "non_posso_venire",
+            "normalizedForm": "non_posso_venire",
+            "surfaceForms": [
+              "non posso venire"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "potere",
+              "venire"
+            ],
+            "glossBySurface": {
+              "non posso venire": {
+                "en": "I can't come"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-free-time",
+      "lessonId": "daily-life",
+      "displayName": "Say what they do in free time",
+      "cefrDescriptor": "Can say what they do during their free time.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "ascolto_musica",
+            "normalizedForm": "ascolto_musica",
+            "surfaceForms": [
+              "ascolto musica"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ascolto",
+              "musica"
+            ],
+            "glossBySurface": {
+              "ascolto musica": {
+                "en": "I listen to music"
+              }
+            }
+          },
+          {
+            "exponentId": "guardo_la_televisione",
+            "normalizedForm": "guardo_la_televisione",
+            "surfaceForms": [
+              "guardo la televisione",
+              "guardo la tv"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "guardare",
+              "televisione",
+              "tv"
+            ],
+            "glossBySurface": {
+              "guardo la televisione": {
+                "en": "I watch television"
+              },
+              "guardo la tv": {
+                "en": "I watch TV"
+              }
+            }
+          },
+          {
+            "exponentId": "esco_con_gli_amici",
+            "normalizedForm": "esco_con_gli_amici",
+            "surfaceForms": [
+              "esco con gli amici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "uscire",
+              "con",
+              "amico"
+            ],
+            "glossBySurface": {
+              "esco con gli amici": {
+                "en": "I go out with friends"
+              }
+            }
+          },
+          {
+            "exponentId": "leggo_un_libro",
+            "normalizedForm": "leggo_un_libro",
+            "surfaceForms": [
+              "leggo un libro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "leggere",
+              "libro"
+            ],
+            "glossBySurface": {
+              "leggo un libro": {
+                "en": "I read a book"
+              }
+            }
+          },
+          {
+            "exponentId": "faccio_sport",
+            "normalizedForm": "faccio_sport",
+            "surfaceForms": [
+              "faccio sport"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "fare",
+              "sport"
+            ],
+            "glossBySurface": {
+              "faccio sport": {
+                "en": "I play sport"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-frequency",
+      "lessonId": "daily-life",
+      "displayName": "Say how often",
+      "cefrDescriptor": "Can say how frequently they do something.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "tutti_i_giorni",
+            "normalizedForm": "tutti_i_giorni",
+            "surfaceForms": [
+              "tutti i giorni",
+              "ogni giorno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "tutto",
+              "i",
+              "giorno",
+              "ogni"
+            ],
+            "glossBySurface": {
+              "tutti i giorni": {
+                "en": "every day"
+              },
+              "ogni giorno": {
+                "en": "each day"
+              }
+            }
+          },
+          {
+            "exponentId": "a_volte",
+            "normalizedForm": "a_volte",
+            "surfaceForms": [
+              "a volte"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "volta"
+            ],
+            "glossBySurface": {
+              "a volte": {
+                "en": "sometimes"
+              }
+            }
+          },
+          {
+            "exponentId": "sempre",
+            "normalizedForm": "sempre",
+            "surfaceForms": [
+              "sempre",
+              "quasi sempre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sempre",
+              "quasi"
+            ],
+            "glossBySurface": {
+              "sempre": {
+                "en": "always"
+              },
+              "quasi sempre": {
+                "en": "almost always"
+              }
+            }
+          },
+          {
+            "exponentId": "mai",
+            "normalizedForm": "mai",
+            "surfaceForms": [
+              "mai"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mai"
+            ],
+            "glossBySurface": {
+              "mai": {
+                "en": "never"
+              }
+            }
+          },
+          {
+            "exponentId": "una_volta_alla_settimana",
+            "normalizedForm": "una_volta_alla_settimana",
+            "surfaceForms": [
+              "una volta alla settimana"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volta",
+              "a",
+              "settimana"
+            ],
+            "glossBySurface": {
+              "una volta alla settimana": {
+                "en": "once a week"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-work-or-study",
+      "lessonId": "daily-life",
+      "displayName": "Say where they work or study",
+      "cefrDescriptor": "Can say where they work or study.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "lavoro_a",
+            "normalizedForm": "lavoro_a",
+            "surfaceForms": [
+              "lavoro a",
+              "lavoro in un ufficio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "lavoro",
+              "a",
+              "in",
+              "ufficio"
+            ],
+            "glossBySurface": {
+              "lavoro a": {
+                "en": "I work at"
+              },
+              "lavoro in un ufficio": {
+                "en": "I work in an office"
+              }
+            }
+          },
+          {
+            "exponentId": "lavoro_da_casa",
+            "normalizedForm": "lavoro_da_casa",
+            "surfaceForms": [
+              "lavoro da casa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "lavoro",
+              "da",
+              "casa"
+            ],
+            "glossBySurface": {
+              "lavoro da casa": {
+                "en": "I work at home"
+              }
+            }
+          },
+          {
+            "exponentId": "studio_alluniversita",
+            "normalizedForm": "studio_alluniversita",
+            "surfaceForms": [
+              "studio all'università",
+              "studio all'universita"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "studio",
+              "a",
+              "università"
+            ],
+            "glossBySurface": {
+              "studio all'università": {
+                "en": "I study at the university"
+              },
+              "studio all'universita": {
+                "en": "I study at the university"
               }
             }
           }

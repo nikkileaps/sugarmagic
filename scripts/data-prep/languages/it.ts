@@ -68,7 +68,9 @@ const FUNCTION_WORDS = new Set([
  */
 const ELIDED_STUBS: Record<string, string> = {
   c: "ci",
+  com: "come",
   d: "di",
+  dall: "dalla",
   quant: "quanto",
   // `l'` is `lo` before a masculine word and `la` before a feminine one, and
   // the stub cannot say which. Answering `lo` always is safe HERE because both

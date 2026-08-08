@@ -569,7 +569,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "say, tell"
-      }
+      },
+      "forms": {
+        "pres": [
+          "dico",
+          "dici",
+          "dice",
+          "diciamo",
+          "dite",
+          "dicono"
+        ],
+        "pret": [
+          "dissi",
+          "dicesti",
+          "disse",
+          "dicemmo",
+          "diceste",
+          "dissero"
+        ],
+        "imp": [
+          "dicevo",
+          "dicevi",
+          "diceva",
+          "dicevamo",
+          "dicevate",
+          "dicevano"
+        ],
+        "ger": "dicendo",
+        "part": "detto"
+      },
+      "formsSource": "authored"
     },
     "primo": {
       "lemmaId": "primo",
@@ -2558,7 +2587,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "arrive, reach"
-      }
+      },
+      "forms": {
+        "pres": [
+          "arrivo",
+          "arrivi",
+          "arriva",
+          "arriviamo",
+          "arrivate",
+          "arrivano"
+        ],
+        "pret": [
+          "arrivai",
+          "arrivasti",
+          "arrivò",
+          "arrivammo",
+          "arrivaste",
+          "arrivarono"
+        ],
+        "imp": [
+          "arrivavo",
+          "arrivavi",
+          "arrivava",
+          "arrivavamo",
+          "arrivavate",
+          "arrivavano"
+        ],
+        "ger": "arrivando",
+        "part": "arrivato"
+      },
+      "formsSource": "authored"
     },
     "consiglio": {
       "lemmaId": "consiglio",
@@ -3551,7 +3609,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "read"
-      }
+      },
+      "forms": {
+        "pres": [
+          "leggo",
+          "leggi",
+          "legge",
+          "leggiamo",
+          "leggete",
+          "leggono"
+        ],
+        "pret": [
+          "lessi",
+          "leggesti",
+          "lesse",
+          "leggemmo",
+          "leggeste",
+          "lessero"
+        ],
+        "imp": [
+          "leggevo",
+          "leggevi",
+          "leggeva",
+          "leggevamo",
+          "leggevate",
+          "leggevano"
+        ],
+        "ger": "leggendo",
+        "part": "letto"
+      },
+      "formsSource": "authored"
     },
     "certo": {
       "lemmaId": "certo",
@@ -3966,7 +4053,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "return, go back"
-      }
+      },
+      "forms": {
+        "pres": [
+          "torno",
+          "torni",
+          "torna",
+          "torniamo",
+          "tornate",
+          "tornano"
+        ],
+        "pret": [
+          "tornai",
+          "tornasti",
+          "tornò",
+          "tornammo",
+          "tornaste",
+          "tornarono"
+        ],
+        "imp": [
+          "tornavo",
+          "tornavi",
+          "tornava",
+          "tornavamo",
+          "tornavate",
+          "tornavano"
+        ],
+        "ger": "tornando",
+        "part": "tornato"
+      },
+      "formsSource": "authored"
     },
     "buono": {
       "lemmaId": "buono",
@@ -4298,7 +4414,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "open"
-      }
+      },
+      "forms": {
+        "pres": [
+          "apro",
+          "apri",
+          "apre",
+          "apriamo",
+          "aprite",
+          "aprono"
+        ],
+        "pret": [
+          "aprii",
+          "apristi",
+          "aprì",
+          "aprimmo",
+          "apriste",
+          "aprirono"
+        ],
+        "imp": [
+          "aprivo",
+          "aprivi",
+          "apriva",
+          "aprivamo",
+          "aprivate",
+          "aprivano"
+        ],
+        "ger": "aprendo",
+        "part": "aperto"
+      },
+      "formsSource": "authored"
     },
     "restare": {
       "lemmaId": "restare",
@@ -4668,7 +4813,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "answer, respond"
-      }
+      },
+      "forms": {
+        "pres": [
+          "rispondo",
+          "rispondi",
+          "risponde",
+          "rispondiamo",
+          "rispondete",
+          "rispondono"
+        ],
+        "pret": [
+          "risposi",
+          "rispondesti",
+          "rispose",
+          "rispondemmo",
+          "rispondeste",
+          "risposero"
+        ],
+        "imp": [
+          "rispondevo",
+          "rispondevi",
+          "rispondeva",
+          "rispondevamo",
+          "rispondevate",
+          "rispondevano"
+        ],
+        "ger": "rispondendo",
+        "part": "risposto"
+      },
+      "formsSource": "authored"
     },
     "seguente": {
       "lemmaId": "seguente",
@@ -4828,7 +5002,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "middle, means"
-      }
+      },
+      "forms": {
+        "ms": "mezzo",
+        "fs": "mezza",
+        "mp": "mezzi",
+        "fp": "mezze"
+      },
+      "formsSource": "authored"
     },
     "partire": {
       "lemmaId": "partire",
@@ -6287,7 +6468,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "look, watch"
-      }
+      },
+      "forms": {
+        "pres": [
+          "guardo",
+          "guardi",
+          "guarda",
+          "guardiamo",
+          "guardate",
+          "guardano"
+        ],
+        "pret": [
+          "guardai",
+          "guardasti",
+          "guardò",
+          "guardammo",
+          "guardaste",
+          "guardarono"
+        ],
+        "imp": [
+          "guardavo",
+          "guardavi",
+          "guardava",
+          "guardavamo",
+          "guardavate",
+          "guardavano"
+        ],
+        "ger": "guardando",
+        "part": "guardato"
+      },
+      "formsSource": "authored"
     },
     "sicurezza": {
       "lemmaId": "sicurezza",
@@ -6470,7 +6680,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "begin, start"
-      }
+      },
+      "forms": {
+        "pres": [
+          "comincio",
+          "cominci",
+          "comincia",
+          "cominciamo",
+          "cominciate",
+          "cominciano"
+        ],
+        "pret": [
+          "cominciai",
+          "cominciasti",
+          "cominciò",
+          "cominciammo",
+          "cominciaste",
+          "cominciarono"
+        ],
+        "imp": [
+          "cominciavo",
+          "cominciavi",
+          "cominciava",
+          "cominciavamo",
+          "cominciavate",
+          "cominciavano"
+        ],
+        "ger": "cominciando",
+        "part": "cominciato"
+      },
+      "formsSource": "authored"
     },
     "posizione": {
       "lemmaId": "posizione",
@@ -6588,7 +6827,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "exit, go out"
-      }
+      },
+      "forms": {
+        "pres": [
+          "esco",
+          "esci",
+          "esce",
+          "usciamo",
+          "uscite",
+          "escono"
+        ],
+        "pret": [
+          "uscii",
+          "uscisti",
+          "uscì",
+          "uscimmo",
+          "usciste",
+          "uscirono"
+        ],
+        "imp": [
+          "uscivo",
+          "uscivi",
+          "usciva",
+          "uscivamo",
+          "uscivate",
+          "uscivano"
+        ],
+        "ger": "uscendo",
+        "part": "uscito"
+      },
+      "formsSource": "authored"
     },
     "modalità": {
       "lemmaId": "modalità",
@@ -9157,7 +9425,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "close, shut"
-      }
+      },
+      "forms": {
+        "pres": [
+          "chiudo",
+          "chiudi",
+          "chiude",
+          "chiudiamo",
+          "chiudete",
+          "chiudono"
+        ],
+        "pret": [
+          "chiusi",
+          "chiudesti",
+          "chiuse",
+          "chiudemmo",
+          "chiudeste",
+          "chiusero"
+        ],
+        "imp": [
+          "chiudevo",
+          "chiudevi",
+          "chiudeva",
+          "chiudevamo",
+          "chiudevate",
+          "chiudevano"
+        ],
+        "ger": "chiudendo",
+        "part": "chiuso"
+      },
+      "formsSource": "authored"
     },
     "osservare": {
       "lemmaId": "osservare",
@@ -22180,7 +22477,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "raise, lift"
-      }
+      },
+      "forms": {
+        "pres": [
+          "alzo",
+          "alzi",
+          "alza",
+          "alziamo",
+          "alzate",
+          "alzano"
+        ],
+        "pret": [
+          "alzai",
+          "alzasti",
+          "alzò",
+          "alzammo",
+          "alzaste",
+          "alzarono"
+        ],
+        "imp": [
+          "alzavo",
+          "alzavi",
+          "alzava",
+          "alzavamo",
+          "alzavate",
+          "alzavano"
+        ],
+        "ger": "alzando",
+        "part": "alzato"
+      },
+      "formsSource": "authored"
     },
     "inserimento": {
       "lemmaId": "inserimento",
@@ -27924,7 +28250,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "practice"
-      }
+      },
+      "forms": {
+        "pres": [
+          "pratico",
+          "pratichi",
+          "pratica",
+          "pratichiamo",
+          "praticate",
+          "praticano"
+        ],
+        "pret": [
+          "praticai",
+          "praticasti",
+          "praticò",
+          "praticammo",
+          "praticaste",
+          "praticarono"
+        ],
+        "imp": [
+          "praticavo",
+          "praticavi",
+          "praticava",
+          "praticavamo",
+          "praticavate",
+          "praticavano"
+        ],
+        "ger": "praticando",
+        "part": "praticato"
+      },
+      "formsSource": "authored"
     },
     "sostanziale": {
       "lemmaId": "sostanziale",
@@ -46656,7 +47011,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "wash"
-      }
+      },
+      "forms": {
+        "pres": [
+          "lavo",
+          "lavi",
+          "lava",
+          "laviamo",
+          "lavate",
+          "lavano"
+        ],
+        "pret": [
+          "lavai",
+          "lavasti",
+          "lavò",
+          "lavammo",
+          "lavaste",
+          "lavarono"
+        ],
+        "imp": [
+          "lavavo",
+          "lavavi",
+          "lavava",
+          "lavavamo",
+          "lavavate",
+          "lavavano"
+        ],
+        "ger": "lavando",
+        "part": "lavato"
+      },
+      "formsSource": "authored"
     },
     "terrestre": {
       "lemmaId": "terrestre",
@@ -84455,6 +84839,32 @@
         "fp": null
       },
       "formsSource": "authored"
+    },
+    "stamattina": {
+      "lemmaId": "stamattina",
+      "lang": "it",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adverb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "this morning"
+      }
+    },
+    "hobby": {
+      "lemmaId": "hobby",
+      "lang": "it",
+      "cefrPriorBand": "A2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "hobby"
+      }
     }
   }
 }

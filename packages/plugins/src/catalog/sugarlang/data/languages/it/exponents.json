@@ -3381,6 +3381,1462 @@
           }
         ]
       }
+    ],
+    "understand-numbers": [
+      {
+        "wordings": [
+          {
+            "phrase": "zero",
+            "gloss": {
+              "en": "zero"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "uno",
+            "gloss": {
+              "en": "one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "due",
+            "gloss": {
+              "en": "two"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tre",
+            "gloss": {
+              "en": "three"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quattro",
+            "gloss": {
+              "en": "four"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cinque",
+            "gloss": {
+              "en": "five"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sei",
+            "gloss": {
+              "en": "six"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sette",
+            "gloss": {
+              "en": "seven"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "otto",
+            "gloss": {
+              "en": "eight"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "nove",
+            "gloss": {
+              "en": "nine"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dieci",
+            "gloss": {
+              "en": "ten"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "undici",
+            "gloss": {
+              "en": "eleven"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dodici",
+            "gloss": {
+              "en": "twelve"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tredici",
+            "gloss": {
+              "en": "thirteen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quattordici",
+            "gloss": {
+              "en": "fourteen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quindici",
+            "gloss": {
+              "en": "fifteen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "venti",
+            "gloss": {
+              "en": "twenty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "trenta",
+            "gloss": {
+              "en": "thirty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quaranta",
+            "gloss": {
+              "en": "forty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cinquanta",
+            "gloss": {
+              "en": "fifty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cento",
+            "gloss": {
+              "en": "a hundred"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mille",
+            "gloss": {
+              "en": "a thousand"
+            }
+          }
+        ]
+      }
+    ],
+    "state-the-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "è l'una",
+            "gloss": {
+              "en": "it's one o'clock"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono le tre",
+            "gloss": {
+              "en": "it's three o'clock"
+            }
+          },
+          {
+            "phrase": "sono le sette",
+            "gloss": {
+              "en": "it's seven o'clock"
+            }
+          },
+          {
+            "phrase": "sono le dieci",
+            "gloss": {
+              "en": "it's ten o'clock"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono le cinque e mezza",
+            "gloss": {
+              "en": "it's half past five"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono le otto e un quarto",
+            "gloss": {
+              "en": "it's quarter past eight"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è mezzogiorno",
+            "gloss": {
+              "en": "it's midday"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-the-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "che ore sono",
+            "gloss": {
+              "en": "what time is it"
+            }
+          },
+          {
+            "phrase": "che ora è",
+            "gloss": {
+              "en": "what time is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ha l'ora",
+            "gloss": {
+              "en": "have you got the time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sa che ore sono",
+            "gloss": {
+              "en": "do you know what time it is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi dice l'ora",
+            "gloss": {
+              "en": "could you tell me the time"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-days": [
+      {
+        "wordings": [
+          {
+            "phrase": "lunedì",
+            "gloss": {
+              "en": "Monday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "martedì",
+            "gloss": {
+              "en": "Tuesday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mercoledì",
+            "gloss": {
+              "en": "Wednesday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "giovedì",
+            "gloss": {
+              "en": "Thursday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "venerdì",
+            "gloss": {
+              "en": "Friday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sabato",
+            "gloss": {
+              "en": "Saturday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "domenica",
+            "gloss": {
+              "en": "Sunday"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-months": [
+      {
+        "wordings": [
+          {
+            "phrase": "gennaio",
+            "gloss": {
+              "en": "January"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "febbraio",
+            "gloss": {
+              "en": "February"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "marzo",
+            "gloss": {
+              "en": "March"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "aprile",
+            "gloss": {
+              "en": "April"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "maggio",
+            "gloss": {
+              "en": "May"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "giugno",
+            "gloss": {
+              "en": "June"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "luglio",
+            "gloss": {
+              "en": "July"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "agosto",
+            "gloss": {
+              "en": "August"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "settembre",
+            "gloss": {
+              "en": "September"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ottobre",
+            "gloss": {
+              "en": "October"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "novembre",
+            "gloss": {
+              "en": "November"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dicembre",
+            "gloss": {
+              "en": "December"
+            }
+          }
+        ]
+      }
+    ],
+    "give-a-date": [
+      {
+        "wordings": [
+          {
+            "phrase": "oggi è sabato",
+            "gloss": {
+              "en": "today is Saturday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è il due gennaio",
+            "gloss": {
+              "en": "it's the second of January"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il quattro marzo",
+            "gloss": {
+              "en": "the fourth of March"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-what-day": [
+      {
+        "wordings": [
+          {
+            "phrase": "che giorno è oggi",
+            "gloss": {
+              "en": "what day is it today"
+            }
+          },
+          {
+            "phrase": "che giorno è",
+            "gloss": {
+              "en": "what day is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che data è oggi",
+            "gloss": {
+              "en": "what's the date today"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quando è",
+            "gloss": {
+              "en": "when is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quando comincia",
+            "gloss": {
+              "en": "when does it start"
+            }
+          }
+        ]
+      }
+    ],
+    "say-when": [
+      {
+        "wordings": [
+          {
+            "phrase": "il fine settimana",
+            "gloss": {
+              "en": "the weekend"
+            }
+          },
+          {
+            "phrase": "nel fine settimana",
+            "gloss": {
+              "en": "at the weekend"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "durante la settimana",
+            "gloss": {
+              "en": "during the week"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-parts-of-day": [
+      {
+        "wordings": [
+          {
+            "phrase": "di mattina",
+            "gloss": {
+              "en": "in the morning"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "di pomeriggio",
+            "gloss": {
+              "en": "in the afternoon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "di sera",
+            "gloss": {
+              "en": "in the evening"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "stamattina",
+            "gloss": {
+              "en": "this morning"
+            }
+          },
+          {
+            "phrase": "questo pomeriggio",
+            "gloss": {
+              "en": "this afternoon"
+            }
+          },
+          {
+            "phrase": "stasera",
+            "gloss": {
+              "en": "tonight"
+            }
+          }
+        ]
+      }
+    ],
+    "state-schedule": [
+      {
+        "wordings": [
+          {
+            "phrase": "tempo libero",
+            "gloss": {
+              "en": "free time"
+            }
+          },
+          {
+            "phrase": "il mio tempo libero",
+            "gloss": {
+              "en": "my free time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dal lunedì al venerdì",
+            "gloss": {
+              "en": "Monday to Friday"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-opening-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "a che ora aprite",
+            "gloss": {
+              "en": "what time do you open"
+            }
+          },
+          {
+            "phrase": "a che ora apre",
+            "gloss": {
+              "en": "what time does it open"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a che ora chiudete",
+            "gloss": {
+              "en": "what time do you close"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quando aprite",
+            "gloss": {
+              "en": "when do you open"
+            }
+          },
+          {
+            "phrase": "quando chiudete",
+            "gloss": {
+              "en": "when do you close"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "fino a che ora",
+            "gloss": {
+              "en": "until what time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "aprite la domenica",
+            "gloss": {
+              "en": "are you open on Sundays"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-appointment": [
+      {
+        "wordings": [
+          {
+            "phrase": "alle quattro",
+            "gloss": {
+              "en": "at four o'clock"
+            }
+          },
+          {
+            "phrase": "all'una",
+            "gloss": {
+              "en": "at one o'clock"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "alle quattro del pomeriggio",
+            "gloss": {
+              "en": "at four in the afternoon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sabato alle due",
+            "gloss": {
+              "en": "on Saturday at two"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho un appuntamento",
+            "gloss": {
+              "en": "I have an appointment"
+            }
+          },
+          {
+            "phrase": "l'appuntamento è alle quattro",
+            "gloss": {
+              "en": "the appointment is at four"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ci vediamo alle due",
+            "gloss": {
+              "en": "let's meet at two"
+            }
+          }
+        ]
+      }
+    ],
+    "say-early-or-late": [
+      {
+        "wordings": [
+          {
+            "phrase": "è tardi",
+            "gloss": {
+              "en": "it's late"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è presto",
+            "gloss": {
+              "en": "it's early"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono in ritardo",
+            "gloss": {
+              "en": "I'm late"
+            }
+          },
+          {
+            "phrase": "farò tardi",
+            "gloss": {
+              "en": "I'm going to be late"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sei in anticipo",
+            "gloss": {
+              "en": "you're early"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono in orario",
+            "gloss": {
+              "en": "I'm on time"
+            }
+          }
+        ]
+      }
+    ],
+    "read-a-timetable": [
+      {
+        "wordings": [
+          {
+            "phrase": "parte alle due",
+            "gloss": {
+              "en": "it leaves at two"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "arriva alle quattro",
+            "gloss": {
+              "en": "it arrives at four"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il prossimo treno",
+            "gloss": {
+              "en": "the next train"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "partenze",
+            "gloss": {
+              "en": "departures"
+            }
+          },
+          {
+            "phrase": "arrivi",
+            "gloss": {
+              "en": "arrivals"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ogni mezz'ora",
+            "gloss": {
+              "en": "every half hour"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-routine": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi alzo presto",
+            "gloss": {
+              "en": "I get up early"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi lavo la mattina",
+            "gloss": {
+              "en": "I shower in the morning"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "faccio colazione a casa",
+            "gloss": {
+              "en": "I have breakfast at home"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vado a letto presto",
+            "gloss": {
+              "en": "I go to bed early"
+            }
+          },
+          {
+            "phrase": "vado a letto tardi",
+            "gloss": {
+              "en": "I go to bed late"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "torno a casa di pomeriggio",
+            "gloss": {
+              "en": "I come home in the afternoon"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-routine": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa fai tutti i giorni",
+            "gloss": {
+              "en": "what do you do every day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a che ora ti alzi",
+            "gloss": {
+              "en": "what time do you get up"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa fai di mattina",
+            "gloss": {
+              "en": "what do you do in the morning"
+            }
+          },
+          {
+            "phrase": "cosa fai di pomeriggio",
+            "gloss": {
+              "en": "what do you do in the afternoon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "com'è la tua giornata",
+            "gloss": {
+              "en": "what is your day like"
+            }
+          }
+        ]
+      }
+    ],
+    "state-work-or-study": [
+      {
+        "wordings": [
+          {
+            "phrase": "lavoro a",
+            "gloss": {
+              "en": "I work at"
+            }
+          },
+          {
+            "phrase": "lavoro in un ufficio",
+            "gloss": {
+              "en": "I work in an office"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lavoro da casa",
+            "gloss": {
+              "en": "I work at home"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "studio all'università",
+            "gloss": {
+              "en": "I study at the university"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-school-activities": [
+      {
+        "wordings": [
+          {
+            "phrase": "studio italiano",
+            "gloss": {
+              "en": "I study Italian"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vado a lezione",
+            "gloss": {
+              "en": "I go to class"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "faccio i compiti",
+            "gloss": {
+              "en": "I do my homework"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho un esame",
+            "gloss": {
+              "en": "I have an exam"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-work-activities": [
+      {
+        "wordings": [
+          {
+            "phrase": "lavoro al computer",
+            "gloss": {
+              "en": "I work on the computer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho una riunione",
+            "gloss": {
+              "en": "I have a meeting"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "rispondo al telefono",
+            "gloss": {
+              "en": "I answer the phone"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "comincio presto",
+            "gloss": {
+              "en": "I start early"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "esco dall'ufficio tardi",
+            "gloss": {
+              "en": "I leave the office late"
+            }
+          }
+        ]
+      }
+    ],
+    "state-free-time": [
+      {
+        "wordings": [
+          {
+            "phrase": "ascolto musica",
+            "gloss": {
+              "en": "I listen to music"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "guardo la televisione",
+            "gloss": {
+              "en": "I watch television"
+            }
+          },
+          {
+            "phrase": "guardo la tv",
+            "gloss": {
+              "en": "I watch TV"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "esco con gli amici",
+            "gloss": {
+              "en": "I go out with friends"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "leggo un libro",
+            "gloss": {
+              "en": "I read a book"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "faccio sport",
+            "gloss": {
+              "en": "I play sport"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-about-hobbies": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa ti piace fare",
+            "gloss": {
+              "en": "what do you like to do"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa fai nel tempo libero",
+            "gloss": {
+              "en": "what do you do in your free time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hai un hobby",
+            "gloss": {
+              "en": "do you have a hobby"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "pratichi uno sport",
+            "gloss": {
+              "en": "do you play a sport"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti piace il calcio",
+            "gloss": {
+              "en": "do you like football"
+            }
+          }
+        ]
+      }
+    ],
+    "express-ability": [
+      {
+        "wordings": [
+          {
+            "phrase": "so nuotare",
+            "gloss": {
+              "en": "I can swim"
+            }
+          },
+          {
+            "phrase": "so cucinare",
+            "gloss": {
+              "en": "I can cook"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso aiutare",
+            "gloss": {
+              "en": "I can help"
+            }
+          },
+          {
+            "phrase": "ti posso aiutare",
+            "gloss": {
+              "en": "I can help you"
+            }
+          }
+        ]
+      }
+    ],
+    "express-inability": [
+      {
+        "wordings": [
+          {
+            "phrase": "non posso",
+            "gloss": {
+              "en": "I can't"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non so nuotare",
+            "gloss": {
+              "en": "I can't swim"
+            }
+          },
+          {
+            "phrase": "non so cucinare",
+            "gloss": {
+              "en": "I can't cook"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non parlo inglese",
+            "gloss": {
+              "en": "I don't speak English"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non posso venire",
+            "gloss": {
+              "en": "I can't come"
+            }
+          }
+        ]
+      }
+    ],
+    "state-frequency": [
+      {
+        "wordings": [
+          {
+            "phrase": "tutti i giorni",
+            "gloss": {
+              "en": "every day"
+            }
+          },
+          {
+            "phrase": "ogni giorno",
+            "gloss": {
+              "en": "each day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a volte",
+            "gloss": {
+              "en": "sometimes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sempre",
+            "gloss": {
+              "en": "always"
+            }
+          },
+          {
+            "phrase": "quasi sempre",
+            "gloss": {
+              "en": "almost always"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mai",
+            "gloss": {
+              "en": "never"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "una volta alla settimana",
+            "gloss": {
+              "en": "once a week"
+            }
+          }
+        ]
+      }
     ]
   }
 }
