@@ -767,7 +767,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "want, wish"
-      }
+      },
+      "forms": {
+        "pres": [
+          "voglio",
+          "vuoi",
+          "vuole",
+          "vogliamo",
+          "volete",
+          "vogliono"
+        ],
+        "pret": [
+          "volli",
+          "volesti",
+          "volle",
+          "volemmo",
+          "voleste",
+          "vollero"
+        ],
+        "imp": [
+          "volevo",
+          "volevi",
+          "voleva",
+          "volevamo",
+          "volevate",
+          "volevano"
+        ],
+        "ger": "volendo",
+        "part": "voluto"
+      },
+      "formsSource": "authored"
     },
     "quello": {
       "lemmaId": "quello",
@@ -781,7 +810,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "that"
-      }
+      },
+      "forms": {
+        "ms": "quello",
+        "fs": "quella",
+        "mp": "quelli",
+        "fp": "quelle"
+      },
+      "formsSource": "authored"
     },
     "quanto": {
       "lemmaId": "quanto",
@@ -2320,7 +2356,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "only, unique"
-      }
+      },
+      "forms": {
+        "ms": "unico",
+        "fs": "unica",
+        "mp": "unici",
+        "fp": "uniche"
+      },
+      "formsSource": "authored"
     },
     "ricerca": {
       "lemmaId": "ricerca",
@@ -3311,7 +3354,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "high, tall"
-      }
+      },
+      "forms": {
+        "ms": "alto",
+        "fs": "alta",
+        "mp": "alti",
+        "fp": "alte"
+      },
+      "formsSource": "authored"
     },
     "particolare": {
       "lemmaId": "particolare",
@@ -3867,7 +3917,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "long"
-      }
+      },
+      "forms": {
+        "ms": "lungo",
+        "fs": "lunga",
+        "mp": "lunghi",
+        "fp": "lunghe"
+      },
+      "formsSource": "authored"
     },
     "esistere": {
       "lemmaId": "esistere",
@@ -7669,7 +7726,12 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "eye"
-      }
+      },
+      "forms": {
+        "sg": "occhio",
+        "pl": "occhi"
+      },
+      "formsSource": "authored"
     },
     "breve": {
       "lemmaId": "breve",
@@ -8140,7 +8202,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "low, base"
-      }
+      },
+      "forms": {
+        "ms": "basso",
+        "fs": "bassa",
+        "mp": "bassi",
+        "fp": "basse"
+      },
+      "formsSource": "authored"
     },
     "assicurare": {
       "lemmaId": "assicurare",
@@ -35694,7 +35763,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "likeable, pleasant"
-      }
+      },
+      "forms": {
+        "ms": "simpatico",
+        "fs": "simpatica",
+        "mp": "simpatici",
+        "fp": "simpatiche"
+      },
+      "formsSource": "authored"
     },
     "sfera": {
       "lemmaId": "sfera",
@@ -81238,7 +81314,14 @@
       "cefrPriorSource": "claude-classified",
       "glosses": {
         "en": "married"
-      }
+      },
+      "forms": {
+        "ms": "sposato",
+        "fs": "sposata",
+        "mp": "sposati",
+        "fp": "sposate"
+      },
+      "formsSource": "authored"
     },
     "spostarsi": {
       "lemmaId": "spostarsi",
@@ -83916,6 +83999,32 @@
       "cefrPriorSource": "claude-classified",
       "glosses": {
         "en": "email"
+      }
+    },
+    "i": {
+      "lemmaId": "i",
+      "lang": "it",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "determiner"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "the (masculine plural)"
+      }
+    },
+    "timido": {
+      "lemmaId": "timido",
+      "lang": "it",
+      "cefrPriorBand": "A2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adjective"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "shy"
       }
     }
   }

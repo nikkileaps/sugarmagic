@@ -13,6 +13,12 @@
       "band": "A1",
       "ordinal": 2,
       "displayName": "Personal Information"
+    },
+    {
+      "lessonId": "family",
+      "band": "A1",
+      "ordinal": 3,
+      "displayName": "Family and Relationships"
     }
   ],
   "competencies": [
@@ -2341,6 +2347,995 @@
             "glossBySurface": {
               "sono in pensione": {
                 "en": "I'm retired"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-siblings",
+      "lessonId": "family",
+      "displayName": "Ask whether someone has siblings",
+      "cefrDescriptor": "Can ask whether someone has brothers or sisters.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "hai_fratelli",
+            "normalizedForm": "hai_fratelli",
+            "surfaceForms": [
+              "hai fratelli",
+              "ha fratelli"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "fratello"
+            ],
+            "glossBySurface": {
+              "hai fratelli": {
+                "en": "do you have any brothers or sisters"
+              },
+              "ha fratelli": {
+                "en": "do you have any brothers or sisters"
+              }
+            }
+          },
+          {
+            "exponentId": "sei_figlio_unico",
+            "normalizedForm": "sei_figlio_unico",
+            "surfaceForms": [
+              "sei figlio unico"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sei",
+              "figlio",
+              "unico"
+            ],
+            "glossBySurface": {
+              "sei figlio unico": {
+                "en": "are you an only child"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-who-someone-is",
+      "lessonId": "family",
+      "displayName": "Ask who someone is",
+      "cefrDescriptor": "Can ask who a person is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "chi_e",
+            "normalizedForm": "chi_e",
+            "surfaceForms": [
+              "chi è",
+              "chi e",
+              "chi è lui",
+              "chi e lui"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "chi",
+              "essere"
+            ],
+            "glossBySurface": {
+              "chi è": {
+                "en": "who is it"
+              },
+              "chi e": {
+                "en": "who is it"
+              },
+              "chi è lui": {
+                "en": "who is he"
+              },
+              "chi e lui": {
+                "en": "who is he"
+              }
+            }
+          },
+          {
+            "exponentId": "chi_e_quella_persona",
+            "normalizedForm": "chi_e_quella_persona",
+            "surfaceForms": [
+              "chi è quella persona",
+              "chi e quella persona",
+              "chi è quel signore",
+              "chi e quel signore"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "chi",
+              "essere",
+              "quello",
+              "persona",
+              "signore"
+            ],
+            "glossBySurface": {
+              "chi è quella persona": {
+                "en": "who is that person"
+              },
+              "chi e quella persona": {
+                "en": "who is that person"
+              },
+              "chi è quel signore": {
+                "en": "who is that man"
+              },
+              "chi e quel signore": {
+                "en": "who is that man"
+              }
+            }
+          },
+          {
+            "exponentId": "di_chi_e_amico",
+            "normalizedForm": "di_chi_e_amico",
+            "surfaceForms": [
+              "di chi è amico",
+              "di chi e amico"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "di",
+              "chi",
+              "essere",
+              "amico"
+            ],
+            "glossBySurface": {
+              "di chi è amico": {
+                "en": "whose friend is he"
+              },
+              "di chi e amico": {
+                "en": "whose friend is he"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-appearance",
+      "lessonId": "family",
+      "displayName": "Describe someone's appearance",
+      "cefrDescriptor": "Can describe a person using basic physical traits.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_alto",
+            "normalizedForm": "e_alto",
+            "surfaceForms": [
+              "è alto",
+              "e alto",
+              "è alta",
+              "e alta",
+              "è basso",
+              "e basso",
+              "è bassa",
+              "e bassa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "alto",
+              "basso"
+            ],
+            "glossBySurface": {
+              "è alto": {
+                "en": "he's tall"
+              },
+              "e alto": {
+                "en": "he's tall"
+              },
+              "è alta": {
+                "en": "she's tall"
+              },
+              "e alta": {
+                "en": "she's tall"
+              },
+              "è basso": {
+                "en": "he's short"
+              },
+              "e basso": {
+                "en": "he's short"
+              },
+              "è bassa": {
+                "en": "she's short"
+              },
+              "e bassa": {
+                "en": "she's short"
+              }
+            }
+          },
+          {
+            "exponentId": "ha_i_capelli_lunghi",
+            "normalizedForm": "ha_i_capelli_lunghi",
+            "surfaceForms": [
+              "ha i capelli lunghi",
+              "ha i capelli corti",
+              "ha i capelli biondi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "i",
+              "capelli",
+              "lungo",
+              "corte",
+              "biondo"
+            ],
+            "glossBySurface": {
+              "ha i capelli lunghi": {
+                "en": "she has long hair"
+              },
+              "ha i capelli corti": {
+                "en": "he has short hair"
+              },
+              "ha i capelli biondi": {
+                "en": "she has blond hair"
+              }
+            }
+          },
+          {
+            "exponentId": "ha_gli_occhi_azzurri",
+            "normalizedForm": "ha_gli_occhi_azzurri",
+            "surfaceForms": [
+              "ha gli occhi azzurri",
+              "ha gli occhi verdi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "occhio",
+              "azzurro",
+              "verde"
+            ],
+            "glossBySurface": {
+              "ha gli occhi azzurri": {
+                "en": "he has blue eyes"
+              },
+              "ha gli occhi verdi": {
+                "en": "she has green eyes"
+              }
+            }
+          },
+          {
+            "exponentId": "porta_gli_occhiali",
+            "normalizedForm": "porta_gli_occhiali",
+            "surfaceForms": [
+              "porta gli occhiali"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "porta",
+              "occhiali"
+            ],
+            "glossBySurface": {
+              "porta gli occhiali": {
+                "en": "wears glasses"
+              }
+            }
+          },
+          {
+            "exponentId": "e_giovane",
+            "normalizedForm": "e_giovane",
+            "surfaceForms": [
+              "è giovane",
+              "e giovane",
+              "è anziano",
+              "e anziano"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "giovane",
+              "anziano"
+            ],
+            "glossBySurface": {
+              "è giovane": {
+                "en": "he's young"
+              },
+              "e giovane": {
+                "en": "he's young"
+              },
+              "è anziano": {
+                "en": "she's elderly"
+              },
+              "e anziano": {
+                "en": "she's elderly"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-personality",
+      "lessonId": "family",
+      "displayName": "Describe someone's character",
+      "cefrDescriptor": "Can describe a person using basic personality adjectives.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_simpatico",
+            "normalizedForm": "e_simpatico",
+            "surfaceForms": [
+              "è simpatico",
+              "e simpatico",
+              "è simpatica",
+              "e simpatica"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "simpatico"
+            ],
+            "glossBySurface": {
+              "è simpatico": {
+                "en": "he's nice"
+              },
+              "e simpatico": {
+                "en": "he's nice"
+              },
+              "è simpatica": {
+                "en": "she's nice"
+              },
+              "e simpatica": {
+                "en": "she's nice"
+              }
+            }
+          },
+          {
+            "exponentId": "e_molto_gentile",
+            "normalizedForm": "e_molto_gentile",
+            "surfaceForms": [
+              "è molto gentile",
+              "e molto gentile"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "molto",
+              "gentile"
+            ],
+            "glossBySurface": {
+              "è molto gentile": {
+                "en": "he's very kind"
+              },
+              "e molto gentile": {
+                "en": "he's very kind"
+              }
+            }
+          },
+          {
+            "exponentId": "e_divertente",
+            "normalizedForm": "e_divertente",
+            "surfaceForms": [
+              "è divertente",
+              "e divertente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "divertente"
+            ],
+            "glossBySurface": {
+              "è divertente": {
+                "en": "he's fun"
+              },
+              "e divertente": {
+                "en": "he's fun"
+              }
+            }
+          },
+          {
+            "exponentId": "e_un_po_timido",
+            "normalizedForm": "e_un_po_timido",
+            "surfaceForms": [
+              "è un po' timido",
+              "e un po' timido"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "po",
+              "timido"
+            ],
+            "glossBySurface": {
+              "è un po' timido": {
+                "en": "he's a bit shy"
+              },
+              "e un po' timido": {
+                "en": "he's a bit shy"
+              }
+            }
+          },
+          {
+            "exponentId": "e_molto_intelligente",
+            "normalizedForm": "e_molto_intelligente",
+            "surfaceForms": [
+              "è molto intelligente",
+              "e molto intelligente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "molto",
+              "intelligente"
+            ],
+            "glossBySurface": {
+              "è molto intelligente": {
+                "en": "she's very clever"
+              },
+              "e molto intelligente": {
+                "en": "she's very clever"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-relationship",
+      "lessonId": "family",
+      "displayName": "Describe a family relationship",
+      "cefrDescriptor": "Can describe a basic family relationship.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_il_mio_fratello_maggiore",
+            "normalizedForm": "e_il_mio_fratello_maggiore",
+            "surfaceForms": [
+              "è il mio fratello maggiore",
+              "e il mio fratello maggiore",
+              "è il mio fratello minore",
+              "e il mio fratello minore"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "mio",
+              "fratello",
+              "maggiore",
+              "minore"
+            ],
+            "glossBySurface": {
+              "è il mio fratello maggiore": {
+                "en": "he's my older brother"
+              },
+              "e il mio fratello maggiore": {
+                "en": "he's my older brother"
+              },
+              "è il mio fratello minore": {
+                "en": "he's my younger brother"
+              },
+              "e il mio fratello minore": {
+                "en": "he's my younger brother"
+              }
+            }
+          },
+          {
+            "exponentId": "siamo_fratelli",
+            "normalizedForm": "siamo_fratelli",
+            "surfaceForms": [
+              "siamo fratelli",
+              "siamo cugini"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "fratello",
+              "cugino"
+            ],
+            "glossBySurface": {
+              "siamo fratelli": {
+                "en": "we're siblings"
+              },
+              "siamo cugini": {
+                "en": "we're cousins"
+              }
+            }
+          },
+          {
+            "exponentId": "siamo_sposati",
+            "normalizedForm": "siamo_sposati",
+            "surfaceForms": [
+              "siamo sposati",
+              "è sposato",
+              "e sposato",
+              "è sposata",
+              "e sposata"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "sposato"
+            ],
+            "glossBySurface": {
+              "siamo sposati": {
+                "en": "we're married"
+              },
+              "è sposato": {
+                "en": "he's married"
+              },
+              "e sposato": {
+                "en": "he's married"
+              },
+              "è sposata": {
+                "en": "she's married"
+              },
+              "e sposata": {
+                "en": "she's married"
+              }
+            }
+          },
+          {
+            "exponentId": "e_il_figlio_di_mio_fratello",
+            "normalizedForm": "e_il_figlio_di_mio_fratello",
+            "surfaceForms": [
+              "è il figlio di mio fratello",
+              "e il figlio di mio fratello",
+              "è la madre del mio amico",
+              "e la madre del mio amico"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "figlio",
+              "di",
+              "mio",
+              "fratello",
+              "madre",
+              "amico"
+            ],
+            "glossBySurface": {
+              "è il figlio di mio fratello": {
+                "en": "he's my brother's son"
+              },
+              "e il figlio di mio fratello": {
+                "en": "he's my brother's son"
+              },
+              "è la madre del mio amico": {
+                "en": "she's my friend's mother"
+              },
+              "e la madre del mio amico": {
+                "en": "she's my friend's mother"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "express-affection",
+      "lessonId": "family",
+      "displayName": "Express affection or dislike",
+      "cefrDescriptor": "Can express simple affection or dislike for someone.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "ti_voglio_bene",
+            "normalizedForm": "ti_voglio_bene",
+            "surfaceForms": [
+              "ti voglio bene",
+              "ti voglio molto bene"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "bene",
+              "molto"
+            ],
+            "glossBySurface": {
+              "ti voglio bene": {
+                "en": "I love you"
+              },
+              "ti voglio molto bene": {
+                "en": "I love you very much"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_sta_simpatico",
+            "normalizedForm": "mi_sta_simpatico",
+            "surfaceForms": [
+              "mi sta simpatico",
+              "mi sta molto simpatico"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "stare",
+              "simpatico",
+              "molto"
+            ],
+            "glossBySurface": {
+              "mi sta simpatico": {
+                "en": "I like him"
+              },
+              "mi sta molto simpatico": {
+                "en": "I like her a lot"
+              }
+            }
+          },
+          {
+            "exponentId": "non_mi_sta_simpatico",
+            "normalizedForm": "non_mi_sta_simpatico",
+            "surfaceForms": [
+              "non mi sta simpatico"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "stare",
+              "simpatico"
+            ],
+            "glossBySurface": {
+              "non mi sta simpatico": {
+                "en": "I don't like him"
+              }
+            }
+          },
+          {
+            "exponentId": "e_il_mio_migliore_amico",
+            "normalizedForm": "e_il_mio_migliore_amico",
+            "surfaceForms": [
+              "è il mio migliore amico",
+              "e il mio migliore amico",
+              "è la mia migliore amica",
+              "e la mia migliore amica"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "mio",
+              "migliore",
+              "amico",
+              "amica"
+            ],
+            "glossBySurface": {
+              "è il mio migliore amico": {
+                "en": "he's my best friend"
+              },
+              "e il mio migliore amico": {
+                "en": "he's my best friend"
+              },
+              "è la mia migliore amica": {
+                "en": "she's my best friend"
+              },
+              "e la mia migliore amica": {
+                "en": "she's my best friend"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-family-members",
+      "lessonId": "family",
+      "displayName": "Identify family members",
+      "cefrDescriptor": "Can name immediate family members.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "mia_madre",
+            "normalizedForm": "mia_madre",
+            "surfaceForms": [
+              "mia madre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "madre"
+            ],
+            "glossBySurface": {
+              "mia madre": {
+                "en": "my mother"
+              }
+            }
+          },
+          {
+            "exponentId": "mio_padre",
+            "normalizedForm": "mio_padre",
+            "surfaceForms": [
+              "mio padre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "padre"
+            ],
+            "glossBySurface": {
+              "mio padre": {
+                "en": "my father"
+              }
+            }
+          },
+          {
+            "exponentId": "mio_fratello",
+            "normalizedForm": "mio_fratello",
+            "surfaceForms": [
+              "mio fratello"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "fratello"
+            ],
+            "glossBySurface": {
+              "mio fratello": {
+                "en": "my brother"
+              }
+            }
+          },
+          {
+            "exponentId": "mio_figlio",
+            "normalizedForm": "mio_figlio",
+            "surfaceForms": [
+              "mio figlio",
+              "mia figlia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "figlio",
+              "figlia"
+            ],
+            "glossBySurface": {
+              "mio figlio": {
+                "en": "my son"
+              },
+              "mia figlia": {
+                "en": "my daughter"
+              }
+            }
+          },
+          {
+            "exponentId": "mio_nonno",
+            "normalizedForm": "mio_nonno",
+            "surfaceForms": [
+              "mio nonno",
+              "mia nonna"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "nonno",
+              "nonna"
+            ],
+            "glossBySurface": {
+              "mio nonno": {
+                "en": "my grandfather"
+              },
+              "mia nonna": {
+                "en": "my grandmother"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-who-someone-is",
+      "lessonId": "family",
+      "displayName": "Say who someone is",
+      "cefrDescriptor": "Can say who a person is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_mio_fratello",
+            "normalizedForm": "e_mio_fratello",
+            "surfaceForms": [
+              "è mio fratello",
+              "e mio fratello",
+              "è mia madre",
+              "e mia madre"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "mio",
+              "fratello",
+              "madre"
+            ],
+            "glossBySurface": {
+              "è mio fratello": {
+                "en": "he's my brother"
+              },
+              "e mio fratello": {
+                "en": "he's my brother"
+              },
+              "è mia madre": {
+                "en": "she's my mother"
+              },
+              "e mia madre": {
+                "en": "she's my mother"
+              }
+            }
+          },
+          {
+            "exponentId": "questo_e_mio_padre",
+            "normalizedForm": "questo_e_mio_padre",
+            "surfaceForms": [
+              "questo è mio padre",
+              "questo e mio padre",
+              "questa è mia figlia",
+              "questa e mia figlia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "questo",
+              "essere",
+              "mio",
+              "padre",
+              "figlia"
+            ],
+            "glossBySurface": {
+              "questo è mio padre": {
+                "en": "this is my father"
+              },
+              "questo e mio padre": {
+                "en": "this is my father"
+              },
+              "questa è mia figlia": {
+                "en": "this is my daughter"
+              },
+              "questa e mia figlia": {
+                "en": "this is my daughter"
+              }
+            }
+          },
+          {
+            "exponentId": "e_un_amico",
+            "normalizedForm": "e_un_amico",
+            "surfaceForms": [
+              "è un amico",
+              "e un amico",
+              "è un'amica",
+              "e un'amica"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "amico",
+              "amica"
+            ],
+            "glossBySurface": {
+              "è un amico": {
+                "en": "he's a friend"
+              },
+              "e un amico": {
+                "en": "he's a friend"
+              },
+              "è un'amica": {
+                "en": "she's a friend"
+              },
+              "e un'amica": {
+                "en": "she's a friend"
+              }
+            }
+          },
+          {
+            "exponentId": "e_di_famiglia",
+            "normalizedForm": "e_di_famiglia",
+            "surfaceForms": [
+              "è di famiglia",
+              "e di famiglia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "di",
+              "famiglia"
+            ],
+            "glossBySurface": {
+              "è di famiglia": {
+                "en": "he's family"
+              },
+              "e di famiglia": {
+                "en": "he's family"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-siblings",
+      "lessonId": "family",
+      "displayName": "State whether they have siblings",
+      "cefrDescriptor": "Can say whether they have brothers or sisters.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "ho_un_fratello",
+            "normalizedForm": "ho_un_fratello",
+            "surfaceForms": [
+              "ho un fratello",
+              "ho due fratelli"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "fratello",
+              "due"
+            ],
+            "glossBySurface": {
+              "ho un fratello": {
+                "en": "I have a brother"
+              },
+              "ho due fratelli": {
+                "en": "I have two brothers"
+              }
+            }
+          },
+          {
+            "exponentId": "non_ho_fratelli",
+            "normalizedForm": "non_ho_fratelli",
+            "surfaceForms": [
+              "non ho fratelli"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "avere",
+              "fratello"
+            ],
+            "glossBySurface": {
+              "non ho fratelli": {
+                "en": "I don't have any brothers or sisters"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_figlio_unico",
+            "normalizedForm": "sono_figlio_unico",
+            "surfaceForms": [
+              "sono figlio unico",
+              "sono figlia unica"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "figlio",
+              "unico",
+              "figlia"
+            ],
+            "glossBySurface": {
+              "sono figlio unico": {
+                "en": "I'm an only child"
+              },
+              "sono figlia unica": {
+                "en": "I'm an only child"
+              }
+            }
+          },
+          {
+            "exponentId": "siamo_due_fratelli",
+            "normalizedForm": "siamo_due_fratelli",
+            "surfaceForms": [
+              "siamo due fratelli"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "due",
+              "fratello"
+            ],
+            "glossBySurface": {
+              "siamo due fratelli": {
+                "en": "there are two of us"
               }
             }
           }

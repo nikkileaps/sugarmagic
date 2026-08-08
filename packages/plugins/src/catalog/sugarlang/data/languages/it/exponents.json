@@ -1247,6 +1247,540 @@
           }
         ]
       }
+    ],
+    "name-family-members": [
+      {
+        "wordings": [
+          {
+            "phrase": "mia madre",
+            "gloss": {
+              "en": "my mother"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mio padre",
+            "gloss": {
+              "en": "my father"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mio fratello",
+            "gloss": {
+              "en": "my brother"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mio figlio",
+            "gloss": {
+              "en": "my son"
+            }
+          },
+          {
+            "phrase": "mia figlia",
+            "gloss": {
+              "en": "my daughter"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mio nonno",
+            "gloss": {
+              "en": "my grandfather"
+            }
+          },
+          {
+            "phrase": "mia nonna",
+            "gloss": {
+              "en": "my grandmother"
+            }
+          }
+        ]
+      }
+    ],
+    "say-who-someone-is": [
+      {
+        "wordings": [
+          {
+            "phrase": "è mio fratello",
+            "gloss": {
+              "en": "he's my brother"
+            }
+          },
+          {
+            "phrase": "è mia madre",
+            "gloss": {
+              "en": "she's my mother"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo è mio padre",
+            "gloss": {
+              "en": "this is my father"
+            }
+          },
+          {
+            "phrase": "questa è mia figlia",
+            "gloss": {
+              "en": "this is my daughter"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un amico",
+            "gloss": {
+              "en": "he's a friend"
+            }
+          },
+          {
+            "phrase": "è un'amica",
+            "gloss": {
+              "en": "she's a friend"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è di famiglia",
+            "gloss": {
+              "en": "he's family"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-who-someone-is": [
+      {
+        "wordings": [
+          {
+            "phrase": "chi è",
+            "gloss": {
+              "en": "who is it"
+            }
+          },
+          {
+            "phrase": "chi è lui",
+            "gloss": {
+              "en": "who is he"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "chi è quella persona",
+            "gloss": {
+              "en": "who is that person"
+            }
+          },
+          {
+            "phrase": "chi è quel signore",
+            "gloss": {
+              "en": "who is that man"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "di chi è amico",
+            "gloss": {
+              "en": "whose friend is he"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-relationship": [
+      {
+        "wordings": [
+          {
+            "phrase": "è il mio fratello maggiore",
+            "gloss": {
+              "en": "he's my older brother"
+            }
+          },
+          {
+            "phrase": "è il mio fratello minore",
+            "gloss": {
+              "en": "he's my younger brother"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siamo fratelli",
+            "gloss": {
+              "en": "we're siblings"
+            }
+          },
+          {
+            "phrase": "siamo cugini",
+            "gloss": {
+              "en": "we're cousins"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siamo sposati",
+            "gloss": {
+              "en": "we're married"
+            }
+          },
+          {
+            "phrase": "è sposato",
+            "gloss": {
+              "en": "he's married"
+            }
+          },
+          {
+            "phrase": "è sposata",
+            "gloss": {
+              "en": "she's married"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è il figlio di mio fratello",
+            "gloss": {
+              "en": "he's my brother's son"
+            }
+          },
+          {
+            "phrase": "è la madre del mio amico",
+            "gloss": {
+              "en": "she's my friend's mother"
+            }
+          }
+        ]
+      }
+    ],
+    "state-siblings": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho un fratello",
+            "gloss": {
+              "en": "I have a brother"
+            }
+          },
+          {
+            "phrase": "ho due fratelli",
+            "gloss": {
+              "en": "I have two brothers"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ho fratelli",
+            "gloss": {
+              "en": "I don't have any brothers or sisters"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono figlio unico",
+            "gloss": {
+              "en": "I'm an only child"
+            }
+          },
+          {
+            "phrase": "sono figlia unica",
+            "gloss": {
+              "en": "I'm an only child"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siamo due fratelli",
+            "gloss": {
+              "en": "there are two of us"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-siblings": [
+      {
+        "wordings": [
+          {
+            "phrase": "hai fratelli",
+            "gloss": {
+              "en": "do you have any brothers or sisters"
+            }
+          },
+          {
+            "phrase": "ha fratelli",
+            "gloss": {
+              "en": "do you have any brothers or sisters"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sei figlio unico",
+            "gloss": {
+              "en": "are you an only child"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-appearance": [
+      {
+        "wordings": [
+          {
+            "phrase": "è alto",
+            "gloss": {
+              "en": "he's tall"
+            }
+          },
+          {
+            "phrase": "è alta",
+            "gloss": {
+              "en": "she's tall"
+            }
+          },
+          {
+            "phrase": "è basso",
+            "gloss": {
+              "en": "he's short"
+            }
+          },
+          {
+            "phrase": "è bassa",
+            "gloss": {
+              "en": "she's short"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ha i capelli lunghi",
+            "gloss": {
+              "en": "she has long hair"
+            }
+          },
+          {
+            "phrase": "ha i capelli corti",
+            "gloss": {
+              "en": "he has short hair"
+            }
+          },
+          {
+            "phrase": "ha i capelli biondi",
+            "gloss": {
+              "en": "she has blond hair"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ha gli occhi azzurri",
+            "gloss": {
+              "en": "he has blue eyes"
+            }
+          },
+          {
+            "phrase": "ha gli occhi verdi",
+            "gloss": {
+              "en": "she has green eyes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "porta gli occhiali",
+            "gloss": {
+              "en": "wears glasses"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è giovane",
+            "gloss": {
+              "en": "he's young"
+            }
+          },
+          {
+            "phrase": "è anziano",
+            "gloss": {
+              "en": "she's elderly"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-personality": [
+      {
+        "wordings": [
+          {
+            "phrase": "è simpatico",
+            "gloss": {
+              "en": "he's nice"
+            }
+          },
+          {
+            "phrase": "è simpatica",
+            "gloss": {
+              "en": "she's nice"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è molto gentile",
+            "gloss": {
+              "en": "he's very kind"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è divertente",
+            "gloss": {
+              "en": "he's fun"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un po' timido",
+            "gloss": {
+              "en": "he's a bit shy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è molto intelligente",
+            "gloss": {
+              "en": "she's very clever"
+            }
+          }
+        ]
+      }
+    ],
+    "express-affection": [
+      {
+        "wordings": [
+          {
+            "phrase": "ti voglio bene",
+            "gloss": {
+              "en": "I love you"
+            }
+          },
+          {
+            "phrase": "ti voglio molto bene",
+            "gloss": {
+              "en": "I love you very much"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi sta simpatico",
+            "gloss": {
+              "en": "I like him"
+            }
+          },
+          {
+            "phrase": "mi sta molto simpatico",
+            "gloss": {
+              "en": "I like her a lot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi sta simpatico",
+            "gloss": {
+              "en": "I don't like him"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è il mio migliore amico",
+            "gloss": {
+              "en": "he's my best friend"
+            }
+          },
+          {
+            "phrase": "è la mia migliore amica",
+            "gloss": {
+              "en": "she's my best friend"
+            }
+          }
+        ]
+      }
     ]
   }
 }

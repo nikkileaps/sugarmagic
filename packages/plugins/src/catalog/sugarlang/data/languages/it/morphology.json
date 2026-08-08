@@ -38569,6 +38569,18 @@
         "noun"
       ]
     },
+    "i": {
+      "lemmaId": "i",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "timido": {
+      "lemmaId": "timido",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
     "sono": {
       "lemmaId": "essere",
       "partsOfSpeech": [
@@ -39282,6 +39294,114 @@
         "verb"
       ]
     },
+    "voglio": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoi": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuole": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vogliamo": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volete": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vogliono": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volli": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volesti": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volle": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volemmo": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voleste": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vollero": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volevo": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volevi": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voleva": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volevamo": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volevate": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volevano": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "volendo": {
       "lemmaId": "volere",
       "partsOfSpeech": [
@@ -39294,7 +39414,21 @@
         "verb"
       ]
     },
+    "quella": {
+      "lemmaId": "quello",
+      "partsOfSpeech": [
+        "adjective",
+        "pronoun"
+      ]
+    },
     "quelli": {
+      "lemmaId": "quello",
+      "partsOfSpeech": [
+        "adjective",
+        "pronoun"
+      ]
+    },
+    "quelle": {
       "lemmaId": "quello",
       "partsOfSpeech": [
         "adjective",
@@ -40628,7 +40762,21 @@
         "noun"
       ]
     },
+    "unica": {
+      "lemmaId": "unico",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
     "unici": {
+      "lemmaId": "unico",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
+    "uniche": {
       "lemmaId": "unico",
       "partsOfSpeech": [
         "adjective",
@@ -41301,7 +41449,21 @@
         "noun"
       ]
     },
+    "alta": {
+      "lemmaId": "alto",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
     "alti": {
+      "lemmaId": "alto",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
+    "alte": {
       "lemmaId": "alto",
       "partsOfSpeech": [
         "adjective",
@@ -41710,7 +41872,21 @@
         "noun"
       ]
     },
-    "lungi": {
+    "lunga": {
+      "lemmaId": "lungo",
+      "partsOfSpeech": [
+        "adjective",
+        "preposition"
+      ]
+    },
+    "lunghi": {
+      "lemmaId": "lungo",
+      "partsOfSpeech": [
+        "adjective",
+        "preposition"
+      ]
+    },
+    "lunghe": {
       "lemmaId": "lungo",
       "partsOfSpeech": [
         "adjective",
@@ -43764,7 +43940,7 @@
         "verb"
       ]
     },
-    "occhii": {
+    "occhi": {
       "lemmaId": "occhio",
       "partsOfSpeech": [
         "noun"
@@ -44011,7 +44187,21 @@
         "verb"
       ]
     },
+    "bassa": {
+      "lemmaId": "basso",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
     "bassi": {
+      "lemmaId": "basso",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
+    "basse": {
       "lemmaId": "basso",
       "partsOfSpeech": [
         "adjective",
@@ -58078,7 +58268,19 @@
         "noun"
       ]
     },
+    "simpatica": {
+      "lemmaId": "simpatico",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
     "simpatici": {
+      "lemmaId": "simpatico",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "simpatiche": {
       "lemmaId": "simpatico",
       "partsOfSpeech": [
         "adjective"
@@ -79551,7 +79753,19 @@
         "verb"
       ]
     },
+    "sposata": {
+      "lemmaId": "sposato",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
     "sposati": {
+      "lemmaId": "sposato",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "sposate": {
       "lemmaId": "sposato",
       "partsOfSpeech": [
         "adjective"
@@ -80805,6 +81019,126 @@
         "noun"
       ]
     },
+    "timidi": {
+      "lemmaId": "timido",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "del": {
+      "lemmaId": "di",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "dello": {
+      "lemmaId": "di",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "della": {
+      "lemmaId": "di",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "dei": {
+      "lemmaId": "di",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "degli": {
+      "lemmaId": "di",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "delle": {
+      "lemmaId": "di",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "nel": {
+      "lemmaId": "in",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "nello": {
+      "lemmaId": "in",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "nella": {
+      "lemmaId": "in",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "nei": {
+      "lemmaId": "in",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "negli": {
+      "lemmaId": "in",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "nelle": {
+      "lemmaId": "in",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "al": {
+      "lemmaId": "a",
+      "partsOfSpeech": [
+        "preposition",
+        "noun"
+      ]
+    },
+    "allo": {
+      "lemmaId": "a",
+      "partsOfSpeech": [
+        "preposition",
+        "noun"
+      ]
+    },
+    "alla": {
+      "lemmaId": "a",
+      "partsOfSpeech": [
+        "preposition",
+        "noun"
+      ]
+    },
+    "ai": {
+      "lemmaId": "a",
+      "partsOfSpeech": [
+        "preposition",
+        "noun"
+      ]
+    },
+    "agli": {
+      "lemmaId": "a",
+      "partsOfSpeech": [
+        "preposition",
+        "noun"
+      ]
+    },
+    "alle": {
+      "lemmaId": "a",
+      "partsOfSpeech": [
+        "preposition",
+        "noun"
+      ]
+    },
     "siate": {
       "lemmaId": "essere",
       "partsOfSpeech": [
@@ -81048,6 +81382,48 @@
       "partsOfSpeech": [
         "verb",
         "noun"
+      ]
+    },
+    "col": {
+      "lemmaId": "con",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "coi": {
+      "lemmaId": "con",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "dal": {
+      "lemmaId": "da",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "dallo": {
+      "lemmaId": "da",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "dalla": {
+      "lemmaId": "da",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "dagli": {
+      "lemmaId": "da",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "dalle": {
+      "lemmaId": "da",
+      "partsOfSpeech": [
+        "preposition"
       ]
     },
     "potermi": {
@@ -81618,6 +81994,41 @@
         "verb"
       ]
     },
+    "sul": {
+      "lemmaId": "su",
+      "partsOfSpeech": [
+        "preposition",
+        "adverb"
+      ]
+    },
+    "sullo": {
+      "lemmaId": "su",
+      "partsOfSpeech": [
+        "preposition",
+        "adverb"
+      ]
+    },
+    "sulla": {
+      "lemmaId": "su",
+      "partsOfSpeech": [
+        "preposition",
+        "adverb"
+      ]
+    },
+    "sugli": {
+      "lemmaId": "su",
+      "partsOfSpeech": [
+        "preposition",
+        "adverb"
+      ]
+    },
+    "sulle": {
+      "lemmaId": "su",
+      "partsOfSpeech": [
+        "preposition",
+        "adverb"
+      ]
+    },
     "dirmi": {
       "lemmaId": "dire",
       "partsOfSpeech": [
@@ -82104,6 +82515,90 @@
         "verb"
       ]
     },
+    "vogliate": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vogliano": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorrei": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorresti": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorrebbe": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorremmo": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorreste": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorrebbero": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorrò": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorrai": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorrà": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorremo": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorrete": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vorranno": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "volermi": {
       "lemmaId": "volere",
       "partsOfSpeech": [
@@ -82159,6 +82654,84 @@
       ]
     },
     "volerne": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoimi": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoiti": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoisi": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoici": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoivi": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoilo": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoila": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoili": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoile": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vuoine": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voluta": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voluti": {
+      "lemmaId": "volere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "volute": {
       "lemmaId": "volere",
       "partsOfSpeech": [
         "verb"

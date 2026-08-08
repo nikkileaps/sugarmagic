@@ -100,7 +100,28 @@ const APOCOPE: Record<string, string> = {
   buon: "buono",
   gran: "grande",
   san: "santo",
-  bel: "bello"
+  bel: "bello",
+  quel: "quello"
+};
+
+/**
+ * Italian fuses a preposition with a following definite article into one
+ * word: `di` + `il` is `del`, `in` + `il` is `nel`. Spanish does this twice
+ * (`del`, `al`) and stores both as words; Italian does it about forty times,
+ * which is a rule rather than forty dictionary entries.
+ *
+ * They are prepositions once fused, so each points at the preposition it came
+ * from. The forms written with an apostrophe -- `dell'`, `all'` -- are handled
+ * before this, by the contraction rule, which reduces them to the plain
+ * feminine form listed here.
+ */
+const ARTICULATED_PREPOSITIONS: Record<string, string[]> = {
+  di: ["del", "dello", "della", "dei", "degli", "delle"],
+  a: ["al", "allo", "alla", "ai", "agli", "alle"],
+  da: ["dal", "dallo", "dalla", "dai", "dagli", "dalle"],
+  in: ["nel", "nello", "nella", "nei", "negli", "nelle"],
+  su: ["sul", "sullo", "sulla", "sui", "sugli", "sulle"],
+  con: ["col", "coi"]
 };
 
 function expandItalianWrittenForm(token: string): string[] | null {
@@ -593,6 +614,13 @@ function addItalianDerivedForms(
     addMorphologyEntry(forms, surface, entry.lemmaId, entry.partsOfSpeech);
   }
   addItalianExtraForms(forms, entry);
+
+  // Fused preposition + article. Last, so a real word always keeps its own
+  // entry: `dai` is the second person of `dare` before it is `da` + `i`, and
+  // `coi` and `col` are optional spellings nobody has to use.
+  for (const fused of ARTICULATED_PREPOSITIONS[entry.lemmaId] ?? []) {
+    addMorphologyEntry(forms, fused, entry.lemmaId, entry.partsOfSpeech);
+  }
 }
 
 export const italianRules: LanguageRules = {
