@@ -151,6 +151,37 @@ describe("derived Italian forms are real words", () => {
     expect(index["farelo"]).toBeUndefined();
   });
 
+  it("no authored verb form carries a doubled i", () => {
+    // The -iare family keeps ONE i (`risparmi`, `risparmiamo`), and writing
+    // the regular -are endings onto its stem produces `risparmii` and
+    // `risparmiiamo`. Nothing complains: they are simply non-words sitting in
+    // the index, and the real forms go missing. Caught once by hand; this is
+    // so the next one is caught by the suite.
+    const atlas = readJsonFile<{
+      lemmas: Record<string, { forms?: Record<string, unknown> }>;
+    }>(sugarlangDataPath("languages", "it", "cefrlex.json")).lemmas;
+
+    const doubled: string[] = [];
+    for (const [lemmaId, entry] of Object.entries(atlas)) {
+      const forms = entry.forms;
+      if (!forms || !("pres" in forms)) continue;
+      const surfaces = [
+        ...(forms.pres as Array<string | null>),
+        ...(forms.pret as Array<string | null>),
+        ...(forms.imp as Array<string | null>),
+        forms.ger as string,
+        forms.part as string
+      ];
+      for (const surface of surfaces) {
+        // A final `ii` is legitimate: `capii`, `dormii` are real preterites.
+        if (typeof surface === "string" && surface.includes("ii") && !surface.endsWith("ii")) {
+          doubled.push(`${lemmaId}: ${surface}`);
+        }
+      }
+    }
+    expect(doubled).toEqual([]);
+  });
+
   it("invents no TENSE for a word whose forms are not authored yet", () => {
     // Most of the Italian dictionary has no stored forms. Attaching a pronoun
     // needs only the infinitive, so that still happens -- but a tense cannot be

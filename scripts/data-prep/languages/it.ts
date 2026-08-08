@@ -116,7 +116,13 @@ const APOCOPE: Record<string, string> = {
   // another verb.
   vuol: "volere",
   poter: "potere",
-  qualcun: "qualcuno"
+  qualcun: "qualcuno",
+  // `fin qui`, `fin lì`: `fino` drops its vowel before a place word.
+  fin: "fino",
+  // `dopo aver letto`: the infinitive drops its vowel before a participle.
+  aver: "avere",
+  // `la maggior parte`: `maggiore` drops its vowel before a noun.
+  maggior: "maggiore"
 };
 
 /**
@@ -158,6 +164,21 @@ const CLITIC_VARIANTS: Record<string, string[]> = {
   vi: ["ve"],
   si: ["se"]
 };
+
+/**
+ * The five verbs with a one-syllable YOU-imperative double the consonant of a
+ * pronoun attached to it: `di'` + `mi` is `dimmi`, `fa'` + `lo` is `fallo`.
+ * A closed list of five, so it is written out rather than derived.
+ */
+const SHORT_IMPERATIVE_BASES: Record<string, string> = {
+  dire: "di",
+  fare: "fa",
+  andare: "va",
+  dare: "da",
+  stare: "sta"
+};
+
+const DOUBLING_CLITICS = ["mi", "ti", "ci", "vi", "lo", "la", "li", "le", "ne"];
 
 /**
  * Italian fuses a preposition with a following definite article into one
@@ -711,6 +732,13 @@ function addItalianExtraForms(
   for (const base of bases) {
     for (const clitic of ITALIAN_CLITICS) {
       addMorphologyEntry(forms, `${base}${clitic}`, lemmaId, partsOfSpeech);
+    }
+  }
+
+  const shortBase = SHORT_IMPERATIVE_BASES[lemmaId];
+  if (shortBase) {
+    for (const clitic of DOUBLING_CLITICS) {
+      addMorphologyEntry(forms, `${shortBase}${clitic[0]}${clitic}`, lemmaId, partsOfSpeech);
     }
   }
 
