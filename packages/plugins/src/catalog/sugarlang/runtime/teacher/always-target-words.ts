@@ -65,6 +65,7 @@
  */
 
 import esAlwaysTarget from "../../data/languages/es/always-target.json";
+import frAlwaysTarget from "../../data/languages/fr/always-target.json";
 import itAlwaysTarget from "../../data/languages/it/always-target.json";
 import type { CEFRBand } from "../cefr";
 import { forcesSubjectPronounAtBand } from "./band-envelope";
@@ -85,9 +86,15 @@ export interface AlwaysTargetWords {
   dropsSubjectPronouns?: boolean;
 }
 
+/**
+ * `fr` is here and is not playable. It is the only shipped list that keeps its
+ * subject pronoun, so it is the only one that exercises the false side of the
+ * gate below from a real file rather than a hand-made object.
+ */
 const DATA_BY_LANG: Partial<Record<string, AlwaysTargetWords>> = {
   es: esAlwaysTarget as AlwaysTargetWords,
-  it: itAlwaysTarget as AlwaysTargetWords
+  it: itAlwaysTarget as AlwaysTargetWords,
+  fr: frAlwaysTarget as AlwaysTargetWords
 };
 
 /**

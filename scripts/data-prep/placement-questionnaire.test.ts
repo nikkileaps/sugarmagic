@@ -15,8 +15,10 @@
 
 import { describe, expect, it } from "vitest";
 import type { MorphologyFile } from "./competency-inventory";
+import type { LanguageRules } from "./languages/language-rules";
 import {
   buildPlacementQuestionnaireFor,
+  languageRules,
   registeredLanguages
 } from "./languages/registry";
 import {
@@ -46,9 +48,25 @@ type Question = { questionId: string; promptText: string } & (
 
 const LANGS = registeredLanguages();
 
-/** Every word in a string, keeping an apostrophe inside one (`un po'`). */
-function words(value: string): string[] {
-  return value.match(/[\p{Letter}\p{Mark}]+(?:'[\p{Letter}\p{Mark}]+)?/gu) ?? [];
+/**
+ * The dictionary keys one written chunk stands for, resolved the way the BUILD
+ * resolves them: the language's own expansion first, then strip what is left.
+ *
+ * This started as a regex over letters, which was enough for two languages that
+ * write their contractions rarely and never at the start of a word. French does
+ * both constantly -- `J'ai`, `m'appelle`, `J'habite` -- and every one of them
+ * came back unknown against a check that had never been asked the question.
+ * Going through `expandWrittenForm` is not a French accommodation; it is what
+ * the check meant all along.
+ */
+function lookupKeys(chunk: string, rules: LanguageRules): string[] {
+  const bare = (value: string) =>
+    value.replace(/[^\p{Letter}\p{Number}\p{Mark}]/gu, "");
+  const lower = chunk.toLocaleLowerCase(rules.lang);
+  const expanded = rules.expandWrittenForm?.(lower);
+  if (expanded) return expanded.map(bare).filter(Boolean);
+  const cleaned = bare(lower);
+  return cleaned ? [cleaned] : [];
 }
 
 /**
@@ -116,15 +134,22 @@ describe.each(LANGS)("placement bank (%s)", (lang) => {
     // Catches a word spelled without its accent, which is how `citta` and
     // `perche` got in. A capitalised word that is not the first of its sentence
     // is a name (`Luca`, `Canada`) and is not expected to be in a dictionary.
+    const rules = languageRules(lang);
     const unknown: string[] = [];
     for (const question of bank.questions) {
       for (const value of targetLanguageStrings(question)) {
-        words(value).forEach((word, index) => {
-          if (index > 0 && word[0] !== word[0]!.toLocaleLowerCase(lang)) return;
-          if (!morphology[word.toLocaleLowerCase(lang)]) {
-            unknown.push(`${question.questionId}: "${word}" in "${value}"`);
-          }
-        });
+        value
+          .split(/\s+/)
+          .filter(Boolean)
+          .forEach((chunk, index) => {
+            const first = chunk[0]!;
+            if (index > 0 && first !== first.toLocaleLowerCase(lang)) return;
+            for (const key of lookupKeys(chunk, rules)) {
+              if (!morphology[key]) {
+                unknown.push(`${question.questionId}: "${chunk}" in "${value}"`);
+              }
+            }
+          });
       }
     }
     expect(unknown).toEqual([]);

@@ -1,0 +1,4428 @@
+{
+  "lang": "fr",
+  "forms": {
+    "aller": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appeler": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avoir": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléter": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrire": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "être": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuser": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquer": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiter": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parler": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaire": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenter": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prier": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrer": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rester": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudre": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travailler": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venir": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyager": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "bon": {
+      "lemmaId": "bon",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "ce": {
+      "lemmaId": "ce",
+      "partsOfSpeech": [
+        "determiner",
+        "pronoun"
+      ]
+    },
+    "désolé": {
+      "lemmaId": "désolé",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "enchanté": {
+      "lemmaId": "enchanté",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "français": {
+      "lemmaId": "français",
+      "partsOfSpeech": [
+        "noun",
+        "adjective"
+      ]
+    },
+    "grand": {
+      "lemmaId": "grand",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "quel": {
+      "lemmaId": "quel",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "ravi": {
+      "lemmaId": "ravi",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "seul": {
+      "lemmaId": "seul",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "ton": {
+      "lemmaId": "ton",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "tout": {
+      "lemmaId": "tout",
+      "partsOfSpeech": [
+        "determiner",
+        "adverb"
+      ]
+    },
+    "besoin": {
+      "lemmaId": "besoin",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "billet": {
+      "lemmaId": "billet",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "document": {
+      "lemmaId": "document",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "douane": {
+      "lemmaId": "douane",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "gare": {
+      "lemmaId": "gare",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "heure": {
+      "lemmaId": "heure",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "jour": {
+      "lemmaId": "jour",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "madame": {
+      "lemmaId": "madame",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "mademoiselle": {
+      "lemmaId": "mademoiselle",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "monsieur": {
+      "lemmaId": "monsieur",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "nom": {
+      "lemmaId": "nom",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "nuit": {
+      "lemmaId": "nuit",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "passeport": {
+      "lemmaId": "passeport",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "phrase": {
+      "lemmaId": "phrase",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "plaisir": {
+      "lemmaId": "plaisir",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "problème": {
+      "lemmaId": "problème",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "temps": {
+      "lemmaId": "temps",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "train": {
+      "lemmaId": "train",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "valise": {
+      "lemmaId": "valise",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "ville": {
+      "lemmaId": "ville",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "voyage": {
+      "lemmaId": "voyage",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "à": {
+      "lemmaId": "à",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "aujourdhui": {
+      "lemmaId": "aujourd'hui",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "avec": {
+      "lemmaId": "avec",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "beaucoup": {
+      "lemmaId": "beaucoup",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "bien": {
+      "lemmaId": "bien",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "bientôt": {
+      "lemmaId": "bientôt",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "bonjour": {
+      "lemmaId": "bonjour",
+      "partsOfSpeech": [
+        "interjection"
+      ]
+    },
+    "bonsoir": {
+      "lemmaId": "bonsoir",
+      "partsOfSpeech": [
+        "interjection"
+      ]
+    },
+    "ci": {
+      "lemmaId": "ci",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "combien": {
+      "lemmaId": "combien",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "comme": {
+      "lemmaId": "comme",
+      "partsOfSpeech": [
+        "conjunction"
+      ]
+    },
+    "comment": {
+      "lemmaId": "comment",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "coucou": {
+      "lemmaId": "coucou",
+      "partsOfSpeech": [
+        "interjection"
+      ]
+    },
+    "dans": {
+      "lemmaId": "dans",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "de": {
+      "lemmaId": "de",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "demain": {
+      "lemmaId": "demain",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "elle": {
+      "lemmaId": "elle",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "en": {
+      "lemmaId": "en",
+      "partsOfSpeech": [
+        "preposition",
+        "pronoun"
+      ]
+    },
+    "ici": {
+      "lemmaId": "ici",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "elles": {
+      "lemmaId": "elles",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "il": {
+      "lemmaId": "il",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "ils": {
+      "lemmaId": "ils",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "infiniment": {
+      "lemmaId": "infiniment",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "je": {
+      "lemmaId": "je",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "la": {
+      "lemmaId": "la",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "le": {
+      "lemmaId": "le",
+      "partsOfSpeech": [
+        "determiner",
+        "pronoun"
+      ]
+    },
+    "les": {
+      "lemmaId": "les",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "leur": {
+      "lemmaId": "leur",
+      "partsOfSpeech": [
+        "determiner",
+        "pronoun"
+      ]
+    },
+    "lui": {
+      "lemmaId": "lui",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "mal": {
+      "lemmaId": "mal",
+      "partsOfSpeech": [
+        "adverb",
+        "noun"
+      ]
+    },
+    "me": {
+      "lemmaId": "me",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "merci": {
+      "lemmaId": "merci",
+      "partsOfSpeech": [
+        "interjection",
+        "noun"
+      ]
+    },
+    "moi": {
+      "lemmaId": "moi",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "mon": {
+      "lemmaId": "mon",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "ne": {
+      "lemmaId": "ne",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "non": {
+      "lemmaId": "non",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "notre": {
+      "lemmaId": "notre",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "nous": {
+      "lemmaId": "nous",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "oui": {
+      "lemmaId": "oui",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "où": {
+      "lemmaId": "où",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "pardon": {
+      "lemmaId": "pardon",
+      "partsOfSpeech": [
+        "interjection",
+        "noun"
+      ]
+    },
+    "pas": {
+      "lemmaId": "pas",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "peu": {
+      "lemmaId": "peu",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "plus": {
+      "lemmaId": "plus",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "pour": {
+      "lemmaId": "pour",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "pourquoi": {
+      "lemmaId": "pourquoi",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "près": {
+      "lemmaId": "près",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "que": {
+      "lemmaId": "que",
+      "partsOfSpeech": [
+        "conjunction",
+        "pronoun"
+      ]
+    },
+    "revoir": {
+      "lemmaId": "revoir",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "rien": {
+      "lemmaId": "rien",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "salut": {
+      "lemmaId": "salut",
+      "partsOfSpeech": [
+        "interjection",
+        "noun"
+      ]
+    },
+    "se": {
+      "lemmaId": "se",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "si": {
+      "lemmaId": "si",
+      "partsOfSpeech": [
+        "conjunction"
+      ]
+    },
+    "son": {
+      "lemmaId": "son",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "tard": {
+      "lemmaId": "tard",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "te": {
+      "lemmaId": "te",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "très": {
+      "lemmaId": "très",
+      "partsOfSpeech": [
+        "adverb"
+      ]
+    },
+    "trois": {
+      "lemmaId": "trois",
+      "partsOfSpeech": [
+        "numeral"
+      ]
+    },
+    "tu": {
+      "lemmaId": "tu",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "un": {
+      "lemmaId": "un",
+      "partsOfSpeech": [
+        "determiner",
+        "numeral"
+      ]
+    },
+    "une": {
+      "lemmaId": "une",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "voici": {
+      "lemmaId": "voici",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "votre": {
+      "lemmaId": "votre",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "vous": {
+      "lemmaId": "vous",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "ça": {
+      "lemmaId": "ça",
+      "partsOfSpeech": [
+        "pronoun"
+      ]
+    },
+    "vais": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vas": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "va": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allons": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allez": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vont": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allai": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allas": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "alla": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allâmes": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allâtes": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allèrent": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allais": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allait": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allions": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "alliez": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allaient": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allant": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "allé": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelle": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelles": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelons": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelez": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appellent": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelai": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelas": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appela": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelâmes": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelâtes": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelèrent": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelais": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelait": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelions": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appeliez": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelaient": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelant": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelé": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ai": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "as": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "a": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avons": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avez": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ont": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "eus": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "eut": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "eûmes": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "eûtes": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "eurent": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avais": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avait": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avions": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aviez": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avaient": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ayant": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "eu": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complète": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complètes": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétons": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétez": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complètent": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétai": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétas": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléta": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétâmes": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétâtes": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétèrent": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétais": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétait": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétions": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétiez": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétaient": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétant": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complété": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décris": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrit": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivons": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivez": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivent": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivis": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivit": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivîmes": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivîtes": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivirent": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivais": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivait": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivions": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décriviez": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivaient": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrivant": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "suis": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "es": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "est": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sommes": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "êtes": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sont": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fus": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fut": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fûmes": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fûtes": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "furent": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "étais": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "était": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "étions": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "étiez": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "étaient": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "étant": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "été": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuse": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuses": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusons": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusez": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusent": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusai": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusas": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusa": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusâmes": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusâtes": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusèrent": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusais": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusait": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusions": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusiez": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusaient": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusant": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusé": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "explique": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliques": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquons": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquez": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquent": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquai": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquas": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliqua": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquâmes": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquâtes": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquèrent": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquais": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquait": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquions": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquiez": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquaient": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquant": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliqué": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habite": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habites": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitons": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitez": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitent": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitai": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitas": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habita": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitâmes": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitâtes": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitèrent": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitais": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitait": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitions": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitiez": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitaient": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitant": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habité": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parle": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parles": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlons": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlez": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlent": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlai": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlas": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parla": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlâmes": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlâtes": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlèrent": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlais": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlait": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlions": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parliez": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlaient": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlant": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlé": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plais": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaît": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaisons": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaisez": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaisent": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plut": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plûmes": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plûtes": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plurent": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaisais": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaisait": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaisions": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaisiez": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaisaient": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaisant": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plu": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présente": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentes": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentons": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentez": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentent": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentai": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentas": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenta": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentâmes": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentâtes": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentèrent": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentais": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentait": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentions": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentiez": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentaient": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentant": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenté": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prie": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pries": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prions": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priez": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prient": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priai": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prias": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pria": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priâmes": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priâtes": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prièrent": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priais": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priait": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priions": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priiez": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priaient": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priant": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prié": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontre": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontres": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrons": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrez": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrent": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrai": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontras": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontra": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrâmes": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrâtes": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrèrent": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrais": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrait": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrions": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontriez": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontraient": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrant": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontré": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "reste": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restes": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restons": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restez": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restent": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restai": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restas": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resta": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restâmes": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restâtes": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restèrent": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restais": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restait": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restions": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restiez": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restaient": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restant": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resté": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résous": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résout": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolvons": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolvez": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolvent": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolus": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolut": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolûmes": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolûtes": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolurent": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolvais": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolvait": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolvions": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolviez": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolvaient": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolvant": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolu": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaille": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travailles": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillons": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillez": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillent": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillai": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillas": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travailla": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillâmes": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillâtes": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillèrent": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillais": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillait": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillions": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travailliez": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillaient": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillant": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillé": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viens": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vient": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venons": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venez": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viennent": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vins": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vint": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vînmes": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vîntes": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vinrent": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venais": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venait": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venions": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "veniez": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venaient": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venant": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venu": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyages": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageons": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagez": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagent": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageai": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageas": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagea": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageâmes": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageâtes": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagèrent": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageais": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageait": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagions": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagiez": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageaient": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageant": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagé": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "bonne": {
+      "lemmaId": "bon",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "bons": {
+      "lemmaId": "bon",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "bonnes": {
+      "lemmaId": "bon",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "cette": {
+      "lemmaId": "ce",
+      "partsOfSpeech": [
+        "determiner",
+        "pronoun"
+      ]
+    },
+    "ces": {
+      "lemmaId": "ce",
+      "partsOfSpeech": [
+        "determiner",
+        "pronoun"
+      ]
+    },
+    "désolée": {
+      "lemmaId": "désolé",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "désolés": {
+      "lemmaId": "désolé",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "désolées": {
+      "lemmaId": "désolé",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "enchantée": {
+      "lemmaId": "enchanté",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "enchantés": {
+      "lemmaId": "enchanté",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "enchantées": {
+      "lemmaId": "enchanté",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "française": {
+      "lemmaId": "français",
+      "partsOfSpeech": [
+        "noun",
+        "adjective"
+      ]
+    },
+    "françaises": {
+      "lemmaId": "français",
+      "partsOfSpeech": [
+        "noun",
+        "adjective"
+      ]
+    },
+    "grande": {
+      "lemmaId": "grand",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "grands": {
+      "lemmaId": "grand",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "grandes": {
+      "lemmaId": "grand",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "quelle": {
+      "lemmaId": "quel",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "quels": {
+      "lemmaId": "quel",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "quelles": {
+      "lemmaId": "quel",
+      "partsOfSpeech": [
+        "determiner"
+      ]
+    },
+    "ravie": {
+      "lemmaId": "ravi",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "ravis": {
+      "lemmaId": "ravi",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "ravies": {
+      "lemmaId": "ravi",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "seule": {
+      "lemmaId": "seul",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "seuls": {
+      "lemmaId": "seul",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "seules": {
+      "lemmaId": "seul",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "toute": {
+      "lemmaId": "tout",
+      "partsOfSpeech": [
+        "determiner",
+        "adverb"
+      ]
+    },
+    "tous": {
+      "lemmaId": "tout",
+      "partsOfSpeech": [
+        "determiner",
+        "adverb"
+      ]
+    },
+    "toutes": {
+      "lemmaId": "tout",
+      "partsOfSpeech": [
+        "determiner",
+        "adverb"
+      ]
+    },
+    "besoins": {
+      "lemmaId": "besoin",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "billets": {
+      "lemmaId": "billet",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "documents": {
+      "lemmaId": "document",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "douanes": {
+      "lemmaId": "douane",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "gares": {
+      "lemmaId": "gare",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "heures": {
+      "lemmaId": "heure",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "jours": {
+      "lemmaId": "jour",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "mesdames": {
+      "lemmaId": "madame",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "mesdemoiselles": {
+      "lemmaId": "mademoiselle",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "messieurs": {
+      "lemmaId": "monsieur",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "noms": {
+      "lemmaId": "nom",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "nuits": {
+      "lemmaId": "nuit",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "passeports": {
+      "lemmaId": "passeport",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "phrases": {
+      "lemmaId": "phrase",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "plaisirs": {
+      "lemmaId": "plaisir",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "problèmes": {
+      "lemmaId": "problème",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "trains": {
+      "lemmaId": "train",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "valises": {
+      "lemmaId": "valise",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "villes": {
+      "lemmaId": "ville",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "au": {
+      "lemmaId": "à",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "aux": {
+      "lemmaId": "à",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "du": {
+      "lemmaId": "de",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "des": {
+      "lemmaId": "de",
+      "partsOfSpeech": [
+        "preposition"
+      ]
+    },
+    "aille": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ailles": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aillent": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "irai": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "iras": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ira": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "irons": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "irez": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "iront": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "irais": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "irait": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "irions": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "iriez": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "iraient": {
+      "lemmaId": "aller",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelerai": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appeleras": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelera": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelerons": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelerez": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appeleront": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelerais": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelerait": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appelerions": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appeleriez": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "appeleraient": {
+      "lemmaId": "appeler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aie": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aies": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ait": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ayons": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ayez": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aient": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aurai": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "auras": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aura": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aurons": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aurez": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "auront": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aurais": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aurait": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aurions": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "auriez": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "auraient": {
+      "lemmaId": "avoir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléterai": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléteras": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "complétera": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléterons": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléterez": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléteront": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléterais": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléterait": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléterions": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléteriez": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compléteraient": {
+      "lemmaId": "compléter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrive": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrives": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrirai": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décriras": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrira": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrirons": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrirez": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décriront": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrirais": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décrirait": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décririons": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décririez": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "décriraient": {
+      "lemmaId": "décrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sois": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "soit": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "soyons": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "soyez": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "soient": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serai": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "seras": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sera": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serons": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serez": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "seront": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serais": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serait": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serions": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "seriez": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "seraient": {
+      "lemmaId": "être",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuserai": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuseras": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excusera": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuserons": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuserez": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuseront": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuserais": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuserait": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuserions": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuseriez": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "excuseraient": {
+      "lemmaId": "excuser",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquerai": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliqueras": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquera": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquerons": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquerez": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliqueront": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquerais": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquerait": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliquerions": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliqueriez": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "expliqueraient": {
+      "lemmaId": "expliquer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiterai": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiteras": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habitera": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiterons": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiterez": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiteront": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiterais": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiterait": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiterions": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiteriez": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "habiteraient": {
+      "lemmaId": "habiter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerai": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parleras": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlera": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerons": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerez": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parleront": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerais": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerait": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerions": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parleriez": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parleraient": {
+      "lemmaId": "parler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaise": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaises": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plairai": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plairas": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plaira": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plairons": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plairez": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plairont": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plairais": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plairait": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plairions": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plairiez": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "plairaient": {
+      "lemmaId": "plaire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenterai": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenteras": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présentera": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenterons": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenterez": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenteront": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenterais": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenterait": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenterions": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenteriez": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "présenteraient": {
+      "lemmaId": "présenter",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prierai": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prieras": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "priera": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prierons": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prierez": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prieront": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prierais": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prierait": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prierions": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prieriez": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prieraient": {
+      "lemmaId": "prier",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrerai": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontreras": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrera": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrerons": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrerez": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontreront": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrerais": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrerait": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontrerions": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontreriez": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rencontreraient": {
+      "lemmaId": "rencontrer",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resterai": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resteras": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "restera": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resterons": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resterez": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resteront": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resterais": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resterait": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resterions": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resteriez": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "resteraient": {
+      "lemmaId": "rester",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolve": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résolves": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudrai": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudras": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudra": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudrons": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudrez": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudront": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudrais": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudrait": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudrions": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudriez": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "résoudraient": {
+      "lemmaId": "résoudre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillerai": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travailleras": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillera": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillerons": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillerez": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travailleront": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillerais": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillerait": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travaillerions": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travailleriez": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "travailleraient": {
+      "lemmaId": "travailler",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "vienne": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viennes": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendrai": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendras": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendra": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendrons": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendrez": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendront": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendrais": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendrait": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendrions": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendriez": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "viendraient": {
+      "lemmaId": "venir",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagerai": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageras": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagera": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagerons": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagerez": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageront": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagerais": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagerait": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyagerions": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageriez": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "voyageraient": {
+      "lemmaId": "voyager",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    }
+  }
+}

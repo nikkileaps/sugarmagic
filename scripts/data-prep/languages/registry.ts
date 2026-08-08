@@ -30,12 +30,14 @@ import {
   type PlacementQuestionnaire
 } from "../sugarlang-language-data";
 import { spanishRules } from "./es";
+import { frenchRules } from "./fr";
 import { italianRules } from "./it";
 import type { LanguageRules } from "./language-rules";
 
 const RULES: Record<string, LanguageRules> = {
   es: spanishRules,
-  it: italianRules
+  it: italianRules,
+  fr: frenchRules
 };
 
 /** Every language with rules, so callers can loop instead of naming them. */

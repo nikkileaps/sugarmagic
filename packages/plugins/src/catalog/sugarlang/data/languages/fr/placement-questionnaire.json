@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "lang": "fr",
+  "targetLanguage": "French",
+  "supportLanguage": "en",
+  "formTitle": "Arrival Form",
+  "formIntro": "A few questions before you go through. Answer what you can and skip the rest.",
+  "minAnswersForValid": 6,
+  "questions": [
+    {
+      "kind": "multiple-choice",
+      "questionId": "fr-q1",
+      "targetBand": "A1",
+      "promptText": "Comment vous appelez-vous ?",
+      "options": [
+        {
+          "optionId": "a",
+          "text": "Je m'appelle Luc.",
+          "isCorrect": true
+        },
+        {
+          "optionId": "b",
+          "text": "J'ai une valise.",
+          "isCorrect": false
+        },
+        {
+          "optionId": "c",
+          "text": "Je travaille ici.",
+          "isCorrect": false
+        }
+      ]
+    },
+    {
+      "kind": "fill-in-blank",
+      "questionId": "fr-q2",
+      "targetBand": "A1",
+      "promptText": "Complétez la phrase.",
+      "sentenceTemplate": "Je ___ du Canada.",
+      "acceptableAnswers": [
+        "viens"
+      ],
+      "acceptableLemmas": [
+        "venir"
+      ]
+    },
+    {
+      "kind": "yes-no",
+      "questionId": "fr-q3",
+      "targetBand": "A1",
+      "promptText": "Parlez-vous un peu français ?",
+      "correctAnswer": "yes",
+      "yesLabel": "oui",
+      "noLabel": "non"
+    },
+    {
+      "kind": "multiple-choice",
+      "questionId": "fr-q4",
+      "targetBand": "A1",
+      "promptText": "Où habitez-vous ?",
+      "options": [
+        {
+          "optionId": "a",
+          "text": "J'habite à Lyon.",
+          "isCorrect": true
+        },
+        {
+          "optionId": "b",
+          "text": "Merci beaucoup.",
+          "isCorrect": false
+        },
+        {
+          "optionId": "c",
+          "text": "Il est tard.",
+          "isCorrect": false
+        }
+      ]
+    },
+    {
+      "kind": "multiple-choice",
+      "questionId": "fr-q5",
+      "targetBand": "A2",
+      "promptText": "Combien de temps restez-vous ?",
+      "options": [
+        {
+          "optionId": "a",
+          "text": "Trois jours.",
+          "isCorrect": true
+        },
+        {
+          "optionId": "b",
+          "text": "La gare est grande.",
+          "isCorrect": false
+        },
+        {
+          "optionId": "c",
+          "text": "Bonne nuit.",
+          "isCorrect": false
+        }
+      ]
+    },
+    {
+      "kind": "yes-no",
+      "questionId": "fr-q6",
+      "targetBand": "A2",
+      "promptText": "Voyagez-vous seul aujourd'hui ?",
+      "correctAnswer": "yes",
+      "yesLabel": "oui",
+      "noLabel": "non"
+    },
+    {
+      "kind": "fill-in-blank",
+      "questionId": "fr-q7",
+      "targetBand": "B1",
+      "promptText": "Complétez la phrase.",
+      "sentenceTemplate": "J'ai besoin de mon ___ pour le train.",
+      "acceptableAnswers": [
+        "billet"
+      ],
+      "acceptableLemmas": [
+        "billet"
+      ]
+    },
+    {
+      "kind": "free-text",
+      "questionId": "fr-q8",
+      "targetBand": "B1",
+      "promptText": "Expliquez pourquoi vous venez dans cette ville.",
+      "expectedLemmas": [
+        "venir",
+        "ville"
+      ],
+      "minExpectedLength": 18
+    },
+    {
+      "kind": "multiple-choice",
+      "questionId": "fr-q9",
+      "targetBand": "B2",
+      "promptText": "Quel document présentez-vous à la douane ?",
+      "options": [
+        {
+          "optionId": "a",
+          "text": "Mon passeport.",
+          "isCorrect": true
+        },
+        {
+          "optionId": "b",
+          "text": "Je suis désolé.",
+          "isCorrect": false
+        },
+        {
+          "optionId": "c",
+          "text": "À bientôt.",
+          "isCorrect": false
+        }
+      ]
+    },
+    {
+      "kind": "free-text",
+      "questionId": "fr-q10",
+      "targetBand": "B2",
+      "promptText": "Décrivez un problème de voyage que vous avez résolu.",
+      "expectedLemmas": [
+        "résoudre",
+        "voyage"
+      ],
+      "minExpectedLength": 24
+    }
+  ]
+}

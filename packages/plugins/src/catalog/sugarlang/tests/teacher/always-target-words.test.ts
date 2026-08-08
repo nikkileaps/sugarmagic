@@ -17,18 +17,26 @@ import {
 } from "../../runtime/teacher/always-target-words";
 import { forcesSubjectPronounAtBand } from "../../runtime/teacher/band-envelope";
 import esCefrlex from "../../data/languages/es/cefrlex.json";
+import frCefrlex from "../../data/languages/fr/cefrlex.json";
 import itCefrlex from "../../data/languages/it/cefrlex.json";
 import type { CEFRBand } from "../../runtime/cefr";
 
 type Lemmas = Record<string, { partsOfSpeech: string[] }>;
 const LEMMAS_BY_LANG: Record<string, Lemmas> = {
   es: (esCefrlex as { lemmas: Lemmas }).lemmas,
-  it: (itCefrlex as { lemmas: Lemmas }).lemmas
+  it: (itCefrlex as { lemmas: Lemmas }).lemmas,
+  fr: (frCefrlex as { lemmas: Lemmas }).lemmas
 };
 
 /** Every language that ships a list. Adding one extends the guards below
  *  without anyone having to remember to. */
-const AUTHORED = ["es", "it"];
+const AUTHORED = ["es", "it", "fr"];
+
+/** The ones that leave the subject out of an ordinary sentence, and the one
+ *  that does not. French is not playable; it is here because it is the only
+ *  shipped list on the second side. */
+const DROPS_SUBJECT = ["es", "it"];
+const KEEPS_SUBJECT = ["fr"];
 
 describe("words that are always in the target language", () => {
   it("THE ONE THAT MATTERS: the subject pronoun is there at every band", () => {
@@ -160,7 +168,7 @@ describe("words that are always in the target language", () => {
   it("a language that drops its subject gets the pronoun line", () => {
     // The decision 091.8 settled: the instruction needs the BAND to be early
     // AND the language to actually drop the subject.
-    for (const lang of AUTHORED) {
+    for (const lang of DROPS_SUBJECT) {
       const lines = formatAlwaysTargetWords(lang, "A1", "The Language");
       expect(
         lines.some((line) => /say its subject pronoun out loud/.test(line)),
@@ -170,10 +178,10 @@ describe("words that are always in the target language", () => {
   });
 
   it("THE ONE THAT MATTERS: a language that KEEPS its subject gets no pronoun line", () => {
-    // The half of the gate no shipped language exercises, and the half that
-    // was wrong before this story. Both es and it drop their subject, so
-    // going through the registry cannot tell this gate from one that is
-    // always open -- the list is handed in directly instead.
+    // The half of the gate that was wrong before 091.8. Handed in directly
+    // rather than through the registry, because a hand-made list is the only
+    // way to check the shape without a shipped file -- which is what this was
+    // before French existed, and is kept as the unit-level guard.
     const keepsSubject: AlwaysTargetWords = {
       lang: "de",
       lemmaIds: ["ich", "du"],
@@ -189,17 +197,37 @@ describe("words that are always in the target language", () => {
     );
   });
 
+  it("THE SAME THING FROM A SHIPPED FILE: French keeps its subject", () => {
+    // The test above proves the function reads the flag. This proves a real
+    // language's file can carry `false` and travel the whole path -- load,
+    // gate, render -- without anyone re-deciding it on the way. That was the
+    // gap 091.8 left open, because both languages it could reach said `true`.
+    for (const lang of KEEPS_SUBJECT) {
+      const lines = formatAlwaysTargetWords(lang, "A1", "The Language");
+      expect(lines.length, lang).toBeGreaterThan(0);
+      expect(
+        lines.some((line) => /say its subject pronoun out loud/.test(line)),
+        lang
+      ).toBe(false);
+    }
+  });
+
   it("the flag is declared, not defaulted", () => {
     // The gate is `=== true`, so a list that forgets the flag silently loses
-    // the instruction. Both shipped lists must say so out loud -- and the
+    // the instruction. Every shipped list must say so out loud -- and the
     // reason this is asserted rather than defaulted is that the safe default
-    // differs by language, and guessing it is what this story removed.
-    //
-    // The false case has no test because no shipped language keeps its
-    // subject yet. French is where that gets exercised, and 091.13 is where
-    // it should be added.
+    // differs by language, and guessing it is what 091.8 removed.
     for (const lang of AUTHORED) {
+      expect(
+        typeof loadAlwaysTargetWords(lang).dropsSubjectPronouns,
+        lang
+      ).toBe("boolean");
+    }
+    for (const lang of DROPS_SUBJECT) {
       expect(loadAlwaysTargetWords(lang).dropsSubjectPronouns, lang).toBe(true);
+    }
+    for (const lang of KEEPS_SUBJECT) {
+      expect(loadAlwaysTargetWords(lang).dropsSubjectPronouns, lang).toBe(false);
     }
   });
 
