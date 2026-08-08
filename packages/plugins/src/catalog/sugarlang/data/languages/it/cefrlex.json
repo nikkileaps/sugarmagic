@@ -1197,7 +1197,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "know"
-      }
+      },
+      "forms": {
+        "pres": [
+          "so",
+          "sai",
+          "sa",
+          "sappiamo",
+          "sapete",
+          "sanno"
+        ],
+        "pret": [
+          "seppi",
+          "sapesti",
+          "seppe",
+          "sapemmo",
+          "sapeste",
+          "seppero"
+        ],
+        "imp": [
+          "sapevo",
+          "sapevi",
+          "sapeva",
+          "sapevamo",
+          "sapevate",
+          "sapevano"
+        ],
+        "ger": "sapendo",
+        "part": "saputo"
+      },
+      "formsSource": "authored"
     },
     "vedere": {
       "lemmaId": "vedere",
@@ -2683,7 +2712,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "small"
-      }
+      },
+      "forms": {
+        "ms": "piccolo",
+        "fs": "piccola",
+        "mp": "piccoli",
+        "fp": "piccole"
+      },
+      "formsSource": "authored"
     },
     "seguire": {
       "lemmaId": "seguire",
@@ -4584,7 +4620,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "remain, stay"
-      }
+      },
+      "forms": {
+        "pres": [
+          "rimango",
+          "rimani",
+          "rimane",
+          "rimaniamo",
+          "rimanete",
+          "rimangono"
+        ],
+        "pret": [
+          "rimasi",
+          "rimanesti",
+          "rimase",
+          "rimanemmo",
+          "rimaneste",
+          "rimasero"
+        ],
+        "imp": [
+          "rimanevo",
+          "rimanevi",
+          "rimaneva",
+          "rimanevamo",
+          "rimanevate",
+          "rimanevano"
+        ],
+        "ger": "rimanendo",
+        "part": "rimasto"
+      },
+      "formsSource": "authored"
     },
     "ordine": {
       "lemmaId": "ordine",
@@ -16798,7 +16863,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "red"
-      }
+      },
+      "forms": {
+        "ms": "rosso",
+        "fs": "rossa",
+        "mp": "rossi",
+        "fp": "rosse"
+      },
+      "formsSource": "authored"
     },
     "attivare": {
       "lemmaId": "attivare",

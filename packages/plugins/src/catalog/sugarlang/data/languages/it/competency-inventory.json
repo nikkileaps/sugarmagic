@@ -19,6 +19,12 @@
       "band": "A1",
       "ordinal": 3,
       "displayName": "Family and Relationships"
+    },
+    {
+      "lessonId": "surroundings",
+      "band": "A1",
+      "ordinal": 4,
+      "displayName": "Immediate Surroundings"
     }
   ],
   "competencies": [
@@ -3336,6 +3342,962 @@
             "glossBySurface": {
               "siamo due fratelli": {
                 "en": "there are two of us"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-availability",
+      "lessonId": "surroundings",
+      "displayName": "Ask whether something is available",
+      "cefrDescriptor": "Can ask whether something is available.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "hai_del_caffe",
+            "normalizedForm": "hai_del_caffe",
+            "surfaceForms": [
+              "hai del caffè",
+              "hai del caffe",
+              "ha del pane"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "di",
+              "caffè",
+              "pane"
+            ],
+            "glossBySurface": {
+              "hai del caffè": {
+                "en": "do you have any coffee"
+              },
+              "hai del caffe": {
+                "en": "do you have any coffee"
+              },
+              "ha del pane": {
+                "en": "do you have any bread"
+              }
+            }
+          },
+          {
+            "exponentId": "ce_il_caffe",
+            "normalizedForm": "ce_il_caffe",
+            "surfaceForms": [
+              "c'è il caffè",
+              "c'è il caffe",
+              "c'e il caffè",
+              "c'e il caffe",
+              "c'è il pane",
+              "c'e il pane"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "caffè",
+              "pane"
+            ],
+            "glossBySurface": {
+              "c'è il caffè": {
+                "en": "is there any coffee"
+              },
+              "c'è il caffe": {
+                "en": "is there any coffee"
+              },
+              "c'e il caffè": {
+                "en": "is there any coffee"
+              },
+              "c'e il caffe": {
+                "en": "is there any coffee"
+              },
+              "c'è il pane": {
+                "en": "is there any bread"
+              },
+              "c'e il pane": {
+                "en": "is there any bread"
+              }
+            }
+          },
+          {
+            "exponentId": "e_rimasto_del_caffe",
+            "normalizedForm": "e_rimasto_del_caffe",
+            "surfaceForms": [
+              "è rimasto del caffè",
+              "è rimasto del caffe",
+              "e rimasto del caffè",
+              "e rimasto del caffe"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "rimanere",
+              "di",
+              "caffè"
+            ],
+            "glossBySurface": {
+              "è rimasto del caffè": {
+                "en": "is there any coffee left"
+              },
+              "è rimasto del caffe": {
+                "en": "is there any coffee left"
+              },
+              "e rimasto del caffè": {
+                "en": "is there any coffee left"
+              },
+              "e rimasto del caffe": {
+                "en": "is there any coffee left"
+              }
+            }
+          },
+          {
+            "exponentId": "e_disponibile",
+            "normalizedForm": "e_disponibile",
+            "surfaceForms": [
+              "è disponibile",
+              "e disponibile"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "disponibile"
+            ],
+            "glossBySurface": {
+              "è disponibile": {
+                "en": "is it available"
+              },
+              "e disponibile": {
+                "en": "is it available"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-object-location",
+      "lessonId": "surroundings",
+      "displayName": "Ask where an object is",
+      "cefrDescriptor": "Can ask where an object is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "dove_il_libro",
+            "normalizedForm": "dove_il_libro",
+            "surfaceForms": [
+              "dov'è il libro",
+              "dov'e il libro",
+              "dov'è la chiave",
+              "dov'e la chiave",
+              "dove sono le chiavi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dove",
+              "essere",
+              "libro",
+              "chiave",
+              "le"
+            ],
+            "glossBySurface": {
+              "dov'è il libro": {
+                "en": "where is the book"
+              },
+              "dov'e il libro": {
+                "en": "where is the book"
+              },
+              "dov'è la chiave": {
+                "en": "where is the key"
+              },
+              "dov'e la chiave": {
+                "en": "where is the key"
+              },
+              "dove sono le chiavi": {
+                "en": "where are the keys"
+              }
+            }
+          },
+          {
+            "exponentId": "sai_dove",
+            "normalizedForm": "sai_dove",
+            "surfaceForms": [
+              "sai dov'è",
+              "sai dov'e"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sapere",
+              "dove",
+              "essere"
+            ],
+            "glossBySurface": {
+              "sai dov'è": {
+                "en": "do you know where it is"
+              },
+              "sai dov'e": {
+                "en": "do you know where it is"
+              }
+            }
+          },
+          {
+            "exponentId": "dove_ce_una_sedia",
+            "normalizedForm": "dove_ce_una_sedia",
+            "surfaceForms": [
+              "dove c'è una sedia",
+              "dove c'e una sedia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dove",
+              "essere",
+              "sedia"
+            ],
+            "glossBySurface": {
+              "dove c'è una sedia": {
+                "en": "where can I find a chair"
+              },
+              "dove c'e una sedia": {
+                "en": "where can I find a chair"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-colour-and-size",
+      "lessonId": "surroundings",
+      "displayName": "Describe colour and size",
+      "cefrDescriptor": "Can describe basic colours and sizes.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_rosso",
+            "normalizedForm": "e_rosso",
+            "surfaceForms": [
+              "è rosso",
+              "e rosso",
+              "è rossa",
+              "e rossa",
+              "è blu",
+              "e blu",
+              "è verde",
+              "e verde",
+              "è nero",
+              "e nero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "rosso",
+              "blu",
+              "verde",
+              "nero"
+            ],
+            "glossBySurface": {
+              "è rosso": {
+                "en": "it's red"
+              },
+              "e rosso": {
+                "en": "it's red"
+              },
+              "è rossa": {
+                "en": "it's red"
+              },
+              "e rossa": {
+                "en": "it's red"
+              },
+              "è blu": {
+                "en": "it's blue"
+              },
+              "e blu": {
+                "en": "it's blue"
+              },
+              "è verde": {
+                "en": "it's green"
+              },
+              "e verde": {
+                "en": "it's green"
+              },
+              "è nero": {
+                "en": "it's black"
+              },
+              "e nero": {
+                "en": "it's black"
+              }
+            }
+          },
+          {
+            "exponentId": "e_grande",
+            "normalizedForm": "e_grande",
+            "surfaceForms": [
+              "è grande",
+              "e grande",
+              "è piccolo",
+              "e piccolo",
+              "è piccola",
+              "e piccola"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "grande",
+              "piccolo"
+            ],
+            "glossBySurface": {
+              "è grande": {
+                "en": "it's big"
+              },
+              "e grande": {
+                "en": "it's big"
+              },
+              "è piccolo": {
+                "en": "it's small"
+              },
+              "e piccolo": {
+                "en": "it's small"
+              },
+              "è piccola": {
+                "en": "it's small"
+              },
+              "e piccola": {
+                "en": "it's small"
+              }
+            }
+          },
+          {
+            "exponentId": "e_molto_grande",
+            "normalizedForm": "e_molto_grande",
+            "surfaceForms": [
+              "è molto grande",
+              "e molto grande",
+              "è troppo grande",
+              "e troppo grande"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "molto",
+              "grande",
+              "troppo"
+            ],
+            "glossBySurface": {
+              "è molto grande": {
+                "en": "it's very big"
+              },
+              "e molto grande": {
+                "en": "it's very big"
+              },
+              "è troppo grande": {
+                "en": "it's too big"
+              },
+              "e troppo grande": {
+                "en": "it's too big"
+              }
+            }
+          },
+          {
+            "exponentId": "e_lungo",
+            "normalizedForm": "e_lungo",
+            "surfaceForms": [
+              "è lungo",
+              "e lungo",
+              "è corto",
+              "e corto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "lungo",
+              "corto"
+            ],
+            "glossBySurface": {
+              "è lungo": {
+                "en": "it's long"
+              },
+              "e lungo": {
+                "en": "it's long"
+              },
+              "è corto": {
+                "en": "it's short"
+              },
+              "e corto": {
+                "en": "it's short"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-room",
+      "lessonId": "surroundings",
+      "displayName": "Describe a room",
+      "cefrDescriptor": "Can describe a room in simple terms.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_una_stanza_grande",
+            "normalizedForm": "e_una_stanza_grande",
+            "surfaceForms": [
+              "è una stanza grande",
+              "e una stanza grande",
+              "è una camera piccola",
+              "e una camera piccola"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "stanza",
+              "grande",
+              "camera",
+              "piccolo"
+            ],
+            "glossBySurface": {
+              "è una stanza grande": {
+                "en": "it's a big room"
+              },
+              "e una stanza grande": {
+                "en": "it's a big room"
+              },
+              "è una camera piccola": {
+                "en": "it's a small room"
+              },
+              "e una camera piccola": {
+                "en": "it's a small room"
+              }
+            }
+          },
+          {
+            "exponentId": "ce_un_tavolo_e_due_sedie",
+            "normalizedForm": "ce_un_tavolo_e_due_sedie",
+            "surfaceForms": [
+              "c'è un tavolo e due sedie",
+              "c'e un tavolo e due sedie"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "tavolo",
+              "e",
+              "due",
+              "sedia"
+            ],
+            "glossBySurface": {
+              "c'è un tavolo e due sedie": {
+                "en": "there's a table and two chairs"
+              },
+              "c'e un tavolo e due sedie": {
+                "en": "there's a table and two chairs"
+              }
+            }
+          },
+          {
+            "exponentId": "ce_molta_luce",
+            "normalizedForm": "ce_molta_luce",
+            "surfaceForms": [
+              "c'è molta luce",
+              "c'e molta luce"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "molto",
+              "luce"
+            ],
+            "glossBySurface": {
+              "c'è molta luce": {
+                "en": "there's a lot of light"
+              },
+              "c'e molta luce": {
+                "en": "there's a lot of light"
+              }
+            }
+          },
+          {
+            "exponentId": "non_ce_molto_spazio",
+            "normalizedForm": "non_ce_molto_spazio",
+            "surfaceForms": [
+              "non c'è molto spazio",
+              "non c'e molto spazio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "essere",
+              "molto",
+              "spazio"
+            ],
+            "glossBySurface": {
+              "non c'è molto spazio": {
+                "en": "there isn't much room"
+              },
+              "non c'e molto spazio": {
+                "en": "there isn't much room"
+              }
+            }
+          },
+          {
+            "exponentId": "la_stanza_ha_una_finestra",
+            "normalizedForm": "la_stanza_ha_una_finestra",
+            "surfaceForms": [
+              "la stanza ha una finestra"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "stanza",
+              "avere",
+              "finestra"
+            ],
+            "glossBySurface": {
+              "la stanza ha una finestra": {
+                "en": "the room has a window"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "name-objects",
+      "lessonId": "surroundings",
+      "displayName": "Name familiar objects",
+      "cefrDescriptor": "Can identify and name common everyday objects.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_un_tavolo",
+            "normalizedForm": "e_un_tavolo",
+            "surfaceForms": [
+              "è un tavolo",
+              "e un tavolo",
+              "il tavolo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "tavolo"
+            ],
+            "glossBySurface": {
+              "è un tavolo": {
+                "en": "it's a table"
+              },
+              "e un tavolo": {
+                "en": "it's a table"
+              },
+              "il tavolo": {
+                "en": "the table"
+              }
+            }
+          },
+          {
+            "exponentId": "e_una_sedia",
+            "normalizedForm": "e_una_sedia",
+            "surfaceForms": [
+              "è una sedia",
+              "e una sedia",
+              "la sedia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "sedia"
+            ],
+            "glossBySurface": {
+              "è una sedia": {
+                "en": "it's a chair"
+              },
+              "e una sedia": {
+                "en": "it's a chair"
+              },
+              "la sedia": {
+                "en": "the chair"
+              }
+            }
+          },
+          {
+            "exponentId": "e_un_libro",
+            "normalizedForm": "e_un_libro",
+            "surfaceForms": [
+              "è un libro",
+              "e un libro",
+              "il libro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "libro"
+            ],
+            "glossBySurface": {
+              "è un libro": {
+                "en": "it's a book"
+              },
+              "e un libro": {
+                "en": "it's a book"
+              },
+              "il libro": {
+                "en": "the book"
+              }
+            }
+          },
+          {
+            "exponentId": "e_una_porta",
+            "normalizedForm": "e_una_porta",
+            "surfaceForms": [
+              "è una porta",
+              "e una porta",
+              "la porta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "porta"
+            ],
+            "glossBySurface": {
+              "è una porta": {
+                "en": "it's a door"
+              },
+              "e una porta": {
+                "en": "it's a door"
+              },
+              "la porta": {
+                "en": "the door"
+              }
+            }
+          },
+          {
+            "exponentId": "e_una_chiave",
+            "normalizedForm": "e_una_chiave",
+            "surfaceForms": [
+              "è una chiave",
+              "e una chiave",
+              "le chiavi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "chiave",
+              "le"
+            ],
+            "glossBySurface": {
+              "è una chiave": {
+                "en": "it's a key"
+              },
+              "e una chiave": {
+                "en": "it's a key"
+              },
+              "le chiavi": {
+                "en": "the keys"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-what-they-have",
+      "lessonId": "surroundings",
+      "displayName": "Say what they have",
+      "cefrDescriptor": "Can say what they have.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "ho_una_macchina",
+            "normalizedForm": "ho_una_macchina",
+            "surfaceForms": [
+              "ho una macchina",
+              "ho una casa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "macchina",
+              "casa"
+            ],
+            "glossBySurface": {
+              "ho una macchina": {
+                "en": "I have a car"
+              },
+              "ho una casa": {
+                "en": "I have a house"
+              }
+            }
+          },
+          {
+            "exponentId": "non_ho_soldi",
+            "normalizedForm": "non_ho_soldi",
+            "surfaceForms": [
+              "non ho soldi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "avere",
+              "soldo"
+            ],
+            "glossBySurface": {
+              "non ho soldi": {
+                "en": "I don't have any money"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_molti_libri",
+            "normalizedForm": "ho_molti_libri",
+            "surfaceForms": [
+              "ho molti libri"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "molto",
+              "libro"
+            ],
+            "glossBySurface": {
+              "ho molti libri": {
+                "en": "I have a lot of books"
+              }
+            }
+          },
+          {
+            "exponentId": "non_ho_niente",
+            "normalizedForm": "non_ho_niente",
+            "surfaceForms": [
+              "non ho niente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "avere",
+              "niente"
+            ],
+            "glossBySurface": {
+              "non ho niente": {
+                "en": "I don't have anything"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-object-location",
+      "lessonId": "surroundings",
+      "displayName": "Say where an object is",
+      "cefrDescriptor": "Can say where an object is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_sul_tavolo",
+            "normalizedForm": "e_sul_tavolo",
+            "surfaceForms": [
+              "è sul tavolo",
+              "e sul tavolo",
+              "è sulla sedia",
+              "e sulla sedia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "su",
+              "tavolo",
+              "sedia"
+            ],
+            "glossBySurface": {
+              "è sul tavolo": {
+                "en": "it's on the table"
+              },
+              "e sul tavolo": {
+                "en": "it's on the table"
+              },
+              "è sulla sedia": {
+                "en": "it's on the chair"
+              },
+              "e sulla sedia": {
+                "en": "it's on the chair"
+              }
+            }
+          },
+          {
+            "exponentId": "e_qui",
+            "normalizedForm": "e_qui",
+            "surfaceForms": [
+              "è qui",
+              "e qui",
+              "è lì",
+              "è li",
+              "e lì",
+              "e li",
+              "è là",
+              "è la",
+              "e là",
+              "e la"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "qui",
+              "lì",
+              "là"
+            ],
+            "glossBySurface": {
+              "è qui": {
+                "en": "it's here"
+              },
+              "e qui": {
+                "en": "it's here"
+              },
+              "è lì": {
+                "en": "it's right there"
+              },
+              "è li": {
+                "en": "it's right there"
+              },
+              "e lì": {
+                "en": "it's right there"
+              },
+              "e li": {
+                "en": "it's right there"
+              },
+              "è là": {
+                "en": "it's over there"
+              },
+              "è la": {
+                "en": "it's over there"
+              },
+              "e là": {
+                "en": "it's over there"
+              },
+              "e la": {
+                "en": "it's over there"
+              }
+            }
+          },
+          {
+            "exponentId": "e_sotto_il_tavolo",
+            "normalizedForm": "e_sotto_il_tavolo",
+            "surfaceForms": [
+              "è sotto il tavolo",
+              "e sotto il tavolo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "sotto",
+              "tavolo"
+            ],
+            "glossBySurface": {
+              "è sotto il tavolo": {
+                "en": "it's under the table"
+              },
+              "e sotto il tavolo": {
+                "en": "it's under the table"
+              }
+            }
+          },
+          {
+            "exponentId": "e_sopra_il_tavolo",
+            "normalizedForm": "e_sopra_il_tavolo",
+            "surfaceForms": [
+              "è sopra il tavolo",
+              "e sopra il tavolo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "sopra",
+              "tavolo"
+            ],
+            "glossBySurface": {
+              "è sopra il tavolo": {
+                "en": "it's on top of the table"
+              },
+              "e sopra il tavolo": {
+                "en": "it's on top of the table"
+              }
+            }
+          },
+          {
+            "exponentId": "e_vicino_alla_porta",
+            "normalizedForm": "e_vicino_alla_porta",
+            "surfaceForms": [
+              "è vicino alla porta",
+              "e vicino alla porta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "vicino",
+              "a",
+              "porta"
+            ],
+            "glossBySurface": {
+              "è vicino alla porta": {
+                "en": "it's near the door"
+              },
+              "e vicino alla porta": {
+                "en": "it's near the door"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-location",
+      "lessonId": "surroundings",
+      "displayName": "Understand location words",
+      "cefrDescriptor": "Can understand basic location words.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "a_casa",
+            "normalizedForm": "a_casa",
+            "surfaceForms": [
+              "a casa",
+              "in casa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "a",
+              "casa",
+              "in"
+            ],
+            "glossBySurface": {
+              "a casa": {
+                "en": "at home"
+              },
+              "in casa": {
+                "en": "in the house"
+              }
+            }
+          },
+          {
+            "exponentId": "laggiu",
+            "normalizedForm": "laggiu",
+            "surfaceForms": [
+              "laggiù",
+              "laggiu"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "laggiù"
+            ],
+            "glossBySurface": {
+              "laggiù": {
+                "en": "over there"
+              },
+              "laggiu": {
+                "en": "over there"
               }
             }
           }

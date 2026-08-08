@@ -1781,6 +1781,480 @@
           }
         ]
       }
+    ],
+    "name-objects": [
+      {
+        "wordings": [
+          {
+            "phrase": "è un tavolo",
+            "gloss": {
+              "en": "it's a table"
+            }
+          },
+          {
+            "phrase": "il tavolo",
+            "gloss": {
+              "en": "the table"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è una sedia",
+            "gloss": {
+              "en": "it's a chair"
+            }
+          },
+          {
+            "phrase": "la sedia",
+            "gloss": {
+              "en": "the chair"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un libro",
+            "gloss": {
+              "en": "it's a book"
+            }
+          },
+          {
+            "phrase": "il libro",
+            "gloss": {
+              "en": "the book"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è una porta",
+            "gloss": {
+              "en": "it's a door"
+            }
+          },
+          {
+            "phrase": "la porta",
+            "gloss": {
+              "en": "the door"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è una chiave",
+            "gloss": {
+              "en": "it's a key"
+            }
+          },
+          {
+            "phrase": "le chiavi",
+            "gloss": {
+              "en": "the keys"
+            }
+          }
+        ]
+      }
+    ],
+    "state-object-location": [
+      {
+        "wordings": [
+          {
+            "phrase": "è sul tavolo",
+            "gloss": {
+              "en": "it's on the table"
+            }
+          },
+          {
+            "phrase": "è sulla sedia",
+            "gloss": {
+              "en": "it's on the chair"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è qui",
+            "gloss": {
+              "en": "it's here"
+            }
+          },
+          {
+            "phrase": "è lì",
+            "gloss": {
+              "en": "it's right there"
+            }
+          },
+          {
+            "phrase": "è là",
+            "gloss": {
+              "en": "it's over there"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è sotto il tavolo",
+            "gloss": {
+              "en": "it's under the table"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è sopra il tavolo",
+            "gloss": {
+              "en": "it's on top of the table"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è vicino alla porta",
+            "gloss": {
+              "en": "it's near the door"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-object-location": [
+      {
+        "wordings": [
+          {
+            "phrase": "dov'è il libro",
+            "gloss": {
+              "en": "where is the book"
+            }
+          },
+          {
+            "phrase": "dov'è la chiave",
+            "gloss": {
+              "en": "where is the key"
+            }
+          },
+          {
+            "phrase": "dove sono le chiavi",
+            "gloss": {
+              "en": "where are the keys"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sai dov'è",
+            "gloss": {
+              "en": "do you know where it is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dove c'è una sedia",
+            "gloss": {
+              "en": "where can I find a chair"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-location": [
+      {
+        "wordings": [
+          {
+            "phrase": "a casa",
+            "gloss": {
+              "en": "at home"
+            }
+          },
+          {
+            "phrase": "in casa",
+            "gloss": {
+              "en": "in the house"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "laggiù",
+            "gloss": {
+              "en": "over there"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-room": [
+      {
+        "wordings": [
+          {
+            "phrase": "è una stanza grande",
+            "gloss": {
+              "en": "it's a big room"
+            }
+          },
+          {
+            "phrase": "è una camera piccola",
+            "gloss": {
+              "en": "it's a small room"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è un tavolo e due sedie",
+            "gloss": {
+              "en": "there's a table and two chairs"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è molta luce",
+            "gloss": {
+              "en": "there's a lot of light"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non c'è molto spazio",
+            "gloss": {
+              "en": "there isn't much room"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la stanza ha una finestra",
+            "gloss": {
+              "en": "the room has a window"
+            }
+          }
+        ]
+      }
+    ],
+    "say-what-they-have": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho una macchina",
+            "gloss": {
+              "en": "I have a car"
+            }
+          },
+          {
+            "phrase": "ho una casa",
+            "gloss": {
+              "en": "I have a house"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ho soldi",
+            "gloss": {
+              "en": "I don't have any money"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho molti libri",
+            "gloss": {
+              "en": "I have a lot of books"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ho niente",
+            "gloss": {
+              "en": "I don't have anything"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-availability": [
+      {
+        "wordings": [
+          {
+            "phrase": "hai del caffè",
+            "gloss": {
+              "en": "do you have any coffee"
+            }
+          },
+          {
+            "phrase": "ha del pane",
+            "gloss": {
+              "en": "do you have any bread"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è il caffè",
+            "gloss": {
+              "en": "is there any coffee"
+            }
+          },
+          {
+            "phrase": "c'è il pane",
+            "gloss": {
+              "en": "is there any bread"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è rimasto del caffè",
+            "gloss": {
+              "en": "is there any coffee left"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è disponibile",
+            "gloss": {
+              "en": "is it available"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-colour-and-size": [
+      {
+        "wordings": [
+          {
+            "phrase": "è rosso",
+            "gloss": {
+              "en": "it's red"
+            }
+          },
+          {
+            "phrase": "è rossa",
+            "gloss": {
+              "en": "it's red"
+            }
+          },
+          {
+            "phrase": "è blu",
+            "gloss": {
+              "en": "it's blue"
+            }
+          },
+          {
+            "phrase": "è verde",
+            "gloss": {
+              "en": "it's green"
+            }
+          },
+          {
+            "phrase": "è nero",
+            "gloss": {
+              "en": "it's black"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è grande",
+            "gloss": {
+              "en": "it's big"
+            }
+          },
+          {
+            "phrase": "è piccolo",
+            "gloss": {
+              "en": "it's small"
+            }
+          },
+          {
+            "phrase": "è piccola",
+            "gloss": {
+              "en": "it's small"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è molto grande",
+            "gloss": {
+              "en": "it's very big"
+            }
+          },
+          {
+            "phrase": "è troppo grande",
+            "gloss": {
+              "en": "it's too big"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è lungo",
+            "gloss": {
+              "en": "it's long"
+            }
+          },
+          {
+            "phrase": "è corto",
+            "gloss": {
+              "en": "it's short"
+            }
+          }
+        ]
+      }
     ]
   }
 }

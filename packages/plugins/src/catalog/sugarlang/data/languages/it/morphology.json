@@ -39656,6 +39656,132 @@
         "noun"
       ]
     },
+    "so": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sai": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sa": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sappiamo": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapete": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sanno": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "seppi": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapesti": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "seppe": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapemmo": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapeste": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "seppero": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapevo": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapevi": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapeva": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapevamo": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapevate": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapevano": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
     "sapendo": {
       "lemmaId": "sapere",
       "partsOfSpeech": [
@@ -39664,13 +39790,6 @@
       ]
     },
     "saputo": {
-      "lemmaId": "sapere",
-      "partsOfSpeech": [
-        "verb",
-        "noun"
-      ]
-    },
-    "saperi": {
       "lemmaId": "sapere",
       "partsOfSpeech": [
         "verb",
@@ -41031,7 +41150,21 @@
         "noun"
       ]
     },
+    "piccola": {
+      "lemmaId": "piccolo",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
     "piccoli": {
+      "lemmaId": "piccolo",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
+    "piccole": {
       "lemmaId": "piccolo",
       "partsOfSpeech": [
         "adjective",
@@ -42401,13 +42534,121 @@
         "noun"
       ]
     },
+    "rimango": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimani": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimane": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimaniamo": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanete": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimangono": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimasi": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanesti": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimase": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanemmo": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimaneste": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimasero": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanevo": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanevi": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimaneva": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanevamo": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanevate": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanevano": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "rimanendo": {
       "lemmaId": "rimanere",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "rimanuto": {
+    "rimasto": {
       "lemmaId": "rimanere",
       "partsOfSpeech": [
         "verb"
@@ -48613,7 +48854,21 @@
         "noun"
       ]
     },
+    "rossa": {
+      "lemmaId": "rosso",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
     "rossi": {
+      "lemmaId": "rosso",
+      "partsOfSpeech": [
+        "adjective",
+        "noun"
+      ]
+    },
+    "rosse": {
       "lemmaId": "rosso",
       "partsOfSpeech": [
         "adjective",
@@ -82989,6 +83244,111 @@
         "verb"
       ]
     },
+    "sappia": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sappiate": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sappiano": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saprei": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapresti": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saprebbe": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapremmo": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapreste": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saprebbero": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saprò": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saprai": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saprà": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapremo": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saprete": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapranno": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
     "sapermi": {
       "lemmaId": "sapere",
       "partsOfSpeech": [
@@ -83053,6 +83413,97 @@
       ]
     },
     "saperne": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saimi": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saiti": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saisi": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saici": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saivi": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sailo": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saila": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saili": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saile": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saine": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saputa": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "saputi": {
+      "lemmaId": "sapere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sapute": {
       "lemmaId": "sapere",
       "partsOfSpeech": [
         "verb",
@@ -87857,6 +88308,96 @@
         "verb"
       ]
     },
+    "rimanga": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimangano": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimaniate": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarrei": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarresti": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarrebbe": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarremmo": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarreste": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarrebbero": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarrò": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarrai": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarrà": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarremo": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarrete": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimarranno": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "rimanermi": {
       "lemmaId": "rimanere",
       "partsOfSpeech": [
@@ -87912,6 +88453,84 @@
       ]
     },
     "rimanerne": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanimi": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimaniti": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanisi": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanici": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanivi": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanilo": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanila": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanili": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanile": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimanine": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimasta": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimasti": {
+      "lemmaId": "rimanere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "rimaste": {
       "lemmaId": "rimanere",
       "partsOfSpeech": [
         "verb"
