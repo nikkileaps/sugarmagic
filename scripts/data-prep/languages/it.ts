@@ -435,9 +435,9 @@ function buildItalianQuestionnaire(): PlacementQuestionnaire {
         kind: "yes-no",
         questionId: "it-q3",
         targetBand: "A1",
-        promptText: "Parli un po di italiano?",
+        promptText: "Parli un po' di italiano?",
         correctAnswer: "yes",
-        yesLabel: "si",
+        yesLabel: "sì",
         noLabel: "no"
       },
       {
@@ -453,10 +453,10 @@ function buildItalianQuestionnaire(): PlacementQuestionnaire {
         kind: "multiple-choice",
         questionId: "it-q5",
         targetBand: "A2",
-        promptText: "Quanto tempo resti in citta?",
+        promptText: "Quanto tempo resti in città?",
         options: [
           { optionId: "a", text: "Due settimane.", isCorrect: true },
-          { optionId: "b", text: "La stazione e grande.", isCorrect: false },
+          { optionId: "b", text: "La stazione è grande.", isCorrect: false },
           { optionId: "c", text: "Mi piace il formaggio.", isCorrect: false }
         ]
       },
@@ -466,7 +466,7 @@ function buildItalianQuestionnaire(): PlacementQuestionnaire {
         targetBand: "A2",
         promptText: "Viaggi da solo oggi?",
         correctAnswer: "yes",
-        yesLabel: "si",
+        yesLabel: "sì",
         noLabel: "no"
       },
       {
@@ -482,8 +482,8 @@ function buildItalianQuestionnaire(): PlacementQuestionnaire {
         kind: "free-text",
         questionId: "it-q8",
         targetBand: "B1",
-        promptText: "Spiega perche vieni in questa citta.",
-        expectedLemmas: ["venire", "citta"],
+        promptText: "Spiega perché vieni in questa città.",
+        expectedLemmas: ["venire", "città"],
         minExpectedLength: 18
       },
       {

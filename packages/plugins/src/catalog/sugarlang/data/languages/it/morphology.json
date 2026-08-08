@@ -58779,13 +58779,121 @@
         "adjective"
       ]
     },
+    "descrivo": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivi": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrive": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamo": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivete": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivono": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrissi": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivesti": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrisse": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivemmo": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriveste": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrissero": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivevo": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivevi": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriveva": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivevamo": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivevate": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivevano": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "descrivendo": {
       "lemmaId": "descrivere",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "descrivuto": {
+    "descritto": {
       "lemmaId": "descrivere",
       "partsOfSpeech": [
         "verb"
@@ -65535,6 +65643,102 @@
       "lemmaId": "appuntamento",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "completa": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamo": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completate": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completano": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completai": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completasti": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completò": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completammo": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completaste": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completarono": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completavo": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completavi": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completava": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completavamo": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completavate": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completavano": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "completando": {
@@ -152036,6 +152240,120 @@
         "verb"
       ]
     },
+    "descriva": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivano": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviate": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivessi": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivesse": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivessimo": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivessero": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriverei": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriveresti": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriverebbe": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriveremmo": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivereste": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriverebbero": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriverò": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriverai": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriverà": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriveremo": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriverete": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriveranno": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "descriver": {
       "lemmaId": "descrivere",
       "partsOfSpeech": [
@@ -152097,6 +152415,144 @@
       ]
     },
     "descriverne": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivimi": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviti": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivisi": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivici": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivivi": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivilo": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivila": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivili": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivile": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descrivine": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamomi": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamoti": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamosi": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamoci": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamovi": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamolo": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamola": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamoli": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamole": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descriviamone": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descritta": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descritti": {
+      "lemmaId": "descrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "descritte": {
       "lemmaId": "descrivere",
       "partsOfSpeech": [
         "verb"
@@ -167149,6 +167605,114 @@
         "verb"
       ]
     },
+    "completino": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiate": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completassi": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completasse": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completassimo": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completassero": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completerei": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completeresti": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completerebbe": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completeremmo": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completereste": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completerebbero": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completerò": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completerai": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completerà": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completeremo": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completerete": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completeranno": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "completar": {
       "lemmaId": "completare",
       "partsOfSpeech": [
@@ -167210,6 +167774,126 @@
       ]
     },
     "completarne": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completami": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completati": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completasi": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completaci": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completalo": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completala": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completali": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completale": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completane": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamomi": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamoti": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamosi": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamoci": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamovi": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamolo": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamola": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamoli": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamole": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completiamone": {
+      "lemmaId": "completare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "completata": {
       "lemmaId": "completare",
       "partsOfSpeech": [
         "verb"

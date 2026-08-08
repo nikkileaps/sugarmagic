@@ -16612,7 +16612,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "describe"
-      }
+      },
+      "forms": {
+        "pres": [
+          "descrivo",
+          "descrivi",
+          "descrive",
+          "descriviamo",
+          "descrivete",
+          "descrivono"
+        ],
+        "pret": [
+          "descrissi",
+          "descrivesti",
+          "descrisse",
+          "descrivemmo",
+          "descriveste",
+          "descrissero"
+        ],
+        "imp": [
+          "descrivevo",
+          "descrivevi",
+          "descriveva",
+          "descrivevamo",
+          "descrivevate",
+          "descrivevano"
+        ],
+        "ger": "descrivendo",
+        "part": "descritto"
+      },
+      "formsSource": "authored"
     },
     "mandare": {
       "lemmaId": "mandare",
@@ -23546,7 +23575,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "complete"
-      }
+      },
+      "forms": {
+        "pres": [
+          "completo",
+          "completi",
+          "completa",
+          "completiamo",
+          "completate",
+          "completano"
+        ],
+        "pret": [
+          "completai",
+          "completasti",
+          "completò",
+          "completammo",
+          "completaste",
+          "completarono"
+        ],
+        "imp": [
+          "completavo",
+          "completavi",
+          "completava",
+          "completavamo",
+          "completavate",
+          "completavano"
+        ],
+        "ger": "completando",
+        "part": "completato"
+      },
+      "formsSource": "authored"
     },
     "attento": {
       "lemmaId": "attento",

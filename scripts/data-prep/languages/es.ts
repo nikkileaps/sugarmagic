@@ -334,7 +334,7 @@ function buildSpanishQuestionnaire(): PlacementQuestionnaire {
         questionId: "es-q2",
         targetBand: "A1",
         promptText: "Completa la frase.",
-        sentenceTemplate: "Yo ___ de Canada.",
+        sentenceTemplate: "Yo ___ de Canadá.",
         acceptableAnswers: ["soy"],
         acceptableLemmas: ["ser"]
       },
@@ -344,7 +344,7 @@ function buildSpanishQuestionnaire(): PlacementQuestionnaire {
         targetBand: "A1",
         promptText: "¿Hablas un poco de español?",
         correctAnswer: "yes",
-        yesLabel: "si",
+        yesLabel: "sí",
         noLabel: "no"
       },
       {
@@ -360,10 +360,10 @@ function buildSpanishQuestionnaire(): PlacementQuestionnaire {
         kind: "multiple-choice",
         questionId: "es-q5",
         targetBand: "A2",
-        promptText: "¿Cuanto tiempo vas a quedarte?",
+        promptText: "¿Cuánto tiempo vas a quedarte?",
         options: [
           { optionId: "a", text: "Dos semanas.", isCorrect: true },
-          { optionId: "b", text: "La estacion es grande.", isCorrect: false },
+          { optionId: "b", text: "La estación es grande.", isCorrect: false },
           { optionId: "c", text: "Me gusta el queso.", isCorrect: false }
         ]
       },
@@ -373,7 +373,7 @@ function buildSpanishQuestionnaire(): PlacementQuestionnaire {
         targetBand: "A2",
         promptText: "¿Viajas solo hoy?",
         correctAnswer: "yes",
-        yesLabel: "si",
+        yesLabel: "sí",
         noLabel: "no"
       },
       {
@@ -389,7 +389,7 @@ function buildSpanishQuestionnaire(): PlacementQuestionnaire {
         kind: "free-text",
         questionId: "es-q8",
         targetBand: "B1",
-        promptText: "Explica por que vienes a esta ciudad.",
+        promptText: "Explica por qué vienes a esta ciudad.",
         expectedLemmas: ["venir", "ciudad"],
         minExpectedLength: 18
       },
@@ -397,7 +397,7 @@ function buildSpanishQuestionnaire(): PlacementQuestionnaire {
         kind: "multiple-choice",
         questionId: "es-q9",
         targetBand: "B2",
-        promptText: "¿Que documento presentas en la aduana?",
+        promptText: "¿Qué documento presentas en la aduana?",
         options: [
           { optionId: "a", text: "Mi pasaporte.", isCorrect: true },
           { optionId: "b", text: "Mi queso favorito.", isCorrect: false },
