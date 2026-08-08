@@ -196,22 +196,26 @@ function exponentIdFor(wording: string): string {
  * an apostrophe. French will need one for `j'ai` and `l'eau`.
  */
 function tokenize(wording: string, rules: LanguageRules): string[] {
-  const rawTokens = wording
-    .toLowerCase()
-    .replace(/[^\p{Letter}\p{Number}\p{Mark}'’\s]/gu, " ")
-    .split(/\s+/)
-    .filter(Boolean);
+  // SPLIT ON SPACES ONLY, AND ASK BEFORE STRIPPING ANYTHING.
+  //
+  // An earlier version stripped every character except letters and apostrophes
+  // first, which quietly made the apostrophe the one mark a contraction may be
+  // written with -- an Italian and French habit promoted to a rule for every
+  // language. A language contracting with anything else had its marker deleted
+  // before it was ever consulted. Caught by new-language.test.ts, which is
+  // what that test is for.
+  const chunks = wording.toLowerCase().split(/\s+/).filter(Boolean);
 
   const out: string[] = [];
-  for (const raw of rawTokens) {
-    const expanded = rules.expandWrittenForm?.(raw);
+  for (const chunk of chunks) {
+    const expanded = rules.expandWrittenForm?.(chunk);
     if (expanded) {
       out.push(...expanded);
       continue;
     }
-    // Not a contraction this language knows: drop any remaining marks so a
-    // stray quote never becomes part of a token.
-    const bare = raw.replace(/['’]/gu, "");
+    // Not something this language expands, so what is left is one word plus
+    // whatever punctuation it was written next to.
+    const bare = chunk.replace(/[^\p{Letter}\p{Number}\p{Mark}]/gu, "");
     if (bare) out.push(bare);
   }
   return out;
@@ -221,11 +225,18 @@ export function buildCompetencyInventory(inputs: {
   bands: CurriculumBandFile[];
   exponents: ExponentsFile;
   morphology: MorphologyFile;
+  /**
+   * The language's rules. Defaults to the registered ones, and is passed in
+   * only to check that a language the registry has never heard of can still be
+   * built -- which is the question "could this take French" reduces to
+   * something answerable without inventing any French.
+   */
+  rules?: LanguageRules;
 }): CompetencyInventoryFile {
   const { bands, exponents, morphology } = inputs;
   assertExponentsShape(exponents);
   const lang = exponents.lang;
-  const rules = languageRules(lang);
+  const rules = inputs.rules ?? languageRules(lang);
 
   const competencyById = new Map<
     string,
