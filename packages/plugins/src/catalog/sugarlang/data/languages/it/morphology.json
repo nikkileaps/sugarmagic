@@ -38617,6 +38617,24 @@
         "noun"
       ]
     },
+    "vero": {
+      "lemmaId": "vero",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "accomodare": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "buonissimo": {
+      "lemmaId": "buonissimo",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
     "sono": {
       "lemmaId": "essere",
       "partsOfSpeech": [
@@ -39136,6 +39154,114 @@
         "noun"
       ]
     },
+    "devo": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devi": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "deve": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dobbiamo": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovete": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devono": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovei": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovesti": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dové": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovemmo": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "doveste": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "doverono": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovevo": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovevi": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "doveva": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovevamo": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovevate": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovevano": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "dovendo": {
       "lemmaId": "dovere",
       "partsOfSpeech": [
@@ -39148,7 +39274,21 @@
         "noun"
       ]
     },
+    "altra": {
+      "lemmaId": "altro",
+      "partsOfSpeech": [
+        "adjective",
+        "pronoun"
+      ]
+    },
     "altri": {
+      "lemmaId": "altro",
+      "partsOfSpeech": [
+        "adjective",
+        "pronoun"
+      ]
+    },
+    "altre": {
       "lemmaId": "altro",
       "partsOfSpeech": [
         "adjective",
@@ -40856,6 +40996,114 @@
         "noun"
       ]
     },
+    "penso": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensi": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensa": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensiamo": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensate": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensano": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensai": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensasti": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensò": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensammo": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensaste": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensarono": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensavo": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensavi": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensava": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensavamo": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensavate": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensavano": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "pensando": {
       "lemmaId": "pensare",
       "partsOfSpeech": [
@@ -41205,6 +41453,114 @@
       "lemmaId": "qualche",
       "partsOfSpeech": [
         "adjective"
+      ]
+    },
+    "sembro": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembri": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembra": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembriamo": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrate": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrano": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrai": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrasti": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrò": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrammo": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembraste": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrarono": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembravo": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembravi": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrava": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembravamo": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembravate": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembravano": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "sembrando": {
@@ -42182,6 +42538,114 @@
       "lemmaId": "programma",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "credo": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credi": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crede": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crediamo": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credete": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credono": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credei": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credesti": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credé": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credemmo": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credeste": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederono": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credevo": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credevi": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credeva": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credevamo": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credevate": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credevano": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "credendo": {
@@ -43459,13 +43923,115 @@
         "noun"
       ]
     },
-    "permettendo": {
+    "permetto": {
       "lemmaId": "permettere",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "permettuto": {
+    "permetti": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permette": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettiamo": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettete": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettono": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permisi": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettesti": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permise": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettemmo": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetteste": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permisero": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettevo": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettevi": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetteva": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettevamo": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettevate": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettevano": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettendo": {
       "lemmaId": "permettere",
       "partsOfSpeech": [
         "verb"
@@ -43898,13 +44464,121 @@
         "verb"
       ]
     },
+    "offro": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offri": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offre": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offriamo": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrite": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrono": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrii": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offristi": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrì": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrimmo": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offriste": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrirono": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrivo": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrivi": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offriva": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrivamo": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrivate": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrivano": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "offrendo": {
       "lemmaId": "offrire",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "offrito": {
+    "offerto": {
       "lemmaId": "offrire",
       "partsOfSpeech": [
         "verb"
@@ -47477,6 +48151,114 @@
         "verb"
       ]
     },
+    "significo": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significhi": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significa": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significhiamo": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significate": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significano": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significai": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significasti": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significò": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significammo": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significaste": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significarono": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significavo": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significavi": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significava": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significavamo": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significavate": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significavano": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "significando": {
       "lemmaId": "significare",
       "partsOfSpeech": [
@@ -49741,6 +50523,114 @@
         "noun"
       ]
     },
+    "ripeto": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeti": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripete": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetiamo": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetete": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetono": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetei": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetesti": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeté": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetemmo": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeteste": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeterono": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetevo": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetevi": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeteva": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetevamo": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetevate": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetevano": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "ripetendo": {
       "lemmaId": "ripetere",
       "partsOfSpeech": [
@@ -51576,7 +52466,21 @@
         "adjective"
       ]
     },
+    "sicura": {
+      "lemmaId": "sicuro",
+      "partsOfSpeech": [
+        "adjective",
+        "adverb"
+      ]
+    },
     "sicuri": {
+      "lemmaId": "sicuro",
+      "partsOfSpeech": [
+        "adjective",
+        "adverb"
+      ]
+    },
+    "sicure": {
       "lemmaId": "sicuro",
       "partsOfSpeech": [
         "adjective",
@@ -85151,6 +86055,162 @@
         "adjective"
       ]
     },
+    "vera": {
+      "lemmaId": "vero",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "veri": {
+      "lemmaId": "vero",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "vere": {
+      "lemmaId": "vero",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "accomodo": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodi": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoda": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodiamo": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodate": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodano": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodai": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodasti": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodò": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodammo": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodaste": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarono": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodavo": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodavi": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodava": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodavamo": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodavate": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodavano": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodando": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodato": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "buonissima": {
+      "lemmaId": "buonissimo",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "buonissimi": {
+      "lemmaId": "buonissimo",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
+    "buonissime": {
+      "lemmaId": "buonissimo",
+      "partsOfSpeech": [
+        "adjective"
+      ]
+    },
     "del": {
       "lemmaId": "di",
       "partsOfSpeech": [
@@ -86256,6 +87316,96 @@
         "verb"
       ]
     },
+    "debba": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dobbiate": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "debbano": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovrei": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovresti": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovrebbe": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovremmo": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovreste": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovrebbero": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovrò": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovrai": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovrà": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovremo": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovrete": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovranno": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "dovermi": {
       "lemmaId": "dovere",
       "partsOfSpeech": [
@@ -86311,6 +87461,78 @@
       ]
     },
     "doverne": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devimi": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "deviti": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devisi": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devici": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devivi": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devilo": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devila": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devili": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devile": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "devine": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovuta": {
+      "lemmaId": "dovere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dovute": {
       "lemmaId": "dovere",
       "partsOfSpeech": [
         "verb"
@@ -88873,6 +90095,90 @@
         "verb"
       ]
     },
+    "pensino": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensiate": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penserei": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penseresti": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penserebbe": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penseremmo": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensereste": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penserebbero": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penserò": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penserai": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penserà": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penseremo": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penserete": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "penseranno": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "pensarmi": {
       "lemmaId": "pensare",
       "partsOfSpeech": [
@@ -88928,6 +90234,66 @@
       ]
     },
     "pensarne": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensami": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensati": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensasi": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensaci": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensalo": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensala": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensali": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensale": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensane": {
+      "lemmaId": "pensare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "pensata": {
       "lemmaId": "pensare",
       "partsOfSpeech": [
         "verb"
@@ -89491,6 +90857,90 @@
         "verb"
       ]
     },
+    "sembrino": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembriate": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrerei": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembreresti": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrerebbe": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembreremmo": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrereste": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrerebbero": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrerò": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrerai": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrerà": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembreremo": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrerete": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembreranno": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "sembrarmi": {
       "lemmaId": "sembrare",
       "partsOfSpeech": [
@@ -89546,6 +90996,66 @@
       ]
     },
     "sembrarne": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrami": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrati": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrasi": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembraci": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembralo": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrala": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrali": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrale": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrane": {
+      "lemmaId": "sembrare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "sembrata": {
       "lemmaId": "sembrare",
       "partsOfSpeech": [
         "verb"
@@ -91091,6 +92601,96 @@
         "verb"
       ]
     },
+    "creda": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credano": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crediate": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederei": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederesti": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederebbe": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederemmo": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credereste": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederebbero": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederò": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederai": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederà": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederemo": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederete": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "crederanno": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "credermi": {
       "lemmaId": "credere",
       "partsOfSpeech": [
@@ -91146,6 +92746,78 @@
       ]
     },
     "crederne": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credimi": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credisi": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credici": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credivi": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credilo": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credila": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credili": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credile": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credine": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "creduta": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "creduti": {
+      "lemmaId": "credere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "credute": {
       "lemmaId": "credere",
       "partsOfSpeech": [
         "verb"
@@ -93317,6 +94989,96 @@
         "verb"
       ]
     },
+    "permetta": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettano": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettiate": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetterei": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetteresti": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetterebbe": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetteremmo": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettereste": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetterebbero": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetterò": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetterai": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetterà": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetteremo": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetterete": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permetteranno": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "permettermi": {
       "lemmaId": "permettere",
       "partsOfSpeech": [
@@ -93372,6 +95134,78 @@
       ]
     },
     "permetterne": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettimi": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettiti": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettisi": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettici": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettivi": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettilo": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettila": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettili": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettile": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permettine": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permessa": {
+      "lemmaId": "permettere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "permesse": {
       "lemmaId": "permettere",
       "partsOfSpeech": [
         "verb"
@@ -94133,6 +95967,96 @@
         "verb"
       ]
     },
+    "offra": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrano": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offriate": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrirei": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offriresti": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrirebbe": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offriremmo": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrireste": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrirebbero": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrirò": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrirai": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrirà": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offriremo": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrirete": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offriranno": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "offrirmi": {
       "lemmaId": "offrire",
       "partsOfSpeech": [
@@ -94188,6 +96112,66 @@
       ]
     },
     "offrirne": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrimi": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offriti": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrisi": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrici": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrilo": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrila": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrili": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrile": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offrine": {
+      "lemmaId": "offrire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "offerti": {
       "lemmaId": "offrire",
       "partsOfSpeech": [
         "verb"
@@ -100943,6 +102927,90 @@
         "verb"
       ]
     },
+    "significhino": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significhiate": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significerei": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significeresti": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significerebbe": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significeremmo": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significereste": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significerebbero": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significerò": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significerai": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significerà": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significeremo": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significerete": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significeranno": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "significarmi": {
       "lemmaId": "significare",
       "partsOfSpeech": [
@@ -100998,6 +103066,60 @@
       ]
     },
     "significarne": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significami": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significasi": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significaci": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significalo": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significala": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significali": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significale": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significane": {
+      "lemmaId": "significare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "significata": {
       "lemmaId": "significare",
       "partsOfSpeech": [
         "verb"
@@ -105600,6 +107722,96 @@
         "verb"
       ]
     },
+    "ripeta": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetano": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetiate": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeterei": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeteresti": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeterebbe": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeteremmo": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetereste": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeterebbero": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeterò": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeterai": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeterà": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeteremo": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeterete": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripeteranno": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "ripetermi": {
       "lemmaId": "ripetere",
       "partsOfSpeech": [
@@ -105649,6 +107861,84 @@
       ]
     },
     "ripeterne": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetimi": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetiti": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetisi": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetici": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetivi": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetilo": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetila": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetili": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetile": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetine": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetuta": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetuti": {
+      "lemmaId": "ripetere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ripetute": {
       "lemmaId": "ripetere",
       "partsOfSpeech": [
         "verb"
@@ -167494,6 +169784,210 @@
     },
     "vuotarne": {
       "lemmaId": "vuotare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodino": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodiate": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderei": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderesti": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderebbe": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderemmo": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodereste": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderebbero": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderò": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderai": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderà": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderemo": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderete": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomoderanno": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarmi": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarti": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarsi": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarci": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarvi": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarlo": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarla": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarli": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarle": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodarne": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodami": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodati": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodasi": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodaci": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodalo": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodala": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodali": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodale": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodane": {
+      "lemmaId": "accomodare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "accomodata": {
+      "lemmaId": "accomodare",
       "partsOfSpeech": [
         "verb"
       ]

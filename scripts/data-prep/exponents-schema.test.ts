@@ -64,6 +64,43 @@ describe("the shipped exponents files are well-formed", () => {
   }
 });
 
+describe("no phrase performs two competencies", () => {
+  // The exponent id comes from the phrase, so the same phrase under two
+  // competencies is ONE card with two claimed owners, and only one is
+  // reported. Nothing in the build objects, and the Spanish suite checks this
+  // for Spanish only -- Italian reached fifteen lessons with two of them
+  // (`prego`, `è buono`) before anyone looked.
+  //
+  // `EXPONENT-AUTHORING.md` says to author the phrase under the competency it
+  // most directly performs and raise the overlap. Italian did that: `prego`
+  // stayed with thanks and showing someone in became `si accomodi`.
+  for (const lang of ["es", "it"]) {
+    it(`${lang}`, () => {
+      const built = buildCompetencyInventory({
+        bands: bands(),
+        exponents: readJsonFile<ExponentsFile>(
+          sugarlangDataPath("languages", lang, "exponents.json")
+        ),
+        morphology: morphology(lang)
+      });
+
+      const owner = new Map<string, string>();
+      const clashes: string[] = [];
+      for (const competency of built.competencies) {
+        for (const exponent of competency.exponents[lang] ?? []) {
+          const first = owner.get(exponent.exponentId);
+          if (first) {
+            clashes.push(`${exponent.exponentId}: ${first} + ${competency.competencyId}`);
+          } else {
+            owner.set(exponent.exponentId, competency.competencyId);
+          }
+        }
+      }
+      expect(clashes).toEqual([]);
+    });
+  }
+});
+
 describe("a malformed entry is named, not crashed on", () => {
   it("a wording with no gloss", () => {
     // Used to be: TypeError from Object.keys(undefined).

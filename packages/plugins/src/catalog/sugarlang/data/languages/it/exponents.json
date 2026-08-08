@@ -2730,13 +2730,7 @@
       {
         "wordings": [
           {
-            "phrase": "è buono",
-            "gloss": {
-              "en": "it's tasty"
-            }
-          },
-          {
-            "phrase": "è molto buono",
+            "phrase": "è buonissimo",
             "gloss": {
               "en": "it's really tasty"
             }
@@ -5198,18 +5192,12 @@
             "phrase": "da questa parte",
             "gloss": {
               "en": "this way"
-            },
-            "lemmas": {
-              "parte": "partire"
             }
           },
           {
             "phrase": "venga da questa parte",
             "gloss": {
               "en": "come this way"
-            },
-            "lemmas": {
-              "parte": "partire"
             }
           }
         ]
@@ -5233,13 +5221,7 @@
       {
         "wordings": [
           {
-            "phrase": "prego",
-            "gloss": {
-              "en": "come in"
-            }
-          },
-          {
-            "phrase": "prego, entri",
+            "phrase": "si accomodi",
             "gloss": {
               "en": "come in, please"
             }
@@ -6869,6 +6851,1452 @@
             "phrase": "farmacia",
             "gloss": {
               "en": "pharmacy"
+            }
+          }
+        ]
+      }
+    ],
+    "state-want": [
+      {
+        "wordings": [
+          {
+            "phrase": "voglio dell'acqua",
+            "gloss": {
+              "en": "I want water"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "voglio questo",
+            "gloss": {
+              "en": "I want this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non voglio",
+            "gloss": {
+              "en": "I don't want to"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "voglio di più",
+            "gloss": {
+              "en": "I want more"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-what-someone-wants": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa vuoi",
+            "gloss": {
+              "en": "what do you want"
+            }
+          },
+          {
+            "phrase": "cosa vuole",
+            "gloss": {
+              "en": "what do you want"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vuoi qualcosa",
+            "gloss": {
+              "en": "do you want something"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa vuoi bere",
+            "gloss": {
+              "en": "what would you like to drink"
+            }
+          }
+        ]
+      }
+    ],
+    "state-need": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho bisogno di un medico",
+            "gloss": {
+              "en": "I need a doctor"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi serve",
+            "gloss": {
+              "en": "I need it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi manca",
+            "gloss": {
+              "en": "I'm short of it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho bisogno di più tempo",
+            "gloss": {
+              "en": "I need more time"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-what-someone-needs": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa ti serve",
+            "gloss": {
+              "en": "what do you need"
+            }
+          },
+          {
+            "phrase": "cosa le serve",
+            "gloss": {
+              "en": "what do you need"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti serve qualcosa",
+            "gloss": {
+              "en": "do you need anything"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa ti manca",
+            "gloss": {
+              "en": "what are you missing"
+            }
+          }
+        ]
+      }
+    ],
+    "state-where-going": [
+      {
+        "wordings": [
+          {
+            "phrase": "voglio andare a casa",
+            "gloss": {
+              "en": "I want to go home"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vado al negozio",
+            "gloss": {
+              "en": "I'm going to the shop"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "andiamo in piazza",
+            "gloss": {
+              "en": "we're going to the square"
+            }
+          }
+        ]
+      }
+    ],
+    "state-intention": [
+      {
+        "wordings": [
+          {
+            "phrase": "vado a mangiare",
+            "gloss": {
+              "en": "I'm going to eat"
+            }
+          },
+          {
+            "phrase": "vado a dormire",
+            "gloss": {
+              "en": "I'm going to sleep"
+            }
+          },
+          {
+            "phrase": "vado a lavorare",
+            "gloss": {
+              "en": "I'm going to work"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "penso di andare",
+            "gloss": {
+              "en": "I plan to go"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "devo lavorare",
+            "gloss": {
+              "en": "I have to work"
+            }
+          }
+        ]
+      }
+    ],
+    "accept-suggestion": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi sembra bene",
+            "gloss": {
+              "en": "sounds good to me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buona idea",
+            "gloss": {
+              "en": "good idea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "certo",
+            "gloss": {
+              "en": "of course"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "va bene",
+            "gloss": {
+              "en": "that's fine"
+            }
+          }
+        ]
+      }
+    ],
+    "decline-suggestion": [
+      {
+        "wordings": [
+          {
+            "phrase": "adesso no",
+            "gloss": {
+              "en": "not now"
+            }
+          },
+          {
+            "phrase": "oggi no",
+            "gloss": {
+              "en": "not today"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un altro giorno",
+            "gloss": {
+              "en": "another day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "meglio di no",
+            "gloss": {
+              "en": "better not"
+            }
+          }
+        ]
+      }
+    ],
+    "invite": [
+      {
+        "wordings": [
+          {
+            "phrase": "andiamo",
+            "gloss": {
+              "en": "let's go"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vuoi venire",
+            "gloss": {
+              "en": "do you want to come"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "offro io",
+            "gloss": {
+              "en": "it's my treat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "andiamo insieme",
+            "gloss": {
+              "en": "let's go together"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-permission": [
+      {
+        "wordings": [
+          {
+            "phrase": "posso passare",
+            "gloss": {
+              "en": "may I come through"
+            }
+          },
+          {
+            "phrase": "posso entrare",
+            "gloss": {
+              "en": "may I come in"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "si può",
+            "gloss": {
+              "en": "is it allowed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "permette",
+            "gloss": {
+              "en": "may I"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "permesso",
+            "gloss": {
+              "en": "excuse me, may I get by"
+            }
+          }
+        ]
+      }
+    ],
+    "grant-or-deny-permission": [
+      {
+        "wordings": [
+          {
+            "phrase": "avanti",
+            "gloss": {
+              "en": "go ahead"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "entra pure",
+            "gloss": {
+              "en": "come in"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non si può",
+            "gloss": {
+              "en": "you can't"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è vietato",
+            "gloss": {
+              "en": "it's not allowed"
+            }
+          }
+        ]
+      }
+    ],
+    "request": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi dai",
+            "gloss": {
+              "en": "will you give me"
+            }
+          },
+          {
+            "phrase": "mi puoi dare",
+            "gloss": {
+              "en": "can you give me"
+            }
+          },
+          {
+            "phrase": "mi può dare",
+            "gloss": {
+              "en": "could you give me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi serve questo",
+            "gloss": {
+              "en": "I need this"
+            }
+          }
+        ]
+      }
+    ],
+    "state-like": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi piace",
+            "gloss": {
+              "en": "I like it"
+            }
+          },
+          {
+            "phrase": "mi piacciono",
+            "gloss": {
+              "en": "I like them"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi piace tanto",
+            "gloss": {
+              "en": "I like it a lot"
+            }
+          }
+        ]
+      }
+    ],
+    "state-dislike": [
+      {
+        "wordings": [
+          {
+            "phrase": "non mi piace molto",
+            "gloss": {
+              "en": "I don't like it much"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi piace per niente",
+            "gloss": {
+              "en": "I don't like it at all"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-what-someone-likes": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa ti piace",
+            "gloss": {
+              "en": "what do you like"
+            }
+          },
+          {
+            "phrase": "cosa le piace",
+            "gloss": {
+              "en": "what do you like"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti piace",
+            "gloss": {
+              "en": "do you like it"
+            }
+          },
+          {
+            "phrase": "ti piacciono",
+            "gloss": {
+              "en": "do you like them"
+            }
+          }
+        ]
+      }
+    ],
+    "choose-between-options": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo",
+            "gloss": {
+              "en": "this one"
+            }
+          },
+          {
+            "phrase": "questa",
+            "gloss": {
+              "en": "this one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quello",
+            "gloss": {
+              "en": "that one"
+            }
+          },
+          {
+            "phrase": "quella",
+            "gloss": {
+              "en": "that one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'altro",
+            "gloss": {
+              "en": "the other one"
+            }
+          },
+          {
+            "phrase": "l'altra",
+            "gloss": {
+              "en": "the other one"
+            }
+          }
+        ]
+      }
+    ],
+    "state-preference": [
+      {
+        "wordings": [
+          {
+            "phrase": "preferisco questo",
+            "gloss": {
+              "en": "I prefer this one"
+            }
+          },
+          {
+            "phrase": "preferisco il tè",
+            "gloss": {
+              "en": "I prefer tea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi piace di più",
+            "gloss": {
+              "en": "I like it better"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è meglio",
+            "gloss": {
+              "en": "it's better"
+            }
+          }
+        ]
+      }
+    ],
+    "say-good-or-bad": [
+      {
+        "wordings": [
+          {
+            "phrase": "è buono",
+            "gloss": {
+              "en": "it's good"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è cattivo",
+            "gloss": {
+              "en": "it's bad"
+            }
+          },
+          {
+            "phrase": "è sbagliato",
+            "gloss": {
+              "en": "it's wrong"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che bello",
+            "gloss": {
+              "en": "how lovely"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è brutto",
+            "gloss": {
+              "en": "it's ugly"
+            }
+          }
+        ]
+      }
+    ],
+    "say-easy-or-hard": [
+      {
+        "wordings": [
+          {
+            "phrase": "è facile",
+            "gloss": {
+              "en": "it's easy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è difficile",
+            "gloss": {
+              "en": "it's hard"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "molto difficile",
+            "gloss": {
+              "en": "very hard"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è difficile",
+            "gloss": {
+              "en": "it's not hard"
+            }
+          }
+        ]
+      }
+    ],
+    "agree": [
+      {
+        "wordings": [
+          {
+            "phrase": "anch'io",
+            "gloss": {
+              "en": "me too"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hai ragione",
+            "gloss": {
+              "en": "you're right"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "esatto",
+            "gloss": {
+              "en": "exactly"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è vero",
+            "gloss": {
+              "en": "that's true"
+            }
+          }
+        ]
+      }
+    ],
+    "disagree": [
+      {
+        "wordings": [
+          {
+            "phrase": "non sono d'accordo",
+            "gloss": {
+              "en": "I don't agree"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "io no",
+            "gloss": {
+              "en": "not me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è vero",
+            "gloss": {
+              "en": "that's not true"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per niente",
+            "gloss": {
+              "en": "not at all"
+            }
+          }
+        ]
+      }
+    ],
+    "give-a-reason": [
+      {
+        "wordings": [
+          {
+            "phrase": "perché sì",
+            "gloss": {
+              "en": "just because"
+            }
+          },
+          {
+            "phrase": "perché no",
+            "gloss": {
+              "en": "because I don't want to"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "perché voglio",
+            "gloss": {
+              "en": "because I want to"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per questo",
+            "gloss": {
+              "en": "that's why"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è che",
+            "gloss": {
+              "en": "the thing is"
+            }
+          }
+        ]
+      }
+    ],
+    "express-surprise": [
+      {
+        "wordings": [
+          {
+            "phrase": "davvero",
+            "gloss": {
+              "en": "really"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sul serio",
+            "gloss": {
+              "en": "seriously"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non può essere",
+            "gloss": {
+              "en": "it can't be"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che sorpresa",
+            "gloss": {
+              "en": "what a surprise"
+            }
+          }
+        ]
+      }
+    ],
+    "express-uncertainty": [
+      {
+        "wordings": [
+          {
+            "phrase": "non lo so",
+            "gloss": {
+              "en": "I don't know"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "forse",
+            "gloss": {
+              "en": "maybe"
+            }
+          },
+          {
+            "phrase": "magari",
+            "gloss": {
+              "en": "perhaps"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "credo di sì",
+            "gloss": {
+              "en": "I think so"
+            }
+          },
+          {
+            "phrase": "credo di no",
+            "gloss": {
+              "en": "I don't think so"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non sono sicuro",
+            "gloss": {
+              "en": "I'm not sure"
+            }
+          },
+          {
+            "phrase": "non sono sicura",
+            "gloss": {
+              "en": "I'm not sure"
+            }
+          }
+        ]
+      }
+    ],
+    "acknowledge": [
+      {
+        "wordings": [
+          {
+            "phrase": "sì",
+            "gloss": {
+              "en": "yes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "certo che sì",
+            "gloss": {
+              "en": "of course, yes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "d'accordo",
+            "gloss": {
+              "en": "agreed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "capito",
+            "gloss": {
+              "en": "understood"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "perfetto",
+            "gloss": {
+              "en": "perfect"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ottimo",
+            "gloss": {
+              "en": "great"
+            }
+          }
+        ]
+      }
+    ],
+    "meta-language": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa è",
+            "gloss": {
+              "en": "what is it"
+            }
+          },
+          {
+            "phrase": "cosa significa",
+            "gloss": {
+              "en": "what does it mean"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non capisco",
+            "gloss": {
+              "en": "I don't understand"
+            }
+          },
+          {
+            "phrase": "non lo capisco",
+            "gloss": {
+              "en": "I don't understand it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "più lentamente",
+            "gloss": {
+              "en": "slower"
+            }
+          },
+          {
+            "phrase": "più lentamente per favore",
+            "gloss": {
+              "en": "slower, please"
+            }
+          },
+          {
+            "phrase": "parla più lentamente",
+            "gloss": {
+              "en": "speak more slowly"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come si dice",
+            "gloss": {
+              "en": "how do you say"
+            }
+          },
+          {
+            "phrase": "come si chiama",
+            "gloss": {
+              "en": "what is it called"
+            }
+          }
+        ]
+      }
+    ],
+    "say-not-understood": [
+      {
+        "wordings": [
+          {
+            "phrase": "non ho capito",
+            "gloss": {
+              "en": "I don't understand"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ti capisco",
+            "gloss": {
+              "en": "I don't understand you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non capisco niente",
+            "gloss": {
+              "en": "I don't understand anything"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non capisco questa parola",
+            "gloss": {
+              "en": "I don't understand that word"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-to-repeat": [
+      {
+        "wordings": [
+          {
+            "phrase": "un'altra volta",
+            "gloss": {
+              "en": "again"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "puoi ripetere",
+            "gloss": {
+              "en": "can you repeat that"
+            }
+          },
+          {
+            "phrase": "può ripetere",
+            "gloss": {
+              "en": "could you repeat that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ripeti",
+            "gloss": {
+              "en": "say it again"
+            }
+          },
+          {
+            "phrase": "ripeta",
+            "gloss": {
+              "en": "say it again"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come scusa",
+            "gloss": {
+              "en": "what was that"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-to-slow-down": [
+      {
+        "wordings": [
+          {
+            "phrase": "più lento",
+            "gloss": {
+              "en": "more slowly"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non così veloce",
+            "gloss": {
+              "en": "not so fast"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "puoi parlare più lentamente",
+            "gloss": {
+              "en": "can you speak more slowly"
+            }
+          },
+          {
+            "phrase": "può parlare più lentamente",
+            "gloss": {
+              "en": "could you speak more slowly"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-meaning": [
+      {
+        "wordings": [
+          {
+            "phrase": "cosa è questo",
+            "gloss": {
+              "en": "what is this"
+            }
+          },
+          {
+            "phrase": "cosa è quello",
+            "gloss": {
+              "en": "what is that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cosa vuol dire",
+            "gloss": {
+              "en": "what does that mean"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-how-to-say": [
+      {
+        "wordings": [
+          {
+            "phrase": "come si pronuncia",
+            "gloss": {
+              "en": "how do you pronounce it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qual è la parola",
+            "gloss": {
+              "en": "what's the word"
+            }
+          }
+        ]
+      }
+    ],
+    "repeat-to-confirm": [
+      {
+        "wordings": [
+          {
+            "phrase": "si dice così",
+            "gloss": {
+              "en": "that's how you say it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo dico bene",
+            "gloss": {
+              "en": "am I saying it right"
+            }
+          }
+        ]
+      }
+    ],
+    "describe-unknown-word": [
+      {
+        "wordings": [
+          {
+            "phrase": "è come",
+            "gloss": {
+              "en": "it's like"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "una cosa da mangiare",
+            "gloss": {
+              "en": "a thing for eating"
+            }
+          },
+          {
+            "phrase": "una cosa da bere",
+            "gloss": {
+              "en": "a thing for drinking"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non so la parola",
+            "gloss": {
+              "en": "I don't know the word"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è una cosa del genere",
+            "gloss": {
+              "en": "it's something like that"
+            }
+          }
+        ]
+      }
+    ],
+    "confirm-information": [
+      {
+        "wordings": [
+          {
+            "phrase": "è quello",
+            "gloss": {
+              "en": "that's it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è corretto",
+            "gloss": {
+              "en": "that's correct"
+            }
+          },
+          {
+            "phrase": "corretto",
+            "gloss": {
+              "en": "correct"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "proprio così",
+            "gloss": {
+              "en": "that's right"
+            }
+          }
+        ]
+      }
+    ],
+    "correct-misunderstanding": [
+      {
+        "wordings": [
+          {
+            "phrase": "non è quello",
+            "gloss": {
+              "en": "that's not it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "voglio dire",
+            "gloss": {
+              "en": "I mean"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ho detto questo",
+            "gloss": {
+              "en": "I didn't say that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un'altra cosa",
+            "gloss": {
+              "en": "it's something else"
             }
           }
         ]

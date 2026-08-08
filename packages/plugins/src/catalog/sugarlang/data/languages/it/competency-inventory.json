@@ -73,6 +73,24 @@
       "band": "A1",
       "ordinal": 12,
       "displayName": "The Body and Feeling Unwell"
+    },
+    {
+      "lessonId": "wants-and-needs",
+      "band": "A1",
+      "ordinal": 13,
+      "displayName": "Simple Wants, Needs and Intentions"
+    },
+    {
+      "lessonId": "likes-and-dislikes",
+      "band": "A1",
+      "ordinal": 14,
+      "displayName": "Likes, Dislikes and Simple Reactions"
+    },
+    {
+      "lessonId": "asking-for-help-understanding",
+      "band": "A1",
+      "ordinal": 15,
+      "displayName": "Asking for Help Understanding"
     }
   ],
   "competencies": [
@@ -4618,33 +4636,25 @@
       "exponents": {
         "it": [
           {
-            "exponentId": "e_buono",
-            "normalizedForm": "e_buono",
+            "exponentId": "e_buonissimo",
+            "normalizedForm": "e_buonissimo",
             "surfaceForms": [
-              "è buono",
-              "e buono",
-              "è molto buono",
-              "e molto buono",
+              "è buonissimo",
+              "e buonissimo",
               "che buono"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
               "essere",
-              "buono",
-              "molto",
-              "che"
+              "buonissimo",
+              "che",
+              "buono"
             ],
             "glossBySurface": {
-              "è buono": {
-                "en": "it's tasty"
-              },
-              "e buono": {
-                "en": "it's tasty"
-              },
-              "è molto buono": {
+              "è buonissimo": {
                 "en": "it's really tasty"
               },
-              "e molto buono": {
+              "e buonissimo": {
                 "en": "it's really tasty"
               },
               "che buono": {
@@ -9314,7 +9324,7 @@
             "constituentLemmas": [
               "da",
               "questo",
-              "partire",
+              "parte",
               "venire"
             ],
             "glossBySurface": {
@@ -9349,22 +9359,17 @@
             }
           },
           {
-            "exponentId": "prego",
-            "normalizedForm": "prego",
+            "exponentId": "si_accomodi",
+            "normalizedForm": "si_accomodi",
             "surfaceForms": [
-              "prego",
-              "prego, entri"
+              "si accomodi"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
-              "prego",
-              "entrare"
+              "accomodare"
             ],
             "glossBySurface": {
-              "prego": {
-                "en": "come in"
-              },
-              "prego, entri": {
+              "si accomodi": {
                 "en": "come in, please"
               }
             }
@@ -12602,6 +12607,2783 @@
             "glossBySurface": {
               "ho caldo": {
                 "en": "I'm hot"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "accept-suggestion",
+      "lessonId": "wants-and-needs",
+      "displayName": "Accept a suggestion",
+      "cefrDescriptor": "Can accept a simple suggestion or invitation.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "mi_sembra_bene",
+            "normalizedForm": "mi_sembra_bene",
+            "surfaceForms": [
+              "mi sembra bene"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sembrare",
+              "bene"
+            ],
+            "glossBySurface": {
+              "mi sembra bene": {
+                "en": "sounds good to me"
+              }
+            }
+          },
+          {
+            "exponentId": "buona_idea",
+            "normalizedForm": "buona_idea",
+            "surfaceForms": [
+              "buona idea"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "buono",
+              "idea"
+            ],
+            "glossBySurface": {
+              "buona idea": {
+                "en": "good idea"
+              }
+            }
+          },
+          {
+            "exponentId": "certo",
+            "normalizedForm": "certo",
+            "surfaceForms": [
+              "certo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "certo"
+            ],
+            "glossBySurface": {
+              "certo": {
+                "en": "of course"
+              }
+            }
+          },
+          {
+            "exponentId": "va_bene",
+            "normalizedForm": "va_bene",
+            "surfaceForms": [
+              "va bene"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "bene"
+            ],
+            "glossBySurface": {
+              "va bene": {
+                "en": "that's fine"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-permission",
+      "lessonId": "wants-and-needs",
+      "displayName": "Ask permission",
+      "cefrDescriptor": "Can ask for permission.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "posso_passare",
+            "normalizedForm": "posso_passare",
+            "surfaceForms": [
+              "posso passare",
+              "posso entrare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "potere",
+              "passare",
+              "entrare"
+            ],
+            "glossBySurface": {
+              "posso passare": {
+                "en": "may I come through"
+              },
+              "posso entrare": {
+                "en": "may I come in"
+              }
+            }
+          },
+          {
+            "exponentId": "si_puo",
+            "normalizedForm": "si_puo",
+            "surfaceForms": [
+              "si può",
+              "si puo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "potere"
+            ],
+            "glossBySurface": {
+              "si può": {
+                "en": "is it allowed"
+              },
+              "si puo": {
+                "en": "is it allowed"
+              }
+            }
+          },
+          {
+            "exponentId": "permette",
+            "normalizedForm": "permette",
+            "surfaceForms": [
+              "permette"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "permettere"
+            ],
+            "glossBySurface": {
+              "permette": {
+                "en": "may I"
+              }
+            }
+          },
+          {
+            "exponentId": "permesso",
+            "normalizedForm": "permesso",
+            "surfaceForms": [
+              "permesso"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "permesso"
+            ],
+            "glossBySurface": {
+              "permesso": {
+                "en": "excuse me, may I get by"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-what-someone-needs",
+      "lessonId": "wants-and-needs",
+      "displayName": "Ask what someone needs",
+      "cefrDescriptor": "Can ask what someone needs.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "cosa_ti_serve",
+            "normalizedForm": "cosa_ti_serve",
+            "surfaceForms": [
+              "cosa ti serve",
+              "cosa le serve"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "servire",
+              "le"
+            ],
+            "glossBySurface": {
+              "cosa ti serve": {
+                "en": "what do you need"
+              },
+              "cosa le serve": {
+                "en": "what do you need"
+              }
+            }
+          },
+          {
+            "exponentId": "ti_serve_qualcosa",
+            "normalizedForm": "ti_serve_qualcosa",
+            "surfaceForms": [
+              "ti serve qualcosa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "servire",
+              "qualcosa"
+            ],
+            "glossBySurface": {
+              "ti serve qualcosa": {
+                "en": "do you need anything"
+              }
+            }
+          },
+          {
+            "exponentId": "cosa_ti_manca",
+            "normalizedForm": "cosa_ti_manca",
+            "surfaceForms": [
+              "cosa ti manca"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "mancare"
+            ],
+            "glossBySurface": {
+              "cosa ti manca": {
+                "en": "what are you missing"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-what-someone-wants",
+      "lessonId": "wants-and-needs",
+      "displayName": "Ask what someone wants",
+      "cefrDescriptor": "Can ask what someone wants.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "cosa_vuoi",
+            "normalizedForm": "cosa_vuoi",
+            "surfaceForms": [
+              "cosa vuoi",
+              "cosa vuole"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "volere"
+            ],
+            "glossBySurface": {
+              "cosa vuoi": {
+                "en": "what do you want"
+              },
+              "cosa vuole": {
+                "en": "what do you want"
+              }
+            }
+          },
+          {
+            "exponentId": "vuoi_qualcosa",
+            "normalizedForm": "vuoi_qualcosa",
+            "surfaceForms": [
+              "vuoi qualcosa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "qualcosa"
+            ],
+            "glossBySurface": {
+              "vuoi qualcosa": {
+                "en": "do you want something"
+              }
+            }
+          },
+          {
+            "exponentId": "cosa_vuoi_bere",
+            "normalizedForm": "cosa_vuoi_bere",
+            "surfaceForms": [
+              "cosa vuoi bere"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "volere",
+              "bere"
+            ],
+            "glossBySurface": {
+              "cosa vuoi bere": {
+                "en": "what would you like to drink"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "decline-suggestion",
+      "lessonId": "wants-and-needs",
+      "displayName": "Decline a suggestion",
+      "cefrDescriptor": "Can decline a simple suggestion or invitation.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "adesso_no",
+            "normalizedForm": "adesso_no",
+            "surfaceForms": [
+              "adesso no",
+              "oggi no"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "adesso",
+              "no",
+              "oggi"
+            ],
+            "glossBySurface": {
+              "adesso no": {
+                "en": "not now"
+              },
+              "oggi no": {
+                "en": "not today"
+              }
+            }
+          },
+          {
+            "exponentId": "un_altro_giorno",
+            "normalizedForm": "un_altro_giorno",
+            "surfaceForms": [
+              "un altro giorno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "altro",
+              "giorno"
+            ],
+            "glossBySurface": {
+              "un altro giorno": {
+                "en": "another day"
+              }
+            }
+          },
+          {
+            "exponentId": "meglio_di_no",
+            "normalizedForm": "meglio_di_no",
+            "surfaceForms": [
+              "meglio di no"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "meglio",
+              "di",
+              "no"
+            ],
+            "glossBySurface": {
+              "meglio di no": {
+                "en": "better not"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "grant-or-deny-permission",
+      "lessonId": "wants-and-needs",
+      "displayName": "Grant or refuse permission",
+      "cefrDescriptor": "Can grant or deny simple permission.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "avanti",
+            "normalizedForm": "avanti",
+            "surfaceForms": [
+              "avanti"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avanti"
+            ],
+            "glossBySurface": {
+              "avanti": {
+                "en": "go ahead"
+              }
+            }
+          },
+          {
+            "exponentId": "entra_pure",
+            "normalizedForm": "entra_pure",
+            "surfaceForms": [
+              "entra pure"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "entrare",
+              "pure"
+            ],
+            "glossBySurface": {
+              "entra pure": {
+                "en": "come in"
+              }
+            }
+          },
+          {
+            "exponentId": "non_si_puo",
+            "normalizedForm": "non_si_puo",
+            "surfaceForms": [
+              "non si può",
+              "non si puo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "potere"
+            ],
+            "glossBySurface": {
+              "non si può": {
+                "en": "you can't"
+              },
+              "non si puo": {
+                "en": "you can't"
+              }
+            }
+          },
+          {
+            "exponentId": "e_vietato",
+            "normalizedForm": "e_vietato",
+            "surfaceForms": [
+              "è vietato",
+              "e vietato"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "vietato"
+            ],
+            "glossBySurface": {
+              "è vietato": {
+                "en": "it's not allowed"
+              },
+              "e vietato": {
+                "en": "it's not allowed"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "invite",
+      "lessonId": "wants-and-needs",
+      "displayName": "Invite someone",
+      "cefrDescriptor": "Can invite someone to do something.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "andiamo",
+            "normalizedForm": "andiamo",
+            "surfaceForms": [
+              "andiamo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare"
+            ],
+            "glossBySurface": {
+              "andiamo": {
+                "en": "let's go"
+              }
+            }
+          },
+          {
+            "exponentId": "vuoi_venire",
+            "normalizedForm": "vuoi_venire",
+            "surfaceForms": [
+              "vuoi venire"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "venire"
+            ],
+            "glossBySurface": {
+              "vuoi venire": {
+                "en": "do you want to come"
+              }
+            }
+          },
+          {
+            "exponentId": "offro_io",
+            "normalizedForm": "offro_io",
+            "surfaceForms": [
+              "offro io"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "offrire",
+              "io"
+            ],
+            "glossBySurface": {
+              "offro io": {
+                "en": "it's my treat"
+              }
+            }
+          },
+          {
+            "exponentId": "andiamo_insieme",
+            "normalizedForm": "andiamo_insieme",
+            "surfaceForms": [
+              "andiamo insieme"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "insieme"
+            ],
+            "glossBySurface": {
+              "andiamo insieme": {
+                "en": "let's go together"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "request",
+      "lessonId": "wants-and-needs",
+      "displayName": "Make a request",
+      "cefrDescriptor": "Can make a simple request or ask for something.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "mi_dai",
+            "normalizedForm": "mi_dai",
+            "surfaceForms": [
+              "mi dai",
+              "mi puoi dare",
+              "mi può dare",
+              "mi puo dare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dare",
+              "potere"
+            ],
+            "glossBySurface": {
+              "mi dai": {
+                "en": "will you give me"
+              },
+              "mi puoi dare": {
+                "en": "can you give me"
+              },
+              "mi può dare": {
+                "en": "could you give me"
+              },
+              "mi puo dare": {
+                "en": "could you give me"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_serve_questo",
+            "normalizedForm": "mi_serve_questo",
+            "surfaceForms": [
+              "mi serve questo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "servire",
+              "questo"
+            ],
+            "glossBySurface": {
+              "mi serve questo": {
+                "en": "I need this"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-intention",
+      "lessonId": "wants-and-needs",
+      "displayName": "Say what they are going to do",
+      "cefrDescriptor": "Can say what they are going to do.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "vado_a_mangiare",
+            "normalizedForm": "vado_a_mangiare",
+            "surfaceForms": [
+              "vado a mangiare",
+              "vado a dormire",
+              "vado a lavorare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "a",
+              "mangiare",
+              "dormire",
+              "lavorare"
+            ],
+            "glossBySurface": {
+              "vado a mangiare": {
+                "en": "I'm going to eat"
+              },
+              "vado a dormire": {
+                "en": "I'm going to sleep"
+              },
+              "vado a lavorare": {
+                "en": "I'm going to work"
+              }
+            }
+          },
+          {
+            "exponentId": "penso_di_andare",
+            "normalizedForm": "penso_di_andare",
+            "surfaceForms": [
+              "penso di andare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "pensare",
+              "di",
+              "andare"
+            ],
+            "glossBySurface": {
+              "penso di andare": {
+                "en": "I plan to go"
+              }
+            }
+          },
+          {
+            "exponentId": "devo_lavorare",
+            "normalizedForm": "devo_lavorare",
+            "surfaceForms": [
+              "devo lavorare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dovere",
+              "lavorare"
+            ],
+            "glossBySurface": {
+              "devo lavorare": {
+                "en": "I have to work"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-need",
+      "lessonId": "wants-and-needs",
+      "displayName": "Say what they need",
+      "cefrDescriptor": "Can say what they need.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "ho_bisogno_di_un_medico",
+            "normalizedForm": "ho_bisogno_di_un_medico",
+            "surfaceForms": [
+              "ho bisogno di un medico"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "bisogno",
+              "di",
+              "medico"
+            ],
+            "glossBySurface": {
+              "ho bisogno di un medico": {
+                "en": "I need a doctor"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_serve",
+            "normalizedForm": "mi_serve",
+            "surfaceForms": [
+              "mi serve"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "servire"
+            ],
+            "glossBySurface": {
+              "mi serve": {
+                "en": "I need it"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_manca",
+            "normalizedForm": "mi_manca",
+            "surfaceForms": [
+              "mi manca"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mancare"
+            ],
+            "glossBySurface": {
+              "mi manca": {
+                "en": "I'm short of it"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_bisogno_di_piu_tempo",
+            "normalizedForm": "ho_bisogno_di_piu_tempo",
+            "surfaceForms": [
+              "ho bisogno di più tempo",
+              "ho bisogno di piu tempo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "bisogno",
+              "di",
+              "più",
+              "tempo"
+            ],
+            "glossBySurface": {
+              "ho bisogno di più tempo": {
+                "en": "I need more time"
+              },
+              "ho bisogno di piu tempo": {
+                "en": "I need more time"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-want",
+      "lessonId": "wants-and-needs",
+      "displayName": "Say what they want",
+      "cefrDescriptor": "Can say what they want.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "voglio_dellacqua",
+            "normalizedForm": "voglio_dellacqua",
+            "surfaceForms": [
+              "voglio dell'acqua"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "di",
+              "acqua"
+            ],
+            "glossBySurface": {
+              "voglio dell'acqua": {
+                "en": "I want water"
+              }
+            }
+          },
+          {
+            "exponentId": "voglio_questo",
+            "normalizedForm": "voglio_questo",
+            "surfaceForms": [
+              "voglio questo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "questo"
+            ],
+            "glossBySurface": {
+              "voglio questo": {
+                "en": "I want this"
+              }
+            }
+          },
+          {
+            "exponentId": "non_voglio",
+            "normalizedForm": "non_voglio",
+            "surfaceForms": [
+              "non voglio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "volere"
+            ],
+            "glossBySurface": {
+              "non voglio": {
+                "en": "I don't want to"
+              }
+            }
+          },
+          {
+            "exponentId": "voglio_di_piu",
+            "normalizedForm": "voglio_di_piu",
+            "surfaceForms": [
+              "voglio di più",
+              "voglio di piu"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "di",
+              "più"
+            ],
+            "glossBySurface": {
+              "voglio di più": {
+                "en": "I want more"
+              },
+              "voglio di piu": {
+                "en": "I want more"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-where-going",
+      "lessonId": "wants-and-needs",
+      "displayName": "Say where they want to go",
+      "cefrDescriptor": "Can say where they want to go.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "voglio_andare_a_casa",
+            "normalizedForm": "voglio_andare_a_casa",
+            "surfaceForms": [
+              "voglio andare a casa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "andare",
+              "a",
+              "casa"
+            ],
+            "glossBySurface": {
+              "voglio andare a casa": {
+                "en": "I want to go home"
+              }
+            }
+          },
+          {
+            "exponentId": "vado_al_negozio",
+            "normalizedForm": "vado_al_negozio",
+            "surfaceForms": [
+              "vado al negozio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "a",
+              "negozio"
+            ],
+            "glossBySurface": {
+              "vado al negozio": {
+                "en": "I'm going to the shop"
+              }
+            }
+          },
+          {
+            "exponentId": "andiamo_in_piazza",
+            "normalizedForm": "andiamo_in_piazza",
+            "surfaceForms": [
+              "andiamo in piazza"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "in",
+              "piazza"
+            ],
+            "glossBySurface": {
+              "andiamo in piazza": {
+                "en": "we're going to the square"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "acknowledge",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Acknowledge",
+      "cefrDescriptor": "Can signal understanding or agreement with simple expressions.",
+      "band": "A1",
+      "interpretLexiconCategory": "acknowledgement",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "si",
+            "normalizedForm": "si",
+            "surfaceForms": [
+              "sì",
+              "si"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "sì"
+            ],
+            "glossBySurface": {
+              "sì": {
+                "en": "yes"
+              },
+              "si": {
+                "en": "yes"
+              }
+            }
+          },
+          {
+            "exponentId": "certo_che_si",
+            "normalizedForm": "certo_che_si",
+            "surfaceForms": [
+              "certo che sì",
+              "certo che si"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "certo",
+              "che",
+              "sì"
+            ],
+            "glossBySurface": {
+              "certo che sì": {
+                "en": "of course, yes"
+              },
+              "certo che si": {
+                "en": "of course, yes"
+              }
+            }
+          },
+          {
+            "exponentId": "daccordo",
+            "normalizedForm": "daccordo",
+            "surfaceForms": [
+              "d'accordo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "di",
+              "accordo"
+            ],
+            "glossBySurface": {
+              "d'accordo": {
+                "en": "agreed"
+              }
+            }
+          },
+          {
+            "exponentId": "capito",
+            "normalizedForm": "capito",
+            "surfaceForms": [
+              "capito"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "capire"
+            ],
+            "glossBySurface": {
+              "capito": {
+                "en": "understood"
+              }
+            }
+          },
+          {
+            "exponentId": "perfetto",
+            "normalizedForm": "perfetto",
+            "surfaceForms": [
+              "perfetto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "perfetto"
+            ],
+            "glossBySurface": {
+              "perfetto": {
+                "en": "perfect"
+              }
+            }
+          },
+          {
+            "exponentId": "ottimo",
+            "normalizedForm": "ottimo",
+            "surfaceForms": [
+              "ottimo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ottimo"
+            ],
+            "glossBySurface": {
+              "ottimo": {
+                "en": "great"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "agree",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Agree",
+      "cefrDescriptor": "Can agree simply.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "anchio",
+            "normalizedForm": "anchio",
+            "surfaceForms": [
+              "anch'io"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "anche",
+              "io"
+            ],
+            "glossBySurface": {
+              "anch'io": {
+                "en": "me too"
+              }
+            }
+          },
+          {
+            "exponentId": "hai_ragione",
+            "normalizedForm": "hai_ragione",
+            "surfaceForms": [
+              "hai ragione"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "ragione"
+            ],
+            "glossBySurface": {
+              "hai ragione": {
+                "en": "you're right"
+              }
+            }
+          },
+          {
+            "exponentId": "esatto",
+            "normalizedForm": "esatto",
+            "surfaceForms": [
+              "esatto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "esatto"
+            ],
+            "glossBySurface": {
+              "esatto": {
+                "en": "exactly"
+              }
+            }
+          },
+          {
+            "exponentId": "e_vero",
+            "normalizedForm": "e_vero",
+            "surfaceForms": [
+              "è vero",
+              "e vero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "vero"
+            ],
+            "glossBySurface": {
+              "è vero": {
+                "en": "that's true"
+              },
+              "e vero": {
+                "en": "that's true"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-what-someone-likes",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Ask what someone likes",
+      "cefrDescriptor": "Can ask what someone likes.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "cosa_ti_piace",
+            "normalizedForm": "cosa_ti_piace",
+            "surfaceForms": [
+              "cosa ti piace",
+              "cosa le piace"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "piacere",
+              "le"
+            ],
+            "glossBySurface": {
+              "cosa ti piace": {
+                "en": "what do you like"
+              },
+              "cosa le piace": {
+                "en": "what do you like"
+              }
+            }
+          },
+          {
+            "exponentId": "ti_piace",
+            "normalizedForm": "ti_piace",
+            "surfaceForms": [
+              "ti piace",
+              "ti piacciono"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piacere"
+            ],
+            "glossBySurface": {
+              "ti piace": {
+                "en": "do you like it"
+              },
+              "ti piacciono": {
+                "en": "do you like them"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "choose-between-options",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Choose between options",
+      "cefrDescriptor": "Can choose between two options.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "questo",
+            "normalizedForm": "questo",
+            "surfaceForms": [
+              "questo",
+              "questa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "questo"
+            ],
+            "glossBySurface": {
+              "questo": {
+                "en": "this one"
+              },
+              "questa": {
+                "en": "this one"
+              }
+            }
+          },
+          {
+            "exponentId": "quello",
+            "normalizedForm": "quello",
+            "surfaceForms": [
+              "quello",
+              "quella"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quello"
+            ],
+            "glossBySurface": {
+              "quello": {
+                "en": "that one"
+              },
+              "quella": {
+                "en": "that one"
+              }
+            }
+          },
+          {
+            "exponentId": "laltro",
+            "normalizedForm": "laltro",
+            "surfaceForms": [
+              "l'altro",
+              "l'altra"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "altro"
+            ],
+            "glossBySurface": {
+              "l'altro": {
+                "en": "the other one"
+              },
+              "l'altra": {
+                "en": "the other one"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "disagree",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Disagree",
+      "cefrDescriptor": "Can disagree simply.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "non_sono_daccordo",
+            "normalizedForm": "non_sono_daccordo",
+            "surfaceForms": [
+              "non sono d'accordo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "essere",
+              "di",
+              "accordo"
+            ],
+            "glossBySurface": {
+              "non sono d'accordo": {
+                "en": "I don't agree"
+              }
+            }
+          },
+          {
+            "exponentId": "io_no",
+            "normalizedForm": "io_no",
+            "surfaceForms": [
+              "io no"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "io",
+              "no"
+            ],
+            "glossBySurface": {
+              "io no": {
+                "en": "not me"
+              }
+            }
+          },
+          {
+            "exponentId": "non_e_vero",
+            "normalizedForm": "non_e_vero",
+            "surfaceForms": [
+              "non è vero",
+              "non e vero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "essere",
+              "vero"
+            ],
+            "glossBySurface": {
+              "non è vero": {
+                "en": "that's not true"
+              },
+              "non e vero": {
+                "en": "that's not true"
+              }
+            }
+          },
+          {
+            "exponentId": "per_niente",
+            "normalizedForm": "per_niente",
+            "surfaceForms": [
+              "per niente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "per",
+              "niente"
+            ],
+            "glossBySurface": {
+              "per niente": {
+                "en": "not at all"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "express-surprise",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Express surprise",
+      "cefrDescriptor": "Can express surprise.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "davvero",
+            "normalizedForm": "davvero",
+            "surfaceForms": [
+              "davvero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "davvero"
+            ],
+            "glossBySurface": {
+              "davvero": {
+                "en": "really"
+              }
+            }
+          },
+          {
+            "exponentId": "sul_serio",
+            "normalizedForm": "sul_serio",
+            "surfaceForms": [
+              "sul serio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "su",
+              "serio"
+            ],
+            "glossBySurface": {
+              "sul serio": {
+                "en": "seriously"
+              }
+            }
+          },
+          {
+            "exponentId": "non_puo_essere",
+            "normalizedForm": "non_puo_essere",
+            "surfaceForms": [
+              "non può essere",
+              "non puo essere"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "potere",
+              "essere"
+            ],
+            "glossBySurface": {
+              "non può essere": {
+                "en": "it can't be"
+              },
+              "non puo essere": {
+                "en": "it can't be"
+              }
+            }
+          },
+          {
+            "exponentId": "che_sorpresa",
+            "normalizedForm": "che_sorpresa",
+            "surfaceForms": [
+              "che sorpresa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "sorpresa"
+            ],
+            "glossBySurface": {
+              "che sorpresa": {
+                "en": "what a surprise"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "express-uncertainty",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Express uncertainty",
+      "cefrDescriptor": "Can express uncertainty.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "non_lo_so",
+            "normalizedForm": "non_lo_so",
+            "surfaceForms": [
+              "non lo so"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "sapere"
+            ],
+            "glossBySurface": {
+              "non lo so": {
+                "en": "I don't know"
+              }
+            }
+          },
+          {
+            "exponentId": "forse",
+            "normalizedForm": "forse",
+            "surfaceForms": [
+              "forse",
+              "magari"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "forse",
+              "magari"
+            ],
+            "glossBySurface": {
+              "forse": {
+                "en": "maybe"
+              },
+              "magari": {
+                "en": "perhaps"
+              }
+            }
+          },
+          {
+            "exponentId": "credo_di_si",
+            "normalizedForm": "credo_di_si",
+            "surfaceForms": [
+              "credo di sì",
+              "credo di si",
+              "credo di no"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "credere",
+              "di",
+              "sì",
+              "no"
+            ],
+            "glossBySurface": {
+              "credo di sì": {
+                "en": "I think so"
+              },
+              "credo di si": {
+                "en": "I think so"
+              },
+              "credo di no": {
+                "en": "I don't think so"
+              }
+            }
+          },
+          {
+            "exponentId": "non_sono_sicuro",
+            "normalizedForm": "non_sono_sicuro",
+            "surfaceForms": [
+              "non sono sicuro",
+              "non sono sicura"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "essere",
+              "sicuro"
+            ],
+            "glossBySurface": {
+              "non sono sicuro": {
+                "en": "I'm not sure"
+              },
+              "non sono sicura": {
+                "en": "I'm not sure"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "give-a-reason",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Give a reason",
+      "cefrDescriptor": "Can give a very basic reason.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "perche_si",
+            "normalizedForm": "perche_si",
+            "surfaceForms": [
+              "perché sì",
+              "perché si",
+              "perche sì",
+              "perche si",
+              "perché no",
+              "perche no"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "perché",
+              "sì",
+              "no"
+            ],
+            "glossBySurface": {
+              "perché sì": {
+                "en": "just because"
+              },
+              "perché si": {
+                "en": "just because"
+              },
+              "perche sì": {
+                "en": "just because"
+              },
+              "perche si": {
+                "en": "just because"
+              },
+              "perché no": {
+                "en": "because I don't want to"
+              },
+              "perche no": {
+                "en": "because I don't want to"
+              }
+            }
+          },
+          {
+            "exponentId": "perche_voglio",
+            "normalizedForm": "perche_voglio",
+            "surfaceForms": [
+              "perché voglio",
+              "perche voglio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "perché",
+              "volere"
+            ],
+            "glossBySurface": {
+              "perché voglio": {
+                "en": "because I want to"
+              },
+              "perche voglio": {
+                "en": "because I want to"
+              }
+            }
+          },
+          {
+            "exponentId": "per_questo",
+            "normalizedForm": "per_questo",
+            "surfaceForms": [
+              "per questo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "per",
+              "questo"
+            ],
+            "glossBySurface": {
+              "per questo": {
+                "en": "that's why"
+              }
+            }
+          },
+          {
+            "exponentId": "e_che",
+            "normalizedForm": "e_che",
+            "surfaceForms": [
+              "è che",
+              "e che"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "che"
+            ],
+            "glossBySurface": {
+              "è che": {
+                "en": "the thing is"
+              },
+              "e che": {
+                "en": "the thing is"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-easy-or-hard",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Say something is easy or hard",
+      "cefrDescriptor": "Can describe something as easy or difficult.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_facile",
+            "normalizedForm": "e_facile",
+            "surfaceForms": [
+              "è facile",
+              "e facile"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "facile"
+            ],
+            "glossBySurface": {
+              "è facile": {
+                "en": "it's easy"
+              },
+              "e facile": {
+                "en": "it's easy"
+              }
+            }
+          },
+          {
+            "exponentId": "e_difficile",
+            "normalizedForm": "e_difficile",
+            "surfaceForms": [
+              "è difficile",
+              "e difficile"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "difficile"
+            ],
+            "glossBySurface": {
+              "è difficile": {
+                "en": "it's hard"
+              },
+              "e difficile": {
+                "en": "it's hard"
+              }
+            }
+          },
+          {
+            "exponentId": "molto_difficile",
+            "normalizedForm": "molto_difficile",
+            "surfaceForms": [
+              "molto difficile"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "molto",
+              "difficile"
+            ],
+            "glossBySurface": {
+              "molto difficile": {
+                "en": "very hard"
+              }
+            }
+          },
+          {
+            "exponentId": "non_e_difficile",
+            "normalizedForm": "non_e_difficile",
+            "surfaceForms": [
+              "non è difficile",
+              "non e difficile"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "essere",
+              "difficile"
+            ],
+            "glossBySurface": {
+              "non è difficile": {
+                "en": "it's not hard"
+              },
+              "non e difficile": {
+                "en": "it's not hard"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-good-or-bad",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Say something is good or bad",
+      "cefrDescriptor": "Can describe something as good or bad.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_buono",
+            "normalizedForm": "e_buono",
+            "surfaceForms": [
+              "è buono",
+              "e buono"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "buono"
+            ],
+            "glossBySurface": {
+              "è buono": {
+                "en": "it's good"
+              },
+              "e buono": {
+                "en": "it's good"
+              }
+            }
+          },
+          {
+            "exponentId": "e_cattivo",
+            "normalizedForm": "e_cattivo",
+            "surfaceForms": [
+              "è cattivo",
+              "e cattivo",
+              "è sbagliato",
+              "e sbagliato"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "cattivo",
+              "sbagliato"
+            ],
+            "glossBySurface": {
+              "è cattivo": {
+                "en": "it's bad"
+              },
+              "e cattivo": {
+                "en": "it's bad"
+              },
+              "è sbagliato": {
+                "en": "it's wrong"
+              },
+              "e sbagliato": {
+                "en": "it's wrong"
+              }
+            }
+          },
+          {
+            "exponentId": "che_bello",
+            "normalizedForm": "che_bello",
+            "surfaceForms": [
+              "che bello"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "bello"
+            ],
+            "glossBySurface": {
+              "che bello": {
+                "en": "how lovely"
+              }
+            }
+          },
+          {
+            "exponentId": "e_brutto",
+            "normalizedForm": "e_brutto",
+            "surfaceForms": [
+              "è brutto",
+              "e brutto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "brutto"
+            ],
+            "glossBySurface": {
+              "è brutto": {
+                "en": "it's ugly"
+              },
+              "e brutto": {
+                "en": "it's ugly"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-dislike",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Say what they dislike",
+      "cefrDescriptor": "Can say that they do not like something.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "non_mi_piace_molto",
+            "normalizedForm": "non_mi_piace_molto",
+            "surfaceForms": [
+              "non mi piace molto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "piacere",
+              "molto"
+            ],
+            "glossBySurface": {
+              "non mi piace molto": {
+                "en": "I don't like it much"
+              }
+            }
+          },
+          {
+            "exponentId": "non_mi_piace_per_niente",
+            "normalizedForm": "non_mi_piace_per_niente",
+            "surfaceForms": [
+              "non mi piace per niente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "piacere",
+              "per",
+              "niente"
+            ],
+            "glossBySurface": {
+              "non mi piace per niente": {
+                "en": "I don't like it at all"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-like",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Say what they like",
+      "cefrDescriptor": "Can say that they like something.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "mi_piace",
+            "normalizedForm": "mi_piace",
+            "surfaceForms": [
+              "mi piace",
+              "mi piacciono"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piacere"
+            ],
+            "glossBySurface": {
+              "mi piace": {
+                "en": "I like it"
+              },
+              "mi piacciono": {
+                "en": "I like them"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_piace_tanto",
+            "normalizedForm": "mi_piace_tanto",
+            "surfaceForms": [
+              "mi piace tanto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piacere",
+              "tanto"
+            ],
+            "glossBySurface": {
+              "mi piace tanto": {
+                "en": "I like it a lot"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-preference",
+      "lessonId": "likes-and-dislikes",
+      "displayName": "Say which they prefer",
+      "cefrDescriptor": "Can express a simple preference.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "preferisco_questo",
+            "normalizedForm": "preferisco_questo",
+            "surfaceForms": [
+              "preferisco questo",
+              "preferisco il tè",
+              "preferisco il te"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "preferire",
+              "questo",
+              "tè"
+            ],
+            "glossBySurface": {
+              "preferisco questo": {
+                "en": "I prefer this one"
+              },
+              "preferisco il tè": {
+                "en": "I prefer tea"
+              },
+              "preferisco il te": {
+                "en": "I prefer tea"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_piace_di_piu",
+            "normalizedForm": "mi_piace_di_piu",
+            "surfaceForms": [
+              "mi piace di più",
+              "mi piace di piu"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piacere",
+              "di",
+              "più"
+            ],
+            "glossBySurface": {
+              "mi piace di più": {
+                "en": "I like it better"
+              },
+              "mi piace di piu": {
+                "en": "I like it better"
+              }
+            }
+          },
+          {
+            "exponentId": "e_meglio",
+            "normalizedForm": "e_meglio",
+            "surfaceForms": [
+              "è meglio",
+              "e meglio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "meglio"
+            ],
+            "glossBySurface": {
+              "è meglio": {
+                "en": "it's better"
+              },
+              "e meglio": {
+                "en": "it's better"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-how-to-say",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Ask how to say something",
+      "cefrDescriptor": "Can ask how to say something.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "come_si_pronuncia",
+            "normalizedForm": "come_si_pronuncia",
+            "surfaceForms": [
+              "come si pronuncia"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "pronuncia"
+            ],
+            "glossBySurface": {
+              "come si pronuncia": {
+                "en": "how do you pronounce it"
+              }
+            }
+          },
+          {
+            "exponentId": "qual_e_la_parola",
+            "normalizedForm": "qual_e_la_parola",
+            "surfaceForms": [
+              "qual è la parola",
+              "qual e la parola"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quale",
+              "essere",
+              "parola"
+            ],
+            "glossBySurface": {
+              "qual è la parola": {
+                "en": "what's the word"
+              },
+              "qual e la parola": {
+                "en": "what's the word"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-meaning",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Ask what a word means",
+      "cefrDescriptor": "Can ask what something is called or what it means.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "cosa_e_questo",
+            "normalizedForm": "cosa_e_questo",
+            "surfaceForms": [
+              "cosa è questo",
+              "cosa e questo",
+              "cosa è quello",
+              "cosa e quello"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "essere",
+              "questo",
+              "quello"
+            ],
+            "glossBySurface": {
+              "cosa è questo": {
+                "en": "what is this"
+              },
+              "cosa e questo": {
+                "en": "what is this"
+              },
+              "cosa è quello": {
+                "en": "what is that"
+              },
+              "cosa e quello": {
+                "en": "what is that"
+              }
+            }
+          },
+          {
+            "exponentId": "cosa_vuol_dire",
+            "normalizedForm": "cosa_vuol_dire",
+            "surfaceForms": [
+              "cosa vuol dire"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "volere",
+              "dire"
+            ],
+            "glossBySurface": {
+              "cosa vuol dire": {
+                "en": "what does that mean"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-to-repeat",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Ask someone to repeat",
+      "cefrDescriptor": "Can ask someone to repeat what they said.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "unaltra_volta",
+            "normalizedForm": "unaltra_volta",
+            "surfaceForms": [
+              "un'altra volta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "altro",
+              "volta"
+            ],
+            "glossBySurface": {
+              "un'altra volta": {
+                "en": "again"
+              }
+            }
+          },
+          {
+            "exponentId": "puoi_ripetere",
+            "normalizedForm": "puoi_ripetere",
+            "surfaceForms": [
+              "puoi ripetere",
+              "può ripetere",
+              "puo ripetere"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "potere",
+              "ripetere"
+            ],
+            "glossBySurface": {
+              "puoi ripetere": {
+                "en": "can you repeat that"
+              },
+              "può ripetere": {
+                "en": "could you repeat that"
+              },
+              "puo ripetere": {
+                "en": "could you repeat that"
+              }
+            }
+          },
+          {
+            "exponentId": "ripeti",
+            "normalizedForm": "ripeti",
+            "surfaceForms": [
+              "ripeti",
+              "ripeta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ripetere"
+            ],
+            "glossBySurface": {
+              "ripeti": {
+                "en": "say it again"
+              },
+              "ripeta": {
+                "en": "say it again"
+              }
+            }
+          },
+          {
+            "exponentId": "come_scusa",
+            "normalizedForm": "come_scusa",
+            "surfaceForms": [
+              "come scusa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "scusa"
+            ],
+            "glossBySurface": {
+              "come scusa": {
+                "en": "what was that"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-to-slow-down",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Ask someone to slow down",
+      "cefrDescriptor": "Can ask someone to speak more slowly.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "piu_lento",
+            "normalizedForm": "piu_lento",
+            "surfaceForms": [
+              "più lento",
+              "piu lento"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "più",
+              "lento"
+            ],
+            "glossBySurface": {
+              "più lento": {
+                "en": "more slowly"
+              },
+              "piu lento": {
+                "en": "more slowly"
+              }
+            }
+          },
+          {
+            "exponentId": "non_cosi_veloce",
+            "normalizedForm": "non_cosi_veloce",
+            "surfaceForms": [
+              "non così veloce",
+              "non cosi veloce"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "così",
+              "veloce"
+            ],
+            "glossBySurface": {
+              "non così veloce": {
+                "en": "not so fast"
+              },
+              "non cosi veloce": {
+                "en": "not so fast"
+              }
+            }
+          },
+          {
+            "exponentId": "puoi_parlare_piu_lentamente",
+            "normalizedForm": "puoi_parlare_piu_lentamente",
+            "surfaceForms": [
+              "puoi parlare più lentamente",
+              "puoi parlare piu lentamente",
+              "può parlare più lentamente",
+              "può parlare piu lentamente",
+              "puo parlare più lentamente",
+              "puo parlare piu lentamente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "potere",
+              "parlare",
+              "più",
+              "lentamente"
+            ],
+            "glossBySurface": {
+              "puoi parlare più lentamente": {
+                "en": "can you speak more slowly"
+              },
+              "puoi parlare piu lentamente": {
+                "en": "can you speak more slowly"
+              },
+              "può parlare più lentamente": {
+                "en": "could you speak more slowly"
+              },
+              "può parlare piu lentamente": {
+                "en": "could you speak more slowly"
+              },
+              "puo parlare più lentamente": {
+                "en": "could you speak more slowly"
+              },
+              "puo parlare piu lentamente": {
+                "en": "could you speak more slowly"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "confirm-information",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Confirm information",
+      "cefrDescriptor": "Can confirm that information is correct.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_quello",
+            "normalizedForm": "e_quello",
+            "surfaceForms": [
+              "è quello",
+              "e quello"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "quello"
+            ],
+            "glossBySurface": {
+              "è quello": {
+                "en": "that's it"
+              },
+              "e quello": {
+                "en": "that's it"
+              }
+            }
+          },
+          {
+            "exponentId": "e_corretto",
+            "normalizedForm": "e_corretto",
+            "surfaceForms": [
+              "è corretto",
+              "e corretto",
+              "corretto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "corretto"
+            ],
+            "glossBySurface": {
+              "è corretto": {
+                "en": "that's correct"
+              },
+              "e corretto": {
+                "en": "that's correct"
+              },
+              "corretto": {
+                "en": "correct"
+              }
+            }
+          },
+          {
+            "exponentId": "proprio_cosi",
+            "normalizedForm": "proprio_cosi",
+            "surfaceForms": [
+              "proprio così",
+              "proprio cosi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "proprio",
+              "così"
+            ],
+            "glossBySurface": {
+              "proprio così": {
+                "en": "that's right"
+              },
+              "proprio cosi": {
+                "en": "that's right"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "correct-misunderstanding",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Correct a misunderstanding",
+      "cefrDescriptor": "Can correct a basic misunderstanding.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "non_e_quello",
+            "normalizedForm": "non_e_quello",
+            "surfaceForms": [
+              "non è quello",
+              "non e quello"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "essere",
+              "quello"
+            ],
+            "glossBySurface": {
+              "non è quello": {
+                "en": "that's not it"
+              },
+              "non e quello": {
+                "en": "that's not it"
+              }
+            }
+          },
+          {
+            "exponentId": "voglio_dire",
+            "normalizedForm": "voglio_dire",
+            "surfaceForms": [
+              "voglio dire"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "dire"
+            ],
+            "glossBySurface": {
+              "voglio dire": {
+                "en": "I mean"
+              }
+            }
+          },
+          {
+            "exponentId": "non_ho_detto_questo",
+            "normalizedForm": "non_ho_detto_questo",
+            "surfaceForms": [
+              "non ho detto questo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "avere",
+              "detto",
+              "questo"
+            ],
+            "glossBySurface": {
+              "non ho detto questo": {
+                "en": "I didn't say that"
+              }
+            }
+          },
+          {
+            "exponentId": "e_unaltra_cosa",
+            "normalizedForm": "e_unaltra_cosa",
+            "surfaceForms": [
+              "è un'altra cosa",
+              "e un'altra cosa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "altro",
+              "cosa"
+            ],
+            "glossBySurface": {
+              "è un'altra cosa": {
+                "en": "it's something else"
+              },
+              "e un'altra cosa": {
+                "en": "it's something else"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "describe-unknown-word",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Describe a word they do not know",
+      "cefrDescriptor": "Can use a simple description for a word they do not know.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "e_come",
+            "normalizedForm": "e_come",
+            "surfaceForms": [
+              "è come",
+              "e come"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "come"
+            ],
+            "glossBySurface": {
+              "è come": {
+                "en": "it's like"
+              },
+              "e come": {
+                "en": "it's like"
+              }
+            }
+          },
+          {
+            "exponentId": "una_cosa_da_mangiare",
+            "normalizedForm": "una_cosa_da_mangiare",
+            "surfaceForms": [
+              "una cosa da mangiare",
+              "una cosa da bere"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "da",
+              "mangiare",
+              "bere"
+            ],
+            "glossBySurface": {
+              "una cosa da mangiare": {
+                "en": "a thing for eating"
+              },
+              "una cosa da bere": {
+                "en": "a thing for drinking"
+              }
+            }
+          },
+          {
+            "exponentId": "non_so_la_parola",
+            "normalizedForm": "non_so_la_parola",
+            "surfaceForms": [
+              "non so la parola"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "sapere",
+              "parola"
+            ],
+            "glossBySurface": {
+              "non so la parola": {
+                "en": "I don't know the word"
+              }
+            }
+          },
+          {
+            "exponentId": "e_una_cosa_del_genere",
+            "normalizedForm": "e_una_cosa_del_genere",
+            "surfaceForms": [
+              "è una cosa del genere",
+              "e una cosa del genere"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "cosa",
+              "di",
+              "genere"
+            ],
+            "glossBySurface": {
+              "è una cosa del genere": {
+                "en": "it's something like that"
+              },
+              "e una cosa del genere": {
+                "en": "it's something like that"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "meta-language",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Ask for clarification",
+      "cefrDescriptor": "Can ask for clarification and slowing down in the target language.",
+      "band": "A1",
+      "isItemZero": true,
+      "placementGateBand": "A2",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "cosa_e",
+            "normalizedForm": "cosa_e",
+            "surfaceForms": [
+              "cosa è",
+              "cosa e",
+              "cosa significa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cosa",
+              "essere",
+              "significare"
+            ],
+            "glossBySurface": {
+              "cosa è": {
+                "en": "what is it"
+              },
+              "cosa e": {
+                "en": "what is it"
+              },
+              "cosa significa": {
+                "en": "what does it mean"
+              }
+            }
+          },
+          {
+            "exponentId": "non_capisco",
+            "normalizedForm": "non_capisco",
+            "surfaceForms": [
+              "non capisco",
+              "non lo capisco"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "capire"
+            ],
+            "glossBySurface": {
+              "non capisco": {
+                "en": "I don't understand"
+              },
+              "non lo capisco": {
+                "en": "I don't understand it"
+              }
+            }
+          },
+          {
+            "exponentId": "piu_lentamente",
+            "normalizedForm": "piu_lentamente",
+            "surfaceForms": [
+              "più lentamente",
+              "piu lentamente",
+              "più lentamente per favore",
+              "piu lentamente per favore",
+              "parla più lentamente",
+              "parla piu lentamente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "più",
+              "lentamente",
+              "per",
+              "favore",
+              "parlare"
+            ],
+            "glossBySurface": {
+              "più lentamente": {
+                "en": "slower"
+              },
+              "piu lentamente": {
+                "en": "slower"
+              },
+              "più lentamente per favore": {
+                "en": "slower, please"
+              },
+              "piu lentamente per favore": {
+                "en": "slower, please"
+              },
+              "parla più lentamente": {
+                "en": "speak more slowly"
+              },
+              "parla piu lentamente": {
+                "en": "speak more slowly"
+              }
+            }
+          },
+          {
+            "exponentId": "come_si_dice",
+            "normalizedForm": "come_si_dice",
+            "surfaceForms": [
+              "come si dice",
+              "come si chiama"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "dire",
+              "chiamare"
+            ],
+            "glossBySurface": {
+              "come si dice": {
+                "en": "how do you say"
+              },
+              "come si chiama": {
+                "en": "what is it called"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "repeat-to-confirm",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Repeat to confirm",
+      "cefrDescriptor": "Can repeat a word or phrase to confirm it.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "si_dice_cosi",
+            "normalizedForm": "si_dice_cosi",
+            "surfaceForms": [
+              "si dice così",
+              "si dice cosi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dire",
+              "così"
+            ],
+            "glossBySurface": {
+              "si dice così": {
+                "en": "that's how you say it"
+              },
+              "si dice cosi": {
+                "en": "that's how you say it"
+              }
+            }
+          },
+          {
+            "exponentId": "lo_dico_bene",
+            "normalizedForm": "lo_dico_bene",
+            "surfaceForms": [
+              "lo dico bene"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dire",
+              "bene"
+            ],
+            "glossBySurface": {
+              "lo dico bene": {
+                "en": "am I saying it right"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-not-understood",
+      "lessonId": "asking-for-help-understanding",
+      "displayName": "Say they do not understand",
+      "cefrDescriptor": "Can say that they do not understand.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "non_ho_capito",
+            "normalizedForm": "non_ho_capito",
+            "surfaceForms": [
+              "non ho capito"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "avere",
+              "capire"
+            ],
+            "glossBySurface": {
+              "non ho capito": {
+                "en": "I don't understand"
+              }
+            }
+          },
+          {
+            "exponentId": "non_ti_capisco",
+            "normalizedForm": "non_ti_capisco",
+            "surfaceForms": [
+              "non ti capisco"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "capire"
+            ],
+            "glossBySurface": {
+              "non ti capisco": {
+                "en": "I don't understand you"
+              }
+            }
+          },
+          {
+            "exponentId": "non_capisco_niente",
+            "normalizedForm": "non_capisco_niente",
+            "surfaceForms": [
+              "non capisco niente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "capire",
+              "niente"
+            ],
+            "glossBySurface": {
+              "non capisco niente": {
+                "en": "I don't understand anything"
+              }
+            }
+          },
+          {
+            "exponentId": "non_capisco_questa_parola",
+            "normalizedForm": "non_capisco_questa_parola",
+            "surfaceForms": [
+              "non capisco questa parola"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "capire",
+              "questo",
+              "parola"
+            ],
+            "glossBySurface": {
+              "non capisco questa parola": {
+                "en": "I don't understand that word"
               }
             }
           }

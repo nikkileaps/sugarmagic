@@ -488,7 +488,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "must, should"
-      }
+      },
+      "forms": {
+        "pres": [
+          "devo",
+          "devi",
+          "deve",
+          "dobbiamo",
+          "dovete",
+          "devono"
+        ],
+        "pret": [
+          "dovei",
+          "dovesti",
+          "dové",
+          "dovemmo",
+          "doveste",
+          "doverono"
+        ],
+        "imp": [
+          "dovevo",
+          "dovevi",
+          "doveva",
+          "dovevamo",
+          "dovevate",
+          "dovevano"
+        ],
+        "ger": "dovendo",
+        "part": "dovuto"
+      },
+      "formsSource": "authored"
     },
     "se": {
       "lemmaId": "se",
@@ -529,7 +558,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "other, another"
-      }
+      },
+      "forms": {
+        "ms": "altro",
+        "fs": "altra",
+        "mp": "altri",
+        "fp": "altre"
+      },
+      "formsSource": "authored"
     },
     "su": {
       "lemmaId": "su",
@@ -1968,7 +2004,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "think"
-      }
+      },
+      "forms": {
+        "pres": [
+          "penso",
+          "pensi",
+          "pensa",
+          "pensiamo",
+          "pensate",
+          "pensano"
+        ],
+        "pret": [
+          "pensai",
+          "pensasti",
+          "pensò",
+          "pensammo",
+          "pensaste",
+          "pensarono"
+        ],
+        "imp": [
+          "pensavo",
+          "pensavi",
+          "pensava",
+          "pensavamo",
+          "pensavate",
+          "pensavano"
+        ],
+        "ger": "pensando",
+        "part": "pensato"
+      },
+      "formsSource": "authored"
     },
     "possibile": {
       "lemmaId": "possibile",
@@ -2355,7 +2420,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "seem, appear"
-      }
+      },
+      "forms": {
+        "pres": [
+          "sembro",
+          "sembri",
+          "sembra",
+          "sembriamo",
+          "sembrate",
+          "sembrano"
+        ],
+        "pret": [
+          "sembrai",
+          "sembrasti",
+          "sembrò",
+          "sembrammo",
+          "sembraste",
+          "sembrarono"
+        ],
+        "imp": [
+          "sembravo",
+          "sembravi",
+          "sembrava",
+          "sembravamo",
+          "sembravate",
+          "sembravano"
+        ],
+        "ger": "sembrando",
+        "part": "sembrato"
+      },
+      "formsSource": "authored"
     },
     "necessario": {
       "lemmaId": "necessario",
@@ -3389,7 +3483,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "believe"
-      }
+      },
+      "forms": {
+        "pres": [
+          "credo",
+          "credi",
+          "crede",
+          "crediamo",
+          "credete",
+          "credono"
+        ],
+        "pret": [
+          "credei",
+          "credesti",
+          "credé",
+          "credemmo",
+          "credeste",
+          "crederono"
+        ],
+        "imp": [
+          "credevo",
+          "credevi",
+          "credeva",
+          "credevamo",
+          "credevate",
+          "credevano"
+        ],
+        "ger": "credendo",
+        "part": "creduto"
+      },
+      "formsSource": "authored"
     },
     "utilizzare": {
       "lemmaId": "utilizzare",
@@ -4777,7 +4900,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "allow, permit"
-      }
+      },
+      "forms": {
+        "pres": [
+          "permetto",
+          "permetti",
+          "permette",
+          "permettiamo",
+          "permettete",
+          "permettono"
+        ],
+        "pret": [
+          "permisi",
+          "permettesti",
+          "permise",
+          "permettemmo",
+          "permetteste",
+          "permisero"
+        ],
+        "imp": [
+          "permettevo",
+          "permettevi",
+          "permetteva",
+          "permettevamo",
+          "permettevate",
+          "permettevano"
+        ],
+        "ger": "permettendo",
+        "part": "permesso"
+      },
+      "formsSource": "authored"
     },
     "entrare": {
       "lemmaId": "entrare",
@@ -5047,7 +5199,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "offer"
-      }
+      },
+      "forms": {
+        "pres": [
+          "offro",
+          "offri",
+          "offre",
+          "offriamo",
+          "offrite",
+          "offrono"
+        ],
+        "pret": [
+          "offrii",
+          "offristi",
+          "offrì",
+          "offrimmo",
+          "offriste",
+          "offrirono"
+        ],
+        "imp": [
+          "offrivo",
+          "offrivi",
+          "offriva",
+          "offrivamo",
+          "offrivate",
+          "offrivano"
+        ],
+        "ger": "offrendo",
+        "part": "offerto"
+      },
+      "formsSource": "authored"
     },
     "ottenere": {
       "lemmaId": "ottenere",
@@ -10147,7 +10328,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "mean, signify"
-      }
+      },
+      "forms": {
+        "pres": [
+          "significo",
+          "significhi",
+          "significa",
+          "significhiamo",
+          "significate",
+          "significano"
+        ],
+        "pret": [
+          "significai",
+          "significasti",
+          "significò",
+          "significammo",
+          "significaste",
+          "significarono"
+        ],
+        "imp": [
+          "significavo",
+          "significavi",
+          "significava",
+          "significavamo",
+          "significavate",
+          "significavano"
+        ],
+        "ger": "significando",
+        "part": "significato"
+      },
+      "formsSource": "authored"
     },
     "centrale": {
       "lemmaId": "centrale",
@@ -14219,7 +14429,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "repeat"
-      }
+      },
+      "forms": {
+        "pres": [
+          "ripeto",
+          "ripeti",
+          "ripete",
+          "ripetiamo",
+          "ripetete",
+          "ripetono"
+        ],
+        "pret": [
+          "ripetei",
+          "ripetesti",
+          "ripeté",
+          "ripetemmo",
+          "ripeteste",
+          "ripeterono"
+        ],
+        "imp": [
+          "ripetevo",
+          "ripetevi",
+          "ripeteva",
+          "ripetevamo",
+          "ripetevate",
+          "ripetevano"
+        ],
+        "ger": "ripetendo",
+        "part": "ripetuto"
+      },
+      "formsSource": "authored"
     },
     "scena": {
       "lemmaId": "scena",
@@ -17495,7 +17734,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "sure, safe"
-      }
+      },
+      "forms": {
+        "ms": "sicuro",
+        "fs": "sicura",
+        "mp": "sicuri",
+        "fp": "sicure"
+      },
+      "formsSource": "authored"
     },
     "distribuzione": {
       "lemmaId": "distribuzione",
@@ -85297,6 +85543,88 @@
       "glosses": {
         "en": "bus"
       }
+    },
+    "vero": {
+      "lemmaId": "vero",
+      "lang": "it",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adjective"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "true, real"
+      },
+      "forms": {
+        "ms": "vero",
+        "fs": "vera",
+        "mp": "veri",
+        "fp": "vere"
+      },
+      "formsSource": "authored"
+    },
+    "accomodare": {
+      "lemmaId": "accomodare",
+      "lang": "it",
+      "cefrPriorBand": "A2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "verb"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "to make comfortable; (reflexive) to come in, take a seat"
+      },
+      "forms": {
+        "pres": [
+          "accomodo",
+          "accomodi",
+          "accomoda",
+          "accomodiamo",
+          "accomodate",
+          "accomodano"
+        ],
+        "pret": [
+          "accomodai",
+          "accomodasti",
+          "accomodò",
+          "accomodammo",
+          "accomodaste",
+          "accomodarono"
+        ],
+        "imp": [
+          "accomodavo",
+          "accomodavi",
+          "accomodava",
+          "accomodavamo",
+          "accomodavate",
+          "accomodavano"
+        ],
+        "ger": "accomodando",
+        "part": "accomodato"
+      },
+      "formsSource": "authored"
+    },
+    "buonissimo": {
+      "lemmaId": "buonissimo",
+      "lang": "it",
+      "cefrPriorBand": "A2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "adjective"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "delicious, very good"
+      },
+      "forms": {
+        "ms": "buonissimo",
+        "fs": "buonissima",
+        "mp": "buonissimi",
+        "fp": "buonissime"
+      },
+      "formsSource": "authored"
     }
   }
 }

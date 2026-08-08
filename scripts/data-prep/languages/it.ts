@@ -67,6 +67,7 @@ const FUNCTION_WORDS = new Set([
  * dropped is exactly the kind of thing that produced non-words elsewhere.
  */
 const ELIDED_STUBS: Record<string, string> = {
+  anch: "anche",
   c: "ci",
   com: "come",
   d: "di",
@@ -107,7 +108,9 @@ const APOCOPE: Record<string, string> = {
   bel: "bello",
   quel: "quello",
   // `mal di testa`, `mal di gola`: `male` drops its vowel before `di`.
-  mal: "male"
+  mal: "male",
+  // `vuol dire`: `vuole` drops its vowel before another verb.
+  vuol: "volere"
 };
 
 /**
