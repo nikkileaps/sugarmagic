@@ -24098,6 +24098,4518 @@
           }
         ]
       }
+    ],
+    "infer-what-is-left-unsaid": [
+      {
+        "wordings": [
+          {
+            "phrase": "quello che lasci intendere è che non ti convince",
+            "gloss": {
+              "en": "what you're implying is that it doesn't convince you"
+            }
+          },
+          {
+            "phrase": "lasci intendere che non sei d'accordo",
+            "gloss": {
+              "en": "you're implying you don't agree"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "leggo tra le righe che non ti sembra una buona idea",
+            "gloss": {
+              "en": "I read between the lines that you don't think it's a good idea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "da quello che hai taciuto, capisco che c'è stato un problema",
+            "gloss": {
+              "en": "from what you left out, I gather there was a problem"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non l'hai detto, ma si capisce benissimo",
+            "gloss": {
+              "en": "you didn't say it, but it comes across perfectly"
+            }
+          }
+        ]
+      }
+    ],
+    "follow-unsignalled-relationships": [
+      {
+        "wordings": [
+          {
+            "phrase": "ora vedo come una cosa si lega all'altra",
+            "gloss": {
+              "en": "now I see how one thing connects to the other"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quindi la seconda è conseguenza della prima",
+            "gloss": {
+              "en": "so the second follows from the first"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "anche se non l'ha detto così, tutto porta allo stesso punto",
+            "gloss": {
+              "en": "though he didn't put it that way, it all points the same way"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho seguito il filo anche se non ha segnato le parti",
+            "gloss": {
+              "en": "I followed the thread even though he didn't mark the sections"
+            }
+          }
+        ]
+      }
+    ],
+    "detect-the-position-an-account-takes": [
+      {
+        "wordings": [
+          {
+            "phrase": "si capisce da che parte è scritto",
+            "gloss": {
+              "en": "you can tell which side it's written from"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "chi ha scritto questo ha una posizione precisa",
+            "gloss": {
+              "en": "whoever wrote this has taken a position"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è così neutrale come pretende di essere",
+            "gloss": {
+              "en": "it isn't as neutral as it claims to be"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il testo difende qualcosa senza dirlo",
+            "gloss": {
+              "en": "the text defends something without saying so"
+            }
+          }
+        ]
+      }
+    ],
+    "detect-an-evasion": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo non risponde a quello che ti ho chiesto",
+            "gloss": {
+              "en": "that doesn't answer what I asked you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "stai girando intorno al punto",
+            "gloss": {
+              "en": "you're going round the point"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo è un giro di parole, non una risposta",
+            "gloss": {
+              "en": "that's a circumlocution, not an answer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "hai rigirato la domanda",
+            "gloss": {
+              "en": "you turned the question around"
+            }
+          }
+        ]
+      }
+    ],
+    "infer-a-motive": [
+      {
+        "wordings": [
+          {
+            "phrase": "capisco perché tiri fuori il tema proprio adesso",
+            "gloss": {
+              "en": "I see why you're raising the subject right now"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qualcosa ti preoccupa per chiederlo oggi",
+            "gloss": {
+              "en": "something must be worrying you to ask today"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non lo chiedi per curiosità, vero",
+            "gloss": {
+              "en": "you're not asking out of curiosity, are you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo dici perché domani bisogna decidere",
+            "gloss": {
+              "en": "you're saying it because tomorrow we have to decide"
+            }
+          }
+        ]
+      }
+    ],
+    "surface-an-unvoiced-objection": [
+      {
+        "wordings": [
+          {
+            "phrase": "vedo che qualcosa non ti convince",
+            "gloss": {
+              "en": "I can see something doesn't convince you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è qualcosa che non ti torna, vero",
+            "gloss": {
+              "en": "there's something that doesn't add up for you, is there"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "noto un ma e preferisco che tu lo dica",
+            "gloss": {
+              "en": "I sense a but and I'd rather you said it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se hai un dubbio, meglio metterlo sul tavolo",
+            "gloss": {
+              "en": "if you have a doubt, better to put it on the table"
+            }
+          }
+        ]
+      }
+    ],
+    "take-a-hint": [
+      {
+        "wordings": [
+          {
+            "phrase": "capito, ci metto mano subito",
+            "gloss": {
+              "en": "understood, I'll get on it right now"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho colto l'antifona",
+            "gloss": {
+              "en": "I took the hint"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non serve che lo ripeti, arrivo",
+            "gloss": {
+              "en": "you don't need to repeat it, I'm coming"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "va bene, mi tolgo di mezzo",
+            "gloss": {
+              "en": "all right, I'll get out of the way"
+            }
+          }
+        ]
+      }
+    ],
+    "drop-a-hint": [
+      {
+        "wordings": [
+          {
+            "phrase": "che freddo con la finestra aperta",
+            "gloss": {
+              "en": "it's chilly with the window open"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dico solo che domani è la scadenza",
+            "gloss": {
+              "en": "I'm only saying tomorrow is the deadline"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non so se avrai tempo, ma quello è ancora in sospeso",
+            "gloss": {
+              "en": "I don't know if you'll have time, but that's still pending"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se ti serve, il rapporto non è ancora arrivato",
+            "gloss": {
+              "en": "in case it helps, the report still hasn't arrived"
+            }
+          }
+        ]
+      }
+    ],
+    "read-a-silence": [
+      {
+        "wordings": [
+          {
+            "phrase": "quel silenzio dice parecchio",
+            "gloss": {
+              "en": "that silence says quite a lot"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che tu non dica niente mi dice già qualcosa",
+            "gloss": {
+              "en": "your saying nothing already tells me something"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non rispondere è anche una risposta",
+            "gloss": {
+              "en": "not answering is an answer too"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il tuo silenzio me lo conferma",
+            "gloss": {
+              "en": "your silence confirms it for me"
+            }
+          }
+        ]
+      }
+    ],
+    "appreciate-distinctions-of-style": [
+      {
+        "wordings": [
+          {
+            "phrase": "dicono la stessa cosa, ma non con lo stesso stile",
+            "gloss": {
+              "en": "they say the same thing, but not in the same style"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questa versione è molto più curata dell'altra",
+            "gloss": {
+              "en": "this version is far more polished than the other"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il primo suona letterario e il secondo giornalistico",
+            "gloss": {
+              "en": "the first sounds literary and the second journalistic"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ognuno tratta il tema con un tono diverso",
+            "gloss": {
+              "en": "each treats the subject in a different tone"
+            }
+          }
+        ]
+      }
+    ],
+    "match-register-to-setting": [
+      {
+        "wordings": [
+          {
+            "phrase": "qui conviene dare del lei",
+            "gloss": {
+              "en": "here it's better to use the polite form"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "in questo ambiente si può parlare in confidenza",
+            "gloss": {
+              "en": "in this setting you can speak informally"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per quella riunione serve un tono più formale",
+            "gloss": {
+              "en": "that meeting calls for a more formal tone"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con loro possiamo parlare senza tante cerimonie",
+            "gloss": {
+              "en": "with them we can speak without so much ceremony"
+            }
+          }
+        ]
+      }
+    ],
+    "sustain-a-formal-register": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei ringraziare per la vostra presenza questa mattina",
+            "gloss": {
+              "en": "I should like to thank you for your presence this morning"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vi ringrazio per l'attenzione",
+            "gloss": {
+              "en": "thank you for your attention"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi rivolgo a voi a nome della squadra",
+            "gloss": {
+              "en": "I address you on behalf of the team"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se permettete, passo al punto successivo",
+            "gloss": {
+              "en": "if you'll allow me, I'll move to the next point"
+            }
+          }
+        ]
+      }
+    ],
+    "recognise-dated-wording": [
+      {
+        "wordings": [
+          {
+            "phrase": "quella parola non la usa più nessuno",
+            "gloss": {
+              "en": "nobody uses that word any more"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "così parlava mia nonna",
+            "gloss": {
+              "en": "that's how my grandmother spoke"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un modo antico di dirlo",
+            "gloss": {
+              "en": "it's an old-fashioned way of saying it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "oggi nessuno lo direbbe così",
+            "gloss": {
+              "en": "nobody would say it that way today"
+            }
+          }
+        ]
+      }
+    ],
+    "recognise-regional-variation": [
+      {
+        "wordings": [
+          {
+            "phrase": "dall'accento direi che è del nord",
+            "gloss": {
+              "en": "from the accent I'd say he's from the north"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quella parola qui non si usa, si usa più al sud",
+            "gloss": {
+              "en": "that word isn't used here, it's more common in the south"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "nel mio paese si dice in un altro modo",
+            "gloss": {
+              "en": "in my country it's said differently"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "si capisce da dove viene da come parla",
+            "gloss": {
+              "en": "you can tell where he's from by how he speaks"
+            }
+          }
+        ]
+      }
+    ],
+    "adapt-to-an-interlocutors-register": [
+      {
+        "wordings": [
+          {
+            "phrase": "se preferisci, diamoci del tu",
+            "gloss": {
+              "en": "if you prefer, let's use first names"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso darti del tu, se ti è più comodo",
+            "gloss": {
+              "en": "I can use the informal form, if that's easier for you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "preferisco continuare a darle del lei",
+            "gloss": {
+              "en": "I'd rather keep to the polite form with you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vedo che preferisci qualcosa di meno formale, parliamo così",
+            "gloss": {
+              "en": "I see you prefer something less formal, let's speak that way"
+            }
+          }
+        ]
+      }
+    ],
+    "recognise-officialese": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo è scritto in linguaggio d'ufficio",
+            "gloss": {
+              "en": "this is written in office language"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "così parlano i moduli, non le persone",
+            "gloss": {
+              "en": "that's how forms talk, not people"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo suona come un testo legale",
+            "gloss": {
+              "en": "that sounds like a legal text"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è linguaggio amministrativo puro",
+            "gloss": {
+              "en": "it's pure administrative language"
+            }
+          }
+        ]
+      }
+    ],
+    "restate-official-language-plainly": [
+      {
+        "wordings": [
+          {
+            "phrase": "in parole semplici, bisogna pagare prima di venerdì",
+            "gloss": {
+              "en": "in plain words, you have to pay before Friday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quello che dice è che servono due documenti",
+            "gloss": {
+              "en": "what it says is that you need two documents"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tradotto in lingua di tutti i giorni, ti tocca aspettare",
+            "gloss": {
+              "en": "translated into everyday language, you have to wait"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la pratica è semplice: presenti la domanda e aspetti",
+            "gloss": {
+              "en": "the procedure is simple: you submit the application and wait"
+            }
+          }
+        ]
+      }
+    ],
+    "judge-a-wording-as-too-strong": [
+      {
+        "wordings": [
+          {
+            "phrase": "detto così suona più duro di quanto vuoi",
+            "gloss": {
+              "en": "put that way it sounds harsher than you mean"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "io lo direi con meno forza",
+            "gloss": {
+              "en": "I'd say it less forcefully"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quella parola gli può cadere male",
+            "gloss": {
+              "en": "that word may not land well with him"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il finale starebbe meglio un po' più morbido",
+            "gloss": {
+              "en": "the ending would sit better a little softer"
+            }
+          }
+        ]
+      }
+    ],
+    "integrate-sub-themes": [
+      {
+        "wordings": [
+          {
+            "phrase": "la questione ha tre parti e tutte e tre si toccano",
+            "gloss": {
+              "en": "the matter has three parts and all three touch each other"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "unisco i due temi perché sono lo stesso problema",
+            "gloss": {
+              "en": "I join the two subjects because they're the same problem"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tutto questo fa parte di una stessa questione",
+            "gloss": {
+              "en": "all this is part of one and the same question"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qui l'economico e il sociale non si separano",
+            "gloss": {
+              "en": "here the economic and the social don't come apart"
+            }
+          }
+        ]
+      }
+    ],
+    "develop-a-particular-point": [
+      {
+        "wordings": [
+          {
+            "phrase": "su questo punto voglio fermarmi un po' di più",
+            "gloss": {
+              "en": "on this point I want to dwell a little longer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo merita più dettaglio",
+            "gloss": {
+              "en": "this deserves more detail"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "entro nel dettaglio sul secondo punto",
+            "gloss": {
+              "en": "I'll go into detail on the second point"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sviluppo questa idea e vado avanti",
+            "gloss": {
+              "en": "I'll develop this idea and move on"
+            }
+          }
+        ]
+      }
+    ],
+    "round-off-with-a-conclusion": [
+      {
+        "wordings": [
+          {
+            "phrase": "in sintesi, la proposta sta in piedi",
+            "gloss": {
+              "en": "in short, the proposal holds up"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per finire, l'idea è semplice",
+            "gloss": {
+              "en": "to finish, the idea is simple"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con questo chiudo: non c'è tempo da perdere",
+            "gloss": {
+              "en": "with that I close: there's no time to lose"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "e qui mi fermo, grazie per avermi ascoltato",
+            "gloss": {
+              "en": "and there I'll stop, thank you for listening"
+            }
+          }
+        ]
+      }
+    ],
+    "signpost-a-long-contribution": [
+      {
+        "wordings": [
+          {
+            "phrase": "dirò tre cose e poi concludo",
+            "gloss": {
+              "en": "I'll say three things and then conclude"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prima il contesto, poi i numeri e alla fine la proposta",
+            "gloss": {
+              "en": "first the context, then the figures and finally the proposal"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "comincio dal problema e finisco con quello che propongo",
+            "gloss": {
+              "en": "I'll begin with the problem and end with what I propose"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo mi porterà via qualche minuto e lo divido in due parti",
+            "gloss": {
+              "en": "this will take me a few minutes and I'll split it in two"
+            }
+          }
+        ]
+      }
+    ],
+    "use-cohesive-devices": [
+      {
+        "wordings": [
+          {
+            "phrase": "da una parte c'è il costo e dall'altra il tempo",
+            "gloss": {
+              "en": "on one hand there's the cost and on the other the time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "detto questo, c'è una difficoltà",
+            "gloss": {
+              "en": "that said, there's a difficulty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a questo si aggiunge un altro problema",
+            "gloss": {
+              "en": "to this is added another problem"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "di conseguenza, bisogna cambiare il piano",
+            "gloss": {
+              "en": "consequently, the plan has to change"
+            }
+          }
+        ]
+      }
+    ],
+    "digress-and-return": [
+      {
+        "wordings": [
+          {
+            "phrase": "apro una parentesi un momento",
+            "gloss": {
+              "en": "let me open a parenthesis for a moment"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi sto allontanando, torno al punto",
+            "gloss": {
+              "en": "I'm drifting, let me come back to the point"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ma torniamo a quello che dicevo",
+            "gloss": {
+              "en": "but let's return to what I was saying"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "riprendo da dove ero rimasto",
+            "gloss": {
+              "en": "I'll pick up where I left off"
+            }
+          }
+        ]
+      }
+    ],
+    "hold-the-floor": [
+      {
+        "wordings": [
+          {
+            "phrase": "un momento, non ho ancora finito",
+            "gloss": {
+              "en": "one moment, I haven't finished yet"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi lasci finire l'idea",
+            "gloss": {
+              "en": "let me finish the thought"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho quasi finito, manca solo una cosa",
+            "gloss": {
+              "en": "I've nearly finished, just one thing left"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non sono ancora arrivato alla parte importante",
+            "gloss": {
+              "en": "I haven't got to the important part yet"
+            }
+          }
+        ]
+      }
+    ],
+    "vary-pace-for-emphasis": [
+      {
+        "wordings": [
+          {
+            "phrase": "e questo è quello che conta davvero",
+            "gloss": {
+              "en": "and this is what really matters"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sottolineo questa parte",
+            "gloss": {
+              "en": "I want to underline this part"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "fate attenzione a questo dato",
+            "gloss": {
+              "en": "pay attention to this figure"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo ripeto perché è il cuore della questione",
+            "gloss": {
+              "en": "I repeat it because it's the heart of the matter"
+            }
+          }
+        ]
+      }
+    ],
+    "open-on-a-complex-subject": [
+      {
+        "wordings": [
+          {
+            "phrase": "il tema è più complicato di quanto sembri",
+            "gloss": {
+              "en": "the subject is more complicated than it looks"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "conviene cominciare capendo da dove viene",
+            "gloss": {
+              "en": "it's worth starting by understanding where this comes from"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo riguarda tutti e vale la pena guardarlo con calma",
+            "gloss": {
+              "en": "this concerns everyone and is worth looking at calmly"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è un motivo per parlarne proprio adesso",
+            "gloss": {
+              "en": "there's a reason to talk about it right now"
+            }
+          }
+        ]
+      }
+    ],
+    "relate-a-contribution-to-others": [
+      {
+        "wordings": [
+          {
+            "phrase": "quello che dico va nella stessa linea di prima",
+            "gloss": {
+              "en": "what I'm saying runs along the same line as before"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo si collega a quello che hai detto poco fa",
+            "gloss": {
+              "en": "this connects to what you said a moment ago"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "concordo con quanto detto e aggiungo una cosa",
+            "gloss": {
+              "en": "I agree with what's been said and would add one thing"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il mio punto va nella direzione opposta al tuo",
+            "gloss": {
+              "en": "my point runs in the opposite direction to yours"
+            }
+          }
+        ]
+      }
+    ],
+    "build-on-anothers-point": [
+      {
+        "wordings": [
+          {
+            "phrase": "riprendo quello che hai detto e lo porto un passo più in là",
+            "gloss": {
+              "en": "I'll take what you said and carry it a step further"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "su quell'idea voglio aggiungere qualcosa",
+            "gloss": {
+              "en": "I want to add something to that idea"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quello che hai messo sul tavolo apre un'altra porta",
+            "gloss": {
+              "en": "what you've put on the table opens another door"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "partendo da quello che hai detto, io arriverei più lontano",
+            "gloss": {
+              "en": "starting from what you said, I'd go further"
+            }
+          }
+        ]
+      }
+    ],
+    "bring-a-quiet-speaker-in": [
+      {
+        "wordings": [
+          {
+            "phrase": "e tu cosa ne pensi di tutto questo",
+            "gloss": {
+              "en": "and what do you make of all this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ti abbiamo ancora sentito, qual è la tua impressione",
+            "gloss": {
+              "en": "we haven't heard from you yet, what's your impression"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi interessa sapere come la vedi tu",
+            "gloss": {
+              "en": "I'm interested to know how you see it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non hai detto niente e la tua opinione serve",
+            "gloss": {
+              "en": "you haven't said anything and your view is needed"
+            }
+          }
+        ]
+      }
+    ],
+    "restore-the-floor-to-an-interrupted-speaker": [
+      {
+        "wordings": [
+          {
+            "phrase": "scusa, ti abbiamo interrotto, continua tu",
+            "gloss": {
+              "en": "sorry, we cut you off, do go on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "stavi dicendo qualcosa, per favore finisci",
+            "gloss": {
+              "en": "you were saying something, please finish"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "torniamo a quello che stavi spiegando",
+            "gloss": {
+              "en": "let's go back to what you were explaining"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non hai fatto in tempo a finire, prego",
+            "gloss": {
+              "en": "you didn't get to finish, go ahead"
+            }
+          }
+        ]
+      }
+    ],
+    "redirect-a-drifting-exchange": [
+      {
+        "wordings": [
+          {
+            "phrase": "ci stiamo allontanando dal tema",
+            "gloss": {
+              "en": "we're drifting off the subject"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "torniamo al punto principale",
+            "gloss": {
+              "en": "let's return to the main point"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo è interessante, ma oggi abbiamo altro da risolvere",
+            "gloss": {
+              "en": "that's interesting, but today we have something else to settle"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "propongo di andare avanti con l'ordine del giorno",
+            "gloss": {
+              "en": "I suggest we carry on with the agenda"
+            }
+          }
+        ]
+      }
+    ],
+    "mark-unnoticed-agreement": [
+      {
+        "wordings": [
+          {
+            "phrase": "credo che stiate dicendo la stessa cosa",
+            "gloss": {
+              "en": "I think you're both saying the same thing"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siete d'accordo più di quanto sembri",
+            "gloss": {
+              "en": "you agree more than it seems"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siete d'accordo e non ve ne siete ancora accorti",
+            "gloss": {
+              "en": "you agree and haven't noticed yet"
+            },
+            "lemmas": {
+              "accorti": "accorgersi"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "le due posizioni si assomigliano parecchio",
+            "gloss": {
+              "en": "the two positions resemble each other quite a lot"
+            }
+          }
+        ]
+      }
+    ],
+    "sum-up-where-a-group-stands": [
+      {
+        "wordings": [
+          {
+            "phrase": "fin qui abbiamo concordato due cose e ne manca una",
+            "gloss": {
+              "en": "so far we've agreed two things and one is missing"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "siamo d'accordo sul termine, non sul prezzo",
+            "gloss": {
+              "en": "we agree on the deadline, not on the price"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "riassumo: abbiamo un accordo parziale",
+            "gloss": {
+              "en": "let me sum up: we have a partial agreement"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "restano due punti aperti",
+            "gloss": {
+              "en": "two points remain open"
+            }
+          }
+        ]
+      }
+    ],
+    "interject-without-derailing": [
+      {
+        "wordings": [
+          {
+            "phrase": "solo un dato veloce e continui",
+            "gloss": {
+              "en": "just one quick figure and you carry on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "una precisazione breve e andiamo avanti",
+            "gloss": {
+              "en": "one brief clarification and we move on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "scusa, un secondo, poi mi racconti il resto",
+            "gloss": {
+              "en": "sorry, one second, then tell me the rest"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "senza interromperti, quello è stato martedì",
+            "gloss": {
+              "en": "without cutting you off, that was Tuesday"
+            }
+          }
+        ]
+      }
+    ],
+    "close-with-what-follows": [
+      {
+        "wordings": [
+          {
+            "phrase": "allora restiamo così: tu scrivi e io controllo",
+            "gloss": {
+              "en": "so we'll leave it like this: you write and I'll check"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "riassumendo, ognuno sa cosa gli tocca",
+            "gloss": {
+              "en": "to sum up, each of us knows what falls to them"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ci vediamo giovedì con la proposta pronta",
+            "gloss": {
+              "en": "we'll meet on Thursday with the proposal ready"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il passo successivo è parlare con la squadra",
+            "gloss": {
+              "en": "the next step is to talk to the team"
+            }
+          }
+        ]
+      }
+    ],
+    "use-idiomatic-expressions-with-command": [
+      {
+        "wordings": [
+          {
+            "phrase": "ci ho rimesso un capitale",
+            "gloss": {
+              "en": "it cost me an arm and a leg"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non farci troppi giri intorno",
+            "gloss": {
+              "en": "don't overthink it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi si è chiuso lo stomaco",
+            "gloss": {
+              "en": "I got a lump in my throat"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ci hanno lasciato a mani vuote",
+            "gloss": {
+              "en": "they left us empty-handed"
+            }
+          }
+        ]
+      }
+    ],
+    "follow-unaccommodated-colloquial-speech": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho capito tutto anche se parlavano molto in fretta",
+            "gloss": {
+              "en": "I understood everything even though they spoke very fast"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "parlano tra loro e non mi perdo niente",
+            "gloss": {
+              "en": "they talk among themselves and I don't miss a thing"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ho bisogno che parlino più lentamente",
+            "gloss": {
+              "en": "I don't need them to slow down"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "seguo la conversazione anche se non me la facilitano",
+            "gloss": {
+              "en": "I follow the conversation even when they don't make it easy"
+            }
+          }
+        ]
+      }
+    ],
+    "judge-when-an-idiom-would-jar": [
+      {
+        "wordings": [
+          {
+            "phrase": "quell'espressione qui non sta bene",
+            "gloss": {
+              "en": "that expression doesn't sit well here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quel modo di dire suona strano in una riunione così",
+            "gloss": {
+              "en": "that saying sounds odd in a meeting like this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "meglio non usare quella frase davanti a loro",
+            "gloss": {
+              "en": "better not use that phrase in front of them"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "in questo contesto quell'espressione è di troppo",
+            "gloss": {
+              "en": "in this context that expression is one too many"
+            }
+          }
+        ]
+      }
+    ],
+    "use-a-set-phrase-in-its-exact-sense": [
+      {
+        "wordings": [
+          {
+            "phrase": "in fin dei conti è lo stesso",
+            "gloss": {
+              "en": "at the end of the day it's the same"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'abbiamo fatto una volta per tutte",
+            "gloss": {
+              "en": "we did it once and for all"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo dico in senso stretto",
+            "gloss": {
+              "en": "I mean it in the strict sense"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "nel caso lo ripeto",
+            "gloss": {
+              "en": "just in case, I'll repeat it"
+            }
+          }
+        ]
+      }
+    ],
+    "work-out-slang-from-context": [
+      {
+        "wordings": [
+          {
+            "phrase": "non conoscevo quella parola ma si capisce dal resto",
+            "gloss": {
+              "en": "I didn't know that word but it's clear from the rest"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "da come l'ha detto, deve voler dire soldi",
+            "gloss": {
+              "en": "from the way he said it, it must mean money"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non l'avevo mai sentita, immagino voglia dire lavoro",
+            "gloss": {
+              "en": "I'd never heard it, I imagine it means work"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quella parola è di strada e qui vuol dire amico",
+            "gloss": {
+              "en": "that word is street slang and here it means friend"
+            }
+          }
+        ]
+      }
+    ],
+    "recognise-a-euphemism": [
+      {
+        "wordings": [
+          {
+            "phrase": "quando dice ridimensionamento intende licenziamento",
+            "gloss": {
+              "en": "when he says restructuring he means redundancy"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo è un modo gentile di dirlo",
+            "gloss": {
+              "en": "that's a gentle way of putting it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sta dicendo la stessa cosa ma con parole belle",
+            "gloss": {
+              "en": "he's saying the same thing but with pretty words"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ha detto povero, ha detto con pochi mezzi",
+            "gloss": {
+              "en": "he didn't say poor, he said of limited means"
+            }
+          }
+        ]
+      }
+    ],
+    "use-a-euphemism": [
+      {
+        "wordings": [
+          {
+            "phrase": "non è nel suo momento migliore",
+            "gloss": {
+              "en": "he isn't at his best just now"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "diciamo che non è stato il suo lavoro migliore",
+            "gloss": {
+              "en": "let's say it wasn't his finest work"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "preferisco dire che si è ritirato",
+            "gloss": {
+              "en": "I'd rather say he stepped back"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è una persona un po' delicata nei modi",
+            "gloss": {
+              "en": "he's a somewhat sensitive person to deal with"
+            }
+          }
+        ]
+      }
+    ],
+    "catch-a-cultural-allusion": [
+      {
+        "wordings": [
+          {
+            "phrase": "quella frase viene da una canzone vecchia, vero",
+            "gloss": {
+              "en": "that line is from an old song, isn't it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho capito il riferimento anche se non l'hai spiegato",
+            "gloss": {
+              "en": "I got the reference even though you didn't explain it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo lo dicono tutti qui da anni",
+            "gloss": {
+              "en": "everyone here has been saying that for years"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "so da dove viene quella battuta",
+            "gloss": {
+              "en": "I know where that joke comes from"
+            }
+          }
+        ]
+      }
+    ],
+    "take-a-proverb-as-meant": [
+      {
+        "wordings": [
+          {
+            "phrase": "hai ragione, meglio tardi che mai",
+            "gloss": {
+              "en": "you're right, better late than never"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo so, non tutto il male viene per nuocere",
+            "gloss": {
+              "en": "I know, every cloud has a silver lining"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo prendo come consiglio, non come rimprovero",
+            "gloss": {
+              "en": "I take it as advice, not as a reproach"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "capisco il proverbio e sono d'accordo",
+            "gloss": {
+              "en": "I understand the proverb and I agree"
+            }
+          }
+        ]
+      }
+    ],
+    "speak-without-obvious-searching": [
+      {
+        "wordings": [
+          {
+            "phrase": "posso parlarne senza pensarci troppo",
+            "gloss": {
+              "en": "I can talk about it without thinking too hard"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ormai mi viene da solo, non traduco",
+            "gloss": {
+              "en": "it comes by itself now, I don't translate"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "parlo senza cercare le parole",
+            "gloss": {
+              "en": "I speak without hunting for words"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi fermo più a pensare come dirlo",
+            "gloss": {
+              "en": "I no longer stop to think how to say it"
+            }
+          }
+        ]
+      }
+    ],
+    "select-from-a-broad-range-of-formulations": [
+      {
+        "wordings": [
+          {
+            "phrase": "lo posso dire in tre modi diversi",
+            "gloss": {
+              "en": "I can say it three different ways"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non devo tagliare quello che voglio dire",
+            "gloss": {
+              "en": "I don't have to cut down what I want to say"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "scelgo la parola che voglio, non quella che mi viene",
+            "gloss": {
+              "en": "I choose the word I want, not the one that comes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dico esattamente quello che intendo dire",
+            "gloss": {
+              "en": "I say exactly what I mean to say"
+            }
+          }
+        ]
+      }
+    ],
+    "hold-the-turn-while-formulating": [
+      {
+        "wordings": [
+          {
+            "phrase": "come lo spiego, vediamo",
+            "gloss": {
+              "en": "how do I explain it, let's see"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "aspetta, sto cercando il modo di dirlo",
+            "gloss": {
+              "en": "wait, I'm looking for the way to say it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è che, come te lo dico, la cosa è più lunga",
+            "gloss": {
+              "en": "it's just, how do I put it, it's a longer story"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un secondo e ce l'ho",
+            "gloss": {
+              "en": "one second and I've got it"
+            }
+          }
+        ]
+      }
+    ],
+    "answer-an-unforeseen-turn": [
+      {
+        "wordings": [
+          {
+            "phrase": "non me l'aspettavo, ma ti rispondo lo stesso",
+            "gloss": {
+              "en": "I wasn't expecting it, but I'll answer anyway"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "questo mi ha colto di sorpresa, anche se ho un'opinione",
+            "gloss": {
+              "en": "that took me by surprise, though I do have a view"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non l'avevo pensata così, vediamo",
+            "gloss": {
+              "en": "I hadn't thought of it that way, let's see"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non me l'aspettavo, ma andiamo per ordine",
+            "gloss": {
+              "en": "I didn't expect it, but let's take it in order"
+            }
+          }
+        ]
+      }
+    ],
+    "sustain-fluency-on-a-formal-occasion": [
+      {
+        "wordings": [
+          {
+            "phrase": "anche se l'ambiente è formale, parlo con scioltezza",
+            "gloss": {
+              "en": "even though the setting is formal, I speak with ease"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "davanti a tanta gente parlo lo stesso",
+            "gloss": {
+              "en": "in front of so many people I speak just the same"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'occasione non mi toglie le parole",
+            "gloss": {
+              "en": "the occasion doesn't take my words away"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso sostenere il discorso fino alla fine",
+            "gloss": {
+              "en": "I can sustain the speech to the end"
+            }
+          }
+        ]
+      }
+    ],
+    "speak-at-length-unprepared": [
+      {
+        "wordings": [
+          {
+            "phrase": "non ho preparato niente, ma posso parlare del tema",
+            "gloss": {
+              "en": "I prepared nothing, but I can speak on the subject"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "senza averci pensato prima, vi racconto come funziona",
+            "gloss": {
+              "en": "without having thought about it beforehand, I'll tell you how it works"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "improvviso e arrivo comunque alla fine",
+            "gloss": {
+              "en": "I improvise and still get to the end"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso parlarne dieci minuti adesso",
+            "gloss": {
+              "en": "I can talk about it for ten minutes right now"
+            }
+          }
+        ]
+      }
+    ],
+    "recover-from-being-put-on-the-spot": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi hanno preso a freddo, ma vado avanti",
+            "gloss": {
+              "en": "they caught me cold, but I'll carry on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "scusa, mi sono perso un secondo, torno al punto",
+            "gloss": {
+              "en": "sorry, I lost it for a second, back to the point"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non mi aspettavo la domanda, un momento e rispondo",
+            "gloss": {
+              "en": "I didn't expect the question, one moment and I'll answer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi si è svuotata la testa, ma adesso ce l'ho",
+            "gloss": {
+              "en": "my mind went blank, but I've got it now"
+            }
+          }
+        ]
+      }
+    ],
+    "keep-precision-at-speed": [
+      {
+        "wordings": [
+          {
+            "phrase": "parlo in fretta e dico comunque quello che voglio dire",
+            "gloss": {
+              "en": "I speak fast and still say what I mean"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non perdo precisione per andare veloce",
+            "gloss": {
+              "en": "I don't lose precision by going fast"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "a ritmo normale non mi sfugge niente",
+            "gloss": {
+              "en": "at normal speed nothing escapes me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso andare veloce senza sbagliare",
+            "gloss": {
+              "en": "I can go fast without making mistakes"
+            }
+          }
+        ]
+      }
+    ],
+    "use-language-flexibly-for-professional-ends": [
+      {
+        "wordings": [
+          {
+            "phrase": "uso la lingua allo stesso modo al lavoro e con gli amici",
+            "gloss": {
+              "en": "I use the language the same way at work and with friends"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso scrivere un rapporto e anche chiacchierare in corridoio",
+            "gloss": {
+              "en": "I can write a report and also chat in the corridor"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "uso la lingua per quello che mi serve",
+            "gloss": {
+              "en": "I use the language for whatever I need"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "in classe, in ufficio o per strada me la cavo uguale",
+            "gloss": {
+              "en": "in class, at the office or in the street I manage just the same"
+            }
+          }
+        ]
+      }
+    ],
+    "present-a-proposal": [
+      {
+        "wordings": [
+          {
+            "phrase": "vi porto una proposta concreta",
+            "gloss": {
+              "en": "I bring you a concrete proposal"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quello che propongo è cambiare il termine e abbassare il costo",
+            "gloss": {
+              "en": "what I propose is changing the deadline and lowering the cost"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'idea è semplice e il preventivo è calcolato",
+            "gloss": {
+              "en": "the idea is simple and the budget is worked out"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se approvate questo, cominciamo lunedì",
+            "gloss": {
+              "en": "if you approve this, we start on Monday"
+            }
+          }
+        ]
+      }
+    ],
+    "field-questions-on-a-proposal": [
+      {
+        "wordings": [
+          {
+            "phrase": "resto a disposizione per le vostre domande",
+            "gloss": {
+              "en": "I remain available for your questions"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "buona domanda, quello lo abbiamo previsto",
+            "gloss": {
+              "en": "good question, we've allowed for that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se ci sono dubbi, rispondo a uno a uno",
+            "gloss": {
+              "en": "if there are doubts, I'll answer them one by one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quello non l'ho ancora risolto, lo controllo e vi faccio sapere",
+            "gloss": {
+              "en": "I haven't settled that yet, I'll check and let you know"
+            }
+          }
+        ]
+      }
+    ],
+    "chair-a-meeting": [
+      {
+        "wordings": [
+          {
+            "phrase": "cominciamo dal primo punto all'ordine del giorno",
+            "gloss": {
+              "en": "let's start with the first item on the agenda"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vi chiedo di rispettare il turno di parola",
+            "gloss": {
+              "en": "I'd ask you to respect the speaking order"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "passiamo al tema successivo",
+            "gloss": {
+              "en": "let's move to the next subject"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dichiaro chiusa la riunione",
+            "gloss": {
+              "en": "I declare the meeting closed"
+            }
+          }
+        ]
+      }
+    ],
+    "brief-someone-on-a-complex-matter": [
+      {
+        "wordings": [
+          {
+            "phrase": "ti metto al corrente in due minuti",
+            "gloss": {
+              "en": "I'll bring you up to speed in two minutes"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'essenziale è questo: è cambiato il fornitore e si è ritardato tutto",
+            "gloss": {
+              "en": "the essentials are these: the supplier changed and everything slipped"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prima della riunione devi sapere tre cose",
+            "gloss": {
+              "en": "before the meeting you need to know three things"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la questione viene da lontano, ti racconto l'importante",
+            "gloss": {
+              "en": "the matter goes back a long way, I'll tell you what matters"
+            }
+          }
+        ]
+      }
+    ],
+    "explain-a-methodology": [
+      {
+        "wordings": [
+          {
+            "phrase": "il risultato è uscito da un sondaggio su mille persone",
+            "gloss": {
+              "en": "the result came from a survey of a thousand people"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "prima misuriamo e poi confrontiamo con l'anno precedente",
+            "gloss": {
+              "en": "first we measure and then compare with the previous year"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lavoriamo con un campione piccolo e lo ripetiamo tre volte",
+            "gloss": {
+              "en": "we work with a small sample and repeat it three times"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il metodo è lo stesso che abbiamo usato l'anno scorso",
+            "gloss": {
+              "en": "the method is the same one we used last year"
+            }
+          }
+        ]
+      }
+    ],
+    "defend-a-result-under-questioning": [
+      {
+        "wordings": [
+          {
+            "phrase": "il dato regge e le spiego perché",
+            "gloss": {
+              "en": "the figure holds and I'll explain why"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'abbiamo controllato due volte e dà lo stesso",
+            "gloss": {
+              "en": "we checked it twice and it comes out the same"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "capisco il dubbio, ma le cifre sono verificate",
+            "gloss": {
+              "en": "I understand the doubt, but the figures are verified"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se ha un altro modo di misurarlo, l'ascolto",
+            "gloss": {
+              "en": "if you have another way of measuring it, I'm listening"
+            }
+          }
+        ]
+      }
+    ],
+    "settle-terms-of-an-agreement": [
+      {
+        "wordings": [
+          {
+            "phrase": "allora restiamo su un mese di termine e pagamento anticipato",
+            "gloss": {
+              "en": "so we settle on a month's deadline and payment in advance"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo mettiamo per iscritto così non ci sono dubbi",
+            "gloss": {
+              "en": "let's put it in writing so there are no doubts"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "accetto il prezzo se mantenete la data di consegna",
+            "gloss": {
+              "en": "I accept the price if you keep the delivery date"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "le condizioni sono queste e non cambiano",
+            "gloss": {
+              "en": "these are the terms and they don't change"
+            }
+          }
+        ]
+      }
+    ],
+    "decline-a-professional-request": [
+      {
+        "wordings": [
+          {
+            "phrase": "questa volta non ce la farò, e preferisco dirlo subito",
+            "gloss": {
+              "en": "this time I won't manage it, and I'd rather say so now"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi piacerebbe aiutarti, ma ho il mese pieno",
+            "gloss": {
+              "en": "I'd love to help you, but my month is full"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non posso prenderlo senza lasciar cadere altro",
+            "gloss": {
+              "en": "I can't take it on without dropping something else"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti dico di no, ma ti aiuto a cercare qualcuno",
+            "gloss": {
+              "en": "I'm saying no, but I'll help you find someone"
+            }
+          }
+        ]
+      }
+    ],
+    "speak-on-behalf-of-someone": [
+      {
+        "wordings": [
+          {
+            "phrase": "parlo a nome di mia sorella, che non è potuta venire",
+            "gloss": {
+              "en": "I'm speaking for my sister, who couldn't come"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vengo a esporre il caso di un collega",
+            "gloss": {
+              "en": "I've come to set out a colleague's case"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi ha chiesto di dirlo per lui",
+            "gloss": {
+              "en": "he asked me to say it for him"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quello che direbbe lei è che il trattamento è stato ingiusto",
+            "gloss": {
+              "en": "what she would say is that the treatment was unfair"
+            }
+          }
+        ]
+      }
+    ],
+    "represent-a-position-not-their-own": [
+      {
+        "wordings": [
+          {
+            "phrase": "io non la penso così, ma l'argomento è questo",
+            "gloss": {
+              "en": "I don't think so myself, but the argument is this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quelli che sono contrari direbbero quanto segue",
+            "gloss": {
+              "en": "those against would say the following"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vi spiego l'altra posizione meglio che posso",
+            "gloss": {
+              "en": "I'll explain the other position as best I can"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "senza condividerlo, capisco da dove nasce quel ragionamento",
+            "gloss": {
+              "en": "without sharing it, I see where that reasoning comes from"
+            }
+          }
+        ]
+      }
+    ],
+    "put-a-case-to-authority": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei esporle la mia situazione",
+            "gloss": {
+              "en": "I should like to set out my situation to you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "le chiedo di rivedere il caso",
+            "gloss": {
+              "en": "I ask you to review the case"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "credo che ci siano motivi per riconsiderarlo",
+            "gloss": {
+              "en": "I believe there are grounds to reconsider it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "porto i documenti che sostengono quello che dico",
+            "gloss": {
+              "en": "I bring the documents that support what I say"
+            }
+          }
+        ]
+      }
+    ],
+    "make-a-formal-request": [
+      {
+        "wordings": [
+          {
+            "phrase": "chiedo una copia del fascicolo",
+            "gloss": {
+              "en": "I request a copy of the file"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con la presente chiedo una proroga",
+            "gloss": {
+              "en": "by this letter I request an extension"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vi sarei grato se consideraste la mia domanda",
+            "gloss": {
+              "en": "I should be grateful if you would consider my application"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei chiedere formalmente una revisione",
+            "gloss": {
+              "en": "I should like to formally request a review"
+            }
+          }
+        ]
+      }
+    ],
+    "state-an-entitlement": [
+      {
+        "wordings": [
+          {
+            "phrase": "mi spetta una settimana di ferie",
+            "gloss": {
+              "en": "a week's holiday is due to me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho diritto al rimborso",
+            "gloss": {
+              "en": "I have a right to a refund"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "secondo il contratto, questo me lo devono pagare",
+            "gloss": {
+              "en": "under the contract, they owe me this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è un favore, è quello che mi tocca",
+            "gloss": {
+              "en": "it isn't a favour, it's what I'm owed"
+            }
+          }
+        ]
+      }
+    ],
+    "register-a-formal-objection": [
+      {
+        "wordings": [
+          {
+            "phrase": "voglio che risulti il mio disaccordo",
+            "gloss": {
+              "en": "I want my disagreement recorded"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi oppongo e chiedo che sia messo a verbale",
+            "gloss": {
+              "en": "I object and ask that it be minuted"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "presento un reclamo formale",
+            "gloss": {
+              "en": "I am filing a formal complaint"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "metto per iscritto che non sono d'accordo",
+            "gloss": {
+              "en": "I'm putting in writing that I don't agree"
+            }
+          }
+        ]
+      }
+    ],
+    "speak-for-a-group": [
+      {
+        "wordings": [
+          {
+            "phrase": "parlo per tutti quelli che lavorano qui",
+            "gloss": {
+              "en": "I speak for everyone who works here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la squadra mi ha chiesto di dire questo",
+            "gloss": {
+              "en": "the team asked me to say this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quello che sentiamo noi vicini è questo",
+            "gloss": {
+              "en": "what we neighbours feel is this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è solo la mia opinione, è quella di tutto il gruppo",
+            "gloss": {
+              "en": "it isn't only my view, it's the whole group's"
+            }
+          }
+        ]
+      }
+    ],
+    "appeal-a-decision": [
+      {
+        "wordings": [
+          {
+            "phrase": "voglio fare ricorso contro quella decisione",
+            "gloss": {
+              "en": "I want to appeal that decision"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qual è la procedura per reclamare",
+            "gloss": {
+              "en": "what is the procedure for complaining"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "chiedo che il caso lo riveda un'altra persona",
+            "gloss": {
+              "en": "I ask that someone else review the case"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non accetto il risultato e continuerò a insistere",
+            "gloss": {
+              "en": "I don't accept the outcome and I'll keep pressing"
+            }
+          }
+        ]
+      }
+    ],
+    "withdraw-a-claim-gracefully": [
+      {
+        "wordings": [
+          {
+            "phrase": "con questi dati, ritiro quello che ho detto",
+            "gloss": {
+              "en": "with these figures, I withdraw what I said"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi sono sbagliato e lo riconosco senza problemi",
+            "gloss": {
+              "en": "I was wrong and I acknowledge it without difficulty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "avevi ragione, lascio cadere il reclamo",
+            "gloss": {
+              "en": "you were right, I'll drop the complaint"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "viste le cose, non insisto oltre",
+            "gloss": {
+              "en": "given how things stand, I won't press further"
+            }
+          }
+        ]
+      }
+    ],
+    "follow-literary-prose": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho letto il romanzo intero senza dizionario",
+            "gloss": {
+              "en": "I read the whole novel without a dictionary"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il capitolo è difficile, ma si capisce",
+            "gloss": {
+              "en": "the chapter is hard, but it comes across"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "capisco quello che racconta il narratore anche se scrive in modo strano",
+            "gloss": {
+              "en": "I understand what the narrator tells even when he writes oddly"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "seguo la storia senza perdermi tra le frasi lunghe",
+            "gloss": {
+              "en": "I follow the story without getting lost in the long sentences"
+            }
+          }
+        ]
+      }
+    ],
+    "interpret-a-metaphor": [
+      {
+        "wordings": [
+          {
+            "phrase": "quando dice inverno sta parlando della vecchiaia",
+            "gloss": {
+              "en": "when he says winter he's talking about old age"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qui il mare rappresenta l'oblio",
+            "gloss": {
+              "en": "here the sea stands for oblivion"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non parla di una porta vera, parla di una via d'uscita",
+            "gloss": {
+              "en": "he isn't talking about a real door, he's talking about a way out"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quell'immagine vuol dire che l'attesa è stata lunga",
+            "gloss": {
+              "en": "that image means the wait was long"
+            }
+          }
+        ]
+      }
+    ],
+    "use-a-metaphor": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo progetto è una nave senza capitano",
+            "gloss": {
+              "en": "this project is a ship without a captain"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'ufficio è diventato un deserto",
+            "gloss": {
+              "en": "the office has become a desert"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "stiamo costruendo la casa dal tetto",
+            "gloss": {
+              "en": "we're building the house from the roof down"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quell'idea è ancora un seme",
+            "gloss": {
+              "en": "that idea is still a seed"
+            }
+          }
+        ]
+      }
+    ],
+    "register-imagery": [
+      {
+        "wordings": [
+          {
+            "phrase": "tutto il testo è pieno di immagini d'acqua",
+            "gloss": {
+              "en": "the whole text is full of water imagery"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è molta luce e molta ombra in questa pagina",
+            "gloss": {
+              "en": "there's a lot of light and shadow on this page"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "le immagini di freddo tornano ogni volta che parla lei",
+            "gloss": {
+              "en": "the cold imagery returns every time she speaks"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quelle immagini non sono messe lì per caso",
+            "gloss": {
+              "en": "that imagery isn't put there by chance"
+            }
+          }
+        ]
+      }
+    ],
+    "recognise-symbolism": [
+      {
+        "wordings": [
+          {
+            "phrase": "l'orologio compare sempre prima di una perdita",
+            "gloss": {
+              "en": "the clock always appears before a loss"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quell'uccello simboleggia la libertà",
+            "gloss": {
+              "en": "that bird symbolises freedom"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la casa vuota rappresenta quello che hanno perso",
+            "gloss": {
+              "en": "the empty house stands for what they lost"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo stesso oggetto torna più volte, e qualcosa significa",
+            "gloss": {
+              "en": "the same object recurs, and it means something"
+            }
+          }
+        ]
+      }
+    ],
+    "discuss-an-authors-craft": [
+      {
+        "wordings": [
+          {
+            "phrase": "la cosa interessante è come lo racconta, non cosa racconta",
+            "gloss": {
+              "en": "the interesting thing is how he tells it, not what he tells"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "le frasi corte fanno leggere più in fretta",
+            "gloss": {
+              "en": "the short sentences make you read faster"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lascia il dato alla fine e per questo colpisce",
+            "gloss": {
+              "en": "he leaves the fact to the end and that's why it lands"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'effetto viene dal ripetere la stessa parola",
+            "gloss": {
+              "en": "the effect comes from repeating the same word"
+            }
+          }
+        ]
+      }
+    ],
+    "paraphrase-a-figurative-passage": [
+      {
+        "wordings": [
+          {
+            "phrase": "detto in parole piane, l'uomo è solo",
+            "gloss": {
+              "en": "put plainly, the man is alone"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quello che vuol dire è che non si fida più di nessuno",
+            "gloss": {
+              "en": "what it means is that he no longer trusts anyone"
+            },
+            "lemmas": {
+              "fida": "fidarsi"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "senza tante immagini, il passo dice che la città è cambiata",
+            "gloss": {
+              "en": "stripped of the imagery, the passage says the city changed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tradotto in semplice, il personaggio ha paura",
+            "gloss": {
+              "en": "translated into plain terms, the character is afraid"
+            }
+          }
+        ]
+      }
+    ],
+    "identify-tone-in-a-text": [
+      {
+        "wordings": [
+          {
+            "phrase": "il tono è ironico dall'inizio alla fine",
+            "gloss": {
+              "en": "the tone is ironic from beginning to end"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "si sente una tristezza tranquilla in tutto il testo",
+            "gloss": {
+              "en": "a quiet sadness runs through the whole text"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'autore parla del suo paese con affetto",
+            "gloss": {
+              "en": "the author speaks of his town with affection"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è dello scherno, anche se sembra serio",
+            "gloss": {
+              "en": "there's mockery in it, though it looks serious"
+            }
+          }
+        ]
+      }
+    ],
+    "compare-two-treatments-of-a-theme": [
+      {
+        "wordings": [
+          {
+            "phrase": "parlano tutti e due dell'esilio, ma uno lo fa con rabbia",
+            "gloss": {
+              "en": "both speak of exile, but one does it with anger"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il primo guarda indietro e il secondo avanti",
+            "gloss": {
+              "en": "the first looks back and the second forward"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "stesso tema, due modi molto diversi di raccontarlo",
+            "gloss": {
+              "en": "same theme, two very different ways of telling it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "dove uno spiega, l'altro preferisce suggerire",
+            "gloss": {
+              "en": "where one explains, the other prefers to suggest"
+            }
+          }
+        ]
+      }
+    ],
+    "mediate-a-disagreement": [
+      {
+        "wordings": [
+          {
+            "phrase": "credo che non stiate discutendo della stessa cosa",
+            "gloss": {
+              "en": "I think you aren't arguing about the same thing"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lui dice una cosa e tu ne hai capita un'altra",
+            "gloss": {
+              "en": "he says one thing and you understood another"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "metto le due posizioni sul tavolo",
+            "gloss": {
+              "en": "let me put both positions on the table"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ascoltiamo prima e poi discutiamo",
+            "gloss": {
+              "en": "let's listen first and argue afterwards"
+            }
+          }
+        ]
+      }
+    ],
+    "restate-a-position-for-the-other-side": [
+      {
+        "wordings": [
+          {
+            "phrase": "quello che chiede lui è tempo, non soldi",
+            "gloss": {
+              "en": "what he's asking for is time, not money"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "detto in modo che si capisca: lei teme di perdere il posto",
+            "gloss": {
+              "en": "put so it's clear: she's afraid of losing her job"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il suo punto è che nessuno l'ha avvisato in tempo",
+            "gloss": {
+              "en": "his point is that nobody told him in time"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se lo dico con le tue parole, lui vuole la stessa cosa che vuoi tu",
+            "gloss": {
+              "en": "if I say it in your words, he wants the same as you"
+            }
+          }
+        ]
+      }
+    ],
+    "find-common-ground": [
+      {
+        "wordings": [
+          {
+            "phrase": "tutti e due volete che vada bene",
+            "gloss": {
+              "en": "you both want this to go well"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "in fondo state chiedendo la stessa cosa",
+            "gloss": {
+              "en": "at bottom you're asking for the same thing"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è una parte su cui siete già d'accordo",
+            "gloss": {
+              "en": "there's a part you already agree on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "possiamo cominciare da quello che nessuno mette in discussione",
+            "gloss": {
+              "en": "we can start from what nobody disputes"
+            }
+          }
+        ]
+      }
+    ],
+    "defuse-a-heated-exchange": [
+      {
+        "wordings": [
+          {
+            "phrase": "abbassiamo un po' i toni",
+            "gloss": {
+              "en": "let's lower the temperature a little"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "fermiamoci un momento e continuiamo con calma",
+            "gloss": {
+              "en": "let's stop a moment and go on calmly"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qui nessuno sta attaccando nessuno",
+            "gloss": {
+              "en": "nobody here is attacking anybody"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "così non arriviamo da nessuna parte",
+            "gloss": {
+              "en": "this way we get nowhere"
+            }
+          }
+        ]
+      }
+    ],
+    "interpret-across-a-cultural-gap": [
+      {
+        "wordings": [
+          {
+            "phrase": "per lui quello non è una mancanza di rispetto, è normale",
+            "gloss": {
+              "en": "for him that isn't disrespect, it's normal"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lì ci si saluta così e non significa altro",
+            "gloss": {
+              "en": "there people greet like that and it means nothing more"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "nel suo paese arrivare tardi non si prende allo stesso modo",
+            "gloss": {
+              "en": "in his country arriving late isn't taken the same way"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non te l'ha detto per maleducazione, l'ha detto per abitudine",
+            "gloss": {
+              "en": "he didn't say it to be rude, he said it out of habit"
+            }
+          }
+        ]
+      }
+    ],
+    "relay-between-two-languages": [
+      {
+        "wordings": [
+          {
+            "phrase": "dice che arriva domani pomeriggio",
+            "gloss": {
+              "en": "he says he's arriving tomorrow afternoon"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "gli spiego in italiano quello che hai appena detto",
+            "gloss": {
+              "en": "I'll explain to him in Italian what you just said"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "chiede se il prezzo comprende la spedizione",
+            "gloss": {
+              "en": "he's asking whether the price includes shipping"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "glielo traduco esattamente come l'ha detto",
+            "gloss": {
+              "en": "I'll translate it for him exactly as he said it"
+            }
+          }
+        ]
+      }
+    ],
+    "adjust-for-a-weaker-speaker": [
+      {
+        "wordings": [
+          {
+            "phrase": "te lo dico con parole più facili, ma è lo stesso",
+            "gloss": {
+              "en": "I'll say it in easier words, but it's the same thing"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vado piano e mi avvisi se qualcosa non si capisce",
+            "gloss": {
+              "en": "I'll go slowly and you tell me if anything isn't clear"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "uso frasi corte, non perché tu non capisca",
+            "gloss": {
+              "en": "I'm using short sentences, not because you don't understand"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se preferisci, lo ripeto in un altro modo",
+            "gloss": {
+              "en": "if you prefer, I'll repeat it another way"
+            }
+          }
+        ]
+      }
+    ],
+    "confirm-both-sides-are-satisfied": [
+      {
+        "wordings": [
+          {
+            "phrase": "siete soddisfatti tutti e due di questo",
+            "gloss": {
+              "en": "are you both satisfied with this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qualcuno resta con qualcosa da dire",
+            "gloss": {
+              "en": "is anyone left with something unsaid"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "allora l'accordo va bene a entrambi",
+            "gloss": {
+              "en": "so the agreement suits you both"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "voglio sentirlo da ciascuno prima di chiudere",
+            "gloss": {
+              "en": "I want to hear it from each of you before we close"
+            }
+          }
+        ]
+      }
+    ],
+    "stay-neutral-while-mediating": [
+      {
+        "wordings": [
+          {
+            "phrase": "non sto né da una parte né dall'altra",
+            "gloss": {
+              "en": "I'm on neither one side nor the other"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la mia opinione qui non serve",
+            "gloss": {
+              "en": "my opinion isn't needed here"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vi ascolto tutti e due allo stesso modo",
+            "gloss": {
+              "en": "I'm listening to you both equally"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non sono qui per decidere chi ha ragione",
+            "gloss": {
+              "en": "I'm not here to decide who's right"
+            }
+          }
+        ]
+      }
+    ],
+    "evaluate-against-criteria": [
+      {
+        "wordings": [
+          {
+            "phrase": "soddisfa quello che chiedevamo in tre punti su quattro",
+            "gloss": {
+              "en": "it meets what we asked for on three of the four points"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "misurato con i criteri di prima, va bene",
+            "gloss": {
+              "en": "measured against the earlier criteria, it comes out well"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il lavoro arriva in tempo, ma non rispetta il preventivo",
+            "gloss": {
+              "en": "the work arrives on time, but doesn't keep to budget"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "rivediamo punto per punto quello che era stato chiesto",
+            "gloss": {
+              "en": "let's go through point by point what had been asked"
+            }
+          }
+        ]
+      }
+    ],
+    "state-what-would-improve-something": [
+      {
+        "wordings": [
+          {
+            "phrase": "guadagnerebbe molto con un finale più corto",
+            "gloss": {
+              "en": "it would gain a lot from a shorter ending"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "io toglierei metà degli esempi",
+            "gloss": {
+              "en": "I'd cut half the examples"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se cominciasse dal risultato, sarebbe più chiaro",
+            "gloss": {
+              "en": "if it began with the result, it would be clearer"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "gli manca un esempio e gli avanza spiegazione",
+            "gloss": {
+              "en": "it's short an example and long on explanation"
+            }
+          }
+        ]
+      }
+    ],
+    "appraise-a-works-strengths-and-weaknesses": [
+      {
+        "wordings": [
+          {
+            "phrase": "il meglio è l'inizio, il più debole è la chiusura",
+            "gloss": {
+              "en": "the best is the opening, the weakest is the close"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è pensato molto bene, ma raccontato male",
+            "gloss": {
+              "en": "it's very well thought out, but badly told"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ha forza nei dati e debolezza nell'argomento",
+            "gloss": {
+              "en": "it's strong on data and weak on argument"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "funziona in generale, cade nei dettagli",
+            "gloss": {
+              "en": "it works overall, it falls down in the details"
+            }
+          }
+        ]
+      }
+    ],
+    "review-something-they-have-seen-or-read": [
+      {
+        "wordings": [
+          {
+            "phrase": "l'ho visto sabato e mi è sembrato meglio di quanto mi aspettassi",
+            "gloss": {
+              "en": "I saw it on Saturday and thought it better than I expected"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vale la pena leggerlo, anche se il primo capitolo costa fatica",
+            "gloss": {
+              "en": "it's worth reading, though the first chapter is hard going"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo consiglio a chiunque abbia pazienza",
+            "gloss": {
+              "en": "I'd recommend it to anyone with patience"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "comincia molto bene e cala nella seconda metà",
+            "gloss": {
+              "en": "it starts very well and drops off in the second half"
+            }
+          }
+        ]
+      }
+    ],
+    "challenge-an-expert-claim": [
+      {
+        "wordings": [
+          {
+            "phrase": "con tutto il rispetto, quello studio dice un'altra cosa",
+            "gloss": {
+              "en": "with all respect, that study says something else"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lei ne sa più di me, ma quel dato non mi torna",
+            "gloss": {
+              "en": "you know more than I do, but that figure doesn't add up for me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi piacerebbe sapere su cosa si basa quell'affermazione",
+            "gloss": {
+              "en": "I'd like to know what that claim rests on"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "senza essere uno specialista, ci vedo un problema",
+            "gloss": {
+              "en": "without being a specialist, I see a problem there"
+            }
+          }
+        ]
+      }
+    ],
+    "assess-the-reliability-of-a-source": [
+      {
+        "wordings": [
+          {
+            "phrase": "da dove è uscito quel dato",
+            "gloss": {
+              "en": "where did that figure come from"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quel sito non mi sembra affidabile",
+            "gloss": {
+              "en": "that site doesn't look reliable to me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'ha scritto qualcuno che ha interesse nella faccenda",
+            "gloss": {
+              "en": "it was written by someone with an interest in the matter"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "se viene da uno studio serio, lo prendo in considerazione",
+            "gloss": {
+              "en": "if it comes from a serious study, I'll take it into account"
+            }
+          }
+        ]
+      }
+    ],
+    "detect-a-weak-analogy": [
+      {
+        "wordings": [
+          {
+            "phrase": "il paragone non regge",
+            "gloss": {
+              "en": "the comparison doesn't hold"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "una scuola non è un'azienda",
+            "gloss": {
+              "en": "a school isn't a company"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'esempio somiglia fino a un certo punto e lì si rompe",
+            "gloss": {
+              "en": "the example holds up to a point and breaks there"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "i due casi sono diversi proprio in quello che conta",
+            "gloss": {
+              "en": "the two cases differ precisely where it matters"
+            }
+          }
+        ]
+      }
+    ],
+    "distinguish-correlation-from-cause": [
+      {
+        "wordings": [
+          {
+            "phrase": "che succedano insieme non vuol dire che una causi l'altra",
+            "gloss": {
+              "en": "that they happen together doesn't mean one causes the other"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "può essere una coincidenza",
+            "gloss": {
+              "en": "it may be a coincidence"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono salite tutte e due, ma questo non spiega niente",
+            "gloss": {
+              "en": "both went up, but that explains nothing"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "forse vengono entrambe da una terza causa",
+            "gloss": {
+              "en": "perhaps both come from a third cause"
+            }
+          }
+        ]
+      }
+    ],
+    "qualify-praise": [
+      {
+        "wordings": [
+          {
+            "phrase": "è molto buono, per quello che si poteva fare",
+            "gloss": {
+              "en": "it's very good, given what was possible"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi è piaciuto molto, con una riserva",
+            "gloss": {
+              "en": "I liked it a lot, with one reservation"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è un buon lavoro per il tempo che hanno avuto",
+            "gloss": {
+              "en": "it's good work for the time they had"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi congratulo, anche se il finale si può migliorare",
+            "gloss": {
+              "en": "I congratulate them, though the ending could be better"
+            },
+            "lemmas": {
+              "congratulo": "congratularsi"
+            }
+          }
+        ]
+      }
+    ],
+    "hold-two-readings-open": [
+      {
+        "wordings": [
+          {
+            "phrase": "può voler dire due cose e ancora non so quale",
+            "gloss": {
+              "en": "it may mean two things and I still don't know which"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per ora lascio aperte tutte e due le letture",
+            "gloss": {
+              "en": "for now I'll leave both readings open"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "andiamo avanti con entrambe le possibilità finché non sappiamo di più",
+            "gloss": {
+              "en": "let's carry both possibilities until we know more"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "le due spiegazioni restano in piedi",
+            "gloss": {
+              "en": "both explanations still stand"
+            }
+          }
+        ]
+      }
+    ],
+    "flag-an-ambiguity": [
+      {
+        "wordings": [
+          {
+            "phrase": "questo si può capire in due modi",
+            "gloss": {
+              "en": "that can be understood two ways"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la frase non è chiara, non so a chi si riferisce",
+            "gloss": {
+              "en": "the sentence isn't clear, I don't know who it refers to"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lì c'è qualcosa di ambiguo che conviene risolvere",
+            "gloss": {
+              "en": "there's something ambiguous there worth resolving"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "così come è scritto, ammette un'altra lettura",
+            "gloss": {
+              "en": "as written, it admits another reading"
+            }
+          }
+        ]
+      }
+    ],
+    "resolve-an-ambiguity-by-asking": [
+      {
+        "wordings": [
+          {
+            "phrase": "quando dici giovedì, parli di questa settimana o della prossima",
+            "gloss": {
+              "en": "when you say Thursday, do you mean this week or next"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "per esserne sicuro, ti riferisci al primo rapporto",
+            "gloss": {
+              "en": "to be sure, do you mean the first report"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo chiedo per conferma: sono cinque o quindici",
+            "gloss": {
+              "en": "I'm asking to confirm: is it five or fifteen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "una domanda per non sbagliare: chi firma",
+            "gloss": {
+              "en": "one question so I don't get it wrong: who signs"
+            }
+          }
+        ]
+      }
+    ],
+    "proceed-on-incomplete-information": [
+      {
+        "wordings": [
+          {
+            "phrase": "con quello che abbiamo, io comincerei lo stesso",
+            "gloss": {
+              "en": "with what we have, I'd start anyway"
+            },
+            "lemmas": {
+              "comincerei": "cominciare"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non c'è tutto, ma basta per andare avanti",
+            "gloss": {
+              "en": "it isn't complete, but it's enough to proceed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "andiamo avanti con quello che sappiamo e correggiamo dopo",
+            "gloss": {
+              "en": "let's go on with what we know and correct later"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "manca informazione, e comunque bisogna decidere oggi",
+            "gloss": {
+              "en": "information is missing, and we still have to decide today"
+            }
+          }
+        ]
+      }
+    ],
+    "state-what-remains-unresolved": [
+      {
+        "wordings": [
+          {
+            "phrase": "continuiamo a non sapere chi paga",
+            "gloss": {
+              "en": "we still don't know who's paying"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quello è rimasto irrisolto",
+            "gloss": {
+              "en": "that was left unresolved"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "di tutto quello di cui abbiamo parlato, la data resta in sospeso",
+            "gloss": {
+              "en": "of everything we discussed, the date is still up in the air"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il punto del prezzo non l'abbiamo chiuso",
+            "gloss": {
+              "en": "we didn't settle the point about the price"
+            }
+          }
+        ]
+      }
+    ],
+    "answer-a-question-with-a-false-premise": [
+      {
+        "wordings": [
+          {
+            "phrase": "la domanda dà per scontato qualcosa che non è successo",
+            "gloss": {
+              "en": "the question takes for granted something that didn't happen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "nessuno ha annullato niente, ma ti racconto cosa è successo",
+            "gloss": {
+              "en": "nobody cancelled anything, but I'll tell you what did happen"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non è andata così, e ti spiego com'è andata",
+            "gloss": {
+              "en": "it wasn't like that, and I'll explain how it was"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "parto da un'altra base: l'ordine non è mai arrivato",
+            "gloss": {
+              "en": "I start from a different premise: the order never arrived"
+            }
+          }
+        ]
+      }
+    ],
+    "act-on-a-vague-brief": [
+      {
+        "wordings": [
+          {
+            "phrase": "l'ho fatto come mi è sembrato e ti dico cosa ho supposto",
+            "gloss": {
+              "en": "I did it as seemed right and I'll tell you what I assumed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'istruzione era ampia, quindi ho scelto la cosa più semplice",
+            "gloss": {
+              "en": "the brief was broad, so I chose the simplest option"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono andato avanti dando per scontato che fosse per lunedì",
+            "gloss": {
+              "en": "I went ahead assuming it was for Monday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non diceva il formato, e ho usato quello di sempre",
+            "gloss": {
+              "en": "it didn't say the format, so I used the usual one"
+            }
+          }
+        ]
+      }
+    ],
+    "withhold-commitment-without-seeming-evasive": [
+      {
+        "wordings": [
+          {
+            "phrase": "preferisco non impegnarmi finché non vedo i numeri",
+            "gloss": {
+              "en": "I'd rather not commit until I see the figures"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti rispondo martedì, quando avrò il dato",
+            "gloss": {
+              "en": "I'll answer you on Tuesday, when I have the figure"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non ti dico né sì né no per ora, e ti spiego perché",
+            "gloss": {
+              "en": "I'm not saying yes or no yet, and I'll tell you why"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi interessa, ma prima devo parlare con la squadra",
+            "gloss": {
+              "en": "I'm interested, but first I need to talk to the team"
+            }
+          }
+        ]
+      }
+    ],
+    "leave-something-deliberately-open": [
+      {
+        "wordings": [
+          {
+            "phrase": "lo lascio aperto di proposito",
+            "gloss": {
+              "en": "I'm leaving it open on purpose"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "preferisco non mettere ancora una data",
+            "gloss": {
+              "en": "I'd rather not put a date on it yet"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "do un numero approssimativo di proposito",
+            "gloss": {
+              "en": "I'm giving an approximate figure deliberately"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che resti così ampio, per non chiuderci",
+            "gloss": {
+              "en": "let it stay that broad, so we don't box ourselves in"
+            }
+          }
+        ]
+      }
     ]
   }
 }

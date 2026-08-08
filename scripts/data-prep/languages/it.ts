@@ -112,15 +112,12 @@ const APOCOPE: Record<string, string> = {
   quel: "quello",
   // `mal di testa`, `mal di gola`: `male` drops its vowel before `di`.
   mal: "male",
-  // `vuol dire`, `poter fare`: a verb drops its final vowel before
-  // another verb.
+  // `vuol dire`: a CONJUGATED verb dropping its vowel. The infinitive doing
+  // the same (`poter fare`) is handled in morphology, for every verb at once.
   vuol: "volere",
-  poter: "potere",
   qualcun: "qualcuno",
   // `fin qui`, `fin lì`: `fino` drops its vowel before a place word.
   fin: "fino",
-  // `dopo aver letto`: the infinitive drops its vowel before a participle.
-  aver: "avere",
   // `la maggior parte`: `maggiore` drops its vowel before a noun.
   maggior: "maggiore"
 };
@@ -717,9 +714,22 @@ function addItalianExtraForms(
   const f = entry.forms;
   const { lemmaId, partsOfSpeech } = entry;
   if (!partsOfSpeech.includes("verb")) return;
-  if (!/(are|ere|ire)$/.test(lemmaId)) return;
+  // `-rre` is the fourth infinitive ending -- `porre`, `esporre`, `tradurre`.
+  // Leaving it out meant those verbs got no attached-pronoun forms at all.
+  if (!/(are|ere|ire|rre)$/.test(lemmaId)) return;
 
-  const bases: string[] = [lemmaId.slice(0, -1)];
+  // The infinitive minus its final -e: the base a pronoun attaches to, and a
+  // word in its own right before another verb (`poter fare`, `voler dire`).
+  // Registering it here means the apocope list does not grow a line per verb.
+  // The -rre verbs drop TWO letters, not one: `esporre` gives `espor` (hence
+  // `esporle`), `tradurre` gives `tradur`. Taking one letter off produced
+  // `esporr`, and every pronoun attached to it was a non-word.
+  const truncated = lemmaId.endsWith("rre")
+    ? lemmaId.slice(0, -2)
+    : lemmaId.slice(0, -1);
+  addMorphologyEntry(forms, truncated, lemmaId, partsOfSpeech);
+
+  const bases: string[] = [truncated];
   if (f && "pres" in f) {
     const command = lemmaId.endsWith("are") ? f.pres[2] : f.pres[1];
     if (typeof command === "string") bases.push(command);

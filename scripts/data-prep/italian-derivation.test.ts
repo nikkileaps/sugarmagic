@@ -190,12 +190,15 @@ describe("derived Italian forms are real words", () => {
     const out = derive({ lemmaId: "temere", partsOfSpeech: ["verb"] });
     expect(out.length).toBeGreaterThan(0);
     expect(out).toContain("temermi");
+    // The truncated infinitive itself is also a word (`temer dire`), and needs
+    // only the infinitive to build.
+    expect(out).toContain("temer");
     // No subjunctive, conditional or future: every form is the infinitive
-    // stem plus one pronoun and nothing else.
+    // stem, alone or plus one pronoun, and nothing else.
     const clitics = ["mi", "ti", "si", "ci", "vi", "lo", "la", "li", "le", "ne"];
     for (const surface of out) {
       expect(
-        clitics.some((clitic) => surface === `temer${clitic}`),
+        surface === "temer" || clitics.some((clitic) => surface === `temer${clitic}`),
         surface
       ).toBe(true);
     }
