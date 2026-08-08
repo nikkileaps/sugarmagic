@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sugarmagic.dev/schemas/exponents.schema.json",
+  "title": "Sugarlang Exponents",
+  "description": "The phrases that perform each competency in one language. HAND-AUTHORED -- this is the only per-language file a person writes by hand, and the competency inventory is generated from it plus the language-neutral curriculum. Structure only: whether a phrase's words resolve, and whether the competency exists, are checked by the build and reported in its failure list.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "lang", "exponents"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "lang": {
+      "description": "BCP-47 code. Must match the directory this file sits in.",
+      "type": "string",
+      "pattern": "^[a-z]{2}$"
+    },
+    "exponents": {
+      "description": "Keyed by competencyId. A competency absent here is simply not taught in this language yet, which is a legitimate state -- a language is authored one lesson at a time.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": {
+        "description": "The exponents for one competency. Each entry is ONE learner card, so the split between entries is the decision about what counts as one thing to know.",
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["wordings"],
+          "properties": {
+            "wordings": {
+              "description": "Ways of saying the same thing. Grouped here they are one card; separate entries are separate cards. The first is canonical and gives the exponent its id.",
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["phrase", "gloss"],
+                "properties": {
+                  "phrase": {
+                    "description": "The target-language phrase, written correctly, accents and all. Lowercase unless the word itself takes a capital, and no TRAILING punctuation -- a semicolon joining two clauses mid-phrase is fine and B2 uses them. Unaccented spellings are DERIVED -- writing them here duplicates what the build already produces.",
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "[^.!?;\\s]$"
+                  },
+                  "gloss": {
+                    "description": "What this wording MEANS, per support language. Authored because it cannot be derived: `por favor` from its own words comes out `for favour`. Translate the phrase, do not describe the act.",
+                    "type": "object",
+                    "minProperties": 1,
+                    "propertyNames": { "pattern": "^[a-z]{2}$" },
+                    "additionalProperties": { "type": "string", "minLength": 1 }
+                  },
+                  "lemmas": {
+                    "description": "Pins a word in THIS phrase to the lemma it means. Only where the index resolves it the WRONG way -- Italian `sei` is the numeral before it is `essere`. A word that does not resolve at all needs a dictionary entry, not an override.",
+                    "type": "object",
+                    "minProperties": 1,
+                    "additionalProperties": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

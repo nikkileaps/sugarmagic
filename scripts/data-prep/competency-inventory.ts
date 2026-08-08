@@ -17,8 +17,12 @@
  * Status: active
  */
 
+import Ajv2020 from "ajv/dist/2020.js";
+import type { ErrorObject, ValidateFunction } from "ajv";
+
 import type { LanguageRules } from "./languages/language-rules";
 import { languageRules } from "./languages/registry";
+import { readJsonFile, sugarlangDataPath } from "./sugarlang-language-data";
 
 export type CurriculumBandFile = {
   schemaVersion: string;
@@ -93,6 +97,56 @@ type InventoryExponent = {
    */
   glossBySurface: Record<string, Record<string, string>>;
 };
+
+/**
+ * STRUCTURE FIRST, MEANING SECOND.
+ *
+ * The build already reports meaning problems well -- an unresolvable word, a
+ * competency that is not in the curriculum -- by collecting them all and
+ * naming each one. It reported SHAPE problems terribly: a missing `gloss` or a
+ * mistyped `wordings` reached the loop below and came out as a TypeError
+ * pointing at a line of this file, saying nothing about which phrase was
+ * wrong.
+ *
+ * That was survivable while one language was authored. It is not the thing to
+ * hand someone writing a few thousand phrases by hand.
+ *
+ * So the schema owns shape and runs first, and the failure list below stays
+ * the single place meaning problems are reported. Two checks, two jobs, no
+ * overlap.
+ */
+let compiledExponentsSchema: ValidateFunction | null = null;
+
+function describeSchemaError(error: ErrorObject): string {
+  // `/exponents/greet/0/wordings/0` reads better as a path than as prose, and
+  // it is what an author needs to find the entry.
+  const where = error.instancePath === "" ? "(root)" : error.instancePath;
+  const extra =
+    error.keyword === "additionalProperties"
+      ? ` ("${String((error.params as { additionalProperty?: string }).additionalProperty)}")`
+      : "";
+  return `${where} ${error.message ?? "is invalid"}${extra}`;
+}
+
+function assertExponentsShape(exponents: ExponentsFile): void {
+  if (!compiledExponentsSchema) {
+    compiledExponentsSchema = new Ajv2020({ strict: true, allErrors: true }).compile(
+      readJsonFile<object>(sugarlangDataPath("schemas", "exponents.schema.json"))
+    );
+  }
+  // Called for its boolean, not as a type guard -- Ajv's guard narrows the
+  // argument to `unknown` and the error branch to `never`, which loses the
+  // `lang` this message needs.
+  const valid: boolean = compiledExponentsSchema(exponents);
+  if (valid) return;
+
+  const errors = compiledExponentsSchema.errors ?? [];
+  throw new Error(
+    `Cannot read the ${exponents.lang ?? "(unknown)"} exponents:\n  ${errors
+      .map(describeSchemaError)
+      .join("\n  ")}`
+  );
+}
 
 export function stripDiacritics(value: string): string {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").normalize("NFC");
@@ -169,6 +223,7 @@ export function buildCompetencyInventory(inputs: {
   morphology: MorphologyFile;
 }): CompetencyInventoryFile {
   const { bands, exponents, morphology } = inputs;
+  assertExponentsShape(exponents);
   const lang = exponents.lang;
   const rules = languageRules(lang);
 
