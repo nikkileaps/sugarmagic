@@ -36,9 +36,11 @@
  */
 
 import esCollisions from "../../data/languages/es/english-collisions.json";
+import itCollisions from "../../data/languages/it/english-collisions.json";
 
 const BY_LANG: Partial<Record<string, Set<string>>> = {
-  es: new Set((esCollisions as { surfaces: string[] }).surfaces)
+  es: new Set((esCollisions as { surfaces: string[] }).surfaces),
+  it: new Set((itCollisions as { surfaces: string[] }).surfaces)
 };
 
 /** The collision set for a language, or an empty set (nothing suppressed). */
