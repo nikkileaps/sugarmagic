@@ -11,6 +11,10 @@
  *   new file instead. That property is the point of this layout, and it is
  *   checked by building a language end to end and reading `git diff --stat`.
  *
+ *   That is the BUILD half only. The full checklist, including the data files
+ *   and the runtime registration a language needs to be playable, is in
+ *   packages/plugins/src/catalog/sugarlang/data/languages/README.md.
+ *
  * Relationships:
  *   - Depends on ./<lang> and ../sugarlang-language-data. Nothing depends back
  *     on it from the shared pipeline, so the dependency runs one way.

@@ -7,9 +7,9 @@
  * WHY FRENCH IS HERE AT ALL
  *   This is a dry run, not a language. There is one lesson of exponents and a
  *   dictionary seeded by hand to cover it, and nothing registers `fr` for play.
- *   Its job is to answer a question that two languages could not: is the
- *   per-language tier actually separate, or was it only separated as far as
- *   Italian happened to push it?
+ *   Its job is to answer a question that two languages could not: is every
+ *   language's own rule really in that language's own file, or did the shared
+ *   pipeline only get cleaned up as far as Italian happened to push it?
  *
  *   The check is the file list. Adding French should create French files and
  *   add one line to the registry. Anything else it forced is a rule that was

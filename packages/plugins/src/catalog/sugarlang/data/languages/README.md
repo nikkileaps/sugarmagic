@@ -1,147 +1,208 @@
 # Language Data
 
-This directory holds plugin-shipped language assets for sugarlang. Runtime code
-never branches on language identity; adding a supported language means adding
-one new `languages/<lang>/` directory that satisfies the shared schemas.
+This directory holds the plugin-shipped language assets for sugarlang: three
+languages, one directory each.
 
-## Required Files Per Language
+**This file is the canonical "adding a language" checklist.** Other docs point
+here rather than repeating it.
 
-- `languages/<lang>/README.md`: provenance, licensing notes, rerun instructions, and coverage notes.
-- `languages/<lang>/cefrlex.json`: lexical atlas consumed by the classifier, budgeter, compiler, and provider layer.
-- `languages/<lang>/morphology.json`: surface-form lookup data consumed by lemmatization.
-- `languages/<lang>/placement-questionnaire.json`: plugin-owned canonical placement question bank.
+| | Spanish | Italian | French |
+|---|---|---|---|
+| Dictionary lemmas | 10,618 | 6,449 | 116 |
+| Morphology surfaces | 103,229 | 41,423 | 734 |
+| Competencies taught | 635 of 635 | 635 of 635 | 18 of 635 |
+| Playable | yes | yes | **no** |
 
-Spanish also ships `languages/es/exponents.json` and the
-`languages/es/competency-inventory.json` generated from it. Italian also ships
-`languages/it/frequency.json`.
+French is a check, not a language -- see `fr/README.md`.
 
-## Schema References
+## Runtime and language identity
 
-- `../schemas/cefrlex.schema.json`
-- `../schemas/morphology.schema.json`
-- `../schemas/placement-questionnaire.schema.json`
-- `../schemas/frequency.schema.json`
-- `../schemas/competency-inventory.schema.json`
+Runtime code holds no language's grammar. Rules that differ per language live
+in `scripts/data-prep/languages/<lang>.ts` and are baked into the data before
+the runtime ever sees it.
 
-## Source Versus Derived
+What the runtime does have is a **registration map** in each of six loaders,
+mapping a language code to its statically imported data file:
 
-Only two kinds of file live here, and the difference decides how you change one.
+- `runtime/classifier/morphology-loader.ts`
+- `runtime/classifier/english-collisions.ts`
+- `runtime/providers/impls/cefr-lex-atlas-provider.ts`
+- `runtime/inventory/competency-inventory-loader.ts`
+- `runtime/teacher/always-target-words.ts`
+- `runtime/placement/placement-questionnaire-loader.ts`
+
+Those maps exist because the data is bundled at build time, not fetched. They
+carry no behaviour -- adding a line changes what is loadable, never what is
+done with it.
+
+## Files per language
+
+Required to be playable:
+
+- `cefrlex.json` -- the DICTIONARY, one entry per lemma.
+- `exponents.json` -- the PHRASES that perform each competency.
+- `morphology.json` -- derived: `surface form -> lemma`.
+- `competency-inventory.json` -- derived: what the runtime loads.
+- `placement-questionnaire.json` -- the arrival form, generated from the
+  language's own builder.
+- `always-target.json` -- the handful of words spoken in this language at every
+  level, however English the rest of the line is.
+- `english-collisions.json` -- English words that are also real words here, so
+  a learner typing English does not bank credit on a word they never used.
+- `README.md` -- provenance for that language.
+
+Italian additionally ships `frequency.json`, from its Kelly import. Spanish
+does not have one.
+
+## Three terms
+
+**forms** -- the inflected shapes on a dictionary entry: a verb's conjugations,
+a noun's plural, an adjective's gender and number. `forms` is the word for
+this. Filling them is what makes a word resolve, and it is the bulk of the
+authoring work. Read them through `runtime/classifier/word-forms.ts`, never by
+bare index.
+
+**function words** -- lemmas that carry no lexical content of their own:
+articles, clitic pronouns, possessive determiners. An exponent does not count
+them among the words it teaches. The list is per language and lives in that
+language's rules file, because the same spelling can be functional in one
+language and meaningful in another -- Italian `su` is a preposition and Spanish
+`su` is a possessive. Prepositions are never on the list; they are vocabulary.
+
+**written short forms** -- tokens that are not words and stand for one or more
+that are. Three unlike things, one idea:
+
+| | example | |
+|---|---|---|
+| Italian | `dov'è` -> `dove` `è` | apostrophe |
+| Italian | `qual` -> `quale` | shortened, no apostrophe written |
+| French | `allez-vous` -> `allez` `vous` | hyphen |
+
+A language declares its own via `expandWrittenForm`. Before this existed the
+build shredded `dov'è` into `dov` and `e` -- two fragments no dictionary holds.
+
+## Source versus derived
 
 **SOURCE. Hand-authored, never regenerated wholesale.**
 
-- `cefrlex.json` -- the DICTIONARY. One entry per lemma: band, part of speech,
-  frequency rank, glosses, and (for verbs) the full set of forms.
-- `exponents.json` -- the PHRASES that perform each competency, in this
-  language. Wordings only; write them spelled correctly, accents and all.
-  Everything else about an exponent is derived.
-- `placement-questionnaire.json`.
+`cefrlex.json`, `exponents.json`, `always-target.json`,
+`english-collisions.json`.
 
-- `always-target.json` -- the handful of words spoken in this language at every
-  level, however much of the line is in English: subject pronouns, possessives,
-  yes and no. HAND-AUTHORED, and short on purpose. These are not teachables --
-  the Teacher never chooses them and they consume no slate slot. A content word
-  here would be taught to every learner forever, so the suite rejects anything
-  that is only a noun.
+There is no importer. Dictionaries were seeded once from a word list and
+everything since is authored. Nothing in this repo can overwrite one; see
+`scripts/data-prep/DICTIONARY-AUTHORING.md`.
 
 **DERIVED. Regenerated from the sources above, never hand-edited.**
 
-- `morphology.json` -- the reverse index: `surface form -> lemma`. The
-  dictionary answers "what is `hablar`?"; this answers "I found `hablando` in
-  this text, what dictionary entry is that?" You need both, because text
-  contains surfaces and the dictionary is keyed by headwords.
-- `competency-inventory.json` -- what the runtime loads. Built from the
-  language-neutral curriculum in `../curriculum/` plus this language's
-  `exponents.json`, with every word resolved through `morphology.json`. A
-  phrase whose words do not resolve fails the build rather than shipping a
-  lemma nobody checked.
+`morphology.json` is the reverse index. The dictionary answers "what is
+`hablar`?"; this answers "I found `hablando`, what entry is that?" You need
+both, because text contains surfaces and the dictionary is keyed by headwords.
 
-There is no importer. Dictionaries were seeded once from a CEFR word list and
-everything since is authored and reviewed, so nothing in this repo can overwrite
-one. See `scripts/data-prep/DICTIONARY-AUTHORING.md` for the prompt and the
-rules an author or model follows.
+`competency-inventory.json` is what the runtime loads, built from the
+language-neutral curriculum plus this language's `exponents.json`.
 
-## The Pipeline: Adding Or Changing A Word
+`placement-questionnaire.json` is generated from the language's
+`buildPlacementQuestionnaire()`. Editing the builder changes nothing until the
+build re-runs, which the suite pins.
 
-1. **Edit the dictionary entry.** This is the only step where anyone types
-   anything. Fill gaps, never overwrite: an entry carries provenance
-   (`cefrPriorSource`, `formsSource`), and a pass may only write where a field
-   is absent or still marked as machine-generated. A human or model correction
-   is permanent.
-2. **Regenerate morphology.**
+## The authoring loop
 
-       pnpm exec tsx scripts/data-prep/build-morphology.ts es
+Exponents drive the dictionary, not the reverse. Write the phrases you want,
+let the build tell you which words it cannot resolve, then fill those in.
+
+1. **Write a lesson's phrases** in `exponents.json`. See
+   `scripts/data-prep/EXPONENT-AUTHORING.md`.
+2. **Build the inventory.** It fails loudly and names every unresolvable word.
+
+       pnpm exec tsx scripts/data-prep/build-competency-inventory.ts it
+
+3. **Fill the dictionary** with the words it named -- add the entry, or add
+   `forms` to an entry that has none. Fill gaps, never overwrite: an entry
+   carries `cefrPriorSource` and `formsSource`, and a pass may write only where
+   a field is absent or still marked `generated`.
+4. **Regenerate morphology**, which is total rather than incremental, so the
+   index and the dictionary cannot drift.
+
        pnpm exec tsx scripts/data-prep/build-morphology.ts it
 
-   This is total, not incremental -- it discards the old index and rebuilds it
-   from the dictionary. So the two cannot drift by hand.
-3. **Rebuild any inventory that depends on it.** Constituent lemmas are
-   resolved through the morphology index, so a dictionary change can move them.
+5. **Rebuild the inventory** and repeat until it is green.
+6. **Run the tests.**
 
-       pnpm exec tsx scripts/data-prep/build-competency-inventory.ts es
+       pnpm vitest run scripts/data-prep packages/plugins/src/catalog/sugarlang/tests/data
 
-   Also rerun this after editing `../curriculum/*.json` or `exponents.json`.
-   `scripts/data-prep/competency-inventory.test.ts` fails if the checked-in
-   file is not exactly what a fresh build produces, so a skipped rebuild or a
-   hand-edit is caught by the suite rather than at the next regeneration.
-4. **Run the tests.** The shipped data is validated against the schemas, and
-   `tests/classifier/verb-forms.test.ts` checks the forms themselves: six
-   slots per tense, provenance present, target-language orthography only.
+### Two failure modes, and only one is loud
 
-## What Reads This Data
+A word that resolves to **nothing** fails the build by name. That is the easy
+one.
 
-Worth knowing before changing it, because the blast radius is wider than it looks.
+A word that resolves to the **wrong lemma** is silent and green. The morphology
+index maps a surface to exactly one lemma and a headword outranks another
+word's inflected form, so Italian `costa` resolves to the noun "coast" rather
+than to `costare`. The phrase then links to a word it does not teach.
+
+The remedy is a `lemmas` override on the wording -- but only where the
+resolution is genuinely wrong. A word that does not resolve *at all* needs the
+dictionary, not an override. Spanish carries 388 overrides (13% of wordings)
+and Italian 28 (1%); the difference is that Italian's dictionary was filled
+properly instead.
+
+## What reads this data
+
+Wider than it looks:
 
 - The DICTIONARY is read through `CefrLexAtlasProvider` by the classifier, the
-  Teacher, scene compilation and the grading pipeline.
-- MORPHOLOGY is read through `lemmatize()`, and therefore by ambient spans,
-  the language-ratio gate in `coverage.ts`, click-to-translate
-  (`lookupSelection`), observation credit for words the player types, and
-  proper-noun detection at compile time.
+  Teacher, scene compilation and grading.
+- MORPHOLOGY is read through `lemmatize()`, and therefore by ambient spans, the
+  language-ratio gate in `coverage.ts`, click-to-translate, observation credit
+  for words the player types, and proper-noun detection at compile time.
 
 A wrong lemma is worse than a missing one: it produces a confident wrong gloss
-on a real word, and it writes a card against the wrong headword.
+on a real word, and writes a card against the wrong headword.
 
-## Adding A Language
+## Adding a language
 
-1. **Seed the dictionary.** Use `scripts/data-prep/DICTIONARY-AUTHORING.md`. A
-   CEFR-graded word list is a good starting point for lemmas and bands; where
-   one does not exist, derive bands from frequency and record that honestly in
-   `cefrPriorSource`. Seeding is one-time -- after it, the dictionary is source.
-2. **Author the forms.** Verbs need `forms`. Decide the tense scope for the
-   language before starting: Spanish ships present, preterite and imperfect for
-   A1-B1 because the future at those levels is `ir a` + infinitive. Another
-   language will differ -- Italian's everyday past is the compound passato
-   prossimo, and its `futuro semplice` is one word and common.
-3. **Add a morphology deriver** in `scripts/data-prep/` if the language needs
-   one that differs from the existing ones, and regenerate.
-4. **Author placement questions.** Placement banks are plugin-owned v1 data,
-   not per-project content.
-5. **Validate and test.** Every shipped JSON must pass its schema, and the
-   loader, lemmatization and band-distribution tests are the minimum bar.
-6. **Write the language README.** It is the single source of truth for where
-   that language's data came from and what has been reviewed.
+**Build side** -- one new file and one line:
 
-Note a language is not playable on the dictionary alone. Italian ships a
-dictionary and a placement bank but authors no `exponents.json`, so it has no
-generated `competency-inventory.json` either and the competency half of
-teaching is Spanish-only today.
+1. **Write `scripts/data-prep/languages/<lang>.ts`** implementing
+   `LanguageRules`: its function words, its written short forms, how its stored
+   forms become morphology entries, which tenses are derived rather than stored,
+   and its placement bank.
+2. **Register it** in `scripts/data-prep/languages/registry.ts`.
 
-That absence is deliberate and stays silent at runtime: the loader throws for a
-language it has no inventory for, and every caller catches that and carries on
-with no competencies, which is the same state as an empty curriculum. Making it
-an error would take Italian out of the game entirely to report a gap the game
-already handles. It is loud in the only place it can be fixed -- there is no
-Italian build script to run, because there is nothing yet for it to read.
+If anything outside `languages/` needs editing to make a language build, a rule
+belonging to one language is still living in shared code. That is the finding,
+and `scripts/data-prep/new-language.test.ts` exists to catch it.
 
-## Reference Patterns
+3. **Seed the dictionary.** A CEFR-graded word list is a good start; where none
+   exists, derive bands from frequency and say so in `cefrPriorSource`. Seeding
+   is one-time -- after it the dictionary is source. French was seeded by hand
+   instead, straight from what lesson 1 needed.
+4. **Author forms as the build asks for them**, following the loop above.
+   Decide the tense scope for the language first: Spanish ships present,
+   preterite and imperfect because its A1-B1 future is `ir a` + infinitive.
+   Italian differs -- its everyday past is the compound passato prossimo and its
+   `futuro semplice` is one word and common. Do not copy Spanish's answer.
+5. **Author `always-target.json`**, including `dropsSubjectPronouns`. Spanish
+   and Italian leave the subject out of an ordinary sentence; French does not,
+   and the flag has no safe default.
+6. **Author `english-collisions.json`.**
+7. **Write the language README.**
 
-- Well-resourced pattern: Spanish, seeded from a CEFR-graded lexicon, with
-  hand-authored verb forms.
-- Under-resourced pattern: Italian, seeded from a frequency list with
-  frequency-derived band backfill, and no forms yet.
+**Runtime side** -- to make it playable, add the language to the map in each of
+the six loaders listed above, and to `VALID_TARGET_LANGUAGES`.
 
-Languages likely feasible with the same architecture include French, German,
-Swedish, Dutch, and English. Languages intentionally out of scope for v1
-include Japanese, Chinese, Korean, and Arabic because the CEFR-aligned data,
-and morphology assumptions differ too much from the current
-Latin-script pipeline.
+## Reference patterns
+
+- **Spanish** -- seeded from a CEFR-graded lexicon (ELELex). Forms are largely
+  machine-generated: 9,378 entries are `generated`, 405 `authored`, 835 have
+  none.
+- **Italian** -- seeded from a frequency list (Kelly) with model-assigned bands
+  for the 1,476 lemmas Kelly did not place. Fewer entries carry forms (407),
+  but all of them are `authored`, which is why it needs a fourteenth as many
+  lemma overrides as Spanish.
+- **French** -- 116 lemmas written by hand to cover one lesson. Not playable.
+
+Languages feasible with this architecture include French, German, Swedish,
+Dutch and English. Japanese, Chinese, Korean and Arabic are out of scope for
+v1: the CEFR-aligned data and the morphology assumptions differ too much from
+this Latin-script pipeline.

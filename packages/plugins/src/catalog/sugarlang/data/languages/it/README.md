@@ -1,58 +1,67 @@
 # Italian Data
 
-This directory holds the checked-in Italian language data snapshot for
-sugarlang.
+## Target Variety: Standard Italian
 
-## Provenance Status
+Standard Italian is what is taught, broadcast and written everywhere, so there
+is no regional substitution table the way Spanish has one. The regional
+differences are dialect rather than a second standard.
 
-The current checked-in files are rebuilt from the real Italian Kelly list via
-the scripts in `scripts/data-prep/`. The checked-in frequency file preserves the
-Kelly ordering as a monotonic frequency proxy, while the atlas merges explicit
-Kelly CEFR assignments with quantile-derived bands for entries whose Kelly row
-does not provide a CEFR point.
+Phrases are authored **correct for Italian, not translated from Spanish** --
+the passato prossimo rather than a one-word preterite, Lei plus a third-person
+verb rather than a politeness pronoun. See
+`scripts/data-prep/EXPONENT-AUTHORING.md`.
 
-## Source Families
+## Provenance
 
-- Kelly project reference: <https://spraakbanken.gu.se/projekt/kelly>
-- Kelly multilingual Italian download: <https://ssharoff.github.io/kelly/it_m3.xls>
+`cefrlex.json` was seeded once from the Italian Kelly list and has been a
+source file ever since. **There is no importer.** `derive-italian-frequency.ts`
+exists and produced `frequency.json` once; `build-italian-cefrlex.ts` is cited
+by older documents and does not exist.
+
+`exponents.json`, `always-target.json` and `english-collisions.json` are
+LLM-authored and reviewed by hand.
+
+- Kelly project: <https://spraakbanken.gu.se/projekt/kelly>
+- Italian Kelly download: <https://ssharoff.github.io/kelly/it_m3.xls>
 
 ## Files
 
-- `frequency.json`
-  - Generated snapshot date: `2026-04-09`
-  - Source: Italian Kelly rank order
-  - Current representation: monotonic frequency proxy derived from the published Kelly ordering
-  - Total ranked lemmas: 6,370
-- `kelly-subset.json`
-  - Source version tag: `it-kelly-2014`
-  - Seed lemmas carried through to the merged atlas
-- `cefrlex.json`
-  - Atlas version: `it-kelly-2026-04-09`
-  - Band distribution: A1 953, A2 982, B1 958, B2 2,024, C1 1,323, C2 130
-  - Every lemma carries `cefrPriorSource`
-- `morphology.json`
-  - Surface-form entries: 12,943
-  - Includes smoke-test forms such as `correndo -> correre`
-  - Higher-band entries covered: 4,435
-  - Current build strategy: lower-band substitutions chosen from the imported atlas by part of speech and rank
-  - Current substitution coverage: 100%
-- `placement-questionnaire.json`
-  - Mixed-kind canonical bank with 10 questions and `minAnswersForValid = 6`
-- `review-queue.yaml`
-  - Human-review queue for low-confidence derived assignments
+- `cefrlex.json` -- atlas version `it-kelly-2026-04-09`, **6,449 lemmas**
+  - Bands: A1 1,022, A2 1,399, B1 1,521, B2 1,362, C1 1,015, C2 130
+  - Band provenance: 4,973 `kelly`, 1,476 `claude-classified` for the lemmas
+    Kelly lists without placing
+  - Forms: 259 verb, 48 noun, 100 adjective
+  - Forms provenance: **all 407 are `authored`**, none generated. The other
+    6,042 lemmas have no forms yet and are filled as authoring reaches them.
+- `morphology.json` -- 41,423 surfaces, derived
+- `frequency.json` -- Kelly rank order as a monotonic frequency proxy
+- `exponents.json` -- 635 competencies, 2,519 cards, 2,863 wordings, 28 lemma
+  overrides (1%)
+- `competency-inventory.json` -- 65 lessons, 635 of 635 competencies taught
+- `placement-questionnaire.json` -- 10 questions, `minAnswersForValid = 6`
+- `always-target.json` -- `dropsSubjectPronouns: true`
+- `english-collisions.json` -- authored from knowledge of both languages, not
+  measured from captured violations the way Spanish's was
 
-## Confidence Notes
+Older documents refer to `kelly-subset.json` and `review-queue.yaml`. Neither
+file exists.
 
-Italian remains the lower-confidence atlas relative to Spanish. The shipped
-snapshot keeps `cefrPriorSource` on every lemma and preserves a review queue so
-human overrides can replace low-confidence derived assignments later without
-changing the runtime contract.
+## Where Italian stands against Spanish
+
+Full parity on what is taught -- both ship all 635 competencies across 65
+lessons. The dictionary is smaller (6,449 lemmas against 10,618), which is a
+recognition-breadth difference rather than a teaching one: a player typing a
+rarer Italian word is likelier to go unrecognised.
+
+Fewer entries carry forms, but every one that does was written by hand rather
+than generated. That is why Italian needs 28 lemma overrides where Spanish
+needs 388 -- a missing form shows up as a build failure and gets fixed in the
+dictionary, which is where it belongs.
 
 ## Re-Run
 
-From the repo root:
+From the repo root, after editing `cefrlex.json` or `exponents.json`:
 
-- `pnpm exec tsx scripts/data-prep/derive-italian-frequency.ts`
-- `pnpm exec tsx scripts/data-prep/build-italian-cefrlex.ts`
 - `pnpm exec tsx scripts/data-prep/build-morphology.ts it`
+- `pnpm exec tsx scripts/data-prep/build-competency-inventory.ts it`
 - `pnpm exec tsx scripts/data-prep/build-placement-questionnaires.ts`

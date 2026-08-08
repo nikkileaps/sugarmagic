@@ -1,9 +1,9 @@
 # French Data
 
-**This is a conformance check, not a language.** French is not playable and is
-not meant to be. It exists to answer a question two languages could not: is the
-per-language tier actually separate, or was it only separated as far as Italian
-happened to push it?
+**This is a check, not a language.** French is not playable and is not meant to
+be. It exists to answer a question two languages could not: is every language's
+own rule really in that language's own file, or did the shared pipeline only get
+cleaned up as far as Italian happened to push it?
 
 The answer is the file list. Adding French created these files plus one line in
 `scripts/data-prep/languages/registry.ts`, and touched no shared build code.
@@ -51,4 +51,4 @@ Three things here are sized for a dry run and would need replacing:
 - `addFrenchMorphologyForms` has no guessing fallback, because every lemma here
   was written on purpose. A corpus import would need one, the way Italian has.
 - Nothing registers `fr` for play. That is a separate set of per-language maps
-  in the runtime loaders; `scripts/data-prep/new-language.test.ts` lists them.
+  in the runtime loaders, listed under "Adding a language" in `../README.md`.

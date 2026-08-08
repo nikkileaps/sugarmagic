@@ -14,13 +14,15 @@
  *   derived forms -- and asserts the pipeline carries them through.
  *
  *   If this test needs a change to anything outside `languages/` to keep
- *   passing, the tier split has leaked and that is the finding.
+ *   passing, a rule that belongs to one language is still living in shared
+ *   code, and that is the finding.
  *
  * WHAT IT DOES NOT COVER
- *   The runtime half. Registering a language for PLAY still means editing
- *   per-language maps in six loaders, and `QUEST_ESSENTIAL_STOPWORDS` in
- *   compile-sugarlang-scene.ts still holds word lists per language in shared
- *   code. Those are real registration sites; this checks the build pipeline.
+ *   The runtime half. Registering a language for PLAY still means adding it to
+ *   a map in each of six loaders: the atlas provider, english-collisions, the
+ *   morphology loader, the competency-inventory loader, always-target-words
+ *   and the placement-questionnaire loader. Those are registration sites, not
+ *   language rules -- this checks the build pipeline.
  *
  * Status: active
  */

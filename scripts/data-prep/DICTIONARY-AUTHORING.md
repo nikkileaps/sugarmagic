@@ -32,7 +32,7 @@ missing what you are adding, write only those.
   "partsOfSpeech": ["verb"],     // one or more
   "cefrPriorSource": "cefrlex",  // where the BAND came from
   "glosses": { "en": "begin, start" },
-  "forms": { ... },              // verbs only — see FORMS
+  "forms": { ... },              // shaped by part of speech — see FORMS
   "formsSource": "authored"      // where the FORMS came from
 }
 ```
@@ -47,6 +47,25 @@ human-override | kelly`. Use `claude-classified` when a model assigned the band.
 - `reviewed` — a human or an independent model checked it and changed nothing.
   This is most of the work and it is not a lesser state than `authored`.
 - `authored` — written or corrected by hand.
+
+### Where the shipped data actually stands
+
+Worth knowing before trusting a form you did not write:
+
+| | `generated` | `authored` | no forms |
+|---|---|---|---|
+| Spanish | 9,378 | 405 | 835 |
+| Italian | 0 | 407 | 6,042 |
+| French | 0 | 50 | 66 |
+
+**Not one Spanish entry is `reviewed`.** 88% of them are machine output that,
+by the definition above, nobody has checked. Italian and French are the other
+trade: far fewer entries carry forms, but every one that does was written by
+hand.
+
+Bands have their own provenance. Spanish is 10,519 `cefrlex` and 99
+`claude-classified`; Italian is 4,973 `kelly` and 1,476 `claude-classified`,
+because Kelly does not place every lemma it lists.
 
 ## BANDS
 
@@ -82,7 +101,40 @@ words. Null sorts last everywhere.
 
 It is a ranking signal and never a gate. Nothing filters on it.
 
-## FORMS (verbs)
+## FORMS
+
+The inflected shapes of an entry. Filling them is what makes a word resolve --
+a surface the dictionary does not hold is a surface the build cannot look up --
+so this is the bulk of the authoring work.
+
+There are three shapes, chosen by part of speech, and an entry has at most one.
+Read them in code through `runtime/classifier/word-forms.ts`, which names every
+slot; never index them by hand.
+
+**Nouns and adjectives are not optional extras.** Spanish ships 6,000 noun
+forms and 2,336 adjective forms against 1,447 verbs -- five sixths of its forms
+are not verbs.
+
+### Nouns
+
+```jsonc
+"forms": { "sg": "ciudad", "pl": "ciudades" }
+```
+
+Number only. **A feminine noun is a separate lemma**, not a form of the
+masculine -- `caso` and `casa` are different words, and a rule that derives one
+from the other invents vocabulary.
+
+### Adjectives
+
+```jsonc
+"forms": { "ms": "rápido", "fs": "rápida", "mp": "rápidos", "fp": "rápidas" }
+```
+
+Gender then number. Use `null` for `fs` and `fp` on the invariable ones
+(`verde`, `feliz`), keeping all four keys so position still means something.
+
+### Verbs
 
 ```jsonc
 "forms": {
@@ -96,7 +148,7 @@ It is a ranking signal and never a gate. Nothing filters on it.
 
 - **Exactly six slots per tense, in person order: 1s, 2s, 3s, 1p, 2p, 3p.**
   Positional for size and lookup speed. Never index these by hand in code — read
-  them through `runtime/classifier/verb-forms.ts`, which names every slot.
+  them through `runtime/classifier/word-forms.ts`, which names every slot.
 - **`null` where a form does not exist.** `llover` is impersonal: "I rain" is not
   something a speaker says, so its 1s is null. Null is a claim that the form does
   not exist, which is different from a gap in the data. Keep the array six long
@@ -106,9 +158,14 @@ It is a ranking signal and never a gate. Nothing filters on it.
   null what is genuinely impossible.
 - **Tense scope is a per-language decision.** Spanish ships present, preterite
   and imperfect for A1-B1: the future at those levels is `ir a` + infinitive, so
-  it is out of scope. Italian would differ — its everyday past is the compound
-  passato prossimo and its `futuro semplice` is one word and common. Decide
-  before authoring; do not copy Spanish's answer.
+  it is out of scope. Italian answered differently — its everyday past is the
+  compound passato prossimo, so the stored `pret` is the passato remoto that a
+  beginner rarely says, and the past they DO say is built from `avere`/`essere`
+  plus the participle. Decide before authoring; do not copy Spanish's answer.
+- **Store what cannot be derived; derive the rest.** Anything a rule gets right
+  every time belongs in the language's `addDerivedForms`, not in the
+  dictionary. All three languages derive their subjunctive, conditional and
+  future that way, so an author never writes `hablaría` beside `hablaba`.
 
 ### What rules get wrong, and where to be careful
 
@@ -180,5 +237,6 @@ against the language's expected set; do not eyeball it.
 5. **Validate before writing**: six slots per tense, provenance on every
    forms, orthography clean, no new bands, no underscores.
 
-`packages/plugins/src/catalog/sugarlang/tests/classifier/verb-forms.test.ts`
-already asserts most of that against the shipped data. Run it.
+`packages/plugins/src/catalog/sugarlang/tests/classifier/word-forms.test.ts`
+already asserts most of that against the shipped data, for every shipped
+language. Run it.
