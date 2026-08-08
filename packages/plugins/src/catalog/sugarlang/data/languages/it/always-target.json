@@ -1,0 +1,15 @@
+{
+  "lang": "it",
+  "note": "Words spoken in Italian at every level, however English the rest of the line is. See runtime/teacher/always-target-words.ts for what this is for and what belongs here.",
+  "dropsSubjectPronouns": true,
+  "lemmaIds": [
+    "io",
+    "tu",
+    "lei",
+    "mio",
+    "tuo",
+    "mi",
+    "sì",
+    "no"
+  ]
+}

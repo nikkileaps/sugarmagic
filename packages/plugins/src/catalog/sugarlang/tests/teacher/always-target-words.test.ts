@@ -10,14 +10,25 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  formatAlwaysTargetLines,
   formatAlwaysTargetWords,
-  loadAlwaysTargetWords
+  loadAlwaysTargetWords,
+  type AlwaysTargetWords
 } from "../../runtime/teacher/always-target-words";
-import { saysSubjectPronounExplicitly } from "../../runtime/teacher/band-envelope";
-import cefrlex from "../../data/languages/es/cefrlex.json";
+import { forcesSubjectPronounAtBand } from "../../runtime/teacher/band-envelope";
+import esCefrlex from "../../data/languages/es/cefrlex.json";
+import itCefrlex from "../../data/languages/it/cefrlex.json";
 import type { CEFRBand } from "../../runtime/cefr";
 
-const LEMMAS = (cefrlex as { lemmas: Record<string, { partsOfSpeech: string[] }> }).lemmas;
+type Lemmas = Record<string, { partsOfSpeech: string[] }>;
+const LEMMAS_BY_LANG: Record<string, Lemmas> = {
+  es: (esCefrlex as { lemmas: Lemmas }).lemmas,
+  it: (itCefrlex as { lemmas: Lemmas }).lemmas
+};
+
+/** Every language that ships a list. Adding one extends the guards below
+ *  without anyone having to remember to. */
+const AUTHORED = ["es", "it"];
 
 describe("words that are always in the target language", () => {
   it("THE ONE THAT MATTERS: the subject pronoun is there at every band", () => {
@@ -85,22 +96,35 @@ describe("words that are always in the target language", () => {
       const rendered = formatAlwaysTargetWords("es", band, "Spanish").some((line) =>
         line.includes("subject pronoun out loud")
       );
-      expect(rendered, band).toBe(saysSubjectPronounExplicitly(band));
+      expect(rendered, band).toBe(forcesSubjectPronounAtBand(band));
     }
   });
 
   it("contributes nothing for a language with no list", () => {
     // Must be zero characters, not a "(none)" line: these reach prompts that
     // are cached on their own text.
-    expect(formatAlwaysTargetWords("it", "A1", "Italian")).toEqual([]);
-    expect(loadAlwaysTargetWords("it").lemmaIds).toEqual([]);
+    //
+    // Repointed from "it", which now HAS a list. The replacement has to be a
+    // code the game cannot be set to -- VALID_TARGET_LANGUAGES is exactly
+    // {es, it} -- so this asserts the shape of the fallback rather than any
+    // real language's behaviour. German is the example because it is also the
+    // case the pronoun rule below exists to get right.
+    expect(formatAlwaysTargetWords("de", "A1", "German")).toEqual([]);
+    expect(loadAlwaysTargetWords("de").lemmaIds).toEqual([]);
   });
 
-  it("every word is a real dictionary entry", () => {
+  it("every word is a real dictionary entry, in ITS OWN language", () => {
     // The list names lemmas. One that does not resolve would be a word the
     // generator is told to always use and the atlas cannot gloss or highlight.
-    for (const lemmaId of loadAlwaysTargetWords("es").lemmaIds) {
-      expect(LEMMAS[lemmaId], lemmaId).toBeDefined();
+    //
+    // Per language, because checking Italian against the Spanish dictionary
+    // would pass for the wrong reason on any shared spelling -- `no` and `mi`
+    // are in both.
+    for (const lang of AUTHORED) {
+      const lemmas = LEMMAS_BY_LANG[lang]!;
+      for (const lemmaId of loadAlwaysTargetWords(lang).lemmaIds) {
+        expect(lemmas[lemmaId], `${lang}: ${lemmaId}`).toBeDefined();
+      }
     }
   });
 
@@ -108,10 +132,12 @@ describe("words that are always in the target language", () => {
     // A content word here would be taught to every learner forever, bypassing
     // the Teacher's judgement about whether this moment affords it.
     // NOUN IS NOT ALLOWED, and that is the point. `queso` is a noun, and a
-    // noun on this list is a content word taught to every learner forever,
-    // bypassing the Teacher's judgement about whether the moment affords it.
+    // noun on this list is a content word taught to every learner forever.
     // An earlier version of this guard allowed "noun" and therefore guarded
     // nothing.
+    //
+    // A word may carry several parts of speech and only needs one allowed:
+    // Spanish `no` is adverb/noun/verb and Italian `no` is adverb/noun.
     const allowed = new Set([
       "pronoun",
       "determiner",
@@ -119,9 +145,72 @@ describe("words that are always in the target language", () => {
       "conjunction",
       "preposition"
     ]);
-    for (const lemmaId of loadAlwaysTargetWords("es").lemmaIds) {
-      const pos = LEMMAS[lemmaId].partsOfSpeech;
-      expect(pos.some((p) => allowed.has(p)), `${lemmaId}: ${pos.join("/")}`).toBe(true);
+    for (const lang of AUTHORED) {
+      const lemmas = LEMMAS_BY_LANG[lang]!;
+      for (const lemmaId of loadAlwaysTargetWords(lang).lemmaIds) {
+        const pos = lemmas[lemmaId]!.partsOfSpeech;
+        expect(
+          pos.some((p) => allowed.has(p)),
+          `${lang}: ${lemmaId}: ${pos.join("/")}`
+        ).toBe(true);
+      }
     }
   });
+
+  it("a language that drops its subject gets the pronoun line", () => {
+    // The decision 091.8 settled: the instruction needs the BAND to be early
+    // AND the language to actually drop the subject.
+    for (const lang of AUTHORED) {
+      const lines = formatAlwaysTargetWords(lang, "A1", "The Language");
+      expect(
+        lines.some((line) => /say its subject pronoun out loud/.test(line)),
+        lang
+      ).toBe(true);
+    }
+  });
+
+  it("THE ONE THAT MATTERS: a language that KEEPS its subject gets no pronoun line", () => {
+    // The half of the gate no shipped language exercises, and the half that
+    // was wrong before this story. Both es and it drop their subject, so
+    // going through the registry cannot tell this gate from one that is
+    // always open -- the list is handed in directly instead.
+    const keepsSubject: AlwaysTargetWords = {
+      lang: "de",
+      lemmaIds: ["ich", "du"],
+      dropsSubjectPronouns: false
+    };
+    const lines = formatAlwaysTargetLines(keepsSubject, "A1", "German");
+
+    // It still gets the list lines -- the words are still always German.
+    expect(lines.length).toBeGreaterThan(0);
+    // But not the instruction to say a pronoun its speakers never drop.
+    expect(lines.some((line) => /say its subject pronoun out loud/.test(line))).toBe(
+      false
+    );
+  });
+
+  it("the flag is declared, not defaulted", () => {
+    // The gate is `=== true`, so a list that forgets the flag silently loses
+    // the instruction. Both shipped lists must say so out loud -- and the
+    // reason this is asserted rather than defaulted is that the safe default
+    // differs by language, and guessing it is what this story removed.
+    //
+    // The false case has no test because no shipped language keeps its
+    // subject yet. French is where that gets exercised, and 091.13 is where
+    // it should be added.
+    for (const lang of AUTHORED) {
+      expect(loadAlwaysTargetWords(lang).dropsSubjectPronouns, lang).toBe(true);
+    }
+  });
+
+  it("the band still gates it: no pronoun line at B1 and above", () => {
+    for (const band of ["B1", "B2", "C1"] as const) {
+      const lines = formatAlwaysTargetWords("it", band, "Italian");
+      expect(
+        lines.some((line) => /say its subject pronoun out loud/.test(line)),
+        band
+      ).toBe(false);
+    }
+  });
+
 });
