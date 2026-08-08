@@ -31,6 +31,12 @@
       "band": "A1",
       "ordinal": 5,
       "displayName": "Food and Drink"
+    },
+    {
+      "lessonId": "buying-things",
+      "band": "A1",
+      "ordinal": 6,
+      "displayName": "Buying Things"
     }
   ],
   "competencies": [
@@ -5272,6 +5278,1054 @@
               },
               "adoro": {
                 "en": "I love it"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "accept-offer",
+      "lessonId": "buying-things",
+      "displayName": "Accept an offer",
+      "cefrDescriptor": "Can accept an offered item.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "lo_prendo",
+            "normalizedForm": "lo_prendo",
+            "surfaceForms": [
+              "lo prendo",
+              "lo voglio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "prendere",
+              "volere"
+            ],
+            "glossBySurface": {
+              "lo prendo": {
+                "en": "I'll take it"
+              },
+              "lo voglio": {
+                "en": "I want it"
+              }
+            }
+          },
+          {
+            "exponentId": "lo_compro",
+            "normalizedForm": "lo_compro",
+            "surfaceForms": [
+              "lo compro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "comprare"
+            ],
+            "glossBySurface": {
+              "lo compro": {
+                "en": "I'll buy it"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-if-shop-has",
+      "lessonId": "buying-things",
+      "displayName": "Ask whether a shop has something",
+      "cefrDescriptor": "Can ask whether a shop has an item.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "avete_del_pane",
+            "normalizedForm": "avete_del_pane",
+            "surfaceForms": [
+              "avete del pane"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "di",
+              "pane"
+            ],
+            "glossBySurface": {
+              "avete del pane": {
+                "en": "do you have any bread"
+              }
+            }
+          },
+          {
+            "exponentId": "ce_del_latte",
+            "normalizedForm": "ce_del_latte",
+            "surfaceForms": [
+              "c'è del latte",
+              "c'e del latte"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "di",
+              "latte"
+            ],
+            "glossBySurface": {
+              "c'è del latte": {
+                "en": "is there any milk"
+              },
+              "c'e del latte": {
+                "en": "is there any milk"
+              }
+            }
+          },
+          {
+            "exponentId": "avete_qualcosa_di_piu_economico",
+            "normalizedForm": "avete_qualcosa_di_piu_economico",
+            "surfaceForms": [
+              "avete qualcosa di più economico",
+              "avete qualcosa di piu economico"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "qualcosa",
+              "di",
+              "più",
+              "economico"
+            ],
+            "glossBySurface": {
+              "avete qualcosa di più economico": {
+                "en": "do you have anything cheaper"
+              },
+              "avete qualcosa di piu economico": {
+                "en": "do you have anything cheaper"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-price",
+      "lessonId": "buying-things",
+      "displayName": "Ask the price",
+      "cefrDescriptor": "Can ask how much something costs.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "quanto_costa",
+            "normalizedForm": "quanto_costa",
+            "surfaceForms": [
+              "quanto costa",
+              "quanto viene"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quanto",
+              "costare",
+              "venire"
+            ],
+            "glossBySurface": {
+              "quanto costa": {
+                "en": "how much does it cost"
+              },
+              "quanto viene": {
+                "en": "how much is it"
+              }
+            }
+          },
+          {
+            "exponentId": "che_prezzo_ha",
+            "normalizedForm": "che_prezzo_ha",
+            "surfaceForms": [
+              "che prezzo ha"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "prezzo",
+              "avere"
+            ],
+            "glossBySurface": {
+              "che prezzo ha": {
+                "en": "what price is it"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-to-see-item",
+      "lessonId": "buying-things",
+      "displayName": "Ask to see something",
+      "cefrDescriptor": "Can ask to see an item.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "posso_vedere",
+            "normalizedForm": "posso_vedere",
+            "surfaceForms": [
+              "posso vedere",
+              "posso vedere quello",
+              "vorrei vedere quello"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "potere",
+              "vedere",
+              "quello",
+              "volere"
+            ],
+            "glossBySurface": {
+              "posso vedere": {
+                "en": "can I see it"
+              },
+              "posso vedere quello": {
+                "en": "can I see that"
+              },
+              "vorrei vedere quello": {
+                "en": "I'd like to see that"
+              }
+            }
+          },
+          {
+            "exponentId": "me_lo_fa_vedere",
+            "normalizedForm": "me_lo_fa_vedere",
+            "surfaceForms": [
+              "me lo fa vedere",
+              "mi fa vedere quello"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "me",
+              "fa",
+              "vedere",
+              "quello"
+            ],
+            "glossBySurface": {
+              "me lo fa vedere": {
+                "en": "could you show it to me"
+              },
+              "mi fa vedere quello": {
+                "en": "could you show me that one"
+              }
+            }
+          },
+          {
+            "exponentId": "vorrei_provare_questo",
+            "normalizedForm": "vorrei_provare_questo",
+            "surfaceForms": [
+              "vorrei provare questo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "provare",
+              "questo"
+            ],
+            "glossBySurface": {
+              "vorrei provare questo": {
+                "en": "I'd like to try this on"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "pay",
+      "lessonId": "buying-things",
+      "displayName": "Pay for a purchase",
+      "cefrDescriptor": "Can pay for a basic purchase.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "vorrei_pagare",
+            "normalizedForm": "vorrei_pagare",
+            "surfaceForms": [
+              "vorrei pagare",
+              "vado a pagare"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "pagare",
+              "andare",
+              "a"
+            ],
+            "glossBySurface": {
+              "vorrei pagare": {
+                "en": "I want to pay"
+              },
+              "vado a pagare": {
+                "en": "I'm going to pay"
+              }
+            }
+          },
+          {
+            "exponentId": "con_la_carta",
+            "normalizedForm": "con_la_carta",
+            "surfaceForms": [
+              "con la carta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "con",
+              "carta"
+            ],
+            "glossBySurface": {
+              "con la carta": {
+                "en": "by card"
+              }
+            }
+          },
+          {
+            "exponentId": "in_contanti",
+            "normalizedForm": "in_contanti",
+            "surfaceForms": [
+              "in contanti"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "in",
+              "contante"
+            ],
+            "glossBySurface": {
+              "in contanti": {
+                "en": "in cash"
+              }
+            }
+          },
+          {
+            "exponentId": "posso_pagare_con_la_carta",
+            "normalizedForm": "posso_pagare_con_la_carta",
+            "surfaceForms": [
+              "posso pagare con la carta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "potere",
+              "pagare",
+              "con",
+              "carta"
+            ],
+            "glossBySurface": {
+              "posso pagare con la carta": {
+                "en": "can I pay by card"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "refuse-politely",
+      "lessonId": "buying-things",
+      "displayName": "Decline politely",
+      "cefrDescriptor": "Can decline something politely.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "no_grazie",
+            "normalizedForm": "no_grazie",
+            "surfaceForms": [
+              "no grazie",
+              "no, grazie"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "no",
+              "grazie"
+            ],
+            "glossBySurface": {
+              "no grazie": {
+                "en": "no thank you"
+              },
+              "no, grazie": {
+                "en": "no, thank you"
+              }
+            }
+          },
+          {
+            "exponentId": "va_bene_cosi",
+            "normalizedForm": "va_bene_cosi",
+            "surfaceForms": [
+              "va bene così",
+              "va bene cosi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "andare",
+              "bene",
+              "così"
+            ],
+            "glossBySurface": {
+              "va bene così": {
+                "en": "that's fine as it is"
+              },
+              "va bene cosi": {
+                "en": "that's fine as it is"
+              }
+            }
+          },
+          {
+            "exponentId": "non_serve",
+            "normalizedForm": "non_serve",
+            "surfaceForms": [
+              "non serve"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "servire"
+            ],
+            "glossBySurface": {
+              "non serve": {
+                "en": "there's no need"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "request-quantity",
+      "lessonId": "buying-things",
+      "displayName": "Ask for a quantity",
+      "cefrDescriptor": "Can request a particular quantity.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "un_chilo",
+            "normalizedForm": "un_chilo",
+            "surfaceForms": [
+              "un chilo",
+              "un chilo per favore"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "chilo",
+              "per",
+              "favore"
+            ],
+            "glossBySurface": {
+              "un chilo": {
+                "en": "a kilo"
+              },
+              "un chilo per favore": {
+                "en": "a kilo, please"
+              }
+            }
+          },
+          {
+            "exponentId": "mezzo_chilo",
+            "normalizedForm": "mezzo_chilo",
+            "surfaceForms": [
+              "mezzo chilo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mezzo",
+              "chilo"
+            ],
+            "glossBySurface": {
+              "mezzo chilo": {
+                "en": "half a kilo"
+              }
+            }
+          },
+          {
+            "exponentId": "un_po",
+            "normalizedForm": "un_po",
+            "surfaceForms": [
+              "un po'",
+              "un po' di più",
+              "un po' di piu"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "po",
+              "di",
+              "più"
+            ],
+            "glossBySurface": {
+              "un po'": {
+                "en": "a little"
+              },
+              "un po' di più": {
+                "en": "a bit more"
+              },
+              "un po' di piu": {
+                "en": "a bit more"
+              }
+            }
+          },
+          {
+            "exponentId": "due_per_favore",
+            "normalizedForm": "due_per_favore",
+            "surfaceForms": [
+              "due per favore"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "due",
+              "per",
+              "favore"
+            ],
+            "glossBySurface": {
+              "due per favore": {
+                "en": "two, please"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-size",
+      "lessonId": "buying-things",
+      "displayName": "Identify a size",
+      "cefrDescriptor": "Can identify and ask for basic sizes.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "grande",
+            "normalizedForm": "grande",
+            "surfaceForms": [
+              "grande",
+              "più grande",
+              "piu grande"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "grande",
+              "più"
+            ],
+            "glossBySurface": {
+              "grande": {
+                "en": "big"
+              },
+              "più grande": {
+                "en": "bigger"
+              },
+              "piu grande": {
+                "en": "bigger"
+              }
+            }
+          },
+          {
+            "exponentId": "piccolo",
+            "normalizedForm": "piccolo",
+            "surfaceForms": [
+              "piccolo",
+              "più piccolo",
+              "piu piccolo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "piccolo",
+              "più"
+            ],
+            "glossBySurface": {
+              "piccolo": {
+                "en": "small"
+              },
+              "più piccolo": {
+                "en": "smaller"
+              },
+              "piu piccolo": {
+                "en": "smaller"
+              }
+            }
+          },
+          {
+            "exponentId": "medio",
+            "normalizedForm": "medio",
+            "surfaceForms": [
+              "medio",
+              "è medio",
+              "e medio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "medio",
+              "essere"
+            ],
+            "glossBySurface": {
+              "medio": {
+                "en": "medium"
+              },
+              "è medio": {
+                "en": "it's medium"
+              },
+              "e medio": {
+                "en": "it's medium"
+              }
+            }
+          },
+          {
+            "exponentId": "che_taglia",
+            "normalizedForm": "che_taglia",
+            "surfaceForms": [
+              "che taglia",
+              "che taglia è",
+              "che taglia e"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "taglia",
+              "essere"
+            ],
+            "glossBySurface": {
+              "che taglia": {
+                "en": "what size"
+              },
+              "che taglia è": {
+                "en": "what size is it"
+              },
+              "che taglia e": {
+                "en": "what size is it"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_sta_grande",
+            "normalizedForm": "mi_sta_grande",
+            "surfaceForms": [
+              "mi sta grande",
+              "mi sta piccolo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "stare",
+              "grande",
+              "piccolo"
+            ],
+            "glossBySurface": {
+              "mi sta grande": {
+                "en": "it's too big on me"
+              },
+              "mi sta piccolo": {
+                "en": "it's too small on me"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-what-to-buy",
+      "lessonId": "buying-things",
+      "displayName": "Say what they want to buy",
+      "cefrDescriptor": "Can say what they want to buy.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "vorrei_comprare",
+            "normalizedForm": "vorrei_comprare",
+            "surfaceForms": [
+              "vorrei comprare",
+              "vorrei comprare un regalo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "volere",
+              "comprare",
+              "regalo"
+            ],
+            "glossBySurface": {
+              "vorrei comprare": {
+                "en": "I want to buy"
+              },
+              "vorrei comprare un regalo": {
+                "en": "I want to buy a present"
+              }
+            }
+          },
+          {
+            "exponentId": "cerco_un_regalo",
+            "normalizedForm": "cerco_un_regalo",
+            "surfaceForms": [
+              "cerco un regalo",
+              "sto cercando un regalo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "cercare",
+              "regalo",
+              "stare"
+            ],
+            "glossBySurface": {
+              "cerco un regalo": {
+                "en": "I'm looking for a present"
+              },
+              "sto cercando un regalo": {
+                "en": "I'm looking for a present"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_bisogno_di_pane",
+            "normalizedForm": "ho_bisogno_di_pane",
+            "surfaceForms": [
+              "ho bisogno di pane"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "bisogno",
+              "di",
+              "pane"
+            ],
+            "glossBySurface": {
+              "ho bisogno di pane": {
+                "en": "I need some bread"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-opening-hours",
+      "lessonId": "buying-things",
+      "displayName": "Understand opening information",
+      "cefrDescriptor": "Can recognize opening and closing information.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "aperto",
+            "normalizedForm": "aperto",
+            "surfaceForms": [
+              "aperto",
+              "è aperto",
+              "e aperto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "aperto",
+              "essere"
+            ],
+            "glossBySurface": {
+              "aperto": {
+                "en": "open"
+              },
+              "è aperto": {
+                "en": "it's open"
+              },
+              "e aperto": {
+                "en": "it's open"
+              }
+            }
+          },
+          {
+            "exponentId": "chiuso",
+            "normalizedForm": "chiuso",
+            "surfaceForms": [
+              "chiuso",
+              "è chiuso",
+              "e chiuso"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "chiuso",
+              "essere"
+            ],
+            "glossBySurface": {
+              "chiuso": {
+                "en": "closed"
+              },
+              "è chiuso": {
+                "en": "it's closed"
+              },
+              "e chiuso": {
+                "en": "it's closed"
+              }
+            }
+          },
+          {
+            "exponentId": "chiuso_la_domenica",
+            "normalizedForm": "chiuso_la_domenica",
+            "surfaceForms": [
+              "chiuso la domenica"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "chiuso",
+              "domenica"
+            ],
+            "glossBySurface": {
+              "chiuso la domenica": {
+                "en": "closed on Sundays"
+              }
+            }
+          },
+          {
+            "exponentId": "aperto_tutto_il_giorno",
+            "normalizedForm": "aperto_tutto_il_giorno",
+            "surfaceForms": [
+              "aperto tutto il giorno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "aperto",
+              "tutto",
+              "giorno"
+            ],
+            "glossBySurface": {
+              "aperto tutto il giorno": {
+                "en": "open all day"
+              }
+            }
+          },
+          {
+            "exponentId": "lorario",
+            "normalizedForm": "lorario",
+            "surfaceForms": [
+              "l'orario",
+              "orario di apertura"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "orario",
+              "di",
+              "apertura"
+            ],
+            "glossBySurface": {
+              "l'orario": {
+                "en": "the opening hours"
+              },
+              "orario di apertura": {
+                "en": "opening hours"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-price",
+      "lessonId": "buying-things",
+      "displayName": "Understand a price",
+      "cefrDescriptor": "Can understand a simple stated price.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "sono_dieci_euro",
+            "normalizedForm": "sono_dieci_euro",
+            "surfaceForms": [
+              "sono dieci euro",
+              "sono quindici euro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "dieci",
+              "euro",
+              "quindici"
+            ],
+            "glossBySurface": {
+              "sono dieci euro": {
+                "en": "that's ten euros"
+              },
+              "sono quindici euro": {
+                "en": "that's fifteen euros"
+              }
+            }
+          },
+          {
+            "exponentId": "costa_cinque_euro",
+            "normalizedForm": "costa_cinque_euro",
+            "surfaceForms": [
+              "costa cinque euro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "costare",
+              "cinque",
+              "euro"
+            ],
+            "glossBySurface": {
+              "costa cinque euro": {
+                "en": "it costs five euros"
+              }
+            }
+          },
+          {
+            "exponentId": "due_euro_e_cinquanta",
+            "normalizedForm": "due_euro_e_cinquanta",
+            "surfaceForms": [
+              "due euro e cinquanta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "due",
+              "euro",
+              "e",
+              "cinquanta"
+            ],
+            "glossBySurface": {
+              "due euro e cinquanta": {
+                "en": "two euros fifty"
+              }
+            }
+          },
+          {
+            "exponentId": "in_totale",
+            "normalizedForm": "in_totale",
+            "surfaceForms": [
+              "in totale"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "in",
+              "totale"
+            ],
+            "glossBySurface": {
+              "in totale": {
+                "en": "in total"
+              }
+            }
+          },
+          {
+            "exponentId": "e_gratis",
+            "normalizedForm": "e_gratis",
+            "surfaceForms": [
+              "è gratis",
+              "e gratis"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "gratis"
+            ],
+            "glossBySurface": {
+              "è gratis": {
+                "en": "it's free"
+              },
+              "e gratis": {
+                "en": "it's free"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "understand-shop-phrases",
+      "lessonId": "buying-things",
+      "displayName": "Understand shop phrases",
+      "cefrDescriptor": "Can understand common transactional phrases.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "altro",
+            "normalizedForm": "altro",
+            "surfaceForms": [
+              "altro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "altro"
+            ],
+            "glossBySurface": {
+              "altro": {
+                "en": "anything else"
+              }
+            }
+          },
+          {
+            "exponentId": "e_tutto",
+            "normalizedForm": "e_tutto",
+            "surfaceForms": [
+              "è tutto",
+              "e tutto",
+              "questo è tutto",
+              "questo e tutto"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "tutto",
+              "questo"
+            ],
+            "glossBySurface": {
+              "è tutto": {
+                "en": "that's everything"
+              },
+              "e tutto": {
+                "en": "that's everything"
+              },
+              "questo è tutto": {
+                "en": "that's everything"
+              },
+              "questo e tutto": {
+                "en": "that's everything"
+              }
+            }
+          },
+          {
+            "exponentId": "come_posso_aiutarla",
+            "normalizedForm": "come_posso_aiutarla",
+            "surfaceForms": [
+              "come posso aiutarla"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "potere",
+              "aiutare"
+            ],
+            "glossBySurface": {
+              "come posso aiutarla": {
+                "en": "how can I help you"
+              }
+            }
+          },
+          {
+            "exponentId": "desidera",
+            "normalizedForm": "desidera",
+            "surfaceForms": [
+              "desidera"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "desiderare"
+            ],
+            "glossBySurface": {
+              "desidera": {
+                "en": "what would you like"
+              }
+            }
+          },
+          {
+            "exponentId": "ecco_a_lei",
+            "normalizedForm": "ecco_a_lei",
+            "surfaceForms": [
+              "ecco a lei"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ecco",
+              "a"
+            ],
+            "glossBySurface": {
+              "ecco a lei": {
+                "en": "here you are"
               }
             }
           }

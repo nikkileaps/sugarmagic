@@ -497,6 +497,20 @@ const SUBJUNCTIVE_ERE_IRE = ["a", "a", "a", "", "", "ano"];
 const CONDITIONAL = ["ei", "esti", "ebbe", "emmo", "este", "ebbero"];
 const FUTURE = ["ò", "ai", "à", "emo", "ete", "anno"];
 
+/**
+ * Italian keeps a `c` or `g` HARD across a following `i` or `e`, and writes an
+ * `h` to do it: `cercare` gives `cerchi`, not `cerci`; `pagare` gives `paghi`.
+ *
+ * Without this the subjunctive -- which is also the polite command, so
+ * ordinary language -- came out a non-word for every -care and -gare verb, and
+ * the real form was missing. The same sound rule produces `lunghi` and
+ * `amiche` in the plural, which is why authored noun and adjective forms carry
+ * it too.
+ */
+function keepHardBeforeI(stem: string): string {
+  return /[cg]$/.test(stem) ? `${stem}h` : stem;
+}
+
 /** `parlare` -> `parler`, `prendere` -> `prender`, `sentire` -> `sentir`. */
 function italianFutureStem(lemmaId: string): string | null {
   const irregular = ITALIAN_IRREGULAR_FUTURE_STEM[lemmaId];
@@ -549,17 +563,19 @@ function italianDerivedTenses(entry: AtlasLemmaEntry): string[] {
       // and `mangiino`. Every -giare and -ciare verb is in this class, and
       // adding the ending blindly wrote a non-word for all of them.
       const absorbs = isAre && stem.endsWith("i");
+      const spelled = isAre ? keepHardBeforeI(stem) : stem;
       out.push(
-        absorbs ? stem : `${stem}${endings[0]}`,
-        absorbs ? `${stem}no` : `${stem}${endings[5]}`
+        absorbs ? stem : `${spelled}${endings[0]}`,
+        absorbs ? `${stem}no` : `${spelled}${endings[5]}`
       );
       // The two plural persons are NOT built off the `io` stem. For an -isc-
       // verb that stem carries the infix, and `capisciamo` is not a word --
       // the real forms are `capiamo` and `capiate`. First person plural is
       // identical to the present indicative, so the dictionary already has it.
       if (typeof noi === "string") out.push(noi);
+      // Same respelling here: `cercare` gives `cerchiate`, not `cerciate`.
       const bare = entry.lemmaId.slice(0, -3);
-      if (bare) out.push(`${bare}iate`);
+      if (bare) out.push(`${keepHardBeforeI(bare)}iate`);
     }
   }
 

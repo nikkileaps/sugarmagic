@@ -2785,6 +2785,602 @@
           }
         ]
       }
+    ],
+    "ask-price": [
+      {
+        "wordings": [
+          {
+            "phrase": "quanto costa",
+            "gloss": {
+              "en": "how much does it cost"
+            },
+            "lemmas": {
+              "costa": "costare"
+            }
+          },
+          {
+            "phrase": "quanto viene",
+            "gloss": {
+              "en": "how much is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che prezzo ha",
+            "gloss": {
+              "en": "what price is it"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-price": [
+      {
+        "wordings": [
+          {
+            "phrase": "sono dieci euro",
+            "gloss": {
+              "en": "that's ten euros"
+            }
+          },
+          {
+            "phrase": "sono quindici euro",
+            "gloss": {
+              "en": "that's fifteen euros"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "costa cinque euro",
+            "gloss": {
+              "en": "it costs five euros"
+            },
+            "lemmas": {
+              "costa": "costare"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "due euro e cinquanta",
+            "gloss": {
+              "en": "two euros fifty"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "in totale",
+            "gloss": {
+              "en": "in total"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è gratis",
+            "gloss": {
+              "en": "it's free"
+            }
+          }
+        ]
+      }
+    ],
+    "state-what-to-buy": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei comprare",
+            "gloss": {
+              "en": "I want to buy"
+            }
+          },
+          {
+            "phrase": "vorrei comprare un regalo",
+            "gloss": {
+              "en": "I want to buy a present"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "cerco un regalo",
+            "gloss": {
+              "en": "I'm looking for a present"
+            }
+          },
+          {
+            "phrase": "sto cercando un regalo",
+            "gloss": {
+              "en": "I'm looking for a present"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho bisogno di pane",
+            "gloss": {
+              "en": "I need some bread"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-if-shop-has": [
+      {
+        "wordings": [
+          {
+            "phrase": "avete del pane",
+            "gloss": {
+              "en": "do you have any bread"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "c'è del latte",
+            "gloss": {
+              "en": "is there any milk"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "avete qualcosa di più economico",
+            "gloss": {
+              "en": "do you have anything cheaper"
+            }
+          }
+        ]
+      }
+    ],
+    "request-quantity": [
+      {
+        "wordings": [
+          {
+            "phrase": "un chilo",
+            "gloss": {
+              "en": "a kilo"
+            }
+          },
+          {
+            "phrase": "un chilo per favore",
+            "gloss": {
+              "en": "a kilo, please"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mezzo chilo",
+            "gloss": {
+              "en": "half a kilo"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "un po'",
+            "gloss": {
+              "en": "a little"
+            }
+          },
+          {
+            "phrase": "un po' di più",
+            "gloss": {
+              "en": "a bit more"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "due per favore",
+            "gloss": {
+              "en": "two, please"
+            }
+          }
+        ]
+      }
+    ],
+    "state-size": [
+      {
+        "wordings": [
+          {
+            "phrase": "grande",
+            "gloss": {
+              "en": "big"
+            }
+          },
+          {
+            "phrase": "più grande",
+            "gloss": {
+              "en": "bigger"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "piccolo",
+            "gloss": {
+              "en": "small"
+            }
+          },
+          {
+            "phrase": "più piccolo",
+            "gloss": {
+              "en": "smaller"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "medio",
+            "gloss": {
+              "en": "medium"
+            }
+          },
+          {
+            "phrase": "è medio",
+            "gloss": {
+              "en": "it's medium"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che taglia",
+            "gloss": {
+              "en": "what size"
+            }
+          },
+          {
+            "phrase": "che taglia è",
+            "gloss": {
+              "en": "what size is it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi sta grande",
+            "gloss": {
+              "en": "it's too big on me"
+            }
+          },
+          {
+            "phrase": "mi sta piccolo",
+            "gloss": {
+              "en": "it's too small on me"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-to-see-item": [
+      {
+        "wordings": [
+          {
+            "phrase": "posso vedere",
+            "gloss": {
+              "en": "can I see it"
+            }
+          },
+          {
+            "phrase": "posso vedere quello",
+            "gloss": {
+              "en": "can I see that"
+            }
+          },
+          {
+            "phrase": "vorrei vedere quello",
+            "gloss": {
+              "en": "I'd like to see that"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me lo fa vedere",
+            "gloss": {
+              "en": "could you show it to me"
+            }
+          },
+          {
+            "phrase": "mi fa vedere quello",
+            "gloss": {
+              "en": "could you show me that one"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei provare questo",
+            "gloss": {
+              "en": "I'd like to try this on"
+            }
+          }
+        ]
+      }
+    ],
+    "accept-offer": [
+      {
+        "wordings": [
+          {
+            "phrase": "lo prendo",
+            "gloss": {
+              "en": "I'll take it"
+            }
+          },
+          {
+            "phrase": "lo voglio",
+            "gloss": {
+              "en": "I want it"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lo compro",
+            "gloss": {
+              "en": "I'll buy it"
+            }
+          }
+        ]
+      }
+    ],
+    "refuse-politely": [
+      {
+        "wordings": [
+          {
+            "phrase": "no grazie",
+            "gloss": {
+              "en": "no thank you"
+            }
+          },
+          {
+            "phrase": "no, grazie",
+            "gloss": {
+              "en": "no, thank you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "va bene così",
+            "gloss": {
+              "en": "that's fine as it is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non serve",
+            "gloss": {
+              "en": "there's no need"
+            }
+          }
+        ]
+      }
+    ],
+    "pay": [
+      {
+        "wordings": [
+          {
+            "phrase": "vorrei pagare",
+            "gloss": {
+              "en": "I want to pay"
+            }
+          },
+          {
+            "phrase": "vado a pagare",
+            "gloss": {
+              "en": "I'm going to pay"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con la carta",
+            "gloss": {
+              "en": "by card"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "in contanti",
+            "gloss": {
+              "en": "in cash"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "posso pagare con la carta",
+            "gloss": {
+              "en": "can I pay by card"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-shop-phrases": [
+      {
+        "wordings": [
+          {
+            "phrase": "altro",
+            "gloss": {
+              "en": "anything else"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è tutto",
+            "gloss": {
+              "en": "that's everything"
+            }
+          },
+          {
+            "phrase": "questo è tutto",
+            "gloss": {
+              "en": "that's everything"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "come posso aiutarla",
+            "gloss": {
+              "en": "how can I help you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "desidera",
+            "gloss": {
+              "en": "what would you like"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ecco a lei",
+            "gloss": {
+              "en": "here you are"
+            }
+          }
+        ]
+      }
+    ],
+    "understand-opening-hours": [
+      {
+        "wordings": [
+          {
+            "phrase": "aperto",
+            "gloss": {
+              "en": "open"
+            }
+          },
+          {
+            "phrase": "è aperto",
+            "gloss": {
+              "en": "it's open"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "chiuso",
+            "gloss": {
+              "en": "closed"
+            }
+          },
+          {
+            "phrase": "è chiuso",
+            "gloss": {
+              "en": "it's closed"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "chiuso la domenica",
+            "gloss": {
+              "en": "closed on Sundays"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "aperto tutto il giorno",
+            "gloss": {
+              "en": "open all day"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "l'orario",
+            "gloss": {
+              "en": "the opening hours"
+            }
+          },
+          {
+            "phrase": "orario di apertura",
+            "gloss": {
+              "en": "opening hours"
+            }
+          }
+        ]
+      }
     ]
   }
 }

@@ -272,7 +272,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "can, may"
-      }
+      },
+      "forms": {
+        "pres": [
+          "posso",
+          "puoi",
+          "può",
+          "possiamo",
+          "potete",
+          "possono"
+        ],
+        "pret": [
+          "potei",
+          "potesti",
+          "poté",
+          "potemmo",
+          "poteste",
+          "poterono"
+        ],
+        "imp": [
+          "potevo",
+          "potevi",
+          "poteva",
+          "potevamo",
+          "potevate",
+          "potevano"
+        ],
+        "ger": "potendo",
+        "part": "potuto"
+      },
+      "formsSource": "authored"
     },
     "anche": {
       "lemmaId": "anche",
@@ -1621,7 +1650,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "take, grab"
-      }
+      },
+      "forms": {
+        "pres": [
+          "prendo",
+          "prendi",
+          "prende",
+          "prendiamo",
+          "prendete",
+          "prendono"
+        ],
+        "pret": [
+          "presi",
+          "prendesti",
+          "prese",
+          "prendemmo",
+          "prendeste",
+          "presero"
+        ],
+        "imp": [
+          "prendevo",
+          "prendevi",
+          "prendeva",
+          "prendevamo",
+          "prendevate",
+          "prendevano"
+        ],
+        "ger": "prendendo",
+        "part": "preso"
+      },
+      "formsSource": "authored"
     },
     "presentare": {
       "lemmaId": "presentare",
@@ -2432,7 +2490,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "search, look for"
-      }
+      },
+      "forms": {
+        "pres": [
+          "cerco",
+          "cerchi",
+          "cerca",
+          "cerchiamo",
+          "cercate",
+          "cercano"
+        ],
+        "pret": [
+          "cercai",
+          "cercasti",
+          "cercò",
+          "cercammo",
+          "cercaste",
+          "cercarono"
+        ],
+        "imp": [
+          "cercavo",
+          "cercavi",
+          "cercava",
+          "cercavamo",
+          "cercavate",
+          "cercavano"
+        ],
+        "ger": "cercando",
+        "part": "cercato"
+      },
+      "formsSource": "authored"
     },
     "informazione": {
       "lemmaId": "informazione",
@@ -5974,7 +6061,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "serve"
-      }
+      },
+      "forms": {
+        "pres": [
+          "servo",
+          "servi",
+          "serve",
+          "serviamo",
+          "servite",
+          "servono"
+        ],
+        "pret": [
+          "servii",
+          "servisti",
+          "servì",
+          "servimmo",
+          "serviste",
+          "servirono"
+        ],
+        "imp": [
+          "servivo",
+          "servivi",
+          "serviva",
+          "servivamo",
+          "servivate",
+          "servivano"
+        ],
+        "ger": "servendo",
+        "part": "servito"
+      },
+      "formsSource": "authored"
     },
     "comunicazione": {
       "lemmaId": "comunicazione",
@@ -17468,7 +17584,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "desire, wish"
-      }
+      },
+      "forms": {
+        "pres": [
+          "desidero",
+          "desideri",
+          "desidera",
+          "desideriamo",
+          "desiderate",
+          "desiderano"
+        ],
+        "pret": [
+          "desiderai",
+          "desiderasti",
+          "desiderò",
+          "desiderammo",
+          "desideraste",
+          "desiderarono"
+        ],
+        "imp": [
+          "desideravo",
+          "desideravi",
+          "desiderava",
+          "desideravamo",
+          "desideravate",
+          "desideravano"
+        ],
+        "ger": "desiderando",
+        "part": "desiderato"
+      },
+      "formsSource": "authored"
     },
     "riunire": {
       "lemmaId": "riunire",
@@ -18852,7 +18997,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "buy"
-      }
+      },
+      "forms": {
+        "pres": [
+          "compro",
+          "compri",
+          "compra",
+          "compriamo",
+          "comprate",
+          "comprano"
+        ],
+        "pret": [
+          "comprai",
+          "comprasti",
+          "comprò",
+          "comprammo",
+          "compraste",
+          "comprarono"
+        ],
+        "imp": [
+          "compravo",
+          "compravi",
+          "comprava",
+          "compravamo",
+          "compravate",
+          "compravano"
+        ],
+        "ger": "comprando",
+        "part": "comprato"
+      },
+      "formsSource": "authored"
     },
     "partita": {
       "lemmaId": "partita",

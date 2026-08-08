@@ -100,6 +100,20 @@ describe("derived Italian forms are real words", () => {
     expect(lemmaOf("parlino")).toBe("parlare");
   });
 
+  it("A THIRD ONE THAT WOULD BE WRONG: -care and -gare keep the consonant hard", () => {
+    // Italian writes an `h` to keep a `c` or `g` hard before an `i`:
+    // `cercare` gives `cerchi`, not `cerci`. The subjunctive is also the
+    // polite command, so this is ordinary shop language, and without the
+    // respelling every -care and -gare verb produced a non-word AND lost its
+    // real form.
+    expect(lemmaOf("cerchi")).toBe("cercare");
+    expect(lemmaOf("cerchino")).toBe("cercare");
+    expect(lemmaOf("cerchiate")).toBe("cercare");
+    expect(index["cerci"]).toBeUndefined();
+    expect(index["cercino"]).toBeUndefined();
+    expect(index["cerciate"]).toBeUndefined();
+  });
+
   it("builds the conditional and future, regular and irregular", () => {
     for (const [surface, lemma] of [
       ["sentirei", "sentire"],

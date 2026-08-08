@@ -38720,6 +38720,132 @@
         "noun"
       ]
     },
+    "posso": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoi": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "può": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "possiamo": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potete": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "possono": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potei": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potesti": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "poté": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potemmo": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "poteste": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "poterono": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potevo": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potevi": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "poteva": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potevamo": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potevate": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potevano": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
     "potendo": {
       "lemmaId": "potere",
       "partsOfSpeech": [
@@ -38728,13 +38854,6 @@
       ]
     },
     "potuto": {
-      "lemmaId": "potere",
-      "partsOfSpeech": [
-        "verb",
-        "noun"
-      ]
-    },
-    "poteri": {
       "lemmaId": "potere",
       "partsOfSpeech": [
         "verb",
@@ -40084,13 +40203,115 @@
         "noun"
       ]
     },
-    "prendendo": {
+    "prendo": {
       "lemmaId": "prendere",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "prenduto": {
+    "prendi": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prende": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendiamo": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendete": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendono": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presi": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendesti": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prese": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendemmo": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendeste": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "presero": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendevo": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendevi": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendeva": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendevamo": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendevate": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendevano": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendendo": {
       "lemmaId": "prendere",
       "partsOfSpeech": [
         "verb"
@@ -40931,6 +41152,114 @@
       "partsOfSpeech": [
         "adjective",
         "noun"
+      ]
+    },
+    "cerco": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cerchi": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cerca": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cerchiamo": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercate": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercano": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercai": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercasti": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercò": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercammo": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercaste": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercarono": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercavo": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercavi": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercava": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercavamo": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercavate": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercavano": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "cercando": {
@@ -43438,6 +43767,108 @@
     },
     "spiegato": {
       "lemmaId": "spiegare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servi": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serve": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serviamo": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servite": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servono": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servii": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servisti": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servì": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servimmo": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serviste": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servirono": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servivo": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servivi": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serviva": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servivamo": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servivate": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servivano": {
+      "lemmaId": "servire",
       "partsOfSpeech": [
         "verb"
       ]
@@ -49458,6 +49889,114 @@
         "adjective"
       ]
     },
+    "desidero": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideri": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidera": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideriamo": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderate": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderano": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderai": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderasti": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderò": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderammo": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideraste": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderarono": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideravo": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideravi": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderava": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideravamo": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideravate": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideravano": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "desiderando": {
       "lemmaId": "desiderare",
       "partsOfSpeech": [
@@ -50175,6 +50714,114 @@
       "lemmaId": "mostra",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "compro": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compri": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compra": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compriamo": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprate": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprano": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprai": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprasti": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprò": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprammo": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compraste": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprarono": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compravo": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compravi": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprava": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compravamo": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compravate": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compravano": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "comprando": {
@@ -52085,12 +52732,6 @@
     },
     "fondazioni": {
       "lemmaId": "fondazione",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
-    "prese": {
-      "lemmaId": "presa",
       "partsOfSpeech": [
         "noun"
       ]
@@ -60041,12 +60682,6 @@
       "lemmaId": "portiere",
       "partsOfSpeech": [
         "noun"
-      ]
-    },
-    "presi": {
-      "lemmaId": "preso",
-      "partsOfSpeech": [
-        "adjective"
       ]
     },
     "stufe": {
@@ -80043,12 +80678,6 @@
         "noun"
       ]
     },
-    "servi": {
-      "lemmaId": "servo",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
     "seti": {
       "lemmaId": "sete",
       "partsOfSpeech": [
@@ -82196,6 +82825,111 @@
         "preposition"
       ]
     },
+    "possa": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "possiate": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "possano": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potrei": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potresti": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potrebbe": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potremmo": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potreste": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potrebbero": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potrò": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potrai": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potrà": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potremo": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potrete": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potranno": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
     "potermi": {
       "lemmaId": "potere",
       "partsOfSpeech": [
@@ -82260,6 +82994,97 @@
       ]
     },
     "poterne": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoimi": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoiti": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoisi": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoici": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoivi": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoilo": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoila": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoili": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoile": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "puoine": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potuta": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potuti": {
+      "lemmaId": "potere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "potute": {
       "lemmaId": "potere",
       "partsOfSpeech": [
         "verb",
@@ -84289,6 +85114,96 @@
         "verb"
       ]
     },
+    "prenda": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendano": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendiate": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderei": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderesti": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderebbe": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderemmo": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendereste": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderebbero": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderò": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderai": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderà": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderemo": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderete": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenderanno": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "prendermi": {
       "lemmaId": "prendere",
       "partsOfSpeech": [
@@ -84344,6 +85259,66 @@
       ]
     },
     "prenderne": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendimi": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prenditi": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendisi": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendici": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendivi": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendilo": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendila": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendili": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendile": {
+      "lemmaId": "prendere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "prendine": {
       "lemmaId": "prendere",
       "partsOfSpeech": [
         "verb"
@@ -85777,6 +86752,90 @@
         "verb"
       ]
     },
+    "cerchino": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cerchiate": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercerei": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cerceresti": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercerebbe": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cerceremmo": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercereste": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercerebbero": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercerò": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercerai": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercerà": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cerceremo": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercerete": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cerceranno": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "cercarmi": {
       "lemmaId": "cercare",
       "partsOfSpeech": [
@@ -85832,6 +86891,66 @@
       ]
     },
     "cercarne": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercami": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercati": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercasi": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercaci": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercalo": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercala": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercali": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercale": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercane": {
+      "lemmaId": "cercare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "cercata": {
       "lemmaId": "cercare",
       "partsOfSpeech": [
         "verb"
@@ -88361,7 +89480,7 @@
         "verb"
       ]
     },
-    "nasciate": {
+    "naschiate": {
       "lemmaId": "nascere",
       "partsOfSpeech": [
         "verb"
@@ -90569,6 +91688,96 @@
         "verb"
       ]
     },
+    "serva": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servano": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serviate": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servirei": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serviresti": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servirebbe": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serviremmo": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servireste": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servirebbero": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servirò": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servirai": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servirà": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serviremo": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servirete": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serviranno": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "servirmi": {
       "lemmaId": "servire",
       "partsOfSpeech": [
@@ -90624,6 +91833,66 @@
       ]
     },
     "servirne": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servimi": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "serviti": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servisi": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servici": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servilo": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servila": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servili": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servile": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servine": {
+      "lemmaId": "servire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "servita": {
       "lemmaId": "servire",
       "partsOfSpeech": [
         "verb"
@@ -94567,7 +95836,7 @@
         "noun"
       ]
     },
-    "piaciate": {
+    "piachiate": {
       "lemmaId": "piacere",
       "partsOfSpeech": [
         "verb",
@@ -103359,6 +104628,90 @@
         "verb"
       ]
     },
+    "desiderino": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideriate": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidererei": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidereresti": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidererebbe": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidereremmo": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderereste": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidererebbero": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidererò": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidererai": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidererà": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidereremo": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidererete": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desidereranno": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "desiderarmi": {
       "lemmaId": "desiderare",
       "partsOfSpeech": [
@@ -103414,6 +104767,66 @@
       ]
     },
     "desiderarne": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderami": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderati": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderasi": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideraci": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desideralo": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderala": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderali": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderale": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderane": {
+      "lemmaId": "desiderare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desiderata": {
       "lemmaId": "desiderare",
       "partsOfSpeech": [
         "verb"
@@ -104601,6 +106014,90 @@
         "verb"
       ]
     },
+    "comprino": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compriate": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprerei": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compreresti": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprerebbe": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compreremmo": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprereste": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprerebbero": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprerò": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprerai": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprerà": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compreremo": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprerete": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compreranno": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "comprarmi": {
       "lemmaId": "comprare",
       "partsOfSpeech": [
@@ -104656,6 +106153,66 @@
       ]
     },
     "comprarne": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprami": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprati": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprasi": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compraci": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compralo": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprala": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprali": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprale": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprane": {
+      "lemmaId": "comprare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "comprata": {
       "lemmaId": "comprare",
       "partsOfSpeech": [
         "verb"
@@ -122133,7 +123690,7 @@
         "verb"
       ]
     },
-    "dispiaciate": {
+    "dispiachiate": {
       "lemmaId": "dispiacere",
       "partsOfSpeech": [
         "verb"
