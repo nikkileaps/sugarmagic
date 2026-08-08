@@ -39,6 +39,13 @@ import {
  *
  * Lemma ids, so `i` and `vi` are omitted rather than listed inertly -- neither
  * resolves in the Italian index today, so the check would never reach them.
+ *
+ * `uno` is deliberately ABSENT even though it is an article (`uno studente`),
+ * because it is also the number one, and the dictionary tags it `numeral`.
+ * Listing it left the number card in the curriculum with no word attached to
+ * it -- schedulable, and unable to teach anything. Spanish leaves `uno` out
+ * for the same reason. The cost is that the article sense counts as content
+ * in the two phrases that use it, which is the smaller error.
  */
 const FUNCTION_WORDS = new Set([
   "il",
@@ -46,7 +53,6 @@ const FUNCTION_WORDS = new Set([
   "la",
   "gli",
   "un",
-  "uno",
   "una",
   "mi",
   "ti",

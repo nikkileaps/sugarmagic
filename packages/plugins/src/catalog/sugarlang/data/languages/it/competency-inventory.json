@@ -7999,7 +7999,9 @@
               "uno"
             ],
             "cefrBand": "A1",
-            "constituentLemmas": [],
+            "constituentLemmas": [
+              "uno"
+            ],
             "glossBySurface": {
               "uno": {
                 "en": "one"
@@ -8490,6 +8492,7 @@
             "cefrBand": "A1",
             "constituentLemmas": [
               "praticare",
+              "uno",
               "sport"
             ],
             "glossBySurface": {
@@ -15538,19 +15541,20 @@
             "normalizedForm": "come_si_dice",
             "surfaceForms": [
               "come si dice",
-              "come si chiama"
+              "come si chiama questo"
             ],
             "cefrBand": "A1",
             "constituentLemmas": [
               "come",
               "dire",
-              "chiamare"
+              "chiamare",
+              "questo"
             ],
             "glossBySurface": {
               "come si dice": {
                 "en": "how do you say"
               },
-              "come si chiama": {
+              "come si chiama questo": {
                 "en": "what is it called"
               }
             }
@@ -23235,6 +23239,7 @@
             "cefrBand": "A2",
             "constituentLemmas": [
               "essere",
+              "uno",
               "zaino",
               "blu"
             ],
@@ -35553,6 +35558,7 @@
             "constituentLemmas": [
               "non",
               "essere",
+              "uno",
               "da",
               "romanzo"
             ],
@@ -41634,18 +41640,18 @@
             }
           },
           {
-            "exponentId": "ho_capito",
-            "normalizedForm": "ho_capito",
+            "exponentId": "ah_ecco",
+            "normalizedForm": "ah_ecco",
             "surfaceForms": [
-              "ho capito"
+              "ah ecco"
             ],
             "cefrBand": "B1",
             "constituentLemmas": [
-              "avere",
-              "capire"
+              "ah",
+              "ecco"
             ],
             "glossBySurface": {
-              "ho capito": {
+              "ah ecco": {
                 "en": "I see"
               }
             }
@@ -48333,6 +48339,7 @@
             ],
             "cefrBand": "B2",
             "constituentLemmas": [
+              "uno",
               "sconto",
               "non",
               "risolvere",
@@ -58410,7 +58417,8 @@
               "essere",
               "dubbio",
               "rispondere",
-              "a"
+              "a",
+              "uno"
             ],
             "glossBySurface": {
               "se ci sono dubbi, rispondo a uno a uno": {
@@ -59717,6 +59725,7 @@
               "di",
               "esilio",
               "ma",
+              "uno",
               "fa",
               "con",
               "rabbia"
@@ -59780,6 +59789,7 @@
             "cefrBand": "C1",
             "constituentLemmas": [
               "dove",
+              "uno",
               "spiegare",
               "altro",
               "preferire",
@@ -61845,6 +61855,7 @@
               "se",
               "venire",
               "da",
+              "uno",
               "studio",
               "serio",
               "prendere",
@@ -61951,6 +61962,7 @@
             "constituentLemmas": [
               "senza",
               "essere",
+              "uno",
               "specialista",
               "vedere",
               "problema"

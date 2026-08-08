@@ -1,19 +1,20 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/classifier/verb-forms.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/classifier/word-forms.test.ts
  *
  * Purpose: Pins the verb-forms contract against the SHIPPED dictionary --
  *   slot order, null handling, and the accessors that exist so nothing indexes
  *   a forms array by hand.
  *
  * Relationships:
- *   - Exercises runtime/classifier/verb-forms.ts against
- *     data/languages/es/cefrlex.json.
+ *   - Exercises runtime/classifier/word-forms.ts against every shipped
+ *     dictionary under data/languages/.
  *
  * Status: active
  */
 
 import { describe, expect, it } from "vitest";
 import esAtlas from "../../data/languages/es/cefrlex.json";
+import itAtlas from "../../data/languages/it/cefrlex.json";
 import {
   PERSON_SLOT,
   allForms,
@@ -100,6 +101,53 @@ describe("word forms, against the shipped dictionary", () => {
     const missing = Object.entries(
       lemmas as Record<string, { forms?: VerbForms; formsSource?: string }>
     )
+      .filter(([, e]) => e.forms && !e.formsSource)
+      .map(([id]) => id);
+    expect(missing).toEqual([]);
+  });
+});
+
+/**
+ * The same contract over every shipped dictionary. Italian was authored to 405
+ * sets of forms while this file checked Spanish only, and the one error found
+ * in them -- a doubled `i` from using the wrong -are helper -- was caught by a
+ * hand-run sweep rather than by anything that would run again.
+ */
+describe.each([
+  { lang: "es", atlas: esAtlas, allowed: /^[a-záéíóúüñ]+$/ },
+  // Italian takes grave and acute accents and no tilde or diaeresis.
+  { lang: "it", atlas: itAtlas, allowed: /^[a-zàèéìíîòóùú]+$/ }
+])("the shipped $lang dictionary keeps the forms contract", ({ atlas, allowed }) => {
+  const entries = (
+    atlas as { lemmas: Record<string, { forms?: WordForms; formsSource?: string }> }
+  ).lemmas;
+
+  it("keeps every tense six slots wide", () => {
+    const wrong: string[] = [];
+    for (const [lemmaId, entry] of Object.entries(entries)) {
+      if (!isVerbForms(entry.forms)) continue;
+      for (const tense of ["pres", "pret", "imp"] as const) {
+        if (entry.forms[tense].length !== 6) wrong.push(`${lemmaId}.${tense}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("uses only that language's orthography", () => {
+    // A Cyrillic 'e' (U+0435) once reached four `desplegar` forms. It is
+    // invisible on inspection and would simply never have matched.
+    const wrong: string[] = [];
+    for (const [lemmaId, entry] of Object.entries(entries)) {
+      if (!entry.forms) continue;
+      for (const form of allForms(entry.forms)) {
+        if (!allowed.test(form.toLowerCase())) wrong.push(`${lemmaId}: ${form}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it("marks provenance on every set of forms", () => {
+    const missing = Object.entries(entries)
       .filter(([, e]) => e.forms && !e.formsSource)
       .map(([id]) => id);
     expect(missing).toEqual([]);

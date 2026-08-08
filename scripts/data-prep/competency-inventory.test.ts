@@ -23,7 +23,10 @@ import { readJsonFile, sugarlangDataPath } from "./sugarlang-language-data";
 
 const BANDS = ["a1", "a2", "b1", "b2", "c1"];
 
-function realInputs() {
+/** Every language whose inventory is checked in. */
+const SHIPPED = ["es", "it"];
+
+function realInputs(lang = "es") {
   return {
     bands: BANDS.map((band) =>
       readJsonFile<CurriculumBandFile>(
@@ -31,29 +34,35 @@ function realInputs() {
       )
     ),
     exponents: readJsonFile<ExponentsFile>(
-      sugarlangDataPath("languages", "es", "exponents.json")
+      sugarlangDataPath("languages", lang, "exponents.json")
     ),
     morphology: readJsonFile<MorphologyFile>(
-      sugarlangDataPath("languages", "es", "morphology.json")
+      sugarlangDataPath("languages", lang, "morphology.json")
     )
   };
 }
 
 describe("the shipped competency inventory is generated, not authored", () => {
-  it("THE ONE THAT MATTERS: the checked-in file is byte-identical to a fresh build", () => {
-    // A hand-edit to the generated file fails here rather than surviving until
-    // the next regeneration silently discards it.
-    const built = `${JSON.stringify(
-      buildCompetencyInventory(realInputs()),
-      null,
-      2
-    )}\n`;
-    const shipped = readFileSync(
-      sugarlangDataPath("languages", "es", "competency-inventory.json"),
-      "utf8"
-    );
-    expect(built).toBe(shipped);
-  });
+  // Every shipped language, not just Spanish: an Italian inventory that can
+  // be hand-edited without anything objecting drifts from its source the
+  // moment someone tries to fix a phrase in the generated file.
+  it.each(SHIPPED)(
+    "THE ONE THAT MATTERS: the checked-in %s file is byte-identical to a fresh build",
+    (lang) => {
+      // A hand-edit to the generated file fails here rather than surviving
+      // until the next regeneration silently discards it.
+      const built = `${JSON.stringify(
+        buildCompetencyInventory(realInputs(lang)),
+        null,
+        2
+      )}\n`;
+      const shipped = readFileSync(
+        sugarlangDataPath("languages", lang, "competency-inventory.json"),
+        "utf8"
+      );
+      expect(built).toBe(shipped);
+    }
+  );
 
   it("building twice from unchanged sources produces the same file", () => {
     const a = JSON.stringify(buildCompetencyInventory(realInputs()));
