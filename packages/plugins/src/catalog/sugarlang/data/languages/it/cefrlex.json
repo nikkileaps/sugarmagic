@@ -320,7 +320,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "do, make"
-      }
+      },
+      "forms": {
+        "pres": [
+          "faccio",
+          "fai",
+          "fa",
+          "facciamo",
+          "fate",
+          "fanno"
+        ],
+        "pret": [
+          "feci",
+          "facesti",
+          "fece",
+          "facemmo",
+          "faceste",
+          "fecero"
+        ],
+        "imp": [
+          "facevo",
+          "facevi",
+          "faceva",
+          "facevamo",
+          "facevate",
+          "facevano"
+        ],
+        "ger": "facendo",
+        "part": "fatto"
+      },
+      "formsSource": "authored"
     },
     "ma": {
       "lemmaId": "ma",
@@ -359,7 +388,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "have, possess"
-      }
+      },
+      "forms": {
+        "pres": [
+          "ho",
+          "hai",
+          "ha",
+          "abbiamo",
+          "avete",
+          "hanno"
+        ],
+        "pret": [
+          "ebbi",
+          "avesti",
+          "ebbe",
+          "avemmo",
+          "aveste",
+          "ebbero"
+        ],
+        "imp": [
+          "avevo",
+          "avevi",
+          "aveva",
+          "avevamo",
+          "avevate",
+          "avevano"
+        ],
+        "ger": "avendo",
+        "part": "avuto"
+      },
+      "formsSource": "authored"
     },
     "suo": {
       "lemmaId": "suo",
@@ -510,7 +568,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "same, itself"
-      }
+      },
+      "forms": {
+        "ms": "stesso",
+        "fs": "stessa",
+        "mp": "stessi",
+        "fp": "stesse"
+      },
+      "formsSource": "authored"
     },
     "solo": {
       "lemmaId": "solo",
@@ -590,7 +655,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "give"
-      }
+      },
+      "forms": {
+        "pres": [
+          "do",
+          "dai",
+          "dà",
+          "diamo",
+          "date",
+          "danno"
+        ],
+        "pret": [
+          "diedi",
+          "desti",
+          "diede",
+          "demmo",
+          "deste",
+          "diedero"
+        ],
+        "imp": [
+          "davo",
+          "davi",
+          "dava",
+          "davamo",
+          "davate",
+          "davano"
+        ],
+        "ger": "dando",
+        "part": "dato"
+      },
+      "formsSource": "authored"
     },
     "due": {
       "lemmaId": "due",
@@ -702,7 +796,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "how much, as much"
-      }
+      },
+      "forms": {
+        "ms": "quanto",
+        "fs": "quanta",
+        "mp": "quanti",
+        "fp": "quante"
+      },
+      "formsSource": "authored"
     },
     "articolo": {
       "lemmaId": "articolo",
@@ -1327,7 +1428,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "my, mine"
-      }
+      },
+      "forms": {
+        "ms": "mio",
+        "fs": "mia",
+        "mp": "miei",
+        "fp": "mie"
+      },
+      "formsSource": "authored"
     },
     "persona": {
       "lemmaId": "persona",
@@ -1583,7 +1691,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "speak, talk"
-      }
+      },
+      "forms": {
+        "pres": [
+          "parlo",
+          "parli",
+          "parla",
+          "parliamo",
+          "parlate",
+          "parlano"
+        ],
+        "pret": [
+          "parlai",
+          "parlasti",
+          "parlò",
+          "parlammo",
+          "parlaste",
+          "parlarono"
+        ],
+        "imp": [
+          "parlavo",
+          "parlavi",
+          "parlava",
+          "parlavamo",
+          "parlavate",
+          "parlavano"
+        ],
+        "ger": "parlando",
+        "part": "parlato"
+      },
+      "formsSource": "authored"
     },
     "io": {
       "lemmaId": "io",
@@ -1783,7 +1920,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "write"
-      }
+      },
+      "forms": {
+        "pres": [
+          "scrivo",
+          "scrivi",
+          "scrive",
+          "scriviamo",
+          "scrivete",
+          "scrivono"
+        ],
+        "pret": [
+          "scrissi",
+          "scrivesti",
+          "scrisse",
+          "scrivemmo",
+          "scriveste",
+          "scrissero"
+        ],
+        "imp": [
+          "scrivevo",
+          "scrivevi",
+          "scriveva",
+          "scrivevamo",
+          "scrivevate",
+          "scrivevano"
+        ],
+        "ger": "scrivendo",
+        "part": "scritto"
+      },
+      "formsSource": "authored"
     },
     "meno": {
       "lemmaId": "meno",
@@ -2404,7 +2570,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "leave, let"
-      }
+      },
+      "forms": {
+        "pres": [
+          "lascio",
+          "lasci",
+          "lascia",
+          "lasciamo",
+          "lasciate",
+          "lasciano"
+        ],
+        "pret": [
+          "lasciai",
+          "lasciasti",
+          "lasciò",
+          "lasciammo",
+          "lasciaste",
+          "lasciarono"
+        ],
+        "imp": [
+          "lasciavo",
+          "lasciavi",
+          "lasciava",
+          "lasciavamo",
+          "lasciavate",
+          "lasciavano"
+        ],
+        "ger": "lasciando",
+        "part": "lasciato"
+      },
+      "formsSource": "authored"
     },
     "politico": {
       "lemmaId": "politico",
@@ -3763,7 +3958,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "understand"
-      }
+      },
+      "forms": {
+        "pres": [
+          "capisco",
+          "capisci",
+          "capisce",
+          "capiamo",
+          "capite",
+          "capiscono"
+        ],
+        "pret": [
+          "capii",
+          "capisti",
+          "capì",
+          "capimmo",
+          "capiste",
+          "capirono"
+        ],
+        "imp": [
+          "capivo",
+          "capivi",
+          "capiva",
+          "capivamo",
+          "capivate",
+          "capivano"
+        ],
+        "ger": "capendo",
+        "part": "capito"
+      },
+      "formsSource": "authored"
     },
     "interesse": {
       "lemmaId": "interesse",
@@ -4076,7 +4300,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "be born, arise"
-      }
+      },
+      "forms": {
+        "pres": [
+          "nasco",
+          "nasci",
+          "nasce",
+          "nasciamo",
+          "nascete",
+          "nascono"
+        ],
+        "pret": [
+          "nacqui",
+          "nascesti",
+          "nacque",
+          "nascemmo",
+          "nasceste",
+          "nacquero"
+        ],
+        "imp": [
+          "nascevo",
+          "nascevi",
+          "nasceva",
+          "nascevamo",
+          "nascevate",
+          "nascevano"
+        ],
+        "ger": "nascendo",
+        "part": "nato"
+      },
+      "formsSource": "authored"
     },
     "confronto": {
       "lemmaId": "confronto",
@@ -5420,7 +5673,14 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "your"
-      }
+      },
+      "forms": {
+        "ms": "tuo",
+        "fs": "tua",
+        "mp": "tuoi",
+        "fp": "tue"
+      },
+      "formsSource": "authored"
     },
     "giugno": {
       "lemmaId": "giugno",
@@ -8222,7 +8482,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "occupy, take up"
-      }
+      },
+      "forms": {
+        "pres": [
+          "occupo",
+          "occupi",
+          "occupa",
+          "occupiamo",
+          "occupate",
+          "occupano"
+        ],
+        "pret": [
+          "occupai",
+          "occupasti",
+          "occupò",
+          "occupammo",
+          "occupaste",
+          "occuparono"
+        ],
+        "imp": [
+          "occupavo",
+          "occupavi",
+          "occupava",
+          "occupavamo",
+          "occupavate",
+          "occupavano"
+        ],
+        "ger": "occupando",
+        "part": "occupato"
+      },
+      "formsSource": "authored"
     },
     "realizzazione": {
       "lemmaId": "realizzazione",
@@ -9834,7 +10123,36 @@
       "cefrPriorSource": "kelly",
       "glosses": {
         "en": "accomplish, perform"
-      }
+      },
+      "forms": {
+        "pres": [
+          "compio",
+          "compi",
+          "compie",
+          "compiamo",
+          "compite",
+          "compiono"
+        ],
+        "pret": [
+          "compii",
+          "compisti",
+          "compì",
+          "compimmo",
+          "compiste",
+          "compirono"
+        ],
+        "imp": [
+          "compivo",
+          "compivi",
+          "compiva",
+          "compivamo",
+          "compivate",
+          "compivano"
+        ],
+        "ger": "compiendo",
+        "part": "compiuto"
+      },
+      "formsSource": "authored"
     },
     "dimensione": {
       "lemmaId": "dimensione",
@@ -83533,6 +83851,71 @@
       "cefrPriorSource": "claude-classified",
       "glosses": {
         "en": "soup"
+      }
+    },
+    "acca": {
+      "lemmaId": "acca",
+      "lang": "it",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "the letter H, said aloud when spelling"
+      }
+    },
+    "bi": {
+      "lemmaId": "bi",
+      "lang": "it",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "the letter B, said aloud when spelling"
+      }
+    },
+    "vu": {
+      "lemmaId": "vu",
+      "lang": "it",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "the letter V, said aloud when spelling"
+      }
+    },
+    "chiocciola": {
+      "lemmaId": "chiocciola",
+      "lang": "it",
+      "cefrPriorBand": "A2",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "at sign; snail"
+      }
+    },
+    "email": {
+      "lemmaId": "email",
+      "lang": "it",
+      "cefrPriorBand": "A1",
+      "frequencyRank": null,
+      "partsOfSpeech": [
+        "noun"
+      ],
+      "cefrPriorSource": "claude-classified",
+      "glosses": {
+        "en": "email"
       }
     }
   }

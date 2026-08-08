@@ -68,6 +68,13 @@ const FUNCTION_WORDS = new Set([
  */
 const ELIDED_STUBS: Record<string, string> = {
   c: "ci",
+  // `l'` is `lo` before a masculine word and `la` before a feminine one, and
+  // the stub cannot say which. Answering `lo` always is safe HERE because both
+  // are function words: whichever it is, it is dropped from the words an
+  // exponent teaches, so the two answers are indistinguishable downstream. If
+  // this is ever consulted somewhere that keeps function words, that stops
+  // being true and the caller needs the gender.
+  l: "lo",
   dov: "dove",
   quest: "questo",
   un: "una",
@@ -563,6 +570,17 @@ function addItalianExtraForms(
   for (const base of bases) {
     for (const clitic of ITALIAN_CLITICS) {
       addMorphologyEntry(forms, `${base}${clitic}`, lemmaId, partsOfSpeech);
+    }
+  }
+
+  // The past participle AGREES when the verb takes `essere`: `sono nato` from
+  // a man, `sono nata` from a woman, and the plurals. The dictionary stores
+  // one form because there is one participle; the agreement is a rule, and
+  // without it half the speakers of a sentence cannot be understood.
+  if (f && "pres" in f && typeof f.part === "string" && f.part.endsWith("o")) {
+    const stem = f.part.slice(0, -1);
+    for (const ending of ["a", "i", "e"]) {
+      addMorphologyEntry(forms, `${stem}${ending}`, lemmaId, partsOfSpeech);
     }
   }
 }

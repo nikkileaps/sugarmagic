@@ -38539,6 +38539,36 @@
         "noun"
       ]
     },
+    "acca": {
+      "lemmaId": "acca",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "bi": {
+      "lemmaId": "bi",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "vu": {
+      "lemmaId": "vu",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "chiocciola": {
+      "lemmaId": "chiocciola",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "email": {
+      "lemmaId": "email",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
     "sono": {
       "lemmaId": "essere",
       "partsOfSpeech": [
@@ -38702,14 +38732,212 @@
         "pronoun"
       ]
     },
-    "fando": {
+    "faccio": {
       "lemmaId": "fare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "fato": {
+    "fai": {
       "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facciamo": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fate": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fanno": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facesti": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fece": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facemmo": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "faceste": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fecero": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facevo": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facevi": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "faceva": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facevamo": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facevate": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facevano": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facendo": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ho": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "hai": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ha": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abbiamo": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avete": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "hanno": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ebbi": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avesti": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ebbe": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avemmo": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aveste": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "ebbero": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avevo": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avevi": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "aveva": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avevamo": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avevate": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avevano": {
+      "lemmaId": "avere",
       "partsOfSpeech": [
         "verb"
       ]
@@ -38773,7 +39001,21 @@
         "noun"
       ]
     },
+    "stessa": {
+      "lemmaId": "stesso",
+      "partsOfSpeech": [
+        "adjective",
+        "pronoun"
+      ]
+    },
     "stessi": {
+      "lemmaId": "stesso",
+      "partsOfSpeech": [
+        "adjective",
+        "pronoun"
+      ]
+    },
+    "stesse": {
       "lemmaId": "stesso",
       "partsOfSpeech": [
         "adjective",
@@ -38810,6 +39052,108 @@
       "lemmaId": "numero",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "do": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dai": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dà": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "diamo": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "date": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "diedi": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "desti": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "diede": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "demmo": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "deste": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "diedero": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "davo": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "davi": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dava": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "davamo": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "davate": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "davano": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "dando": {
@@ -38955,6 +39299,30 @@
       "partsOfSpeech": [
         "adjective",
         "pronoun"
+      ]
+    },
+    "quanta": {
+      "lemmaId": "quanto",
+      "partsOfSpeech": [
+        "pronoun",
+        "adverb",
+        "determiner"
+      ]
+    },
+    "quanti": {
+      "lemmaId": "quanto",
+      "partsOfSpeech": [
+        "pronoun",
+        "adverb",
+        "determiner"
+      ]
+    },
+    "quante": {
+      "lemmaId": "quanto",
+      "partsOfSpeech": [
+        "pronoun",
+        "adverb",
+        "determiner"
       ]
     },
     "articoli": {
@@ -39397,7 +39765,21 @@
         "verb"
       ]
     },
-    "mii": {
+    "mia": {
+      "lemmaId": "mio",
+      "partsOfSpeech": [
+        "adjective",
+        "pronoun"
+      ]
+    },
+    "miei": {
+      "lemmaId": "mio",
+      "partsOfSpeech": [
+        "adjective",
+        "pronoun"
+      ]
+    },
+    "mie": {
       "lemmaId": "mio",
       "partsOfSpeech": [
         "adjective",
@@ -39590,6 +39972,114 @@
     },
     "portato": {
       "lemmaId": "portare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlo": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parli": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parla": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parliamo": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlate": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlano": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlai": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlasti": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlò": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlammo": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlaste": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlarono": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlavo": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlavi": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlava": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlavamo": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlavate": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlavano": {
+      "lemmaId": "parlare",
       "partsOfSpeech": [
         "verb"
       ]
@@ -39788,13 +40278,115 @@
         "noun"
       ]
     },
-    "scrivendo": {
+    "scrivo": {
       "lemmaId": "scrivere",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "scrivuto": {
+    "scrivi": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrive": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriviamo": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivete": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivono": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrissi": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivesti": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrisse": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivemmo": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriveste": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrissero": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivevo": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivevi": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriveva": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivevamo": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivevate": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivevano": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivendo": {
       "lemmaId": "scrivere",
       "partsOfSpeech": [
         "verb"
@@ -40156,6 +40748,114 @@
       "lemmaId": "rapporto",
       "partsOfSpeech": [
         "noun"
+      ]
+    },
+    "lascio": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasci": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascia": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciamo": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciate": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciano": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciai": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciasti": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciò": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciammo": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciaste": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciarono": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciavo": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciavi": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciava": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciavamo": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciavate": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciavano": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
       ]
     },
     "lasciando": {
@@ -41059,6 +41759,114 @@
         "verb"
       ]
     },
+    "capisco": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capisci": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capisce": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiamo": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capite": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscono": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capii": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capisti": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capì": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capimmo": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiste": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capirono": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capivo": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capivi": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiva": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capivamo": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capivate": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capivano": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "capendo": {
       "lemmaId": "capire",
       "partsOfSpeech": [
@@ -41186,13 +41994,121 @@
         "noun"
       ]
     },
+    "nasco": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasci": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasce": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasciamo": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascete": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascono": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nacqui": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascesti": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nacque": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascemmo": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasceste": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nacquero": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascevo": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascevi": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasceva": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascevamo": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascevate": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascevano": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "nascendo": {
       "lemmaId": "nascere",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "nascuto": {
+    "nato": {
       "lemmaId": "nascere",
       "partsOfSpeech": [
         "verb"
@@ -41414,12 +42330,6 @@
     },
     "questioni": {
       "lemmaId": "questione",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
-    "date": {
-      "lemmaId": "data",
       "partsOfSpeech": [
         "noun"
       ]
@@ -41896,7 +42806,21 @@
         "adjective"
       ]
     },
-    "tui": {
+    "tua": {
+      "lemmaId": "tuo",
+      "partsOfSpeech": [
+        "pronoun",
+        "adjective"
+      ]
+    },
+    "tuoi": {
+      "lemmaId": "tuo",
+      "partsOfSpeech": [
+        "pronoun",
+        "adjective"
+      ]
+    },
+    "tue": {
       "lemmaId": "tuo",
       "partsOfSpeech": [
         "pronoun",
@@ -43260,6 +44184,114 @@
         "adjective"
       ]
     },
+    "occupo": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupi": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupa": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupiamo": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupate": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupano": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupai": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupasti": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupò": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupammo": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupaste": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuparono": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupavo": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupavi": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupava": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupavamo": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupavate": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupavano": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "occupando": {
       "lemmaId": "occupare",
       "partsOfSpeech": [
@@ -44019,6 +45051,114 @@
     },
     "comunicando": {
       "lemmaId": "comunicare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compio": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compi": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compie": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compiamo": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compite": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compiono": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compii": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compisti": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compì": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compimmo": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compiste": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compirono": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compivo": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compivi": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compiva": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compivamo": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compivate": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compivano": {
+      "lemmaId": "compiere",
       "partsOfSpeech": [
         "verb"
       ]
@@ -51907,12 +53047,6 @@
     },
     "babbi": {
       "lemmaId": "babbo",
-      "partsOfSpeech": [
-        "noun"
-      ]
-    },
-    "fate": {
-      "lemmaId": "fata",
       "partsOfSpeech": [
         "noun"
       ]
@@ -79659,6 +80793,18 @@
         "noun"
       ]
     },
+    "acce": {
+      "lemmaId": "acca",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
+    "chiocciole": {
+      "lemmaId": "chiocciola",
+      "partsOfSpeech": [
+        "noun"
+      ]
+    },
     "siate": {
       "lemmaId": "essere",
       "partsOfSpeech": [
@@ -79897,6 +81043,13 @@
         "noun"
       ]
     },
+    "stata": {
+      "lemmaId": "essere",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
     "potermi": {
       "lemmaId": "potere",
       "partsOfSpeech": [
@@ -79967,6 +81120,96 @@
         "noun"
       ]
     },
+    "faccii": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facciino": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fiate": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "farei": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "faresti": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "farebbe": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "faremmo": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fareste": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "farebbero": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "farò": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "farai": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "farà": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "faremo": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "farete": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "faranno": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "farmi": {
       "lemmaId": "fare",
       "partsOfSpeech": [
@@ -80027,6 +81270,156 @@
         "verb"
       ]
     },
+    "fati": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "faci": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "favi": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "falo": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fala": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fali": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fale": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fane": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fatta": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "fatte": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abbia": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abbiate": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abbiano": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avrei": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avresti": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avrebbe": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avremmo": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avreste": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avrebbero": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avrò": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avrai": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avrà": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avremo": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avrete": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avranno": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "avermi": {
       "lemmaId": "avere",
       "partsOfSpeech": [
@@ -80082,6 +81475,84 @@
       ]
     },
     "averne": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "haimi": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "haiti": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "haisi": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "haici": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "haivi": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "hailo": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "haila": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "haili": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "haile": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "haine": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avuta": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avuti": {
+      "lemmaId": "avere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "avute": {
       "lemmaId": "avere",
       "partsOfSpeech": [
         "verb"
@@ -80207,6 +81678,96 @@
         "verb"
       ]
     },
+    "dia": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "diate": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "diano": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "darei": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "daresti": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "darebbe": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "daremmo": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dareste": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "darebbero": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "darò": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "darai": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "darà": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "daremo": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "darete": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "daranno": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "darmi": {
       "lemmaId": "dare",
       "partsOfSpeech": [
@@ -80262,6 +81823,66 @@
       ]
     },
     "darne": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dàmi": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dàti": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dàsi": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dàci": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dàvi": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dàlo": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dàla": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dàli": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dàle": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dàne": {
       "lemmaId": "dare",
       "partsOfSpeech": [
         "verb"
@@ -80466,6 +82087,18 @@
       ]
     },
     "vane": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andata": {
+      "lemmaId": "andare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "andati": {
       "lemmaId": "andare",
       "partsOfSpeech": [
         "verb"
@@ -81369,6 +83002,12 @@
         "verb"
       ]
     },
+    "presentata": {
+      "lemmaId": "presentare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "tenermi": {
       "lemmaId": "tenere",
       "partsOfSpeech": [
@@ -81489,6 +83128,90 @@
         "verb"
       ]
     },
+    "parlino": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parliate": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerei": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parleresti": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerebbe": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parleremmo": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlereste": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerebbero": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerò": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerai": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerà": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parleremo": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlerete": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parleranno": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "parlarmi": {
       "lemmaId": "parlare",
       "partsOfSpeech": [
@@ -81544,6 +83267,66 @@
       ]
     },
     "parlarne": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlami": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlati": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlasi": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlaci": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlalo": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlala": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlali": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlale": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlane": {
+      "lemmaId": "parlare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "parlata": {
       "lemmaId": "parlare",
       "partsOfSpeech": [
         "verb"
@@ -81819,6 +83602,114 @@
         "verb"
       ]
     },
+    "chiesta": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chiesti": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "chieste": {
+      "lemmaId": "chiedere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriva": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivano": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriviate": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriverei": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriveresti": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriverebbe": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriveremmo": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivereste": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriverebbero": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriverò": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriverai": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriverà": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriveremo": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriverete": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriveranno": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "scrivermi": {
       "lemmaId": "scrivere",
       "partsOfSpeech": [
@@ -81874,6 +83765,66 @@
       ]
     },
     "scriverne": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivimi": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scriviti": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivisi": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivici": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivivi": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivilo": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivila": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivili": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivile": {
+      "lemmaId": "scrivere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "scrivine": {
       "lemmaId": "scrivere",
       "partsOfSpeech": [
         "verb"
@@ -82269,6 +84220,24 @@
         "verb"
       ]
     },
+    "venuta": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venuti": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "venute": {
+      "lemmaId": "venire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "cercarmi": {
       "lemmaId": "cercare",
       "partsOfSpeech": [
@@ -82563,6 +84532,96 @@
         "verb"
       ]
     },
+    "lascii": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciino": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciiate": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascierei": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascieresti": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascierebbe": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascieremmo": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciereste": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascierebbero": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascierò": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascierai": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascierà": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascieremo": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascierete": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascieranno": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "lasciarmi": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
@@ -82612,6 +84671,66 @@
       ]
     },
     "lasciarne": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciami": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciati": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciasi": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciaci": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lascialo": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciala": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciali": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciale": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciane": {
+      "lemmaId": "lasciare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "lasciata": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
@@ -82956,6 +85075,13 @@
       ]
     },
     "sentine": {
+      "lemmaId": "sentire",
+      "partsOfSpeech": [
+        "verb",
+        "noun"
+      ]
+    },
+    "sentita": {
       "lemmaId": "sentire",
       "partsOfSpeech": [
         "verb",
@@ -84288,6 +86414,96 @@
         "verb"
       ]
     },
+    "capisca": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscano": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiate": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capirei": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiresti": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capirebbe": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiremmo": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capireste": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capirebbero": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capirò": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capirai": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capirà": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiremo": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capirete": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiranno": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "capirmi": {
       "lemmaId": "capire",
       "partsOfSpeech": [
@@ -84343,6 +86559,78 @@
       ]
     },
     "capirne": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscimi": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capisciti": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscisi": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscici": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscivi": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscilo": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscila": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscili": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscile": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiscine": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capita": {
+      "lemmaId": "capire",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "capiti": {
       "lemmaId": "capire",
       "partsOfSpeech": [
         "verb"
@@ -84528,6 +86816,96 @@
         "verb"
       ]
     },
+    "nasca": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascano": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasciate": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascerei": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasceresti": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascerebbe": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasceremmo": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascereste": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascerebbero": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascerò": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascerai": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascerà": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasceremo": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascerete": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasceranno": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "nascermi": {
       "lemmaId": "nascere",
       "partsOfSpeech": [
@@ -84583,6 +86961,84 @@
       ]
     },
     "nascerne": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascimi": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nasciti": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascisi": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascici": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascivi": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascilo": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascila": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascili": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascile": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nascine": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nata": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nati": {
+      "lemmaId": "nascere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "nate": {
       "lemmaId": "nascere",
       "partsOfSpeech": [
         "verb"
@@ -89034,6 +91490,90 @@
         "verb"
       ]
     },
+    "occupino": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupiate": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperei": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperesti": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperebbe": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperemmo": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupereste": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperebbero": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperò": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperai": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperà": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperemo": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperete": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occuperanno": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "occuparmi": {
       "lemmaId": "occupare",
       "partsOfSpeech": [
@@ -89083,6 +91623,60 @@
       ]
     },
     "occuparne": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupami": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupasi": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupaci": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupalo": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupala": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupali": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupale": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupane": {
+      "lemmaId": "occupare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "occupata": {
       "lemmaId": "occupare",
       "partsOfSpeech": [
         "verb"
@@ -90878,6 +93472,96 @@
         "verb"
       ]
     },
+    "compia": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compiano": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compiiate": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compierei": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compieresti": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compierebbe": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compieremmo": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compiereste": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compierebbero": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compierò": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compierai": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compierà": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compieremo": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compierete": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compieranno": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "compiermi": {
       "lemmaId": "compiere",
       "partsOfSpeech": [
@@ -90933,6 +93617,72 @@
       ]
     },
     "compierne": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compimi": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compisi": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compici": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compilo": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compila": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compili": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compile": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compine": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compiuta": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compiuti": {
+      "lemmaId": "compiere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "compiute": {
       "lemmaId": "compiere",
       "partsOfSpeech": [
         "verb"
@@ -102750,6 +105500,12 @@
         "verb"
       ]
     },
+    "scusata": {
+      "lemmaId": "scusare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "finanziarmi": {
       "lemmaId": "finanziare",
       "partsOfSpeech": [
@@ -107617,6 +110373,12 @@
       ]
     },
     "abitane": {
+      "lemmaId": "abitare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "abitata": {
       "lemmaId": "abitare",
       "partsOfSpeech": [
         "verb"
@@ -112854,6 +115616,12 @@
         "verb"
       ]
     },
+    "figurata": {
+      "lemmaId": "figurare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
     "sognarmi": {
       "lemmaId": "sognare",
       "partsOfSpeech": [
@@ -117355,6 +120123,24 @@
       ]
     },
     "dispiacine": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiaciuta": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiaciuti": {
+      "lemmaId": "dispiacere",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "dispiaciute": {
       "lemmaId": "dispiacere",
       "partsOfSpeech": [
         "verb"

@@ -611,6 +611,642 @@
           }
         ]
       }
+    ],
+    "state-age": [
+      {
+        "wordings": [
+          {
+            "phrase": "ho venti anni",
+            "gloss": {
+              "en": "I'm twenty years old"
+            }
+          },
+          {
+            "phrase": "ho trenta anni",
+            "gloss": {
+              "en": "I'm thirty years old"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ho la tua stessa età",
+            "gloss": {
+              "en": "I'm the same age as you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono più grande di te",
+            "gloss": {
+              "en": "I'm older than you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono più piccolo di te",
+            "gloss": {
+              "en": "I'm younger than you"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-age": [
+      {
+        "wordings": [
+          {
+            "phrase": "quanti anni hai",
+            "gloss": {
+              "en": "how old are you"
+            }
+          },
+          {
+            "phrase": "quanti anni ha",
+            "gloss": {
+              "en": "how old are you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che età hai",
+            "gloss": {
+              "en": "what age are you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qual è la tua età",
+            "gloss": {
+              "en": "what is your age"
+            }
+          }
+        ]
+      }
+    ],
+    "state-birthday": [
+      {
+        "wordings": [
+          {
+            "phrase": "il mio compleanno è a maggio",
+            "gloss": {
+              "en": "my birthday is in May"
+            }
+          },
+          {
+            "phrase": "il mio compleanno è a luglio",
+            "gloss": {
+              "en": "my birthday is in July"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "compio gli anni a marzo",
+            "gloss": {
+              "en": "my birthday is in March"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono nato a gennaio",
+            "gloss": {
+              "en": "I was born in January"
+            }
+          },
+          {
+            "phrase": "sono nata a gennaio",
+            "gloss": {
+              "en": "I was born in January"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "il mio compleanno è oggi",
+            "gloss": {
+              "en": "my birthday is today"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-birthday": [
+      {
+        "wordings": [
+          {
+            "phrase": "quando è il tuo compleanno",
+            "gloss": {
+              "en": "when is your birthday"
+            }
+          },
+          {
+            "phrase": "quando è il suo compleanno",
+            "gloss": {
+              "en": "when is your birthday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "quando compi gli anni",
+            "gloss": {
+              "en": "when is your birthday"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che giorno è il tuo compleanno",
+            "gloss": {
+              "en": "what day is your birthday"
+            }
+          }
+        ]
+      }
+    ],
+    "state-occupation": [
+      {
+        "wordings": [
+          {
+            "phrase": "sono insegnante",
+            "gloss": {
+              "en": "I'm a teacher"
+            }
+          },
+          {
+            "phrase": "sono medico",
+            "gloss": {
+              "en": "I'm a doctor"
+            }
+          },
+          {
+            "phrase": "sono studente",
+            "gloss": {
+              "en": "I'm a student"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "lavoro in un negozio",
+            "gloss": {
+              "en": "I work in a shop"
+            }
+          },
+          {
+            "phrase": "lavoro in una banca",
+            "gloss": {
+              "en": "I work in a bank"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non lavoro",
+            "gloss": {
+              "en": "I don't work"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "sono in pensione",
+            "gloss": {
+              "en": "I'm retired"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-occupation": [
+      {
+        "wordings": [
+          {
+            "phrase": "che lavoro fai",
+            "gloss": {
+              "en": "what do you do for a living"
+            }
+          },
+          {
+            "phrase": "che lavoro fa",
+            "gloss": {
+              "en": "what do you do for a living"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "di cosa ti occupi",
+            "gloss": {
+              "en": "what do you work as"
+            }
+          },
+          {
+            "phrase": "di cosa si occupa",
+            "gloss": {
+              "en": "what do you work as"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "qual è il tuo lavoro",
+            "gloss": {
+              "en": "what is your job"
+            }
+          }
+        ]
+      }
+    ],
+    "give-phone-number": [
+      {
+        "wordings": [
+          {
+            "phrase": "il mio numero è",
+            "gloss": {
+              "en": "my number is"
+            }
+          },
+          {
+            "phrase": "il mio numero di telefono è",
+            "gloss": {
+              "en": "my phone number is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti do il mio numero",
+            "gloss": {
+              "en": "I'll give you my number"
+            }
+          },
+          {
+            "phrase": "le do il mio numero",
+            "gloss": {
+              "en": "I'll give you my number"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti lascio il mio numero",
+            "gloss": {
+              "en": "I'll leave you my number"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-phone-number": [
+      {
+        "wordings": [
+          {
+            "phrase": "qual è il tuo numero",
+            "gloss": {
+              "en": "what is your number"
+            }
+          },
+          {
+            "phrase": "qual è il tuo numero di telefono",
+            "gloss": {
+              "en": "what is your phone number"
+            }
+          },
+          {
+            "phrase": "qual è il suo numero",
+            "gloss": {
+              "en": "what is your number"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "mi dai il tuo numero",
+            "gloss": {
+              "en": "will you give me your number"
+            }
+          }
+        ]
+      }
+    ],
+    "give-email": [
+      {
+        "wordings": [
+          {
+            "phrase": "la mia email è",
+            "gloss": {
+              "en": "my email is"
+            }
+          },
+          {
+            "phrase": "il mio indirizzo email è",
+            "gloss": {
+              "en": "my email address is"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ti scrivo la mia email",
+            "gloss": {
+              "en": "I'll write my email down for you"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "chiocciola",
+            "gloss": {
+              "en": "at sign"
+            }
+          }
+        ]
+      }
+    ],
+    "spell-name": [
+      {
+        "wordings": [
+          {
+            "phrase": "si scrive così",
+            "gloss": {
+              "en": "it's spelled like this"
+            }
+          },
+          {
+            "phrase": "il mio nome si scrive così",
+            "gloss": {
+              "en": "my name is spelled like this"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "tutto attaccato",
+            "gloss": {
+              "en": "all one word"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con l'acca",
+            "gloss": {
+              "en": "with an h"
+            }
+          },
+          {
+            "phrase": "con la bi",
+            "gloss": {
+              "en": "with a b"
+            }
+          },
+          {
+            "phrase": "con la vu",
+            "gloss": {
+              "en": "with a v"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-spelling": [
+      {
+        "wordings": [
+          {
+            "phrase": "come si scrive",
+            "gloss": {
+              "en": "how do you spell it"
+            }
+          },
+          {
+            "phrase": "come si scrive questo",
+            "gloss": {
+              "en": "how do you spell that"
+            }
+          },
+          {
+            "phrase": "come si scrive il tuo nome",
+            "gloss": {
+              "en": "how do you spell your name"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "me lo scrivi",
+            "gloss": {
+              "en": "will you write it for me"
+            }
+          },
+          {
+            "phrase": "me lo scrive",
+            "gloss": {
+              "en": "could you write it for me"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "con o senza acca",
+            "gloss": {
+              "en": "with an h or without one"
+            }
+          }
+        ]
+      }
+    ],
+    "state-languages": [
+      {
+        "wordings": [
+          {
+            "phrase": "parlo italiano",
+            "gloss": {
+              "en": "I speak Italian"
+            }
+          },
+          {
+            "phrase": "parlo inglese",
+            "gloss": {
+              "en": "I speak English"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "parlo un po' di italiano",
+            "gloss": {
+              "en": "I speak a little Italian"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "non parlo italiano",
+            "gloss": {
+              "en": "I don't speak Italian"
+            }
+          },
+          {
+            "phrase": "non parlo molto italiano",
+            "gloss": {
+              "en": "I don't speak much Italian"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "la mia lingua madre è l'italiano",
+            "gloss": {
+              "en": "my first language is Italian"
+            }
+          }
+        ]
+      }
+    ],
+    "ask-languages": [
+      {
+        "wordings": [
+          {
+            "phrase": "parli italiano",
+            "gloss": {
+              "en": "do you speak Italian"
+            }
+          },
+          {
+            "phrase": "parli inglese",
+            "gloss": {
+              "en": "do you speak English"
+            }
+          },
+          {
+            "phrase": "parla italiano",
+            "gloss": {
+              "en": "do you speak Italian"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "che lingue parli",
+            "gloss": {
+              "en": "what languages do you speak"
+            }
+          }
+        ]
+      }
+    ],
+    "confirm-understanding": [
+      {
+        "wordings": [
+          {
+            "phrase": "capisco",
+            "gloss": {
+              "en": "I understand"
+            }
+          },
+          {
+            "phrase": "sì, capisco",
+            "gloss": {
+              "en": "yes, I understand"
+            }
+          },
+          {
+            "phrase": "ho capito",
+            "gloss": {
+              "en": "I understand"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "ora capisco",
+            "gloss": {
+              "en": "now I get it"
+            }
+          },
+          {
+            "phrase": "adesso ho capito",
+            "gloss": {
+              "en": "now I understand"
+            }
+          }
+        ]
+      },
+      {
+        "wordings": [
+          {
+            "phrase": "è chiaro",
+            "gloss": {
+              "en": "that's clear"
+            }
+          }
+        ]
+      }
     ]
   }
 }

@@ -7,6 +7,12 @@
       "band": "A1",
       "ordinal": 1,
       "displayName": "Social Contact"
+    },
+    {
+      "lessonId": "personal-information",
+      "band": "A1",
+      "ordinal": 2,
+      "displayName": "Personal Information"
     }
   ],
   "competencies": [
@@ -1140,6 +1146,1201 @@
             "glossBySurface": {
               "molte grazie": {
                 "en": "thank you very much"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-age",
+      "lessonId": "personal-information",
+      "displayName": "Ask someone's age",
+      "cefrDescriptor": "Can ask how old someone is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "quanti_anni_hai",
+            "normalizedForm": "quanti_anni_hai",
+            "surfaceForms": [
+              "quanti anni hai",
+              "quanti anni ha"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quanto",
+              "anno",
+              "avere"
+            ],
+            "glossBySurface": {
+              "quanti anni hai": {
+                "en": "how old are you"
+              },
+              "quanti anni ha": {
+                "en": "how old are you"
+              }
+            }
+          },
+          {
+            "exponentId": "che_eta_hai",
+            "normalizedForm": "che_eta_hai",
+            "surfaceForms": [
+              "che età hai",
+              "che eta hai"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "età",
+              "avere"
+            ],
+            "glossBySurface": {
+              "che età hai": {
+                "en": "what age are you"
+              },
+              "che eta hai": {
+                "en": "what age are you"
+              }
+            }
+          },
+          {
+            "exponentId": "qual_e_la_tua_eta",
+            "normalizedForm": "qual_e_la_tua_eta",
+            "surfaceForms": [
+              "qual è la tua età",
+              "qual è la tua eta",
+              "qual e la tua età",
+              "qual e la tua eta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quale",
+              "essere",
+              "tuo",
+              "età"
+            ],
+            "glossBySurface": {
+              "qual è la tua età": {
+                "en": "what is your age"
+              },
+              "qual è la tua eta": {
+                "en": "what is your age"
+              },
+              "qual e la tua età": {
+                "en": "what is your age"
+              },
+              "qual e la tua eta": {
+                "en": "what is your age"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-birthday",
+      "lessonId": "personal-information",
+      "displayName": "Ask when a birthday is",
+      "cefrDescriptor": "Can ask when someone's birthday is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "quando_e_il_tuo_compleanno",
+            "normalizedForm": "quando_e_il_tuo_compleanno",
+            "surfaceForms": [
+              "quando è il tuo compleanno",
+              "quando e il tuo compleanno",
+              "quando è il suo compleanno",
+              "quando e il suo compleanno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quando",
+              "essere",
+              "tuo",
+              "compleanno",
+              "suo"
+            ],
+            "glossBySurface": {
+              "quando è il tuo compleanno": {
+                "en": "when is your birthday"
+              },
+              "quando e il tuo compleanno": {
+                "en": "when is your birthday"
+              },
+              "quando è il suo compleanno": {
+                "en": "when is your birthday"
+              },
+              "quando e il suo compleanno": {
+                "en": "when is your birthday"
+              }
+            }
+          },
+          {
+            "exponentId": "quando_compi_gli_anni",
+            "normalizedForm": "quando_compi_gli_anni",
+            "surfaceForms": [
+              "quando compi gli anni"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quando",
+              "compiere",
+              "anno"
+            ],
+            "glossBySurface": {
+              "quando compi gli anni": {
+                "en": "when is your birthday"
+              }
+            }
+          },
+          {
+            "exponentId": "che_giorno_e_il_tuo_compleanno",
+            "normalizedForm": "che_giorno_e_il_tuo_compleanno",
+            "surfaceForms": [
+              "che giorno è il tuo compleanno",
+              "che giorno e il tuo compleanno"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "giorno",
+              "essere",
+              "tuo",
+              "compleanno"
+            ],
+            "glossBySurface": {
+              "che giorno è il tuo compleanno": {
+                "en": "what day is your birthday"
+              },
+              "che giorno e il tuo compleanno": {
+                "en": "what day is your birthday"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-languages",
+      "lessonId": "personal-information",
+      "displayName": "Ask which languages someone speaks",
+      "cefrDescriptor": "Can ask which languages someone speaks.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "parli_italiano",
+            "normalizedForm": "parli_italiano",
+            "surfaceForms": [
+              "parli italiano",
+              "parli inglese",
+              "parla italiano"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "parlare",
+              "italiano",
+              "inglese"
+            ],
+            "glossBySurface": {
+              "parli italiano": {
+                "en": "do you speak Italian"
+              },
+              "parli inglese": {
+                "en": "do you speak English"
+              },
+              "parla italiano": {
+                "en": "do you speak Italian"
+              }
+            }
+          },
+          {
+            "exponentId": "che_lingue_parli",
+            "normalizedForm": "che_lingue_parli",
+            "surfaceForms": [
+              "che lingue parli"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "lingua",
+              "parlare"
+            ],
+            "glossBySurface": {
+              "che lingue parli": {
+                "en": "what languages do you speak"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-occupation",
+      "lessonId": "personal-information",
+      "displayName": "Ask what someone does",
+      "cefrDescriptor": "Can ask what someone does.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "che_lavoro_fai",
+            "normalizedForm": "che_lavoro_fai",
+            "surfaceForms": [
+              "che lavoro fai",
+              "che lavoro fa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "che",
+              "lavoro",
+              "fare",
+              "fa"
+            ],
+            "glossBySurface": {
+              "che lavoro fai": {
+                "en": "what do you do for a living"
+              },
+              "che lavoro fa": {
+                "en": "what do you do for a living"
+              }
+            }
+          },
+          {
+            "exponentId": "di_cosa_ti_occupi",
+            "normalizedForm": "di_cosa_ti_occupi",
+            "surfaceForms": [
+              "di cosa ti occupi",
+              "di cosa si occupa"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "di",
+              "cosa",
+              "occupare"
+            ],
+            "glossBySurface": {
+              "di cosa ti occupi": {
+                "en": "what do you work as"
+              },
+              "di cosa si occupa": {
+                "en": "what do you work as"
+              }
+            }
+          },
+          {
+            "exponentId": "qual_e_il_tuo_lavoro",
+            "normalizedForm": "qual_e_il_tuo_lavoro",
+            "surfaceForms": [
+              "qual è il tuo lavoro",
+              "qual e il tuo lavoro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quale",
+              "essere",
+              "tuo",
+              "lavoro"
+            ],
+            "glossBySurface": {
+              "qual è il tuo lavoro": {
+                "en": "what is your job"
+              },
+              "qual e il tuo lavoro": {
+                "en": "what is your job"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-phone-number",
+      "lessonId": "personal-information",
+      "displayName": "Ask for a phone number",
+      "cefrDescriptor": "Can ask for a phone number.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "qual_e_il_tuo_numero",
+            "normalizedForm": "qual_e_il_tuo_numero",
+            "surfaceForms": [
+              "qual è il tuo numero",
+              "qual e il tuo numero",
+              "qual è il tuo numero di telefono",
+              "qual e il tuo numero di telefono",
+              "qual è il suo numero",
+              "qual e il suo numero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quale",
+              "essere",
+              "tuo",
+              "numero",
+              "di",
+              "telefono",
+              "suo"
+            ],
+            "glossBySurface": {
+              "qual è il tuo numero": {
+                "en": "what is your number"
+              },
+              "qual e il tuo numero": {
+                "en": "what is your number"
+              },
+              "qual è il tuo numero di telefono": {
+                "en": "what is your phone number"
+              },
+              "qual e il tuo numero di telefono": {
+                "en": "what is your phone number"
+              },
+              "qual è il suo numero": {
+                "en": "what is your number"
+              },
+              "qual e il suo numero": {
+                "en": "what is your number"
+              }
+            }
+          },
+          {
+            "exponentId": "mi_dai_il_tuo_numero",
+            "normalizedForm": "mi_dai_il_tuo_numero",
+            "surfaceForms": [
+              "mi dai il tuo numero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dare",
+              "tuo",
+              "numero"
+            ],
+            "glossBySurface": {
+              "mi dai il tuo numero": {
+                "en": "will you give me your number"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-spelling",
+      "lessonId": "personal-information",
+      "displayName": "Ask how something is spelled",
+      "cefrDescriptor": "Can ask how a word or name is spelled.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "come_si_scrive",
+            "normalizedForm": "come_si_scrive",
+            "surfaceForms": [
+              "come si scrive",
+              "come si scrive questo",
+              "come si scrive il tuo nome"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "come",
+              "scrivere",
+              "questo",
+              "tuo",
+              "nome"
+            ],
+            "glossBySurface": {
+              "come si scrive": {
+                "en": "how do you spell it"
+              },
+              "come si scrive questo": {
+                "en": "how do you spell that"
+              },
+              "come si scrive il tuo nome": {
+                "en": "how do you spell your name"
+              }
+            }
+          },
+          {
+            "exponentId": "me_lo_scrivi",
+            "normalizedForm": "me_lo_scrivi",
+            "surfaceForms": [
+              "me lo scrivi",
+              "me lo scrive"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "me",
+              "scrivere"
+            ],
+            "glossBySurface": {
+              "me lo scrivi": {
+                "en": "will you write it for me"
+              },
+              "me lo scrive": {
+                "en": "could you write it for me"
+              }
+            }
+          },
+          {
+            "exponentId": "con_o_senza_acca",
+            "normalizedForm": "con_o_senza_acca",
+            "surfaceForms": [
+              "con o senza acca"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "con",
+              "o",
+              "senza",
+              "acca"
+            ],
+            "glossBySurface": {
+              "con o senza acca": {
+                "en": "with an h or without one"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "confirm-understanding",
+      "lessonId": "personal-information",
+      "displayName": "Say whether they understand",
+      "cefrDescriptor": "Can say that they do understand.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "capisco",
+            "normalizedForm": "capisco",
+            "surfaceForms": [
+              "capisco",
+              "sì, capisco",
+              "si, capisco",
+              "ho capito"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "capire",
+              "sì",
+              "avere"
+            ],
+            "glossBySurface": {
+              "capisco": {
+                "en": "I understand"
+              },
+              "sì, capisco": {
+                "en": "yes, I understand"
+              },
+              "si, capisco": {
+                "en": "yes, I understand"
+              },
+              "ho capito": {
+                "en": "I understand"
+              }
+            }
+          },
+          {
+            "exponentId": "ora_capisco",
+            "normalizedForm": "ora_capisco",
+            "surfaceForms": [
+              "ora capisco",
+              "adesso ho capito"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ora",
+              "capire",
+              "adesso",
+              "avere"
+            ],
+            "glossBySurface": {
+              "ora capisco": {
+                "en": "now I get it"
+              },
+              "adesso ho capito": {
+                "en": "now I understand"
+              }
+            }
+          },
+          {
+            "exponentId": "e_chiaro",
+            "normalizedForm": "e_chiaro",
+            "surfaceForms": [
+              "è chiaro",
+              "e chiaro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "chiaro"
+            ],
+            "glossBySurface": {
+              "è chiaro": {
+                "en": "that's clear"
+              },
+              "e chiaro": {
+                "en": "that's clear"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "give-email",
+      "lessonId": "personal-information",
+      "displayName": "Give an email address",
+      "cefrDescriptor": "Can give an email address.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "la_mia_email_e",
+            "normalizedForm": "la_mia_email_e",
+            "surfaceForms": [
+              "la mia email è",
+              "la mia email e",
+              "il mio indirizzo email è",
+              "il mio indirizzo email e"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "email",
+              "essere",
+              "indirizzo"
+            ],
+            "glossBySurface": {
+              "la mia email è": {
+                "en": "my email is"
+              },
+              "la mia email e": {
+                "en": "my email is"
+              },
+              "il mio indirizzo email è": {
+                "en": "my email address is"
+              },
+              "il mio indirizzo email e": {
+                "en": "my email address is"
+              }
+            }
+          },
+          {
+            "exponentId": "ti_scrivo_la_mia_email",
+            "normalizedForm": "ti_scrivo_la_mia_email",
+            "surfaceForms": [
+              "ti scrivo la mia email"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "scrivere",
+              "mio",
+              "email"
+            ],
+            "glossBySurface": {
+              "ti scrivo la mia email": {
+                "en": "I'll write my email down for you"
+              }
+            }
+          },
+          {
+            "exponentId": "chiocciola",
+            "normalizedForm": "chiocciola",
+            "surfaceForms": [
+              "chiocciola"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "chiocciola"
+            ],
+            "glossBySurface": {
+              "chiocciola": {
+                "en": "at sign"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "give-phone-number",
+      "lessonId": "personal-information",
+      "displayName": "Give a phone number",
+      "cefrDescriptor": "Can give a phone number.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "il_mio_numero_e",
+            "normalizedForm": "il_mio_numero_e",
+            "surfaceForms": [
+              "il mio numero è",
+              "il mio numero e",
+              "il mio numero di telefono è",
+              "il mio numero di telefono e"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "numero",
+              "essere",
+              "di",
+              "telefono"
+            ],
+            "glossBySurface": {
+              "il mio numero è": {
+                "en": "my number is"
+              },
+              "il mio numero e": {
+                "en": "my number is"
+              },
+              "il mio numero di telefono è": {
+                "en": "my phone number is"
+              },
+              "il mio numero di telefono e": {
+                "en": "my phone number is"
+              }
+            }
+          },
+          {
+            "exponentId": "ti_do_il_mio_numero",
+            "normalizedForm": "ti_do_il_mio_numero",
+            "surfaceForms": [
+              "ti do il mio numero",
+              "le do il mio numero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "dare",
+              "mio",
+              "numero",
+              "le"
+            ],
+            "glossBySurface": {
+              "ti do il mio numero": {
+                "en": "I'll give you my number"
+              },
+              "le do il mio numero": {
+                "en": "I'll give you my number"
+              }
+            }
+          },
+          {
+            "exponentId": "ti_lascio_il_mio_numero",
+            "normalizedForm": "ti_lascio_il_mio_numero",
+            "surfaceForms": [
+              "ti lascio il mio numero"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "lasciare",
+              "mio",
+              "numero"
+            ],
+            "glossBySurface": {
+              "ti lascio il mio numero": {
+                "en": "I'll leave you my number"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "spell-name",
+      "lessonId": "personal-information",
+      "displayName": "Spell their name",
+      "cefrDescriptor": "Can spell their own name aloud.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "si_scrive_cosi",
+            "normalizedForm": "si_scrive_cosi",
+            "surfaceForms": [
+              "si scrive così",
+              "si scrive cosi",
+              "il mio nome si scrive così",
+              "il mio nome si scrive cosi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "scrivere",
+              "così",
+              "mio",
+              "nome"
+            ],
+            "glossBySurface": {
+              "si scrive così": {
+                "en": "it's spelled like this"
+              },
+              "si scrive cosi": {
+                "en": "it's spelled like this"
+              },
+              "il mio nome si scrive così": {
+                "en": "my name is spelled like this"
+              },
+              "il mio nome si scrive cosi": {
+                "en": "my name is spelled like this"
+              }
+            }
+          },
+          {
+            "exponentId": "tutto_attaccato",
+            "normalizedForm": "tutto_attaccato",
+            "surfaceForms": [
+              "tutto attaccato"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "tutto",
+              "attaccare"
+            ],
+            "glossBySurface": {
+              "tutto attaccato": {
+                "en": "all one word"
+              }
+            }
+          },
+          {
+            "exponentId": "con_lacca",
+            "normalizedForm": "con_lacca",
+            "surfaceForms": [
+              "con l'acca",
+              "con la bi",
+              "con la vu"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "con",
+              "acca",
+              "bi",
+              "vu"
+            ],
+            "glossBySurface": {
+              "con l'acca": {
+                "en": "with an h"
+              },
+              "con la bi": {
+                "en": "with a b"
+              },
+              "con la vu": {
+                "en": "with a v"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-age",
+      "lessonId": "personal-information",
+      "displayName": "State their age",
+      "cefrDescriptor": "Can say how old they are.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "ho_venti_anni",
+            "normalizedForm": "ho_venti_anni",
+            "surfaceForms": [
+              "ho venti anni",
+              "ho trenta anni"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "venti",
+              "anno",
+              "trenta"
+            ],
+            "glossBySurface": {
+              "ho venti anni": {
+                "en": "I'm twenty years old"
+              },
+              "ho trenta anni": {
+                "en": "I'm thirty years old"
+              }
+            }
+          },
+          {
+            "exponentId": "ho_la_tua_stessa_eta",
+            "normalizedForm": "ho_la_tua_stessa_eta",
+            "surfaceForms": [
+              "ho la tua stessa età",
+              "ho la tua stessa eta"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avere",
+              "tuo",
+              "stesso",
+              "età"
+            ],
+            "glossBySurface": {
+              "ho la tua stessa età": {
+                "en": "I'm the same age as you"
+              },
+              "ho la tua stessa eta": {
+                "en": "I'm the same age as you"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_piu_grande_di_te",
+            "normalizedForm": "sono_piu_grande_di_te",
+            "surfaceForms": [
+              "sono più grande di te",
+              "sono piu grande di te"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "più",
+              "grande",
+              "di",
+              "te"
+            ],
+            "glossBySurface": {
+              "sono più grande di te": {
+                "en": "I'm older than you"
+              },
+              "sono piu grande di te": {
+                "en": "I'm older than you"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_piu_piccolo_di_te",
+            "normalizedForm": "sono_piu_piccolo_di_te",
+            "surfaceForms": [
+              "sono più piccolo di te",
+              "sono piu piccolo di te"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "più",
+              "piccolo",
+              "di",
+              "te"
+            ],
+            "glossBySurface": {
+              "sono più piccolo di te": {
+                "en": "I'm younger than you"
+              },
+              "sono piu piccolo di te": {
+                "en": "I'm younger than you"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-birthday",
+      "lessonId": "personal-information",
+      "displayName": "Give their birthday",
+      "cefrDescriptor": "Can say when their birthday is.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "il_mio_compleanno_e_a_maggio",
+            "normalizedForm": "il_mio_compleanno_e_a_maggio",
+            "surfaceForms": [
+              "il mio compleanno è a maggio",
+              "il mio compleanno e a maggio",
+              "il mio compleanno è a luglio",
+              "il mio compleanno e a luglio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "compleanno",
+              "essere",
+              "a",
+              "maggio",
+              "luglio"
+            ],
+            "glossBySurface": {
+              "il mio compleanno è a maggio": {
+                "en": "my birthday is in May"
+              },
+              "il mio compleanno e a maggio": {
+                "en": "my birthday is in May"
+              },
+              "il mio compleanno è a luglio": {
+                "en": "my birthday is in July"
+              },
+              "il mio compleanno e a luglio": {
+                "en": "my birthday is in July"
+              }
+            }
+          },
+          {
+            "exponentId": "compio_gli_anni_a_marzo",
+            "normalizedForm": "compio_gli_anni_a_marzo",
+            "surfaceForms": [
+              "compio gli anni a marzo"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "compiere",
+              "anno",
+              "a",
+              "marzo"
+            ],
+            "glossBySurface": {
+              "compio gli anni a marzo": {
+                "en": "my birthday is in March"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_nato_a_gennaio",
+            "normalizedForm": "sono_nato_a_gennaio",
+            "surfaceForms": [
+              "sono nato a gennaio",
+              "sono nata a gennaio"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "nascere",
+              "a",
+              "gennaio"
+            ],
+            "glossBySurface": {
+              "sono nato a gennaio": {
+                "en": "I was born in January"
+              },
+              "sono nata a gennaio": {
+                "en": "I was born in January"
+              }
+            }
+          },
+          {
+            "exponentId": "il_mio_compleanno_e_oggi",
+            "normalizedForm": "il_mio_compleanno_e_oggi",
+            "surfaceForms": [
+              "il mio compleanno è oggi",
+              "il mio compleanno e oggi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "compleanno",
+              "essere",
+              "oggi"
+            ],
+            "glossBySurface": {
+              "il mio compleanno è oggi": {
+                "en": "my birthday is today"
+              },
+              "il mio compleanno e oggi": {
+                "en": "my birthday is today"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-languages",
+      "lessonId": "personal-information",
+      "displayName": "State languages they speak",
+      "cefrDescriptor": "Can say which languages they speak.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "parlo_italiano",
+            "normalizedForm": "parlo_italiano",
+            "surfaceForms": [
+              "parlo italiano",
+              "parlo inglese"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "parlare",
+              "italiano",
+              "inglese"
+            ],
+            "glossBySurface": {
+              "parlo italiano": {
+                "en": "I speak Italian"
+              },
+              "parlo inglese": {
+                "en": "I speak English"
+              }
+            }
+          },
+          {
+            "exponentId": "parlo_un_po_di_italiano",
+            "normalizedForm": "parlo_un_po_di_italiano",
+            "surfaceForms": [
+              "parlo un po' di italiano"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "parlare",
+              "po",
+              "di",
+              "italiano"
+            ],
+            "glossBySurface": {
+              "parlo un po' di italiano": {
+                "en": "I speak a little Italian"
+              }
+            }
+          },
+          {
+            "exponentId": "non_parlo_italiano",
+            "normalizedForm": "non_parlo_italiano",
+            "surfaceForms": [
+              "non parlo italiano",
+              "non parlo molto italiano"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "parlare",
+              "italiano",
+              "molto"
+            ],
+            "glossBySurface": {
+              "non parlo italiano": {
+                "en": "I don't speak Italian"
+              },
+              "non parlo molto italiano": {
+                "en": "I don't speak much Italian"
+              }
+            }
+          },
+          {
+            "exponentId": "la_mia_lingua_madre_e_litaliano",
+            "normalizedForm": "la_mia_lingua_madre_e_litaliano",
+            "surfaceForms": [
+              "la mia lingua madre è l'italiano",
+              "la mia lingua madre e l'italiano"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mio",
+              "lingua",
+              "madre",
+              "essere",
+              "italiano"
+            ],
+            "glossBySurface": {
+              "la mia lingua madre è l'italiano": {
+                "en": "my first language is Italian"
+              },
+              "la mia lingua madre e l'italiano": {
+                "en": "my first language is Italian"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-occupation",
+      "lessonId": "personal-information",
+      "displayName": "State their occupation",
+      "cefrDescriptor": "Can say what they do.",
+      "band": "A1",
+      "exponents": {
+        "it": [
+          {
+            "exponentId": "sono_insegnante",
+            "normalizedForm": "sono_insegnante",
+            "surfaceForms": [
+              "sono insegnante",
+              "sono medico",
+              "sono studente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "insegnante",
+              "medico",
+              "studente"
+            ],
+            "glossBySurface": {
+              "sono insegnante": {
+                "en": "I'm a teacher"
+              },
+              "sono medico": {
+                "en": "I'm a doctor"
+              },
+              "sono studente": {
+                "en": "I'm a student"
+              }
+            }
+          },
+          {
+            "exponentId": "lavoro_in_un_negozio",
+            "normalizedForm": "lavoro_in_un_negozio",
+            "surfaceForms": [
+              "lavoro in un negozio",
+              "lavoro in una banca"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "lavoro",
+              "in",
+              "negozio",
+              "banca"
+            ],
+            "glossBySurface": {
+              "lavoro in un negozio": {
+                "en": "I work in a shop"
+              },
+              "lavoro in una banca": {
+                "en": "I work in a bank"
+              }
+            }
+          },
+          {
+            "exponentId": "non_lavoro",
+            "normalizedForm": "non_lavoro",
+            "surfaceForms": [
+              "non lavoro"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "non",
+              "lavoro"
+            ],
+            "glossBySurface": {
+              "non lavoro": {
+                "en": "I don't work"
+              }
+            }
+          },
+          {
+            "exponentId": "sono_in_pensione",
+            "normalizedForm": "sono_in_pensione",
+            "surfaceForms": [
+              "sono in pensione"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "essere",
+              "in",
+              "pensione"
+            ],
+            "glossBySurface": {
+              "sono in pensione": {
+                "en": "I'm retired"
               }
             }
           }
