@@ -110,7 +110,7 @@ export interface EnvelopeClassifierCheckOptions {
   inventoryExponents?: readonly InventoryExponentLike[];
   /** English-collision surfaces (english-collisions.ts). See computeCoverage. */
   englishCollisions?: Set<string>;
-  /** Single-word surfaces known target-language now: slated words' paradigm forms. */
+  /** Single-word surfaces known target-language now: slated words' forms forms. */
   recognizedTargetSurfaces?: Set<string>;
 }
 

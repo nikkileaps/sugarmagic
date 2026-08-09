@@ -15,8 +15,8 @@
  * Status: active
  */
 
+import { buildItalianFrequencyData } from "./languages/it";
 import {
-  buildItalianFrequencyData,
   sugarlangDataPath,
   writeJsonFile
 } from "./sugarlang-language-data";

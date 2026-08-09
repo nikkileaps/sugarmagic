@@ -70,7 +70,7 @@ export function computeCoverage(
   englishCollisions?: Set<string>,
   /**
    * Single-word surfaces the system independently knows are target-language
-   * right now -- a slated word's paradigm forms, computed by the caller. The
+   * right now -- a slated word's forms, computed by the caller. The
    * multi-word spans (exponents, scene chunks) are already handled by the
    * chunk matcher, whose tokens never reach the guard.
    */

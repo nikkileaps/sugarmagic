@@ -12,46 +12,46 @@ bug. Production is narrow; recognition is wide.
 
 See `scripts/data-prep/EXPONENT-AUTHORING.md` for the substitution table.
 
-This directory holds the checked-in Spanish language data snapshot for
-sugarlang.
+## Provenance
 
-## Provenance Status
+`cefrlex.json` was seeded once from ELELex and has been a source file ever
+since. **There is no importer.** `scripts/data-prep/import-elelex.ts` is cited
+by older documents and does not exist. To change the dictionary, edit it; see
+`scripts/data-prep/DICTIONARY-AUTHORING.md`.
 
-The current checked-in files are rebuilt from the real ELELex Spanish source via
-the scripts in `scripts/data-prep/`. The morphology file is
-derived from that imported atlas and are checked in as canonical plugin data.
-
-## Source Families
+`exponents.json`, `always-target.json` and `english-collisions.json` are
+LLM-authored and reviewed by hand.
 
 - ELELex reference project: <https://cental.uclouvain.be/cefrlex/elelex/download/>
-- Placement questionnaire ownership: plugin data under `placement-questionnaire.json`
 
 ## Files
 
-- `cefrlex.json`
-  - Atlas version: `es-elelex-2026-04-09`
-  - Source: ELELex TSV import, deduplicated to single-token lemmas
-  - Band distribution: A1 3,217, A2 2,685, B1 1,916, B2 1,437, C1 1,745, C2 0
-  - Total lemmas: 11,000
-- `morphology.json`
-  - Surface-form entries: 29,284
-  - Includes smoke-test forms such as `corriendo -> correr`
-  - Higher-band entries covered: 5,098
-  - Current build strategy: lower-band substitutions chosen from the imported atlas by part of speech and rank
-  - Current B1+ substitution coverage: 100%
-- `placement-questionnaire.json`
-  - Mixed-kind canonical bank with 10 questions and `minAnswersForValid = 6`
+- `cefrlex.json` -- atlas version `es-elelex-2026-04-09`, **10,618 lemmas**
+  - Bands: A1 3,198, A2 2,591, B1 1,850, B2 1,352, C1 1,627, C2 0
+  - Band provenance: 10,519 `cefrlex`, 99 `claude-classified`
+  - Forms: 1,447 verb, 6,000 noun, 2,336 adjective
+  - Forms provenance: 9,378 `generated`, 405 `authored`, 835 with no forms.
+    **None are `reviewed`** -- 88% of the forms are machine output that nobody
+    has checked, which is the honest state of this file.
+- `morphology.json` -- 103,229 surfaces, derived
+- `exponents.json` -- 635 competencies, 2,526 cards, 2,896 wordings, 388 lemma
+  overrides (13%)
+- `competency-inventory.json` -- 65 lessons, 635 of 635 competencies taught
+- `placement-questionnaire.json` -- 10 questions, `minAnswersForValid = 6`
+- `always-target.json` -- `dropsSubjectPronouns: true`
+- `english-collisions.json` -- measured from captured violations
 
-## Licensing Notes
+Spanish ships no `frequency.json`; only Italian has one.
 
-The checked-in atlas is rebuilt from the public ELELex source. Keep the ELELex
-citation and license requirements in this file and rerun the schema/tests after
-every refresh.
+## Licensing
+
+The atlas derives from the public ELELex source. Keep the citation and license
+requirements here, and rerun the schema tests after any refresh.
 
 ## Re-Run
 
-From the repo root:
+From the repo root, after editing `cefrlex.json` or `exponents.json`:
 
-- `pnpm exec tsx scripts/data-prep/import-elelex.ts`
-- `pnpm exec tsx scripts/data-prep/build-spanish-morphology.ts`
+- `pnpm exec tsx scripts/data-prep/build-morphology.ts es`
+- `pnpm exec tsx scripts/data-prep/build-competency-inventory.ts es`
 - `pnpm exec tsx scripts/data-prep/build-placement-questionnaires.ts`

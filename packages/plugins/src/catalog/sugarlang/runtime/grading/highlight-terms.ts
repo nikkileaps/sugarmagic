@@ -146,7 +146,7 @@ export function buildHighlightTerms(args: {
    * one answer to "is this word in this line". A form that is not in the text
    * simply does not match, exactly as before.
    *
-   * A word with no stored paradigm contributes its citation form, which is
+   * A word with no stored forms contributes its citation form, which is
    * today's behaviour and the right fallback: 584 higher-band verbs and every
    * closed-class word have none.
    */
@@ -157,9 +157,9 @@ export function buildHighlightTerms(args: {
     const gloss = atlas.getGloss(lemma.lemmaId, targetLanguage, supportLanguage);
     // A multi-word lemma like `buenos_dias` is ONE term, not two.
     const citation = lemma.lemmaId.replace(/_/g, " ");
-    // The citation form is ALWAYS a valid surface and is never a paradigm slot
+    // The citation form is ALWAYS a valid surface and is never one of the stored form slots
     // -- a verb's infinitive is the lemma itself, and `voy a hablar` puts it on
-    // the page verbatim. Include it alongside whatever the paradigm holds.
+    // the page verbatim. Include it alongside whatever the stored forms hold.
     const terms = [
       citation,
       ...allForms(atlas.getForms(lemma.lemmaId, targetLanguage))

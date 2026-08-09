@@ -11,10 +11,18 @@
  * Relationships:
  *   - Reads data/curriculum/<band>.json and data/languages/<lang>/exponents.json.
  *   - Resolves words through data/languages/<lang>/morphology.json.
+ *   - Takes contractions and function words from ./languages/<lang>.
  *   - Writes data/languages/<lang>/competency-inventory.json.
  *
  * Status: active
  */
+
+import Ajv2020 from "ajv/dist/2020.js";
+import type { ErrorObject, ValidateFunction } from "ajv";
+
+import type { LanguageRules } from "./languages/language-rules";
+import { languageRules } from "./languages/registry";
+import { readJsonFile, sugarlangDataPath } from "./sugarlang-language-data";
 
 export type CurriculumBandFile = {
   schemaVersion: string;
@@ -91,33 +99,54 @@ type InventoryExponent = {
 };
 
 /**
- * Words carrying no lexical content of their own: articles, clitic object and
- * reflexive pronouns, and possessive determiners. A competency counts as in
- * envelope when one of its constituent lemmas is being taught, so leaving `me`
- * or `el` in the list would put half the curriculum in envelope the moment
- * either is prescribed.
+ * STRUCTURE FIRST, MEANING SECOND.
  *
- * Prepositions are NOT here. `hasta`, `en`, `por` and `de` are taught as
- * vocabulary at A1 and carry meaning the learner has to acquire.
+ * The build already reports meaning problems well -- an unresolvable word, a
+ * competency that is not in the curriculum -- by collecting them all and
+ * naming each one. It reported SHAPE problems terribly: a missing `gloss` or a
+ * mistyped `wordings` reached the loop below and came out as a TypeError
+ * pointing at a line of this file, saying nothing about which phrase was
+ * wrong.
+ *
+ * That was survivable while one language was authored. It is not the thing to
+ * hand someone writing a few thousand phrases by hand.
+ *
+ * So the schema owns shape and runs first, and the failure list below stays
+ * the single place meaning problems are reported. Two checks, two jobs, no
+ * overlap.
  */
-const NO_LEXICAL_CONTENT = new Set([
-  "el",
-  "la",
-  "los",
-  "un",
-  "una",
-  "me",
-  "te",
-  "se",
-  "nos",
-  "os",
-  "lo",
-  "le",
-  "les",
-  "mi",
-  "tu",
-  "su"
-]);
+let compiledExponentsSchema: ValidateFunction | null = null;
+
+function describeSchemaError(error: ErrorObject): string {
+  // `/exponents/greet/0/wordings/0` reads better as a path than as prose, and
+  // it is what an author needs to find the entry.
+  const where = error.instancePath === "" ? "(root)" : error.instancePath;
+  const extra =
+    error.keyword === "additionalProperties"
+      ? ` ("${String((error.params as { additionalProperty?: string }).additionalProperty)}")`
+      : "";
+  return `${where} ${error.message ?? "is invalid"}${extra}`;
+}
+
+function assertExponentsShape(exponents: ExponentsFile): void {
+  if (!compiledExponentsSchema) {
+    compiledExponentsSchema = new Ajv2020({ strict: true, allErrors: true }).compile(
+      readJsonFile<object>(sugarlangDataPath("schemas", "exponents.schema.json"))
+    );
+  }
+  // Called for its boolean, not as a type guard -- Ajv's guard narrows the
+  // argument to `unknown` and the error branch to `never`, which loses the
+  // `lang` this message needs.
+  const valid: boolean = compiledExponentsSchema(exponents);
+  if (valid) return;
+
+  const errors = compiledExponentsSchema.errors ?? [];
+  throw new Error(
+    `Cannot read the ${exponents.lang ?? "(unknown)"} exponents:\n  ${errors
+      .map(describeSchemaError)
+      .join("\n  ")}`
+  );
+}
 
 export function stripDiacritics(value: string): string {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "").normalize("NFC");
@@ -153,21 +182,71 @@ function exponentIdFor(wording: string): string {
     .replace(/\s+/g, "_");
 }
 
-function tokenize(wording: string): string[] {
-  return wording
-    .toLowerCase()
-    .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
-    .split(/\s+/)
-    .filter(Boolean);
+/**
+ * The words of a wording, with written contractions expanded into the words
+ * they stand for.
+ *
+ * Stripping the apostrophe and splitting -- which is what this did -- turns
+ * Italian `dov'e` into `dov` and `e`. `dov` is not a word and no dictionary
+ * will ever hold it, so a core A1 phrase could not be authored at all. The
+ * language says what the stub stands for, because the dropped vowel is fixed
+ * per word and guessing it is how non-words get made.
+ *
+ * Spanish supplies no rule and is unaffected: it writes no contractions with
+ * an apostrophe. French will need one for `j'ai` and `l'eau`.
+ */
+function tokenize(wording: string, rules: LanguageRules): string[] {
+  // SPLIT ON SPACES ONLY, AND ASK BEFORE STRIPPING ANYTHING.
+  //
+  // An earlier version stripped every character except letters and apostrophes
+  // first, which quietly made the apostrophe the one mark a contraction may be
+  // written with -- an Italian and French habit promoted to a rule for every
+  // language. A language contracting with anything else had its marker deleted
+  // before it was ever consulted. Caught by new-language.test.ts, which is
+  // what that test is for.
+  const chunks = wording.toLowerCase().split(/\s+/).filter(Boolean);
+  const bare = (value: string) =>
+    value.replace(/[^\p{Letter}\p{Number}\p{Mark}]/gu, "");
+
+  const out: string[] = [];
+  for (const chunk of chunks) {
+    const expanded = rules.expandWrittenForm?.(chunk);
+    if (expanded) {
+      // STRIP THE EXPANDED PARTS TOO. A contraction can sit against
+      // punctuation -- `d'accordo,` -- and the comma rode along on the second
+      // half, so the word after any elision at the end of a clause failed to
+      // resolve. The language returns words; making them clean is this
+      // function's job, not every language's.
+      for (const part of expanded) {
+        const cleaned = bare(part);
+        if (cleaned) out.push(cleaned);
+      }
+      continue;
+    }
+    // Not something this language expands, so what is left is one word plus
+    // whatever punctuation it was written next to.
+    const cleaned = bare(chunk);
+    if (cleaned) out.push(cleaned);
+  }
+  return out;
 }
 
 export function buildCompetencyInventory(inputs: {
   bands: CurriculumBandFile[];
   exponents: ExponentsFile;
   morphology: MorphologyFile;
+  /**
+   * The language's rules. Defaults to the registered ones, and is passed in
+   * only to check that a language the registry has never heard of can still be
+   * built -- which is the question "could this take French" reduces to
+   * something answerable without inventing any French.
+   */
+  rules?: LanguageRules;
 }): CompetencyInventoryFile {
   const { bands, exponents, morphology } = inputs;
+  assertExponentsShape(exponents);
   const lang = exponents.lang;
+  const rules = inputs.rules ?? languageRules(lang);
 
   const competencyById = new Map<
     string,
@@ -229,7 +308,7 @@ export function buildCompetencyInventory(inputs: {
           glossBySurface[form] ??= wording.gloss;
         }
 
-        for (const token of tokenize(wording.phrase)) {
+        for (const token of tokenize(wording.phrase, rules)) {
           const lemma =
             wording.lemmas?.[token] ?? morphology.forms[token]?.lemmaId;
           if (!lemma) {
@@ -238,7 +317,11 @@ export function buildCompetencyInventory(inputs: {
             );
             continue;
           }
-          if (NO_LEXICAL_CONTENT.has(lemma)) continue;
+          // The language's own list. It used to be one Spanish list used for
+          // every language, which counted Italian `il`, `ti`, `ci` and `si` as
+          // words an exponent teaches while stripping `su` and `tu`, which
+          // Italian needs.
+          if (rules.functionWords.has(lemma)) continue;
           if (!constituentLemmas.includes(lemma)) constituentLemmas.push(lemma);
         }
       }

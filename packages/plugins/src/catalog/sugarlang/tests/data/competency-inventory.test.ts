@@ -20,6 +20,7 @@
 import Ajv2020 from "ajv/dist/2020.js";
 import { describe, expect, it } from "vitest";
 import esInventory from "../../data/languages/es/competency-inventory.json";
+import itInventory from "../../data/languages/it/competency-inventory.json";
 import competencyInventorySchema from "../../data/schemas/competency-inventory.schema.json";
 import {
   CompetencyInventoryLoader,
@@ -31,12 +32,25 @@ import { INTERPRET_LEXICON_CATEGORIES } from "../../runtime/contracts/competency
 import { createChunkMatcher } from "../../runtime/classifier/chunk-matcher";
 import { tokenize } from "../../runtime/classifier/tokenize";
 
-describe("competency-inventory schema + data", () => {
-  const ajv = new Ajv2020({ strict: true });
+/**
+ * Every shipped language, checked by the SAME invariants rather than a
+ * parallel set per language. Adding a third extends all of these at once,
+ * which is the point -- Italian reached 635 competencies while this file
+ * checked Spanish only, and two unreachable phrases sat in it undetected.
+ */
+const SHIPPED: Array<{ lang: string; inventory: typeof esInventory }> = [
+  { lang: "es", inventory: esInventory },
+  { lang: "it", inventory: itInventory as unknown as typeof esInventory }
+];
 
-  it("es inventory validates against the schema", () => {
+describe.each(SHIPPED)("competency-inventory schema + data ($lang)", ({ lang, inventory }) => {
+  const ajv = new Ajv2020({ strict: true });
+  const exponentsOf = (competency: (typeof inventory)["competencies"][number]) =>
+    (competency.exponents as Record<string, typeof competency.exponents.es>)[lang] ?? [];
+
+  it("validates against the schema", () => {
     const validate = ajv.compile(competencyInventorySchema);
-    const valid = validate(esInventory);
+    const valid = validate(inventory);
     if (!valid) {
       throw new Error(
         `Schema validation failed: ${JSON.stringify(validate.errors, null, 2)}`
@@ -45,26 +59,24 @@ describe("competency-inventory schema + data", () => {
     expect(valid).toBe(true);
   });
 
-  it("es inventory has the required item-zero meta-language competency", () => {
-    const meta = esInventory.competencies.find(
-      (c) => c.competencyId === "meta-language"
-    );
+  it("has the required item-zero meta-language competency", () => {
+    const meta = inventory.competencies.find((c) => c.competencyId === "meta-language");
     expect(meta).toBeDefined();
     expect(meta!.isItemZero).toBe(true);
     expect(meta!.placementGateBand).toBe("A2");
-    expect(meta!.exponents.es.length).toBeGreaterThanOrEqual(4);
+    expect(exponentsOf(meta!).length).toBeGreaterThanOrEqual(4);
   });
 
   it("every competency names a lesson the inventory carries", () => {
-    const known = new Set(esInventory.lessons.map((l) => l.lessonId));
-    const orphans = esInventory.competencies
+    const known = new Set(inventory.lessons.map((l) => l.lessonId));
+    const orphans = inventory.competencies
       .filter((c) => !known.has(c.lessonId))
       .map((c) => `${c.competencyId} -> ${c.lessonId}`);
     expect(orphans).toEqual([]);
   });
 
-  it("es inventory includes the four interpretLexicon category competencies", () => {
-    const categories = esInventory.competencies
+  it("includes the four interpretLexicon category competencies", () => {
+    const categories = inventory.competencies
       .filter((c) => c.interpretLexiconCategory)
       .map((c) => c.interpretLexiconCategory);
 
@@ -74,27 +86,25 @@ describe("competency-inventory schema + data", () => {
   });
 
   it("every exponent has at least one surfaceForm and one constituentLemma", () => {
-    for (const competency of esInventory.competencies) {
-      for (const [lang, exponents] of Object.entries(competency.exponents)) {
-        for (const exponent of exponents) {
-          expect(
-            exponent.surfaceForms.length,
-            `${competency.competencyId}/${lang}/${exponent.exponentId} surfaceForms`
-          ).toBeGreaterThan(0);
-          expect(
-            exponent.constituentLemmas.length,
-            `${competency.competencyId}/${lang}/${exponent.exponentId} constituentLemmas`
-          ).toBeGreaterThan(0);
-        }
+    for (const competency of inventory.competencies) {
+      for (const exponent of exponentsOf(competency)) {
+        expect(
+          exponent.surfaceForms.length,
+          `${competency.competencyId}/${lang}/${exponent.exponentId} surfaceForms`
+        ).toBeGreaterThan(0);
+        expect(
+          exponent.constituentLemmas.length,
+          `${competency.competencyId}/${lang}/${exponent.exponentId} constituentLemmas`
+        ).toBeGreaterThan(0);
       }
     }
   });
 
-  it("all exponent normalizedForms are unique within a language", () => {
+  it("all exponent normalizedForms are unique within the language", () => {
     const seen = new Set<string>();
-    for (const competency of esInventory.competencies) {
-      for (const exponent of competency.exponents.es ?? []) {
-        expect(seen.has(exponent.normalizedForm)).toBe(false);
+    for (const competency of inventory.competencies) {
+      for (const exponent of exponentsOf(competency)) {
+        expect(seen.has(exponent.normalizedForm), exponent.normalizedForm).toBe(false);
         seen.add(exponent.normalizedForm);
       }
     }
@@ -103,8 +113,8 @@ describe("competency-inventory schema + data", () => {
   it("every accented wording also ships deaccented, because players type without accents", () => {
     const strip = (v: string) =>
       v.normalize("NFD").replace(/\p{Diacritic}/gu, "").normalize("NFC");
-    for (const competency of esInventory.competencies) {
-      for (const exponent of competency.exponents.es ?? []) {
+    for (const competency of inventory.competencies) {
+      for (const exponent of exponentsOf(competency)) {
         for (const surface of exponent.surfaceForms) {
           expect(
             exponent.surfaceForms,
@@ -116,7 +126,7 @@ describe("competency-inventory schema + data", () => {
   });
 });
 
-describe("the matcher can actually find what was authored", () => {
+describe.each(SHIPPED)("the matcher can actually find what was authored ($lang)", ({ lang, inventory }) => {
   it("THE ONE THAT MATTERS: every surface form finds its own exponent", () => {
     // Authoring a phrase is not the same as the matcher being able to reach
     // it. Two exponents sharing a surface form both validate -- their ids
@@ -125,12 +135,16 @@ describe("the matcher can actually find what was authored", () => {
     // can never earn credit for. That is how `qué es esto` ended up on both
     // `meta-language` and `ask-meaning`, and `no me gusta nada` on both
     // `state-dislike` and `state-food-dislikes`.
-    const exponents = getAllInventoryExponents("es");
-    const matcher = createChunkMatcher(exponents, "es");
+    //
+    // It found two more the first time it ran over Italian: `ho capito` was a
+    // wording of the A1 card AND a card of its own at C1, and `come si chiama`
+    // belonged to both naming-a-thing and asking-a-person's-name.
+    const exponents = getAllInventoryExponents(lang);
+    const matcher = createChunkMatcher(exponents, lang);
     const unreachable: string[] = [];
     for (const exponent of exponents) {
       for (const surface of exponent.surfaceForms) {
-        const hits = matcher.match(tokenize(surface, "es"), surface);
+        const hits = matcher.match(tokenize(surface, lang), surface);
         if (!hits.some((hit) => hit.item.exponentId === exponent.exponentId)) {
           unreachable.push(
             `${exponent.exponentId}: "${surface}" matched ${
@@ -146,8 +160,10 @@ describe("the matcher can actually find what was authored", () => {
   it("no phrase is authored under two competencies", () => {
     const owner = new Map<string, string>();
     const shared: string[] = [];
-    for (const competency of esInventory.competencies) {
-      for (const exponent of competency.exponents.es ?? []) {
+    for (const competency of inventory.competencies) {
+      const exponents =
+        (competency.exponents as Record<string, typeof competency.exponents.es>)[lang] ?? [];
+      for (const exponent of exponents) {
         for (const surface of exponent.surfaceForms) {
           const prior = owner.get(surface);
           if (prior && prior !== competency.competencyId) {

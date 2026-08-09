@@ -22,6 +22,7 @@
  */
 
 import esInventoryData from "../../data/languages/es/competency-inventory.json";
+import itInventoryData from "../../data/languages/it/competency-inventory.json";
 import type {
   CompetencyInventory,
   Competency,
@@ -74,8 +75,20 @@ function assertValidInventory(
   }
 }
 
+/**
+ * A language's inventory holds whatever has been authored for it, and a
+ * partly-authored one is a legitimate state rather than a half-built one:
+ * `buildCompetencyInventory` emits only the competencies a language has
+ * exponents for, and only the lessons those fill.
+ *
+ * Spanish and Italian are both complete -- 635 competencies across 65 lessons,
+ * every band. The consequence to know about while a language is still being
+ * authored: `prompt-builder` selects competencies by EXACT band, so a learner
+ * placed above the highest authored band sees none of them.
+ */
 const DEFAULT_INVENTORY_DATA: Partial<Record<string, unknown>> = {
-  es: esInventoryData
+  es: esInventoryData,
+  it: itInventoryData
 };
 
 export class CompetencyInventoryLoader {

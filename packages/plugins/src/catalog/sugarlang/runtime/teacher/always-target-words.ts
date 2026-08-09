@@ -65,16 +65,36 @@
  */
 
 import esAlwaysTarget from "../../data/languages/es/always-target.json";
+import frAlwaysTarget from "../../data/languages/fr/always-target.json";
+import itAlwaysTarget from "../../data/languages/it/always-target.json";
 import type { CEFRBand } from "../cefr";
-import { saysSubjectPronounExplicitly } from "./band-envelope";
+import { forcesSubjectPronounAtBand } from "./band-envelope";
 
 export interface AlwaysTargetWords {
   lang: string;
   lemmaIds: string[];
+  /**
+   * Whether this language leaves the subject pronoun out of an ordinary
+   * sentence. Spanish and Italian do; French and German do not.
+   *
+   * It lives here, with the language's own words, because it is a fact about
+   * the language rather than a teaching decision -- and the teaching decision
+   * that reads it (WHICH bands force the pronoun anyway) stays in
+   * band-envelope with every other band-keyed number. Two facts, two homes;
+   * the instruction below needs both to be true.
+   */
+  dropsSubjectPronouns?: boolean;
 }
 
+/**
+ * `fr` is here and is not playable. It is the only shipped list that keeps its
+ * subject pronoun, so it is the only one that exercises the false side of the
+ * gate below from a real file rather than a hand-made object.
+ */
 const DATA_BY_LANG: Partial<Record<string, AlwaysTargetWords>> = {
-  es: esAlwaysTarget as AlwaysTargetWords
+  es: esAlwaysTarget as AlwaysTargetWords,
+  it: itAlwaysTarget as AlwaysTargetWords,
+  fr: frAlwaysTarget as AlwaysTargetWords
 };
 
 /**
@@ -100,7 +120,28 @@ export function formatAlwaysTargetWords(
   band: CEFRBand,
   targetLanguageName: string
 ): string[] {
-  const words = loadAlwaysTargetWords(lang).lemmaIds;
+  return formatAlwaysTargetLines(
+    loadAlwaysTargetWords(lang),
+    band,
+    targetLanguageName
+  );
+}
+
+/**
+ * The same thing, given the list directly.
+ *
+ * Split out so the SUBJECT-PRONOUN DECISION CAN BE TESTED. Both languages that
+ * ship a list drop their subject, so a test going through the registry cannot
+ * tell the language half of that gate from a gate that is always open -- which
+ * is the exact way the rule was wrong before this story. Handed a list, a test
+ * can pass one that keeps its subject.
+ */
+export function formatAlwaysTargetLines(
+  data: AlwaysTargetWords,
+  band: CEFRBand,
+  targetLanguageName: string
+): string[] {
+  const words = data.lemmaIds;
   if (words.length === 0) {
     return [];
   }
@@ -110,7 +151,12 @@ export function formatAlwaysTargetWords(
     `Do NOT drop one into an otherwise English sentence -- write "I sell cheese", never "yo sell cheese". If you want one of these words, write the whole phrase around it in ${targetLanguageName}.`
   ];
 
-  if (saysSubjectPronounExplicitly(band)) {
+  // BOTH have to be true. The band decides whether a learner is early enough
+  // to need the subject spelled out; the language decides whether there is
+  // anything to spell out. Telling a French model to say the pronoun "rather
+  // than dropping it" asks for something its speakers do anyway -- prompt
+  // noise at best, and at worst a hint that dropping it was ever an option.
+  if (data.dropsSubjectPronouns === true && forcesSubjectPronounAtBand(band)) {
     // Also scoped to the phrase. Unscoped, this is the line that produced
     // "yo make cheese" -- it read as "put a pronoun in front of every verb",
     // and most of the verbs in an anchored line are English ones.

@@ -1,0 +1,1264 @@
+{
+  "lang": "fr",
+  "atlasVersion": "fr-seed-lesson1",
+  "lemmas": {
+    "aller": {
+      "lemmaId": "aller",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 25,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to go" },
+      "forms": {
+        "pres": ["vais", "vas", "va", "allons", "allez", "vont"],
+        "pret": ["allai", "allas", "alla", "allâmes", "allâtes", "allèrent"],
+        "imp": ["allais", "allais", "allait", "allions", "alliez", "allaient"],
+        "ger": "allant",
+        "part": "allé"
+      },
+      "formsSource": "authored"
+    },
+    "appeler": {
+      "lemmaId": "appeler",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 210,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to call" },
+      "forms": {
+        "pres": ["appelle", "appelles", "appelle", "appelons", "appelez", "appellent"],
+        "pret": ["appelai", "appelas", "appela", "appelâmes", "appelâtes", "appelèrent"],
+        "imp": ["appelais", "appelais", "appelait", "appelions", "appeliez", "appelaient"],
+        "ger": "appelant",
+        "part": "appelé"
+      },
+      "formsSource": "authored"
+    },
+    "avoir": {
+      "lemmaId": "avoir",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 2,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to have" },
+      "forms": {
+        "pres": ["ai", "as", "a", "avons", "avez", "ont"],
+        "pret": ["eus", "eus", "eut", "eûmes", "eûtes", "eurent"],
+        "imp": ["avais", "avais", "avait", "avions", "aviez", "avaient"],
+        "ger": "ayant",
+        "part": "eu"
+      },
+      "formsSource": "authored"
+    },
+    "compléter": {
+      "lemmaId": "compléter",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 1420,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to complete" },
+      "forms": {
+        "pres": ["complète", "complètes", "complète", "complétons", "complétez", "complètent"],
+        "pret": ["complétai", "complétas", "compléta", "complétâmes", "complétâtes", "complétèrent"],
+        "imp": ["complétais", "complétais", "complétait", "complétions", "complétiez", "complétaient"],
+        "ger": "complétant",
+        "part": "complété"
+      },
+      "formsSource": "authored"
+    },
+    "décrire": {
+      "lemmaId": "décrire",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 960,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to describe" },
+      "forms": {
+        "pres": ["décris", "décris", "décrit", "décrivons", "décrivez", "décrivent"],
+        "pret": ["décrivis", "décrivis", "décrivit", "décrivîmes", "décrivîtes", "décrivirent"],
+        "imp": ["décrivais", "décrivais", "décrivait", "décrivions", "décriviez", "décrivaient"],
+        "ger": "décrivant",
+        "part": "décrit"
+      },
+      "formsSource": "authored"
+    },
+    "être": {
+      "lemmaId": "être",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 1,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to be" },
+      "forms": {
+        "pres": ["suis", "es", "est", "sommes", "êtes", "sont"],
+        "pret": ["fus", "fus", "fut", "fûmes", "fûtes", "furent"],
+        "imp": ["étais", "étais", "était", "étions", "étiez", "étaient"],
+        "ger": "étant",
+        "part": "été"
+      },
+      "formsSource": "authored"
+    },
+    "excuser": {
+      "lemmaId": "excuser",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 1180,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to excuse" },
+      "forms": {
+        "pres": ["excuse", "excuses", "excuse", "excusons", "excusez", "excusent"],
+        "pret": ["excusai", "excusas", "excusa", "excusâmes", "excusâtes", "excusèrent"],
+        "imp": ["excusais", "excusais", "excusait", "excusions", "excusiez", "excusaient"],
+        "ger": "excusant",
+        "part": "excusé"
+      },
+      "formsSource": "authored"
+    },
+    "expliquer": {
+      "lemmaId": "expliquer",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 430,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to explain" },
+      "forms": {
+        "pres": ["explique", "expliques", "explique", "expliquons", "expliquez", "expliquent"],
+        "pret": ["expliquai", "expliquas", "expliqua", "expliquâmes", "expliquâtes", "expliquèrent"],
+        "imp": ["expliquais", "expliquais", "expliquait", "expliquions", "expliquiez", "expliquaient"],
+        "ger": "expliquant",
+        "part": "expliqué"
+      },
+      "formsSource": "authored"
+    },
+    "habiter": {
+      "lemmaId": "habiter",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 1050,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to live, to reside" },
+      "forms": {
+        "pres": ["habite", "habites", "habite", "habitons", "habitez", "habitent"],
+        "pret": ["habitai", "habitas", "habita", "habitâmes", "habitâtes", "habitèrent"],
+        "imp": ["habitais", "habitais", "habitait", "habitions", "habitiez", "habitaient"],
+        "ger": "habitant",
+        "part": "habité"
+      },
+      "formsSource": "authored"
+    },
+    "parler": {
+      "lemmaId": "parler",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 95,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to speak" },
+      "forms": {
+        "pres": ["parle", "parles", "parle", "parlons", "parlez", "parlent"],
+        "pret": ["parlai", "parlas", "parla", "parlâmes", "parlâtes", "parlèrent"],
+        "imp": ["parlais", "parlais", "parlait", "parlions", "parliez", "parlaient"],
+        "ger": "parlant",
+        "part": "parlé"
+      },
+      "formsSource": "authored"
+    },
+    "plaire": {
+      "lemmaId": "plaire",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 640,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to please" },
+      "forms": {
+        "pres": ["plais", "plais", "plaît", "plaisons", "plaisez", "plaisent"],
+        "pret": ["plus", "plus", "plut", "plûmes", "plûtes", "plurent"],
+        "imp": ["plaisais", "plaisais", "plaisait", "plaisions", "plaisiez", "plaisaient"],
+        "ger": "plaisant",
+        "part": "plu"
+      },
+      "formsSource": "authored"
+    },
+    "présenter": {
+      "lemmaId": "présenter",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 380,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to introduce, to present" },
+      "forms": {
+        "pres": ["présente", "présentes", "présente", "présentons", "présentez", "présentent"],
+        "pret": ["présentai", "présentas", "présenta", "présentâmes", "présentâtes", "présentèrent"],
+        "imp": ["présentais", "présentais", "présentait", "présentions", "présentiez", "présentaient"],
+        "ger": "présentant",
+        "part": "présenté"
+      },
+      "formsSource": "authored"
+    },
+    "prier": {
+      "lemmaId": "prier",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 890,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to beg, to pray" },
+      "forms": {
+        "pres": ["prie", "pries", "prie", "prions", "priez", "prient"],
+        "pret": ["priai", "prias", "pria", "priâmes", "priâtes", "prièrent"],
+        "imp": ["priais", "priais", "priait", "priions", "priiez", "priaient"],
+        "ger": "priant",
+        "part": "prié"
+      },
+      "formsSource": "authored"
+    },
+    "rencontrer": {
+      "lemmaId": "rencontrer",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 520,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to meet" },
+      "forms": {
+        "pres": ["rencontre", "rencontres", "rencontre", "rencontrons", "rencontrez", "rencontrent"],
+        "pret": ["rencontrai", "rencontras", "rencontra", "rencontrâmes", "rencontrâtes", "rencontrèrent"],
+        "imp": ["rencontrais", "rencontrais", "rencontrait", "rencontrions", "rencontriez", "rencontraient"],
+        "ger": "rencontrant",
+        "part": "rencontré"
+      },
+      "formsSource": "authored"
+    },
+    "rester": {
+      "lemmaId": "rester",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 175,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to stay" },
+      "forms": {
+        "pres": ["reste", "restes", "reste", "restons", "restez", "restent"],
+        "pret": ["restai", "restas", "resta", "restâmes", "restâtes", "restèrent"],
+        "imp": ["restais", "restais", "restait", "restions", "restiez", "restaient"],
+        "ger": "restant",
+        "part": "resté"
+      },
+      "formsSource": "authored"
+    },
+    "résoudre": {
+      "lemmaId": "résoudre",
+      "lang": "fr",
+      "cefrPriorBand": "B1",
+      "frequencyRank": 1240,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to solve" },
+      "forms": {
+        "pres": ["résous", "résous", "résout", "résolvons", "résolvez", "résolvent"],
+        "pret": ["résolus", "résolus", "résolut", "résolûmes", "résolûtes", "résolurent"],
+        "imp": ["résolvais", "résolvais", "résolvait", "résolvions", "résolviez", "résolvaient"],
+        "ger": "résolvant",
+        "part": "résolu"
+      },
+      "formsSource": "authored"
+    },
+    "travailler": {
+      "lemmaId": "travailler",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 330,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to work" },
+      "forms": {
+        "pres": ["travaille", "travailles", "travaille", "travaillons", "travaillez", "travaillent"],
+        "pret": ["travaillai", "travaillas", "travailla", "travaillâmes", "travaillâtes", "travaillèrent"],
+        "imp": ["travaillais", "travaillais", "travaillait", "travaillions", "travailliez", "travaillaient"],
+        "ger": "travaillant",
+        "part": "travaillé"
+      },
+      "formsSource": "authored"
+    },
+    "venir": {
+      "lemmaId": "venir",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 45,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to come" },
+      "forms": {
+        "pres": ["viens", "viens", "vient", "venons", "venez", "viennent"],
+        "pret": ["vins", "vins", "vint", "vînmes", "vîntes", "vinrent"],
+        "imp": ["venais", "venais", "venait", "venions", "veniez", "venaient"],
+        "ger": "venant",
+        "part": "venu"
+      },
+      "formsSource": "authored"
+    },
+    "voyager": {
+      "lemmaId": "voyager",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 1310,
+      "partsOfSpeech": ["verb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to travel" },
+      "forms": {
+        "pres": ["voyage", "voyages", "voyage", "voyageons", "voyagez", "voyagent"],
+        "pret": ["voyageai", "voyageas", "voyagea", "voyageâmes", "voyageâtes", "voyagèrent"],
+        "imp": ["voyageais", "voyageais", "voyageait", "voyagions", "voyagiez", "voyageaient"],
+        "ger": "voyageant",
+        "part": "voyagé"
+      },
+      "formsSource": "authored"
+    },
+    "bon": {
+      "lemmaId": "bon",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 88,
+      "partsOfSpeech": ["adjective"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "good" },
+      "forms": { "ms": "bon", "fs": "bonne", "mp": "bons", "fp": "bonnes" },
+      "formsSource": "authored"
+    },
+    "ce": {
+      "lemmaId": "ce",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 12,
+      "partsOfSpeech": ["determiner", "pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "this, that" },
+      "forms": { "ms": "ce", "fs": "cette", "mp": "ces", "fp": "ces" },
+      "formsSource": "authored"
+    },
+    "désolé": {
+      "lemmaId": "désolé",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 1490,
+      "partsOfSpeech": ["adjective"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "sorry" },
+      "forms": { "ms": "désolé", "fs": "désolée", "mp": "désolés", "fp": "désolées" },
+      "formsSource": "authored"
+    },
+    "enchanté": {
+      "lemmaId": "enchanté",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 2600,
+      "partsOfSpeech": ["adjective"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "delighted" },
+      "forms": { "ms": "enchanté", "fs": "enchantée", "mp": "enchantés", "fp": "enchantées" },
+      "formsSource": "authored"
+    },
+    "français": {
+      "lemmaId": "français",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 300,
+      "partsOfSpeech": ["noun", "adjective"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "French" },
+      "forms": { "ms": "français", "fs": "française", "mp": "français", "fp": "françaises" },
+      "formsSource": "authored"
+    },
+    "grand": {
+      "lemmaId": "grand",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 70,
+      "partsOfSpeech": ["adjective"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "big, large" },
+      "forms": { "ms": "grand", "fs": "grande", "mp": "grands", "fp": "grandes" },
+      "formsSource": "authored"
+    },
+    "quel": {
+      "lemmaId": "quel",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 120,
+      "partsOfSpeech": ["determiner"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "which, what" },
+      "forms": { "ms": "quel", "fs": "quelle", "mp": "quels", "fp": "quelles" },
+      "formsSource": "authored"
+    },
+    "ravi": {
+      "lemmaId": "ravi",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 2800,
+      "partsOfSpeech": ["adjective"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "delighted" },
+      "forms": { "ms": "ravi", "fs": "ravie", "mp": "ravis", "fp": "ravies" },
+      "formsSource": "authored"
+    },
+    "seul": {
+      "lemmaId": "seul",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 190,
+      "partsOfSpeech": ["adjective"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "alone, only" },
+      "forms": { "ms": "seul", "fs": "seule", "mp": "seuls", "fp": "seules" },
+      "formsSource": "authored"
+    },
+    "ton": {
+      "lemmaId": "ton",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 195,
+      "partsOfSpeech": ["determiner"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "your (familiar)" }
+    },
+    "tout": {
+      "lemmaId": "tout",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 22,
+      "partsOfSpeech": ["determiner", "adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "all, quite" },
+      "forms": { "ms": "tout", "fs": "toute", "mp": "tous", "fp": "toutes" },
+      "formsSource": "authored"
+    },
+    "besoin": {
+      "lemmaId": "besoin",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 260,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "need" },
+      "forms": { "sg": "besoin", "pl": "besoins" },
+      "formsSource": "authored"
+    },
+    "billet": {
+      "lemmaId": "billet",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 1600,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "ticket" },
+      "forms": { "sg": "billet", "pl": "billets" },
+      "formsSource": "authored"
+    },
+    "document": {
+      "lemmaId": "document",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 900,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "document" },
+      "forms": { "sg": "document", "pl": "documents" },
+      "formsSource": "authored"
+    },
+    "douane": {
+      "lemmaId": "douane",
+      "lang": "fr",
+      "cefrPriorBand": "B1",
+      "frequencyRank": 4200,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "customs" },
+      "forms": { "sg": "douane", "pl": "douanes" },
+      "formsSource": "authored"
+    },
+    "gare": {
+      "lemmaId": "gare",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 1900,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "station" },
+      "forms": { "sg": "gare", "pl": "gares" },
+      "formsSource": "authored"
+    },
+    "heure": {
+      "lemmaId": "heure",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 130,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "hour" },
+      "forms": { "sg": "heure", "pl": "heures" },
+      "formsSource": "authored"
+    },
+    "jour": {
+      "lemmaId": "jour",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 60,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "day" },
+      "forms": { "sg": "jour", "pl": "jours" },
+      "formsSource": "authored"
+    },
+    "madame": {
+      "lemmaId": "madame",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 620,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "madam" },
+      "forms": { "sg": "madame", "pl": "mesdames" },
+      "formsSource": "authored"
+    },
+    "mademoiselle": {
+      "lemmaId": "mademoiselle",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 2400,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "miss" },
+      "forms": { "sg": "mademoiselle", "pl": "mesdemoiselles" },
+      "formsSource": "authored"
+    },
+    "monsieur": {
+      "lemmaId": "monsieur",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 410,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "sir" },
+      "forms": { "sg": "monsieur", "pl": "messieurs" },
+      "formsSource": "authored"
+    },
+    "nom": {
+      "lemmaId": "nom",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 240,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "name" },
+      "forms": { "sg": "nom", "pl": "noms" },
+      "formsSource": "authored"
+    },
+    "nuit": {
+      "lemmaId": "nuit",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 200,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "night" },
+      "forms": { "sg": "nuit", "pl": "nuits" },
+      "formsSource": "authored"
+    },
+    "passeport": {
+      "lemmaId": "passeport",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 3900,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "passport" },
+      "forms": { "sg": "passeport", "pl": "passeports" },
+      "formsSource": "authored"
+    },
+    "phrase": {
+      "lemmaId": "phrase",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 1700,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "sentence" },
+      "forms": { "sg": "phrase", "pl": "phrases" },
+      "formsSource": "authored"
+    },
+    "plaisir": {
+      "lemmaId": "plaisir",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 700,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "pleasure" },
+      "forms": { "sg": "plaisir", "pl": "plaisirs" },
+      "formsSource": "authored"
+    },
+    "problème": {
+      "lemmaId": "problème",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 350,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "problem" },
+      "forms": { "sg": "problème", "pl": "problèmes" },
+      "formsSource": "authored"
+    },
+    "temps": {
+      "lemmaId": "temps",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 80,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "time, weather" },
+      "forms": { "sg": "temps", "pl": "temps" },
+      "formsSource": "authored"
+    },
+    "train": {
+      "lemmaId": "train",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 1100,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "train" },
+      "forms": { "sg": "train", "pl": "trains" },
+      "formsSource": "authored"
+    },
+    "valise": {
+      "lemmaId": "valise",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 3600,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "suitcase" },
+      "forms": { "sg": "valise", "pl": "valises" },
+      "formsSource": "authored"
+    },
+    "ville": {
+      "lemmaId": "ville",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 290,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "town, city" },
+      "forms": { "sg": "ville", "pl": "villes" },
+      "formsSource": "authored"
+    },
+    "voyage": {
+      "lemmaId": "voyage",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 1050,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "trip, journey" },
+      "forms": { "sg": "voyage", "pl": "voyages" },
+      "formsSource": "authored"
+    },
+    "à": {
+      "lemmaId": "à",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 4,
+      "partsOfSpeech": ["preposition"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "to, at" }
+    },
+    "aujourd'hui": {
+      "lemmaId": "aujourd'hui",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 340,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "today" }
+    },
+    "avec": {
+      "lemmaId": "avec",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 30,
+      "partsOfSpeech": ["preposition"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "with" }
+    },
+    "beaucoup": {
+      "lemmaId": "beaucoup",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 150,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "a lot" }
+    },
+    "bien": {
+      "lemmaId": "bien",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 40,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "well" }
+    },
+    "bientôt": {
+      "lemmaId": "bientôt",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 800,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "soon" }
+    },
+    "bonjour": {
+      "lemmaId": "bonjour",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 900,
+      "partsOfSpeech": ["interjection"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "hello, good day" }
+    },
+    "bonsoir": {
+      "lemmaId": "bonsoir",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 1800,
+      "partsOfSpeech": ["interjection"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "good evening" }
+    },
+    "ci": {
+      "lemmaId": "ci",
+      "lang": "fr",
+      "cefrPriorBand": "A2",
+      "frequencyRank": 2900,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "here (in fixed phrases)" }
+    },
+    "combien": {
+      "lemmaId": "combien",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 480,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "how much, how many" }
+    },
+    "comme": {
+      "lemmaId": "comme",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 35,
+      "partsOfSpeech": ["conjunction"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "like, as" }
+    },
+    "comment": {
+      "lemmaId": "comment",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 110,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "how" }
+    },
+    "coucou": {
+      "lemmaId": "coucou",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 5200,
+      "partsOfSpeech": ["interjection"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "hey there" }
+    },
+    "dans": {
+      "lemmaId": "dans",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 15,
+      "partsOfSpeech": ["preposition"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "in" }
+    },
+    "de": {
+      "lemmaId": "de",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 3,
+      "partsOfSpeech": ["preposition"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "of, from" }
+    },
+    "demain": {
+      "lemmaId": "demain",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 560,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "tomorrow" }
+    },
+    "elle": {
+      "lemmaId": "elle",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 18,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "she" }
+    },
+    "en": {
+      "lemmaId": "en",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 10,
+      "partsOfSpeech": ["preposition", "pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "in; of it" }
+    },
+    "ici": {
+      "lemmaId": "ici",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 230,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "here" }
+    },
+    "elles": {
+      "lemmaId": "elles",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 115,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "they (feminine)" }
+    },
+    "il": {
+      "lemmaId": "il",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 8,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "he, it" }
+    },
+    "ils": {
+      "lemmaId": "ils",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 62,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "they (masculine)" }
+    },
+    "infiniment": {
+      "lemmaId": "infiniment",
+      "lang": "fr",
+      "cefrPriorBand": "B1",
+      "frequencyRank": 4800,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "infinitely" }
+    },
+    "je": {
+      "lemmaId": "je",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 6,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "I" }
+    },
+    "la": {
+      "lemmaId": "la",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 5,
+      "partsOfSpeech": ["determiner"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "the (feminine)" }
+    },
+    "le": {
+      "lemmaId": "le",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 7,
+      "partsOfSpeech": ["determiner", "pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "the (masculine); it" }
+    },
+    "les": {
+      "lemmaId": "les",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 9,
+      "partsOfSpeech": ["determiner"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "the (plural)" }
+    },
+    "leur": {
+      "lemmaId": "leur",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 85,
+      "partsOfSpeech": ["determiner", "pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "their; to them" }
+    },
+    "lui": {
+      "lemmaId": "lui",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 44,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "him; to him, to her" }
+    },
+    "mal": {
+      "lemmaId": "mal",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 380,
+      "partsOfSpeech": ["adverb", "noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "badly; harm" }
+    },
+    "me": {
+      "lemmaId": "me",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 33,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "me, myself" }
+    },
+    "merci": {
+      "lemmaId": "merci",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 750,
+      "partsOfSpeech": ["interjection", "noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "thank you" }
+    },
+    "moi": {
+      "lemmaId": "moi",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 55,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "me" }
+    },
+    "mon": {
+      "lemmaId": "mon",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 50,
+      "partsOfSpeech": ["determiner"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "my" }
+    },
+    "ne": {
+      "lemmaId": "ne",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 20,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "not (first half)" }
+    },
+    "non": {
+      "lemmaId": "non",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 100,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "no" }
+    },
+    "notre": {
+      "lemmaId": "notre",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 170,
+      "partsOfSpeech": ["determiner"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "our" }
+    },
+    "nous": {
+      "lemmaId": "nous",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 28,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "we, us" }
+    },
+    "oui": {
+      "lemmaId": "oui",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 320,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "yes" }
+    },
+    "où": {
+      "lemmaId": "où",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 90,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "where" }
+    },
+    "pardon": {
+      "lemmaId": "pardon",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 2100,
+      "partsOfSpeech": ["interjection", "noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "sorry, pardon" }
+    },
+    "pas": {
+      "lemmaId": "pas",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 21,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "not (second half)" }
+    },
+    "peu": {
+      "lemmaId": "peu",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 140,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "little, a bit" }
+    },
+    "plus": {
+      "lemmaId": "plus",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 26,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "more" }
+    },
+    "pour": {
+      "lemmaId": "pour",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 14,
+      "partsOfSpeech": ["preposition"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "for" }
+    },
+    "pourquoi": {
+      "lemmaId": "pourquoi",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 270,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "why" }
+    },
+    "près": {
+      "lemmaId": "près",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 440,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "near" }
+    },
+    "que": {
+      "lemmaId": "que",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 11,
+      "partsOfSpeech": ["conjunction", "pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "that, which" }
+    },
+    "revoir": {
+      "lemmaId": "revoir",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 1450,
+      "partsOfSpeech": ["noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "seeing again (in au revoir)" }
+    },
+    "rien": {
+      "lemmaId": "rien",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 160,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "nothing" }
+    },
+    "salut": {
+      "lemmaId": "salut",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 2000,
+      "partsOfSpeech": ["interjection", "noun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "hi" }
+    },
+    "se": {
+      "lemmaId": "se",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 17,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "oneself" }
+    },
+    "si": {
+      "lemmaId": "si",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 65,
+      "partsOfSpeech": ["conjunction"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "if" }
+    },
+    "son": {
+      "lemmaId": "son",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 27,
+      "partsOfSpeech": ["determiner"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "his, her, its" }
+    },
+    "tard": {
+      "lemmaId": "tard",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 690,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "late" }
+    },
+    "te": {
+      "lemmaId": "te",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 75,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "you, yourself" }
+    },
+    "très": {
+      "lemmaId": "très",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 105,
+      "partsOfSpeech": ["adverb"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "very" }
+    },
+    "trois": {
+      "lemmaId": "trois",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 250,
+      "partsOfSpeech": ["numeral"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "three" }
+    },
+    "tu": {
+      "lemmaId": "tu",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 42,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "you (familiar)" }
+    },
+    "un": {
+      "lemmaId": "un",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 13,
+      "partsOfSpeech": ["determiner", "numeral"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "a, one" }
+    },
+    "une": {
+      "lemmaId": "une",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 16,
+      "partsOfSpeech": ["determiner"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "a (feminine)" }
+    },
+    "voici": {
+      "lemmaId": "voici",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 580,
+      "partsOfSpeech": ["preposition"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "here is" }
+    },
+    "votre": {
+      "lemmaId": "votre",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 180,
+      "partsOfSpeech": ["determiner"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "your" }
+    },
+    "vous": {
+      "lemmaId": "vous",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 24,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "you (polite/plural)" }
+    },
+    "ça": {
+      "lemmaId": "ça",
+      "lang": "fr",
+      "cefrPriorBand": "A1",
+      "frequencyRank": 48,
+      "partsOfSpeech": ["pronoun"],
+      "cefrPriorSource": "human-override",
+      "glosses": { "en": "that, it" }
+    }
+  }
+}

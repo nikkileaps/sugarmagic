@@ -36,7 +36,7 @@
       "questionId": "es-q2",
       "targetBand": "A1",
       "promptText": "Completa la frase.",
-      "sentenceTemplate": "Yo ___ de Canada.",
+      "sentenceTemplate": "Yo ___ de Canadá.",
       "acceptableAnswers": [
         "soy"
       ],
@@ -50,7 +50,7 @@
       "targetBand": "A1",
       "promptText": "¿Hablas un poco de español?",
       "correctAnswer": "yes",
-      "yesLabel": "si",
+      "yesLabel": "sí",
       "noLabel": "no"
     },
     {
@@ -72,7 +72,7 @@
       "kind": "multiple-choice",
       "questionId": "es-q5",
       "targetBand": "A2",
-      "promptText": "¿Cuanto tiempo vas a quedarte?",
+      "promptText": "¿Cuánto tiempo vas a quedarte?",
       "options": [
         {
           "optionId": "a",
@@ -81,7 +81,7 @@
         },
         {
           "optionId": "b",
-          "text": "La estacion es grande.",
+          "text": "La estación es grande.",
           "isCorrect": false
         },
         {
@@ -97,7 +97,7 @@
       "targetBand": "A2",
       "promptText": "¿Viajas solo hoy?",
       "correctAnswer": "yes",
-      "yesLabel": "si",
+      "yesLabel": "sí",
       "noLabel": "no"
     },
     {
@@ -119,7 +119,7 @@
       "kind": "free-text",
       "questionId": "es-q8",
       "targetBand": "B1",
-      "promptText": "Explica por que vienes a esta ciudad.",
+      "promptText": "Explica por qué vienes a esta ciudad.",
       "expectedLemmas": [
         "venir",
         "ciudad"
@@ -130,7 +130,7 @@
       "kind": "multiple-choice",
       "questionId": "es-q9",
       "targetBand": "B2",
-      "promptText": "¿Que documento presentas en la aduana?",
+      "promptText": "¿Qué documento presentas en la aduana?",
       "options": [
         {
           "optionId": "a",

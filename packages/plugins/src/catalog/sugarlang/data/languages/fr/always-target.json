@@ -1,0 +1,14 @@
+{
+  "lang": "fr",
+  "note": "Words spoken in French at every level, however English the rest of the line is. See runtime/teacher/always-target-words.ts for what this is for and what belongs here.",
+  "dropsSubjectPronouns": false,
+  "lemmaIds": [
+    "je",
+    "tu",
+    "vous",
+    "mon",
+    "ton",
+    "oui",
+    "non"
+  ]
+}

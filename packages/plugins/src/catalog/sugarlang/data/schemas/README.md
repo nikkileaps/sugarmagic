@@ -8,6 +8,9 @@ Per-language data:
 - `morphology.schema.json` -- the surface-to-lemma index. Generated.
 - `placement-questionnaire.schema.json`
 - `frequency.schema.json`
+- `exponents.schema.json` -- the phrases that perform each competency. The only
+  per-language file authored by hand, and the one the build validates before
+  it reads anything.
 
 The curriculum, which is language-neutral, and the inventory it produces:
 

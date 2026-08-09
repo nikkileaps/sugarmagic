@@ -118,7 +118,7 @@
           "oneOf": [
             {
               "type": "object",
-              "description": "Verb paradigm. Six slots per tense in person order (1s,2s,3s,1p,2p,3p); null where the form does not exist.",
+              "description": "Verb forms. Six slots per tense in person order (1s,2s,3s,1p,2p,3p); null where the form does not exist.",
               "additionalProperties": false,
               "required": [
                 "pres",

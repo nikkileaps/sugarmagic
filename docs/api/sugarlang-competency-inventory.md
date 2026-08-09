@@ -17,9 +17,9 @@ plus one language's authored exponents; nothing here is hand-edited.
 | Role | Path |
 |------|------|
 | Authored curriculum (language-neutral) | `packages/plugins/src/catalog/sugarlang/data/curriculum/<band>.json` |
-| Authored phrases (per language) | `packages/plugins/src/catalog/sugarlang/data/languages/es/exponents.json` |
-| Generator | `scripts/data-prep/build-spanish-competency-inventory.ts` |
-| Generated data | `packages/plugins/src/catalog/sugarlang/data/languages/es/competency-inventory.json` |
+| Authored phrases (per language) | `packages/plugins/src/catalog/sugarlang/data/languages/<lang>/exponents.json` |
+| Generator | `scripts/data-prep/build-competency-inventory.ts <lang>` |
+| Generated data | `packages/plugins/src/catalog/sugarlang/data/languages/<lang>/competency-inventory.json` |
 | JSON schema | `packages/plugins/src/catalog/sugarlang/data/schemas/competency-inventory.schema.json` |
 | TypeScript contracts | `packages/plugins/src/catalog/sugarlang/runtime/contracts/competency-inventory.ts` |
 | Runtime loader | `packages/plugins/src/catalog/sugarlang/runtime/inventory/competency-inventory-loader.ts` |
@@ -28,10 +28,13 @@ plus one language's authored exponents; nothing here is hand-edited.
 ## Regenerating
 
 ```
-pnpm exec tsx scripts/data-prep/build-spanish-competency-inventory.ts
+pnpm exec tsx scripts/data-prep/build-competency-inventory.ts es
+pnpm exec tsx scripts/data-prep/build-competency-inventory.ts it
+pnpm exec tsx scripts/data-prep/build-competency-inventory.ts fr
 ```
 
-Rerun after editing any of its three inputs:
+One script, any language -- it takes the code as an argument and reads that
+language's files. Rerun after editing any of its three inputs:
 
 - `data/curriculum/<band>.json` -- a competency's descriptor, band or lesson.
 - `data/languages/<lang>/exponents.json` -- the phrases.
@@ -215,7 +218,13 @@ They are taught before anything else and are not subject to the CEFR gate.
 Competencies with `interpretLexiconCategory` set contribute their
 `surfaceForms` to the four-slot interpretLexicon consumed by `detectSocialMove`
 in `sugaragent/runtime/stages/interpretation.ts`. Call
-`buildInterpretLexiconFromInventory("es")` for the full category map.
+`buildInterpretLexiconFromInventory(lang)` for the full category map.
+
+`detectSocialMove(inputText, lexicon?)` takes the lexicon as a parameter and
+names no language, so it works for any language whose inventory carries the
+four categories. Spanish and Italian both do; the teacher middleware builds the
+map from the learner's target language at
+`sugar-lang-teacher-middleware.ts:114`.
 
 ## normalizedForm Join Key
 
@@ -226,15 +235,22 @@ same underscore-lowercased convention.
 
 ## Adding a New Language
 
+The full checklist lives in
+`packages/plugins/src/catalog/sugarlang/data/languages/README.md`. The two
+steps that concern this file:
+
 1. Author `data/languages/<lang>/exponents.json` -- wordings only, spelled
-   correctly. The competency ids must already exist in the curriculum.
-2. Add a build script alongside `build-spanish-competency-inventory.ts` and run
-   it. Unresolvable words fail there, which is the point.
-3. Import the generated file in `competency-inventory-loader.ts` and add it to
+   correctly. The competency ids must already exist in the curriculum. Run
+   `build-competency-inventory.ts <lang>`; unresolvable words fail there, which
+   is the point.
+2. Import the generated file in `competency-inventory-loader.ts` and add it to
    `DEFAULT_INVENTORY_DATA`.
-4. Add `interpretLexiconCategory` entries only if `detectSocialMove` is live
-   for that language (currently `es` only).
+
+`interpretLexiconCategory` is set on the language-neutral curriculum, not per
+language, so a language gets the four categories as soon as it authors phrases
+for those competencies.
 
 A language with no `exponents.json` ships no inventory. The loader throws for
 it and every caller catches that and carries on with no competencies, which is
-the same state as an empty curriculum.
+the same state as an empty curriculum. Every caller does this silently and by
+design, so a language can be half-authored without taking the game down.

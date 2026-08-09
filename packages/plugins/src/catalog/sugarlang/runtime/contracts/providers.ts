@@ -193,7 +193,7 @@ export interface LexicalAtlasProvider {
    * The word's inflected forms, or undefined when it has none stored.
    *
    * Undefined is ordinary: closed-class words do not inflect here, and 584
-   * higher-band verbs have no paradigm yet. Callers fall back to the citation
+   * higher-band verbs have no stored forms yet. Callers fall back to the citation
    * form rather than treating it as a failure.
    */
   getForms: (lemmaId: string, lang: string) => WordForms | undefined;

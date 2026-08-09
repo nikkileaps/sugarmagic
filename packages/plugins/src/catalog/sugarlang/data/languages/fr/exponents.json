@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "1",
+  "lang": "fr",
+  "exponents": {
+    "greet": [
+      { "wordings": [{ "phrase": "bonjour", "gloss": { "en": "hello, good day" } }] },
+      { "wordings": [{ "phrase": "bonsoir", "gloss": { "en": "good evening" } }] },
+      { "wordings": [{ "phrase": "salut", "gloss": { "en": "hi" } }] },
+      { "wordings": [{ "phrase": "coucou", "gloss": { "en": "hey there" } }] }
+    ],
+    "ask-how-are-you": [
+      {
+        "wordings": [
+          { "phrase": "comment allez-vous", "gloss": { "en": "how are you" } },
+          { "phrase": "comment vas-tu", "gloss": { "en": "how are you" } }
+        ]
+      },
+      {
+        "wordings": [
+          { "phrase": "ça va", "gloss": { "en": "how's it going" } },
+          { "phrase": "comment ça va", "gloss": { "en": "how are things" } }
+        ]
+      }
+    ],
+    "say-how-i-am": [
+      {
+        "wordings": [
+          { "phrase": "bien", "gloss": { "en": "well" } },
+          { "phrase": "très bien", "gloss": { "en": "very well" } }
+        ]
+      },
+      { "wordings": [{ "phrase": "pas mal", "gloss": { "en": "not bad" } }] },
+      { "wordings": [{ "phrase": "comme ci comme ça", "gloss": { "en": "so-so" } }] },
+      { "wordings": [{ "phrase": "mal", "gloss": { "en": "badly" } }] }
+    ],
+    "introduce-self": [
+      { "wordings": [{ "phrase": "enchanté", "gloss": { "en": "pleased to meet you" } }] },
+      {
+        "wordings": [
+          { "phrase": "ravi de vous rencontrer", "gloss": { "en": "delighted to meet you" } }
+        ]
+      }
+    ],
+    "ask-name": [
+      {
+        "wordings": [
+          { "phrase": "comment vous appelez-vous", "gloss": { "en": "what is your name" } },
+          { "phrase": "comment tu t'appelles", "gloss": { "en": "what's your name" } }
+        ]
+      },
+      { "wordings": [{ "phrase": "quel est votre nom", "gloss": { "en": "what is your name" } }] }
+    ],
+    "state-name": [
+      { "wordings": [{ "phrase": "je m'appelle", "gloss": { "en": "my name is" } }] },
+      { "wordings": [{ "phrase": "mon nom est", "gloss": { "en": "my name is" } }] }
+    ],
+    "introduce-other": [
+      {
+        "wordings": [
+          { "phrase": "je vous présente", "gloss": { "en": "may I introduce you to" } },
+          { "phrase": "je te présente", "gloss": { "en": "let me introduce you to" } }
+        ]
+      },
+      { "wordings": [{ "phrase": "voici", "gloss": { "en": "this is" } }] }
+    ],
+    "ask-origin": [
+      {
+        "wordings": [
+          { "phrase": "d'où venez-vous", "gloss": { "en": "where are you from" } },
+          { "phrase": "d'où viens-tu", "gloss": { "en": "where are you from" } }
+        ]
+      },
+      { "wordings": [{ "phrase": "vous êtes d'ici", "gloss": { "en": "are you from around here" } }] }
+    ],
+    "state-origin": [
+      { "wordings": [{ "phrase": "je suis de", "gloss": { "en": "I'm from" } }] },
+      { "wordings": [{ "phrase": "je viens de", "gloss": { "en": "I come from" } }] }
+    ],
+    "ask-residence": [
+      {
+        "wordings": [
+          { "phrase": "où habitez-vous", "gloss": { "en": "where do you live" } },
+          { "phrase": "où habites-tu", "gloss": { "en": "where do you live" } }
+        ]
+      },
+      {
+        "wordings": [
+          { "phrase": "vous habitez près d'ici", "gloss": { "en": "do you live near here" } }
+        ]
+      }
+    ],
+    "state-residence": [
+      { "wordings": [{ "phrase": "j'habite à", "gloss": { "en": "I live in" } }] },
+      { "wordings": [{ "phrase": "j'habite près d'ici", "gloss": { "en": "I live nearby" } }] },
+      { "wordings": [{ "phrase": "je suis d'ici", "gloss": { "en": "I'm from here" } }] }
+    ],
+    "address-politely": [
+      { "wordings": [{ "phrase": "monsieur", "gloss": { "en": "sir" } }] },
+      { "wordings": [{ "phrase": "madame", "gloss": { "en": "madam" } }] },
+      { "wordings": [{ "phrase": "mademoiselle", "gloss": { "en": "miss" } }] }
+    ],
+    "say-please": [
+      { "wordings": [{ "phrase": "s'il vous plaît", "gloss": { "en": "please" } }] },
+      { "wordings": [{ "phrase": "s'il te plaît", "gloss": { "en": "please (familiar)" } }] }
+    ],
+    "thank": [
+      { "wordings": [{ "phrase": "merci", "gloss": { "en": "thank you" } }] },
+      { "wordings": [{ "phrase": "merci beaucoup", "gloss": { "en": "thank you very much" } }] },
+      { "wordings": [{ "phrase": "merci infiniment", "gloss": { "en": "thank you so much" } }] }
+    ],
+    "respond-to-thanks": [
+      { "wordings": [{ "phrase": "de rien", "gloss": { "en": "you're welcome" } }] },
+      { "wordings": [{ "phrase": "je vous en prie", "gloss": { "en": "you're most welcome" } }] },
+      { "wordings": [{ "phrase": "avec plaisir", "gloss": { "en": "my pleasure" } }] }
+    ],
+    "apologize": [
+      { "wordings": [{ "phrase": "pardon", "gloss": { "en": "sorry" } }] },
+      { "wordings": [{ "phrase": "je suis désolé", "gloss": { "en": "I'm sorry" } }] },
+      { "wordings": [{ "phrase": "je m'excuse", "gloss": { "en": "I apologize" } }] }
+    ],
+    "get-attention": [
+      { "wordings": [{ "phrase": "excusez-moi", "gloss": { "en": "excuse me" } }] },
+      { "wordings": [{ "phrase": "excuse-moi", "gloss": { "en": "excuse me (familiar)" } }] }
+    ],
+    "farewell": [
+      { "wordings": [{ "phrase": "au revoir", "gloss": { "en": "goodbye" } }] },
+      { "wordings": [{ "phrase": "à bientôt", "gloss": { "en": "see you soon" } }] },
+      { "wordings": [{ "phrase": "à plus tard", "gloss": { "en": "see you later" } }] },
+      { "wordings": [{ "phrase": "à demain", "gloss": { "en": "see you tomorrow" } }] },
+      { "wordings": [{ "phrase": "à tout à l'heure", "gloss": { "en": "see you in a bit" } }] },
+      { "wordings": [{ "phrase": "bonne nuit", "gloss": { "en": "good night" } }] }
+    ]
+  }
+}

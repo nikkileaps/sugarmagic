@@ -205,7 +205,7 @@ export function createSugarLangVerifyMiddleware(
           ? new Set(voiceSpec.interjections)
           : undefined;
       // THE HONEST-INSTRUMENT INPUTS (sugarmagic-latency-psm). A slated word's
-      // paradigm forms are target-language wherever they appear; competency
+      // stored forms are target-language wherever they appear; competency
       // exponents ("me gusta") are matched as spans even in dynamic lines the
       // scene lexicon never saw; and English-collision spellings count only
       // inside one of those. Without these, English prose reads as Spanish and

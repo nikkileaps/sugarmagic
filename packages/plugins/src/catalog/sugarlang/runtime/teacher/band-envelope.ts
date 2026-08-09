@@ -136,23 +136,30 @@ export function getIntroduceCapForBand(cefrBand: CEFRBand): number {
  *
  * Here rather than beside the word list (`always-target-words.ts`) because it
  * is band-keyed, and every band-keyed pedagogical number lives in this file.
- * They are also two different rules wearing one face: WHICH LANGUAGE the
- * subject is in is always the target one; WHETHER IT IS SAID AT ALL is this.
  *
- * TAKES NO LANGUAGE, AND THAT IS A LIMIT RATHER THAN A DECISION. Everything
- * else in this file is a language-neutral pedagogical number; this one is
- * justified entirely by Spanish pro-drop. It happens to hold for the other
- * pro-drop languages (Italian, Portuguese) and is simply wrong for a language
- * that requires the subject -- French, German -- where the instruction would
- * ask for something a speaker does anyway.
+ * TAKES NO LANGUAGE, AND THAT IS NOW A DECISION RATHER THAN A LIMIT. An
+ * earlier version of this comment left it open, because Spanish was the only
+ * language with an always-target list and nothing forced the question. Writing
+ * Italian's list forced it, and the answer was that the rule was doing two
+ * jobs:
  *
- * Nothing enforces that today: the only gate is that Spanish is the one
- * language with an always-target list. Whoever authors the second list decides
- * whether this grows a language parameter or moves.
+ *   WHETHER THE LANGUAGE DROPS THE SUBJECT AT ALL is a fact about the
+ *   language. Spanish and Italian drop it; French and German do not. That
+ *   moved to `dropsSubjectPronouns` in each language's always-target.json,
+ *   beside its own words.
+ *
+ *   AT WHICH BANDS WE FORCE IT ANYWAY is a teaching judgement, identical in
+ *   every language that drops it, and stays here. Passing a language into this
+ *   would have made it the one function in a file of language-neutral numbers
+ *   that is not one.
+ *
+ * `formatAlwaysTargetWords` requires both, so a language that does not drop
+ * the subject never sees the instruction -- without anyone having to remember
+ * that it should not.
  *
  *   A1 yes   A2 yes   B1+ no
  */
-export function saysSubjectPronounExplicitly(cefrBand: CEFRBand): boolean {
+export function forcesSubjectPronounAtBand(cefrBand: CEFRBand): boolean {
   return cefrBand === "A1" || cefrBand === "A2";
 }
 

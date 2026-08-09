@@ -41,13 +41,14 @@ import {
   type TextBlobSourceKind
 } from "./scene-traversal";
 
-const QUEST_ESSENTIAL_STOPWORDS: Record<string, Set<string>> = {
-  en: new Set(["the", "a", "an", "and", "or", "of", "to", "in", "on", "at", "for", "with", "by", "from", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would", "could", "should", "may", "might", "can", "shall", "it", "its", "this", "that", "these", "those", "i", "you", "he", "she", "we", "they", "me", "him", "her", "us", "them", "my", "your", "his", "our", "their", "not", "no", "but", "if", "so", "as", "up"]),
-  es: new Set(["el", "la", "los", "las", "un", "una", "y", "o", "de", "del", "a", "al", "en", "con", "por", "para", "que"]),
-  it: new Set(["il", "lo", "la", "gli", "le", "un", "una", "e", "o", "di", "a", "al", "nel", "con", "per", "che"])
-};
-
-const FUNCTIONAL_PARTS_OF_SPEECH = new Set([
+/**
+ * A word list per language used to sit here too, and every reachable entry in
+ * it was already excluded by these parts of speech. It went because a language
+ * list in shared compile code means adding a language edits this file --
+ * see tests/compile/quest-essential-stopwords.test.ts for the guard that keeps
+ * this sufficient.
+ */
+export const FUNCTIONAL_PARTS_OF_SPEECH = new Set([
   "article",
   "determiner",
   "preposition",
@@ -109,16 +110,20 @@ function extractProperNouns(
   return [...nouns].sort(compareStrings);
 }
 
-function isQuestEssentialContentLemma(
-  lemmaId: string,
-  atlasEntry: AtlasLemmaEntry | undefined,
-  lang: string
-): boolean {
-  if ((QUEST_ESSENTIAL_STOPWORDS[lang] ?? new Set()).has(lemmaId)) {
-    return false;
-  }
-
-  if (atlasEntry?.partsOfSpeech.some((part) => FUNCTIONAL_PARTS_OF_SPEECH.has(part.toLowerCase()))) {
+/**
+ * Is this a word a quest is teaching, or one it merely needs to form a
+ * sentence?
+ *
+ * The dictionary already answers this, in every language, by tagging the part
+ * of speech. Nothing here names a language, and nothing should: a new one
+ * arrives tagged the same way.
+ */
+function isQuestEssentialContentLemma(atlasEntry: AtlasLemmaEntry): boolean {
+  if (
+    atlasEntry.partsOfSpeech.some((part) =>
+      FUNCTIONAL_PARTS_OF_SPEECH.has(part.toLowerCase())
+    )
+  ) {
     return false;
   }
 
@@ -325,7 +330,7 @@ export function compileSugarlangScene(
             blob.sourceKind === "quest-objective-display-name") &&
           blob.objectiveNodeId &&
           blob.questDefinitionId &&
-          isQuestEssentialContentLemma(atlasEntry.lemmaId, atlasEntry, scene.targetLanguage)
+          isQuestEssentialContentLemma(atlasEntry)
         ) {
           const key = `${blob.objectiveNodeId}:${atlasEntry.lemmaId}`;
           if (!questEssentialMap.has(key)) {

@@ -1,0 +1,1178 @@
+{
+  "schemaVersion": "2",
+  "lang": "fr",
+  "lessons": [
+    {
+      "lessonId": "social-contact",
+      "band": "A1",
+      "ordinal": 1,
+      "displayName": "Social Contact"
+    }
+  ],
+  "competencies": [
+    {
+      "competencyId": "address-politely",
+      "lessonId": "social-contact",
+      "displayName": "Address someone politely",
+      "cefrDescriptor": "Can use a simple polite form of address.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "monsieur",
+            "normalizedForm": "monsieur",
+            "surfaceForms": [
+              "monsieur"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "monsieur"
+            ],
+            "glossBySurface": {
+              "monsieur": {
+                "en": "sir"
+              }
+            }
+          },
+          {
+            "exponentId": "madame",
+            "normalizedForm": "madame",
+            "surfaceForms": [
+              "madame"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "madame"
+            ],
+            "glossBySurface": {
+              "madame": {
+                "en": "madam"
+              }
+            }
+          },
+          {
+            "exponentId": "mademoiselle",
+            "normalizedForm": "mademoiselle",
+            "surfaceForms": [
+              "mademoiselle"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mademoiselle"
+            ],
+            "glossBySurface": {
+              "mademoiselle": {
+                "en": "miss"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "apologize",
+      "lessonId": "social-contact",
+      "displayName": "Apologize",
+      "cefrDescriptor": "Can apologize briefly.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "pardon",
+            "normalizedForm": "pardon",
+            "surfaceForms": [
+              "pardon"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "pardon"
+            ],
+            "glossBySurface": {
+              "pardon": {
+                "en": "sorry"
+              }
+            }
+          },
+          {
+            "exponentId": "je_suis_desole",
+            "normalizedForm": "je_suis_desole",
+            "surfaceForms": [
+              "je suis désolé",
+              "je suis desole"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "être",
+              "désolé"
+            ],
+            "glossBySurface": {
+              "je suis désolé": {
+                "en": "I'm sorry"
+              },
+              "je suis desole": {
+                "en": "I'm sorry"
+              }
+            }
+          },
+          {
+            "exponentId": "je_mexcuse",
+            "normalizedForm": "je_mexcuse",
+            "surfaceForms": [
+              "je m'excuse"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "excuser"
+            ],
+            "glossBySurface": {
+              "je m'excuse": {
+                "en": "I apologize"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-how-are-you",
+      "lessonId": "social-contact",
+      "displayName": "Ask how someone is",
+      "cefrDescriptor": "Can ask how someone is.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "comment_allezvous",
+            "normalizedForm": "comment_allezvous",
+            "surfaceForms": [
+              "comment allez-vous",
+              "comment vas-tu"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "comment",
+              "aller"
+            ],
+            "glossBySurface": {
+              "comment allez-vous": {
+                "en": "how are you"
+              },
+              "comment vas-tu": {
+                "en": "how are you"
+              }
+            }
+          },
+          {
+            "exponentId": "ca_va",
+            "normalizedForm": "ca_va",
+            "surfaceForms": [
+              "ça va",
+              "ca va",
+              "comment ça va",
+              "comment ca va"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ça",
+              "aller",
+              "comment"
+            ],
+            "glossBySurface": {
+              "ça va": {
+                "en": "how's it going"
+              },
+              "ca va": {
+                "en": "how's it going"
+              },
+              "comment ça va": {
+                "en": "how are things"
+              },
+              "comment ca va": {
+                "en": "how are things"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-name",
+      "lessonId": "social-contact",
+      "displayName": "Ask someone's name",
+      "cefrDescriptor": "Can ask what someone is called.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "comment_vous_appelezvous",
+            "normalizedForm": "comment_vous_appelezvous",
+            "surfaceForms": [
+              "comment vous appelez-vous",
+              "comment tu t'appelles"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "comment",
+              "appeler"
+            ],
+            "glossBySurface": {
+              "comment vous appelez-vous": {
+                "en": "what is your name"
+              },
+              "comment tu t'appelles": {
+                "en": "what's your name"
+              }
+            }
+          },
+          {
+            "exponentId": "quel_est_votre_nom",
+            "normalizedForm": "quel_est_votre_nom",
+            "surfaceForms": [
+              "quel est votre nom"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "quel",
+              "être",
+              "nom"
+            ],
+            "glossBySurface": {
+              "quel est votre nom": {
+                "en": "what is your name"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-origin",
+      "lessonId": "social-contact",
+      "displayName": "Ask where someone is from",
+      "cefrDescriptor": "Can ask where someone comes from.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "dou_venezvous",
+            "normalizedForm": "dou_venezvous",
+            "surfaceForms": [
+              "d'où venez-vous",
+              "d'ou venez-vous",
+              "d'où viens-tu",
+              "d'ou viens-tu"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "de",
+              "où",
+              "venir"
+            ],
+            "glossBySurface": {
+              "d'où venez-vous": {
+                "en": "where are you from"
+              },
+              "d'ou venez-vous": {
+                "en": "where are you from"
+              },
+              "d'où viens-tu": {
+                "en": "where are you from"
+              },
+              "d'ou viens-tu": {
+                "en": "where are you from"
+              }
+            }
+          },
+          {
+            "exponentId": "vous_etes_dici",
+            "normalizedForm": "vous_etes_dici",
+            "surfaceForms": [
+              "vous êtes d'ici",
+              "vous etes d'ici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "être",
+              "de",
+              "ici"
+            ],
+            "glossBySurface": {
+              "vous êtes d'ici": {
+                "en": "are you from around here"
+              },
+              "vous etes d'ici": {
+                "en": "are you from around here"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "ask-residence",
+      "lessonId": "social-contact",
+      "displayName": "Ask where someone lives",
+      "cefrDescriptor": "Can ask where someone lives.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "ou_habitezvous",
+            "normalizedForm": "ou_habitezvous",
+            "surfaceForms": [
+              "où habitez-vous",
+              "ou habitez-vous",
+              "où habites-tu",
+              "ou habites-tu"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "où",
+              "habiter"
+            ],
+            "glossBySurface": {
+              "où habitez-vous": {
+                "en": "where do you live"
+              },
+              "ou habitez-vous": {
+                "en": "where do you live"
+              },
+              "où habites-tu": {
+                "en": "where do you live"
+              },
+              "ou habites-tu": {
+                "en": "where do you live"
+              }
+            }
+          },
+          {
+            "exponentId": "vous_habitez_pres_dici",
+            "normalizedForm": "vous_habitez_pres_dici",
+            "surfaceForms": [
+              "vous habitez près d'ici",
+              "vous habitez pres d'ici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "habiter",
+              "près",
+              "de",
+              "ici"
+            ],
+            "glossBySurface": {
+              "vous habitez près d'ici": {
+                "en": "do you live near here"
+              },
+              "vous habitez pres d'ici": {
+                "en": "do you live near here"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "farewell",
+      "lessonId": "social-contact",
+      "displayName": "Farewell",
+      "cefrDescriptor": "Can take leave of someone with a simple expression.",
+      "band": "A1",
+      "interpretLexiconCategory": "farewell",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "au_revoir",
+            "normalizedForm": "au_revoir",
+            "surfaceForms": [
+              "au revoir"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "à",
+              "revoir"
+            ],
+            "glossBySurface": {
+              "au revoir": {
+                "en": "goodbye"
+              }
+            }
+          },
+          {
+            "exponentId": "a_bientot",
+            "normalizedForm": "a_bientot",
+            "surfaceForms": [
+              "à bientôt",
+              "à bientot",
+              "a bientôt",
+              "a bientot"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "à",
+              "bientôt"
+            ],
+            "glossBySurface": {
+              "à bientôt": {
+                "en": "see you soon"
+              },
+              "à bientot": {
+                "en": "see you soon"
+              },
+              "a bientôt": {
+                "en": "see you soon"
+              },
+              "a bientot": {
+                "en": "see you soon"
+              }
+            }
+          },
+          {
+            "exponentId": "a_plus_tard",
+            "normalizedForm": "a_plus_tard",
+            "surfaceForms": [
+              "à plus tard",
+              "a plus tard"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "à",
+              "plus",
+              "tard"
+            ],
+            "glossBySurface": {
+              "à plus tard": {
+                "en": "see you later"
+              },
+              "a plus tard": {
+                "en": "see you later"
+              }
+            }
+          },
+          {
+            "exponentId": "a_demain",
+            "normalizedForm": "a_demain",
+            "surfaceForms": [
+              "à demain",
+              "a demain"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "à",
+              "demain"
+            ],
+            "glossBySurface": {
+              "à demain": {
+                "en": "see you tomorrow"
+              },
+              "a demain": {
+                "en": "see you tomorrow"
+              }
+            }
+          },
+          {
+            "exponentId": "a_tout_a_lheure",
+            "normalizedForm": "a_tout_a_lheure",
+            "surfaceForms": [
+              "à tout à l'heure",
+              "à tout a l'heure",
+              "a tout à l'heure",
+              "a tout a l'heure"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "à",
+              "tout",
+              "heure"
+            ],
+            "glossBySurface": {
+              "à tout à l'heure": {
+                "en": "see you in a bit"
+              },
+              "à tout a l'heure": {
+                "en": "see you in a bit"
+              },
+              "a tout à l'heure": {
+                "en": "see you in a bit"
+              },
+              "a tout a l'heure": {
+                "en": "see you in a bit"
+              }
+            }
+          },
+          {
+            "exponentId": "bonne_nuit",
+            "normalizedForm": "bonne_nuit",
+            "surfaceForms": [
+              "bonne nuit"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "bon",
+              "nuit"
+            ],
+            "glossBySurface": {
+              "bonne nuit": {
+                "en": "good night"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "get-attention",
+      "lessonId": "social-contact",
+      "displayName": "Get attention politely",
+      "cefrDescriptor": "Can get someone's attention politely.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "excusezmoi",
+            "normalizedForm": "excusezmoi",
+            "surfaceForms": [
+              "excusez-moi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "excuser",
+              "moi"
+            ],
+            "glossBySurface": {
+              "excusez-moi": {
+                "en": "excuse me"
+              }
+            }
+          },
+          {
+            "exponentId": "excusemoi",
+            "normalizedForm": "excusemoi",
+            "surfaceForms": [
+              "excuse-moi"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "excuser",
+              "moi"
+            ],
+            "glossBySurface": {
+              "excuse-moi": {
+                "en": "excuse me (familiar)"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "greet",
+      "lessonId": "social-contact",
+      "displayName": "Greet",
+      "cefrDescriptor": "Can greet someone and respond to a greeting.",
+      "band": "A1",
+      "interpretLexiconCategory": "greeting",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "bonjour",
+            "normalizedForm": "bonjour",
+            "surfaceForms": [
+              "bonjour"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "bonjour"
+            ],
+            "glossBySurface": {
+              "bonjour": {
+                "en": "hello, good day"
+              }
+            }
+          },
+          {
+            "exponentId": "bonsoir",
+            "normalizedForm": "bonsoir",
+            "surfaceForms": [
+              "bonsoir"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "bonsoir"
+            ],
+            "glossBySurface": {
+              "bonsoir": {
+                "en": "good evening"
+              }
+            }
+          },
+          {
+            "exponentId": "salut",
+            "normalizedForm": "salut",
+            "surfaceForms": [
+              "salut"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "salut"
+            ],
+            "glossBySurface": {
+              "salut": {
+                "en": "hi"
+              }
+            }
+          },
+          {
+            "exponentId": "coucou",
+            "normalizedForm": "coucou",
+            "surfaceForms": [
+              "coucou"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "coucou"
+            ],
+            "glossBySurface": {
+              "coucou": {
+                "en": "hey there"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "introduce-other",
+      "lessonId": "social-contact",
+      "displayName": "Introduce another person",
+      "cefrDescriptor": "Can introduce one person to another.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "je_vous_presente",
+            "normalizedForm": "je_vous_presente",
+            "surfaceForms": [
+              "je vous présente",
+              "je vous presente",
+              "je te présente",
+              "je te presente"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "présenter"
+            ],
+            "glossBySurface": {
+              "je vous présente": {
+                "en": "may I introduce you to"
+              },
+              "je vous presente": {
+                "en": "may I introduce you to"
+              },
+              "je te présente": {
+                "en": "let me introduce you to"
+              },
+              "je te presente": {
+                "en": "let me introduce you to"
+              }
+            }
+          },
+          {
+            "exponentId": "voici",
+            "normalizedForm": "voici",
+            "surfaceForms": [
+              "voici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "voici"
+            ],
+            "glossBySurface": {
+              "voici": {
+                "en": "this is"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "introduce-self",
+      "lessonId": "social-contact",
+      "displayName": "Introduce self",
+      "cefrDescriptor": "Can say their own name and introduce themselves simply.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "enchante",
+            "normalizedForm": "enchante",
+            "surfaceForms": [
+              "enchanté",
+              "enchante"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "enchanté"
+            ],
+            "glossBySurface": {
+              "enchanté": {
+                "en": "pleased to meet you"
+              },
+              "enchante": {
+                "en": "pleased to meet you"
+              }
+            }
+          },
+          {
+            "exponentId": "ravi_de_vous_rencontrer",
+            "normalizedForm": "ravi_de_vous_rencontrer",
+            "surfaceForms": [
+              "ravi de vous rencontrer"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "ravi",
+              "de",
+              "rencontrer"
+            ],
+            "glossBySurface": {
+              "ravi de vous rencontrer": {
+                "en": "delighted to meet you"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "respond-to-thanks",
+      "lessonId": "social-contact",
+      "displayName": "Respond to thanks",
+      "cefrDescriptor": "Can respond when thanked.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "de_rien",
+            "normalizedForm": "de_rien",
+            "surfaceForms": [
+              "de rien"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "de",
+              "rien"
+            ],
+            "glossBySurface": {
+              "de rien": {
+                "en": "you're welcome"
+              }
+            }
+          },
+          {
+            "exponentId": "je_vous_en_prie",
+            "normalizedForm": "je_vous_en_prie",
+            "surfaceForms": [
+              "je vous en prie"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "en",
+              "prier"
+            ],
+            "glossBySurface": {
+              "je vous en prie": {
+                "en": "you're most welcome"
+              }
+            }
+          },
+          {
+            "exponentId": "avec_plaisir",
+            "normalizedForm": "avec_plaisir",
+            "surfaceForms": [
+              "avec plaisir"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "avec",
+              "plaisir"
+            ],
+            "glossBySurface": {
+              "avec plaisir": {
+                "en": "my pleasure"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-how-i-am",
+      "lessonId": "social-contact",
+      "displayName": "Say how they are",
+      "cefrDescriptor": "Can say how they are feeling in simple terms.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "bien",
+            "normalizedForm": "bien",
+            "surfaceForms": [
+              "bien",
+              "très bien",
+              "tres bien"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "bien",
+              "très"
+            ],
+            "glossBySurface": {
+              "bien": {
+                "en": "well"
+              },
+              "très bien": {
+                "en": "very well"
+              },
+              "tres bien": {
+                "en": "very well"
+              }
+            }
+          },
+          {
+            "exponentId": "pas_mal",
+            "normalizedForm": "pas_mal",
+            "surfaceForms": [
+              "pas mal"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "pas",
+              "mal"
+            ],
+            "glossBySurface": {
+              "pas mal": {
+                "en": "not bad"
+              }
+            }
+          },
+          {
+            "exponentId": "comme_ci_comme_ca",
+            "normalizedForm": "comme_ci_comme_ca",
+            "surfaceForms": [
+              "comme ci comme ça",
+              "comme ci comme ca"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "comme",
+              "ci",
+              "ça"
+            ],
+            "glossBySurface": {
+              "comme ci comme ça": {
+                "en": "so-so"
+              },
+              "comme ci comme ca": {
+                "en": "so-so"
+              }
+            }
+          },
+          {
+            "exponentId": "mal",
+            "normalizedForm": "mal",
+            "surfaceForms": [
+              "mal"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "mal"
+            ],
+            "glossBySurface": {
+              "mal": {
+                "en": "badly"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "say-please",
+      "lessonId": "social-contact",
+      "displayName": "Say please",
+      "cefrDescriptor": "Can attach the everyday politeness word to a simple request.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "sil_vous_plait",
+            "normalizedForm": "sil_vous_plait",
+            "surfaceForms": [
+              "s'il vous plaît",
+              "s'il vous plait"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "si",
+              "plaire"
+            ],
+            "glossBySurface": {
+              "s'il vous plaît": {
+                "en": "please"
+              },
+              "s'il vous plait": {
+                "en": "please"
+              }
+            }
+          },
+          {
+            "exponentId": "sil_te_plait",
+            "normalizedForm": "sil_te_plait",
+            "surfaceForms": [
+              "s'il te plaît",
+              "s'il te plait"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "si",
+              "plaire"
+            ],
+            "glossBySurface": {
+              "s'il te plaît": {
+                "en": "please (familiar)"
+              },
+              "s'il te plait": {
+                "en": "please (familiar)"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-name",
+      "lessonId": "social-contact",
+      "displayName": "State their name",
+      "cefrDescriptor": "Can say what they are called.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "je_mappelle",
+            "normalizedForm": "je_mappelle",
+            "surfaceForms": [
+              "je m'appelle"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "appeler"
+            ],
+            "glossBySurface": {
+              "je m'appelle": {
+                "en": "my name is"
+              }
+            }
+          },
+          {
+            "exponentId": "mon_nom_est",
+            "normalizedForm": "mon_nom_est",
+            "surfaceForms": [
+              "mon nom est"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "nom",
+              "être"
+            ],
+            "glossBySurface": {
+              "mon nom est": {
+                "en": "my name is"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-origin",
+      "lessonId": "social-contact",
+      "displayName": "State where they are from",
+      "cefrDescriptor": "Can say where they come from.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "je_suis_de",
+            "normalizedForm": "je_suis_de",
+            "surfaceForms": [
+              "je suis de"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "être",
+              "de"
+            ],
+            "glossBySurface": {
+              "je suis de": {
+                "en": "I'm from"
+              }
+            }
+          },
+          {
+            "exponentId": "je_viens_de",
+            "normalizedForm": "je_viens_de",
+            "surfaceForms": [
+              "je viens de"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "venir",
+              "de"
+            ],
+            "glossBySurface": {
+              "je viens de": {
+                "en": "I come from"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "state-residence",
+      "lessonId": "social-contact",
+      "displayName": "State where they live",
+      "cefrDescriptor": "Can say where they live.",
+      "band": "A1",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "jhabite_a",
+            "normalizedForm": "jhabite_a",
+            "surfaceForms": [
+              "j'habite à",
+              "j'habite a"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "habiter",
+              "à"
+            ],
+            "glossBySurface": {
+              "j'habite à": {
+                "en": "I live in"
+              },
+              "j'habite a": {
+                "en": "I live in"
+              }
+            }
+          },
+          {
+            "exponentId": "jhabite_pres_dici",
+            "normalizedForm": "jhabite_pres_dici",
+            "surfaceForms": [
+              "j'habite près d'ici",
+              "j'habite pres d'ici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "habiter",
+              "près",
+              "de",
+              "ici"
+            ],
+            "glossBySurface": {
+              "j'habite près d'ici": {
+                "en": "I live nearby"
+              },
+              "j'habite pres d'ici": {
+                "en": "I live nearby"
+              }
+            }
+          },
+          {
+            "exponentId": "je_suis_dici",
+            "normalizedForm": "je_suis_dici",
+            "surfaceForms": [
+              "je suis d'ici"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "être",
+              "de",
+              "ici"
+            ],
+            "glossBySurface": {
+              "je suis d'ici": {
+                "en": "I'm from here"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "competencyId": "thank",
+      "lessonId": "social-contact",
+      "displayName": "Thank",
+      "cefrDescriptor": "Can thank someone simply.",
+      "band": "A1",
+      "interpretLexiconCategory": "gratitude",
+      "exponents": {
+        "fr": [
+          {
+            "exponentId": "merci",
+            "normalizedForm": "merci",
+            "surfaceForms": [
+              "merci"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "merci"
+            ],
+            "glossBySurface": {
+              "merci": {
+                "en": "thank you"
+              }
+            }
+          },
+          {
+            "exponentId": "merci_beaucoup",
+            "normalizedForm": "merci_beaucoup",
+            "surfaceForms": [
+              "merci beaucoup"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "merci",
+              "beaucoup"
+            ],
+            "glossBySurface": {
+              "merci beaucoup": {
+                "en": "thank you very much"
+              }
+            }
+          },
+          {
+            "exponentId": "merci_infiniment",
+            "normalizedForm": "merci_infiniment",
+            "surfaceForms": [
+              "merci infiniment"
+            ],
+            "cefrBand": "A1",
+            "constituentLemmas": [
+              "merci",
+              "infiniment"
+            ],
+            "glossBySurface": {
+              "merci infiniment": {
+                "en": "thank you so much"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

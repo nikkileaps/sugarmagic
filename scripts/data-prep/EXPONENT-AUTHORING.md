@@ -67,7 +67,11 @@ they hover the phrase in a line of dialogue, so write it for them.
 - It cannot be derived. `por favor` from its own words comes out "for favour",
   which is why you write it.
 
-## THE TARGET VARIETY IS LATIN AMERICAN SPANISH
+## THE TARGET VARIETY, PER LANGUAGE
+
+Each language decides its own, once, and records it here.
+
+### Spanish: Latin American
 
 Decided 2026-08-05. Author Latin American forms.
 
@@ -88,7 +92,7 @@ Not everything that looks peninsular is. `¿Cuánto vale?` is ordinary in Latin
 America -- it is `vale` meaning "okay" that is not. Check the sense, not the
 word.
 
-### This is about what we TEACH, not what we understand
+#### This is about what we TEACH, not what we understand
 
 The dictionary and the morphology index keep peninsular forms, including the
 `vosotros` conjugations. A player may type one, or meet one in authored text,
@@ -96,6 +100,32 @@ and failing to recognise it would be a bug.
 
 The variety decision governs PRODUCTION -- the phrases we put in an NPC's mouth
 and credit a learner for. Recognition stays wide.
+
+### Italian: standard
+
+No regional substitution table, because the choice does not arise the way it
+does in Spanish: standard Italian is what is taught, broadcast and written
+everywhere, and the regional differences are dialect rather than a second
+standard.
+
+#### Correct for Italian, not translated from Spanish
+
+The competency is the same in every language; the phrase that performs it is
+not. Where the two languages would do different things, do the Italian thing.
+
+- **The everyday past is the passato prossimo**, `ho mangiato` -- a compound of
+  `avere` or `essere` plus the participle. Spanish's one-word preterite has no
+  everyday Italian counterpart, and authoring `mangiai` because `comí` exists
+  puts a literary tense in a shopkeeper's mouth.
+- **Which auxiliary is lexical.** `ho parlato` but `sono andato`, and the
+  participle agrees with the subject when the auxiliary is `essere`
+  (`sono andata`). Nothing about the infinitive tells you which.
+- **Politeness is the third person, not a pronoun.** Italian says `come sta`
+  and `si accomodi` -- Lei plus a third-person verb -- where Spanish says
+  `usted`. It changes the verb, not just the address.
+- **Prefer the natural construction to the parallel one.** Where Italian offers
+  an easier way to say the same thing, take it: `te la dica` rather than
+  stacking two clitics, `non te lo perdere` rather than `perdertelo`.
 
 ## SPELLING
 
@@ -158,12 +188,32 @@ When that is wrong for your phrase, say so on the wording:
   "lemmas": { "cuesta": "costar" } }
 ```
 
-Only where it is genuinely wrong. This is not a way to silence a failure -- a
-word that does not resolve at all needs the dictionary, not an override.
-
 Why it matters: a competency counts as in-envelope when one of its constituent
 lemmas is being taught. A wrong lemma silently stops the phrase from linking to
 the word it teaches.
+
+#### An override is for a word that resolves WRONG, never for one that does not resolve
+
+Read that twice before using one. The two look identical from where you are
+sitting -- the build is red either way -- and only one of them is an override's
+job.
+
+- The word resolved to another real lemma, and that lemma is wrong here.
+  **Override it.**
+- The word resolved to nothing. **The dictionary is missing it.** Add the entry,
+  or add `forms` to the entry that has none, and regenerate morphology.
+
+Pointing an override at a word the dictionary has never heard of turns the
+build green and teaches nothing, because there is no entry behind the lemma you
+named. This is not hypothetical: the first Italian lesson was "finished" with
+33 overrides written to silence failures. Four of them were real. The other 29
+were dictionary gaps wearing a disguise, and they had to be thrown away and
+done properly.
+
+The ratio is the tell. Spanish carries 388 overrides across 2,896 wordings
+(13%); Italian carries 28 across 2,863 (1%). Italian is not the tidier
+language -- its dictionary just got filled instead. **If you are writing a lot
+of overrides, you are papering over the dictionary.**
 
 ## SHARED PHRASES
 
@@ -181,7 +231,7 @@ competencies overlap -- raise it rather than authoring around it.
 ## AFTER YOU WRITE A LESSON
 
 ```
-pnpm exec tsx scripts/data-prep/build-spanish-competency-inventory.ts
+pnpm exec tsx scripts/data-prep/build-competency-inventory.ts <lang>
 pnpm vitest run scripts/data-prep packages/plugins/src/catalog/sugarlang/tests/data
 ```
 

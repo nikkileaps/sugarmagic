@@ -153,7 +153,7 @@ describe("findTermMatches", () => {
 
   it("does not guess at inflection", () => {
     // The caller supplies every form explicitly, so there is nothing to guess.
-    // `maleta` no longer half-matches `maletas`; the paradigm supplies both.
+    // `maleta` no longer half-matches `maletas`; the stored forms supply both.
     expect(findTermMatches("dos maletas", ["maleta"], [], [])).toHaveLength(0);
     expect(findTermMatches("dos maletas", ["maletas"], [], [])).toHaveLength(1);
   });

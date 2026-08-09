@@ -244,7 +244,7 @@ describe("Epic 4 runtime language-data loaders", () => {
 
     // Spanish tops out at C1 in this data. That is a SHAPE claim -- introducing
     // a C2 entry changes what the band set means -- and it has been broken by
-    // accident: twelve verbs were banded C2 while filling in paradigms, and
+    // accident: twelve verbs were banded C2 while filling in forms, and
     // this assertion is what caught it.
     expect(provider.listLemmasAtBand("C2", "es")).toHaveLength(0);
   });
