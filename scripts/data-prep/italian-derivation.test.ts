@@ -130,6 +130,87 @@ describe("derived Italian forms are real words", () => {
     expect(index["parlherò"]).toBeUndefined();
   });
 
+  it("A FOURTH: -ciare and -giare drop the softening i in the future too", () => {
+    // The same class as the subjunctive case above, missed in the future for a
+    // whole epic. That `i` is only there to keep the `c` or `g` soft before
+    // `a` and `o`; the future and conditional endings start with `e`, which
+    // does the job on its own. So `mangiare` gives `mangerò` -- and neither
+    // `mangierò` (the i kept) nor `mangherò` (the velar rule misapplied).
+    for (const [surface, lemma] of [
+      ["mangerò", "mangiare"],
+      ["mangerei", "mangiare"],
+      ["comincerò", "cominciare"],
+      ["lascerò", "lasciare"],
+      ["viaggerò", "viaggiare"],
+      ["festeggerei", "festeggiare"]
+    ] as const) {
+      expect(lemmaOf(surface), surface).toBe(lemma);
+    }
+    for (const nonWord of ["mangierò", "mangherò", "comincierò", "lascierò"]) {
+      expect(index[nonWord], nonWord).toBeUndefined();
+    }
+
+    // NOT every -iare verb: where the i belongs to the stem it stays, and
+    // where the consonant is genuinely velar the h still arrives.
+    expect(lemmaOf("studierò")).toBe("studiare");
+    expect(lemmaOf("cambierò")).toBe("cambiare");
+    expect(lemmaOf("dimenticherò")).toBe("dimenticare");
+  });
+
+  it("THE voi SUBJUNCTIVE COMES OFF THE noi PRESENT, not the infinitive", () => {
+    // Built off the infinitive it applied the -are respelling to verbs that
+    // are not -are (`leggere` -> `legghiate`) and doubled the i of the -iare
+    // family (`mangiiate`). Taking `leggiamo` and `mangiamo` as given needs no
+    // respelling at all and is right for every class, including -rre.
+    for (const [surface, lemma] of [
+      ["leggiate", "leggere"],
+      ["vinciate", "vincere"],
+      ["mangiate", "mangiare"],
+      ["esponiate", "esporre"],
+      ["capiate", "capire"],
+      ["cerchiate", "cercare"],
+      ["parliate", "parlare"]
+    ] as const) {
+      expect(lemmaOf(surface), surface).toBe(lemma);
+    }
+    for (const nonWord of ["legghiate", "vinchiate", "mangiiate", "espoiate"]) {
+      expect(index[nonWord], nonWord).toBeUndefined();
+    }
+  });
+
+  it("`fare` is not an -are verb, however its infinitive ends", () => {
+    // The class test is a string test, so `fare` and `soddisfare` took the
+    // -are endings and shipped `faccino`. `faccia` hid the miss because it is
+    // also the noun "face"; `facciano` is the form that proves it.
+    expect(lemmaOf("facciano")).toBe("fare");
+    expect(index["faccino"]).toBeUndefined();
+    expect(lemmaOf("soddisfacciano")).toBe("soddisfare");
+
+    // `facci` IS a word and must survive: it is the short imperative `fa'`
+    // with the clitic `ci` doubled onto it, "do it for us".
+    expect(lemmaOf("facci")).toBe("fare");
+  });
+
+  it("-rre verbs get a future and a conditional at all", () => {
+    // They end in neither `ere` nor `ire`, so the class test matched nothing
+    // and these five verbs silently had no future and no conditional -- not a
+    // wrong form, an absent tense, which is why nothing looked odd.
+    for (const [surface, lemma] of [
+      ["esporrò", "esporre"],
+      ["esporrei", "esporre"],
+      ["tradurrò", "tradurre"],
+      ["proporrei", "proporre"],
+      ["supporranno", "supporre"],
+      ["opporrebbe", "opporre"]
+    ] as const) {
+      expect(lemmaOf(surface), surface).toBe(lemma);
+    }
+    // One `r`, not three: the stem keeps the infinitive's pair and the ending
+    // adds none.
+    expect(index["esporrrò"]).toBeUndefined();
+    expect(index["esporerò"]).toBeUndefined();
+  });
+
   it("builds the conditional and future, regular and irregular", () => {
     for (const [surface, lemma] of [
       ["sentirei", "sentire"],
@@ -151,34 +232,22 @@ describe("derived Italian forms are real words", () => {
     expect(index["farelo"]).toBeUndefined();
   });
 
-  it("no authored verb form carries a doubled i", () => {
-    // The -iare family keeps ONE i (`risparmi`, `risparmiamo`), and writing
-    // the regular -are endings onto its stem produces `risparmii` and
-    // `risparmiiamo`. Nothing complains: they are simply non-words sitting in
-    // the index, and the real forms go missing. Caught once by hand; this is
-    // so the next one is caught by the suite.
-    const atlas = readJsonFile<{
-      lemmas: Record<string, { forms?: Record<string, unknown> }>;
-    }>(sugarlangDataPath("languages", "it", "cefrlex.json")).lemmas;
-
-    const doubled: string[] = [];
-    for (const [lemmaId, entry] of Object.entries(atlas)) {
-      const forms = entry.forms;
-      if (!forms || !("pres" in forms)) continue;
-      const surfaces = [
-        ...(forms.pres as Array<string | null>),
-        ...(forms.pret as Array<string | null>),
-        ...(forms.imp as Array<string | null>),
-        forms.ger as string,
-        forms.part as string
-      ];
-      for (const surface of surfaces) {
-        // A final `ii` is legitimate: `capii`, `dormii` are real preterites.
-        if (typeof surface === "string" && surface.includes("ii") && !surface.endsWith("ii")) {
-          doubled.push(`${lemmaId}: ${surface}`);
-        }
-      }
-    }
+  it("no surface IN THE INDEX carries a doubled i", () => {
+    // The -iare family keeps ONE i (`risparmi`, `risparmiamo`), and writing an
+    // i-initial ending onto its stem produces `risparmii` and `risparmiiate`.
+    // Nothing complains: they are simply non-words sitting in the index, and
+    // the real forms go missing.
+    //
+    // THIS SCANS THE INDEX, WHICH IS THE POINT. It used to read the authored
+    // dictionary instead -- and every form of this bug is DERIVED, so the
+    // dictionary never contained one and the guard could not fail. 21
+    // non-words (`mangiiate`, `lasciiate`, `consigliiate` ...) passed it for
+    // as long as it existed. A guard has to look where the bug lands.
+    const doubled = Object.keys(index).filter(
+      // A final `ii` is legitimate: `capii`, `dormii` are real preterites, and
+      // `principii` a real plural.
+      (surface) => surface.includes("ii") && !surface.endsWith("ii")
+    );
     expect(doubled).toEqual([]);
   });
 

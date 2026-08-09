@@ -37,8 +37,12 @@ import {
  * `tu` is the subject pronoun, which the always-target list wants a learner to
  * say out loud rather than treat as filler.
  *
- * Lemma ids, so `i` and `vi` are omitted rather than listed inertly -- neither
- * resolves in the Italian index today, so the check would never reach them.
+ * LEMMA IDS: the check runs after a token resolves, so a surface that resolves
+ * to nothing cannot be excluded here and listing it is inert. `i`, `le`, `vi`
+ * and `li` were left out on exactly that reasoning and it was wrong -- all
+ * four resolve, and 119 exponents were counting an article or an object clitic
+ * among the words they teach. Check the index before deciding a lemma is
+ * unreachable; the dictionary grows underneath a judgement like that.
  *
  * `uno` is deliberately ABSENT even though it is an article (`uno studente`),
  * because it is also the number one, and the dictionary tags it `numeral`.
@@ -51,13 +55,17 @@ const FUNCTION_WORDS = new Set([
   "il",
   "lo",
   "la",
+  "i",
   "gli",
+  "le",
   "un",
   "una",
   "mi",
   "ti",
   "si",
   "ci",
+  "vi",
+  "li",
   "ne",
   "lui",
   "lei"
@@ -528,7 +536,22 @@ const ITALIAN_IRREGULAR_SUBJUNCTIVE: Record<string, string[]> = {
   sapere: ["sappia", "sappia", "sappia", "sappiamo", "sappiate", "sappiano"],
   volere: ["voglia", "voglia", "voglia", "vogliamo", "vogliate", "vogliano"],
   potere: ["possa", "possa", "possa", "possiamo", "possiate", "possano"],
-  dovere: ["debba", "debba", "debba", "dobbiamo", "dobbiate", "debbano"]
+  dovere: ["debba", "debba", "debba", "dobbiamo", "dobbiate", "debbano"],
+  // `fare` and `soddisfare` are here for a reason worth naming: their
+  // infinitives END IN "are" without being -are verbs (both contract from
+  // Latin facere). The class test is a string test, so they took the -are
+  // endings and came out `facci` and `faccino`, and the real `faccia` and
+  // `facciano` went missing. `faccia` looks present in the index only because
+  // it is also the noun "face".
+  fare: ["faccia", "faccia", "faccia", "facciamo", "facciate", "facciano"],
+  soddisfare: [
+    "soddisfaccia",
+    "soddisfaccia",
+    "soddisfaccia",
+    "soddisfacciamo",
+    "soddisfacciate",
+    "soddisfacciano"
+  ]
 };
 
 /**
@@ -602,16 +625,38 @@ function keepHardBeforeFrontVowel(stem: string): string {
   return /[cg]$/.test(stem) ? `${stem}h` : stem;
 }
 
-/** `parlare` -> `parler`, `prendere` -> `prender`, `sentire` -> `sentir`. */
+/**
+ * `parlare` -> `parler`, `prendere` -> `prender`, `sentire` -> `sentir`,
+ * `esporre` -> `esporr`.
+ */
 function italianFutureStem(lemmaId: string): string | null {
   const irregular = ITALIAN_IRREGULAR_FUTURE_STEM[lemmaId];
   if (irregular) return irregular;
-  // The ending starts with `e`, so a stem in `c` or `g` needs its `h`:
-  // `dimenticare` gives `dimenticherò`, not `dimenticerò`.
   if (lemmaId.endsWith("are")) {
-    return `${keepHardBeforeFrontVowel(lemmaId.slice(0, -3))}er`;
+    const stem = lemmaId.slice(0, -3);
+    // -ciare and -giare: that `i` is not part of the stem, it is there to keep
+    // the `c` or `g` SOFT in front of `a` and `o`. These endings start with
+    // `e`, which already does that, so the `i` goes and no `h` arrives:
+    // `mangiare` gives `mangerò` -- never `mangierò`, and never `mangherò`.
+    //
+    // Not every -iare verb. `studiare` keeps its `i` (`studierò`) because
+    // there it belongs to the stem and softens nothing, and so do `cambiare`
+    // and `consigliare`.
+    if (/[cg]i$/.test(stem)) return `${stem.slice(0, -1)}er`;
+    // Otherwise the same `e` is what forces the `h` IN: `dimenticare` gives
+    // `dimenticherò`, not `dimenticerò`.
+    return `${keepHardBeforeFrontVowel(stem)}er`;
   }
-  if (lemmaId.endsWith("ere") || lemmaId.endsWith("ire")) {
+  // `rre` is named alongside `ere` and `ire` rather than folded into them,
+  // because it does NOT end in either and so matched nothing: `esporre` and
+  // `tradurre` had no future and no conditional at all, where every other verb
+  // with stored forms had both. The operation is the same one -- drop the
+  // final `e` -- which is why it reads as an afterthought and was missed.
+  if (
+    lemmaId.endsWith("ere") ||
+    lemmaId.endsWith("ire") ||
+    lemmaId.endsWith("rre")
+  ) {
     return lemmaId.slice(0, -1);
   }
   return null;
@@ -663,14 +708,21 @@ function italianDerivedTenses(entry: AtlasLemmaEntry): string[] {
         absorbs ? stem : `${spelled}${endings[0]}`,
         absorbs ? `${stem}no` : `${spelled}${endings[5]}`
       );
-      // The two plural persons are NOT built off the `io` stem. For an -isc-
-      // verb that stem carries the infix, and `capisciamo` is not a word --
-      // the real forms are `capiamo` and `capiate`. First person plural is
-      // identical to the present indicative, so the dictionary already has it.
-      if (typeof noi === "string") out.push(noi);
-      // Same respelling here: `cercare` gives `cerchiate`, not `cerciate`.
-      const bare = entry.lemmaId.slice(0, -3);
-      if (bare) out.push(`${keepHardBeforeFrontVowel(bare)}iate`);
+      // BOTH plural persons come off the `noi` PRESENT, which is the only stem
+      // that is right for every class. The `noi` subjunctive is identical to
+      // it, and the `voi` is it with `-amo` swapped for `-ate`.
+      //
+      // Not off the `io` stem: for an -isc- verb that carries the infix, and
+      // `capisciamo` is not a word. Not off the infinitive either, which is
+      // what this used to do -- that applied the -are respelling to verbs that
+      // are not -are (`leggere` came out `legghiate`, real `leggiate`) and
+      // doubled the `i` of the -iare family (`mangiiate`, real `mangiate`).
+      // Taking `leggiamo` and `mangiamo` as given needs no respelling at all,
+      // and it fixes the -rre verbs for free: `esponiamo` -> `esponiate`.
+      if (typeof noi === "string") {
+        out.push(noi);
+        if (noi.endsWith("amo")) out.push(`${noi.slice(0, -3)}ate`);
+      }
     }
   }
 

@@ -108259,19 +108259,7 @@
         "noun"
       ]
     },
-    "facci": {
-      "lemmaId": "fare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
-    "faccino": {
-      "lemmaId": "fare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
-    "fiate": {
+    "facciano": {
       "lemmaId": "fare",
       "partsOfSpeech": [
         "verb"
@@ -108548,6 +108536,12 @@
       ]
     },
     "fammi": {
+      "lemmaId": "fare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "facci": {
       "lemmaId": "fare",
       "partsOfSpeech": [
         "verb"
@@ -109291,7 +109285,7 @@
         "verb"
       ]
     },
-    "diate": {
+    "diciate": {
       "lemmaId": "dire",
       "partsOfSpeech": [
         "verb"
@@ -109646,6 +109640,12 @@
       ]
     },
     "dia": {
+      "lemmaId": "dare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "diate": {
       "lemmaId": "dare",
       "partsOfSpeech": [
         "verb"
@@ -117254,12 +117254,6 @@
         "verb"
       ]
     },
-    "lasciiate": {
-      "lemmaId": "lasciare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "lasciassi": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
@@ -117284,73 +117278,73 @@
         "verb"
       ]
     },
-    "lascierei": {
+    "lascerei": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lascieresti": {
+    "lasceresti": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lascierebbe": {
+    "lascerebbe": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lascieremmo": {
+    "lasceremmo": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lasciereste": {
+    "lascereste": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lascierebbero": {
+    "lascerebbero": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lascierò": {
+    "lascerò": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lascierai": {
+    "lascerai": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lascierà": {
+    "lascerà": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lascieremo": {
+    "lasceremo": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lascierete": {
+    "lascerete": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "lascieranno": {
+    "lasceranno": {
       "lemmaId": "lasciare",
       "partsOfSpeech": [
         "verb"
@@ -118533,7 +118527,7 @@
         "verb"
       ]
     },
-    "riuschiate": {
+    "riusciate": {
       "lemmaId": "riuscire",
       "partsOfSpeech": [
         "verb"
@@ -119517,7 +119511,7 @@
         "verb"
       ]
     },
-    "conoschiate": {
+    "conosciate": {
       "lemmaId": "conoscere",
       "partsOfSpeech": [
         "verb"
@@ -120273,7 +120267,7 @@
         "verb"
       ]
     },
-    "legghiate": {
+    "leggiate": {
       "lemmaId": "leggere",
       "partsOfSpeech": [
         "verb"
@@ -122379,7 +122373,7 @@
         "verb"
       ]
     },
-    "propoiate": {
+    "proponiate": {
       "lemmaId": "proporre",
       "partsOfSpeech": [
         "verb"
@@ -122404,6 +122398,78 @@
       ]
     },
     "proponessero": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporrei": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporresti": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporrebbe": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporremmo": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporreste": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporrebbero": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporrò": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporrai": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporrà": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporremo": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporrete": {
+      "lemmaId": "proporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "proporranno": {
       "lemmaId": "proporre",
       "partsOfSpeech": [
         "verb"
@@ -124125,7 +124191,7 @@
         "verb"
       ]
     },
-    "naschiate": {
+    "nasciate": {
       "lemmaId": "nascere",
       "partsOfSpeech": [
         "verb"
@@ -127359,7 +127425,7 @@
         "verb"
       ]
     },
-    "aggiunghiate": {
+    "aggiungiate": {
       "lemmaId": "aggiungere",
       "partsOfSpeech": [
         "verb"
@@ -129297,7 +129363,7 @@
         "verb"
       ]
     },
-    "riconoschiate": {
+    "riconosciate": {
       "lemmaId": "riconoscere",
       "partsOfSpeech": [
         "verb"
@@ -131571,12 +131637,6 @@
         "verb"
       ]
     },
-    "cambiiate": {
-      "lemmaId": "cambiare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "cambiassi": {
       "lemmaId": "cambiare",
       "partsOfSpeech": [
@@ -131865,7 +131925,7 @@
         "verb"
       ]
     },
-    "scegliiate": {
+    "scegliate": {
       "lemmaId": "scegliere",
       "partsOfSpeech": [
         "verb"
@@ -132297,12 +132357,6 @@
         "verb"
       ]
     },
-    "cominciiate": {
-      "lemmaId": "cominciare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "cominciassi": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
@@ -132327,73 +132381,73 @@
         "verb"
       ]
     },
-    "comincierei": {
+    "comincerei": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "comincieresti": {
+    "cominceresti": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "comincierebbe": {
+    "comincerebbe": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "comincieremmo": {
+    "cominceremmo": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "cominciereste": {
+    "comincereste": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "comincierebbero": {
+    "comincerebbero": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "comincierò": {
+    "comincerò": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "comincierai": {
+    "comincerai": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "comincierà": {
+    "comincerà": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "comincieremo": {
+    "cominceremo": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "comincierete": {
+    "comincerete": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "comincieranno": {
+    "cominceranno": {
       "lemmaId": "cominciare",
       "partsOfSpeech": [
         "verb"
@@ -132969,7 +133023,7 @@
         "verb"
       ]
     },
-    "uschiate": {
+    "usciate": {
       "lemmaId": "uscire",
       "partsOfSpeech": [
         "verb"
@@ -134541,7 +134595,7 @@
         "verb"
       ]
     },
-    "rivolghiate": {
+    "rivolgiate": {
       "lemmaId": "rivolgere",
       "partsOfSpeech": [
         "verb"
@@ -137127,7 +137181,7 @@
         "verb"
       ]
     },
-    "verifichiate": {
+    "verificiate": {
       "lemmaId": "verificare",
       "partsOfSpeech": [
         "verb"
@@ -138051,7 +138105,7 @@
         "verb"
       ]
     },
-    "raccogliiate": {
+    "raccogliate": {
       "lemmaId": "raccogliere",
       "partsOfSpeech": [
         "verb"
@@ -142313,7 +142367,7 @@
         "noun"
       ]
     },
-    "piachiate": {
+    "piacciate": {
       "lemmaId": "piacere",
       "partsOfSpeech": [
         "verb",
@@ -144373,7 +144427,7 @@
         "verb"
       ]
     },
-    "compiiate": {
+    "compiate": {
       "lemmaId": "compiere",
       "partsOfSpeech": [
         "verb"
@@ -144943,7 +144997,7 @@
         "verb"
       ]
     },
-    "creschiate": {
+    "cresciate": {
       "lemmaId": "crescere",
       "partsOfSpeech": [
         "verb"
@@ -145261,7 +145315,7 @@
         "verb"
       ]
     },
-    "vinchiate": {
+    "vinciate": {
       "lemmaId": "vincere",
       "partsOfSpeech": [
         "verb"
@@ -148333,7 +148387,7 @@
         "verb"
       ]
     },
-    "muoviate": {
+    "moviate": {
       "lemmaId": "muovere",
       "partsOfSpeech": [
         "verb"
@@ -151639,7 +151693,7 @@
         "verb"
       ]
     },
-    "espoiate": {
+    "esponiate": {
       "lemmaId": "esporre",
       "partsOfSpeech": [
         "verb"
@@ -151664,6 +151718,78 @@
       ]
     },
     "esponessero": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporrei": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporresti": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporrebbe": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporremmo": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporreste": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporrebbero": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporrò": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporrai": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporrà": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporremo": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporrete": {
+      "lemmaId": "esporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "esporranno": {
       "lemmaId": "esporre",
       "partsOfSpeech": [
         "verb"
@@ -155072,12 +155198,6 @@
         "verb"
       ]
     },
-    "studiiate": {
-      "lemmaId": "studiare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "studiassi": {
       "lemmaId": "studiare",
       "partsOfSpeech": [
@@ -156776,7 +156896,7 @@
         "verb"
       ]
     },
-    "convinchiate": {
+    "convinciate": {
       "lemmaId": "convincere",
       "partsOfSpeech": [
         "verb"
@@ -158708,12 +158828,6 @@
         "verb"
       ]
     },
-    "rischiiate": {
-      "lemmaId": "rischiare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "rischiassi": {
       "lemmaId": "rischiare",
       "partsOfSpeech": [
@@ -159074,7 +159188,7 @@
         "verb"
       ]
     },
-    "togliiate": {
+    "togliate": {
       "lemmaId": "togliere",
       "partsOfSpeech": [
         "verb"
@@ -161767,7 +161881,7 @@
         "verb"
       ]
     },
-    "spinghiate": {
+    "spingiate": {
       "lemmaId": "spingere",
       "partsOfSpeech": [
         "verb"
@@ -163315,12 +163429,6 @@
         "verb"
       ]
     },
-    "mangiiate": {
-      "lemmaId": "mangiare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "mangiassi": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
@@ -163345,73 +163453,73 @@
         "verb"
       ]
     },
-    "mangierei": {
+    "mangerei": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangieresti": {
+    "mangeresti": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangierebbe": {
+    "mangerebbe": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangieremmo": {
+    "mangeremmo": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangiereste": {
+    "mangereste": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangierebbero": {
+    "mangerebbero": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangierò": {
+    "mangerò": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangierai": {
+    "mangerai": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangierà": {
+    "mangerà": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangieremo": {
+    "mangeremo": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangierete": {
+    "mangerete": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "mangieranno": {
+    "mangeranno": {
       "lemmaId": "mangiare",
       "partsOfSpeech": [
         "verb"
@@ -164347,7 +164455,7 @@
         "verb"
       ]
     },
-    "corregghiate": {
+    "correggiate": {
       "lemmaId": "correggere",
       "partsOfSpeech": [
         "verb"
@@ -166213,12 +166321,6 @@
         "verb"
       ]
     },
-    "consigliiate": {
-      "lemmaId": "consigliare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "consigliassi": {
       "lemmaId": "consigliare",
       "partsOfSpeech": [
@@ -166694,12 +166796,6 @@
       ]
     },
     "sbaglino": {
-      "lemmaId": "sbagliare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
-    "sbagliiate": {
       "lemmaId": "sbagliare",
       "partsOfSpeech": [
         "verb"
@@ -167899,13 +167995,25 @@
         "verb"
       ]
     },
-    "soddisfino": {
+    "soddisfaccia": {
       "lemmaId": "soddisfare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "soddisfiate": {
+    "soddisfacciamo": {
+      "lemmaId": "soddisfare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "soddisfacciate": {
+      "lemmaId": "soddisfare",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "soddisfacciano": {
       "lemmaId": "soddisfare",
       "partsOfSpeech": [
         "verb"
@@ -168698,12 +168806,6 @@
       ]
     },
     "ringrazino": {
-      "lemmaId": "ringraziare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
-    "ringraziiate": {
       "lemmaId": "ringraziare",
       "partsOfSpeech": [
         "verb"
@@ -169909,7 +170011,7 @@
         "verb"
       ]
     },
-    "cogliiate": {
+    "cogliate": {
       "lemmaId": "cogliere",
       "partsOfSpeech": [
         "verb"
@@ -174607,7 +174709,7 @@
         "verb"
       ]
     },
-    "traduiate": {
+    "traduciate": {
       "lemmaId": "tradurre",
       "partsOfSpeech": [
         "verb"
@@ -174632,6 +174734,78 @@
       ]
     },
     "traducessero": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurrei": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurresti": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurrebbe": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurremmo": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurreste": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurrebbero": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurrò": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurrai": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurrà": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurremo": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurrete": {
+      "lemmaId": "tradurre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "tradurranno": {
       "lemmaId": "tradurre",
       "partsOfSpeech": [
         "verb"
@@ -184162,7 +184336,7 @@
         "verb"
       ]
     },
-    "oppoiate": {
+    "opponiate": {
       "lemmaId": "opporre",
       "partsOfSpeech": [
         "verb"
@@ -184187,6 +184361,78 @@
       ]
     },
     "opponessero": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporrei": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporresti": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporrebbe": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporremmo": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporreste": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporrebbero": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporrò": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporrai": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporrà": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporremo": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporrete": {
+      "lemmaId": "opporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "opporranno": {
       "lemmaId": "opporre",
       "partsOfSpeech": [
         "verb"
@@ -184450,7 +184696,7 @@
         "verb"
       ]
     },
-    "biate": {
+    "beviate": {
       "lemmaId": "bere",
       "partsOfSpeech": [
         "verb"
@@ -187731,7 +187977,7 @@
         "verb"
       ]
     },
-    "sfugghiate": {
+    "sfuggiate": {
       "lemmaId": "sfuggire",
       "partsOfSpeech": [
         "verb"
@@ -188607,12 +188853,6 @@
         "verb"
       ]
     },
-    "viaggiiate": {
-      "lemmaId": "viaggiare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "viaggiassi": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
@@ -188637,73 +188877,73 @@
         "verb"
       ]
     },
-    "viaggierei": {
+    "viaggerei": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggieresti": {
+    "viaggeresti": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggierebbe": {
+    "viaggerebbe": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggieremmo": {
+    "viaggeremmo": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggiereste": {
+    "viaggereste": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggierebbero": {
+    "viaggerebbero": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggierò": {
+    "viaggerò": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggierai": {
+    "viaggerai": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggierà": {
+    "viaggerà": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggieremo": {
+    "viaggeremo": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggierete": {
+    "viaggerete": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "viaggieranno": {
+    "viaggeranno": {
       "lemmaId": "viaggiare",
       "partsOfSpeech": [
         "verb"
@@ -196471,12 +196711,6 @@
         "verb"
       ]
     },
-    "risparmiiate": {
-      "lemmaId": "risparmiare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "risparmiassi": {
       "lemmaId": "risparmiare",
       "partsOfSpeech": [
@@ -196837,7 +197071,7 @@
         "verb"
       ]
     },
-    "regghiate": {
+    "reggiate": {
       "lemmaId": "reggere",
       "partsOfSpeech": [
         "verb"
@@ -199843,7 +200077,7 @@
         "verb"
       ]
     },
-    "dispiachiate": {
+    "dispiacciate": {
       "lemmaId": "dispiacere",
       "partsOfSpeech": [
         "verb"
@@ -209214,12 +209448,6 @@
         "verb"
       ]
     },
-    "festeggiiate": {
-      "lemmaId": "festeggiare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "festeggiassi": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
@@ -209244,73 +209472,73 @@
         "verb"
       ]
     },
-    "festeggierei": {
+    "festeggerei": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggieresti": {
+    "festeggeresti": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggierebbe": {
+    "festeggerebbe": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggieremmo": {
+    "festeggeremmo": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggiereste": {
+    "festeggereste": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggierebbero": {
+    "festeggerebbero": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggierò": {
+    "festeggerò": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggierai": {
+    "festeggerai": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggierà": {
+    "festeggerà": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggieremo": {
+    "festeggeremo": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggierete": {
+    "festeggerete": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "festeggieranno": {
+    "festeggeranno": {
       "lemmaId": "festeggiare",
       "partsOfSpeech": [
         "verb"
@@ -210462,7 +210690,7 @@
         "verb"
       ]
     },
-    "tachiate": {
+    "tacciate": {
       "lemmaId": "tacere",
       "partsOfSpeech": [
         "verb"
@@ -211470,7 +211698,7 @@
         "verb"
       ]
     },
-    "suppoiate": {
+    "supponiate": {
       "lemmaId": "supporre",
       "partsOfSpeech": [
         "verb"
@@ -211495,6 +211723,78 @@
       ]
     },
     "supponessero": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporrei": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporresti": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporrebbe": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporremmo": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporreste": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporrebbero": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporrò": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporrai": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporrà": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporremo": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporrete": {
+      "lemmaId": "supporre",
+      "partsOfSpeech": [
+        "verb"
+      ]
+    },
+    "supporranno": {
       "lemmaId": "supporre",
       "partsOfSpeech": [
         "verb"
@@ -213888,12 +214188,6 @@
         "verb"
       ]
     },
-    "ricominciiate": {
-      "lemmaId": "ricominciare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "ricominciassi": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
@@ -213918,73 +214212,73 @@
         "verb"
       ]
     },
-    "ricomincierei": {
+    "ricomincerei": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricomincieresti": {
+    "ricominceresti": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricomincierebbe": {
+    "ricomincerebbe": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricomincieremmo": {
+    "ricominceremmo": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricominciereste": {
+    "ricomincereste": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricomincierebbero": {
+    "ricomincerebbero": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricomincierò": {
+    "ricomincerò": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricomincierai": {
+    "ricomincerai": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricomincierà": {
+    "ricomincerà": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricomincieremo": {
+    "ricominceremo": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricomincierete": {
+    "ricomincerete": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "ricomincieranno": {
+    "ricominceranno": {
       "lemmaId": "ricominciare",
       "partsOfSpeech": [
         "verb"
@@ -216841,12 +217135,6 @@
       ]
     },
     "somiglino": {
-      "lemmaId": "somigliare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
-    "somigliiate": {
       "lemmaId": "somigliare",
       "partsOfSpeech": [
         "verb"
@@ -227268,12 +227556,6 @@
         "verb"
       ]
     },
-    "assomigliiate": {
-      "lemmaId": "assomigliare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "assomigliassi": {
       "lemmaId": "assomigliare",
       "partsOfSpeech": [
@@ -232074,7 +232356,7 @@
         "verb"
       ]
     },
-    "accorgeiate": {
+    "accorgiate": {
       "lemmaId": "accorgersi",
       "partsOfSpeech": [
         "verb"
@@ -234870,7 +235152,7 @@
         "verb"
       ]
     },
-    "congratulaiate": {
+    "congratulariate": {
       "lemmaId": "congratularsi",
       "partsOfSpeech": [
         "verb"
@@ -236616,7 +236898,7 @@
         "verb"
       ]
     },
-    "fidaiate": {
+    "fidariate": {
       "lemmaId": "fidarsi",
       "partsOfSpeech": [
         "verb"
@@ -248160,7 +248442,7 @@
         "pronoun"
       ]
     },
-    "rattristaiate": {
+    "rattristariate": {
       "lemmaId": "rattristarsi",
       "partsOfSpeech": [
         "verb"
@@ -248808,7 +249090,7 @@
         "verb"
       ]
     },
-    "nuochiate": {
+    "nociate": {
       "lemmaId": "nuocere",
       "partsOfSpeech": [
         "verb"
@@ -249420,12 +249702,6 @@
         "verb"
       ]
     },
-    "simboleggiiate": {
-      "lemmaId": "simboleggiare",
-      "partsOfSpeech": [
-        "verb"
-      ]
-    },
     "simboleggiassi": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
@@ -249450,73 +249726,73 @@
         "verb"
       ]
     },
-    "simboleggierei": {
+    "simboleggerei": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggieresti": {
+    "simboleggeresti": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggierebbe": {
+    "simboleggerebbe": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggieremmo": {
+    "simboleggeremmo": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggiereste": {
+    "simboleggereste": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggierebbero": {
+    "simboleggerebbero": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggierò": {
+    "simboleggerò": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggierai": {
+    "simboleggerai": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggierà": {
+    "simboleggerà": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggieremo": {
+    "simboleggeremo": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggierete": {
+    "simboleggerete": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"
       ]
     },
-    "simboleggieranno": {
+    "simboleggeranno": {
       "lemmaId": "simboleggiare",
       "partsOfSpeech": [
         "verb"

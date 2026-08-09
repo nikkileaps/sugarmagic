@@ -50,6 +50,34 @@ describe("function words are per language", () => {
     }
   });
 
+  it("no article or object clitic is counted among the words a phrase teaches", () => {
+    // The concrete failure: `i`, `le` and `vi` were left out of the Italian
+    // list on the reasoning that they did not resolve, the dictionary grew,
+    // and 119 exponents ended up teaching an article.
+    //
+    // Checked by NAMING the closed sets rather than by part of speech. A
+    // part-of-speech sweep does not work -- Spanish tags 58 lemmas
+    // `determiner`, and most of them (`este`, `mucho`, `todo`, `otro`) are
+    // words a learner has to acquire. Articles and object clitics are short,
+    // closed and finite, so they can simply be listed.
+    const CLOSED_SETS: Record<string, string[]> = {
+      es: ["el", "la", "los", "un", "una", "me", "te", "se", "lo", "le"],
+      it: ["il", "lo", "la", "i", "gli", "le", "un", "una", "mi", "ti", "si", "ci", "vi", "li", "ne"],
+      fr: ["le", "la", "les", "un", "une", "me", "te", "se", "lui", "leur"]
+    };
+
+    for (const lang of registeredLanguages()) {
+      const index = morphology(lang);
+      const words = languageRules(lang).functionWords;
+      const leaked = (CLOSED_SETS[lang] ?? []).filter(
+        // Only ones that actually resolve can leak -- an unreachable lemma is
+        // inert either way, and that is the trap this replaces.
+        (lemma) => index[lemma]?.lemmaId === lemma && !words.has(lemma)
+      );
+      expect(leaked, lang).toEqual([]);
+    }
+  });
+
   it("every function word is a real lemma in its own language", () => {
     // A lemma id that does not resolve can never be reached by the check, so
     // listing it is inert and hides the fact that the real one is missing.
