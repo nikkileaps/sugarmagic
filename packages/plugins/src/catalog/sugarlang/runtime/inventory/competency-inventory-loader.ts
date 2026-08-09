@@ -76,14 +76,15 @@ function assertValidInventory(
 }
 
 /**
- * Italian is authored a lesson at a time, so its inventory holds whatever has
- * been written so far -- one lesson today. That is a legitimate state, not a
- * half-built one: `buildCompetencyInventory` emits only the competencies a
- * language has exponents for, and only the lessons those fill.
+ * A language's inventory holds whatever has been authored for it, and a
+ * partly-authored one is a legitimate state rather than a half-built one:
+ * `buildCompetencyInventory` emits only the competencies a language has
+ * exponents for, and only the lessons those fill.
  *
- * The consequence to know about: `prompt-builder` selects competencies by
- * EXACT band, so a learner placed above A1 sees none of these until the higher
- * bands are authored.
+ * Spanish and Italian are both complete -- 635 competencies across 65 lessons,
+ * every band. The consequence to know about while a language is still being
+ * authored: `prompt-builder` selects competencies by EXACT band, so a learner
+ * placed above the highest authored band sees none of them.
  */
 const DEFAULT_INVENTORY_DATA: Partial<Record<string, unknown>> = {
   es: esInventoryData,

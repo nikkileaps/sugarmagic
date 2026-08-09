@@ -26,7 +26,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import XLSX from "xlsx";
 
 export type CEFRBand = "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
 type AtlasPriorSource =

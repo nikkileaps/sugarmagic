@@ -28,18 +28,12 @@
 import { describe, expect, it } from "vitest";
 import esCefrlex from "../../data/languages/es/cefrlex.json";
 import itCefrlex from "../../data/languages/it/cefrlex.json";
+import { FUNCTIONAL_PARTS_OF_SPEECH } from "../../runtime/compile/compile-sugarlang-scene";
 
-/** Kept in step with `FUNCTIONAL_PARTS_OF_SPEECH` in compile-sugarlang-scene. */
-const FUNCTIONAL = new Set([
-  "article",
-  "determiner",
-  "preposition",
-  "pronoun",
-  "conjunction",
-  "auxiliary",
-  "particle",
-  "interjection"
-]);
+// Imported, not copied. This guard exists to prove the parts of speech are
+// sufficient on their own; a second copy of them here could drift from the
+// real one and the guard would go on passing against a list nothing uses.
+const FUNCTIONAL = FUNCTIONAL_PARTS_OF_SPEECH;
 
 type Lemmas = Record<string, { partsOfSpeech: string[] }>;
 const LEMMAS: Record<string, Lemmas> = {

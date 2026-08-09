@@ -48,7 +48,7 @@ import {
  * see tests/compile/quest-essential-stopwords.test.ts for the guard that keeps
  * this sufficient.
  */
-const FUNCTIONAL_PARTS_OF_SPEECH = new Set([
+export const FUNCTIONAL_PARTS_OF_SPEECH = new Set([
   "article",
   "determiner",
   "preposition",

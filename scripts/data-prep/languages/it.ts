@@ -33,9 +33,18 @@ import {
  * Articles, clitic pronouns and the elided forms' bases.
  *
  * Deliberately NOT a translation of the Spanish list. `su` and `tu` are in
- * that one and must not be here: Italian `su` is the preposition "on", and
- * `tu` is the subject pronoun, which the always-target list wants a learner to
- * say out loud rather than treat as filler.
+ * that one and must not be here, for two different reasons:
+ *   `su` is a possessive in Spanish and the preposition "on" in Italian, so it
+ *   carries meaning here and stripping it would lose a real word.
+ *   `tu` is a possessive determiner in Spanish and only the subject pronoun in
+ *   Italian, and an Italian subject pronoun is optional -- saying `tu sei`
+ *   rather than `sei` is a choice that means something, so it is not filler.
+ *
+ * THIS LIST AND always-target.json ARE INDEPENDENT. `mi` and `lei` are on
+ * both, which is not a contradiction: one says a word is not among the things
+ * a phrase teaches, the other says the generator must never render it in
+ * English. A word can be both, and membership in one implies nothing about the
+ * other.
  *
  * LEMMA IDS: the check runs after a token resolves, so a surface that resolves
  * to nothing cannot be excluded here and listing it is inert. `i`, `le`, `vi`

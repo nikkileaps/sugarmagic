@@ -28,8 +28,8 @@ const LEMMAS_BY_LANG: Record<string, Lemmas> = {
   fr: (frCefrlex as { lemmas: Lemmas }).lemmas
 };
 
-/** Every language that ships a list. Adding one extends the guards below
- *  without anyone having to remember to. */
+/** Every language that ships a list. Add a language here when you add its
+ *  always-target.json, and the guards below cover it. */
 const AUTHORED = ["es", "it", "fr"];
 
 /** The ones that leave the subject out of an ordinary sentence, and the one
