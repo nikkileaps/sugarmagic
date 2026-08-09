@@ -1,7 +1,7 @@
 # Domain Terms
 
 Status: active
-Last verified against code: 2026-08-05
+Last verified against code: 2026-08-09
 
 The nouns sugarlang uses, and the distinctions between the ones that sound
 alike. Every definition below cites the type or file that owns it; if the code
@@ -329,6 +329,47 @@ A pre-rendered version of an authored line for a specific language, band and
 posture, baked at compile time and read from cache at runtime. Keyed
 `{ lang, band, contentHash, variantPromptVersion }` -- note there is no learner
 in that key.
+
+A variant is a *derived artifact* (below): the runtime cannot produce one, so
+it has to ship with the game.
+
+### Derived artifact
+
+Data produced from authored content by a compile-time pass that **the player's
+machine cannot reproduce** -- because reproducing it needs Studio, a gateway
+call, and money.
+
+That last clause is the whole term. Everything derived is reproducible in
+principle; what matters is BY WHOM. So the test is one question:
+
+> Can the runtime rebuild this on the player's machine?
+
+**Yes -> it is a cache.** Let it be rebuilt; do not ship it. A compiled scene
+lexicon is this: the runtime has a compiler and the scene content, and builds
+its own (`runtime-services.ts`, `RuntimeCompileScheduler`).
+
+**No -> it is a derived artifact, and it must travel with the game.** Baked
+line variants, scene context models and chunk extractions are all this: each
+comes from a gateway call, and a player's browser makes none.
+
+A derived artifact is an ASSET -- data the player downloads before they can
+play -- and it lives where assets live. The precedent is the baked navmesh:
+produced by a Studio pass, written into the project's `assets/`, referenced
+off the region (`region.navMesh.assetPath`), collected by
+`collectFileBackedAssetPaths` (`packages/domain/src/asset-paths.ts`) and
+shipped. When that collection was missed, NPC pathfinding silently fell back
+to straight lines "even though the bake persisted fine"
+(`packages/testing/src/navmesh-asset-path.test.ts`).
+
+**A derived store can hold authored content, and authored content is never
+disposable.** Correcting a variant by hand writes it into the same cache as
+the machine-made ones, marked `generatedByModel: "manual"`
+(`ui/shell/editor-support.ts`). Treating that store as regenerable destroys
+hand-written work. Provenance on the record is what tells them apart; the
+store's name does not.
+
+The architectural rule this term serves is ADR 005 "Persistence Strata",
+rules 3 and 6 (`docs/adr/005-persistence-strata.md`).
 
 ---
 
