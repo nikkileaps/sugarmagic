@@ -10,8 +10,11 @@ narrowly-scoped investigation then established the ground truth below, three
 stories were split out to `sugarmagic-scene-vocab-o8f`, and a confirming pass
 found four more real issues, now applied.
 
-Two open forks are deliberately NOT resolved here -- when variants enter the
-payload (092.4) and where the bake-coverage check runs (092.5). nikki's call,
+Then nikki corrected the transport: these artifacts ARE assets and belong in
+`assets/`, following the baked-navmesh precedent -- which removes the deploy
+work the earlier drafts feared. Two open forks are deliberately NOT resolved
+here -- when variants enter the artifact set (092.4) and where the
+bake-coverage check runs (092.5). nikki's call,
 2026-08-09: decide each at the top of its own story, with the code in front of
 you, rather than blocking the whole plan on two guesses. Each story below says
 so at the point of the fork. Everything else is executable as written.
@@ -83,45 +86,67 @@ returns a chunk-less lexicon. The in-file comment claims the compile cache
 "survives the mismatch because it can recompile" -- true for lemmas, false for
 chunks.
 
-## The transport
+## The transport: they are assets, and assets already work
 
-`pluginBootPayloads` is a plain `Record<string, unknown>` handed to
-`host.start` (`runtimeHost.ts:326`) -- nothing about it is preview-only.
-`buildBootJsonPayload` simply never emits the key
-(`published-web.ts:103-175`), which the live `boot.json` confirms.
+nikki, 2026-08-09: this is data that must be downloaded to the player's browser
+before they can play. That is the definition of an asset, and `assets/` is the
+concern that owns it. No exception to any rule is needed.
 
-`pluginConfigurations` already reaches production (`published-web.ts:119`; the
-deployed file carries 212 bytes of sugarlang settings). Teach plans already
-persist a derived artifact there via `UpdatePluginConfiguration`
-(`ui/shell/contributions.ts:141-162`) -- though note that precedent is
-Studio-only by its own header: "Nothing in a shipped game reads or writes
-this" (`teach-plan-state.ts:45-47`). The write half is proven; the read half
-is new work.
+**The precedent is the baked navmesh**, which is the same shape exactly: a
+Studio-side bake produces it, it is written into `assets/` as a binary,
+referenced off the region (`region.navMesh.assetPath`), and it ships. Plan
+069.8 built it, and there is a regression test guarding it because when the
+path was NOT collected, "NPC pathfinding silently fall[s] back to
+straight-line after a restart... even though the bake persisted fine"
+(`packages/testing/src/navmesh-asset-path.test.ts:4-9`). Same artifact shape,
+same silent-degradation failure, already solved.
 
-**Caveat to record in 092.1:** `normalizeSugarLangPluginConfig`
-(`config.ts:117+`) returns only declared fields and discards unknown keys, so
-artifacts must be read raw off `context.configuration.config[KEY]`, bypassing
-the plugin's own normalizer.
+**One collector does both jobs.** `collectFileBackedAssetPaths`
+(`domain/src/asset-paths.ts:28`) is "the single collector that decides which
+files re-load into the asset-source store on project open (and ship to
+deployed games)". Adding a source to it gets reload-on-open AND
+ship-to-production from one edit.
 
-### Why not project-directory sidecars yet
+**And deploy already carries them, unconditionally:**
 
-1. **`packages/plugins` cannot write to the project directory** -- deps are
-   mantine, domain, runtime-core, ui, supabase-js, ajv; no `@sugarmagic/io`.
-   Every bake writer lives there. The mask writer is Studio-side, passed down
-   as a callback.
-2. **Transport is not free.** Deploy stages a FIXED list
-   (`github-workflow.ts:481-512`). `git add -A` reaches the game repo
-   (`sugardeploy/host/middleware.ts:2143,2381`) but nothing stages sidecars
-   into the Netlify `dist/`. Also needs a template version bump (`:56`) with a
-   ledger entry (`:97`), a game-repo re-save, and cache headers.
-3. **Correction from round 2:** an earlier draft claimed managed-file drift
-   would halt saving "including boot.json". Wrong -- `project.sgrmagic` and
-   regions are written at `project-lifecycle/index.ts:384-396`, BEFORE the
-   drift check at `:418`, and that early return is unreachable because
-   `drifted` is a subset of `changed` and Studio always passes
-   `overwriteManagedFiles` when `changed > 0` (`App.tsx:561`).
+    if [ -d assets ]; then
+      mkdir -p .sugarmagic/published-web/dist/assets
+      cp -R assets/. .sugarmagic/published-web/dist/assets/
+    fi
 
-Sidecars remain right eventually, on ADR 005 grounds. Deferred with a trigger.
+(`github-workflow.ts:509-512`.) No workflow change, no
+`SUGARDEPLOY_WORKFLOW_TEMPLATE_VERSION` bump, no ledger entry, no game-repo
+re-save. Earlier drafts of this plan listed all four as the cost of shipping
+files; they are the cost of shipping files to a NEW location, not to
+`assets/`.
+
+**Cache headers come out right for free.** `/assets/*` is `immutable,
+max-age=31536000` (`published-web.ts:200-212`), which is correct when the
+filename carries the content hash -- and the hash is already the cache key the
+bake computes.
+
+### What is actually left to build
+
+One thing: the bake cannot write files. Every bake writer lives in
+`packages/plugins`, whose dependencies are mantine, domain, runtime-core, ui,
+supabase-js and ajv -- no `@sugarmagic/io`. Studio has that capability and
+already hands it down as a callback to the mask painter
+(`apps/studio/src/App.tsx:2160,2378,2431` -> `writeBlobFile`/`writeMaskFile`).
+The same move works here.
+
+### The config slot is NOT the answer, and the earlier drafts were wrong
+
+Rounds 1 and 2 of epic-review moved this plan onto
+`pluginConfigurations[sugarlang]`, reasoning that it was the only transport
+already reaching production. That was true and beside the point: it puts
+derived output inside `project.sgrmagic` AND inside the file the game fetches
+before it renders anything, which is the exact failure ADR 005's Context
+names -- "'One source of truth' is often misread as 'one giant file'. That
+leads to editor bloat leaking into runtime load paths" (`:8`). Recorded so the
+reasoning is not rediscovered and repeated.
+
+The teach-plan document stays where it is (`teach-plan-state.ts`); it is small
+and Studio-only. This is about the artifacts a PLAYER needs.
 
 ## Stories
 
@@ -129,65 +154,80 @@ Ordered so the cheapest real win lands first. 092.3 alone gives the deployed
 Teacher its scene concepts -- though see that story: the cheap half is the
 reading, not the getting.
 
-### 092.1 Amend ADR 005 with the travel rule
-Amend in place; write no competing taxonomy. Content: derived projections the
-RUNTIME cannot rebuild must travel with the game, because a rebake needs
-Studio, a gateway and money. Name the transport, the untyped-channel caveat
-above, and the tension with ADR 005's own Context ("'One source of truth' is
-often misread as 'one giant file'... editor bloat leaking into runtime load
-paths", `:8`) with sidecars named as the end state.
+### 092.1 Record the rule in ADR 005
+Amend in place; write no competing taxonomy. One rule, one clarification:
+
+**A derived artifact the PLAYER's machine cannot rebuild is an asset.** ADR
+005 rule 3 calls derived runtime projections disposable, which is too loose:
+losing one costs a rebake, and a rebake needs Studio, a gateway and money, so
+a player can never perform it. Anything in that class travels with the game
+the way the baked navmesh already does (Plan 069.8).
+
+Also record: hand-edited variants (`saveVariant` writes
+`generatedByModel: "manual"`, `editor-support.ts:985-997`) are AUTHORED
+content sitting in a derived store, and must never live only there.
+
+**Do NOT record a "config slot" rule.** Earlier drafts of this plan routed
+artifacts through `pluginConfigurations`; that is superseded, and the reasoning
+against it is in the transport section above so it is not rediscovered.
 **Exit:** ADR 005 amended in place; sugarlang storage docs link to it; no
-second taxonomy document exists.
+second taxonomy document exists; the amendment cites the navmesh precedent.
 
-### 092.2 Put the sugarlang payload into boot.json
-`buildBootJsonPayload` emits `pluginBootPayloads.sugarlang`, sourced from the
-plugin config slot written at bake time. This is the transport every story
-below rides. Payload shape stays `SugarlangPreviewBootPayload` so preview and
-prod share one contract; extend the type where a story below requires it
-(variants), rather than inventing a parallel shape.
+### 092.2 The bake writes artifact files into `assets/`
+Scene context models and variants are written as files under the project's
+`assets/`, named by their content hash, and registered through
+`collectFileBackedAssetPaths` (`domain/src/asset-paths.ts:28`) exactly as
+`region.navMesh.assetPath` is. That one registration gets both jobs --
+re-load on project open, and ship to the deployed game -- and deploy carries
+`assets/` wholesale already (`github-workflow.ts:509-512`), so there is no
+workflow work.
 
-Bake must persist without an explicit save -- `UpdatePluginConfiguration` only
-sets `isDirty` (`authoring-session/index.ts:1338`) and `requestSave` is absent
-from `PluginDesignSectionRenderProps` (`packages/plugins/src/shell/index.ts:79-101`).
-Today IndexedDB covers a tab close; after this it must not lose gateway-funded
-work. Batch to ONE write per bake: every command pushes a whole-project
-checkpoint onto an undo stack that is never truncated (32 sites), so per-band
-writes would bury Ctrl+Z. Serialization must be deterministic or every save
-pops the overwrite dialog (`App.tsx:519-545`).
-**CAPTURE AT EXTRACTION TIME, NEVER RE-DERIVE AT DEPLOY.** The obvious move --
-reuse `buildSugarlangPreviewBootPayload` to assemble the payload -- is a trap.
-That builder looks each model up by `{contentHash, supportLanguage,
-promptVersion}` (`runtime/compile/preview-boot.ts:81-86`), so any edit since
-the last Rebuild misses and ships nothing. That is `docs/backlog/013`, found in
-play 2026-07-31: "Editing any authored content in a scene changes its content
-hash, so the cached model no longer matches and the runtime reports it
-absent." The hash is also impure -- assembly resolves lore through the gateway
-first -- so a run without a gateway URL silently ships zero. Write artifacts
-into the config slot where they are PRODUCED, with the hash already in hand.
+**What this story actually builds:** a way for the bake to write a file.
+`packages/plugins` has no `@sugarmagic/io`; Studio does, and already passes
+that capability down as a callback to the mask painter
+(`App.tsx:2160,2378,2431`). Follow that shape.
 
-Pattern to copy for the single write: `editor-support.ts:745` fires
-`onTeachPlanDocument` exactly once after the scheduler stops, and
-`contributions.ts:140-162` turns it into one command. A third save option the
-list above omits: `plugins/sdk.ts:36` + `App.tsx:584` already implement a
-silent save for workspace views.
+**Write the artifact where it is PRODUCED, with its hash in hand.** Do not
+re-derive the set later by looking models up by
+`{contentHash, supportLanguage, promptVersion}` -- that is
+`buildSugarlangPreviewBootPayload` (`runtime/compile/preview-boot.ts:81-86`),
+and any edit since the last Rebuild misses it and ships nothing. That is
+`docs/backlog/013`, found in play 2026-07-31: "Editing any authored content in
+a scene changes its content hash, so the cached model no longer matches and
+the runtime reports it absent." The lookup is also impure (it resolves lore
+through the gateway), so a run without a gateway URL silently ships zero.
+
+Content-hashed filenames are required, not cosmetic: `/assets/*` ships
+`immutable, max-age=31536000` (`published-web.ts:200-212`), so a reused
+filename would serve a stale artifact for a year.
+
+IndexedDB is demoted to a read cache. Studio's reader must rehydrate from the
+files -- `readSugarlangCompileStatus` derives everything from IndexedDB
+`listEntries()` (`editor-support.ts:267-299,372-374`) and would otherwise
+report a fresh browser as un-baked. Hand-edited variants must survive the
+same trip.
+
+One write per bake: `editor-support.ts:745` fires `onTeachPlanDocument` exactly
+once after the scheduler stops -- copy that shape rather than writing per band.
 **Depends on:** 092.1.
-**Exit:** a deployed `boot.json` contains `pluginBootPayloads.sugarlang`; bake,
-close the tab without saving, reopen -- artifacts still present; one bake
-produces one undo entry; two consecutive saves are byte-identical; and editing
-a scene after a Rebuild still ships that scene's artifacts (the backlog-013
-case).
+**Exit:** bake, clear ALL browser storage, reopen the project -- Studio reports
+the artifacts present and Rebuild finds nothing stale; the files are in
+`assets/` and survive a fresh clone; a hand-edited variant survives the same
+test; a scene edited AFTER its last Rebuild still produces artifacts; two
+consecutive bakes of unchanged content produce byte-identical files.
 
 ### 092.3 Scene contexts reach the deployed Teacher
-**CONSUMPTION is free; ASSEMBLY is not.** Once a model is in the payload it
-travels whole and is looked up by `sceneId` with no hash and no workspace
+**CONSUMPTION is free; PRODUCTION is not.** Once a model is in the artifact
+set it travels whole and is looked up by `sceneId` with no hash and no workspace
 involved -- bake writes `sceneId: input.region.identity.id`
 (`scene-traversal.ts:642`), the runtime reads the same
 (`runtime-core/src/spatial/index.ts:417`), seeding is a plain map
 (`runtime-cache-state.ts:83`), and the Teacher asks for it by id
-(`teacher-middleware.ts:361` -> `runtime-services.ts:421`).
+(`teacher-middleware.ts:361` -> `runtime-services.ts:421`). The runtime fetches
+the artifact file the way it fetches any other asset.
 
-But GETTING a model into the payload goes through the hash lookup 092.2 warns
-about, and that failure is invisible -- the only signal is a `console.warn`
+But GETTING a model into the artifact set goes through the hash lookup 092.2
+warns about, and that failure is invisible -- the only signal is a `console.warn`
 (`preview-boot.ts:93`), and the HUD says "(not built)" whether the build never
 ran or the key merely disagreed. So this story's real work is proving the
 model is there, not proving the Teacher can read it.
@@ -202,7 +242,7 @@ longer describes production.
 ### 092.4 Variants reach the deployed game
 Chain D is structurally preview-only: it reads Studio's IndexedDB by
 `studioWorkspaceId`, and a deployed origin has no such database. Variants must
-ride the payload and be served from `MemoryVariantCache`
+ship as files (092.2) and be served from `MemoryVariantCache`
 (`variant-cache.ts:85`), which already implements the same interface.
 
 Both construction sites gate on `studioWorkspaceId` and must be handled:
@@ -211,15 +251,15 @@ per-conversation cache (`:915-917`). Preview keeps its live IndexedDB read so
 a hand-edited variant still appears with no save
 (`variant-popover-connected.tsx:43-79`).
 
-**Resolve before Lock: when do variants enter the payload?** They have no bulk
+**When do variants enter the artifact set?** They have no bulk
 bake -- `docs/backlog/007`: "bulk variant baking has never existed in
 production" -- so they arrive from per-node popover clicks
 (`contributions.ts:274,286` -> `editor-support.ts:847-848`). Writing config on
 every click hits exactly the undo-checkpoint problem 092.2 exists to avoid, and
 a deploy-time sweep needs `listEntries()` plus per-key `get()` because the
 interface has no bulk read (`variant-cache.ts:55-61`). Pick a collection
-moment. **DECIDE THIS FIRST, before writing any of this story** -- it changes
-what the story is.
+moment -- most likely a sweep at bake/save time, since a click cannot write a
+file on its own. **DECIDE THIS FIRST, before writing any of this story.**
 
 If a bulk bake IS added, size the seeded cache explicitly:
 `MemoryVariantCache` defaults to `maxEntries: 400` and `set()` evicts LRU
@@ -317,11 +357,6 @@ finds nothing; both comments describe shipped behavior.
 
 ## Deferred, with triggers
 
-- **Sidecar artifact files.** Right eventually on ADR 005 grounds. **Trigger:**
-  when `boot.json` or `project.sgrmagic` growth from artifacts is what a player
-  or author waits on. Cost: GHA staging step, template bump + ledger entry,
-  game-repo re-save, cache headers (`/assets/*` is `immutable,
-  max-age=31536000`, and only `.assetSources` gets the `?v=<sha>` stamp).
 - **Episode-scoping the published artifact.** `sugarmagic-boot-scoping-j24`.
   Must key on (region, scene) -- `sceneId` is the REGION id
   (`scene-traversal.ts:642`).
