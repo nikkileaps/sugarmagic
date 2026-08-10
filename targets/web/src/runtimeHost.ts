@@ -119,6 +119,7 @@ import {
   type RuntimeBannerContribution,
   createPlayerVisualController,
   createSessionHudCard,
+  BOOT_SYNC_TIMEOUT_MS,
   createSyncEngine,
   registerActiveGameId,
   registerActiveIdentityProvider,
@@ -1324,6 +1325,8 @@ export function createWebRuntimeHost(
   // on teardown so a disposed host does not keep reconciling in the
   // background against an account nobody is playing as.
   let accountDataSync: SyncEngine | null = null;
+  /** The first reconcile, awaited by boot before the game becomes playable. */
+  let firstSyncPass: Promise<void> | null = null;
   let billboardAssetRegistry: BillboardAssetRegistry | null = null;
   let billboardRenderer: BillboardRenderer | null = null;
   let textBillboardRenderer: TextBillboardRenderer | null = null;
@@ -1541,6 +1544,7 @@ export function createWebRuntimeHost(
     identityUnsubscribe = null;
     accountDataSync?.stop();
     accountDataSync = null;
+    firstSyncPass = null;
     userStore.set(null);
     latestAutosaveStore.set(null);
 
@@ -2046,7 +2050,9 @@ export function createWebRuntimeHost(
           : null,
         ownerWindow
       });
-      accountDataSync.start();
+      // Kicked off HERE and awaited further down, so the first pull overlaps
+      // asset preloading instead of being serialised behind it.
+      firstSyncPass = accountDataSync.start();
       // Story 47.10 follow-up — track the resolved user live so the
       // Session debug HUD card's User / Anon rows reflect sign-in /
       // sign-out instead of being frozen at the boot-time user.
@@ -2082,6 +2088,33 @@ export function createWebRuntimeHost(
     const resolvedSavedGame: GameSave | null =
       state.savedGame ??
       (state.savedGamePromise ? await state.savedGamePromise : null);
+
+    // Plan 092.6 — a returning player's data has to be HERE before they can do
+    // anything with it. Left to the background interval, the first pull raced
+    // the player: reach a conversation before it landed and the game read an
+    // empty store, taught words already known, and corrected itself minutes
+    // later with no sign anything had been wrong. "Wait a few seconds before
+    // talking to anyone" is not a thing a player can be asked to do.
+    //
+    // Bounded, because a backend that is down must not hold someone out of a
+    // game that is otherwise ready. Anything arriving after the deadline still
+    // arrives, just later -- which is the ordinary background case.
+    if (firstSyncPass) {
+      const pending = firstSyncPass;
+      firstSyncPass = null;
+      await Promise.race([
+        pending,
+        new Promise<void>((resolve) => {
+          ownerWindow.setTimeout(() => {
+            console.warn(
+              `[web-runtime] first sync did not finish within ${BOOT_SYNC_TIMEOUT_MS}ms; ` +
+                "starting anyway. Data already on this device is used until it lands."
+            );
+            resolve();
+          }, BOOT_SYNC_TIMEOUT_MS);
+        })
+      ]);
+    }
 
     // Plan 060 §060.1 — preload every file-backed asset into the
     // HTTP cache BEFORE world assembly, so the loading screen

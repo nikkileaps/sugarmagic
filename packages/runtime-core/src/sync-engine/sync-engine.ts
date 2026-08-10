@@ -59,6 +59,18 @@ export const SYNC_MAX_INTERVAL_MS = 300_000;
 /** Records per push or pull request. */
 export const SYNC_BATCH = 250;
 
+/**
+ * How long boot waits for a player's data before giving up and letting them
+ * play anyway.
+ *
+ * Waiting is right -- a returning player who reaches a conversation before
+ * their words arrive gets taught things they already know. Waiting FOREVER is
+ * not: a backend that is down or slow would leave them staring at a loading
+ * screen with a perfectly playable game behind it. So the wait is bounded, and
+ * what lands after the deadline still lands, just later.
+ */
+export const BOOT_SYNC_TIMEOUT_MS = 8000;
+
 export interface SyncResult {
   pushed: number;
   pulled: number;
@@ -70,8 +82,17 @@ export interface SyncResult {
 export interface SyncEngine {
   /** One pass over every registered store. Never throws. */
   syncNow(reason: string): Promise<SyncResult>;
-  /** Begin the interval and the browser triggers. */
-  start(): void;
+  /**
+   * Begin the interval and the browser triggers, and hand back the FIRST
+   * pass so boot can wait for it.
+   *
+   * A returning player's data has to be in place before they can do anything
+   * with it. Left to the interval, the first pull races the player: reach a
+   * conversation before it lands and the game reads an empty store, teaches
+   * words already known, and then quietly corrects itself later. Waiting is
+   * the boot screen's job, which is why it is handed back rather than kept.
+   */
+  start(): Promise<void>;
   stop(): void;
 }
 
@@ -241,14 +262,15 @@ export function createSyncEngine(
   return {
     syncNow,
 
-    start() {
+    async start() {
       if (!stopped) return;
       stopped = false;
       ownerWindow?.addEventListener("online", onOnline);
       ownerWindow?.addEventListener("visibilitychange", onVisibility);
-      // A first pass straight away: signing in is the moment a returning
-      // player most wants their own data back.
-      void run("started");
+      // Awaited by the caller, not fired and forgotten: this pass is what
+      // brings a returning player's data back, and everything after it is
+      // wrong until it lands.
+      await run("started");
     },
 
     stop() {

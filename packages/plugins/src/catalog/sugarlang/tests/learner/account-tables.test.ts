@@ -102,16 +102,104 @@ describe("092.6.3 - sugarlang's tables have real columns", () => {
   });
 });
 
+describe("092.6.4 - the learner core round-trips completely", () => {
+  it("THE ONE THAT MATTERS: every field the profile needs comes back", async () => {
+    // Two were missing once -- the mapping was forced through with a double
+    // cast, so the compiler could not object -- and the first conversation on
+    // a second device crashed reading `.map` of undefined.
+    const row = {
+      record_key: "user:player:es:en",
+      target_language: "es",
+      support_language: "en",
+      estimated_cefr_band: "B1",
+      assessment_status: "evaluated",
+      evaluated_cefr_band: "B1",
+      cefr_confidence: 0.8,
+      evaluated_at: 1_700_000_000_000,
+      cefr_posterior: { A1: { alpha: 4, beta: 2 } }
+    };
+    const core = SUGARLANG_LEARNER_TABLE.fromColumns(row);
+
+    expect(core.estimatedCefrBand).toBe("B1");
+    expect(core.assessment.status).toBe("evaluated");
+    // The two that were missing:
+    expect(Array.isArray(core.sessionHistory)).toBe(true);
+    expect(core.cefrPosterior).toBeDefined();
+  });
+
+  it("the evidence behind the band survives, not just the band", () => {
+    // Without it a returning player holds a level with nothing supporting it,
+    // and the next observation updates a fresh prior.
+    const posterior = SUGARLANG_LEARNER_TABLE.toColumns({
+      cefrPosterior: { A1: { alpha: 7, beta: 3 } },
+      assessment: {}
+    } as never).cefr_posterior as Record<string, { alpha: number }>;
+    expect(posterior.A1!.alpha).toBe(7);
+
+    const back = SUGARLANG_LEARNER_TABLE.fromColumns({
+      cefr_posterior: { A1: { alpha: 7, beta: 3 } }
+    });
+    expect(back.cefrPosterior.A1).toEqual({ alpha: 7, beta: 3 });
+  });
+
+  it("a band missing from the stored posterior is filled in, not left undefined", () => {
+    // It arrives as json from a network. A gap would surface later as
+    // arithmetic on undefined rather than as a bad read here.
+    const back = SUGARLANG_LEARNER_TABLE.fromColumns({ cefr_posterior: {} });
+    for (const band of ["A1", "A2", "B1", "B2", "C1", "C2"]) {
+      expect(back.cefrPosterior[band as keyof typeof back.cefrPosterior]).toEqual({
+        alpha: 1,
+        beta: 1
+      });
+    }
+  });
+
+  it("junk in a text column reads as the SAFEST value, not as itself", () => {
+    // Over-estimating a learner teaches them things they cannot follow.
+    const back = SUGARLANG_LEARNER_TABLE.fromColumns({
+      estimated_cefr_band: "not-a-band",
+      assessment_status: "nonsense"
+    });
+    expect(back.estimatedCefrBand).toBe("A1");
+    expect(back.assessment.status).toBe("unassessed");
+  });
+
+  it("a sitting does not travel between devices", () => {
+    const back = SUGARLANG_LEARNER_TABLE.fromColumns({});
+    expect(back.currentSession).toBeNull();
+    expect(back.sessionHistory).toEqual([]);
+  });
+});
+
 describe("092.6.3 - the migration", () => {
   const sql = SUGARLANG_ACCOUNT_MIGRATIONS.map((m) => m.sql).join("\n");
 
-  it("THE ONE THAT MATTERS: ships as its own numbered file", () => {
+  it("THE ONE THAT MATTERS: every change is its own numbered file, in order", () => {
     // `supabase db push` skips anything it has already applied, comparing only
     // the filename version. Editing an earlier file changes nothing and
-    // reports success.
-    expect(SUGARLANG_ACCOUNT_MIGRATIONS).toHaveLength(1);
-    expect(SUGARLANG_ACCOUNT_MIGRATIONS[0]!.filename).toMatch(/^\d{4}_.*\.sql$/);
-    expect(SUGARLANG_ACCOUNT_MIGRATIONS[0]!.filename).not.toContain("0001");
+    // reports success -- so a schema change has to arrive as a NEW file that
+    // sorts after the ones already out there.
+    const names = SUGARLANG_ACCOUNT_MIGRATIONS.map((m) => m.filename);
+
+    for (const name of names) {
+      expect(name).toMatch(/^\d{4}_.*\.sql$/);
+      // 0001 belongs to the account plugin's own schema.
+      expect(name.startsWith("0001")).toBe(false);
+    }
+    expect(new Set(names).size).toBe(names.length);
+    expect([...names].sort()).toEqual(names);
+  });
+
+  it("a column added later comes as a new file, not an edit to an old one", () => {
+    // The posterior was added after 0002 had been applied. Putting it there
+    // would have been a silent no-op on every project that already ran it.
+    const first = SUGARLANG_ACCOUNT_MIGRATIONS[0]!;
+    expect(first.sql).not.toContain("cefr_posterior");
+
+    const later = SUGARLANG_ACCOUNT_MIGRATIONS.slice(1)
+      .map((m) => m.sql)
+      .join("\n");
+    expect(later).toContain("add column if not exists cefr_posterior");
   });
 
   it("creates both tables with the four columns the mechanism requires", () => {

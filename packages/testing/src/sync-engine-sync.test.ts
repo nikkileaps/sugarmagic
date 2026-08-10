@@ -16,6 +16,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  BOOT_SYNC_TIMEOUT_MS,
   SYNC_MAX_INTERVAL_MS,
   createSyncEngine,
   createMemoryRecordStorage,
@@ -141,6 +142,63 @@ describe("092.6.3 - a player's data reaches their other devices", () => {
     const result = await createSyncEngine({ remote, ownerWindow: null }).syncNow("t");
     expect(result.pushed).toBe(1);
     expect(await a.adapter.readPending(10)).toHaveLength(0);
+  });
+});
+
+describe("092.6 - a returning player's data is there before they can use it", () => {
+  it("THE ONE THAT MATTERS: start() does not resolve until the first pull has landed", async () => {
+    // Left to the background interval this raced the player: reach a
+    // conversation before the pull landed and the game read an empty store,
+    // taught words already known, then corrected itself minutes later with no
+    // sign anything had been wrong. Boot awaits this, so there is no window.
+    const { remote, seed } = fakeRemote();
+    seed({
+      key: "already-known",
+      columns: { lemma: "already-known" },
+      deleted: false,
+      updatedAt: new Date(5_000).toISOString()
+    });
+    const a = makeStore("user-returning");
+
+    // The gate is built BEFORE the engine can reach it, so releasing it is
+    // never a no-op that leaves the pull hanging.
+    let releasePull!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releasePull = resolve;
+    });
+    let resolved = false;
+    const slow: RemoteRecordStorageAdapter = {
+      pull: async (key, table, since, limit) => {
+        await gate;
+        return remote.pull(key, table, since, limit);
+      },
+      push: remote.push
+    };
+
+    const engine = createSyncEngine({ remote: slow, ownerWindow: null });
+    const started = engine.start().then(() => {
+      resolved = true;
+    });
+
+    // The pull is still in flight, so boot must still be waiting. Several
+    // ticks, because the pass pushes before it pulls.
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(resolved).toBe(false);
+    expect(await a.store.get("already-known")).toBeUndefined();
+
+    releasePull();
+    await started;
+
+    expect(resolved).toBe(true);
+    expect(await a.store.get("already-known")).toEqual({ lemma: "already-known" });
+    engine.stop();
+  });
+
+  it("a backend that never answers does not hold the player out of the game", async () => {
+    // Waiting is right; waiting for ever is not. The bound is what boot races
+    // the first pass against.
+    expect(BOOT_SYNC_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(BOOT_SYNC_TIMEOUT_MS).toBeLessThanOrEqual(15_000);
   });
 });
 

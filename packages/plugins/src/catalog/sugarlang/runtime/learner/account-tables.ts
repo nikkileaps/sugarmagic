@@ -35,7 +35,11 @@
  */
 
 import type { RemoteTableSpec } from "@sugarmagic/runtime-core";
-import type { LemmaCard } from "../types";
+import type { CEFRBand, LemmaCard } from "../types";
+import type {
+  CefrPosterior,
+  LearnerAssessment
+} from "./learner-profile";
 import type { PersistedLearnerProfileCore } from "./persistence";
 
 const WORD_TABLE_NAME = "sugarlang_words";
@@ -47,6 +51,41 @@ function num(value: unknown, fallback = 0): number {
 
 function nullableNum(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+const BANDS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
+
+/** A row is data from a network, so its text columns are checked rather than
+ *  trusted. An unrecognised band reads as the lowest one: over-estimating a
+ *  learner teaches them things they cannot follow. */
+function asBand(value: unknown): CEFRBand {
+  return (BANDS as readonly string[]).includes(String(value))
+    ? (value as CEFRBand)
+    : "A1";
+}
+
+function asAssessmentStatus(value: unknown): LearnerAssessment["status"] {
+  return value === "estimated" || value === "evaluated" ? value : "unassessed";
+}
+
+/**
+ * The stored posterior, with every band present.
+ *
+ * Filled in per band rather than trusted wholesale: this arrives as json from
+ * a network, and a missing band would surface later as arithmetic on
+ * `undefined` rather than as a bad read here.
+ */
+function asPosterior(value: unknown): CefrPosterior {
+  const stored = (value ?? {}) as Record<string, unknown>;
+  const posterior = {} as CefrPosterior;
+  for (const band of BANDS) {
+    const weight = (stored[band] ?? {}) as Record<string, unknown>;
+    posterior[band] = {
+      alpha: num(weight.alpha, 1),
+      beta: num(weight.beta, 1)
+    };
+  }
+  return posterior;
 }
 
 /**
@@ -114,23 +153,49 @@ export const SUGARLANG_LEARNER_TABLE: RemoteTableSpec<PersistedLearnerProfileCor
       assessment_status: core.assessment.status,
       evaluated_cefr_band: core.assessment.evaluatedCefrBand,
       cefr_confidence: core.assessment.cefrConfidence,
-      evaluated_at: core.assessment.evaluatedAtMs
+      evaluated_at: core.assessment.evaluatedAtMs,
+      // THE EVIDENCE BEHIND THE BAND, and the one thing here that is not a
+      // scalar. It is a fixed set of weights per level, read and rewritten
+      // whole and never queried by, so a single json column is the honest
+      // shape -- unlike the word table, where every number is something the
+      // teacher asks questions about.
+      //
+      // Dropping it would leave a returning player holding a level with
+      // nothing supporting it: the next thing they did would update a fresh
+      // prior, quietly discarding everything that produced the estimate.
+      cefr_posterior: core.cefrPosterior
     }),
 
-    fromColumns: (row) =>
-      ({
-        learnerId: String(row.record_key ?? ""),
-        targetLanguage: String(row.target_language ?? ""),
-        supportLanguage: String(row.support_language ?? ""),
-        estimatedCefrBand: (row.estimated_cefr_band ?? "A1") as never,
-        assessment: {
-          status: (row.assessment_status ?? "unassessed") as never,
-          evaluatedCefrBand: (row.evaluated_cefr_band ?? null) as never,
-          cefrConfidence: num(row.cefr_confidence),
-          evaluatedAtMs: nullableNum(row.evaluated_at)
-        },
-        currentSession: null
-      }) as unknown as PersistedLearnerProfileCore
+    // NO CAST HERE, DELIBERATELY. This was written `as unknown as` once, which
+    // told the compiler to trust a value missing two required fields. It built,
+    // shipped, and crashed the first conversation on a second device --
+    // something read `.map` on the array that was never there. The type is the
+    // only thing standing between a column list and a runtime crash, so it has
+    // to be allowed to do its job.
+    fromColumns: (row): PersistedLearnerProfileCore => ({
+      learnerId: String(row.record_key ?? "") as PersistedLearnerProfileCore["learnerId"],
+      targetLanguage: String(row.target_language ?? ""),
+      supportLanguage: String(row.support_language ?? ""),
+      estimatedCefrBand: asBand(row.estimated_cefr_band),
+      assessment: {
+        status: asAssessmentStatus(row.assessment_status),
+        evaluatedCefrBand: row.evaluated_cefr_band
+          ? asBand(row.evaluated_cefr_band)
+          : null,
+        cefrConfidence: num(row.cefr_confidence),
+        evaluatedAtMs: nullableNum(row.evaluated_at)
+      },
+      cefrPosterior: asPosterior(row.cefr_posterior),
+      // Both describe ONE sitting, and a sitting does not travel. `currentSession`
+      // belongs to the tab that is open; `sessionHistory` is a log that grows
+      // without bound and nothing reads across devices today. Carrying either
+      // would mean a second machine inheriting a session it was not present for.
+      //
+      // History is worth keeping eventually -- see the ticket on truncating or
+      // compacting it -- but silently syncing an unbounded log is not the way in.
+      currentSession: null,
+      sessionHistory: []
+    })
   };
 
 /**
@@ -226,6 +291,26 @@ export const SUGARLANG_ACCOUNT_MIGRATIONS = [
         "  for each row execute function public.sugarlang_touch_updated_at();",
         ""
       ])
+    ].join("\n")
+  },
+  {
+    // A SEPARATE FILE because 0002 has already been applied somewhere, and the
+    // CLI skips anything it has a record of -- editing 0002 would change
+    // nothing and report success. Every schema change from here gets its own
+    // numbered file.
+    filename: "0003_sugarlang_learner_posterior.sql",
+    sql: [
+      "-- The evidence behind a learner's level. Without it a returning player",
+      "-- holds a band with nothing supporting it, and the next thing they do",
+      "-- updates a fresh prior -- quietly discarding how the estimate was",
+      "-- reached.",
+      "--",
+      "-- json rather than columns: it is a fixed set of weights per level,",
+      "-- read and rewritten whole and never queried by. The word table is the",
+      "-- opposite case and gets real columns.",
+      `alter table public.${LEARNER_TABLE_NAME}`,
+      "  add column if not exists cefr_posterior jsonb;",
+      ""
     ].join("\n")
   }
 ];
