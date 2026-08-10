@@ -16,7 +16,7 @@
  */
 
 import "fake-indexeddb/auto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import {
   assertAccountScopedLearnerId,
   IndexedDBCardStore
@@ -24,6 +24,14 @@ import {
 import type { LemmaCard } from "../../runtime/types";
 import { createTeachRecordStore } from "../../runtime/learner/teach-record-store";
 import { createEncounterDebtLedger } from "../../runtime/learner/encounter-debt-ledger";
+
+import { registerActiveGameId } from "@sugarmagic/runtime-core";
+
+// Storage on a player's device is named for the game they are playing, and the
+// namer refuses to build a name without one -- a database with no game in its
+// name is shared by every game on the origin. The host registers this from the
+// boot payload in a real run.
+beforeEach(() => registerActiveGameId("test-game"));
 
 function card(lemmaId: string): LemmaCard {
   return {

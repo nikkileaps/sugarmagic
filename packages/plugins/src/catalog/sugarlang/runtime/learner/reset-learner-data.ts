@@ -133,7 +133,10 @@ export async function resetSugarlangLearnerDatabases(
     .filter(
       (name): name is string =>
         typeof name === "string" &&
-        (name.startsWith(CARD_STORE_DB_NAME_PREFIX) ||
+        // CONTAINS, not startsWith: a learner database name leads with the
+        // GAME id now, so the plugin's segment sits in the middle. Matching
+        // on the prefix would silently delete nothing.
+        (name.includes(CARD_STORE_DB_NAME_PREFIX) ||
           name.startsWith(TELEMETRY_DB_NAME))
     );
 

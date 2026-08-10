@@ -444,13 +444,26 @@ Sync runs on its OWN cadence and on triggers (sign-in, reconnect, tab hidden),
 never on the autosave heartbeat -- that path stringifies its whole payload
 every 5s to detect change (`useAutosave.ts:124-136`) and must stay small.
 
-The remote table is generic -- keyed by account, plugin, store and record --
-with row-level security scoping every row to its owner, and no plugin named in
-it. It is emitted as a migration by the deploy and applied by the Apply
-Migration button; sugarmagic never writes rows to Supabase itself. Note
-`deployment/supabase.ts:29` hardcodes `sugarprofile` to gate migration
-generation, so adding a table there extends an existing coupling rather than
-creating one -- record it, do not fix it here.
+EACH PLUGIN OWNS ITS OWN TABLE, with real typed columns, and ships the
+migration that creates it. The mechanism requires four columns of any such
+table -- `user_id` (what row-level security scopes on), `record_key`,
+`deleted`, and a trigger-stamped `updated_at` -- and the plugin supplies the
+rest. One shared table holding every plugin's data as opaque JSON was the
+first attempt and it was wrong: nothing could be indexed, constrained, or
+asked a question. "How many words at this band does this player know" has to
+be answerable by the database, not by pulling every row into the browser.
+
+Core stays free of plugin names because the remote implementation is HANDED a
+table rather than choosing one, and the deploy collects migrations by
+iterating enabled plugins.
+
+MIGRATIONS ARE NEW NUMBERED FILES, NEVER EDITS TO AN EARLIER ONE. `supabase
+db push` records what it has applied by filename version and skips the rest --
+"only the timestamps are compared" -- so editing a file a project already ran
+changes nothing and reports success. Note `deployment/supabase.ts:29`
+hardcodes `sugarprofile` to gate migration generation at all; that is an
+existing coupling this extends rather than creates.
+
 **Depends on:** 092.6.2.
 **Exit:** a record written on browser A appears on browser B for the same
 account after a sync, and does not appear for a different account. A delete on
@@ -504,6 +517,16 @@ names the code it covered.
 finds nothing; both comments describe shipped behavior.
 
 ## Deferred, with triggers
+
+- **Per-player data scoped by something other than a player.** The sync engine
+  keys records on the player, deliberately. Widening that field to a
+  general-purpose scope was considered and rejected: it works on the device,
+  where it is only part of a database name, and cannot work in the database,
+  whose isolation rule is "you may only read rows whose user_id is your
+  account". **Trigger:** something genuinely needs per-chapter or per-region
+  records. **Then:** add a column to that plugin's table plus a matching
+  security rule -- not a wider key. The note lives on `RecordStoreKey.userId`
+  too, which is where someone will actually be standing when they need it.
 
 - **Episode-scoping the published artifact.** `sugarmagic-boot-scoping-j24`.
   Must key on (region, scene) -- `sceneId` is the REGION id

@@ -35,6 +35,7 @@ import {
   assertAccountScopedLearnerId,
   CARD_STORE_DB_NAME_PREFIX
 } from "./card-store";
+import { gameScopedStorageName } from "@sugarmagic/runtime-core";
 
 export const TARGET_DEBT_ENCOUNTERS = 10;
 
@@ -300,5 +301,5 @@ export function createEncounterDebtLedger(learnerId: string): EncounterDebtLedge
   if (typeof indexedDB === "undefined") {
     return new MemoryEncounterDebtLedger();
   }
-  return new IndexedDBEncounterDebtLedger(`${ENCOUNTER_DEBT_DB_NAME_PREFIX}${learnerId}`);
+  return new IndexedDBEncounterDebtLedger(gameScopedStorageName(ENCOUNTER_DEBT_DB_NAME_PREFIX, learnerId));
 }

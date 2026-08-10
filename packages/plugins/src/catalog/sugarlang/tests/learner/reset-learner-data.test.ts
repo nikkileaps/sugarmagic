@@ -17,7 +17,7 @@
 
 import "fake-indexeddb/auto";
 import { IDBFactory } from "fake-indexeddb";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 import {
   CARD_STORE_DB_NAME_PREFIX,
   IndexedDBCardStore
@@ -26,6 +26,14 @@ import { resetSugarlangLearnerDatabases } from "../../runtime/learner/reset-lear
 import { TEACH_RECORD_DB_NAME_PREFIX } from "../../runtime/learner/teach-record-store";
 import { TELEMETRY_DB_NAME } from "../../runtime/telemetry/telemetry";
 import { createLemmaCard } from "./test-helpers";
+
+import { registerActiveGameId } from "@sugarmagic/runtime-core";
+
+// Storage on a player's device is named for the game they are playing, and the
+// namer refuses to build a name without one -- a database with no game in its
+// name is shared by every game on the origin. The host registers this from the
+// boot payload in a real run.
+beforeEach(() => registerActiveGameId("test-game"));
 
 function openRawDatabase(
   factory: IDBFactory,
@@ -118,7 +126,7 @@ describe("resetSugarlangLearnerDatabases", () => {
 
     expect(result.ok).toBe(true);
     expect(result.deletedDatabases).toEqual([
-      `${CARD_STORE_DB_NAME_PREFIX}:user-test:learner-closeable`
+      `test-game:${CARD_STORE_DB_NAME_PREFIX}:user-test:learner-closeable`
     ]);
     // A closed store must re-open cleanly (against a now-fresh database).
     expect(await store.count()).toBe(0);
@@ -141,7 +149,7 @@ describe("resetSugarlangLearnerDatabases", () => {
 
     expect(result.ok).toBe(true);
     expect(result.deletedDatabases).toEqual([
-      `${CARD_STORE_DB_NAME_PREFIX}:user-test:learner-versionchange`
+      `test-game:${CARD_STORE_DB_NAME_PREFIX}:user-test:learner-versionchange`
     ]);
     expect(await store.get("perro")).toBeUndefined();
   });

@@ -63,12 +63,13 @@ import type {
   StudioPluginWorkspaceDefinition
 } from "../../sdk";
 import { PluginSchemaSettingsPanel } from "../../PluginSchemaSettingsPanel";
+import { gameScopedStorageName } from "@sugarmagic/runtime-core";
 
-// Mirror of anonymous-local.ts's internal STORAGE_KEY constant.
-// Duplicated rather than exported because the constant is an
-// implementation detail of the default provider; the dev panel is
-// the only sanctioned caller that pokes localStorage directly.
-const ANONYMOUS_LOCAL_STORAGE_KEY = "sugarmagic.anonymous-user-id";
+// Plan 092.6 — was a hand-copied mirror of anonymous-local.ts's key, which
+// went stale the moment that key changed and left this button clearing
+// nothing. It asks the same helper the provider uses instead, so the two
+// cannot drift again.
+const ANONYMOUS_LOCAL_STORAGE_SEGMENT = "anonymous-user-id";
 
 function formatPosition(
   position: { x: number; y: number; z: number } | null
@@ -306,7 +307,9 @@ function SugarProfileWorkspaceContent(props: PluginWorkspaceViewProps) {
 
   function handleRegenerateConfirm() {
     try {
-      window.localStorage.removeItem(ANONYMOUS_LOCAL_STORAGE_KEY);
+      window.localStorage.removeItem(
+        gameScopedStorageName(ANONYMOUS_LOCAL_STORAGE_SEGMENT)
+      );
     } catch (error) {
       console.warn("[sugarprofile] localStorage clear failed", error);
     }

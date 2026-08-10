@@ -943,6 +943,11 @@ async function postPreviewBootMessage(
       creditsDefinition: session.gameProject.creditsDefinition,
       // Plan 059 §059.3 — entry title sequence's first card.
       gameTitle: session.gameProject.displayName,
+      // Plan 092.6 — Preview serves every project from ONE origin, so without
+      // this two projects share the same databases and read each other's
+      // saves and learner data. displayName is for humans; the id is what
+      // storage is keyed on.
+      gameId: session.gameProject.identity.id,
       assetSources,
       // Story 47.10.5 — authored fresh-start record. Studio preview
       // mirrors the published-web boot.json shape so a "New Game"

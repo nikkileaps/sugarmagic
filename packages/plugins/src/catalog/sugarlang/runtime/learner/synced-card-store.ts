@@ -33,12 +33,13 @@
  */
 
 import {
-  createSyncedAccountStore,
-  type SyncedAccountStore
+  createSyncedRecordStore,
+  type SyncedRecordStore
 } from "@sugarmagic/runtime-core";
 import type { LemmaCard } from "../types";
 import type { CardStore, CardStorePage } from "./card-store";
 import { SUGARLANG_PLUGIN_ID } from "../../plugin-id";
+import { SUGARLANG_WORD_TABLE } from "./account-tables";
 
 /** Bumped when a stored word record changes shape. */
 export const SUGARLANG_CARD_STORE_SCHEMA_VERSION = 1;
@@ -49,7 +50,7 @@ export interface CreateSyncedCardStoreOptions {
   targetLanguage: string;
   supportLanguage: string;
   /** Test seam: use this store instead of constructing one. */
-  store?: SyncedAccountStore<LemmaCard>;
+  store?: SyncedRecordStore<LemmaCard>;
   /** Test seam: the account, when there is no signed-in one to read. */
   userId?: string;
 }
@@ -59,11 +60,12 @@ export function createSyncedCardStore(
 ): CardStore {
   const store =
     options.store ??
-    createSyncedAccountStore<LemmaCard>({
+    createSyncedRecordStore<LemmaCard>({
       pluginId: SUGARLANG_PLUGIN_ID,
       storeId: `cards:${options.targetLanguage}:${options.supportLanguage}`,
       schemaVersion: SUGARLANG_CARD_STORE_SCHEMA_VERSION,
-      userId: options.userId
+      userId: options.userId,
+      table: SUGARLANG_WORD_TABLE
     });
 
   return {

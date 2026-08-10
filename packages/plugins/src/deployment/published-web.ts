@@ -112,6 +112,10 @@ function buildBootJsonPayload(
     note: PUBLISHED_WEB_HEADER,
     schemaVersion: BOOT_JSON_SCHEMA_VERSION,
     gameProjectIdentity: gameProject.identity,
+    // Plan 092.6 — the id every storage name on the player's device leads
+    // with. Flat rather than nested so the host reads one field; the nested
+    // identity above is kept for the deploy's own bookkeeping.
+    gameId: gameProject.identity.id,
     gameProjectMajorVersion: gameProject.majorVersion,
     installedPluginIds: gameProject.pluginConfigurations
       .filter((entry) => entry.enabled)

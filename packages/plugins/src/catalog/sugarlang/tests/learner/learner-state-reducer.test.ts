@@ -16,7 +16,7 @@
  */
 
 import "fake-indexeddb/auto";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   createBlackboardScope
 } from "@sugarmagic/runtime-core";
@@ -48,6 +48,14 @@ import {
   createLemmaCard,
   createReducerObservationEvent
 } from "./test-helpers";
+
+import { registerActiveGameId } from "@sugarmagic/runtime-core";
+
+// Storage on a player's device is named for the game they are playing, and the
+// namer refuses to build a name without one -- a database with no game in its
+// name is shared by every game on the origin. The host registers this from the
+// boot payload in a real run.
+beforeEach(() => registerActiveGameId("test-game"));
 
 describe("LearnerStateReducer", () => {
   it("defines sugarlang facts with working ownership and placement defaults", () => {

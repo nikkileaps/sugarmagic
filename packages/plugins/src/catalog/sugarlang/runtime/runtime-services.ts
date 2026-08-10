@@ -41,7 +41,7 @@ import type {
   RuntimeBlackboard
 } from "@sugarmagic/runtime-core";
 import {
-  createSyncedAccountStore,
+  createSyncedRecordStore,
   getActiveUserId
 } from "@sugarmagic/runtime-core";
 import type { SugarLangPluginConfig } from "../config";
@@ -88,6 +88,7 @@ import {
 import { PlacementScoreEngine } from "./placement/placement-score-engine";
 import { BlackboardLearnerStore } from "./providers/impls/blackboard-learner-store";
 import { createSyncedCardStore } from "./learner/synced-card-store";
+import { SUGARLANG_LEARNER_TABLE } from "./learner/account-tables";
 import type {
   LearnerProfileCoreStore,
   PersistedLearnerProfileCore
@@ -275,10 +276,11 @@ function createLearnerStores(
   try {
     return {
       cardStore: createSyncedCardStore({ targetLanguage, supportLanguage }),
-      profileCoreStore: createSyncedAccountStore<PersistedLearnerProfileCore>({
+      profileCoreStore: createSyncedRecordStore<PersistedLearnerProfileCore>({
         pluginId: SUGARLANG_PLUGIN_ID,
         storeId: `profile:${targetLanguage}:${supportLanguage}`,
-        schemaVersion: SUGARLANG_LEARNER_PROFILE_SCHEMA_VERSION
+        schemaVersion: SUGARLANG_LEARNER_PROFILE_SCHEMA_VERSION,
+        table: SUGARLANG_LEARNER_TABLE
       })
     };
   } catch (error) {

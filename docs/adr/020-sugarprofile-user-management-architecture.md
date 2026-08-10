@@ -71,7 +71,7 @@ Two homes exist, and the choice between them is mechanical:
   be produced synchronously. `serialize()` runs on every autosave
   tick and the payload is re-serialised whole to detect change, so
   anything that grows without bound does not belong here.
-- **A per-account record store** (`runtime-core/src/account-data`)
+- **A per-account record store** (`runtime-core/src/sync-engine`)
   for anything larger, anything read asynchronously, or anything
   that should follow the player to another device. The local copy
   is the source of reads and writes; syncing to the account happens

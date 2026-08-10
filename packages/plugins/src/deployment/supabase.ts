@@ -20,6 +20,7 @@
 
 import type { GameProject } from "@sugarmagic/domain";
 import type { ManagedProjectFile } from "./index";
+import { getDiscoveredPluginDefinition } from "../builtin";
 
 export const SUPABASE_MIGRATIONS_TEMPLATE_VERSION = 2;
 const TEMPLATE_VERSION_STAMP_PREFIX = "-- SUGARMAGIC SUPABASE MIGRATIONS TEMPLATE VERSION:";
@@ -180,83 +181,59 @@ export function buildSupabaseManagedFiles(
       content: buildInitialMigrationSql(),
       contentType: "text"
     },
-    {
-      relativePath: "deployment/supabase/migrations/0002_account_records.sql",
-      content: buildAccountRecordsMigrationSql(),
-      contentType: "text"
-    }
+    ...collectPluginAccountMigrations(gameProject)
   ];
 }
 
 /**
- * Plan 092.6.3 — per-account records, as a SEPARATE migration.
+ * Plan 092.6.3 — the migrations plugins ship for their own per-account tables.
  *
- * IT CANNOT GO IN 0001. `supabase db push` records each applied migration by
- * its filename version and skips anything already recorded -- "only the
- * timestamps are compared". A project that has already applied 0001 would
- * never see an edit to it, and the push would report success having done
- * nothing. Every future schema change needs its own numbered file for the same
- * reason.
+ * EACH PLUGIN OWNS ITS SCHEMA. A synced store declares a table with real typed
+ * columns and ships the SQL that creates it, so the database can index and
+ * constrain what is in it. This file collects those files; it does not know
+ * what any of them contain and names no plugin.
+ *
+ * THEY ARE SEPARATE, NUMBERED FILES, NEVER EDITS TO AN EARLIER ONE.
+ * `supabase db push` records each applied migration by its filename version
+ * and skips anything already recorded -- "only the timestamps are compared".
+ * A project that has applied 0001 would never see an edit to it, and the push
+ * would report success having done nothing.
+ *
+ * The mechanism requires four columns of every such table and the plugin
+ * supplies the rest:
+ *   user_id     scoped by row-level security
+ *   record_key  which record
+ *   deleted     a tombstone, so a delete survives the next pull
+ *   updated_at  stamped by a trigger; the ordering authority for conflicts
  */
-function buildAccountRecordsMigrationSql(): string {
-  return [
-    `-- ${GENERATED_HEADER}`,
-    `${TEMPLATE_VERSION_STAMP_PREFIX} ${SUPABASE_MIGRATIONS_TEMPLATE_VERSION}`,
-    "",
-    "-- Plan 092.6.3 — per-account records any plugin can sync into.",
-    "-- Generic on purpose: plugin_id and store_id are DATA, so a new plugin",
-    "-- needs no migration of its own. One row per record rather than a blob",
-    "-- per store, so a conflict resolves per record and a sync sends only what",
-    "-- changed.",
-    "create table if not exists public.account_records (",
-    "  user_id uuid not null references auth.users(id) on delete cascade,",
-    "  plugin_id text not null,",
-    "  store_id text not null,",
-    "  record_key text not null,",
-    "  data jsonb,",
-    "  schema_version integer not null default 1,",
-    "  -- A tombstone, not a removed row: deleting outright would let the next",
-    "  -- pull hand the record straight back to the device that deleted it.",
-    "  deleted boolean not null default false,",
-    "  -- THE ORDERING AUTHORITY for last-write-wins. Stamped by the database,",
-    "  -- never by the client -- client clocks disagree and a wrong one wins",
-    "  -- every argument it is in.",
-    "  updated_at timestamptz not null default now(),",
-    "  primary key (user_id, plugin_id, store_id, record_key)",
-    ");",
-    "",
-    "-- The pull asks 'what changed since?', so that is the index.",
-    "create index if not exists account_records_since_idx",
-    "  on public.account_records (user_id, plugin_id, store_id, updated_at);",
-    "",
-    "alter table public.account_records enable row level security;",
-    "",
-    "create policy \"users select own account records\" on public.account_records",
-    "  for select using (auth.uid() = user_id);",
-    "create policy \"users insert own account records\" on public.account_records",
-    "  for insert with check (auth.uid() = user_id);",
-    "create policy \"users update own account records\" on public.account_records",
-    "  for update using (auth.uid() = user_id);",
-    "create policy \"users delete own account records\" on public.account_records",
-    "  for delete using (auth.uid() = user_id);",
-    "",
-    "-- Stamped on every write so a client cannot backdate a record to win.",
-    "create or replace function public.touch_account_record()",
-    "  returns trigger",
-    "  language plpgsql",
-    "as $$",
-    "begin",
-    "  new.updated_at = now();",
-    "  return new;",
-    "end;",
-    "$$;",
-    "",
-    "drop trigger if exists account_records_touch on public.account_records;",
-    "create trigger account_records_touch",
-    "  before insert or update on public.account_records",
-    "  for each row execute function public.touch_account_record();",
-    ""
-  ].join("\n");
+function collectPluginAccountMigrations(
+  gameProject: GameProject
+): ManagedProjectFile[] {
+  const files: ManagedProjectFile[] = [];
+  for (const configuration of gameProject.pluginConfigurations) {
+    if (!configuration.enabled) continue;
+    const definition = getDiscoveredPluginDefinition(configuration.pluginId);
+    const migrations = definition?.deployment?.supabaseMigrations ?? [];
+    for (const migration of migrations) {
+      files.push({
+        relativePath: `deployment/supabase/migrations/${migration.filename}`,
+        content: [
+          `-- ${GENERATED_HEADER}`,
+          `-- Owned by the ${configuration.pluginId} plugin.`,
+          "",
+          migration.sql,
+          ""
+        ].join("\n"),
+        contentType: "text"
+      });
+    }
+  }
+  // Sorted so the emitted set is stable regardless of plugin discovery order;
+  // the CLI applies them in filename order and a wobbling order would show up
+  // as spurious diffs in the game repo.
+  return files.sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath)
+  );
 }
 
 export function getSugarProfileMigrationDirectory(): string {

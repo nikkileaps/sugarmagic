@@ -21,15 +21,20 @@
  */
 
 import type { LemmaCard } from "../types";
+import { gameScopedStorageName } from "@sugarmagic/runtime-core";
 
 export const CARD_STORE_PAGE_SIZE = 250;
 
 /**
- * Owned here: every card-store database name starts with this prefix. The
- * shared learner-data reset (reset-learner-data.ts) is the only other
- * consumer -- do not hard-code the literal anywhere else.
- */
-export const CARD_STORE_DB_NAME_PREFIX = "sugarlang-card-store";
+ * Owned here: every card-store database name contains this segment. The shared
+ * learner-data reset (reset-learner-data.ts) is the only other consumer -- do
+ * not hard-code the literal anywhere else.
+ *
+ * Distinguishes this plugin's learner databases from a game's other storage.
+ *  The full name leads with the GAME id (`gameScopedStorageName`) -- a player's
+ *  device carries the name of the game they are playing, not of the tool it was
+ *  built with, and two games previewed on one origin must not share a store. */
+export const CARD_STORE_DB_NAME_PREFIX = "sugarlang-cards";
 
 /**
  * How many leading segments of a learner id identify the ACCOUNT. One today;
@@ -299,7 +304,7 @@ export class IndexedDBCardStore implements CardStore {
     if (!this.dbPromise) {
       const opened = new Promise<IDBDatabase>((resolve, reject) => {
         const request = this.indexedDbFactory.open(
-          `${CARD_STORE_DB_NAME_PREFIX}:${this.options.profileId}`,
+          gameScopedStorageName(CARD_STORE_DB_NAME_PREFIX, this.options.profileId),
           1
         );
 

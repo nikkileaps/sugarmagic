@@ -1,5 +1,5 @@
 /**
- * packages/runtime-core/src/account-data/sync.ts
+ * packages/runtime-core/src/sync-engine/sync.ts
  *
  * Purpose: Reconciles every synced account store with the player's account.
  *
@@ -34,9 +34,9 @@
  *   into a bill.
  *
  * Exports:
- *   - createAccountDataSync
- *   - AccountDataSync, AccountDataSyncResult
- *   - ACCOUNT_SYNC_INTERVAL_MS, ACCOUNT_SYNC_MAX_INTERVAL_MS, ACCOUNT_SYNC_BATCH
+ *   - createSyncEngine
+ *   - SyncEngine, SyncResult
+ *   - SYNC_INTERVAL_MS, SYNC_MAX_INTERVAL_MS, SYNC_BATCH
  *
  * Implements: Plan 092 story 092.6.3
  *
@@ -44,22 +44,22 @@
  */
 
 import {
-  listSyncedAccountStores,
-  type AccountDataRemote,
-  type AccountStoreSyncHandle,
-  type RemoteAccountRecord
+  listSyncedRecordStores,
+  type RemoteRecordStorageAdapter,
+  type SyncHandle,
+  type RemoteRecord
 } from "./index";
 
 /** Gap between passes while everything is healthy. */
-export const ACCOUNT_SYNC_INTERVAL_MS = 30_000;
+export const SYNC_INTERVAL_MS = 30_000;
 
 /** Ceiling once passes keep failing. */
-export const ACCOUNT_SYNC_MAX_INTERVAL_MS = 300_000;
+export const SYNC_MAX_INTERVAL_MS = 300_000;
 
 /** Records per push or pull request. */
-export const ACCOUNT_SYNC_BATCH = 250;
+export const SYNC_BATCH = 250;
 
-export interface AccountDataSyncResult {
+export interface SyncResult {
   pushed: number;
   pulled: number;
   /** Remote records skipped because this device had an unpushed edit. */
@@ -67,9 +67,9 @@ export interface AccountDataSyncResult {
   failures: number;
 }
 
-export interface AccountDataSync {
+export interface SyncEngine {
   /** One pass over every registered store. Never throws. */
-  syncNow(reason: string): Promise<AccountDataSyncResult>;
+  syncNow(reason: string): Promise<SyncResult>;
   /** Begin the interval and the browser triggers. */
   start(): void;
   stop(): void;
@@ -85,23 +85,23 @@ const defaultLogger: SyncLogger = {
   warn: (message, detail) => console.warn(message, detail ?? "")
 };
 
-export interface CreateAccountDataSyncOptions {
+export interface CreateSyncEngineOptions {
   /** Null means nothing to sync against; every pass is a no-op. */
-  remote: AccountDataRemote | null;
+  remote: RemoteRecordStorageAdapter | null;
   logger?: SyncLogger;
   intervalMs?: number;
   /** Test seam. Defaults to the registry. */
-  listStores?: () => AccountStoreSyncHandle[];
+  listStores?: () => SyncHandle[];
   /** Test seam for the browser triggers. */
   ownerWindow?: Pick<Window, "addEventListener" | "removeEventListener"> | null;
 }
 
-export function createAccountDataSync(
-  options: CreateAccountDataSyncOptions
-): AccountDataSync {
+export function createSyncEngine(
+  options: CreateSyncEngineOptions
+): SyncEngine {
   const logger = options.logger ?? defaultLogger;
-  const baseIntervalMs = options.intervalMs ?? ACCOUNT_SYNC_INTERVAL_MS;
-  const listStores = options.listStores ?? listSyncedAccountStores;
+  const baseIntervalMs = options.intervalMs ?? SYNC_INTERVAL_MS;
+  const listStores = options.listStores ?? listSyncedRecordStores;
   const ownerWindow =
     options.ownerWindow === undefined
       ? typeof window !== "undefined"
@@ -115,9 +115,9 @@ export function createAccountDataSync(
   let consecutiveFailures = 0;
 
   async function syncStore(
-    handle: AccountStoreSyncHandle,
-    remote: AccountDataRemote,
-    result: AccountDataSyncResult
+    handle: SyncHandle,
+    remote: RemoteRecordStorageAdapter,
+    result: SyncResult
   ): Promise<void> {
     // Push first so the account has this device's edits before we ask what
     // changed -- it keeps a pass from reporting a conflict against a record
@@ -125,29 +125,37 @@ export function createAccountDataSync(
     // the edit: `applyRemote` refuses to overwrite a record still marked
     // pending, and that guard holds whichever order these run in.
     for (;;) {
-      const pending = await handle.takePending(ACCOUNT_SYNC_BATCH);
+      const pending = await handle.takePending(SYNC_BATCH);
       if (pending.length === 0) break;
-      const outgoing: RemoteAccountRecord[] = pending.map((record) => ({
+      const outgoing: RemoteRecord[] = pending.map((record) => ({
         key: record.key,
-        data: record.data,
-        schemaVersion: record.schemaVersion,
+        // A tombstone sends no columns: the row is being marked gone, and the
+        // plugin's fields are whatever they were.
+        columns:
+          record.deleted || record.data === null
+            ? null
+            : handle.table.toColumns(record.data),
         deleted: record.deleted,
-        // Ignored by the server, which stamps its own. Sent so a backend that
-        // wants to reject a stale write has something to compare.
+        // Ignored by the server, which stamps its own.
         updatedAt: new Date(record.updatedAtMs).toISOString()
       }));
-      const pushed = await remote.push(handle.storeKey, outgoing);
+      const pushed = await remote.push(handle.storeKey, handle.table, outgoing);
       await handle.markPushed(pushed.accepted);
       result.pushed += pushed.accepted.length;
       // A server that accepts nothing would spin here forever on the same
       // batch. Stop and let the next pass try again.
       if (pushed.accepted.length === 0) break;
-      if (pending.length < ACCOUNT_SYNC_BATCH) break;
+      if (pending.length < SYNC_BATCH) break;
     }
 
     let since = await handle.getWatermark();
     for (;;) {
-      const page = await remote.pull(handle.storeKey, since, ACCOUNT_SYNC_BATCH);
+      const page = await remote.pull(
+        handle.storeKey,
+        handle.table,
+        since,
+        SYNC_BATCH
+      );
       if (page.records.length > 0) {
         const applied = await handle.applyRemote(page.records);
         result.pulled += applied.applied;
@@ -159,8 +167,8 @@ export function createAccountDataSync(
     }
   }
 
-  async function syncNow(reason: string): Promise<AccountDataSyncResult> {
-    const result: AccountDataSyncResult = {
+  async function syncNow(reason: string): Promise<SyncResult> {
+    const result: SyncResult = {
       pushed: 0,
       pulled: 0,
       conflictsKeptLocal: 0,
@@ -177,7 +185,7 @@ export function createAccountDataSync(
         // pending, so nothing is lost by this pass failing.
         result.failures += 1;
         logger.warn(
-          `[account-data] sync failed for ${handle.storeKey.pluginId}:${handle.storeKey.storeId}`,
+          `[sync-engine] sync failed for ${handle.storeKey.pluginId}:${handle.storeKey.storeId}`,
           error
         );
       }
@@ -187,7 +195,7 @@ export function createAccountDataSync(
       // Named rather than swallowed: this is the shape where someone loses an
       // edit and cannot tell you why.
       logger.info(
-        `[account-data] ${result.conflictsKeptLocal} remote record(s) kept local, ` +
+        `[sync-engine] ${result.conflictsKeptLocal} remote record(s) kept local, ` +
           `unpushed edits won (${reason})`
       );
     }
@@ -199,7 +207,7 @@ export function createAccountDataSync(
     if (consecutiveFailures === 0) return baseIntervalMs;
     return Math.min(
       baseIntervalMs * 2 ** consecutiveFailures,
-      ACCOUNT_SYNC_MAX_INTERVAL_MS
+      SYNC_MAX_INTERVAL_MS
     );
   }
 

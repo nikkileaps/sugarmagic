@@ -30,7 +30,7 @@ import { createCookieSessionStorage } from "./runtime/cookie-session-storage";
 import { createSupabaseIdentityProvider } from "./runtime/identity";
 import { createSupabaseGameSaveStore } from "./runtime/save-store";
 import { createSupabaseProfileStore } from "./runtime/profile-store";
-import { createSupabaseAccountDataRemote } from "./runtime/account-data-remote";
+import { createSupabaseRecordStorage } from "./runtime/supabase-record-storage";
 
 export const SUGARPROFILE_PLUGIN_ID = "sugarprofile";
 
@@ -310,7 +310,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       });
       const saveStore = createSupabaseGameSaveStore({ client });
       const profileStore = createSupabaseProfileStore({ client });
-      const accountDataRemote = createSupabaseAccountDataRemote(client);
+      const accountDataRemote = createSupabaseRecordStorage(client);
       return {
         pluginId: configuration.pluginId,
         displayName: "SugarProfile",
@@ -359,7 +359,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
           },
           {
             pluginId: configuration.pluginId,
-            contributionId: "sugarprofile.account-data-remote",
+            contributionId: "sugarprofile.supabase-record-storage",
             kind: "accountData.remote",
             displayName: "Supabase Account Record Store",
             priority: 100,

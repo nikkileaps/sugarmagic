@@ -26,6 +26,7 @@ import {
   assertAccountScopedLearnerId,
   CARD_STORE_DB_NAME_PREFIX
 } from "./card-store";
+import { gameScopedStorageName } from "@sugarmagic/runtime-core";
 
 /**
  * All teach-record database names start with this prefix so the shared
@@ -149,5 +150,5 @@ export function createTeachRecordStore(learnerId: string): TeachRecordStore {
   if (typeof indexedDB === "undefined") {
     return new MemoryTeachRecordStore();
   }
-  return new IndexedDBTeachRecordStore(`${TEACH_RECORD_DB_NAME_PREFIX}${learnerId}`);
+  return new IndexedDBTeachRecordStore(gameScopedStorageName(TEACH_RECORD_DB_NAME_PREFIX, learnerId));
 }

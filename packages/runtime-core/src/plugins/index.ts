@@ -26,7 +26,7 @@ import type {
   ConversationQuestFormResponse,
   ConversationActionProposal
 } from "../conversation";
-import type { AccountDataRemote } from "../account-data";
+import type { RemoteRecordStorageAdapter } from "../sync-engine";
 import type { UserIdentityProvider } from "../identity";
 import type { UserProfileStore } from "../profile";
 import {
@@ -326,12 +326,12 @@ export type GameSaveStoreContribution = RuntimePluginContributionBase<
 // contributed, account stores still work, they just never leave the
 // device. runtime-core defines the interface and never learns which
 // backend a project uses.
-export type AccountDataRemoteContribution = RuntimePluginContributionBase<
+export type RemoteRecordStorageAdapterContribution = RuntimePluginContributionBase<
   "accountData.remote",
   {
     remoteId: string;
     summary: string;
-    remote: AccountDataRemote;
+    remote: RemoteRecordStorageAdapter;
   }
 >;
 
@@ -408,7 +408,7 @@ export type RuntimePluginContribution =
   | MechanicsEmitHandlerContribution
   | IdentityProviderContribution
   | GameSaveStoreContribution
-  | AccountDataRemoteContribution
+  | RemoteRecordStorageAdapterContribution
   | ProfileStoreContribution;
 
 export interface RuntimePluginContext {
@@ -680,10 +680,10 @@ export function resolveActiveProfileStore(
  * and writes locally, and nothing syncs. A project with no accounts is exactly
  * this case.
  */
-export function resolveActiveAccountDataRemote(
+export function resolveActiveRemoteRecordStorageAdapter(
   manager: RuntimePluginManager,
   logger: ResolverLogger = defaultResolverLogger
-): AccountDataRemote | null {
+): RemoteRecordStorageAdapter | null {
   const contributions = manager.getContributions("accountData.remote");
   if (contributions.length === 0) return null;
   if (contributions.length > 1) {

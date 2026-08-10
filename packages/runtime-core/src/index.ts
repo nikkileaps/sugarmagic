@@ -1,7 +1,8 @@
 import type { RuntimeCompileProfile } from "./materials";
 import type { RuntimeSessionBoundary } from "./state";
 
-export * from "./account-data";
+export * from "./storage-names";
+export * from "./sync-engine";
 export * from "./camera";
 export * from "./behavior";
 export * from "./audio";

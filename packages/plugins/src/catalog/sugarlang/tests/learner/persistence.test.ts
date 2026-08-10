@@ -19,7 +19,7 @@ import "fake-indexeddb/auto";
 import {
   createBlackboardScope
 } from "@sugarmagic/runtime-core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import {
   CARD_STORE_PAGE_SIZE,
   IndexedDBCardStore,
@@ -43,6 +43,14 @@ import {
   createLearnerProfile,
   createLemmaCard
 } from "./test-helpers";
+
+import { registerActiveGameId } from "@sugarmagic/runtime-core";
+
+// Storage on a player's device is named for the game they are playing, and the
+// namer refuses to build a name without one -- a database with no game in its
+// name is shared by every game on the origin. The host registers this from the
+// boot payload in a real run.
+beforeEach(() => registerActiveGameId("test-game"));
 
 class CountingCardStore implements CardStore {
   public listPageCalls = 0;

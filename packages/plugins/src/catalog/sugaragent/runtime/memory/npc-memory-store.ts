@@ -45,7 +45,11 @@
  * Status: active
  */
 
-import { getActivePlaythroughId, getActiveUserId } from "@sugarmagic/runtime-core";
+import {
+  gameScopedStorageName,
+  getActivePlaythroughId,
+  getActiveUserId
+} from "@sugarmagic/runtime-core";
 
 /** Current record schema. Bump when the record shape changes
  *  incompatibly; `migrateRecord` owns the upgrade path.
@@ -64,7 +68,11 @@ export const DEFAULT_ITEM_IMPORTANCE = 5;
 
 /** IndexedDB database name prefix; the active userId is appended so
  *  each user gets an isolated database (sugarlang card-store idiom). */
-const DB_NAME_PREFIX = "sugaragent-npc-memory";
+/** Distinguishes this plugin's memory database from a game's other storage.
+ *  The full name leads with the GAME id -- a player's device carries the name
+ *  of the game they are playing, not of the tool it was built with, and two
+ *  games previewed on one origin must not share NPC memory. */
+const DB_NAME_SEGMENT = "sugaragent-npc-memory";
 const OBJECT_STORE_NAME = "npc-memory";
 const DB_VERSION = 1;
 
@@ -465,7 +473,7 @@ export class IndexedDBNpcMemoryBackend implements NpcMemoryBackend {
     if (!this.dbPromise) {
       this.dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
         const request = this.indexedDbFactory.open(
-          `${DB_NAME_PREFIX}:${this.userId}`,
+          gameScopedStorageName(DB_NAME_SEGMENT, this.userId),
           DB_VERSION
         );
         request.onerror = () => {

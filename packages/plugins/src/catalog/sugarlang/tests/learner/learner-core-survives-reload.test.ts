@@ -17,9 +17,9 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  createMemoryAccountBacking,
-  createSyncedAccountStore,
-  unregisterSyncedAccountStore
+  createMemoryRecordStorage,
+  createSyncedRecordStore,
+  unregisterSyncedRecordStore
 } from "@sugarmagic/runtime-core";
 import { MemoryCardStore } from "../../runtime/learner/card-store";
 import {
@@ -31,6 +31,7 @@ import {
   type PersistedLearnerProfileCore
 } from "../../runtime/learner/persistence";
 import { createLearnerBlackboard } from "./test-helpers";
+import { SUGARLANG_LEARNER_TABLE } from "../../runtime/learner/account-tables";
 import { LEARNER_PROFILE_FACT } from "../../runtime/learner/fact-definitions";
 
 const PLAYER = "player-1";
@@ -47,18 +48,19 @@ const blackboard = createLearnerBlackboard;
 
 /** A store backed by memory, standing in for the per-account one. */
 function coreStore(): LearnerProfileCoreStore & { close: () => Promise<void> } {
-  const store = createSyncedAccountStore<PersistedLearnerProfileCore>({
+  const store = createSyncedRecordStore<PersistedLearnerProfileCore>({
     pluginId: "example-plugin",
     storeId: "profile",
     schemaVersion: 1,
     userId: "user-a",
-    backing: createMemoryAccountBacking()
+    adapter: createMemoryRecordStorage(),
+    table: SUGARLANG_LEARNER_TABLE
   });
   return {
     get: (key) => store.get(key),
     put: (key, data) => store.put(key, data),
     close: async () => {
-      unregisterSyncedAccountStore(store.storeKey);
+      unregisterSyncedRecordStore(store.storeKey);
       await store.close();
     }
   };

@@ -84,6 +84,7 @@ import {
 // without importing this file. Re-exported so callers see one name.
 export { SUGARLANG_PLUGIN_ID } from "./plugin-id";
 import { SUGARLANG_PLUGIN_ID } from "./plugin-id";
+import { SUGARLANG_ACCOUNT_MIGRATIONS } from "./runtime/learner/account-tables";
 export const SUGARLANG_DISPLAY_NAME = "Sugarlang";
 
 const deploymentRequirements: DeploymentRequirement[] = [
@@ -343,6 +344,11 @@ export const SUGARLANG_MIDDLEWARE_FACTORIES = [
 
 export const pluginDefinition: DiscoveredPluginDefinition = {
   deploymentRequirements,
+  // Plan 092.6.3 — the tables this plugin's synced learner data lands in.
+  // Its own schema, its own numbered migration file.
+  deployment: {
+    supabaseMigrations: SUGARLANG_ACCOUNT_MIGRATIONS
+  },
   manifest: {
     pluginId: SUGARLANG_PLUGIN_ID,
     displayName: SUGARLANG_DISPLAY_NAME,

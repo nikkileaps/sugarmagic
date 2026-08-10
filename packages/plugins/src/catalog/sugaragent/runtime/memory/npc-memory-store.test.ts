@@ -14,7 +14,7 @@
  */
 
 import { IDBFactory } from "fake-indexeddb";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import {
   InMemoryNpcMemoryBackend,
   NpcMemoryStore,
@@ -22,6 +22,14 @@ import {
   type NpcMemoryBackend,
   type NpcMemoryRecord
 } from "./npc-memory-store";
+
+import { registerActiveGameId } from "@sugarmagic/runtime-core";
+
+// Storage on a player's device is named for the game they are playing, and the
+// namer refuses to build a name without one -- a database with no game in its
+// name is shared by every game on the origin. The host registers this from the
+// boot payload in a real run.
+beforeEach(() => registerActiveGameId("test-game"));
 
 const USER = "user-1";
 const PLAY_A = "play-A";

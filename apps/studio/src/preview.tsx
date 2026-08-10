@@ -145,6 +145,7 @@ interface PreviewBootMessage {
   creditsDefinition?: CreditsDefinition | null;
   /** Plan 059 §059.3 — entry title sequence's first card. */
   gameTitle?: string | null;
+  gameId?: string | null;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
   defaultGameSavePayload?: GameSavePayload | null;
@@ -308,6 +309,7 @@ window.addEventListener("message", (event) => {
         musicBindings: data.musicBindings,
         creditsDefinition: data.creditsDefinition,
         gameTitle: data.gameTitle,
+        gameId: data.gameId,
         assetSources: data.assetSources,
         pluginBootPayloads: data.pluginBootPayloads,
         defaultGameSavePayload: data.defaultGameSavePayload ?? null,

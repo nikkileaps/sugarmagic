@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import {
   createDefaultMechanicsDefinition,
@@ -49,6 +49,14 @@ import {
   runAutosaveTick,
   waitForActiveUser
 } from "@sugarmagic/target-web";
+
+import { registerActiveGameId } from "@sugarmagic/runtime-core";
+
+// Storage on a player's device is named for the game they are playing, and the
+// namer refuses to build a name without one -- a database with no game in its
+// name is shared by every game on the origin. The host registers this from the
+// boot payload in a real run.
+beforeEach(() => registerActiveGameId("test-game"));
 
 function createFakeStorage(): Storage {
   const data = new Map<string, string>();
@@ -600,8 +608,9 @@ describe("AnonymousLocalIdentityProvider", () => {
     expect(user?.email).toBeNull();
     expect(user?.displayName).toBeNull();
     expect(user?.createdAt).toBe("2026-06-25T00:00:00.000Z");
-    // Persistence: storage now carries the record under the canonical key.
-    const raw = storage.getItem("sugarmagic.anonymous-user-id");
+    // Persistence: storage now carries the record under a name that leads
+    // with the GAME, so two games on one origin do not share a player. Canonical key.
+    const raw = storage.getItem("test-game:anonymous-user-id");
     expect(raw).not.toBeNull();
     expect(JSON.parse(raw ?? "{}")).toEqual({
       version: 1,
@@ -634,7 +643,7 @@ describe("AnonymousLocalIdentityProvider", () => {
     });
     const first = provider.currentUser();
     expect(first?.userId).toBe("uuid-0");
-    storage.removeItem("sugarmagic.anonymous-user-id");
+    storage.removeItem("test-game:anonymous-user-id");
     const second = provider.currentUser();
     expect(second?.userId).toBe("uuid-1");
   });
@@ -708,7 +717,7 @@ describe("AnonymousLocalIdentityProvider", () => {
 
   it("recovers from a corrupt persisted record by regenerating", () => {
     const storage = createFakeStorage();
-    storage.setItem("sugarmagic.anonymous-user-id", "{not-json");
+    storage.setItem("test-game:anonymous-user-id", "{not-json");
     const provider = createAnonymousLocalIdentityProvider({
       storage,
       randomUuid: () => "uuid-recovered",
@@ -721,7 +730,7 @@ describe("AnonymousLocalIdentityProvider", () => {
   it("recovers from a wrong-version persisted record by regenerating", () => {
     const storage = createFakeStorage();
     storage.setItem(
-      "sugarmagic.anonymous-user-id",
+      "test-game:anonymous-user-id",
       JSON.stringify({ version: 99, userId: "stale", createdAt: "irrelevant" })
     );
     const provider = createAnonymousLocalIdentityProvider({
@@ -1765,17 +1774,16 @@ describe("buildSupabaseManagedFiles", () => {
     const paths = files.map((file) => file.relativePath);
 
     expect(paths).toContain("deployment/supabase/migrations/0001_initial.sql");
-    expect(paths).toContain(
-      "deployment/supabase/migrations/0002_account_records.sql"
-    );
 
+    // The account tables belong to whichever plugins are enabled; this
+    // fixture enables only sugarprofile, so 0001 is the whole set and it must
+    // NOT have grown a plugin's table.
     const initial = files.find((f) => f.relativePath.includes("0001_initial"));
+    expect(String(initial?.content)).not.toContain("sugarlang_");
     expect(String(initial?.content)).not.toContain("account_records");
-
-    const added = files.find((f) => f.relativePath.includes("0002_account_records"));
-    expect(String(added?.content)).toContain("create table if not exists public.account_records");
-    // Scoped to its owner, like every other table here.
-    expect(String(added?.content)).toContain("auth.uid() = user_id");
+    expect(paths.filter((p) => p.includes("/migrations/"))).toEqual([
+      "deployment/supabase/migrations/0001_initial.sql"
+    ]);
   });
 
   // Domain helpers needed only by this block — import lazily so
@@ -1871,8 +1879,7 @@ describe("buildSupabaseManagedFiles", () => {
     const files = buildSupabaseManagedFiles(project);
     expect(files.map((f) => f.relativePath).sort()).toEqual([
       "deployment/supabase/config.toml",
-      "deployment/supabase/migrations/0001_initial.sql",
-      "deployment/supabase/migrations/0002_account_records.sql"
+      "deployment/supabase/migrations/0001_initial.sql"
     ]);
     const configToml = files.find(
       (f) => f.relativePath === "deployment/supabase/config.toml"

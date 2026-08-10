@@ -22,7 +22,7 @@
  * whole to detect change. So state that is read asynchronously,
  * grows without bound, or needs to follow a player to another
  * device belongs in a per-account record store instead —
- * `runtime-core/src/account-data`.
+ * `runtime-core/src/sync-engine`.
  *
  * Implements: Plan 055 §055.1
  *

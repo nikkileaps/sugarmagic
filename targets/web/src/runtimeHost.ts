@@ -119,10 +119,11 @@ import {
   type RuntimeBannerContribution,
   createPlayerVisualController,
   createSessionHudCard,
-  createAccountDataSync,
+  createSyncEngine,
+  registerActiveGameId,
   registerActiveIdentityProvider,
-  resolveActiveAccountDataRemote,
-  type AccountDataSync,
+  resolveActiveRemoteRecordStorageAdapter,
+  type SyncEngine,
   resolveActiveGameSaveStore,
   resolveActiveIdentityProvider,
   upgradeLegacyPayload,
@@ -244,6 +245,15 @@ export interface WebRuntimeStartState {
   /** Plan 059 §059.3 — the game's display title, shown as the
    *  first card of the entry title sequence. */
   gameTitle?: string | null;
+  /**
+   * Plan 092.6 — which game this is, from `gameProject.identity.id`.
+   *
+   * Every database and storage key the game creates on the player's device
+   * leads with it, so two projects previewed on one origin cannot read each
+   * other's saves or learner data. Absent means storage refuses to open, which
+   * is a build defect rather than a player condition.
+   */
+  gameId?: string | null;
   /**
    * Story 47.5 — pre-loaded game save record for the current user.
    * When non-null, the host hydrates from the save's payload
@@ -1313,7 +1323,7 @@ export function createWebRuntimeHost(
   // Plan 092.6.3 — per-account record sync. One per host lifetime; stopped
   // on teardown so a disposed host does not keep reconciling in the
   // background against an account nobody is playing as.
-  let accountDataSync: AccountDataSync | null = null;
+  let accountDataSync: SyncEngine | null = null;
   let billboardAssetRegistry: BillboardAssetRegistry | null = null;
   let billboardRenderer: BillboardRenderer | null = null;
   let textBillboardRenderer: TextBillboardRenderer | null = null;
@@ -2021,8 +2031,8 @@ export function createWebRuntimeHost(
       // plugin contributing a backend, every account store keeps serving
       // reads and writes locally and simply never leaves the device.
       accountDataSync?.stop();
-      accountDataSync = createAccountDataSync({
-        remote: resolveActiveAccountDataRemote(pluginManager),
+      accountDataSync = createSyncEngine({
+        remote: resolveActiveRemoteRecordStorageAdapter(pluginManager),
         ownerWindow
       });
       accountDataSync.start();
@@ -2284,6 +2294,11 @@ export function createWebRuntimeHost(
       state.musicBindings?.creditsThemeMusicId ?? null;
     bootCreditsDefinition = state.creditsDefinition ?? null;
     bootGameTitle = state.gameTitle ?? null;
+    // Plan 092.6 — registered BEFORE anything opens storage. Every database
+    // name on the player's device leads with it, and the helper that builds
+    // those names throws without it rather than sharing an origin's storage
+    // between two games.
+    registerActiveGameId(state.gameId ?? null);
     // Plan 058 §058.4 — per-Scene environment override: the
     // projector reads state.activeEnvironmentId, so a Scene with
     // an override shadows the authored/boot value; null falls

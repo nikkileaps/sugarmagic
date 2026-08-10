@@ -1,5 +1,5 @@
 /**
- * packages/runtime-core/src/account-data/backing.ts
+ * packages/runtime-core/src/sync-engine/adapter.ts
  *
  * Purpose: Where an account store actually keeps its rows. One interface, an
  *   IndexedDB implementation and a memory one, so the store above says nothing
@@ -12,39 +12,40 @@
  *   rows while the pending set stays tiny.
  *
  * Exports:
- *   - AccountDataBacking
- *   - createMemoryAccountBacking
- *   - createIndexedDBAccountBacking
- *   - ACCOUNT_DATA_DB_PREFIX
+ *   - LocalRecordStorageAdapter
+ *   - createMemoryRecordStorage
+ *   - createIndexedDBRecordStorage
+ *   - RECORD_STORE_DB_PREFIX
  *
  * Implements: Plan 092 story 092.6.2
  *
  * Status: active
  */
 
-import type { AccountStoreKey, StoredAccountRecord } from "./index";
+import { gameScopedStorageName } from "../storage-names";
+import type { RecordStoreKey, StoredRecord } from "./index";
 
-/** Every account-data database starts with this, so a wipe can find them. */
-export const ACCOUNT_DATA_DB_PREFIX = "sugarmagic-account-data";
+/** Distinguishes record databases from a game's other storage. */
+export const RECORD_STORE_DB_SEGMENT = "records";
 
 const OBJECT_STORE = "records";
 const PENDING_INDEX = "pending";
 const DB_VERSION = 1;
 
-export interface AccountDataBacking {
-  read(key: string): Promise<StoredAccountRecord | undefined>;
-  write(records: ReadonlyArray<StoredAccountRecord>): Promise<void>;
+export interface LocalRecordStorageAdapter {
+  read(key: string): Promise<StoredRecord | undefined>;
+  write(records: ReadonlyArray<StoredRecord>): Promise<void>;
   readPage(
     afterKey: string,
     limit: number
-  ): Promise<{ records: StoredAccountRecord[]; nextCursor: string | null }>;
-  readPending(limit: number): Promise<StoredAccountRecord[]>;
+  ): Promise<{ records: StoredRecord[]; nextCursor: string | null }>;
+  readPending(limit: number): Promise<StoredRecord[]>;
   removeAll(): Promise<void>;
   close?(): Promise<void>;
 }
 
-export function createMemoryAccountBacking(): AccountDataBacking {
-  const rows = new Map<string, StoredAccountRecord>();
+export function createMemoryRecordStorage(): LocalRecordStorageAdapter {
+  const rows = new Map<string, StoredRecord>();
   const sortedKeys = () => Array.from(rows.keys()).sort();
 
   return {
@@ -58,14 +59,14 @@ export function createMemoryAccountBacking(): AccountDataBacking {
     async readPage(afterKey, limit) {
       const keys = sortedKeys().filter((k) => k > afterKey);
       const page = keys.slice(0, limit);
-      const records = page.map((k) => ({ ...(rows.get(k) as StoredAccountRecord) }));
+      const records = page.map((k) => ({ ...(rows.get(k) as StoredRecord) }));
       const nextCursor = keys.length > limit ? (page[page.length - 1] ?? null) : null;
       return { records, nextCursor };
     },
     async readPending(limit) {
-      const out: StoredAccountRecord[] = [];
+      const out: StoredRecord[] = [];
       for (const key of sortedKeys()) {
-        const row = rows.get(key) as StoredAccountRecord;
+        const row = rows.get(key) as StoredRecord;
         if (row.pending === 1) out.push({ ...row });
         if (out.length >= limit) break;
       }
@@ -77,20 +78,24 @@ export function createMemoryAccountBacking(): AccountDataBacking {
   };
 }
 
-export function createIndexedDBAccountBacking(
-  storeKey: AccountStoreKey
-): AccountDataBacking {
+export function createIndexedDBRecordStorage(
+  storeKey: RecordStoreKey
+): LocalRecordStorageAdapter {
   const factory = globalThis.indexedDB;
   if (!factory) {
-    throw new Error("[account-data] IndexedDB is unavailable.");
+    throw new Error("[sync-engine] IndexedDB is unavailable.");
   }
-  // The account is IN THE DATABASE NAME, not just in the rows. Two accounts on
-  // one browser therefore cannot see each other's data even through a bug in
-  // this file -- the wrong-key class of mistake that Plan 092.6.1 fixed cannot
+  // The game AND the account are in the database name, not just in the rows.
+  // Two accounts on one browser therefore cannot see each other's data even
+  // through a bug in this file, and two games previewed on the same origin
+  // cannot see each other's at all -- the wrong-key class of mistake cannot
   // reach across a database boundary.
-  const dbName =
-    `${ACCOUNT_DATA_DB_PREFIX}:${storeKey.pluginId}` +
-    `:${storeKey.storeId}:${storeKey.userId}`;
+  const dbName = gameScopedStorageName(
+    RECORD_STORE_DB_SEGMENT,
+    storeKey.pluginId,
+    storeKey.storeId,
+    storeKey.userId
+  );
 
   let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -106,7 +111,7 @@ export function createIndexedDBAccountBacking(
         }
       };
       request.onerror = () =>
-        reject(request.error ?? new Error(`[account-data] cannot open ${dbName}`));
+        reject(request.error ?? new Error(`[sync-engine] cannot open ${dbName}`));
       request.onsuccess = () => {
         const db = request.result;
         // Release the connection when another tab upgrades, so a wipe is not
@@ -138,7 +143,7 @@ export function createIndexedDBAccountBacking(
           .transaction(OBJECT_STORE, "readonly")
           .objectStore(OBJECT_STORE)
           .get(key);
-        req.onsuccess = () => resolve(req.result as StoredAccountRecord | undefined);
+        req.onsuccess = () => resolve(req.result as StoredRecord | undefined);
         req.onerror = () => reject(req.error);
       });
     },
@@ -157,7 +162,7 @@ export function createIndexedDBAccountBacking(
     async readPage(afterKey, limit) {
       const db = await openDb();
       return new Promise((resolve, reject) => {
-        const records: StoredAccountRecord[] = [];
+        const records: StoredRecord[] = [];
         const range = IDBKeyRange.lowerBound(afterKey, true);
         const req = db
           .transaction(OBJECT_STORE, "readonly")
@@ -173,7 +178,7 @@ export function createIndexedDBAccountBacking(
             });
             return;
           }
-          records.push(cursor.value as StoredAccountRecord);
+          records.push(cursor.value as StoredRecord);
           cursor.continue();
         };
         req.onerror = () => reject(req.error);
@@ -183,7 +188,7 @@ export function createIndexedDBAccountBacking(
     async readPending(limit) {
       const db = await openDb();
       return new Promise((resolve, reject) => {
-        const records: StoredAccountRecord[] = [];
+        const records: StoredRecord[] = [];
         const req = db
           .transaction(OBJECT_STORE, "readonly")
           .objectStore(OBJECT_STORE)
@@ -195,7 +200,7 @@ export function createIndexedDBAccountBacking(
             resolve(records);
             return;
           }
-          records.push(cursor.value as StoredAccountRecord);
+          records.push(cursor.value as StoredRecord);
           cursor.continue();
         };
         req.onerror = () => reject(req.error);
