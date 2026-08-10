@@ -354,6 +354,8 @@ function BootOverlay(props: {
   title: string;
   body: string;
   tone?: "default" | "error";
+  /** Rendered under the body. Used for the still-loading choice. */
+  footer?: React.ReactNode;
 }) {
   const isError = props.tone === "error";
   return (
@@ -398,6 +400,7 @@ function BootOverlay(props: {
           {props.title}
         </p>
         <p style={{ margin: "8px 0 0", fontSize: 15 }}>{props.body}</p>
+        {props.footer}
       </div>
     </div>
   );
@@ -428,6 +431,12 @@ function PreviewOverlay() {
   const assetPreload = useSyncExternalStore(
     host.state.assetPreload.subscribe,
     host.state.assetPreload.getSnapshot
+  );
+  // Plan 092.6 — same choice the deployed game offers. An author sitting at a
+  // stuck loading screen with no way forward is the same problem a player has.
+  const bootStall = useSyncExternalStore(
+    host.state.bootStall.subscribe,
+    host.state.bootStall.getSnapshot
   );
 
   useEffect(() => {
@@ -541,8 +550,25 @@ function PreviewOverlay() {
         title="Sugarmagic"
         body={
           assetPreload && assetPreload.total > 0
-            ? `Loading assets ${assetPreload.loaded}/${assetPreload.total}...`
+            ? `Loading ${assetPreload.loaded}/${assetPreload.total}...`
             : "Syncing..."
+        }
+        footer={
+          bootStall ? (
+            <>
+              <p style={{ marginTop: 12 }}>
+                This is taking longer than expected. Starting now may mean
+                missing scenery, or progress that has not caught up yet.
+              </p>
+              <button
+                type="button"
+                onClick={() => host.startWithoutFinishedLoading()}
+                style={{ marginTop: 8, cursor: "pointer" }}
+              >
+                Start anyway
+              </button>
+            </>
+          ) : null
         }
       />
     ) : phase === "failed" ? (

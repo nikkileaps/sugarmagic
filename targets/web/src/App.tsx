@@ -130,6 +130,9 @@ export function App() {
     loaded: number;
     total: number;
   } | null>(null);
+  // Plan 092.6 — set when boot readiness overruns; drives the "start anyway"
+  // choice on the loading screen.
+  const [bootStall, setBootStall] = useState<{ waitedMs: number } | null>(null);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -156,6 +159,9 @@ export function App() {
     hostRef.current = host;
     const unsubscribePreload = host.state.assetPreload.subscribe(() => {
       setAssetPreload(host.state.assetPreload.getSnapshot());
+    });
+    const unsubscribeStall = host.state.bootStall.subscribe(() => {
+      setBootStall(host.state.bootStall.getSnapshot());
     });
 
     // Story 47.10.5 — `__freshStartFlag` is captured at module load
@@ -247,6 +253,7 @@ export function App() {
     return () => {
       cancelled = true;
       unsubscribePreload();
+      unsubscribeStall();
       host.dispose();
       hostRef.current = null;
     };
@@ -381,9 +388,27 @@ export function App() {
           <p className="eyebrow">Sugarmagic</p>
           <p>
             {assetPreload && assetPreload.total > 0
-              ? `Loading assets ${assetPreload.loaded}/${assetPreload.total}...`
+              ? `Loading ${assetPreload.loaded}/${assetPreload.total}...`
               : "Loading game data..."}
           </p>
+          {/* Plan 092.6 — readiness overran. The player decides rather than
+              being handed a game whose ground and progress may not have
+              arrived, which reads as broken rather than as loading. */}
+          {bootStall ? (
+            <>
+              <p style={{ marginTop: 12 }}>
+                This is taking longer than expected. Starting now may mean
+                missing scenery, or progress that has not caught up yet.
+              </p>
+              <button
+                type="button"
+                onClick={() => hostRef.current?.startWithoutFinishedLoading()}
+                style={{ marginTop: 8, cursor: "pointer" }}
+              >
+                Start anyway
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     ) : phase.kind === "failed" ? (

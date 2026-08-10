@@ -119,7 +119,6 @@ import {
   type RuntimeBannerContribution,
   createPlayerVisualController,
   createSessionHudCard,
-  BOOT_SYNC_TIMEOUT_MS,
   createSyncEngine,
   registerActiveGameId,
   registerActiveIdentityProvider,
@@ -211,6 +210,15 @@ export interface WebRuntimeHostOptions {
   ownerWindow?: Window;
   request: WebTargetAdapterRequest;
 }
+
+/**
+ * How long boot loads before it stops deciding for the player.
+ *
+ * Long enough that a normal cold start on a slow connection never sees it --
+ * the assets alone allow 20s each -- and short enough that nobody sits in
+ * front of a loading screen wondering whether it is stuck.
+ */
+export const BOOT_READINESS_TIMEOUT_MS = 30_000;
 
 export interface WebRuntimeStartState {
   regions: RegionDocument[];
@@ -428,6 +436,16 @@ export interface WebRuntimeHostState {
    */
   assetPreload: ObservableValue<AssetPreloadProgress | null>;
   /**
+   * Plan 092.6 — set when boot readiness has overrun and the player is being
+   * asked what to do. Null the rest of the time.
+   *
+   * Starting a game whose world or whose player data has not arrived looks
+   * like a broken game, not a loading one -- missing ground, absent scenery, a
+   * learner taught words they already know. So the choice is the player's, and
+   * this is how the boot screen knows to offer it.
+   */
+  bootStall: ObservableValue<{ waitedMs: number } | null>;
+  /**
    * Plan 054 §054.3 — the canonical Model layer for game
    * lifecycle. `lifecycle: "booting" | "start-menu" | "playing"
    * | "paused"` answers "what phase of the game is the player
@@ -489,6 +507,8 @@ export interface WebRuntimeHost {
    * reflects the latest snapshot. Idempotent; safe to call after
    * every successful write even when the payload didn't change.
    */
+  /** Plan 092.6 — the player's answer to the still-loading prompt. */
+  startWithoutFinishedLoading(): void;
   notifyAutosaveWritten(snapshot: {
     lastPlayed: string;
     payload: GameSavePayload;
@@ -961,6 +981,11 @@ export function createWebRuntimeHost(
   const latestAutosaveStore: MutableObservableValue<SessionHudSavedGameSnapshot | null> =
     createObservableValue<SessionHudSavedGameSnapshot | null>(null);
   // Plan 060 §060.1 — boot asset-preload progress store.
+  const bootStallStore: MutableObservableValue<{ waitedMs: number } | null> =
+    createObservableValue<{ waitedMs: number } | null>(null);
+  /** Resolves the readiness wait when the player chooses to start anyway.
+   *  Replaced each boot; a no-op until readiness has actually overrun. */
+  let startAnyway: (() => void) | null = null;
   const assetPreloadStore: MutableObservableValue<AssetPreloadProgress | null> =
     createObservableValue<AssetPreloadProgress | null>(null);
 
@@ -2089,44 +2114,80 @@ export function createWebRuntimeHost(
       state.savedGame ??
       (state.savedGamePromise ? await state.savedGamePromise : null);
 
-    // Plan 092.6 — a returning player's data has to be HERE before they can do
-    // anything with it. Left to the background interval, the first pull raced
-    // the player: reach a conversation before it landed and the game read an
-    // empty store, taught words already known, and corrected itself minutes
-    // later with no sign anything had been wrong. "Wait a few seconds before
-    // talking to anyone" is not a thing a player can be asked to do.
+    // Plan 092.6 — ONE readiness phase, not two.
     //
-    // Bounded, because a backend that is down must not hold someone out of a
-    // game that is otherwise ready. Anything arriving after the deadline still
-    // arrives, just later -- which is the ordinary background case.
-    if (firstSyncPass) {
-      const pending = firstSyncPass;
-      firstSyncPass = null;
-      await Promise.race([
-        pending,
-        new Promise<void>((resolve) => {
-          ownerWindow.setTimeout(() => {
-            console.warn(
-              `[web-runtime] first sync did not finish within ${BOOT_SYNC_TIMEOUT_MS}ms; ` +
-                "starting anyway. Data already on this device is used until it lands."
-            );
-            resolve();
-          }, BOOT_SYNC_TIMEOUT_MS);
-        })
-      ]);
-    }
+    // A returning player's data has to be here before they can use it: reach a
+    // conversation before it lands and the game teaches words they already
+    // know, then corrects itself minutes later with nothing to show it was
+    // ever wrong. That is the same requirement the asset preload already
+    // exists to meet, so it is the same phase -- one deadline, one progress
+    // readout, one answer to "is this game ready". It was briefly a separate
+    // wait with its own timeout and no presence on the loading screen, which
+    // meant the two could disagree about ready and only one of them told
+    // anybody.
+    //
+    // Counted as one unit of work alongside the assets so the loading screen
+    // can say what it is waiting for.
+    const pendingSync = firstSyncPass;
+    firstSyncPass = null;
+    const syncUnits = pendingSync ? 1 : 0;
+    let assetsLoaded = 0;
+    let assetsTotal = 0;
+    let syncDone = 0;
+    const publishProgress = () =>
+      assetPreloadStore.set({
+        loaded: assetsLoaded + syncDone,
+        total: assetsTotal + syncUnits
+      });
 
-    // Plan 060 §060.1 — preload every file-backed asset into the
-    // HTTP cache BEFORE world assembly, so the loading screen
-    // gates on a genuinely ready game (music plays on first
-    // gesture, meshes don't pop in). Per-asset failures warn and
-    // continue; the phase never blocks boot indefinitely. In
-    // Studio preview the sources are local blob URLs, so this is
-    // near-instant there.
-    assetPreloadStore.set({ loaded: 0, total: 0 });
-    await preloadAssetSources(state.assetSources, {
-      onProgress: (progress) => assetPreloadStore.set(progress)
+    assetPreloadStore.set({ loaded: 0, total: syncUnits });
+    const readiness = Promise.all([
+      preloadAssetSources(state.assetSources, {
+        onProgress: (progress) => {
+          assetsLoaded = progress.loaded;
+          assetsTotal = progress.total;
+          publishProgress();
+        }
+      }),
+      pendingSync
+        ? pendingSync.then(() => {
+            syncDone = 1;
+            publishProgress();
+          })
+        : Promise.resolve()
+    ]);
+
+    // NOT A SILENT TIMEOUT. Starting a game whose world or whose player data
+    // has not arrived produces missing ground, absent scenery, and a learner
+    // taught words they already know -- all of which look like the game being
+    // broken rather than the game still loading. So when readiness overruns,
+    // the player is told and decides: keep waiting, or start anyway knowing
+    // what that means. Deciding on their behalf is what produced a "working"
+    // boot with black ground.
+    let readinessSettled = false;
+    void readiness.then(() => {
+      readinessSettled = true;
+      bootStallStore.set(null);
     });
+    await Promise.race([
+      readiness,
+      new Promise<void>((resolve) => {
+        ownerWindow.setTimeout(() => {
+          if (readinessSettled) {
+            resolve();
+            return;
+          }
+          console.warn(
+            `[web-runtime] still loading after ${BOOT_READINESS_TIMEOUT_MS}ms; asking the player.`
+          );
+          // Resolved by the player choosing to start anyway; readiness
+          // finishing first wins the race above regardless.
+          startAnyway = resolve;
+          bootStallStore.set({ waitedMs: BOOT_READINESS_TIMEOUT_MS });
+        }, BOOT_READINESS_TIMEOUT_MS);
+      })
+    ]);
+    bootStallStore.set(null);
     assetPreloadStore.set(null);
 
     scene = new THREE.Scene();
@@ -3140,6 +3201,20 @@ export function createWebRuntimeHost(
     };
   }
 
+  /**
+   * The player chose to start before loading finished (Plan 092.6).
+   *
+   * A no-op unless readiness has actually overrun -- there is nothing to
+   * release before then. What is still in flight keeps going; it simply is not
+   * waited on, which is why the prompt says what that costs.
+   */
+  function startWithoutFinishedLoading(): void {
+    const release = startAnyway;
+    startAnyway = null;
+    bootStallStore.set(null);
+    release?.();
+  }
+
   function notifyAutosaveWritten(snapshot: {
     lastPlayed: string;
     payload: GameSavePayload;
@@ -3195,6 +3270,7 @@ export function createWebRuntimeHost(
     user: userStore,
     latestAutosave: latestAutosaveStore,
     assetPreload: assetPreloadStore,
+    bootStall: bootStallStore,
     gameState: gameStateStore,
     uiState: uiStateStore
   };
@@ -3206,6 +3282,7 @@ export function createWebRuntimeHost(
     dispose,
     getCurrentSavePayload,
     notifyAutosaveWritten,
+    startWithoutFinishedLoading,
     showStartMenu,
     setLoginModalOpen,
     startNewGame: hostStartNewGame,

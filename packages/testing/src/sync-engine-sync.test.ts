@@ -16,7 +16,6 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  BOOT_SYNC_TIMEOUT_MS,
   SYNC_MAX_INTERVAL_MS,
   createSyncEngine,
   createMemoryRecordStorage,
@@ -195,10 +194,13 @@ describe("092.6 - a returning player's data is there before they can use it", ()
   });
 
   it("a backend that never answers does not hold the player out of the game", async () => {
-    // Waiting is right; waiting for ever is not. The bound is what boot races
-    // the first pass against.
-    expect(BOOT_SYNC_TIMEOUT_MS).toBeGreaterThan(0);
-    expect(BOOT_SYNC_TIMEOUT_MS).toBeLessThanOrEqual(15_000);
+    // The bound lives with BOOT, not here: waiting for a player's data is the
+    // same readiness phase as waiting for the world, so there is one deadline
+    // and one prompt rather than two timeouts that disagree. See
+    // BOOT_READINESS_TIMEOUT_MS in the web host.
+    const engine = createSyncEngine({ remote: null, ownerWindow: null });
+    await expect(engine.start()).resolves.toBeUndefined();
+    engine.stop();
   });
 });
 

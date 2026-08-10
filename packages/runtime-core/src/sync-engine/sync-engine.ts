@@ -59,17 +59,6 @@ export const SYNC_MAX_INTERVAL_MS = 300_000;
 /** Records per push or pull request. */
 export const SYNC_BATCH = 250;
 
-/**
- * How long boot waits for a player's data before giving up and letting them
- * play anyway.
- *
- * Waiting is right -- a returning player who reaches a conversation before
- * their words arrive gets taught things they already know. Waiting FOREVER is
- * not: a backend that is down or slow would leave them staring at a loading
- * screen with a perfectly playable game behind it. So the wait is bounded, and
- * what lands after the deadline still lands, just later.
- */
-export const BOOT_SYNC_TIMEOUT_MS = 8000;
 
 export interface SyncResult {
   pushed: number;
