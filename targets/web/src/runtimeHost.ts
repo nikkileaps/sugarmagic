@@ -119,7 +119,10 @@ import {
   type RuntimeBannerContribution,
   createPlayerVisualController,
   createSessionHudCard,
+  createAccountDataSync,
   registerActiveIdentityProvider,
+  resolveActiveAccountDataRemote,
+  type AccountDataSync,
   resolveActiveGameSaveStore,
   resolveActiveIdentityProvider,
   upgradeLegacyPayload,
@@ -1307,6 +1310,10 @@ export function createWebRuntimeHost(
   // identity onChange subscription below now writes into
   // `userStore.set(next)` instead of mutating a local `latestUser`.
   let identityUnsubscribe: (() => void) | null = null;
+  // Plan 092.6.3 — per-account record sync. One per host lifetime; stopped
+  // on teardown so a disposed host does not keep reconciling in the
+  // background against an account nobody is playing as.
+  let accountDataSync: AccountDataSync | null = null;
   let billboardAssetRegistry: BillboardAssetRegistry | null = null;
   let billboardRenderer: BillboardRenderer | null = null;
   let textBillboardRenderer: TextBillboardRenderer | null = null;
@@ -1522,6 +1529,8 @@ export function createWebRuntimeHost(
 
     identityUnsubscribe?.();
     identityUnsubscribe = null;
+    accountDataSync?.stop();
+    accountDataSync = null;
     userStore.set(null);
     latestAutosaveStore.set(null);
 
@@ -2003,6 +2012,20 @@ export function createWebRuntimeHost(
       // module-level access-token registry so gateway-routed clients
       // (SugarAgent etc.) read the live access token per request.
       registerActiveIdentityProvider(resolvedIdentity);
+      // Plan 092.6.3 — start reconciling per-account stores now that an
+      // account exists. Started AFTER the identity registration above,
+      // because the stores key on the account and the first pass is what
+      // brings a returning player's data back.
+      //
+      // A null remote is a working configuration, not a failure: with no
+      // plugin contributing a backend, every account store keeps serving
+      // reads and writes locally and simply never leaves the device.
+      accountDataSync?.stop();
+      accountDataSync = createAccountDataSync({
+        remote: resolveActiveAccountDataRemote(pluginManager),
+        ownerWindow
+      });
+      accountDataSync.start();
       // Story 47.10 follow-up — track the resolved user live so the
       // Session debug HUD card's User / Anon rows reflect sign-in /
       // sign-out instead of being frozen at the boot-time user.

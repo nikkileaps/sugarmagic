@@ -26,6 +26,7 @@ import type {
   ConversationQuestFormResponse,
   ConversationActionProposal
 } from "../conversation";
+import type { AccountDataRemote } from "../account-data";
 import type { UserIdentityProvider } from "../identity";
 import type { UserProfileStore } from "../profile";
 import {
@@ -64,7 +65,8 @@ export type RuntimePluginContributionKind =
   | "mechanics.emitHandler"
   | "identity.provider"
   | "save.store"
-  | "profile.store";
+  | "profile.store"
+  | "accountData.remote";
 
 interface RuntimePluginContributionBase<TKind extends RuntimePluginContributionKind, TPayload> {
   pluginId: string;
@@ -318,6 +320,21 @@ export type GameSaveStoreContribution = RuntimePluginContributionBase<
   }
 >;
 
+// Plan 092.6.3 — plugins that can reach a backend contribute the server
+// side of per-account record storage here. Same single-active model as
+// profile.store, and the same null-when-absent outcome: with nothing
+// contributed, account stores still work, they just never leave the
+// device. runtime-core defines the interface and never learns which
+// backend a project uses.
+export type AccountDataRemoteContribution = RuntimePluginContributionBase<
+  "accountData.remote",
+  {
+    remoteId: string;
+    summary: string;
+    remote: AccountDataRemote;
+  }
+>;
+
 // Story 47.8 — plugins that own per-user profile data (display
 // name, locale, preferences) contribute a UserProfileStore here.
 // Unlike identity.provider + save.store, there's no runtime-core
@@ -391,6 +408,7 @@ export type RuntimePluginContribution =
   | MechanicsEmitHandlerContribution
   | IdentityProviderContribution
   | GameSaveStoreContribution
+  | AccountDataRemoteContribution
   | ProfileStoreContribution;
 
 export interface RuntimePluginContext {
@@ -652,4 +670,36 @@ export function resolveActiveProfileStore(
     .slice()
     .sort((a, b) => b.priority - a.priority)[0];
   return winner.payload.store;
+}
+
+/**
+ * Plan 092.6.3 — pick the backend that per-account stores sync against.
+ *
+ * Returns `null` when no plugin contributes one, and that is a working
+ * configuration rather than a failure: every account store keeps serving reads
+ * and writes locally, and nothing syncs. A project with no accounts is exactly
+ * this case.
+ */
+export function resolveActiveAccountDataRemote(
+  manager: RuntimePluginManager,
+  logger: ResolverLogger = defaultResolverLogger
+): AccountDataRemote | null {
+  const contributions = manager.getContributions("accountData.remote");
+  if (contributions.length === 0) return null;
+  if (contributions.length > 1) {
+    logger.warn(
+      `[runtime-core] Multiple plugins contribute accountData.remote; picking highest priority.`,
+      {
+        contributingPluginIds: contributions.map((c) => c.pluginId),
+        priorities: contributions.map((c) => ({
+          pluginId: c.pluginId,
+          priority: c.priority
+        }))
+      }
+    );
+  }
+  const winner = contributions
+    .slice()
+    .sort((a, b) => b.priority - a.priority)[0];
+  return winner.payload.remote;
 }
