@@ -35,11 +35,6 @@ import { SUGARLANG_COMPILE_PIPELINE_VERSION } from "../../runtime/compile/conten
 import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
 import { IndexedDBVariantCache } from "../../runtime/compile/variant-cache";
-import { IndexedDBIntentCache } from "../../runtime/compile/intent-cache";
-import {
-  LINE_INTENT_PROMPT_VERSION,
-  LineIntentExtractor
-} from "../../runtime/compile/line-intent-extractor";
 import {
   SCENE_CONTEXT_PROMPT_VERSION,
   SceneContextExtractor
@@ -959,24 +954,6 @@ export async function rebuildSugarlangCompileCache(
             promptVersion: SUGARLANG_COMPILE_PIPELINE_VERSION
           }
         : undefined,
-    intentPipeline: gatewayClient
-      ? {
-          cache: new IndexedDBIntentCache({ workspaceId }),
-          extractNodeIntent: async (dialogueDefinitionId, node, contentHash) => {
-            return new LineIntentExtractor({
-              llmClient: gatewayClient
-            }).extract({
-              nodeId: node.nodeId,
-              nodeText: node.text,
-              authoredIntent: node.intent,
-              contentHash,
-              dialogueDefinitionId,
-              promptVersion: LINE_INTENT_PROMPT_VERSION
-            });
-          },
-          promptVersion: LINE_INTENT_PROMPT_VERSION
-        }
-      : undefined,
     // STUDIO ONLY, deliberately. The runtime's lazy path (`ensureScene`) runs in
     // the deployed game, and this is a gateway call -- a player's machine must
     // not do authoring work. The runtime receives models by seeding.
@@ -1023,7 +1000,6 @@ export async function rebuildSugarlangCompileCache(
   scheduler.rebuildAll();
   await scheduler.flush();
   await scheduler.flushChunks();
-  await scheduler.flushIntents();
   await scheduler.flushSceneContext();
   scheduler.stop();
 

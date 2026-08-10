@@ -460,8 +460,6 @@ export interface RuntimePluginInstance {
   blackboardFactDefinitions?: readonly BlackboardFactDefinition<unknown>[];
   init?: (context: RuntimePluginContext) => Promise<void> | void;
   update?: (delta: number) => void;
-  serializeState?: () => unknown;
-  loadState?: (state: unknown) => void;
   dispose?: () => Promise<void> | void;
 }
 
@@ -481,8 +479,6 @@ export interface RuntimePluginManager {
   getContributions: <TKind extends RuntimePluginContributionKind>(
     kind: TKind
   ) => Array<Extract<RuntimePluginContribution, { kind: TKind }>>;
-  serializeState: () => Record<string, unknown>;
-  loadState: (stateByPlugin: Record<string, unknown> | null | undefined) => void;
 }
 
 function isContributionAllowedOnHost(
@@ -541,23 +537,6 @@ export function createRuntimePluginManager(
         )
         .sort((left, right) => left.priority - right.priority);
     },
-    serializeState() {
-      const byPlugin: Record<string, unknown> = {};
-      for (const plugin of plugins) {
-        const state = plugin.serializeState?.();
-        if (state !== undefined) {
-          byPlugin[plugin.pluginId] = state;
-        }
-      }
-      return byPlugin;
-    },
-    loadState(stateByPlugin) {
-      if (!stateByPlugin) return;
-      for (const plugin of plugins) {
-        if (!(plugin.pluginId in stateByPlugin)) continue;
-        plugin.loadState?.(stateByPlugin[plugin.pluginId]);
-      }
-    }
   };
 }
 

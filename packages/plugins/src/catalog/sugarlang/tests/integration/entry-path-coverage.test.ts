@@ -80,7 +80,6 @@ import {
   SUGARLANG_CONSTRAINT_ANNOTATION,
 } from "../../runtime/middlewares/shared";
 import { createTestRegion, createTestActiveScene } from "../compile/test-helpers";
-import { createBudgeterSceneLexicon } from "./scene-lexicon-fixture";
 import { clearSugarlangRuntimeCompileCache } from "../../runtime/compile/runtime-cache-state";
 
 // ---------------------------------------------------------------------------
@@ -95,13 +94,6 @@ const SCENE_ID = "scene-station";
 const AUTHORED_LINE_1 = "Hola viajero";
 const AUTHORED_LINE_2 = "Hola otra vez amigo";
 
-// Only "hola" as A1 so the budgeter deterministically prescribes it (same
-// trick as the e2e golden): the "encountered" observation on the NPC line is
-// then guaranteed, giving observe a cheap observable per admitted path.
-const HOLA_PREVIEW_LEXICON = createBudgeterSceneLexicon({
-  sceneId: SCENE_ID,
-  entries: [{ lemmaId: "hola", band: "A1", frequencyRank: 1 }]
-});
 
 const TEST_NPC_DEFINITIONS: NPCDefinition[] = [
   {
@@ -417,7 +409,6 @@ function buildHarness(
     itemDefinitions: [],
     documentDefinitions: []
   });
-  services.seedPreviewLexicons({ lexicons: [HOLA_PREVIEW_LEXICON] });
 
   const captured: { annotations: Record<string, unknown> } = { annotations: {} };
   const captureMiddleware: ConversationMiddleware = {

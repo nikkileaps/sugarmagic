@@ -156,19 +156,20 @@ interface LineIntentFields {
 }
 ```
 
-At bake time, `extractIntent` (compile-scheduler intent pipeline, wired in
-`rebuildSugarlangCompileCache` in 087.5) extracts a structured
-`LineIntentArtifact` from the authored English text and the authored intent
-fields, stored in `IndexedDBIntentCache`. Runtime reads the intent cache to
-populate `constraint.targetVocab.introduce` from `mustConveyFacts` when a
-baked variant is used, and to match against due teachables for the live-render
-trigger.
+Authored intent is read directly off the dialogue node. Nothing extracts a
+separate artifact from it.
 
-The intent content hash is computed by `buildIntentContentHash(nodeId, text,
-intent?)` (intent-cache.ts), shared between the bake pipeline and the runtime.
-Do not use `buildVariantContentHash` for intent keys -- that function uses
-`JSON.stringify({})` on both sides deliberately (intent does not factor into
-variant cache hits).
+A bake pass used to: it called the gateway per line, built a
+`LineIntentArtifact`, and cached it for the live-render trigger to match
+against. That trigger was deleted (Tier C above), which left a pass that spent
+money every rebuild and wrote a cache nothing read -- including variant
+generation, whose only caller passes `intent: null`. Removed in Plan 092.7.
+
+Variants are keyed by `buildDialogueNodeContentHash(nodeId, text)`
+(dialogue-node-source.ts), which puts `JSON.stringify({})` in the intent slot
+deliberately: intent goes into the LLM prompt, not the key, so a cache hit
+survives a hand-authored intent edit. There is no second hash -- the separate
+intent hash went with the extraction pass.
 
 ```typescript
 interface LineIntentArtifact {

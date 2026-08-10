@@ -478,9 +478,16 @@ Every entry gets one of two answers: USED by a named story, or DELETED with a
 grep exit. Deleting is the default; something is kept only if a story here
 actually calls it and names it. Where a test is the only caller, the test goes
 with the code -- `seedPreviewLexicons` has green tests for a branch that never
-runs, which is exactly how it stayed hidden. EXCEPT where a test exists to keep
-a path DEAD: `tests/middlewares/sugar-lang-scripted-middleware.test.ts:77-105`
-guards the deleted intent read path and must outlive its subject.
+runs, which is exactly how it stayed hidden.
+
+NO TEST EXISTS TO KEEP A PATH DEAD. An earlier draft carved out
+`sugar-lang-scripted-middleware.test.ts` as guarding a deleted path and so
+having to outlive its subject. nikki, reading it: a test whose subject is
+absent code is confusing and keeps the ghost around. She is right, and the
+carve-out was wrong for a second reason -- what those tests assert is a PRESENT
+property (rendering a scripted line costs zero gateway calls) across two
+inputs. Reframed in present tense; the second input is the hard case rather
+than a duplicate, so nothing was removed.
 **Depends on:** 092.4 and 092.6 -- the two stories that might claim one.
 Run it LAST so the answers are decisions, not guesses.
 **Exit:** each item is USED-by-`<story>` or DELETED; for every DELETED item a

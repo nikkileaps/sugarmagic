@@ -105,7 +105,6 @@ export function createFirefliesRuntimePlugin(options: {
         }
       }
     ],
-    serializeState: () => ({ enabled: true })
   };
 }
 

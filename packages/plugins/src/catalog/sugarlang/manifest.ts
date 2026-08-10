@@ -315,7 +315,6 @@ export function createSugarlangPlugin(
           }))
         }
       );
-      services.seedPreviewLexicons(bootPayload);
       const studioWorkspaceId = extractSugarlangStudioWorkspaceId(bootPayload);
       if (studioWorkspaceId) {
         services.wireStudioVariantCache(studioWorkspaceId);
@@ -345,7 +344,6 @@ export function createSugarlangPlugin(
       await flushTelemetry(telemetry, logger);
       await telemetry.dispose?.();
     },
-    serializeState: () => ({ enabled: context.configuration.enabled })
   };
 }
 

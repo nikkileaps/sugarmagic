@@ -48,7 +48,6 @@ import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
 import { IndexedDBVariantCache, type SugarlangVariantCache } from "./compile/variant-cache";
 import { getShippedVariantCache } from "./compile/shipped-variant-cache";
-import { IndexedDBIntentCache, type SugarlangIntentCache } from "./compile/intent-cache";
 import { LiveRenderCache } from "./compile/live-render-cache";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
 import type { SugarlangLLMClient } from "./llm/types";
@@ -141,8 +140,6 @@ export interface SugarlangExecutionServices {
   llmClient: SugarlangLLMClient | null;
   /** 086.4: optional variant cache injected by callers at bake time. */
   variantCache?: SugarlangVariantCache;
-  /** 086.4: optional intent cache injected by callers at bake time. */
-  intentCache?: SugarlangIntentCache;
   /** 086.5: optional live-render cache (in-memory only; no persistence needed). */
   liveRenderCache?: LiveRenderCache;
   /** 087.1: outer-loop scheduler -- computes the cross-session teach schedule. */
@@ -306,7 +303,6 @@ export class SugarlangRuntimeServices {
   private readonly telemetry: TelemetrySink;
   private readonly languageBundles = new Map<string, LanguageBundle>();
   private readonly executionServices = new Map<string, SugarlangExecutionServices>();
-  private readonly previewLexicons = new Map<string, unknown>();
   private boundContext: BoundRuntimeContext | null = null;
   private readonly gatewayClient: SugarlangLLMClient | null;
   private readonly llmModel: string;
@@ -384,20 +380,6 @@ export class SugarlangRuntimeServices {
     }
   }
 
-  seedPreviewLexicons(payload: unknown): void {
-    if (!isRecord(payload) || !Array.isArray(payload.lexicons)) {
-      return;
-    }
-    for (const lexicon of payload.lexicons) {
-      if (
-        isRecord(lexicon) &&
-        typeof lexicon.sceneId === "string" &&
-        typeof lexicon.contentHash === "string"
-      ) {
-        this.previewLexicons.set(lexicon.sceneId, lexicon);
-      }
-    }
-  }
 
   wireStudioVariantCache(workspaceId: string): void {
     if (this.studioWorkspaceId !== workspaceId) {
@@ -1029,9 +1011,6 @@ export class SugarlangRuntimeServices {
     const variantCache: SugarlangVariantCache | undefined = this.studioWorkspaceId
       ? new IndexedDBVariantCache({ workspaceId: this.studioWorkspaceId })
       : getShippedVariantCache();
-    const intentCache: SugarlangIntentCache | undefined = this.studioWorkspaceId
-      ? new IndexedDBIntentCache({ workspaceId: this.studioWorkspaceId })
-      : undefined;
     const liveRenderCache = new LiveRenderCache();
 
     const services: SugarlangExecutionServices = {
@@ -1047,7 +1026,6 @@ export class SugarlangRuntimeServices {
       teacher,
       llmClient: this.gatewayClient,
       variantCache,
-      intentCache,
       liveRenderCache
     };
     this.executionServices.set(key, services);
@@ -1119,16 +1097,6 @@ export class SugarlangRuntimeServices {
       profile: "runtime-preview"
     });
     const sceneLexiconStore = new DefaultSugarlangSceneLexiconStore(scheduler);
-
-    const previewLexicons = Array.from(this.previewLexicons.values()).filter(
-      (lexicon) =>
-        isRecord(lexicon) &&
-        lexicon.profile === "runtime-preview" &&
-        lexicon.sceneId === this.boundContext?.activeRegion?.identity.id
-    );
-    if (previewLexicons.length > 0) {
-      sceneLexiconStore.seed(previewLexicons as never);
-    }
 
     const bundle: LanguageBundle = {
       atlas,

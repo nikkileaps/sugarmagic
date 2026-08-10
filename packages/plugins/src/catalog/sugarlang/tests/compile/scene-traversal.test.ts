@@ -149,8 +149,7 @@ describe("projectSceneContextSources (Plan 090.1)", () => {
       source.sourceId.startsWith("dialogue:")
     );
 
-    // Per-NPC, because "what is this scene about" is not a per-line question --
-    // that scope belongs to LineIntentExtractor.
+    // Per-NPC, because "what is this scene about" is not a per-line question.
     expect(dialogueSources.every((source) => source.kind === "npc")).toBe(true);
   });
 

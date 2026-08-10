@@ -626,7 +626,7 @@ function SugarProfileWorkspaceContent(props: PluginWorkspaceViewProps) {
                 <Alert color="green" variant="light" title="Migration applied">
                   <Stack gap={4}>
                     <Text size="sm">
-                      <Code>supabase db push</Code> succeeded. New auth signups will get a profile row auto-created; save loads + writes now hit <Code>public.game_save</Code>.
+                      <Code>supabase db push</Code> succeeded. New auth signups will get a profile row auto-created; save loads + writes now hit <Code>public.saves</Code>.
                     </Text>
                     {migrationPhase.stdout.trim() ? (
                       <Code block>{migrationPhase.stdout.trim()}</Code>

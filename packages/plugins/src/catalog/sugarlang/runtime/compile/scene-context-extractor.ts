@@ -50,10 +50,9 @@
  *   fail-soft -- any failure returns an empty concept list plus a `failure`,
  *   never a throw, so a compile degrades rather than breaking authoring.
  *
- * NOT THE PLACE FOR LINE INTENT
- *   `LineIntentExtractor` briefly lived here (2026-07-29) and was moved back
- *   out. The two have different DEPENDENCY SCOPE, and that is what decides an
- *   artifact boundary:
+ * SCOPE IS WHAT DECIDES AN ARTIFACT BOUNDARY
+ *   A per-line pass briefly lived here and was moved back out, because the two
+ *   depend on different things:
  *
  *     scene concepts   depend on ALL sources        -> one artifact per scene
  *     line intent      depends on ONE dialogue node -> one artifact per node

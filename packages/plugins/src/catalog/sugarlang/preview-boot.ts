@@ -122,10 +122,13 @@ export async function buildSugarlangPreviewBootPayloadForSession(
   // different things -- `workspaceId` here is Studio's NAVIGATION workspace
   // ("layout", "quests", ...), while the Rebuild button writes under
   // `sugarlang-studio:{gameProjectId}` (resolveStudioCompileWorkspaceId). The
-  // compile cache above survives the mismatch only because it can recompile on
-  // the fly and repopulate whatever cache it is handed; scene context CANNOT --
-  // building it is a gateway call and a Studio-only pass -- so reading the wrong
-  // id means silently shipping no situations, ever.
+  // compile cache above survives the mismatch for LEMMAS only: those it can
+  // recompute on the fly and repopulate into whatever cache it is handed.
+  // Authored CHUNKS it cannot -- extracting them is a Studio-only pass, so the
+  // wrong id yields a chunk-less lexicon that looks identical to a scene with
+  // no chunks (`sugarmagic-scene-vocab-o8f`). Scene context cannot survive it
+  // either: building that is a gateway call, so reading the wrong id means
+  // silently shipping no situations, ever.
   const payload = await buildSugarlangPreviewBootPayload(
     scenes,
     cache,
