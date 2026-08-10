@@ -105,7 +105,7 @@ describe("resetSugarlangLearnerDatabases", () => {
   it("closes provided closeables so their databases can be deleted", async () => {
     const factory = new IDBFactory();
     const store = new IndexedDBCardStore({
-      profileId: "learner-closeable",
+      profileId: "user-test:learner-closeable",
       indexedDbFactory: factory
     });
     await store.set(createLemmaCard("casa"));
@@ -118,7 +118,7 @@ describe("resetSugarlangLearnerDatabases", () => {
 
     expect(result.ok).toBe(true);
     expect(result.deletedDatabases).toEqual([
-      `${CARD_STORE_DB_NAME_PREFIX}:learner-closeable`
+      `${CARD_STORE_DB_NAME_PREFIX}:user-test:learner-closeable`
     ]);
     // A closed store must re-open cleanly (against a now-fresh database).
     expect(await store.count()).toBe(0);
@@ -127,7 +127,7 @@ describe("resetSugarlangLearnerDatabases", () => {
   it("succeeds against a live card store via its versionchange handler", async () => {
     const factory = new IDBFactory();
     const store = new IndexedDBCardStore({
-      profileId: "learner-versionchange",
+      profileId: "user-test:learner-versionchange",
       indexedDbFactory: factory
     });
     await store.set(createLemmaCard("perro"));
@@ -141,7 +141,7 @@ describe("resetSugarlangLearnerDatabases", () => {
 
     expect(result.ok).toBe(true);
     expect(result.deletedDatabases).toEqual([
-      `${CARD_STORE_DB_NAME_PREFIX}:learner-versionchange`
+      `${CARD_STORE_DB_NAME_PREFIX}:user-test:learner-versionchange`
     ]);
     expect(await store.get("perro")).toBeUndefined();
   });
@@ -185,7 +185,7 @@ describe("IndexedDBCardStore.close", () => {
   it("re-opens cleanly after an explicit close", async () => {
     const factory = new IDBFactory();
     const store = new IndexedDBCardStore({
-      profileId: "learner-reopen",
+      profileId: "user-test:learner-reopen",
       indexedDbFactory: factory
     });
     await store.set(createLemmaCard("gato"));
@@ -199,7 +199,7 @@ describe("IndexedDBCardStore.close", () => {
   it("is safe to call close before any operation and repeatedly", async () => {
     const factory = new IDBFactory();
     const store = new IndexedDBCardStore({
-      profileId: "learner-idle-close",
+      profileId: "user-test:learner-idle-close",
       indexedDbFactory: factory
     });
 

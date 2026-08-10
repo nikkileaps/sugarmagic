@@ -22,7 +22,10 @@
  * Status: active
  */
 
-import { CARD_STORE_DB_NAME_PREFIX } from "./card-store";
+import {
+  assertAccountScopedLearnerId,
+  CARD_STORE_DB_NAME_PREFIX
+} from "./card-store";
 
 /**
  * All teach-record database names start with this prefix so the shared
@@ -139,6 +142,10 @@ export class IndexedDBTeachRecordStore implements TeachRecordStore {
  * Falls back to MemoryTeachRecordStore if IndexedDB is unavailable.
  */
 export function createTeachRecordStore(learnerId: string): TeachRecordStore {
+  // Checked BEFORE the memory fallback: an unscoped id is a caller bug in
+  // every environment, and letting it through in one of them is how it
+  // survives to production. See `assertAccountScopedLearnerId`.
+  assertAccountScopedLearnerId(learnerId, "createTeachRecordStore");
   if (typeof indexedDB === "undefined") {
     return new MemoryTeachRecordStore();
   }

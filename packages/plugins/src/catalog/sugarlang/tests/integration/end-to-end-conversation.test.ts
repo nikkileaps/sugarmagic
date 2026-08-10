@@ -21,6 +21,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { signInTestAccount } from "../learner/signed-in-test-account";
 import {
   RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
   createBlackboardScope,
@@ -253,13 +254,17 @@ function makeSharedSetup(
 }
 
 describe("end-to-end conversation golden", () => {
+  let clearTestAccount: (() => void) | undefined;
+
   beforeEach(() => {
+    clearTestAccount = signInTestAccount();
     // 081.5 exit criterion: the suite fails on any unmocked URL. Tests that
     // need a gateway response re-install the guard with an explicit handler.
     installFetchGuard();
     clearSugarlangRuntimeCompileCache();
   });
   afterEach(() => {
+    clearTestAccount?.();
     uninstallFetchGuard();
     clearSugarlangRuntimeCompileCache();
   });

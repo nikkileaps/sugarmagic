@@ -30,6 +30,39 @@ export const CARD_STORE_PAGE_SIZE = 250;
  * consumer -- do not hard-code the literal anywhere else.
  */
 export const CARD_STORE_DB_NAME_PREFIX = "sugarlang-card-store";
+
+/**
+ * How many leading segments of a learner id identify the ACCOUNT. One today;
+ * named so the check below reads as a rule rather than a magic number.
+ */
+const LEARNER_ID_ACCOUNT_SEGMENTS = 1;
+
+/**
+ * Refuse to open a per-player database that is not scoped to an account
+ * (Plan 092.6.1).
+ *
+ * THROWS RATHER THAN DEGRADES, deliberately, and it is the one place in this
+ * plugin's runtime that does. A missing account here is not a condition a
+ * player can be in -- callers resolve the account first and defer when it is
+ * not ready -- so reaching this means a caller skipped that, and the failure
+ * it would otherwise cause is silent and permanent: everyone sharing the
+ * browser writes into one history, and none of it can ever be attributed back
+ * to a person. Falling back to a memory store would hide it just as well.
+ * `NpcMemoryStore` takes the same position for the same reason.
+ */
+export function assertAccountScopedLearnerId(
+  learnerId: string,
+  storeLabel: string
+): void {
+  const segments = learnerId.split(":").filter((part) => part.length > 0);
+  if (segments.length > LEARNER_ID_ACCOUNT_SEGMENTS) return;
+  throw new Error(
+    `[sugarlang] ${storeLabel} was given the learner id "${learnerId}", which ` +
+      "carries no account. Resolve the signed-in account first and defer " +
+      "construction until identity has settled -- a store opened without one " +
+      "is shared by every account using this browser."
+  );
+}
 const CARD_STORE_NAME = "lemma-cards";
 
 export interface CardStorePage {
@@ -132,6 +165,7 @@ export class IndexedDBCardStore implements CardStore {
     if (!indexedDbFactory) {
       throw new Error("IndexedDBCardStore requires an IndexedDB implementation.");
     }
+    assertAccountScopedLearnerId(options.profileId, "IndexedDBCardStore");
     this.indexedDbFactory = indexedDbFactory;
   }
 

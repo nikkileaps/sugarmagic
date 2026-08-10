@@ -310,31 +310,166 @@ rebaking clears it; a fully-baked project dispatches. The story states in
 writing that a second narrative Scene over an already-baked region is NOT
 covered, and points at the deferred ticket.
 
-### 092.6 Learner profile survives a reload
-Known defect: `docs/api/sugarlang-learner-state.md:89-98` states the CEFR
-posterior, `estimatedCefrBand`, the `assessment` record and placement status
-do not survive reload; `persistence.ts:306-311` writes only to
-`blackboard.setFact`. Paul is re-placed every time he returns.
+### 092.6 A player's own data lives locally and syncs to their account
+The word history is not tied to the account AT ALL. `IndexedDBCardStore` opens
+`sugarlang-card-store:${profileId}` (`card-store.ts:268`) where `profileId` is
+`buildLearnerId` = `${playerEntityId}:${targetLanguage}:${supportLanguage}`
+(`runtime-services.ts:213-218`). No `userId` in it. So two accounts on one
+machine SHARE a word history, and one account on two machines gets two. Its two
+siblings key the same way -- `TeachRecordStore`
+(`teach-record-store.ts:32,141-146`) and `EncounterDebtLedger`
+(`encounter-debt-ledger.ts:42,293-298`). Syncing any of them as they stand
+would push one player's words into another player's row, so the re-key is not
+a nicety, it gates everything else here.
 
-It must NOT ship as a `SaveParticipant` -- that contract says "A participant is
-NOT a hatch for plugin domain data to ride in GameSave"
-(`save/participant.ts:10-13`), and ADR 020 names "sugarlang's learner
-blackboard" explicitly (`:47-57`).
+Separately the profile CORE -- the level, the placement record -- is not in a
+store at all. `persistence.ts:306-311` writes it to `blackboard.setFact`, which
+is memory for the life of the tab, and `:241-247` reads it back from there or
+falls to a default. Paul is re-placed every session.
 
-**Put it next to the cards; that needs no new seam.** ADR 020 prescribes a
-plugin-owned store keyed on `userId`, and one already exists for the sibling
-data -- `IndexedDBCardStore`, opened as `sugarlang-card-store:${profileId}`
-(`card-store.ts:32,268`). `persistence.ts:296-311` already holds both the card
-store and the profile at the same call where it writes the blackboard fact, so
-the profile core becomes a record beside the cards. This is the decision that
-sets the story's size: `serializeState`/`loadState` is the other candidate and
-**has zero call sites**, so choosing it would mean owning the persist and
-restore call sites too. Two earlier drafts of this plan picked seams without
-checking whether anything called them.
+Earlier drafts said this must not ride in the game save, citing
+`participant.ts:10-13` and ADR 020 `:47-57`. nikki: that ADR is misleading --
+plugin data MAY travel the save path provided it is namespaced to the plugin,
+opt-in, and absent entirely when the plugin is not installed. ADR 020 is
+amended by this epic to say so. But the save path is still the wrong road HERE,
+for a mechanical reason the earlier drafts missed: `SaveParticipant.serialize()`
+is SYNCHRONOUS (`participant.ts:70`, "Sync, cheap; called every autosave tick")
+and the word history lives behind async IndexedDB. It cannot be read there.
+
+**The shape is local-primary with background sync**, which is the standard
+local-first arrangement: the device holds the primary copy, the server is a
+sync peer rather than a gatekeeper, and reconciliation is last-write-wins on a
+server-stamped timestamp. Sizing says this is not exotic -- one record is ~305
+bytes, and the entire dictionary at 11k words is 3.2 MB. The only thing that
+was ever expensive is cadence, and sync has its own.
+
+**Nothing in core or the host may name a plugin.** `runtimeHost.ts:63,1986,1990`
+already imports `SUGARPROFILE_PLUGIN_ID` and branches on it to read
+`playPageUrl`; that is the drift this mechanism must not repeat. Guard it the
+way 092.1 guarded the asset collector -- a test that reads the source and fails
+if a plugin name appears in it.
+
+**Two customers prove the shape.** sugaragent's `NpcMemoryStore` has the same
+unmet need and is ALREADY keyed correctly -- `userId` + `playthroughId` from
+`getActiveUserId()`/`getActivePlaythroughId()`, throwing rather than writing
+under a null key (`npc-memory-store.ts:528-537`). It is the model to copy and
+the second customer to design against. It is NOT converted in this epic;
+converting it is the proof the mechanism generalised, and belongs to whoever
+needs NPC memory to follow a player.
+
+Split into four stories. Order is forced: the key is wrong, so nothing may sync
+until it is right.
+
+#### 092.6.1 Re-key a player's local data to their account
+Every per-player store this plugin owns keys on the account, reading
+`getActiveUserId()` from runtime-core (NOT from another plugin), and refuses to
+construct when identity has not settled rather than writing under a null key --
+`npc-memory-store.ts:530-536` is the exact precedent, including the error text
+pointing the caller at deferred construction.
+
+Existing local data is DROPPED, not migrated: it cannot be attributed to an
+account after the fact, so there is nothing to migrate it to. Learner data is
+disposable in this project. `resetSugarlangLearnerDatabases`
+(`reset-learner-data.ts:93-157`) already enumerates and deletes by DB-name
+prefix and is the tool for it -- note it does not currently cover
+`sugaragent-npc-memory:*` or `sugarmagic-saves` and must not start.
 **Depends on:** nothing.
-**Exit:** place, hard-refresh, band and placement status still there. State
-explicitly what a second device gets -- the band restores but cards are
-device-local, and a band with no cards is a behaviour someone signs off.
+**Exit:** two accounts on one browser have separate word histories; one account
+signing in twice on one browser sees one. Constructing a store before identity
+resolves throws with a message naming the fix. A grep shows no per-player store
+keyed without a `userId`.
+
+#### 092.6.2 A general store any plugin can use: local primary, synced to the account
+Runtime-core gains a keyed per-user record store. Local backing is IndexedDB
+(memory fallback, as every existing plugin store already does) and is the
+source of every read and write -- a local write IS the state. Reuse what is
+here: `listPage(cursor, limit)` + `bulkSet` + `CARD_STORE_PAGE_SIZE = 250`
+(`card-store.ts:25,164-176,192`) are the paging and batching shapes; the sync
+wrapper is a Decorator over a plain local store, mirroring
+`createSerializedSaveStore` (`serialized-store.ts:62`) including its
+`Symbol.for` idempotency brand (`:49,65-68,98`) so wrapping twice is safe.
+
+The remote backing is an INTERFACE in runtime-core with the Supabase
+implementation contributed by a plugin, exactly as `GameSaveStore` is today
+(`plugins/index.ts:311-319` for the contribution, `:604-627` for the
+priority-wins resolver, `save-store.ts:55` for the Supabase impl). That is what
+keeps core free of plugin names, and it means a project with no account plugin
+installed still gets a working local store.
+
+SYNCED VS LOCAL-ONLY IS DECLARED AT CREATION, NOT PER RECORD. A plugin asks for
+a local store or a synced store and they are different types; only the synced
+one carries sync metadata and a remote backing, and only synced stores are
+registered with the sync loop. You cannot accidentally sync a local store, and
+you cannot declare a synced one and forget to wire it. Plenty here must stay
+local and must be named as such in the API docs: the Studio compile caches, the
+telemetry ring buffer, project handles.
+
+Record-shape migration is a PARAMETER of the store -- a current version plus an
+upgrade function applied on read -- so plugins get it right by default rather
+than by discipline. `migrateNpcMemoryRecord` (`npc-memory-store.ts:359-388`,
+called at all four read sites) is the worked example; note it bumped the record
+version without bumping `DB_VERSION` (`:54,69`) because no index changed.
+
+ADR 020 IS AMENDED BY THIS STORY. It currently says plugin-domain data "lives
+with that plugin in its OWN store" (`:47-57`) in terms that read as a ban on
+the save path, and `participant.ts:10-13` repeats it. Both are rewritten to
+state the actual rule: plugin data may travel a shared path when it is
+namespaced to the plugin, opt-in, and absent when the plugin is not installed --
+and that a per-player record store is the right home for data too large or too
+async for a save slice. Without this the next author reads the old rule and
+rebuilds the hand-rolled store.
+**Depends on:** nothing (buildable alongside 092.6.1).
+**Exit:** a throwaway plugin can declare one synced store and one local store,
+write to both, and only the synced one appears in the sync registry. Core and
+host source contain no plugin name -- enforced by a test that reads the files,
+per 092.1. With no account plugin installed the local store still works. ADR
+020 and `participant.ts` state the amended rule, and neither still reads as a
+blanket ban.
+
+#### 092.6.3 The sync loop
+Push records marked dirty, pull records newer than a per-store watermark,
+resolve last-write-wins on the server-stamped timestamp. Deletes propagate as
+tombstones or they resurrect on the next pull. Dirty tracking is
+append-on-mutation, which already exists as `changedCards`
+(`persistence.ts:66,300-304`, pushed by `learner-state-reducer.ts:409-416`).
+
+NOTHING IN THE REPO DOES LAST-WRITE-WINS TODAY -- `lastPlayed` and
+`profiles.updated_at` are stamped by every writer and read by nobody, so the
+comparison is new code with no precedent to copy. The server stamps the
+ordering timestamp because client clocks are not trustworthy. The known hazard
+is the silent overwrite: a local write that succeeded is quietly replaced by a
+remote version that won. Log it rather than swallow it.
+
+Sync runs on its OWN cadence and on triggers (sign-in, reconnect, tab hidden),
+never on the autosave heartbeat -- that path stringifies its whole payload
+every 5s to detect change (`useAutosave.ts:124-136`) and must stay small.
+
+The remote table is generic -- keyed by account, plugin, store and record --
+with row-level security scoping every row to its owner, and no plugin named in
+it. It is emitted as a migration by the deploy and applied by the Apply
+Migration button; sugarmagic never writes rows to Supabase itself. Note
+`deployment/supabase.ts:29` hardcodes `sugarprofile` to gate migration
+generation, so adding a table there extends an existing coupling rather than
+creating one -- record it, do not fix it here.
+**Depends on:** 092.6.2.
+**Exit:** a record written on browser A appears on browser B for the same
+account after a sync, and does not appear for a different account. A delete on
+A removes it from B. Editing the same record on both resolves to the later
+write and says so in the log. With the network down, reads and writes keep
+working and reconcile on reconnect.
+
+#### 092.6.4 The level and the word history follow the player
+Sugarlang's word history moves onto the synced store, and the profile core --
+the level, the placement record -- stops living on the blackboard and becomes a
+record beside it. `persistence.ts:296-311` already holds both the store and the
+profile at the same call, so this is a change of destination, not of structure.
+Retrievability stays derived on read (`persistence.ts:268-288`) and is still
+not persisted; syncing a decayed value would bake in the instant it was read.
+**Depends on:** 092.6.1, 092.6.3.
+**Exit:** place, hard-refresh, level and placement status still there. Sign in
+on a second machine and both the level AND the word history arrive. The API
+docs state what a player gets on a new device and what happens when two devices
+disagree.
 
 ### 092.7 Delete the dead code, or wire it up
 Leave it better than we found it. The functions listed under "Dead paths" above

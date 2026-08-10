@@ -122,14 +122,14 @@ describe("learner persistence", () => {
   it("survives indexeddb reloads and namespaces profiles independently", async () => {
     const cardA = createLemmaCard("hola", "A1");
     const cardB = createLemmaCard("ciao", "A1");
-    const storeA = new IndexedDBCardStore({ profileId: "profile-a" });
-    const storeB = new IndexedDBCardStore({ profileId: "profile-b" });
+    const storeA = new IndexedDBCardStore({ profileId: "user-test:profile-a" });
+    const storeB = new IndexedDBCardStore({ profileId: "user-test:profile-b" });
 
     await storeA.set(cardA);
     await storeB.set(cardB);
 
-    const reloadedA = new IndexedDBCardStore({ profileId: "profile-a" });
-    const reloadedB = new IndexedDBCardStore({ profileId: "profile-b" });
+    const reloadedA = new IndexedDBCardStore({ profileId: "user-test:profile-a" });
+    const reloadedB = new IndexedDBCardStore({ profileId: "user-test:profile-b" });
 
     expect(await reloadedA.get("hola")).toEqual(cardA);
     expect(await reloadedA.get("ciao")).toBeUndefined();

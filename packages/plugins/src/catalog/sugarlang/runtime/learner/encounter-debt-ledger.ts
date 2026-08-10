@@ -31,7 +31,10 @@
  * Status: active
  */
 
-import { CARD_STORE_DB_NAME_PREFIX } from "./card-store";
+import {
+  assertAccountScopedLearnerId,
+  CARD_STORE_DB_NAME_PREFIX
+} from "./card-store";
 
 export const TARGET_DEBT_ENCOUNTERS = 10;
 
@@ -291,6 +294,9 @@ export class IndexedDBEncounterDebtLedger implements EncounterDebtLedger {
  * Falls back to MemoryEncounterDebtLedger when IndexedDB is unavailable.
  */
 export function createEncounterDebtLedger(learnerId: string): EncounterDebtLedger {
+  // Same reasoning as the teach-record store: checked before the memory
+  // fallback so a caller bug cannot hide in one environment.
+  assertAccountScopedLearnerId(learnerId, "createEncounterDebtLedger");
   if (typeof indexedDB === "undefined") {
     return new MemoryEncounterDebtLedger();
   }

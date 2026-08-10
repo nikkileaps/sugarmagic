@@ -18,6 +18,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { signInTestAccount } from "../learner/signed-in-test-account";
 import { createDefaultPlayerDefinition } from "@sugarmagic/domain";
 import {
   RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
@@ -132,12 +133,16 @@ function makeAssessmentRuntimeContextMiddleware(npcDefinitionId: string): Conver
 }
 
 describe("cold-start placement golden", () => {
+  let clearTestAccount: (() => void) | undefined;
+
   beforeEach(() => {
+    clearTestAccount = signInTestAccount();
     // 081.5 exit criterion: the suite fails on any unmocked URL. This flow is
     // fully deterministic (no proxy URL configured), so any fetch is a bug.
     installFetchGuard();
   });
   afterEach(async () => {
+    clearTestAccount?.();
     uninstallFetchGuard();
     await clearSugarlangRuntimeCompileCache();
   });

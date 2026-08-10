@@ -40,6 +40,7 @@ import type {
   ConversationExecutionContext,
   RuntimeBlackboard
 } from "@sugarmagic/runtime-core";
+import { getActiveUserId } from "@sugarmagic/runtime-core";
 import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
 import { IndexedDBVariantCache, type SugarlangVariantCache } from "./compile/variant-cache";
@@ -210,12 +211,41 @@ function getSelectionLanguages(
   return { targetLanguage, supportLanguage };
 }
 
+/**
+ * Identifies ONE learner: this account, this player character, this language
+ * pair.
+ *
+ * THE ACCOUNT LEADS, AND IT USED NOT TO BE HERE AT ALL (Plan 092.6.1). Without
+ * it every store below is shared by whoever sits at the browser: two accounts
+ * on one machine got ONE word history between them, and one account on two
+ * machines got two. That is a correctness bug on its own, and it made syncing
+ * impossible -- pushing an unattributed history to an account would file one
+ * player's words under another's name.
+ *
+ * `userId` is never blank: `resolveLearnerScope` refuses to build one before
+ * identity has settled.
+ */
 function buildLearnerId(
+  userId: string,
   playerEntityId: string,
   targetLanguage: string,
   supportLanguage: string
 ): string {
-  return `${playerEntityId}:${targetLanguage}:${supportLanguage}`;
+  return `${userId}:${playerEntityId}:${targetLanguage}:${supportLanguage}`;
+}
+
+/**
+ * The signed-in account, or null when identity has not settled yet.
+ *
+ * Plugin runtimes are constructed BEFORE the host resolves an identity
+ * provider, so this is read per call rather than captured -- the same
+ * late-binding reason `getActiveUserId` exists at all. Callers DEFER: a
+ * learner resolved under a null account would write a history that belongs to
+ * nobody, which is the bug this replaced.
+ */
+function resolveLearnerScope(): string | null {
+  const userId = getActiveUserId();
+  return userId && userId.length > 0 ? userId : null;
 }
 
 function createCardStore(profileId: string): CardStore {
@@ -631,7 +661,14 @@ export class SugarlangRuntimeServices {
     const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
     if (!targetLanguage || !this.boundContext) return null;
 
+    // No account yet means no learner to ask about, so no placement form. A
+    // form offered under a null account would record its result against a
+    // learner that the next read cannot find.
+    const userId = resolveLearnerScope();
+    if (!userId) return null;
+
     const learnerId = buildLearnerId(
+      userId,
       this.boundContext.playerDefinition.definitionId,
       targetLanguage,
       this.config.supportLanguage?.trim().toLowerCase() || "en"
@@ -848,8 +885,24 @@ export class SugarlangRuntimeServices {
       return existing;
     }
 
+    // DEFER RATHER THAN GUESS. Identity settles during boot, and this can be
+    // asked before it has. Returning null degrades the turn -- the caller
+    // already handles it -- where inventing a learner would open a word store
+    // under no account and quietly strand everything written into it. Nothing
+    // is cached under `key` here, so the next call after sign-in resolves for
+    // real.
+    const userId = resolveLearnerScope();
+    if (!userId) {
+      this.logger.warn(
+        "Sugarlang learner requested before an account resolved; deferring. " +
+          "This is expected during boot and should not repeat once signed in."
+      );
+      return null;
+    }
+
     const languageBundle = this.getLanguageBundle(languages.targetLanguage);
     const learnerId = buildLearnerId(
+      userId,
       this.boundContext.playerDefinition.definitionId,
       languages.targetLanguage,
       languages.supportLanguage

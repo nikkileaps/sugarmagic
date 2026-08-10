@@ -46,6 +46,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { signInTestAccount } from "../learner/signed-in-test-account";
 import {
   RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
   createBlackboardScope,
@@ -452,7 +453,10 @@ function buildHarness(
 }
 
 describe("081.3 entry-path coverage", () => {
+  let clearTestAccount: (() => void) | undefined;
+
   beforeEach(async () => {
+    clearTestAccount = signInTestAccount();
     await clearSugarlangRuntimeCompileCache();
     fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       throw new Error(`entry-path-coverage: unmocked fetch ${String(input)}`);
@@ -460,6 +464,7 @@ describe("081.3 entry-path coverage", () => {
     vi.stubGlobal("fetch", fetchMock);
   });
   afterEach(async () => {
+    clearTestAccount?.();
     vi.unstubAllGlobals();
     await clearSugarlangRuntimeCompileCache();
   });
