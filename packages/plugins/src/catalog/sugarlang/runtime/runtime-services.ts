@@ -47,6 +47,7 @@ import {
 import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
 import { IndexedDBVariantCache, type SugarlangVariantCache } from "./compile/variant-cache";
+import { getShippedVariantCache } from "./compile/shipped-variant-cache";
 import { IndexedDBIntentCache, type SugarlangIntentCache } from "./compile/intent-cache";
 import { LiveRenderCache } from "./compile/live-render-cache";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
@@ -456,11 +457,14 @@ export class SugarlangRuntimeServices {
    * the player had already talked to somebody -- open the book first and you
    * got English with no indication why.
    *
-   * Undefined only in a published game with no studio workspace, where nothing
-   * has been graded anyway.
+   * Undefined only when a project has nothing graded at all. It used to be
+   * undefined in every published game -- the comment here said "nothing has
+   * been graded anyway", which was false: plenty was graded, it just never
+   * left the machine that graded it, so every item description rendered
+   * authored English in production (Plan 092.4).
    */
   getVariantCache(): SugarlangVariantCache | undefined {
-    if (!this.studioWorkspaceId) return undefined;
+    if (!this.studioWorkspaceId) return getShippedVariantCache();
     this._standaloneVariantCache ??= new IndexedDBVariantCache({
       workspaceId: this.studioWorkspaceId
     });
@@ -1015,9 +1019,16 @@ export class SugarlangRuntimeServices {
 
     const teachRecordStore = createTeachRecordStore(learnerId);
     const ledgerStore = createEncounterDebtLedger(learnerId);
+    // ONE SOURCE PER HOST, never a fallback chain. In Studio the live
+    // workspace database wins, so a variant hand-edited in the popover shows
+    // in Preview without saving first. Anywhere else it is the shipped file.
+    //
+    // A chain -- try the database, fall back to the file -- is how "the
+    // deployed game has no variants" stayed invisible: the working source
+    // covers for the broken one and nothing reports the difference.
     const variantCache: SugarlangVariantCache | undefined = this.studioWorkspaceId
       ? new IndexedDBVariantCache({ workspaceId: this.studioWorkspaceId })
-      : undefined;
+      : getShippedVariantCache();
     const intentCache: SugarlangIntentCache | undefined = this.studioWorkspaceId
       ? new IndexedDBIntentCache({ workspaceId: this.studioWorkspaceId })
       : undefined;

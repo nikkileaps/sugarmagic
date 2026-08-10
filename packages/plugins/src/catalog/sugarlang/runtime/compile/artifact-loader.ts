@@ -17,6 +17,7 @@
  *
  * Exports:
  *   - loadSceneContextsFromArtifact
+ *   - loadVariantsFromArtifact
  *
  * Implements: Plan 092 story 092.3
  *
@@ -24,7 +25,75 @@
  */
 
 import type { SceneContextModel } from "../contracts/scene-context";
-import { SUGARLANG_SCENE_CONTEXT_ASSET_PATH } from "./artifact-paths";
+import type { VariantCacheEntry } from "./variant-cache";
+import {
+  SUGARLANG_SCENE_CONTEXT_ASSET_PATH,
+  SUGARLANG_VARIANT_ASSET_PATH
+} from "./artifact-paths";
+
+/**
+ * One fetch shape for every artifact this game shipped with.
+ *
+ * RESOLVED THROUGH `assetSources`, NEVER BY HAND-BUILT URL -- see the module
+ * header. Failure of any kind returns null: a deployed game must not fail to
+ * boot because a file it ships is missing or unreadable. It teaches less; it
+ * still plays.
+ */
+async function readArtifact(
+  assetSources: Record<string, string> | undefined,
+  assetPath: string,
+  fetchImpl: typeof fetch
+): Promise<unknown | null> {
+  const url = assetSources?.[assetPath];
+  if (!url) return null;
+  try {
+    const response = await fetchImpl(url);
+    if (!response.ok) {
+      console.warn(`[sugarlang] artifact ${response.status} at ${url}`);
+      return null;
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn(`[sugarlang] artifact unreadable at ${url}`, error);
+    return null;
+  }
+}
+
+/**
+ * The graded line variants this game shipped with, or an empty array.
+ *
+ * Empty is a LEGAL QUIET STATE: a project with nothing graded ships no
+ * entries, and every scripted line renders the authored text -- which is what
+ * happened in production for months, so the caller logs the count.
+ *
+ * Shape-checked rather than trusted. This is fetched from a network and may
+ * have been hand-edited; one malformed entry must not cost the rest.
+ */
+export async function loadVariantsFromArtifact(
+  assetSources: Record<string, string> | undefined,
+  fetchImpl: typeof fetch = fetch
+): Promise<VariantCacheEntry[]> {
+  const parsed = await readArtifact(
+    assetSources,
+    SUGARLANG_VARIANT_ASSET_PATH,
+    fetchImpl
+  );
+  const entries = (parsed as { variants?: unknown })?.variants;
+  if (!Array.isArray(entries)) return [];
+
+  return (entries as VariantCacheEntry[]).filter((entry) => {
+    const key = entry?.key;
+    const variant = entry?.variant;
+    return Boolean(
+      key?.lang &&
+        key?.band &&
+        key?.contentHash &&
+        key?.variantPromptVersion &&
+        typeof variant?.text === "string" &&
+        variant.text.length > 0
+    );
+  });
+}
 
 /**
  * The scene context models this game shipped with, or an empty array.

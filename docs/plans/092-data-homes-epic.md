@@ -12,12 +12,13 @@ found four more real issues, now applied.
 
 Then nikki corrected the transport: these artifacts ARE assets and belong in
 `assets/`, following the baked-navmesh precedent -- which removes the deploy
-work the earlier drafts feared. Two open forks are deliberately NOT resolved
-here -- when variants enter the artifact set (092.4) and where the
-bake-coverage check runs (092.5). nikki's call,
-2026-08-09: decide each at the top of its own story, with the code in front of
-you, rather than blocking the whole plan on two guesses. Each story below says
-so at the point of the fork. Everything else is executable as written.
+work the earlier drafts feared.
+
+One open fork remains, deliberately NOT resolved here: when variants enter the
+artifact set (092.4). nikki's call, 2026-08-09: decide it at the top of its own
+story, with the code in front of you, rather than blocking the whole plan on a
+guess. The story says so at the point of the fork. The other fork -- where a
+bake-coverage check runs -- left with the preflight story; see Deferred.
 Branch: data-homes
 
 ## Ground truth: what actually reaches the runtime today
@@ -259,8 +260,9 @@ ship as files (092.2) and be served from `MemoryVariantCache`
 (`variant-cache.ts:85`), which already implements the same interface.
 
 Both construction sites gate on `studioWorkspaceId` and must be handled:
-`getVariantCache()` (`runtime-services.ts:393-399`, item views) and the
-per-conversation cache (`:915-917`). Preview keeps its live IndexedDB read so
+`getVariantCache()` (`runtime-services.ts:462`, item views, consumed by
+`display-text-resolver.ts:168` via `manifest.ts:160`) and the per-conversation
+cache (`:1018`, consumed by `sugar-lang-scripted-middleware.ts:174,344`). Preview keeps its live IndexedDB read so
 a hand-edited variant still appears with no save
 (`variant-popover-connected.tsx:43-79`).
 
@@ -272,43 +274,25 @@ every click hits exactly the undo-checkpoint problem 092.2 exists to avoid, and
 a deploy-time sweep needs `listEntries()` plus per-key `get()` because the
 interface has no bulk read (`variant-cache.ts:55-61`). Pick a collection
 moment -- most likely a sweep at bake/save time, since a click cannot write a
-file on its own. **DECIDE THIS FIRST, before writing any of this story.**
+file on its own.
 
-If a bulk bake IS added, size the seeded cache explicitly:
-`MemoryVariantCache` defaults to `maxEntries: 400` and `set()` evicts LRU
-silently (`variant-cache.ts:92,144`). 100 lines x 6 bands is 600 -- it would
-drop a third of them with no warning.
+**RESOLVED by 092.2: a sweep at save time**, exactly as guessed above.
+`collectVariantArtifact` walks `listEntries()` and reads each key, prunes stale
+machine drafts and KEEPS hand-written ones, and the file is written when the
+project saves. There are 28 entries in wordlark's artifact today, one of them
+hand-authored. Nothing further to decide here.
+
+The seeded cache must be sized explicitly:
+`MemoryVariantCache` defaults to `maxEntries: 400` and 10 MB, and `set()`
+evicts least-recently-used silently (`variant-cache.ts:92-93,144`). 100 lines x
+6 bands is 600 -- it would drop a third of them with no warning.
 **Depends on:** 092.2.
+Also fix the comment on `getVariantCache()` claiming a published game has
+"nothing graded anyway" -- this story is what makes it false, so it does not
+belong in 092.8.
 **Exit:** on a clean browser, a scripted beginner line renders its baked
 variant rather than English, and item text likewise; editing a variant in
 Studio still shows in Preview with no save.
-
-### 092.5 Deploy preflight: unbaked scenes fail loud
-Runtime degrades, build fails loud. Preflight must fail on a scene NEVER baked,
-not only a stale one -- the bake covers only the scene Studio has open
-(`editor-support.ts:585-590`), so "only chapter one is baked" is the likely
-real failure.
-
-The check runs host-side, but note the hash is NOT pure: it needs gateway lore
-resolution. Either the host makes that call, or Studio posts a computed
-coverage report. **DECIDE THIS FIRST, before writing any of this story** -- it
-is the difference between a small story and a large one.
-The existing `Verify boot.json exists` gate (`github-workflow.ts:386-391`) is
-the shape.
-
-**COVERAGE IS PER REGION, NOT PER NARRATIVE SCENE, AND MUST SAY SO.** The
-artifact key `sceneId` is the REGION id (`scene-traversal.ts:642`), and the
-bake composes ONE `activeScene` overlay across all regions
-(`editor-support.ts:584-588`) after invalidating the cache (`:599`). So a
-project baked under Scene 1 reads as fully covered, and seeding overwrites per
-region id. Naming coverage per (region, narrative Scene) needs a hash per pair
--- real work that belongs with `sugarmagic-boot-scoping-j24`, not here. Scope
-this story's exit to regions and say why.
-**Depends on:** 092.2.
-**Exit:** deploying with one REGION unbaked fails preflight naming it;
-rebaking clears it; a fully-baked project dispatches. The story states in
-writing that a second narrative Scene over an already-baked region is NOT
-covered, and points at the deferred ticket.
 
 ### 092.6 A player's own data lives locally and syncs to their account
 The word history is not tied to the account AT ALL. `IndexedDBCardStore` opens
@@ -518,6 +502,13 @@ finds nothing; both comments describe shipped behavior.
 
 ## Deferred, with triggers
 
+- **Failing a deploy that ships an unbaked region.** Moved out to
+  `sugarmagic-deploy-preflight-15i`. It guards against shipping without
+  authored teaching content; this epic is about that content reaching a
+  deployed game at all. The fork it turns on is unresolved and stated in the
+  ticket: the content hash needs gateway lore resolution, so either the deploy
+  makes that call or Studio hands over a coverage report.
+
 - **Per-player data scoped by something other than a player.** The sync engine
   keys records on the player, deliberately. Widening that field to a
   general-purpose scope was considered and rejected: it works on the device,
@@ -530,7 +521,12 @@ finds nothing; both comments describe shipped behavior.
 
 - **Episode-scoping the published artifact.** `sugarmagic-boot-scoping-j24`.
   Must key on (region, scene) -- `sceneId` is the REGION id
-  (`scene-traversal.ts:642`).
+  (`scene-traversal.ts:642`). NOW COVERS THE VARIANT FILE TOO: 092.4 ships
+  every graded line for every episode in one file loaded whole, so the
+  in-memory cache needs a hard ceiling sized to the whole game. That number is
+  a workaround for the missing scope, and getting it wrong renders authored
+  English silently. **Trigger:** the ceiling has to be raised, or a line
+  renders English where graded text exists.
 - **Preview writing to the production database.** `sugarmagic-preview-data-bu1`.
 - **Cross-device learner cards.** Cards are device-local because the store is
   IndexedDB (`runtime-services.ts:221-229`), not because persistence is

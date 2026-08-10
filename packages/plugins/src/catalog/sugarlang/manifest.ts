@@ -36,6 +36,7 @@ import type {
 } from "@sugarmagic/runtime-core";
 import { normalizeSugarLangPluginConfig, resolveSugarlangProxyBaseUrl } from "./config";
 import { loadSceneContextsFromArtifact } from "./runtime/compile/artifact-loader";
+import { seedShippedVariantCache } from "./runtime/compile/shipped-variant-cache";
 import {
   createSugarLangContextMiddleware
 } from "./runtime/middlewares/sugar-lang-context-middleware";
@@ -289,6 +290,20 @@ export function createSugarlangPlugin(
       const seededContexts = isPublished
         ? await loadSceneContextsFromArtifact(runtimeContext.assetSources)
         : extractSugarlangPreviewBootSceneContexts(bootPayload);
+
+      // Plan 092.4 — the graded text a scripted line and an item description
+      // render. Studio reads the live workspace database instead, so a variant
+      // edited in the popover shows in Preview without saving; only a deployed
+      // game reads the shipped file.
+      if (isPublished) {
+        const shippedVariants = await seedShippedVariantCache(
+          runtimeContext.assetSources
+        );
+        console.info(
+          `[sugarlang runtime] seeded ${shippedVariants} graded line variant(s)`,
+          { source: "shipped artifact" }
+        );
+      }
       seedSugarlangRuntimeSceneContext(seededContexts);
       console.info(
         `[sugarlang runtime] seeded ${seededContexts.length} scene context model(s)`,
