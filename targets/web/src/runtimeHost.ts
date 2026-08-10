@@ -2703,6 +2703,8 @@ export function createWebRuntimeHost(
         },
         release: (moveName) => cameraMoveDirector.release(moveName, CAMERA_MOVE_BOUNDS)
       },
+      // Plan 092.3 — a plugin resolves its shipped artifacts through this.
+      assetSources: currentAssetSources,
       activeRegion,
       activeScene,
       // Plan 069.3 — NPC movement resolves against the same static world.

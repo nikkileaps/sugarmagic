@@ -407,6 +407,18 @@ export interface RuntimePluginContext {
   ) => ConversationRuntimeContext;
   boot: RuntimeBootModel;
   pluginBootPayloads?: Record<string, unknown>;
+  /**
+   * Every file-backed asset path mapped to the URL that serves it (Plan
+   * 092.3).
+   *
+   * A plugin that shipped a DERIVED ARTIFACT (ADR 005 rule 3) declared its
+   * path into its own configuration; this is how it turns that path back into
+   * something fetchable. Resolve through this rather than hard-coding a URL:
+   * the deploy stamps each value with the deployed sha, and `/assets/*` is
+   * served `immutable` for a year, so a hand-built path would be cached
+   * across deploys and never update.
+   */
+  assetSources?: Record<string, string>;
   blackboard?: RuntimeBlackboard;
   activeRegion?: RegionDocument | null;
   /** Plan 058 §058.1 — the active narrative Scene whose overlay

@@ -35,6 +35,7 @@ import type {
   RuntimePluginInstance
 } from "@sugarmagic/runtime-core";
 import { normalizeSugarLangPluginConfig, resolveSugarlangProxyBaseUrl } from "./config";
+import { loadSceneContextsFromArtifact } from "./runtime/compile/artifact-loader";
 import {
   createSugarLangContextMiddleware
 } from "./runtime/middlewares/sugar-lang-context-middleware";
@@ -271,15 +272,29 @@ export function createSugarlangPlugin(
       const lexicons = extractSugarlangPreviewBootLexicons(bootPayload);
       await seedSugarlangRuntimeCompileCache(lexicons);
       // The runtime cannot build these -- extraction is a gateway call and a
-      // Studio-only pass -- so a boot seed is the only way it ever has them.
-      const seededContexts = extractSugarlangPreviewBootSceneContexts(bootPayload);
+      // Studio-only pass -- so they have to arrive already made.
+      //
+      // ONE SOURCE PER HOST, chosen by host rather than by falling back. In
+      // Studio the Preview window is same-origin with the editor and gets the
+      // models by postMessage, live, so an author sees a rebuild immediately.
+      // A published game has no Studio to message it: it reads the artifact
+      // file it shipped with. A fallback chain would hide a broken source
+      // behind a working one -- exactly how "the Teacher has no scene
+      // concepts" stayed invisible in production for months (Plan 092.3).
+      const isPublished = runtimeContext.boot.hostKind === "published-web";
+      const seededContexts = isPublished
+        ? await loadSceneContextsFromArtifact(runtimeContext.assetSources)
+        : extractSugarlangPreviewBootSceneContexts(bootPayload);
       seedSugarlangRuntimeSceneContext(seededContexts);
       console.info(
         `[sugarlang runtime] seeded ${seededContexts.length} scene context model(s)`,
-        seededContexts.map((model) => ({
-          sceneId: model.sceneId,
-          concepts: model.concepts.length
-        }))
+        {
+          source: isPublished ? "shipped artifact" : "studio boot payload",
+          models: seededContexts.map((model) => ({
+            sceneId: model.sceneId,
+            concepts: model.concepts.length
+          }))
+        }
       );
       services.seedPreviewLexicons(bootPayload);
       const studioWorkspaceId = extractSugarlangStudioWorkspaceId(bootPayload);

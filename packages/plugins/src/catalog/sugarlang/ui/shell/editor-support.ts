@@ -44,6 +44,11 @@ import {
   SCENE_CONTEXT_PROMPT_VERSION,
   SceneContextExtractor
 } from "../../runtime/compile/scene-context-extractor";
+import {
+  SUGARLANG_ARTIFACT_SCHEMA_VERSION as ARTIFACT_SCHEMA_VERSION,
+  SUGARLANG_SCENE_CONTEXT_ASSET_PATH as SCENE_CONTEXT_ASSET_PATH,
+  SUGARLANG_VARIANT_ASSET_PATH as VARIANT_ASSET_PATH
+} from "../../runtime/compile/artifact-paths";
 import { IndexedDBSceneContextCache } from "../../runtime/compile/scene-context-cache";
 import { planSceneTeaching } from "../../runtime/compile/scene-teach-plan";
 import {
@@ -192,26 +197,15 @@ export interface SugarlangArtifact {
   json: unknown;
 }
 
-/** Bumped when an artifact file's shape changes in a way a reader must notice. */
-export const SUGARLANG_ARTIFACT_SCHEMA_VERSION = 1;
-
-/**
- * STABLE, not content-hashed. The deploy stamps every `assetSources` URL with
- * the deployed sha (Plan 060, `github-workflow.ts`), so cache-busting is
- * already handled -- and a stable name means the declared path list never
- * changes, so writing an artifact never touches the project session.
- */
-export const SUGARLANG_SCENE_CONTEXT_ASSET_PATH =
-  "assets/sugarlang/scene-contexts.json";
-
-/** Stable, same reasoning as the scene-context path above. */
-export const SUGARLANG_VARIANT_ASSET_PATH = "assets/sugarlang/variants.json";
-
-/** Every path this plugin declares, for the project's asset collector. */
-export const SUGARLANG_ARTIFACT_ASSET_PATHS: readonly string[] = [
+// The paths and the schema version live in runtime/compile/artifact-paths,
+// because the deployed game reads these files and must not import Studio code.
+// Re-exported here so the writing side keeps one import.
+export {
+  SUGARLANG_ARTIFACT_ASSET_PATHS,
+  SUGARLANG_ARTIFACT_SCHEMA_VERSION,
   SUGARLANG_SCENE_CONTEXT_ASSET_PATH,
   SUGARLANG_VARIANT_ASSET_PATH
-];
+} from "../../runtime/compile/artifact-paths";
 
 /**
  * Sweeps every baked variant out of the browser cache into one artifact
@@ -280,9 +274,9 @@ export async function collectVariantArtifact(
   }
 
   return {
-    relativeAssetPath: SUGARLANG_VARIANT_ASSET_PATH,
+    relativeAssetPath: VARIANT_ASSET_PATH,
     json: {
-      schemaVersion: SUGARLANG_ARTIFACT_SCHEMA_VERSION,
+      schemaVersion: ARTIFACT_SCHEMA_VERSION,
       promptVersion: VARIANT_PROMPT_VERSION,
       variants: entries
     }
@@ -303,7 +297,7 @@ export async function restoreVariantsFromArtifact(
 ): Promise<number> {
   let parsed: unknown;
   try {
-    const blob = await readAssetFile(SUGARLANG_VARIANT_ASSET_PATH);
+    const blob = await readAssetFile(VARIANT_ASSET_PATH);
     if (!blob) {
       return 0;
     }
@@ -411,9 +405,9 @@ export async function collectSceneContextArtifact(
   }
 
   return {
-    relativeAssetPath: SUGARLANG_SCENE_CONTEXT_ASSET_PATH,
+    relativeAssetPath: SCENE_CONTEXT_ASSET_PATH,
     json: {
-      schemaVersion: SUGARLANG_ARTIFACT_SCHEMA_VERSION,
+      schemaVersion: ARTIFACT_SCHEMA_VERSION,
       promptVersion: SCENE_CONTEXT_PROMPT_VERSION,
       sceneContextModels: models
     }
@@ -442,7 +436,7 @@ export async function restoreSceneContextsFromArtifact(
 ): Promise<number> {
   let parsed: unknown;
   try {
-    const blob = await readAssetFile(SUGARLANG_SCENE_CONTEXT_ASSET_PATH);
+    const blob = await readAssetFile(SCENE_CONTEXT_ASSET_PATH);
     if (!blob) {
       return 0;
     }

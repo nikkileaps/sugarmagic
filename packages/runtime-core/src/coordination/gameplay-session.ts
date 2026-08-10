@@ -235,6 +235,9 @@ export interface RuntimeGameplaySessionControllerOptions {
   soundEventBindings?: SoundEventBindingMap;
   audioMixer?: AudioMixerSettings;
   pluginManager?: RuntimePluginManager | null;
+  /** Plan 092.3 — path -> serving URL, so a plugin can fetch an artifact it
+   *  shipped. Threaded to plugin init; see RuntimePluginContext.assetSources. */
+  assetSources?: Record<string, string>;
   /** Plan 069.3 — the static collision world (built by the host from the
    *  scene objects) so NPC movement resolves against props via the shared
    *  `resolveMove`. Absent => empty world (agent-vs-agent still applies). */
@@ -2633,6 +2636,7 @@ export function createRuntimeGameplayAssembly(
   if (pluginManager) {
     void pluginManager.init({
       blackboard: gameplaySession.blackboard,
+      assetSources: options.assetSources,
       activeRegion: options.activeRegion,
       activeScene: options.activeScene ?? null,
       playerDefinition: options.playerDefinition,
