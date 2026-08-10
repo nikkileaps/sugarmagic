@@ -121,7 +121,7 @@ describe("the region teacher warmer", () => {
   });
 });
 
-describe("mini-review: a failed warm is retried", () => {
+describe("mini-review: a failed warm is retried -- A BOUNDED number of times", () => {
   it("does not remember a world state whose warm failed", async () => {
     // Marking it regardless meant a gateway outage was recorded as "done" and
     // never retried until the world moved -- which, on a region fixed for the
@@ -153,5 +153,99 @@ describe("mini-review: a failed warm is retried", () => {
     await settle();
 
     expect(warm).toHaveBeenCalledTimes(1);
+  });
+
+  it("THE PROD INCIDENT: a warm that keeps failing STOPS, it does not bill for ever", async () => {
+    // Shipped behaviour: a failed warm never recorded its key, so the next
+    // check saw the same unwarmed state and called again -- every 2 seconds,
+    // for ever, each one a paid Teacher call. In prod the gateway answered
+    // 401 and it billed until the browser was closed.
+    const warm = vi.fn(async (_npcIds: readonly string[]) => "failed");
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warmer = createRegionTeacherWarmer({
+      listWarmableNpcIds: () => ["npc-a"],
+      buildWarmContext: async () => ({ situationKey: "k1", warmAll: warm })
+    });
+
+    // Five minutes of a broken gateway.
+    for (let i = 0; i < 150; i++) {
+      warmer.tick(2000);
+      await settle();
+    }
+
+    expect(warm).toHaveBeenCalledTimes(3);
+    // Loud once, not once per tick -- a log spammed 150 times is a second bug.
+    expect(errors).toHaveBeenCalledTimes(1);
+    errors.mockRestore();
+  });
+
+  it("a warm that THROWS is bounded too, not just one that returns 'failed'", async () => {
+    // The budget is spent before the call for exactly this reason: a throwing
+    // path that never reached the outcome check would retry for ever.
+    const warm = vi.fn(async (_npcIds: readonly string[]) => {
+      throw new Error("gateway 401");
+    });
+    const warmer = createRegionTeacherWarmer({
+      listWarmableNpcIds: () => ["npc-a"],
+      buildWarmContext: async () => ({ situationKey: "k1", warmAll: warm })
+    });
+
+    for (let i = 0; i < 50; i++) {
+      warmer.tick(2000);
+      await settle();
+    }
+
+    expect(warm).toHaveBeenCalledTimes(3);
+  });
+
+  it("a world that MOVES gets a fresh budget -- giving up is per world state", async () => {
+    // Bounding globally would mean one bad patch permanently disabled warming
+    // for the session. The thing that failed is one situation.
+    const warm = vi.fn(async (_npcIds: readonly string[]) => "failed");
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    let key = "k1";
+    const warmer = createRegionTeacherWarmer({
+      listWarmableNpcIds: () => ["npc-a"],
+      buildWarmContext: async () => ({ situationKey: key, warmAll: warm })
+    });
+
+    for (let i = 0; i < 20; i++) {
+      warmer.tick(2000);
+      await settle();
+    }
+    expect(warm).toHaveBeenCalledTimes(3);
+
+    key = "k2";
+    for (let i = 0; i < 20; i++) {
+      warmer.tick(2000);
+      await settle();
+    }
+    expect(warm).toHaveBeenCalledTimes(6);
+    errors.mockRestore();
+  });
+
+  it("invalidate() clears a spent budget, so a forced re-warm really re-warms", async () => {
+    let outcome = "failed";
+    const warm = vi.fn(async (_npcIds: readonly string[]) => outcome);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warmer = createRegionTeacherWarmer({
+      listWarmableNpcIds: () => ["npc-a"],
+      buildWarmContext: async () => ({ situationKey: "k1", warmAll: warm })
+    });
+
+    for (let i = 0; i < 20; i++) {
+      warmer.tick(2000);
+      await settle();
+    }
+    expect(warm).toHaveBeenCalledTimes(3);
+
+    // The gateway comes back and something forces a re-warm.
+    outcome = "warmed";
+    warmer.invalidate();
+    warmer.tick(2000);
+    await settle();
+
+    expect(warm).toHaveBeenCalledTimes(4);
+    errors.mockRestore();
   });
 });

@@ -92,6 +92,7 @@ import {
   createWebRuntimeHost,
   migrateLocalSaveToCloud,
   useAutosave,
+  useAutosaveFailureNotice,
   waitForActiveUser
 } from "@sugarmagic/target-web";
 import {
@@ -478,10 +479,16 @@ function PreviewOverlay() {
   // over this hook anyway) doesn't need a callback bridge to
   // the hook. The hook just polls + writes; it knows nothing
   // about destructive flows.
+  // Preview shows the same save-failure notice the published game does.
+  // The Session debug HUD's save rows are an AUTHOR readout of what was
+  // written; they do not tell you that writing has stopped, and Preview is
+  // where a broken store gets noticed first.
+  const autosaveNotice = useAutosaveFailureNotice();
   useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
     onWritten: (written) => {
       host.notifyAutosaveWritten(written);
-    }
+    },
+    onStatusChange: autosaveNotice.onStatusChange
   });
 
   const prevUserRef = useRef<User | null>(null);
@@ -582,6 +589,7 @@ function PreviewOverlay() {
       {showLoginModal ? (
         <LoginModal provider={active.identityProvider} mode="required" />
       ) : null}
+      {autosaveNotice.notice}
     </>
   );
 }

@@ -41,6 +41,9 @@ import {
   normalizeSugarProfilePluginConfig
 } from "@sugarmagic/plugins";
 import {
+  AUTOSAVE_FAILURE_NOTICE_THRESHOLD,
+  AUTOSAVE_MAX_RETRY_DELAY_MS,
+  autosaveRetryDelayMs,
   gameSavePayloadsEqual,
   migrateLocalSaveToCloud,
   runAutosaveTick,
@@ -2579,6 +2582,65 @@ describe("47.10 — runAutosaveTick", () => {
     });
     expect(result.written).toBe(false);
     expect(store.saveCalls).toBe(0);
+  });
+});
+
+describe("a failing autosave backs off instead of hammering the store", () => {
+  // Found by the unbounded-retry sweep after the region-warmer incident.
+  // Autosave polled on a flat 5s interval and a throwing write left
+  // `lastWritten` untouched, so the identical payload was re-upserted every
+  // 5s -- 720 times an hour -- for as long as the failure lasted. Supabase
+  // throws on a 401 or an RLS denial, so it was reachable in production.
+
+  it("THE ONE THAT MATTERS: the delay grows with each consecutive failure", () => {
+    let previous = autosaveRetryDelayMs(0, 5000);
+    for (let failures = 1; failures <= 6; failures++) {
+      const delay = autosaveRetryDelayMs(failures, 5000);
+      expect(delay).toBeGreaterThan(previous);
+      previous = delay;
+    }
+  });
+
+  it("the delay is CAPPED, so it cannot grow into never-retrying", () => {
+    // Unlike the Teacher warm-up, this must never give up: abandoning a save
+    // silently discards the player's progress. It slows down and keeps going.
+    expect(autosaveRetryDelayMs(50, 5000)).toBe(AUTOSAVE_MAX_RETRY_DELAY_MS);
+    expect(autosaveRetryDelayMs(500, 5000)).toBe(AUTOSAVE_MAX_RETRY_DELAY_MS);
+  });
+
+  it("an hour of a broken store costs 60 writes, not 720", () => {
+    // The number that made this worth fixing.
+    let elapsed = 0;
+    let writes = 0;
+    let failures = 0;
+    while (elapsed < 60 * 60 * 1000) {
+      elapsed += autosaveRetryDelayMs(failures, 5000);
+      failures += 1;
+      writes += 1;
+    }
+    expect(writes).toBeLessThanOrEqual(65);
+    // And it never stopped trying.
+    expect(writes).toBeGreaterThan(55);
+  });
+
+  it("a healthy store still polls at the base interval", () => {
+    // The backoff must not slow down the normal case.
+    expect(autosaveRetryDelayMs(0, 5000)).toBe(5000);
+    expect(autosaveRetryDelayMs(-1, 5000)).toBe(5000);
+  });
+
+  it("the player is told after 5 failures in a row -- about a minute", () => {
+    // A blip or a brief reconnect must not flash a notice, but a player who
+    // really is losing progress has to find out fast enough to act on it.
+    // nikki set both numbers: five failures, about a minute.
+    expect(AUTOSAVE_FAILURE_NOTICE_THRESHOLD).toBe(5);
+
+    let untilNoticeMs = 0;
+    for (let n = 0; n < AUTOSAVE_FAILURE_NOTICE_THRESHOLD; n++) {
+      untilNoticeMs += autosaveRetryDelayMs(n, 5000);
+    }
+    expect(untilNoticeMs).toBeGreaterThan(45_000);
+    expect(untilNoticeMs).toBeLessThan(80_000);
   });
 });
 

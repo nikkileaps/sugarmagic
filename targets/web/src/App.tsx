@@ -67,6 +67,7 @@ import {
 import { consumeFreshStartFlag } from "./save/freshStart";
 import { migrateLocalSaveToCloud } from "./save/migrate-local-to-cloud";
 import { useAutosave } from "./save/useAutosave";
+import { useAutosaveFailureNotice } from "./save/AutosaveFailureNotice";
 import { waitForActiveUser } from "./save/waitForActiveUser";
 import { SUGARMAGIC_VERSION } from "./version";
 
@@ -312,10 +313,17 @@ export function App() {
   // active store via resolveActiveGameSaveStore. The hook just
   // polls + writes; it doesn't need to know about start-new-
   // game or sign-out flows.
+  // The Session HUD card also shows save state, but it is
+  // `hostKinds: ["studio"]` -- Preview only. A player in the
+  // published game has no other way to learn their progress is not
+  // being written, so it surfaces here, in React, next to the
+  // build chip.
+  const autosaveNotice = useAutosaveFailureNotice();
   useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
     onWritten: (written) => {
       hostRef.current?.notifyAutosaveWritten(written);
-    }
+    },
+    onStatusChange: autosaveNotice.onStatusChange
   });
 
   // Story 47.10 — migrate the anonymous IndexedDB save to the active
@@ -424,6 +432,10 @@ export function App() {
           mode="required"
         />
       ) : null}
+      {/* Sustained-save-failure notice. Shown only after several writes
+          in a row have failed, so a blip stays silent, and dismissable so
+          it never pins itself over someone's game. */}
+      {autosaveNotice.notice}
       {/* Build version chip — dimmed footer in the bottom-left.
           Always visible in the published bundle so bug reports
           and screenshots include the exact engine build. */}

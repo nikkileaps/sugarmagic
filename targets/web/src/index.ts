@@ -5,9 +5,17 @@ export {
   useAutosave,
   runAutosaveTick,
   gameSavePayloadsEqual,
+  autosaveRetryDelayMs,
+  AUTOSAVE_MAX_RETRY_DELAY_MS,
+  AUTOSAVE_FAILURE_NOTICE_THRESHOLD,
+  type AutosaveStatus,
   type AutosaveTickSource,
   type UseAutosaveOptions
 } from "./save/useAutosave";
+export {
+  useAutosaveFailureNotice,
+  type AutosaveFailureNotice
+} from "./save/AutosaveFailureNotice";
 export {
   migrateLocalSaveToCloud,
   type MigrateLocalSaveToCloudOptions,

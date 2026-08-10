@@ -40,6 +40,22 @@
  *   alternative was inventing a readiness signal, and a wrong one fails
  *   silently by never warming at all.
  *
+ * A FAILING WARM MUST GIVE UP
+ *   This shipped retrying for ever. A failed warm did not record its key, so
+ *   the next check saw the same unwarmed state and called again -- every 2
+ *   seconds, each one a paid Teacher call. That is correct for a blip and
+ *   ruinous for anything that stays broken, and prod stayed broken: the
+ *   gateway answered 401 and the loop billed until nikki closed the browser.
+ *   The comment here used to assert the retry was correct, which is why review
+ *   after review read past it.
+ *
+ *   So failures are budgeted PER WORLD STATE: `MAX_ATTEMPTS_PER_KEY` tries,
+ *   then quiet until the key moves. Per-key rather than global because the
+ *   thing that failed is one situation, and a world that has moved on deserves
+ *   a fresh try. Warming is an OPTIMISATION -- when it cannot run the game
+ *   plays on with slow first turns, and that is always the better trade than
+ *   spending money in a loop.
+ *
  * WHY THERE IS NO CONVERSATION-END HOOK
  *   The plan called for re-warming when a conversation ends, because a
  *   conversation can advance a quest and quest stage IS in the situation key --
@@ -59,6 +75,10 @@
 /** Minimum gap between checks. Deciding whether to warm costs ~12 blackboard
  *  reads, which is fine twice a second and not fine at 60fps. */
 const CHECK_INTERVAL_MS = 2000;
+
+/** How many times ONE world state may fail before the warmer stops asking for
+ *  it. See "A FAILING WARM MUST GIVE UP" in the module header. */
+const MAX_ATTEMPTS_PER_KEY = 3;
 
 export interface RegionWarmerDeps {
   /** Resolves the NPCs currently worth warming. Scripted-only NPCs must be
@@ -89,6 +109,10 @@ export interface RegionTeacherWarmer {
 export function createRegionTeacherWarmer(deps: RegionWarmerDeps): RegionTeacherWarmer {
   let sinceLastCheckMs = CHECK_INTERVAL_MS;
   let warmedForKey: string | null = null;
+  /** The key `attempts` is counting for. Failures are budgeted per world
+   *  state, so a key that moves gets a fresh budget. */
+  let attemptsForKey: string | null = null;
+  let attempts = 0;
   let running = false;
   let disposed = false;
 
@@ -100,6 +124,13 @@ export function createRegionTeacherWarmer(deps: RegionWarmerDeps): RegionTeacher
     // moves, so this no longer matches.
     if (built.situationKey === warmedForKey) return;
 
+    if (built.situationKey !== attemptsForKey) {
+      attemptsForKey = built.situationKey;
+      attempts = 0;
+    }
+    // Given up on this world state. Silent, because it already said so once.
+    if (attempts >= MAX_ATTEMPTS_PER_KEY) return;
+
     const npcIds = deps.listWarmableNpcIds();
     if (npcIds.length === 0) return;
 
@@ -108,14 +139,29 @@ export function createRegionTeacherWarmer(deps: RegionWarmerDeps): RegionTeacher
     // directive cache is scoped per conversation, so a region with N NPCs fired
     // N full ~9s Teacher calls, repeating on every time-of-day and quest-stage
     // change. Caught in review before it shipped.
+    // Counted BEFORE the call, so a warm that throws costs the budget exactly
+    // like a warm that returns "failed". Anything else lets a throwing path
+    // retry for ever, which is the bug this budget exists to stop.
+    attempts += 1;
     const outcome = await built.warmAll(npcIds);
+    if (disposed) return;
+
     // ONLY REMEMBER A STATE THAT ACTUALLY GOT WARMED. Marking it regardless
     // meant a failed warm -- gateway down, model erroring -- was recorded as
     // done and never retried until the world moved, which on a fixed region
-    // can be a long time. Leaving it unset costs one retry per interval, which
-    // is the correct behaviour for a transient failure.
-    if (!disposed && outcome !== "failed") {
+    // can be a long time.
+    if (outcome !== "failed") {
       warmedForKey = built.situationKey;
+      return;
+    }
+
+    if (attempts >= MAX_ATTEMPTS_PER_KEY) {
+      // Loud, and exactly once per world state. Warming is an optimisation;
+      // the game plays on with slow first turns.
+      console.error(
+        `[sugarlang] region warm failed ${attempts}x, giving up until the ` +
+          `world changes. First turns will be slow. Check the gateway.`
+      );
     }
   }
 
@@ -136,6 +182,10 @@ export function createRegionTeacherWarmer(deps: RegionWarmerDeps): RegionTeacher
     },
     invalidate(): void {
       warmedForKey = null;
+      // A forced re-warm is a fresh start, including for a state that had
+      // used up its budget.
+      attemptsForKey = null;
+      attempts = 0;
       sinceLastCheckMs = CHECK_INTERVAL_MS;
     },
     dispose(): void {
