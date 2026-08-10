@@ -165,7 +165,12 @@ function buildBootJsonPayload(
               contentLibrary: snapshot.contentLibrary,
               itemDefinitions: gameProject.itemDefinitions,
               documentDefinitions: gameProject.documentDefinitions,
-              regions: snapshot.regions
+              regions: snapshot.regions,
+              // Plan 092.2 — a plugin's derived artifacts ship with the game.
+              // Disabled plugins are skipped inside the collector, so turning
+              // one off deploys a game without its files rather than a game
+              // with dangling ones.
+              pluginConfigurations: gameProject.pluginConfigurations
             }).map((path) => [path, `/${path}`])
           ),
     // Story 47.10.5 — authored fresh-start record. When a returning

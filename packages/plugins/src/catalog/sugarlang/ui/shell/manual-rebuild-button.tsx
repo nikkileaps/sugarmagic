@@ -24,6 +24,9 @@ import {
   readSugarlangCompileStatus,
   rebuildSugarlangCompileCache,
   resolveStudioCompileWorkspaceId,
+  restoreSceneContextsFromArtifact,
+  restoreVariantsFromArtifact,
+  type SugarlangArtifact,
   type SugarlangCompileStatusSummary
 } from "./editor-support";
 import {
@@ -49,6 +52,17 @@ export interface ManualRebuildButtonProps {
    * it will not survive a reload and will not deploy with the game.
    */
   onPersistTeachPlan?: (document: SugarlangTeachPlanDocument) => void;
+  /**
+   * Writes the bake's derived artifacts into the project's `assets/` and
+   * declares their paths (Plan 092.2). Absent means the bake's output stays in
+   * this browser and never reaches a deployed game.
+   */
+  onArtifacts?: (artifacts: SugarlangArtifact[]) => Promise<void> | void;
+  /**
+   * Reads a previously written artifact back, so the browser cache can be
+   * restored from the project instead of re-running paid extraction.
+   */
+  readAssetFile?: (relativeAssetPath: string) => Promise<Blob | null>;
   /**
    * The teach plan already stored on the project, hydrated into the in-memory
    * lookup on mount so a bake works before any rebuild this session.
@@ -98,6 +112,30 @@ export function ManualRebuildButton(
   // Hashes are passed so a plan belonging to a scene that has since been edited
   // is DROPPED rather than used. Stale steering is worse than none: a bake would
   // aim at what the scene used to be about and look entirely deliberate.
+  // Plan 092.2 -- put the durable scene-context artifact back into the browser
+  // cache before anything reads it. Without this, clearing browser storage
+  // makes a Rebuild re-run the gateway extraction for scenes that have not
+  // changed, which costs money for no new information.
+  useEffect(() => {
+    const read = props.readAssetFile;
+    if (!read) return;
+    let cancelled = false;
+    void Promise.all([
+      restoreSceneContextsFromArtifact(workspaceId, read),
+      restoreVariantsFromArtifact(workspaceId, read)
+    ]).then(([sceneContexts, variants]) => {
+      if (!cancelled && (sceneContexts > 0 || variants > 0)) {
+        console.info("[sugarlang build] artifacts-restored", {
+          sceneContexts,
+          variants
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [props.readAssetFile, workspaceId]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -186,7 +224,8 @@ export function ManualRebuildButton(
         setProgress,
         {
           chunkExtractionEnabled: props.chunkExtractionEnabled ?? true,
-          onTeachPlanDocument: props.onPersistTeachPlan
+          onTeachPlanDocument: props.onPersistTeachPlan,
+          onArtifacts: props.onArtifacts
         }
       );
       setStatus(result.status);

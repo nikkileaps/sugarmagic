@@ -89,6 +89,52 @@ export interface PluginDesignSectionRenderProps {
   activeScene?: Scene | null;
   targetLanguage: string;
   onCommand: (command: SemanticCommand) => void;
+  /**
+   * Write bytes into the project's `assets/` folder (Plan 092.2).
+   *
+   * A plugin that produces a DERIVED ARTIFACT the runtime cannot rebuild --
+   * one needing Studio, a network service or paid work (ADR 005 rule 3) --
+   * has to put the result somewhere that travels with the game. `assets/` is
+   * that place, and the deploy already ships it wholesale.
+   *
+   * Studio supplies this because writing to disk needs the project directory
+   * handle, which only Studio holds; the same reason the mask painter is
+   * handed a writer rather than reaching for one. A plugin package never
+   * depends on `@sugarmagic/io`.
+   *
+   * Declaring the written path is a SEPARATE step: put it under
+   * `PLUGIN_ASSET_PATHS_CONFIG_KEY` in the plugin's own configuration, or the
+   * file will not re-load on project open and will not deploy.
+   *
+   * Absent when no project is open.
+   */
+  writeAssetFile?: (relativeAssetPath: string, blob: Blob) => Promise<void>;
+  /**
+   * Read back a file the plugin previously wrote (Plan 092.2). Null when the
+   * project has never produced it.
+   *
+   * This is what demotes the browser cache to a cache. The artifact on disk is
+   * the durable copy, so after clearing browser storage a plugin can restore
+   * its own cache from the project rather than re-running the paid work that
+   * produced it.
+   *
+   * Reads the copy already loaded into memory on project open, not the disk:
+   * `readBlobFile` intermittently returns null for a file written moments
+   * earlier, and the artifact is declared, so it is in memory anyway.
+   */
+  readAssetFile?: (relativeAssetPath: string) => Promise<Blob | null>;
+  /**
+   * Save the project (Plan 092.2).
+   *
+   * Needed because writing an artifact FILE and declaring its path are two
+   * different kinds of write: the file goes to disk immediately, the
+   * declaration is a command that only marks the session dirty. Without a save
+   * a bake leaves files on disk that nothing reloads and nothing ships -- the
+   * exact half-state this epic exists to remove.
+   *
+   * Absent when no project is open.
+   */
+  requestSave?: () => Promise<unknown>;
   selectedNPC?: NPCDefinition | null;
   updateNPC?: (definition: NPCDefinition) => void;
   selectedQuest?: QuestDefinition | null;

@@ -197,9 +197,20 @@ a scene changes its content hash, so the cached model no longer matches and
 the runtime reports it absent." The lookup is also impure (it resolves lore
 through the gateway), so a run without a gateway URL silently ships zero.
 
-Content-hashed filenames are required, not cosmetic: `/assets/*` ships
-`immutable, max-age=31536000` (`published-web.ts:200-212`), so a reused
-filename would serve a stale artifact for a year.
+**Filenames are STABLE, not content-hashed** (corrected 2026-08-09, during
+the story). An earlier draft required content hashes in the name to beat the
+`immutable, max-age=31536000` header on `/assets/*`. Plan 060 already solved
+that: the deploy stamps EVERY `assetSources` URL with the deploy sha --
+`jq '.assetSources |= with_entries(.value += "?v=" + $v)'`
+(`github-workflow.ts:494`) -- "New deploy -> new URLs -> browsers fetch fresh
+with no manual cache busting... Pairs with the immutable Cache-Control".
+
+Stable names matter for more than tidiness: a changing filename changes the
+DECLARED PATH LIST, and that list lives in the project, so every edit would
+write the session and push an undo checkpoint. With stable names the path
+list is written once and left alone -- so a file write costs nothing on the
+session side, and the "one write per bake" rule below applies only to the
+declaration, not to the artifacts.
 
 IndexedDB is demoted to a read cache. Studio's reader must rehydrate from the
 files -- `readSugarlangCompileStatus` derives everything from IndexedDB
@@ -207,8 +218,10 @@ files -- `readSugarlangCompileStatus` derives everything from IndexedDB
 report a fresh browser as un-baked. Hand-edited variants must survive the
 same trip.
 
-One write per bake: `editor-support.ts:745` fires `onTeachPlanDocument` exactly
-once after the scheduler stops -- copy that shape rather than writing per band.
+One config write, not one per artifact: `editor-support.ts:745` fires
+`onTeachPlanDocument` exactly once after the scheduler stops -- copy that shape
+for the path declaration. Artifact FILES may be written as they are produced;
+they never touch the session.
 **Depends on:** 092.1.
 **Exit:** bake, clear ALL browser storage, reopen the project -- Studio reports
 the artifacts present and Rebuild finds nothing stale; the files are in

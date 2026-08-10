@@ -33,7 +33,11 @@ function collectRelativeAssetPaths(projectStore: ProjectStore): string[] {
     documentDefinitions: session.gameProject?.documentDefinitions,
     // Plan 069.8 — baked navmesh artifacts must re-load on project open, else
     // NPC pathfinding falls back to straight-line after a restart.
-    regions: session.regions ? Array.from(session.regions.values()) : []
+    regions: session.regions ? Array.from(session.regions.values()) : [],
+    // Plan 092.2 — a plugin's derived artifacts are file-backed too. Same
+    // reason as the navmesh: without this they never re-load on open, so a
+    // bake looks lost after a restart.
+    pluginConfigurations: session.gameProject?.pluginConfigurations
   });
 }
 

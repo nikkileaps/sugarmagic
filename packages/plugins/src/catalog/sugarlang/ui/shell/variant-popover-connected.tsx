@@ -31,6 +31,12 @@ export interface VariantsPopoverConnectedProps {
   targetLanguage: string;
   dialogue: DialogueDefinition | null;
   workspaceId: string;
+  /**
+   * Plan 092.2 -- called after any variant changes, so the durable copy in
+   * `assets/` keeps up. Absent means variants live only in this browser, which
+   * is the state this epic exists to end.
+   */
+  onVariantsChanged?: () => Promise<void> | void;
 }
 
 const client = createVariantAuthoringClient();
@@ -62,11 +68,16 @@ export function VariantsPopoverConnected(props: VariantsPopoverConnectedProps): 
       workspaceId
     );
     setBandVariants((prev) => ({ ...prev, ...generated }));
+    // Durable copy keeps up with the cache (Plan 092.2).
+    await props.onVariantsChanged?.();
   }
 
   async function handleUpdateVariant(band: CEFRBand, text: string): Promise<void> {
     const dialogueDefinitionId = dialogue?.definitionId ?? "";
     await client.saveVariant(node.nodeId, node.text, band, text, dialogueDefinitionId, targetLanguage, workspaceId);
+    // A hand-written variant is AUTHORED, not derived -- it cannot be
+    // regenerated, so it must reach the project (ADR 005 rule 6).
+    await props.onVariantsChanged?.();
     setBandVariants((prev) => ({
       ...prev,
       [band]: {
