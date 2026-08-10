@@ -28,7 +28,8 @@ import type { CardStore } from "../../learner";
 import {
   cloneLearnerProfile,
   createEmptyLearnerProfile,
-  loadLearnerProfile
+  loadLearnerProfile,
+  type LearnerProfileCoreStore
 } from "../../learner";
 
 export interface BlackboardLearnerStoreOptions {
@@ -38,6 +39,8 @@ export interface BlackboardLearnerStoreOptions {
   targetLanguage: string;
   supportLanguage: string;
   cardStore: CardStore;
+  /** Where the level and placement record durably live (Plan 092.6.4). */
+  profileStore?: LearnerProfileCoreStore;
   learnerPriorProvider: LearnerPriorProvider;
 }
 
@@ -49,6 +52,7 @@ export class BlackboardLearnerStore {
       blackboard: this.options.blackboard,
       playerEntityId: this.options.playerEntityId,
       cardStore: this.options.cardStore,
+      profileStore: this.options.profileStore,
       fallbackProfile: createEmptyLearnerProfile({
         learnerId: this.options.learnerId,
         targetLanguage: this.options.targetLanguage,

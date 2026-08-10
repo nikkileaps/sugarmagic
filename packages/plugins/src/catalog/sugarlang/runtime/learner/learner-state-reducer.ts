@@ -47,7 +47,8 @@ import {
 import {
   createEmptyLearnerProfile,
   loadLearnerProfile,
-  saveLearnerProfile
+  saveLearnerProfile,
+  type LearnerProfileCoreStore
 } from "./persistence";
 import {
   LEARNER_PROFILE_FACT,
@@ -150,6 +151,8 @@ export interface LearnerStateReducerOptions {
    *  scheduling and session accumulators are unaffected. Debug-only. */
   debugPinnedBand?: () => CEFRBand | null;
   cardStore: CardStore;
+  /** Where the level and placement record durably live (Plan 092.6.4). */
+  profileStore?: LearnerProfileCoreStore;
   atlas: LexicalAtlasProvider;
   learnerPriorProvider: LearnerPriorProvider;
   telemetry?: TelemetrySink;
@@ -255,6 +258,7 @@ export class LearnerStateReducer {
       blackboard: this.options.blackboard,
       playerEntityId: this.options.playerEntityId,
       cardStore: this.options.cardStore,
+      profileStore: this.options.profileStore,
       fallbackProfile: createSeedProfile(this.options)
     });
     const changedCards: LemmaCard[] = [];
@@ -411,6 +415,7 @@ export class LearnerStateReducer {
       playerEntityId: this.options.playerEntityId,
       profile,
       cardStore: this.options.cardStore,
+      profileStore: this.options.profileStore,
       sourceSystem: LEARNER_PROFILE_FACT.ownerSystem,
       changedCards
     });

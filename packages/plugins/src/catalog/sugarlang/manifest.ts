@@ -80,7 +80,10 @@ import {
   setSugarlangChunkExtractionEnabled
 } from "./ui/shell/contributions";
 
-export const SUGARLANG_PLUGIN_ID = "sugarlang";
+// Defined in a leaf module so runtime code can namespace its storage with it
+// without importing this file. Re-exported so callers see one name.
+export { SUGARLANG_PLUGIN_ID } from "./plugin-id";
+import { SUGARLANG_PLUGIN_ID } from "./plugin-id";
 export const SUGARLANG_DISPLAY_NAME = "Sugarlang";
 
 const deploymentRequirements: DeploymentRequirement[] = [

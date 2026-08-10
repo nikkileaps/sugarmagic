@@ -40,7 +40,10 @@ import type {
   ConversationExecutionContext,
   RuntimeBlackboard
 } from "@sugarmagic/runtime-core";
-import { getActiveUserId } from "@sugarmagic/runtime-core";
+import {
+  createSyncedAccountStore,
+  getActiveUserId
+} from "@sugarmagic/runtime-core";
 import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
 import { IndexedDBVariantCache, type SugarlangVariantCache } from "./compile/variant-cache";
@@ -84,6 +87,12 @@ import {
 } from "./placement/placement-questionnaire-loader";
 import { PlacementScoreEngine } from "./placement/placement-score-engine";
 import { BlackboardLearnerStore } from "./providers/impls/blackboard-learner-store";
+import { createSyncedCardStore } from "./learner/synced-card-store";
+import type {
+  LearnerProfileCoreStore,
+  PersistedLearnerProfileCore
+} from "./learner/persistence";
+import { SUGARLANG_PLUGIN_ID } from "../plugin-id";
 import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider";
 import { FsrsLearnerPriorProvider } from "./providers/impls/fsrs-learner-prior-provider";
 import {
@@ -248,16 +257,44 @@ function resolveLearnerScope(): string | null {
   return userId && userId.length > 0 ? userId : null;
 }
 
-function createCardStore(profileId: string): CardStore {
-  if (typeof indexedDB !== "undefined") {
-    try {
-      return new IndexedDBCardStore({ profileId });
-    } catch {
-      return new MemoryCardStore();
-    }
+/**
+ * The two stores a learner needs: their words, and everything that is not a
+ * word (Plan 092.6.4).
+ *
+ * Both are per-account and synced, so a player who signs in on a second
+ * machine finds their level AND the words behind it, rather than a level with
+ * no evidence for it. Storage that cannot be opened degrades to memory for the
+ * session -- the same posture every learner store here has always taken, and
+ * the honest one when there is nowhere to put anything.
+ */
+function createLearnerStores(
+  learnerId: string,
+  targetLanguage: string,
+  supportLanguage: string
+): { cardStore: CardStore; profileCoreStore?: LearnerProfileCoreStore } {
+  try {
+    return {
+      cardStore: createSyncedCardStore({ targetLanguage, supportLanguage }),
+      profileCoreStore: createSyncedAccountStore<PersistedLearnerProfileCore>({
+        pluginId: SUGARLANG_PLUGIN_ID,
+        storeId: `profile:${targetLanguage}:${supportLanguage}`,
+        schemaVersion: SUGARLANG_LEARNER_PROFILE_SCHEMA_VERSION
+      })
+    };
+  } catch (error) {
+    console.warn(
+      `[sugarlang] per-account learner storage unavailable for ${learnerId}; ` +
+        "this session's progress will not be saved.",
+      error
+    );
+    // No profile store: the core stays on the blackboard for the session,
+    // which is what it did before any of this existed.
+    return { cardStore: new MemoryCardStore() };
   }
-  return new MemoryCardStore();
 }
+
+/** Bumped when the stored learner core changes shape. */
+export const SUGARLANG_LEARNER_PROFILE_SCHEMA_VERSION = 1;
 
 export class SugarlangRuntimeServices {
   private readonly config: SugarLangPluginConfig;
@@ -907,7 +944,16 @@ export class SugarlangRuntimeServices {
       languages.targetLanguage,
       languages.supportLanguage
     );
-    const cardStore = createCardStore(learnerId);
+    // Plan 092.6.4 — a learner's words and their level both live in
+    // per-account storage now, so they follow the player to another machine
+    // instead of ending with the browser they were learned in. Both fall back
+    // to a local-only store when nothing can reach an account, which is what
+    // a project with no accounts gets.
+    const { cardStore, profileCoreStore } = createLearnerStores(
+      learnerId,
+      languages.targetLanguage,
+      languages.supportLanguage
+    );
     const learnerPriorProvider = new FsrsLearnerPriorProvider(languageBundle.atlas);
     const learnerStore = new BlackboardLearnerStore({
       blackboard: this.boundContext.blackboard,
@@ -916,6 +962,7 @@ export class SugarlangRuntimeServices {
       targetLanguage: languages.targetLanguage,
       supportLanguage: languages.supportLanguage,
       cardStore,
+      profileStore: profileCoreStore,
       learnerPriorProvider
     });
     const learnerStateReducer = new LearnerStateReducer({
@@ -925,6 +972,7 @@ export class SugarlangRuntimeServices {
       supportLanguage: languages.supportLanguage,
       blackboard: this.boundContext.blackboard,
       cardStore,
+      profileStore: profileCoreStore,
       atlas: languageBundle.atlas,
       learnerPriorProvider,
       telemetry: this.telemetry,

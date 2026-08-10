@@ -45,6 +45,15 @@ interface LoadLearnerProfileOptions {
   blackboard: RuntimeBlackboard;
   playerEntityId: string;
   cardStore: CardStore;
+  /**
+   * Where the profile CORE durably lives (Plan 092.6.4) -- the level, the
+   * placement record, everything that is not a word.
+   *
+   * The blackboard below is memory for the life of the tab, so without this a
+   * returning player is re-placed every session. Absent in tests and in a
+   * browser with no storage, which behaves exactly as it did before.
+   */
+  profileStore?: LearnerProfileCoreStore;
   fallbackProfile: LearnerProfile;
   /**
    * Injectable clock, for decay.
@@ -62,9 +71,28 @@ interface SaveLearnerProfileOptions {
   playerEntityId: string;
   profile: LearnerProfile;
   cardStore: CardStore;
+  /** See LoadLearnerProfileOptions. */
+  profileStore?: LearnerProfileCoreStore;
   sourceSystem: string;
   changedCards?: LemmaCard[];
 }
+
+/**
+ * The slice of an account store this module needs. Narrowed to two methods so
+ * a test can supply a plain object, and so nothing here depends on how the
+ * store is backed or whether it syncs.
+ */
+export interface LearnerProfileCoreStore {
+  get: (key: string) => Promise<PersistedLearnerProfileCore | undefined>;
+  put: (key: string, data: PersistedLearnerProfileCore) => Promise<void>;
+}
+
+/**
+ * One learner has one core record. A fixed key rather than a generated one:
+ * the store is already scoped to the account and the language pair, so there
+ * is nothing left to distinguish.
+ */
+export const LEARNER_PROFILE_CORE_KEY = "core";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -238,13 +266,34 @@ function isDeadChunkCardKey(cardKey: string): boolean {
 export async function loadLearnerProfile(
   options: LoadLearnerProfileOptions
 ): Promise<LearnerProfile> {
+  // THE DURABLE COPY FIRST (Plan 092.6.4). The blackboard is memory for the
+  // life of the tab; before this it was the only home the core had, so a
+  // returning player arrived with their words intact and their level gone and
+  // was re-placed every session.
+  //
+  // A read that fails is not fatal -- the blackboard or the default still
+  // produces a playable learner, and the alternative is refusing to start.
+  let persistedCore: PersistedLearnerProfileCore | undefined;
+  if (options.profileStore) {
+    try {
+      persistedCore = await options.profileStore.get(LEARNER_PROFILE_CORE_KEY);
+    } catch (error) {
+      console.warn("[sugarlang] could not read the stored learner core", error);
+    }
+  }
+
   const envelope = options.blackboard.getFact(
     LEARNER_PROFILE_FACT,
     createBlackboardScope("entity", options.playerEntityId)
   );
-  const baseProfile = envelope?.value
-    ? cloneLearnerProfile(envelope.value)
-    : cloneLearnerProfile(options.fallbackProfile);
+  const baseProfile = persistedCore
+    ? cloneLearnerProfile({
+        ...(persistedCore as LearnerProfile),
+        lemmaCards: {}
+      })
+    : envelope?.value
+      ? cloneLearnerProfile(envelope.value)
+      : cloneLearnerProfile(options.fallbackProfile);
 
   const lemmaCards: Record<string, LemmaCard> = {
     ...Object.fromEntries(
@@ -309,4 +358,19 @@ export async function saveLearnerProfile(
     value: cloneLearnerProfile(options.profile),
     sourceSystem: options.sourceSystem
   });
+
+  // The durable copy of everything that is not a word. Written WITHOUT the
+  // cards: they are rows of their own in the same account store, and copying
+  // them in here would double every write and give the two copies a chance to
+  // disagree.
+  if (options.profileStore) {
+    const { lemmaCards: _cards, ...core } = cloneLearnerProfile(options.profile);
+    try {
+      await options.profileStore.put(LEARNER_PROFILE_CORE_KEY, core);
+    } catch (error) {
+      // A turn must not fail because storage did. The blackboard above still
+      // carries the profile for this session.
+      console.warn("[sugarlang] could not persist the learner core", error);
+    }
+  }
 }
