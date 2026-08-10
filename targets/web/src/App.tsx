@@ -49,6 +49,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createAnonymousLocalIdentityProvider,
+  registerActiveGameId,
   createIndexedDBGameSaveStore,
   createSerializedSaveStore,
   type GameSave,
@@ -193,6 +194,12 @@ export function App() {
         const savedGamePromise = new Promise<GameSave | null>((resolve) => {
           resolveSavedGame = resolve;
         });
+        // Plan 092.6 — BEFORE anything reads the player's storage. The
+        // `currentUser` argument below is evaluated before `host.start` runs,
+        // so leaving this to the host is too late: the identity provider reads
+        // localStorage under a name that leads with the game, and there would
+        // be no game yet.
+        registerActiveGameId(payload.gameId ?? null);
         await host.start({
           ...payload,
           pluginRuntimeEnvironment: buildConfig.pluginRuntimeEnvironment,

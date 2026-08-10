@@ -77,6 +77,7 @@ import {
   createIndexedDBGameSaveStore,
   createSerializedSaveStore,
   createObservableValue,
+  registerActiveGameId,
   registerActiveIdentityProvider,
   type GameSave,
   type GameSavePayload,
@@ -253,6 +254,12 @@ window.addEventListener("message", (event) => {
       // Continue / refresh doesn't accidentally skip the start
       // menu. sessionStorage clears on tab close anyway; this
       // guards against same-tab reloads after a New Game click.
+      // Plan 092.6 — BEFORE anything reads the player's storage. The
+      // `currentUser` argument below is evaluated before `host.start` runs, so
+      // leaving this to the host is too late: the identity provider reads
+      // localStorage under a name that leads with the game, and there would be
+      // no game yet.
+      registerActiveGameId(data.gameId ?? null);
       const freshStart = consumeFreshStartFlag();
       // Story 47.10 boot-ordering follow-up — same deferred-save
       // pattern as App.tsx: the host awaits this promise after

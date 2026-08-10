@@ -169,7 +169,8 @@ import {
   validateMechanicsDefinition,
   bakeNavMesh,
   buildRegionNavMeshInput,
-  computeNavMeshInputHash
+  computeNavMeshInputHash,
+  registerActiveGameId
 } from "@sugarmagic/runtime-core";
 import {
   createShellStore,
@@ -996,6 +997,19 @@ export function App() {
   const projectHandle = useStore(projectStore, (s) => s.handle);
   const session = useStore(projectStore, (s) => s.session);
   const previewWindow = useStore(previewStore, (s) => s.previewWindow);
+
+  // Plan 092.6 — Studio itself needs the open project's id, because some
+  // author-facing panels read the PLAYER's storage directly (the SugarProfile
+  // panel's anonymous-user row and its Regenerate button). Those names lead
+  // with the game, so without this they cannot be built and the panel throws.
+  //
+  // Registered from the open project rather than from a preview boot: Studio
+  // and the Preview iframe are separate documents with separate copies of this
+  // registry, and the panel is reachable whether or not Preview is running.
+  const openProjectId = session?.gameProject.identity.id ?? null;
+  useEffect(() => {
+    registerActiveGameId(openProjectId);
+  }, [openProjectId]);
 
   const isDirty = session?.isDirty ?? false;
   const undoCount = session?.undoStack.length ?? 0;
