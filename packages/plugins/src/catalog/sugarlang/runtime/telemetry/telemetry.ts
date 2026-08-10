@@ -57,6 +57,7 @@ import type {
 } from "../types";
 import type { LearnerSnapshot } from "../middlewares/shared";
 import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
+import { getActiveAccessToken } from "@sugarmagic/runtime-core";
 
 export const SUGARLANG_TELEMETRY_SCHEMA_VERSION = 1 as const;
 export const SUGARLANG_STUDIO_TELEMETRY_WORKSPACE_ID =
@@ -1191,12 +1192,30 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
     }
   };
 
-  constructor(options: { proxyBaseUrl: string; flushIntervalMs?: number }) {
+  /** Same reason as the LLM client: a gateway in `supabase-jwt` mode answers
+   *  401 without it, so every event a deployed game recorded was thrown away
+   *  and production teaching analytics were silently empty. Injectable so a
+   *  test can assert the header. */
+  private readonly getAccessToken: () => Promise<string | null>;
+
+  /** Last token seen by `flush()`. The unload path is synchronous -- an
+   *  awaited fetch never completes after unload -- so it cannot ask for a
+   *  fresh one and reuses this. Tokens last about an hour and unload follows
+   *  play by seconds, so a stale value here is a dropped final batch at
+   *  worst, which is already this sink's posture on failure. */
+  private lastToken = "";
+
+  constructor(options: {
+    proxyBaseUrl: string;
+    flushIntervalMs?: number;
+    getAccessToken?: () => Promise<string | null>;
+  }) {
     const base = options.proxyBaseUrl.endsWith("/")
       ? options.proxyBaseUrl.slice(0, -1)
       : options.proxyBaseUrl;
     this.url = `${base}/api/sugarlang/telemetry`;
     this.flushIntervalMs = options.flushIntervalMs ?? 5000;
+    this.getAccessToken = options.getAccessToken ?? getActiveAccessToken;
     if (typeof window !== "undefined") {
       window.addEventListener("pagehide", this.handlePageHide);
     }
@@ -1224,9 +1243,15 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
       this.scheduleFlush(0);
     }
     try {
+      const token = (await this.getAccessToken())?.trim() ?? "";
+      // Remembered for the unload path below, which cannot await.
+      this.lastToken = token;
       await fetch(this.url, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           events: batch.map(stripPii),
           schemaVersion: SUGARLANG_TELEMETRY_SCHEMA_VERSION
@@ -1281,7 +1306,10 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
       try {
         void fetch(this.url, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            ...(this.lastToken ? { authorization: `Bearer ${this.lastToken}` } : {})
+          },
           keepalive: true,
           body: JSON.stringify({
             events: batch.map(stripPii),
