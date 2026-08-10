@@ -51,10 +51,36 @@ SugarProfile owns identity, the cross-plugin `GameSavePayload`
 (region / position / tracked quest), and per-user profile fields
 (display_name, locale, preferences). Anything that's plugin-domain
 state (sugaragent's conversation memory, sugarlang's learner
-blackboard) lives with that plugin in its OWN store, keyed on the
-`userId` the active `UserIdentityProvider` hands out. This keeps
-the runtime-core save record small and stable, and lets plugins
-evolve their domain state independently.
+blackboard) is OWNED by that plugin and keyed on the `userId` the
+active `UserIdentityProvider` hands out. This keeps the
+runtime-core save record small and stable, and lets plugins evolve
+their domain state independently.
+
+**Owned by the plugin does not mean it may not travel a shared
+path.** Plugin data may ride a shared mechanism when it is
+namespaced to the plugin, opt-in, and absent entirely when the
+plugin is not installed — those three properties are what stop one
+plugin's data becoming everyone's problem, and a rule that forbids
+sharing outright buys nothing extra. What is genuinely forbidden is
+a plugin widening a shared *shape*: adding fields to
+`GameSavePayload`, or reaching into another plugin's slice.
+
+Two homes exist, and the choice between them is mechanical:
+
+- **A save slice**, via `SaveParticipant`, for small state that can
+  be produced synchronously. `serialize()` runs on every autosave
+  tick and the payload is re-serialised whole to detect change, so
+  anything that grows without bound does not belong here.
+- **A per-account record store** (`runtime-core/src/account-data`)
+  for anything larger, anything read asynchronously, or anything
+  that should follow the player to another device. The local copy
+  is the source of reads and writes; syncing to the account happens
+  in the background on its own cadence.
+
+Both are namespaced by the plugin and absent when it is not
+installed. Neither permits a plugin to name another plugin, and
+neither permits runtime-core or the host to name a plugin — the
+mechanism is handed a plugin id as data.
 
 ### Anonymous-first by default; sign-in is an upgrade
 
