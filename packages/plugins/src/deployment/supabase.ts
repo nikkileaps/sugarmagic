@@ -134,6 +134,75 @@ function buildInitialMigrationSql(): string {
     "  after insert on auth.users",
     "  for each row execute function public.handle_new_user();",
     "",
+    ""
+  ].join("\n");
+}
+
+/**
+ * Story 47.8 — Supabase CLI config. `project_id` links the
+ * directory to a specific Supabase project so `supabase db push`
+ * targets the right one without the user running `supabase link`
+ * manually. The user still needs to `supabase login` once on their
+ * dev machine (caches an access token in `~/.supabase/access-token`)
+ * before the Apply Migration button works.
+ */
+function buildConfigToml(projectRef: string): string {
+  return [
+    `# ${GENERATED_HEADER}`,
+    `# Project ref linked to https://${projectRef}.supabase.co`,
+    `project_id = "${projectRef}"`,
+    ""
+  ].join("\n");
+}
+
+/**
+ * Story 47.8 — manage the supabase migration directory contents.
+ * Returns an empty array when SugarProfile is not enabled or has no
+ * configured Supabase URL — those games shouldn't grow a stray
+ * `deployment/supabase/` directory just because the plugin is
+ * registered.
+ */
+export function buildSupabaseManagedFiles(
+  gameProject: GameProject
+): ManagedProjectFile[] {
+  const sugarProfile = readSugarProfileConfig(gameProject);
+  if (!sugarProfile || !sugarProfile.enableLogin) return [];
+  const projectRef = extractSupabaseProjectRef(sugarProfile.supabaseUrl);
+  if (!projectRef) return [];
+  return [
+    {
+      relativePath: "deployment/supabase/config.toml",
+      content: buildConfigToml(projectRef),
+      contentType: "text"
+    },
+    {
+      relativePath: "deployment/supabase/migrations/0001_initial.sql",
+      content: buildInitialMigrationSql(),
+      contentType: "text"
+    },
+    {
+      relativePath: "deployment/supabase/migrations/0002_account_records.sql",
+      content: buildAccountRecordsMigrationSql(),
+      contentType: "text"
+    }
+  ];
+}
+
+/**
+ * Plan 092.6.3 — per-account records, as a SEPARATE migration.
+ *
+ * IT CANNOT GO IN 0001. `supabase db push` records each applied migration by
+ * its filename version and skips anything already recorded -- "only the
+ * timestamps are compared". A project that has already applied 0001 would
+ * never see an edit to it, and the push would report success having done
+ * nothing. Every future schema change needs its own numbered file for the same
+ * reason.
+ */
+function buildAccountRecordsMigrationSql(): string {
+  return [
+    `-- ${GENERATED_HEADER}`,
+    `${TEMPLATE_VERSION_STAMP_PREFIX} ${SUPABASE_MIGRATIONS_TEMPLATE_VERSION}`,
+    "",
     "-- Plan 092.6.3 — per-account records any plugin can sync into.",
     "-- Generic on purpose: plugin_id and store_id are DATA, so a new plugin",
     "-- needs no migration of its own. One row per record rather than a blob",
@@ -188,51 +257,6 @@ function buildInitialMigrationSql(): string {
     "  for each row execute function public.touch_account_record();",
     ""
   ].join("\n");
-}
-
-/**
- * Story 47.8 — Supabase CLI config. `project_id` links the
- * directory to a specific Supabase project so `supabase db push`
- * targets the right one without the user running `supabase link`
- * manually. The user still needs to `supabase login` once on their
- * dev machine (caches an access token in `~/.supabase/access-token`)
- * before the Apply Migration button works.
- */
-function buildConfigToml(projectRef: string): string {
-  return [
-    `# ${GENERATED_HEADER}`,
-    `# Project ref linked to https://${projectRef}.supabase.co`,
-    `project_id = "${projectRef}"`,
-    ""
-  ].join("\n");
-}
-
-/**
- * Story 47.8 — manage the supabase migration directory contents.
- * Returns an empty array when SugarProfile is not enabled or has no
- * configured Supabase URL — those games shouldn't grow a stray
- * `deployment/supabase/` directory just because the plugin is
- * registered.
- */
-export function buildSupabaseManagedFiles(
-  gameProject: GameProject
-): ManagedProjectFile[] {
-  const sugarProfile = readSugarProfileConfig(gameProject);
-  if (!sugarProfile || !sugarProfile.enableLogin) return [];
-  const projectRef = extractSupabaseProjectRef(sugarProfile.supabaseUrl);
-  if (!projectRef) return [];
-  return [
-    {
-      relativePath: "deployment/supabase/config.toml",
-      content: buildConfigToml(projectRef),
-      contentType: "text"
-    },
-    {
-      relativePath: "deployment/supabase/migrations/0001_initial.sql",
-      content: buildInitialMigrationSql(),
-      contentType: "text"
-    }
-  ];
 }
 
 export function getSugarProfileMigrationDirectory(): string {

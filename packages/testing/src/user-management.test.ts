@@ -1748,6 +1748,36 @@ describe("extractSupabaseProjectRef", () => {
 });
 
 describe("buildSupabaseManagedFiles", () => {
+  it("THE ONE THAT MATTERS: a new table ships as its own migration, not an edit to 0001", async () => {
+    // `supabase db push` records each applied migration by its filename
+    // version and skips anything already recorded -- "only the timestamps are
+    // compared". A project that has applied 0001 would never see an edit to
+    // it, and the push would report success having changed nothing. This
+    // caught exactly that: account_records was first added by editing 0001.
+    const { buildSupabaseManagedFiles } = await import("@sugarmagic/plugins");
+    const files = buildSupabaseManagedFiles(
+      await makeGameProjectWithSugarProfile({
+        enabled: true,
+        enableLogin: true,
+        supabaseUrl: "https://abcdefghijklmnop.supabase.co"
+      })
+    );
+    const paths = files.map((file) => file.relativePath);
+
+    expect(paths).toContain("deployment/supabase/migrations/0001_initial.sql");
+    expect(paths).toContain(
+      "deployment/supabase/migrations/0002_account_records.sql"
+    );
+
+    const initial = files.find((f) => f.relativePath.includes("0001_initial"));
+    expect(String(initial?.content)).not.toContain("account_records");
+
+    const added = files.find((f) => f.relativePath.includes("0002_account_records"));
+    expect(String(added?.content)).toContain("create table if not exists public.account_records");
+    // Scoped to its owner, like every other table here.
+    expect(String(added?.content)).toContain("auth.uid() = user_id");
+  });
+
   // Domain helpers needed only by this block — import lazily so
   // the existing test setup at the top of the file stays focused.
   async function loadDomainHelpers() {
@@ -1841,7 +1871,8 @@ describe("buildSupabaseManagedFiles", () => {
     const files = buildSupabaseManagedFiles(project);
     expect(files.map((f) => f.relativePath).sort()).toEqual([
       "deployment/supabase/config.toml",
-      "deployment/supabase/migrations/0001_initial.sql"
+      "deployment/supabase/migrations/0001_initial.sql",
+      "deployment/supabase/migrations/0002_account_records.sql"
     ]);
     const configToml = files.find(
       (f) => f.relativePath === "deployment/supabase/config.toml"
