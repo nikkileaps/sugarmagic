@@ -144,6 +144,29 @@ describe("092.6.3 - a player's data reaches their other devices", () => {
   });
 });
 
+describe("092.6.3 - Studio Preview never reaches the backend", () => {
+  it("THE ONE THAT MATTERS: with no remote, nothing leaves the device", async () => {
+    // Preview runs the same host as the published game, against a project
+    // configured for the REAL backend. Without the host guard every word
+    // learned while authoring would land in the live database as if a player
+    // had learned it. This is the shape that guard produces.
+    const a = makeStore("user-alice");
+    await a.store.put("authored", { lemma: "authored" });
+
+    const result = await createSyncEngine({
+      remote: null,
+      ownerWindow: null
+    }).syncNow("preview");
+
+    expect(result.pushed).toBe(0);
+    expect(result.failures).toBe(0);
+    // ...and the author still has their data locally.
+    expect(await a.store.get("authored")).toEqual({ lemma: "authored" });
+    // Still pending, so a build that DOES sync would send it.
+    expect(await a.adapter.readPending(10)).toHaveLength(1);
+  });
+});
+
 describe("092.6.3 - conflicts and failures", () => {
   it("an unpushed local edit survives a pass, even against a newer remote record", async () => {
     const { remote, seed } = fakeRemote();

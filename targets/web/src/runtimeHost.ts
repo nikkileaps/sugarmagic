@@ -2030,9 +2030,20 @@ export function createWebRuntimeHost(
       // A null remote is a working configuration, not a failure: with no
       // plugin contributing a backend, every account store keeps serving
       // reads and writes locally and simply never leaves the device.
+      //
+      // STUDIO PREVIEW NEVER SYNCS. Preview runs this same host, and the
+      // project it previews is configured against the REAL backend -- so
+      // without this guard every word learned while authoring would be written
+      // into the live database as if a player had learned it. There is no
+      // separate development backend to point it at yet. Preview therefore
+      // reads and writes locally and reconciles with nothing, which is also
+      // what an author wants: throwaway state that does not follow them.
+      const syncsToBackend = adapter.boot.hostKind === "published-web";
       accountDataSync?.stop();
       accountDataSync = createSyncEngine({
-        remote: resolveActiveRemoteRecordStorageAdapter(pluginManager),
+        remote: syncsToBackend
+          ? resolveActiveRemoteRecordStorageAdapter(pluginManager)
+          : null,
         ownerWindow
       });
       accountDataSync.start();

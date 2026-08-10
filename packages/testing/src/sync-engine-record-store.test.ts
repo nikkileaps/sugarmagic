@@ -239,6 +239,63 @@ describe("092.6.2 - deletes and migrations", () => {
   });
 });
 
+describe("092.6.2 - clearing a synced store actually clears it", () => {
+  it("THE ONE THAT MATTERS: a cleared record is tombstoned, not just dropped", async () => {
+    // Dropping the row leaves the server holding it, so the next pull hands it
+    // straight back and the clear looks like it silently failed.
+    const adapter = createMemoryRecordStorage();
+    const store = createSyncedRecordStore<Word>({
+      table: wordsTable,
+      ...spec<Word>({ adapter })
+    });
+    trackForCleanup(store.storeKey);
+
+    await store.put("formaggio", { lemma: "formaggio", strength: 1 });
+    await store.clear();
+
+    expect(await store.get("formaggio")).toBeUndefined();
+    const stored = await adapter.read("formaggio");
+    expect(stored?.deleted).toBe(true);
+    // ...and it is queued to tell the server.
+    expect(await adapter.readPending(10)).toHaveLength(1);
+  });
+
+  it("clears EVERY page, not just the first", async () => {
+    // The first version re-read from the start each time, so after page one
+    // was tombstoned it found nothing live and quit with the rest untouched.
+    const adapter = createMemoryRecordStorage();
+    const store = createSyncedRecordStore<Word>({
+      table: wordsTable,
+      ...spec<Word>({ adapter })
+    });
+    trackForCleanup(store.storeKey);
+
+    await store.putMany(
+      Array.from({ length: 600 }, (_, i) => ({
+        key: `w${String(i).padStart(4, "0")}`,
+        data: { lemma: `w${i}`, strength: 1 }
+      }))
+    );
+    expect(await store.count()).toBe(600);
+
+    await store.clear();
+
+    expect(await store.count()).toBe(0);
+    expect(await store.list()).toEqual([]);
+  });
+
+  it("a LOCAL-only store just drops its rows, with nothing to tell", async () => {
+    // Nothing on a server to contradict it, so a tombstone would be dead
+    // weight the store carries for ever.
+    const adapter = createMemoryRecordStorage();
+    const store = createLocalRecordStore<Word>(spec<Word>({ adapter }));
+    await store.put("gone", { lemma: "gone", strength: 1 });
+    await store.clear();
+
+    expect(await adapter.read("gone")).toBeUndefined();
+  });
+});
+
 describe("092.6.2 - the mechanism names no plugin", () => {
   // The host already drifted the other way: runtimeHost.ts imports one
   // specific plugin's id and branches on it. A rule with no enforcer is a

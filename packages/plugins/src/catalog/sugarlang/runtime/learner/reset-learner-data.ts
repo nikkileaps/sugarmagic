@@ -17,16 +17,22 @@
  * Status: active
  */
 
-import { CARD_STORE_DB_NAME_PREFIX } from "./card-store";
+import { clearPlayerStoresForPlugin } from "@sugarmagic/runtime-core";
+import { SUGARLANG_PLUGIN_ID } from "../../plugin-id";
 import { TELEMETRY_DB_NAME } from "../telemetry/telemetry";
-// Note: teach-record DBs (085.5) use the prefix "${CARD_STORE_DB_NAME_PREFIX}:teach:" and are
-// automatically covered by the CARD_STORE_DB_NAME_PREFIX startsWith check below.
+// Note: every store holding a player's data -- cards, teach records, the
+// encounter-debt ledger -- clears itself through the player-store registry.
+// None of them are found by name.
 
 const DEFAULT_BLOCKED_TIMEOUT_MS = 3000;
 
 export interface SugarlangLearnerDataResetResult {
   /** True only when every sugarlang database was actually deleted. */
   ok: boolean;
+  /** Stores that emptied themselves because the runtime was holding them.
+   *  This is the path that reaches a player's account, not just their
+   *  device. */
+  clearedStores: string[];
   deletedDatabases: string[];
   /** Databases held open by a live connection past the blocked timeout. */
   blockedDatabases: string[];
@@ -95,10 +101,30 @@ export async function resetSugarlangLearnerDatabases(
 ): Promise<SugarlangLearnerDataResetResult> {
   const result: SugarlangLearnerDataResetResult = {
     ok: true,
+    clearedStores: [],
     deletedDatabases: [],
     blockedDatabases: [],
     failedDatabases: []
   };
+
+  // ASK THE STORES FIRST. Anything the runtime currently holds knows how to
+  // empty itself, and a synced store empties itself in a way that reaches the
+  // player's account rather than only their device. Only what is NOT open
+  // falls through to the database sweep below -- a language pair the player is
+  // not using, or an account that previously used this browser.
+  //
+  // This used to be a sweep and nothing else, which meant a store's data was
+  // only reachable while its NAME matched a pattern kept somewhere else. It
+  // stopped matching the first time a store was renamed and the wipe reported
+  // success having deleted nothing.
+  const asked = await clearPlayerStoresForPlugin(SUGARLANG_PLUGIN_ID);
+  result.clearedStores = asked.cleared;
+  for (const failure of asked.failed) {
+    result.ok = false;
+    console.warn(
+      `[sugarlang] could not clear the ${failure.storeId} store: ${failure.reason}`
+    );
+  }
 
   for (const closeable of options.closeables ?? []) {
     try {
@@ -128,16 +154,22 @@ export async function resetSugarlangLearnerDatabases(
     return result;
   }
 
+  // ONLY THE AUTHORING TELEMETRY IS SWEPT BY NAME. Learner data is cleared by
+  // asking the stores above, never by matching database names.
+  //
+  // The sweep used to cover learner databases too, and once those names
+  // carried the ACCOUNT it was deleting every account that had ever played in
+  // this browser -- sign in as someone else to check something, hit reset, and
+  // their words are gone as well. A pattern cannot tell whose data it is
+  // matching, which is the whole reason it is the wrong tool here.
+  //
+  // Telemetry is different: it is the AUTHOR's own recording of their own
+  // Preview sessions, one database, not per player.
   const names = (await factory.databases())
     .map((db) => db.name)
     .filter(
       (name): name is string =>
-        typeof name === "string" &&
-        // CONTAINS, not startsWith: a learner database name leads with the
-        // GAME id now, so the plugin's segment sits in the middle. Matching
-        // on the prefix would silently delete nothing.
-        (name.includes(CARD_STORE_DB_NAME_PREFIX) ||
-          name.startsWith(TELEMETRY_DB_NAME))
+        typeof name === "string" && name.startsWith(TELEMETRY_DB_NAME)
     );
 
   const timeoutMs = options.blockedTimeoutMs ?? DEFAULT_BLOCKED_TIMEOUT_MS;

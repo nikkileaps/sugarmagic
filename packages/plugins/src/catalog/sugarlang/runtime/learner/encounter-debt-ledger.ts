@@ -35,7 +35,11 @@ import {
   assertAccountScopedLearnerId,
   CARD_STORE_DB_NAME_PREFIX
 } from "./card-store";
-import { gameScopedStorageName } from "@sugarmagic/runtime-core";
+import {
+  gameScopedStorageName,
+  registerPlayerStore
+} from "@sugarmagic/runtime-core";
+import { SUGARLANG_PLUGIN_ID } from "../../plugin-id";
 
 export const TARGET_DEBT_ENCOUNTERS = 10;
 
@@ -110,6 +114,10 @@ export interface EncounterDebtLedger {
    */
   getEncounterCounts(): Promise<Map<string, number>>;
 
+  /** Forget everything, for a player starting over. Empties the store rather
+   *  than deleting its database, so a caller holding it stays valid. */
+  clearAll(): Promise<void>;
+
   close?: () => Promise<void>;
 }
 
@@ -156,6 +164,10 @@ export class MemoryEncounterDebtLedger implements EncounterDebtLedger {
       result.set(record.itemId, countDiverseEncounters(record.encounters));
     }
     return result;
+  }
+
+  async clearAll(): Promise<void> {
+    this.records.clear();
   }
 }
 
@@ -282,6 +294,17 @@ export class IndexedDBEncounterDebtLedger implements EncounterDebtLedger {
     return result;
   }
 
+  async clearAll(): Promise<void> {
+    const db = await this.openDb();
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(DEBT_STORE_NAME, "readwrite");
+      tx.objectStore(DEBT_STORE_NAME).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
   async close(): Promise<void> {
     if (!this.dbPromise) return;
     const db = await this.dbPromise;
@@ -301,5 +324,13 @@ export function createEncounterDebtLedger(learnerId: string): EncounterDebtLedge
   if (typeof indexedDB === "undefined") {
     return new MemoryEncounterDebtLedger();
   }
-  return new IndexedDBEncounterDebtLedger(gameScopedStorageName(ENCOUNTER_DEBT_DB_NAME_PREFIX, learnerId));
+  const store = new IndexedDBEncounterDebtLedger(gameScopedStorageName(ENCOUNTER_DEBT_DB_NAME_PREFIX, learnerId));
+  // Registered so a wipe asks it to clear itself rather than hunting for its
+  // database by name -- the guess that silently stopped matching once already.
+  registerPlayerStore({
+    pluginId: SUGARLANG_PLUGIN_ID,
+    storeId: "encounter-debt",
+    clear: () => store.clearAll()
+  });
+  return store;
 }

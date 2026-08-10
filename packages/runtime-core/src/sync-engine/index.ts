@@ -53,6 +53,10 @@
 
 import { getActiveUserId } from "../identity/access-token-registry";
 import {
+  registerPlayerStore,
+  unregisterPlayerStore
+} from "../player-stores";
+import {
   createIndexedDBRecordStorage,
   createMemoryRecordStorage,
   type LocalRecordStorageAdapter
@@ -413,13 +417,49 @@ function createStore<TData>(
     },
 
     async clear() {
-      await adapter.removeAll();
+      // A SYNCED store cannot just drop its rows. The server still has them,
+      // so the next pull hands every one straight back and the clear looks
+      // like it silently failed. Tombstoning each record is what actually
+      // reaches the server -- the same reason `delete` writes a tombstone
+      // rather than removing a row.
+      if (syncMode === "local-only") {
+        await adapter.removeAll();
+        return;
+      }
+      // Walks the whole keyspace with a cursor. Re-reading from the start
+      // each time would stop after one page: those records are tombstoned by
+      // then, so the second read finds nothing live and quits with the rest of
+      // the store untouched.
+      let cursor = RESERVED_KEY_PREFIX;
+      for (;;) {
+        const page = await adapter.readPage(cursor, RECORD_STORE_PAGE_SIZE);
+        if (page.records.length === 0) break;
+        const live = page.records.filter((record) => !record.deleted);
+        if (live.length > 0) {
+          await adapter.write(live.map((record) => toStored(record.key, null, true)));
+        }
+        if (!page.nextCursor) break;
+        cursor = page.nextCursor;
+      }
     },
 
     async close() {
+      // Deregistered on close: a closed store cannot clear anything, and
+      // leaving it listed would have a wipe report success for a store that
+      // did nothing.
+      unregisterPlayerStore(spec.pluginId, spec.storeId);
       await adapter.close?.();
     }
   };
+
+  // Registered so a wipe can ASK this store to clear itself instead of
+  // hunting for its database by name. Both kinds register: a local-only store
+  // still holds a player's data and still has to go when they start over.
+  registerPlayerStore({
+    pluginId: spec.pluginId,
+    storeId: spec.storeId,
+    clear: () => store.clear()
+  });
 
   return { store, adapter };
 }
