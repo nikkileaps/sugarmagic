@@ -458,6 +458,21 @@ export interface RuntimePluginInstance {
   config?: Record<string, unknown>;
   contributions: RuntimePluginContribution[];
   blackboardFactDefinitions?: readonly BlackboardFactDefinition<unknown>[];
+  /**
+   * Open this plugin's per-account storage. Runs at boot, once the player's
+   * account is known and BEFORE the sync loop's first pass.
+   *
+   * SEPARATE FROM `init` BECAUSE IT HAPPENS MUCH EARLIER. `init` needs the
+   * world, the region and the player definition, none of which exist until
+   * after the boot screen is done -- so a store opened there has already
+   * missed the first sync, and the boot wait it should have been part of.
+   * That is how a returning player got put through placement again on a second
+   * device: their stores were built on the first conversation turn and read
+   * empty, because nothing had ever reconciled them.
+   *
+   * Storage is all this may do. There is no world yet.
+   */
+  openAccountStorage?: () => Promise<void> | void;
   init?: (context: RuntimePluginContext) => Promise<void> | void;
   update?: (delta: number) => void;
   dispose?: () => Promise<void> | void;
@@ -471,6 +486,9 @@ export interface RuntimePluginManagerOptions {
 
 export interface RuntimePluginManager {
   readonly boot: RuntimeBootModel;
+  /** See `RuntimePluginInstance.openAccountStorage`. Call once, at boot,
+   *  after the account resolves and before the sync loop starts. */
+  openAccountStorage: () => Promise<void>;
   init: (context?: Omit<RuntimePluginContext, "boot">) => Promise<void>;
   update: (delta: number) => void;
   dispose: () => Promise<void>;
@@ -499,6 +517,22 @@ export function createRuntimePluginManager(
 
   return {
     boot,
+    async openAccountStorage() {
+      for (const plugin of plugins) {
+        // One plugin failing to open its storage must not stop the others, or
+        // take the boot down with it. That plugin's data does not follow the
+        // player this session; the rest of the game is unaffected.
+        try {
+          await plugin.openAccountStorage?.();
+        } catch (error) {
+          console.warn(
+            `[runtime-core] ${plugin.pluginId} could not open its per-account storage; ` +
+              "its data will not sync this session.",
+            error
+          );
+        }
+      }
+    },
     async init(context = {}) {
       if (initialized) return;
       for (const plugin of plugins) {

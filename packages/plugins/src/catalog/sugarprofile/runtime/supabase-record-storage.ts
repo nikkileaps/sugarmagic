@@ -45,6 +45,15 @@ const USER_ID = "user_id";
 const DELETED = "deleted";
 const UPDATED_AT = "updated_at";
 
+/**
+ * One database row as the sync engine's wire type.
+ *
+ * The four reserved columns come off `columns` because the mechanism carries
+ * each of them in its own field -- `record_key` as `key`, and so on. The engine
+ * puts `record_key` BACK on the row before a table spec reads it, so a spec
+ * still sees the column it stored. Do not add it to `columns` here as well:
+ * that would give the engine two sources for one value.
+ */
 function rowToRecord(row: Record<string, unknown>): RemoteRecord {
   const deleted = row[DELETED] === true;
   const { [USER_ID]: _u, [RECORD_KEY]: _k, [DELETED]: _d, [UPDATED_AT]: _t, ...columns } =

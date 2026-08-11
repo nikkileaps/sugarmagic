@@ -85,7 +85,7 @@ import {
 // without importing this file. Re-exported so callers see one name.
 export { SUGARLANG_PLUGIN_ID } from "./plugin-id";
 import { SUGARLANG_PLUGIN_ID } from "./plugin-id";
-import { SUGARLANG_ACCOUNT_MIGRATIONS } from "./runtime/learner/account-tables";
+import { SUGARLANG_LEARNER_MIGRATIONS } from "./runtime/learner/learner-tables";
 export const SUGARLANG_DISPLAY_NAME = "Sugarlang";
 
 const deploymentRequirements: DeploymentRequirement[] = [
@@ -264,6 +264,13 @@ export function createSugarlangPlugin(
     displayName: SUGARLANG_DISPLAY_NAME,
     contributions,
     blackboardFactDefinitions: SUGARLANG_BLACKBOARD_FACT_DEFINITIONS,
+    // Plan 092.6.3 — the learner's word history and level, opened at boot so
+    // the first sync pass reconciles them before the player can reach a
+    // conversation. Deliberately NOT in `init` below: that needs a world, and
+    // by the time there is one the boot wait is over.
+    openAccountStorage() {
+      return services.openAccountStorage();
+    },
     update(deltaSeconds) {
       // The runtime's frame delta is SECONDS (runtimeHost.ts: (now - lastTime)
       // / 1000). The warmer counts milliseconds, so this converts. Passing
@@ -360,7 +367,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
   // Plan 092.6.3 — the tables this plugin's synced learner data lands in.
   // Its own schema, its own numbered migration file.
   deployment: {
-    supabaseMigrations: SUGARLANG_ACCOUNT_MIGRATIONS
+    supabaseMigrations: SUGARLANG_LEARNER_MIGRATIONS
   },
   manifest: {
     pluginId: SUGARLANG_PLUGIN_ID,

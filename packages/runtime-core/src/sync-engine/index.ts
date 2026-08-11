@@ -178,6 +178,22 @@ export interface LocalRecordStore<TData = unknown> extends RecordStore<TData> {
 /** Reconciled with the player's account in the background. */
 export interface SyncedRecordStore<TData = unknown> extends RecordStore<TData> {
   readonly syncMode: "synced";
+  /**
+   * Resolves once this store has had its first reconcile attempt, so a caller
+   * that must not read a half-empty store can wait for it.
+   *
+   * WHY A STORE NEEDS THIS AT ALL. The boot screen waits for the first sync
+   * pass, but a store built later -- on the first conversation turn, say --
+   * missed that pass entirely and would be read empty on a device where the
+   * player already has months of history. Boot cannot wait for a store that
+   * does not exist yet, so the wait belongs to the store.
+   *
+   * RESOLVES ON FAILURE TOO, and immediately when nothing will ever sync this
+   * store (no account plugin, no backend, tests). It answers "has this store had its turn", not
+   * that the data arrived -- a game that cannot reach the network still has to
+   * start.
+   */
+  whenFirstSynced(): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,14 +213,32 @@ export interface SyncedRecordStore<TData = unknown> extends RecordStore<TData> {
  *   deleted     a tombstone, so a delete cannot be undone by the next pull
  *   updated_at  stamped by the database; the ordering authority for conflicts
  *
- * Everything else is the plugin's. `toColumns` must not return any of the
- * four; `fromColumns` is handed the whole row and takes what it wants.
+ * Everything else is the plugin's.
+ *
+ * THE TWO DIRECTIONS ARE NOT SYMMETRIC, AND THE NAMES SAY SO. A plugin WRITES
+ * columns -- only its own, never the four above. It READS a row, which is its
+ * own columns plus `record_key`. That one reserved column comes back because it
+ * is the record's identity and is usually a domain id already (a lemma, a node),
+ * so withholding it would force every spec to duplicate a field it has.
+ *
+ * The other three stay withheld deliberately: `user_id` is answered by the
+ * store's own key, and `deleted`/`updated_at` are how this mechanism orders
+ * conflicts -- a plugin that read them would be in a position to second-guess
+ * the resolution it is being handed the result of.
+ *
+ * These were `toColumns`/`fromColumns` and shipped broken: the name said
+ * "columns", the parameter said `row`, and the two sides of the contract were
+ * written against different readings. The Supabase adapter stripped
+ * `record_key` before the call while every table spec read it back, so each
+ * pulled record arrived with an empty id.
  */
 export interface RemoteTableSpec<TData = unknown> {
   /** The plugin's own table, created by the plugin's own migration. */
   tableName: string;
+  /** The plugin's own columns. Must not include any reserved column. */
   toColumns: (data: TData) => Record<string, unknown>;
-  fromColumns: (row: Record<string, unknown>) => TData;
+  /** The plugin's own columns plus `record_key`. Never called for a tombstone. */
+  fromRow: (row: Record<string, unknown>) => TData;
 }
 
 /** Columns this mechanism owns. A plugin's `toColumns` may not write them. */
@@ -265,6 +299,21 @@ export interface SyncHandle {
   /** The plugin's table. Handed to the remote so it works against the right
    *  schema without knowing whose it is. */
   readonly table: RemoteTableSpec;
+  /**
+   * Whether a pull against this store has ever succeeded.
+   *
+   * Until one has, this device has never heard what the account holds, and
+   * two things follow: it must not push (a local record made from a default
+   * would overwrite the real one), and a record it does receive outranks an
+   * unpushed local one. An unpushed edit normally wins -- it has not had its
+   * chance to argue -- but that reasoning needs the local copy to be an EDIT.
+   * Before the first pull it is a guess made in ignorance.
+   */
+  hasPulled(): boolean;
+  /** Called by the loop after a pull succeeds. */
+  markPulled(): void;
+  /** Called by the loop after this store's first pass, successful or not. */
+  markFirstSyncDone(): void;
   /** Records edited locally and not yet accepted by the server. */
   takePending(limit: number): Promise<StoredRecord[]>;
   /** Record that the server accepted these, with its timestamps. */
@@ -281,12 +330,34 @@ export interface SyncHandle {
 const syncedStores = new Map<string, SyncHandle>();
 
 /**
+ * Told when a store appears, so a running loop can reconcile it now rather
+ * than up to a full interval later. Null when no loop is running, which is how
+ * a new store knows nothing will ever sync it and finishes its own wait.
+ */
+let registrationListener: ((handle: SyncHandle) => void) | null = null;
+
+export function setSyncedStoreRegistrationListener(
+  listener: ((handle: SyncHandle) => void) | null
+): void {
+  registrationListener = listener;
+}
+
+/**
  * Module-level, matching `access-token-registry`: plugin runtimes are built
  * before the host is in a position to hand them anything, so the host finds
  * them here rather than being threaded through every plugin's factory.
  */
 export function registerSyncedRecordStore(handle: SyncHandle): void {
   syncedStores.set(formatRecordStoreKey(handle.storeKey), handle);
+  if (registrationListener) {
+    registrationListener(handle);
+    return;
+  }
+  // NOBODY IS LISTENING, so nothing will ever reconcile this store and a
+  // caller waiting on its first sync would wait forever. A project with no account
+  // plugin is a supported configuration, not a failure -- it gets a working
+  // local store -- so the wait ends rather than hanging the game.
+  handle.markFirstSyncDone();
 }
 
 export function unregisterSyncedRecordStore(key: RecordStoreKey): void {
@@ -333,8 +404,14 @@ function resolveAdapter(
 
 function createStore<TData>(
   spec: RecordStoreSpec<TData>,
-  syncMode: "local-only" | "synced"
-): { store: RecordStore<TData>; adapter: LocalRecordStorageAdapter } {
+  syncMode: "local-only" | "synced",
+  /** Settles when this store has had its first reconcile attempt. Already
+   *  settled for a local-only store, which has nothing to reconcile with. */
+  firstSync: Promise<void>
+): {
+  store: RecordStore<TData> & { whenFirstSynced: () => Promise<void> };
+  adapter: LocalRecordStorageAdapter;
+} {
   const storeKey: RecordStoreKey = {
     pluginId: spec.pluginId,
     storeId: spec.storeId,
@@ -365,9 +442,10 @@ function createStore<TData>(
     };
   }
 
-  const store: RecordStore<TData> = {
+  const store: RecordStore<TData> & { whenFirstSynced: () => Promise<void> } = {
     storeKey,
     syncMode,
+    whenFirstSynced: () => firstSync,
 
     async get(key) {
       const stored = await adapter.read(key);
@@ -468,33 +546,54 @@ function createStore<TData>(
 export function createLocalRecordStore<TData>(
   spec: RecordStoreSpec<TData>
 ): LocalRecordStore<TData> {
-  return createStore(spec, "local-only").store as LocalRecordStore<TData>;
+  // Nothing will ever reconcile a local store, so its first sync is already
+  // over. Callers can wait on it without knowing which kind they hold.
+  return createStore(spec, "local-only", Promise.resolve())
+    .store as LocalRecordStore<TData>;
+}
+
+/** What building a synced store gives you: the store a plugin reads and
+ *  writes, and the privileged view the sync loop needs. */
+export interface SyncedRecordStoreParts<TData = unknown> {
+  store: SyncedRecordStore<TData>;
+  handle: SyncHandle;
 }
 
 /**
- * Storage that follows the player to their other devices.
+ * Build storage that can follow the player to their other devices.
  *
- * Registers itself with the sync loop on construction, so declaring one is
- * the whole of the wiring -- there is no second step to forget.
+ * BUILDING IT DOES NOT START SYNCING IT. Nothing global is touched here: this
+ * returns two objects and that is all it does. Hand the handle to
+ * `registerSyncedRecordStore` when you want the loop to see it.
+ *
+ * It used to register itself, which read as convenient and cost more than it
+ * saved -- constructing a store mutated module state, so no test could build
+ * one without unregistering it afterwards, and the moment a store came into
+ * existence stopped being something a caller decided.
  */
 export function createSyncedRecordStore<TData>(
   spec: RecordStoreSpec<TData> & { table: RemoteTableSpec<TData> }
-): SyncedRecordStore<TData> {
+): SyncedRecordStoreParts<TData> {
   assertNoReservedColumns(spec.table as RemoteTableSpec<unknown>);
+
+  let finishFirstSync = (): void => {};
+  const firstSync = new Promise<void>((resolve) => {
+    finishFirstSync = resolve;
+  });
+
   // The sync handle shares the store's OWN adapter rather than opening a
   // second one against the same database -- two connections would mean two
   // caches of the same rows and a pending flag cleared in one being invisible
   // to the other.
-  const { store, adapter } = createStore(spec, "synced");
-  registerSyncedRecordStore(
-    createSyncHandle(
-      store.storeKey,
-      spec.table as RemoteTableSpec,
-      adapter,
-      spec.schemaVersion
-    )
+  const { store, adapter } = createStore(spec, "synced", firstSync);
+  const handle = createSyncHandle(
+    store.storeKey,
+    spec.table as RemoteTableSpec,
+    adapter,
+    spec.schemaVersion,
+    finishFirstSync
   );
-  return store as SyncedRecordStore<TData>;
+  return { store: store as SyncedRecordStore<TData>, handle };
 }
 
 /**
@@ -524,11 +623,20 @@ function createSyncHandle(
   storeKey: RecordStoreKey,
   table: RemoteTableSpec,
   adapter: LocalRecordStorageAdapter,
-  schemaVersion: number
+  schemaVersion: number,
+  finishFirstSync: () => void
 ): SyncHandle {
+  let pulled = false;
+
   return {
     storeKey,
     table,
+
+    hasPulled: () => pulled,
+    markPulled: () => {
+      pulled = true;
+    },
+    markFirstSyncDone: finishFirstSync,
 
     async takePending(limit) {
       return adapter.readPending(limit);
@@ -555,14 +663,28 @@ function createSyncHandle(
         // treated as the later one -- it has not had its chance to argue. The
         // caller logs the skip rather than swallowing it: a local write that
         // silently loses to a remote one is the known hazard of this scheme.
-        if (current?.pending === 1) {
+        //
+        // UNLESS THIS DEVICE HAS NEVER PULLED. Then the local copy is not an
+        // edit, it is whatever this device invented while it had no idea what
+        // the account held -- a learner profile defaulted to "unplaced", say,
+        // written seconds ago because the store was read before it had ever
+        // been filled. Letting that win is how a returning player was put
+        // through placement again and then had the empty result pushed over
+        // the real one.
+        if (current?.pending === 1 && pulled) {
           skippedLocalNewer += 1;
           continue;
         }
         if (current?.syncedAt && current.syncedAt >= remote.updatedAt) continue;
         updates.push({
           key: remote.key,
-          data: remote.columns === null ? null : table.fromColumns(remote.columns),
+          // The key is put BACK on the row before the plugin reads it. The
+          // wire type carries it separately because the mechanism needs it
+          // separately; a table spec wants it as the column it was stored as.
+          data:
+            remote.columns === null
+              ? null
+              : table.fromRow({ ...remote.columns, record_key: remote.key }),
           schemaVersion,
           updatedAtMs: Date.now(),
           deleted: remote.deleted,

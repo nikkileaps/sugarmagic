@@ -87,8 +87,10 @@ import {
 } from "./placement/placement-questionnaire-loader";
 import { PlacementScoreEngine } from "./placement/placement-score-engine";
 import { BlackboardLearnerStore } from "./providers/impls/blackboard-learner-store";
-import { createSyncedCardStore } from "./learner/synced-card-store";
-import { SUGARLANG_LEARNER_TABLE } from "./learner/account-tables";
+import {
+  initLearnerStores,
+  type LearnerStores
+} from "./learner/learner-stores";
 import type {
   LearnerProfileCoreStore,
   PersistedLearnerProfileCore
@@ -256,46 +258,6 @@ function resolveLearnerScope(): string | null {
   return userId && userId.length > 0 ? userId : null;
 }
 
-/**
- * The two stores a learner needs: their words, and everything that is not a
- * word (Plan 092.6.4).
- *
- * Both are per-account and synced, so a player who signs in on a second
- * machine finds their level AND the words behind it, rather than a level with
- * no evidence for it. Storage that cannot be opened degrades to memory for the
- * session -- the same posture every learner store here has always taken, and
- * the honest one when there is nowhere to put anything.
- */
-function createLearnerStores(
-  learnerId: string,
-  targetLanguage: string,
-  supportLanguage: string
-): { cardStore: CardStore; profileCoreStore?: LearnerProfileCoreStore } {
-  try {
-    return {
-      cardStore: createSyncedCardStore({ targetLanguage, supportLanguage }),
-      profileCoreStore: createSyncedRecordStore<PersistedLearnerProfileCore>({
-        pluginId: SUGARLANG_PLUGIN_ID,
-        storeId: `profile:${targetLanguage}:${supportLanguage}`,
-        schemaVersion: SUGARLANG_LEARNER_PROFILE_SCHEMA_VERSION,
-        table: SUGARLANG_LEARNER_TABLE
-      })
-    };
-  } catch (error) {
-    console.warn(
-      `[sugarlang] per-account learner storage unavailable for ${learnerId}; ` +
-        "this session's progress will not be saved.",
-      error
-    );
-    // No profile store: the core stays on the blackboard for the session,
-    // which is what it did before any of this existed.
-    return { cardStore: new MemoryCardStore() };
-  }
-}
-
-/** Bumped when the stored learner core changes shape. */
-export const SUGARLANG_LEARNER_PROFILE_SCHEMA_VERSION = 1;
-
 export class SugarlangRuntimeServices {
   private readonly config: SugarLangPluginConfig;
   private readonly environment: RuntimePluginEnvironment | undefined;
@@ -303,6 +265,19 @@ export class SugarlangRuntimeServices {
   private readonly telemetry: TelemetrySink;
   private readonly languageBundles = new Map<string, LanguageBundle>();
   private readonly executionServices = new Map<string, SugarlangExecutionServices>();
+  /**
+   * The learner's stores, keyed by account and language pair.
+   *
+   * SEPARATE FROM `executionServices` because they are opened much earlier --
+   * at boot, by `openAccountStorage`, so the boot sync pass can reconcile them
+   * before the player reaches anything. Execution services need a bound world
+   * and cannot exist that early, so caching the stores with them would put
+   * them back on the first conversation turn, which is the bug.
+   */
+  private readonly learnerStores = new Map<
+    string,
+    LearnerStores
+  >();
   private boundContext: BoundRuntimeContext | null = null;
   private readonly gatewayClient: SugarlangLLMClient | null;
   private readonly llmModel: string;
@@ -606,6 +581,10 @@ export class SugarlangRuntimeServices {
       entry.learnerStateReducer.resetSessionAccumulators();
     }
     this.executionServices.clear();
+    // The stores go too: the reset above closed their databases and took them
+    // out of the wipe registry, so a cached one would come back as a handle to
+    // storage nothing can clear again.
+    this.learnerStores.clear();
 
     // Re-seed the authored band override (same DEV guard as bindRuntime), so a
     // reset returns to the configured band rather than to no band at all.
@@ -894,6 +873,47 @@ export class SugarlangRuntimeServices {
     return this.resolveForLanguages(targetLanguage, "en");
   }
 
+  /**
+   * Open the learner's storage for the configured language pair.
+   *
+   * Called at boot, before the sync loop's first pass, so that pass has
+   * something to reconcile and the boot screen's wait covers it. Deliberately
+   * needs no world: there is not one yet.
+   *
+   * Silent when there is no account or no configured language -- neither is a
+   * failure, and neither leaves anything to open.
+   */
+  async openAccountStorage(): Promise<void> {
+    const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
+    if (!targetLanguage) return;
+    const userId = resolveLearnerScope();
+    if (!userId) return;
+    // "en" matches the ambient path's support language; a conversation that
+    // carries its own pair opens that one on demand instead.
+    this.getLearnerStores(userId, targetLanguage, "en");
+  }
+
+  /**
+   * The learner's stores for one account and language pair, opened once.
+   *
+   * Opening a second set for the same pair would register a second sync handle
+   * under the same key and a second connection to the same database -- two
+   * caches of the same rows, and a pending flag cleared in one invisible to
+   * the other.
+   */
+  private getLearnerStores(
+    userId: string,
+    targetLanguage: string,
+    supportLanguage: string
+  ): LearnerStores {
+    const key = `${userId}:${targetLanguage}:${supportLanguage}`;
+    const existing = this.learnerStores.get(key);
+    if (existing) return existing;
+    const created = initLearnerStores(userId, targetLanguage, supportLanguage);
+    this.learnerStores.set(key, created);
+    return created;
+  }
+
   private async resolveForLanguages(
     targetLanguage: string,
     supportLanguage: string
@@ -937,11 +957,21 @@ export class SugarlangRuntimeServices {
     // instead of ending with the browser they were learned in. Both fall back
     // to a local-only store when nothing can reach an account, which is what
     // a project with no accounts gets.
-    const { cardStore, profileCoreStore } = createLearnerStores(
-      learnerId,
+    const { cardStore, profileCoreStore, whenFirstSynced } = this.getLearnerStores(
+      userId,
       languages.targetLanguage,
       languages.supportLanguage
     );
+    // ALREADY RECONCILED for the configured pair -- `openAccountStorage` opened
+    // it at boot and the boot screen waited for the pass. This await is for the
+    // other case: a conversation carrying a language pair that is not the
+    // configured one opens its stores here, on the turn, and must not be read
+    // before they have been reconciled once.
+    //
+    // Ends on failure, and immediately when nothing will ever sync these
+    // stores, so an offline player or a project with no account plugin waits
+    // on nothing.
+    await whenFirstSynced;
     const learnerPriorProvider = new FsrsLearnerPriorProvider(languageBundle.atlas);
     const learnerStore = new BlackboardLearnerStore({
       blackboard: this.boundContext.blackboard,

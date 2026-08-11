@@ -24,7 +24,7 @@
  *   the store is already scoped to it.
  *
  * Exports:
- *   - createSyncedCardStore
+ *   - asCardStore
  *   - SUGARLANG_CARD_STORE_SCHEMA_VERSION
  *
  * Implements: Plan 092 story 092.6.4
@@ -32,42 +32,24 @@
  * Status: active
  */
 
-import {
-  createSyncedRecordStore,
-  type SyncedRecordStore
-} from "@sugarmagic/runtime-core";
+import { type SyncedRecordStore } from "@sugarmagic/runtime-core";
 import type { LemmaCard } from "../types";
 import type { CardStore, CardStorePage } from "./card-store";
-import { SUGARLANG_PLUGIN_ID } from "../../plugin-id";
-import { SUGARLANG_WORD_TABLE } from "./account-tables";
 
 /** Bumped when a stored word record changes shape. */
 export const SUGARLANG_CARD_STORE_SCHEMA_VERSION = 1;
 
 const DEFAULT_PAGE_SIZE = 250;
 
-export interface CreateSyncedCardStoreOptions {
-  targetLanguage: string;
-  supportLanguage: string;
-  /** Test seam: use this store instead of constructing one. */
-  store?: SyncedRecordStore<LemmaCard>;
-  /** Test seam: the account, when there is no signed-in one to read. */
-  userId?: string;
-}
-
-export function createSyncedCardStore(
-  options: CreateSyncedCardStoreOptions
-): CardStore {
-  const store =
-    options.store ??
-    createSyncedRecordStore<LemmaCard>({
-      pluginId: SUGARLANG_PLUGIN_ID,
-      storeId: `cards:${options.targetLanguage}:${options.supportLanguage}`,
-      schemaVersion: SUGARLANG_CARD_STORE_SCHEMA_VERSION,
-      userId: options.userId,
-      table: SUGARLANG_WORD_TABLE
-    });
-
+/**
+ * Presents a word store as a `CardStore`, and does nothing else.
+ *
+ * IT DOES NOT BUILD ONE. Deciding what to build and when belongs to
+ * `initLearnerWords`; this only translates between two shapes. Fused together,
+ * the pair needed a `store?` parameter so a test could skip the half it did
+ * not want, which is the usual sign that one function was doing two jobs.
+ */
+export function asCardStore(store: SyncedRecordStore<LemmaCard>): CardStore {
   return {
     async get(lemmaId) {
       return store.get(lemmaId);

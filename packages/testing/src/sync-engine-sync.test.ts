@@ -21,6 +21,7 @@ import {
   createMemoryRecordStorage,
   createSyncedRecordStore,
   listSyncedRecordStores,
+  registerSyncedRecordStore,
   unregisterSyncedRecordStore,
   type RemoteRecordStorageAdapter,
   type RecordStoreKey,
@@ -36,14 +37,43 @@ interface Word {
 const wordsTable = {
   tableName: "example_plugin_words",
   toColumns: (data: Word) => ({ lemma: data.lemma }),
-  fromColumns: (row: Record<string, unknown>) => ({ lemma: String(row.lemma) })
+  fromRow: (row: Record<string, unknown>) => ({ lemma: String(row.lemma) })
+};
+
+/**
+ * A table whose identity field IS the record key, which is the ordinary shape:
+ * the word table stores a lemma id that way rather than repeating it as a
+ * column of its own.
+ *
+ * This exists because the contract broke exactly here. `fromColumns` took a
+ * parameter named `row`, the Supabase adapter read the name and stripped
+ * `record_key` before the call, and every table spec read it back -- so pulled
+ * records arrived with an empty id, collapsed into one entry on read, and a
+ * second device recovered nothing. A spec that reads its own key is now the
+ * thing under test rather than an assumption.
+ */
+interface KeyedWord {
+  id: string;
+  lemma: string;
+}
+
+const keyedTable: RemoteTableSpec<KeyedWord> = {
+  tableName: "example_plugin_keyed_words",
+  // Deliberately does NOT emit the id: it is the record key.
+  toColumns: (data) => ({ lemma: data.lemma }),
+  fromRow: (row) => ({
+    id: String(row.record_key ?? ""),
+    lemma: String(row.lemma)
+  })
 };
 
 const opened: RecordStoreKey[] = [];
 
 function makeStore(userId: string, storeId = "words") {
   const adapter = createMemoryRecordStorage();
-  const store = createSyncedRecordStore<Word>({
+  // Building and registering are two steps on purpose: a test can build one
+  // and assert on it without the sync loop ever seeing it.
+  const { store, handle } = createSyncedRecordStore<Word>({
     pluginId: "example-plugin",
     storeId,
     schemaVersion: 1,
@@ -51,6 +81,7 @@ function makeStore(userId: string, storeId = "words") {
     adapter,
     table: wordsTable
   });
+  registerSyncedRecordStore(handle);
   opened.push(store.storeKey);
   return { store, adapter };
 }
@@ -88,6 +119,140 @@ afterEach(() => {
   for (const key of opened) unregisterSyncedRecordStore(key);
   opened.length = 0;
   vi.useRealTimers();
+});
+
+describe("092.6.3 - a record keyed by its own id survives the round trip", () => {
+  function makeKeyedStore(userId: string) {
+    const { store, handle } = createSyncedRecordStore<KeyedWord>({
+      pluginId: "example-plugin",
+      storeId: "keyed-words",
+      schemaVersion: 1,
+      userId,
+      adapter: createMemoryRecordStorage(),
+      table: keyedTable
+    });
+    registerSyncedRecordStore(handle);
+    opened.push(store.storeKey);
+    return store;
+  }
+
+  it("THE ONE THAT MATTERS: a pulled record keeps its id", async () => {
+    const { remote } = fakeRemote();
+    const a = makeKeyedStore("user-alice");
+    await a.put("riconoscere", { id: "riconoscere", lemma: "riconoscere" });
+    await createSyncEngine({ remote, ownerWindow: null }).syncNow("test");
+    unregisterSyncedRecordStore(a.storeKey);
+
+    const b = makeKeyedStore("user-alice");
+    await createSyncEngine({ remote, ownerWindow: null }).syncNow("test");
+
+    // The id is carried as `record_key` on the wire, never as a column, so
+    // this is the assertion that the engine hands the key back to the spec.
+    expect(await b.get("riconoscere")).toEqual({
+      id: "riconoscere",
+      lemma: "riconoscere"
+    });
+  });
+
+  it("many pulled records stay distinct rather than collapsing onto one id", async () => {
+    // The failure this replaces was silent in exactly this way: every record
+    // came back with an empty id, so a caller keying by it kept only the last.
+    const { remote } = fakeRemote();
+    const a = makeKeyedStore("user-alice");
+    for (const lemma of ["pane", "formaggio", "vino"]) {
+      await a.put(lemma, { id: lemma, lemma });
+    }
+    await createSyncEngine({ remote, ownerWindow: null }).syncNow("test");
+    unregisterSyncedRecordStore(a.storeKey);
+
+    const b = makeKeyedStore("user-alice");
+    await createSyncEngine({ remote, ownerWindow: null }).syncNow("test");
+
+    const byId = new Map((await b.list()).map((e) => [e.data.id, e.data.lemma]));
+    expect(byId.size).toBe(3);
+    expect(byId.get("formaggio")).toBe("formaggio");
+  });
+});
+
+describe("092.6.3 - a device that has never pulled cannot overwrite the account", () => {
+  it("THE ONE THAT MATTERS: the account's record beats one invented before any pull", async () => {
+    // The shape that destroyed a returning player's level. Their stores are
+    // built on the first conversation turn, long after boot waited for a sync
+    // pass that found nothing registered. The learner core is read, comes back
+    // empty, and is written straight back as a defaulted profile -- under the
+    // one fixed key "core". Treated as an unpushed edit it outranks the real
+    // record and is then pushed over it. It is not an edit; this device had
+    // not yet heard anything.
+    const { remote, seed } = fakeRemote();
+    seed({
+      key: "core",
+      columns: { lemma: "B2-from-the-account" },
+      deleted: false,
+      updatedAt: new Date(9_999_999).toISOString()
+    });
+
+    const fresh = makeStore("user-alice");
+    await fresh.store.put("core", { lemma: "defaulted-because-the-store-was-empty" });
+
+    await createSyncEngine({ remote, ownerWindow: null }).syncNow("first pass");
+
+    expect(await fresh.store.get("core")).toEqual({ lemma: "B2-from-the-account" });
+  });
+
+  it("does not push anything when the pull fails, rather than overwriting blind", async () => {
+    // A device that cannot read the account must not write to it. Pushing here
+    // would replace real rows with whatever this device defaulted to while it
+    // had no idea what was there.
+    const pushed: unknown[] = [];
+    const pullFails: RemoteRecordStorageAdapter = {
+      pull: async () => {
+        throw new Error("gateway down");
+      },
+      push: async (_k, _t, records) => {
+        pushed.push(...records);
+        return { accepted: [] };
+      }
+    };
+    const a = makeStore("user-alice");
+    await a.store.put("core", { lemma: "defaulted" });
+
+    const result = await createSyncEngine({
+      remote: pullFails,
+      ownerWindow: null,
+      logger: { info: vi.fn(), warn: vi.fn() }
+    }).syncNow("test");
+
+    expect(pushed).toHaveLength(0);
+    expect(result.failures).toBe(1);
+    // Nothing is lost by refusing: it stays pending for a pass that can read.
+    expect(await a.adapter.readPending(10)).toHaveLength(1);
+  });
+
+  it("finishes the first-sync wait even when the pass fails, so the game still starts", async () => {
+    const failing: RemoteRecordStorageAdapter = {
+      pull: async () => {
+        throw new Error("gateway down");
+      },
+      push: async () => ({ accepted: [] })
+    };
+    const a = makeStore("user-alice");
+
+    await createSyncEngine({
+      remote: failing,
+      ownerWindow: null,
+      logger: { info: vi.fn(), warn: vi.fn() }
+    }).syncNow("test");
+
+    await expect(a.store.whenFirstSynced()).resolves.toBeUndefined();
+  });
+
+  it("finishes the wait immediately when there is no backend to sync against", async () => {
+    // A project with no account plugin is supported, not broken. A caller
+    // waiting on this must not wait forever.
+    const store = makeStore("user-alice", "no-backend").store;
+    await createSyncEngine({ remote: null, ownerWindow: null }).syncNow("test");
+    await expect(store.whenFirstSynced()).resolves.toBeUndefined();
+  });
 });
 
 describe("092.6.3 - a player's data reaches their other devices", () => {
@@ -159,16 +324,16 @@ describe("092.6 - a returning player's data is there before they can use it", ()
     });
     const a = makeStore("user-returning");
 
-    // The gate is built BEFORE the engine can reach it, so releasing it is
+    // The blocker is built BEFORE the engine can reach it, so releasing it is
     // never a no-op that leaves the pull hanging.
     let releasePull!: () => void;
-    const gate = new Promise<void>((resolve) => {
+    const blocked = new Promise<void>((resolve) => {
       releasePull = resolve;
     });
     let resolved = false;
     const slow: RemoteRecordStorageAdapter = {
       pull: async (key, table, since, limit) => {
-        await gate;
+        await blocked;
         return remote.pull(key, table, since, limit);
       },
       push: remote.push
@@ -230,14 +395,20 @@ describe("092.6.3 - Studio Preview never reaches the backend", () => {
 describe("092.6.3 - conflicts and failures", () => {
   it("an unpushed local edit survives a pass, even against a newer remote record", async () => {
     const { remote, seed } = fakeRemote();
+    const a = makeStore("user-alice");
+
+    // ONE PASS FIRST, so this device has heard what the account holds. Until
+    // it has, a local record is a guess rather than an edit and the account
+    // wins it -- pinned by the never-pulled tests below. This test is about
+    // the steady state, which is where the rule protects real work.
+    await createSyncEngine({ remote, ownerWindow: null }).syncNow("warm-up");
+
     seed({
       key: "contested",
       columns: { lemma: "from-server" },
       deleted: false,
       updatedAt: new Date(9_999_999).toISOString()
     });
-
-    const a = makeStore("user-alice");
     await a.store.put("contested", { lemma: "from-this-device" });
 
     const sync = createSyncEngine({ remote, ownerWindow: null });
@@ -257,6 +428,8 @@ describe("092.6.3 - conflicts and failures", () => {
       updatedAt: new Date(9_999_999).toISOString()
     });
     const a = makeStore("user-alice");
+    // As above: steady state, not a device that has never pulled.
+    await createSyncEngine({ remote, ownerWindow: null }).syncNow("warm-up");
     await a.store.put("contested", { lemma: "local" });
 
     const info = vi.fn();
@@ -319,7 +492,10 @@ describe("092.6.3 - conflicts and failures", () => {
           markPushed: async () => undefined,
           applyRemote: async () => ({ applied: 0, skippedLocalNewer: 0 }),
           getWatermark: async () => null,
-          setWatermark: async () => undefined
+          setWatermark: async () => undefined,
+          hasPulled: () => true,
+          markPulled: () => {},
+          markFirstSyncDone: () => {}
         },
         ...listSyncedRecordStores()
       ]

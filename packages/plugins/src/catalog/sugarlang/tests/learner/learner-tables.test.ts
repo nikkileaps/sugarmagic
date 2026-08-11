@@ -1,5 +1,5 @@
 /**
- * packages/plugins/src/catalog/sugarlang/tests/learner/account-tables.test.ts
+ * packages/plugins/src/catalog/sugarlang/tests/learner/learner-tables.test.ts
  *
  * Purpose: This plugin's per-account tables and the migration that creates
  *   them (Plan 092.6.3 / 092.6.4).
@@ -17,10 +17,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  SUGARLANG_ACCOUNT_MIGRATIONS,
+  SUGARLANG_LEARNER_MIGRATIONS,
   SUGARLANG_LEARNER_TABLE,
   SUGARLANG_WORD_TABLE
-} from "../../runtime/learner/account-tables";
+} from "../../runtime/learner/learner-tables";
 import type { LemmaCard } from "../../runtime/types";
 
 const card: LemmaCard = {
@@ -43,8 +43,13 @@ const RESERVED = ["user_id", "record_key", "deleted", "updated_at"];
 
 describe("092.6.3 - sugarlang's tables have real columns", () => {
   it("THE ONE THAT MATTERS: a word survives the round trip through columns", () => {
+    // Builds the row by hand, so this pins the MAPPER only -- it cannot show
+    // that the engine actually supplies `record_key`. It once did not, and this
+    // test passed throughout. The wiring is pinned in
+    // `packages/testing/src/sync-engine-sync.test.ts` instead, through a real
+    // store and a real sync pass.
     const row = { ...SUGARLANG_WORD_TABLE.toColumns(card), record_key: card.lemmaId };
-    const back = SUGARLANG_WORD_TABLE.fromColumns(row);
+    const back = SUGARLANG_WORD_TABLE.fromRow(row);
 
     expect(back.lemmaId).toBe("riconoscere");
     expect(back.difficulty).toBe(5.5);
@@ -118,13 +123,30 @@ describe("092.6.4 - the learner core round-trips completely", () => {
       evaluated_at: 1_700_000_000_000,
       cefr_posterior: { A1: { alpha: 4, beta: 2 } }
     };
-    const core = SUGARLANG_LEARNER_TABLE.fromColumns(row);
+    const core = SUGARLANG_LEARNER_TABLE.fromRow(row);
 
     expect(core.estimatedCefrBand).toBe("B1");
     expect(core.assessment.status).toBe("evaluated");
     // The two that were missing:
     expect(Array.isArray(core.sessionHistory)).toBe(true);
     expect(core.cefrPosterior).toBeDefined();
+  });
+
+  it("the learner id is NOT stored, in either direction", () => {
+    // It is the account, the player definition and the language pair joined
+    // together, so the reader already holds every part and stamps it on load.
+    // This once came back from `record_key`, which for this table is the
+    // constant "core" -- so a pulled profile claimed to belong to a learner
+    // named "core", and that id went on to scope blackboard facts and reach
+    // the Teacher prompt.
+    const columns = SUGARLANG_LEARNER_TABLE.toColumns({
+      cefrPosterior: {},
+      assessment: {}
+    } as never);
+    expect(Object.keys(columns)).not.toContain("learner_id");
+
+    const back = SUGARLANG_LEARNER_TABLE.fromRow({ record_key: "core" });
+    expect(back).not.toHaveProperty("learnerId");
   });
 
   it("the evidence behind the band survives, not just the band", () => {
@@ -136,7 +158,7 @@ describe("092.6.4 - the learner core round-trips completely", () => {
     } as never).cefr_posterior as Record<string, { alpha: number }>;
     expect(posterior.A1!.alpha).toBe(7);
 
-    const back = SUGARLANG_LEARNER_TABLE.fromColumns({
+    const back = SUGARLANG_LEARNER_TABLE.fromRow({
       cefr_posterior: { A1: { alpha: 7, beta: 3 } }
     });
     expect(back.cefrPosterior.A1).toEqual({ alpha: 7, beta: 3 });
@@ -145,7 +167,7 @@ describe("092.6.4 - the learner core round-trips completely", () => {
   it("a band missing from the stored posterior is filled in, not left undefined", () => {
     // It arrives as json from a network. A gap would surface later as
     // arithmetic on undefined rather than as a bad read here.
-    const back = SUGARLANG_LEARNER_TABLE.fromColumns({ cefr_posterior: {} });
+    const back = SUGARLANG_LEARNER_TABLE.fromRow({ cefr_posterior: {} });
     for (const band of ["A1", "A2", "B1", "B2", "C1", "C2"]) {
       expect(back.cefrPosterior[band as keyof typeof back.cefrPosterior]).toEqual({
         alpha: 1,
@@ -156,7 +178,7 @@ describe("092.6.4 - the learner core round-trips completely", () => {
 
   it("junk in a text column reads as the SAFEST value, not as itself", () => {
     // Over-estimating a learner teaches them things they cannot follow.
-    const back = SUGARLANG_LEARNER_TABLE.fromColumns({
+    const back = SUGARLANG_LEARNER_TABLE.fromRow({
       estimated_cefr_band: "not-a-band",
       assessment_status: "nonsense"
     });
@@ -165,21 +187,21 @@ describe("092.6.4 - the learner core round-trips completely", () => {
   });
 
   it("a sitting does not travel between devices", () => {
-    const back = SUGARLANG_LEARNER_TABLE.fromColumns({});
+    const back = SUGARLANG_LEARNER_TABLE.fromRow({});
     expect(back.currentSession).toBeNull();
     expect(back.sessionHistory).toEqual([]);
   });
 });
 
 describe("092.6.3 - the migration", () => {
-  const sql = SUGARLANG_ACCOUNT_MIGRATIONS.map((m) => m.sql).join("\n");
+  const sql = SUGARLANG_LEARNER_MIGRATIONS.map((m) => m.sql).join("\n");
 
   it("THE ONE THAT MATTERS: every change is its own numbered file, in order", () => {
     // `supabase db push` skips anything it has already applied, comparing only
     // the filename version. Editing an earlier file changes nothing and
     // reports success -- so a schema change has to arrive as a NEW file that
     // sorts after the ones already out there.
-    const names = SUGARLANG_ACCOUNT_MIGRATIONS.map((m) => m.filename);
+    const names = SUGARLANG_LEARNER_MIGRATIONS.map((m) => m.filename);
 
     for (const name of names) {
       expect(name).toMatch(/^\d{4}_.*\.sql$/);
@@ -193,10 +215,10 @@ describe("092.6.3 - the migration", () => {
   it("a column added later comes as a new file, not an edit to an old one", () => {
     // The posterior was added after 0002 had been applied. Putting it there
     // would have been a silent no-op on every project that already ran it.
-    const first = SUGARLANG_ACCOUNT_MIGRATIONS[0]!;
+    const first = SUGARLANG_LEARNER_MIGRATIONS[0]!;
     expect(first.sql).not.toContain("cefr_posterior");
 
-    const later = SUGARLANG_ACCOUNT_MIGRATIONS.slice(1)
+    const later = SUGARLANG_LEARNER_MIGRATIONS.slice(1)
       .map((m) => m.sql)
       .join("\n");
     expect(later).toContain("add column if not exists cefr_posterior");

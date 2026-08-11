@@ -22,6 +22,7 @@ import {
   createMemoryRecordStorage,
   createSyncedRecordStore,
   listSyncedRecordStores,
+  registerSyncedRecordStore,
   unregisterSyncedRecordStore,
   type RecordStoreKey,
   type RecordStoreSpec
@@ -50,7 +51,7 @@ function spec<TData>(
 const wordsTable = {
   tableName: "example_plugin_words",
   toColumns: (data: Word) => ({ lemma: data.lemma, strength: data.strength }),
-  fromColumns: (row: Record<string, unknown>) => ({
+  fromRow: (row: Record<string, unknown>) => ({
     lemma: String(row.lemma),
     strength: Number(row.strength)
   })
@@ -105,8 +106,25 @@ describe("092.6.2 - synced and local-only are different things", () => {
     expect(listSyncedRecordStores()).toHaveLength(0);
   });
 
-  it("a synced store registers itself, so declaring one IS the wiring", () => {
-    const store = createSyncedRecordStore<Word>({ table: wordsTable, ...spec<Word>() });
+  it("building a synced store does NOT put it on the sync loop's list", () => {
+    // Construction used to register, which read as convenience and meant no
+    // test could build a store without unregistering it afterwards -- and the
+    // moment a store started being synced was decided by a constructor rather
+    // than by a caller. Registering is now its own step.
+    const { store } = createSyncedRecordStore<Word>({
+      table: wordsTable,
+      ...spec<Word>()
+    });
+    expect(store.syncMode).toBe("synced");
+    expect(listSyncedRecordStores()).toHaveLength(0);
+  });
+
+  it("registering is what makes the sync loop see it", () => {
+    const { store, handle } = createSyncedRecordStore<Word>({
+      table: wordsTable,
+      ...spec<Word>()
+    });
+    registerSyncedRecordStore(handle);
     trackForCleanup(store.storeKey);
     expect(listSyncedRecordStores()).toHaveLength(1);
     expect(listSyncedRecordStores()[0]!.storeKey.storeId).toBe("words");
@@ -119,10 +137,11 @@ describe("092.6.2 - synced and local-only are different things", () => {
     expect(await localAdapter.readPending(10)).toHaveLength(0);
 
     const syncedAdapter = createMemoryRecordStorage();
-    const synced = createSyncedRecordStore<Word>({
+    const { store: synced, handle: syncedHandle } = createSyncedRecordStore<Word>({
       table: wordsTable,
       ...spec<Word>({ adapter: syncedAdapter, storeId: "synced-words" })
     });
+    registerSyncedRecordStore(syncedHandle);
     trackForCleanup(synced.storeKey);
     await synced.put("b", { lemma: "b", strength: 1 });
     expect(await syncedAdapter.readPending(10)).toHaveLength(1);
@@ -134,7 +153,8 @@ describe("092.6.2 - the store's own bookkeeping stays out of the way", () => {
     // It lives in the same keyspace, so a caller listing their words would
     // otherwise be handed the store's internal bookkeeping as one of them.
     const adapter = createMemoryRecordStorage();
-    const store = createSyncedRecordStore<Word>({ table: wordsTable, ...spec<Word>({ adapter }) });
+    const { store, handle: storeHandle } = createSyncedRecordStore<Word>({ table: wordsTable, ...spec<Word>({ adapter }) });
+    registerSyncedRecordStore(storeHandle);
     trackForCleanup(store.storeKey);
 
     const handle = listSyncedRecordStores().find(
@@ -153,10 +173,11 @@ describe("092.6.2 - the store's own bookkeeping stays out of the way", () => {
     // The reserved prefix is U+0000, not a space. It was written as a literal
     // space once, which would have silently swallowed any key beginning with
     // one.
-    const store = createSyncedRecordStore<Word>({
+    const { store, handle: storeHandle } = createSyncedRecordStore<Word>({
       table: wordsTable,
       ...spec<Word>({ adapter: createMemoryRecordStorage(), storeId: "spacey" })
     });
+    registerSyncedRecordStore(storeHandle);
     trackForCleanup(store.storeKey);
     await store.put(" leading space", { lemma: "x", strength: 1 });
     expect((await store.list()).map((r) => r.key)).toEqual([" leading space"]);
@@ -166,7 +187,8 @@ describe("092.6.2 - the store's own bookkeeping stays out of the way", () => {
 describe("092.6.2 - deletes and migrations", () => {
   it("a delete leaves a tombstone, so it cannot be undone by the next pull", async () => {
     const adapter = createMemoryRecordStorage();
-    const store = createSyncedRecordStore<Word>({ table: wordsTable, ...spec<Word>({ adapter }) });
+    const { store, handle: storeHandle } = createSyncedRecordStore<Word>({ table: wordsTable, ...spec<Word>({ adapter }) });
+    registerSyncedRecordStore(storeHandle);
     trackForCleanup(store.storeKey);
 
     await store.put("gone", { lemma: "gone", strength: 1 });
@@ -244,10 +266,11 @@ describe("092.6.2 - clearing a synced store actually clears it", () => {
     // Dropping the row leaves the server holding it, so the next pull hands it
     // straight back and the clear looks like it silently failed.
     const adapter = createMemoryRecordStorage();
-    const store = createSyncedRecordStore<Word>({
+    const { store, handle: storeHandle } = createSyncedRecordStore<Word>({
       table: wordsTable,
       ...spec<Word>({ adapter })
     });
+    registerSyncedRecordStore(storeHandle);
     trackForCleanup(store.storeKey);
 
     await store.put("formaggio", { lemma: "formaggio", strength: 1 });
@@ -264,10 +287,11 @@ describe("092.6.2 - clearing a synced store actually clears it", () => {
     // The first version re-read from the start each time, so after page one
     // was tombstoned it found nothing live and quit with the rest untouched.
     const adapter = createMemoryRecordStorage();
-    const store = createSyncedRecordStore<Word>({
+    const { store, handle: storeHandle } = createSyncedRecordStore<Word>({
       table: wordsTable,
       ...spec<Word>({ adapter })
     });
+    registerSyncedRecordStore(storeHandle);
     trackForCleanup(store.storeKey);
 
     await store.putMany(

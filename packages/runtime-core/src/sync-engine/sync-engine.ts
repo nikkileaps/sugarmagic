@@ -45,6 +45,7 @@
 
 import {
   listSyncedRecordStores,
+  setSyncedStoreRegistrationListener,
   type RemoteRecordStorageAdapter,
   type SyncHandle,
   type RemoteRecord
@@ -123,17 +124,65 @@ export function createSyncEngine(
   let running = false;
   let stopped = true;
   let consecutiveFailures = 0;
+  /**
+   * A store appeared while a pass was in flight. That pass was already
+   * iterating its own list and cannot pick the newcomer up, so the next pass
+   * runs immediately instead of an interval later -- something is waiting on
+   * that store's first sync, and up to 30 seconds of loading screen is not the
+   * answer.
+   */
+  let registeredDuringPass = false;
 
   async function syncStore(
     handle: SyncHandle,
     remote: RemoteRecordStorageAdapter,
     result: SyncResult
   ): Promise<void> {
-    // Push first so the account has this device's edits before we ask what
-    // changed -- it keeps a pass from reporting a conflict against a record
-    // the server was about to be told about anyway. It is NOT what protects
-    // the edit: `applyRemote` refuses to overwrite a record still marked
-    // pending, and that guard holds whichever order these run in.
+    // PULL FIRST, and on a store that has never pulled, do not push at all.
+    //
+    // A device that has not heard what the account holds cannot safely write
+    // to it. Everything in its store is either untouched or invented from a
+    // default, and pushing that is a blind overwrite: a returning player's
+    // real level, replaced by the empty one this device made up because it
+    // read the store before anything had filled it.
+    //
+    // The order used to be the other way round, on the reasoning that pushing
+    // first saves reporting a conflict against a record the server was about
+    // to be told about anyway. That is still true and still worth little --
+    // and the comment saying the order does not affect safety was only right
+    // while every store was assumed to have pulled already.
+    //
+    // THE ORDER IS THE ENFORCEMENT. A pull that fails throws out of here, so
+    // the push below never runs and the records stay pending for the next
+    // pass. There is no separate "have we pulled" check to keep in step.
+    let since = await handle.getWatermark();
+    for (;;) {
+      const page = await remote.pull(
+        handle.storeKey,
+        handle.table,
+        since,
+        SYNC_BATCH
+      );
+      if (page.records.length > 0) {
+        const applied = await handle.applyRemote(page.records);
+        result.pulled += applied.applied;
+        result.conflictsKeptLocal += applied.skippedLocalNewer;
+      }
+      if (!page.nextSince) break;
+      since = page.nextSince;
+      await handle.setWatermark(since);
+    }
+    // AFTER the whole pull, not after the first page: every page of a first
+    // pull is still the first pull, and flipping this early would let page two
+    // start losing to unpushed local records that page one outranked.
+    const wasFirstPull = !handle.hasPulled();
+    handle.markPulled();
+    if (wasFirstPull) {
+      logger.info(
+        `[sync-engine] first pull complete for ${handle.storeKey.pluginId}:${handle.storeKey.storeId}`
+      );
+    }
+
     for (;;) {
       const pending = await handle.takePending(SYNC_BATCH);
       if (pending.length === 0) break;
@@ -157,24 +206,6 @@ export function createSyncEngine(
       if (pushed.accepted.length === 0) break;
       if (pending.length < SYNC_BATCH) break;
     }
-
-    let since = await handle.getWatermark();
-    for (;;) {
-      const page = await remote.pull(
-        handle.storeKey,
-        handle.table,
-        since,
-        SYNC_BATCH
-      );
-      if (page.records.length > 0) {
-        const applied = await handle.applyRemote(page.records);
-        result.pulled += applied.applied;
-        result.conflictsKeptLocal += applied.skippedLocalNewer;
-      }
-      if (!page.nextSince) break;
-      since = page.nextSince;
-      await handle.setWatermark(since);
-    }
   }
 
   async function syncNow(reason: string): Promise<SyncResult> {
@@ -185,7 +216,12 @@ export function createSyncEngine(
       failures: 0
     };
     const remote = options.remote;
-    if (!remote) return result;
+    if (!remote) {
+      // No backend is a supported configuration, so every store's wait ends
+      // rather than leaving a caller waiting on a reconcile that cannot come.
+      for (const handle of listStores()) handle.markFirstSyncDone();
+      return result;
+    }
 
     for (const handle of listStores()) {
       try {
@@ -198,6 +234,11 @@ export function createSyncEngine(
           `[sync-engine] sync failed for ${handle.storeKey.pluginId}:${handle.storeKey.storeId}`,
           error
         );
+      } finally {
+        // RUNS ON FAILURE TOO. This answers "has this store had its
+        // turn", not "did the data arrive" -- a game whose backend is down
+        // still has to start, and the local copy is what it plays from.
+        handle.markFirstSyncDone();
       }
     }
 
@@ -233,12 +274,32 @@ export function createSyncEngine(
     // store would push the same records twice.
     if (running || stopped) return;
     running = true;
+    registeredDuringPass = false;
     try {
       await syncNow(reason);
     } finally {
       running = false;
-      schedule(nextDelayMs());
+      if (registeredDuringPass) {
+        registeredDuringPass = false;
+        schedule(0);
+      } else {
+        schedule(nextDelayMs());
+      }
     }
+  }
+
+  /**
+   * A store built after boot -- the learner's, on the first conversation turn
+   * -- missed every pass so far, and something is waiting on its first sync. Reconcile
+   * it now rather than at the next tick.
+   */
+  function onStoreRegistered(_handle: SyncHandle): void {
+    if (stopped) return;
+    if (running) {
+      registeredDuringPass = true;
+      return;
+    }
+    void run("store registered");
   }
 
   const onOnline = () => void run("came back online");
@@ -254,6 +315,10 @@ export function createSyncEngine(
     async start() {
       if (!stopped) return;
       stopped = false;
+      // Claimed BEFORE the first pass: a store registering during it must be
+      // seen, and until this is set a new store ends its own wait on the
+      // assumption that nothing is listening.
+      setSyncedStoreRegistrationListener(onStoreRegistered);
       ownerWindow?.addEventListener("online", onOnline);
       ownerWindow?.addEventListener("visibilitychange", onVisibility);
       // Awaited by the caller, not fired and forgotten: this pass is what
@@ -264,6 +329,9 @@ export function createSyncEngine(
 
     stop() {
       stopped = true;
+      // Released so a store built after this ends its own wait rather than
+      // waiting on a loop that is no longer running.
+      setSyncedStoreRegistrationListener(null);
       if (timer !== null) {
         clearTimeout(timer);
         timer = null;

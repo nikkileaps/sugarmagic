@@ -18,8 +18,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createMemoryRecordStorage,
-  createSyncedRecordStore,
-  unregisterSyncedRecordStore
+  createSyncedRecordStore
 } from "@sugarmagic/runtime-core";
 import { MemoryCardStore } from "../../runtime/learner/card-store";
 import {
@@ -31,7 +30,7 @@ import {
   type PersistedLearnerProfileCore
 } from "../../runtime/learner/persistence";
 import { createLearnerBlackboard } from "./test-helpers";
-import { SUGARLANG_LEARNER_TABLE } from "../../runtime/learner/account-tables";
+import { SUGARLANG_LEARNER_TABLE } from "../../runtime/learner/learner-tables";
 import { LEARNER_PROFILE_FACT } from "../../runtime/learner/fact-definitions";
 
 const PLAYER = "player-1";
@@ -46,9 +45,14 @@ function emptyProfile() {
 
 const blackboard = createLearnerBlackboard;
 
-/** A store backed by memory, standing in for the per-account one. */
+/**
+ * A store backed by memory, standing in for the per-account one.
+ *
+ * Never registered with the sync loop: this is about what survives a reload
+ * locally, and building a store no longer syncs it.
+ */
 function coreStore(): LearnerProfileCoreStore & { close: () => Promise<void> } {
-  const store = createSyncedRecordStore<PersistedLearnerProfileCore>({
+  const { store } = createSyncedRecordStore<PersistedLearnerProfileCore>({
     pluginId: "example-plugin",
     storeId: "profile",
     schemaVersion: 1,
@@ -59,10 +63,7 @@ function coreStore(): LearnerProfileCoreStore & { close: () => Promise<void> } {
   return {
     get: (key) => store.get(key),
     put: (key, data) => store.put(key, data),
-    close: async () => {
-      unregisterSyncedRecordStore(store.storeKey);
-      await store.close();
-    }
+    close: () => store.close()
   };
 }
 

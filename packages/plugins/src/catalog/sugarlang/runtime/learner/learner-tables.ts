@@ -1,8 +1,14 @@
 /**
- * packages/plugins/src/catalog/sugarlang/runtime/learner/account-tables.ts
+ * packages/plugins/src/catalog/sugarlang/runtime/learner/learner-tables.ts
  *
  * Purpose: The database tables this plugin owns for a player's learning, and
  *   how its records map into them.
+ *
+ * WHAT IS IN HERE
+ *   Two table specs and the SQL that creates them. A table spec is a table
+ *   name plus the pair of converters between one of this plugin's records and
+ *   one database row. Nothing else -- no reads, no writes, no connection. The
+ *   sync engine owns all of that and calls these.
  *
  * TWO TABLES, BECAUSE THEY ARE TWO DIFFERENT THINGS
  *   A player has ONE row of learner state -- their level, how confident the
@@ -27,7 +33,7 @@
  * Exports:
  *   - SUGARLANG_WORD_TABLE
  *   - SUGARLANG_LEARNER_TABLE
- *   - SUGARLANG_ACCOUNT_MIGRATIONS
+ *   - SUGARLANG_LEARNER_MIGRATIONS
  *
  * Implements: Plan 092 story 092.6.3 / 092.6.4
  *
@@ -114,7 +120,7 @@ export const SUGARLANG_WORD_TABLE: RemoteTableSpec<LemmaCard> = {
     provisional_evidence_first_seen_turn: card.provisionalEvidenceFirstSeenTurn
   }),
 
-  fromColumns: (row) => ({
+  fromRow: (row) => ({
     lemmaId: String(row.record_key ?? ""),
     difficulty: num(row.difficulty),
     stability: num(row.stability),
@@ -172,8 +178,14 @@ export const SUGARLANG_LEARNER_TABLE: RemoteTableSpec<PersistedLearnerProfileCor
     // something read `.map` on the array that was never there. The type is the
     // only thing standing between a column list and a runtime crash, so it has
     // to be allowed to do its job.
-    fromColumns: (row): PersistedLearnerProfileCore => ({
-      learnerId: String(row.record_key ?? "") as PersistedLearnerProfileCore["learnerId"],
+    //
+    // NO `learnerId` HERE EITHER, and none in `toColumns`. It is the account,
+    // the player definition and the language pair joined together, so the
+    // reader already holds every part of it and stamps it on load. This once
+    // rebuilt it from `record_key`, which is the constant "core" for this
+    // table -- a made-up id that then travelled into blackboard scopes and the
+    // Teacher prompt. Derived identity does not belong in storage.
+    fromRow: (row): PersistedLearnerProfileCore => ({
       targetLanguage: String(row.target_language ?? ""),
       supportLanguage: String(row.support_language ?? ""),
       estimatedCefrBand: asBand(row.estimated_cefr_band),
@@ -205,7 +217,7 @@ export const SUGARLANG_LEARNER_TABLE: RemoteTableSpec<PersistedLearnerProfileCor
  * records what it has applied by filename version and skips the rest, so
  * editing a file a project already ran changes nothing and reports success.
  */
-export const SUGARLANG_ACCOUNT_MIGRATIONS = [
+export const SUGARLANG_LEARNER_MIGRATIONS = [
   {
     filename: "0002_sugarlang_learning.sql",
     sql: [
