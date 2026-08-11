@@ -319,8 +319,20 @@ export interface SyncHandle {
   markFirstSyncDone(): void;
   /** Records edited locally and not yet accepted by the server. */
   takePending(limit: number): Promise<StoredRecord[]>;
-  /** Record that the server accepted these, with its timestamps. */
-  markPushed(accepted: RemotePushResult["accepted"]): Promise<void>;
+  /**
+   * Record that the server accepted these, with its timestamps.
+   *
+   * `sent` is what `takePending` handed over, and it is required rather than
+   * convenient: a record edited between being sent and being acknowledged has
+   * NOT had that edit accepted, so its flag must stay set. Clearing it on the
+   * strength of the acknowledgement alone marks work as saved that the server
+   * has never seen, and nothing later notices -- the record simply stops being
+   * offered for sending.
+   */
+  markPushed(
+    accepted: RemotePushResult["accepted"],
+    sent: ReadonlyArray<StoredRecord>
+  ): Promise<void>;
   /** Merge server records in. Returns how many actually changed anything. */
   applyRemote(records: ReadonlyArray<RemoteRecord>): Promise<{
     applied: number;
@@ -444,12 +456,29 @@ function createStore<TData>(
     return upgraded === null ? undefined : upgraded;
   }
 
+  /**
+   * A stamp that always moves forward, even for two writes in the same
+   * millisecond.
+   *
+   * The sync loop tells "this record is exactly what I sent" from "this record
+   * was edited while the request was in flight" by comparing this value. A
+   * plain `Date.now()` makes those two indistinguishable when the edit lands in
+   * the same millisecond as the write before it, and the cost of guessing wrong
+   * is a silently dropped edit -- so the stamp is nudged forward rather than
+   * repeated.
+   */
+  let lastStampMs = 0;
+  function nextStampMs(): number {
+    lastStampMs = Math.max(Date.now(), lastStampMs + 1);
+    return lastStampMs;
+  }
+
   function toStored(key: string, data: TData | null, deleted: boolean): StoredRecord {
     return {
       key,
       data,
       schemaVersion: spec.schemaVersion,
-      updatedAtMs: Date.now(),
+      updatedAtMs: nextStampMs(),
       deleted,
       // A local-only store never has anything to push, so it never marks
       // anything pending -- that is the whole of the difference at write time.
@@ -660,15 +689,21 @@ function createSyncHandle(
       return adapter.readPending(limit);
     },
 
-    async markPushed(accepted) {
+    async markPushed(accepted, sent) {
       if (accepted.length === 0) return;
+      const sentAtMs = new Map(sent.map((record) => [record.key, record.updatedAtMs]));
       const updates: StoredRecord[] = [];
       for (const ack of accepted) {
         const current = await adapter.read(ack.key);
         if (!current) continue;
+        // EDITED WHILE THE REQUEST WAS IN FLIGHT, so what came back is an
+        // acknowledgement of the OLD version. Left alone entirely -- still
+        // flagged, still unreconciled -- so the next pass offers it again. Its
+        // own acknowledgement will set both fields together.
+        if (current.updatedAtMs !== sentAtMs.get(ack.key)) continue;
         updates.push({ ...current, pending: 0, syncedAt: ack.updatedAt });
       }
-      await adapter.write(updates);
+      if (updates.length > 0) await adapter.write(updates);
     },
 
     async applyRemote(records) {

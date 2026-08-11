@@ -275,6 +275,54 @@ describe("092.6.3 - a device that has never pulled cannot overwrite the account"
     engine.stop();
   });
 
+  it("THE ONE THAT MATTERS: an edit made while a push is in flight still gets sent", async () => {
+    // A push is a network round trip and the player keeps playing through it.
+    // The acknowledgement that comes back is for the version that was SENT, but
+    // the flag was cleared on whatever the record is NOW -- so an edit landing
+    // in that window was marked as saved without the server ever seeing it, and
+    // was never offered again. Silent, and only visible as a word that quietly
+    // failed to follow someone to their other device.
+    const { remote } = fakeRemote();
+    const a = makeStore("user-alice");
+    await a.store.put("word", { lemma: "first" });
+
+    const editsMidFlight: RemoteRecordStorageAdapter = {
+      pull: remote.pull,
+      push: async (key, table, records) => {
+        // Deterministic stand-in for "the player learned something else while
+        // the request was open".
+        await a.store.put("word", { lemma: "second" });
+        return remote.push(key, table, records);
+      }
+    };
+
+    await createSyncEngine({
+      remote: editsMidFlight,
+      ownerWindow: null
+    }).syncNow("test");
+
+    // The newer text is what the player has...
+    expect(await a.store.get("word")).toEqual({ lemma: "second" });
+    // ...and it is still queued, because the server was only ever told "first".
+    expect(await a.adapter.readPending(10)).toHaveLength(1);
+
+    // The next pass sends it for real, and then it settles.
+    await createSyncEngine({ remote, ownerWindow: null }).syncNow("test");
+    expect(await a.adapter.readPending(10)).toHaveLength(0);
+  });
+
+  it("still clears the flag on a record that was NOT touched during the push", async () => {
+    // The other half: if nothing edited it, leaving it flagged would mean
+    // pushing the same record on every pass forever.
+    const { remote } = fakeRemote();
+    const a = makeStore("user-alice");
+    await a.store.put("settled", { lemma: "settled" });
+
+    await createSyncEngine({ remote, ownerWindow: null }).syncNow("test");
+
+    expect(await a.adapter.readPending(10)).toHaveLength(0);
+  });
+
   it("finishes the wait immediately when there is no backend to sync against", async () => {
     // A project with no account plugin is supported, not broken. A caller
     // waiting on this must not wait forever.

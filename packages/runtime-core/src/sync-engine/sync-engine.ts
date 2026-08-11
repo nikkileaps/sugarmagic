@@ -199,7 +199,9 @@ export function createSyncEngine(
         updatedAt: new Date(record.updatedAtMs).toISOString()
       }));
       const pushed = await remote.push(handle.storeKey, handle.table, outgoing);
-      await handle.markPushed(pushed.accepted);
+      // `pending` is handed back so the store can tell an acknowledged record
+      // from one the player edited while the request was in the air.
+      await handle.markPushed(pushed.accepted, pending);
       result.pushed += pushed.accepted.length;
       // A server that accepts nothing would spin here forever on the same
       // batch. Stop and let the next pass try again.
