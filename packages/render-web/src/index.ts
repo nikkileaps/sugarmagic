@@ -13,6 +13,15 @@ export * from "./asset-surface-bake";
 export * from "./instanced-group";
 export * from "./renderable-reconciler";
 export { sampleMeshTrianglesForDensity } from "./mesh-triangle-sampler";
+// The effect materializer, exported so its parameter reading can be tested
+// against real TSL nodes. It once silently ignored every authored bloom value
+// because it looked for the number in the wrong place on the node, and nothing
+// could catch that without building a genuine literal.
+export { materializeEffectOp } from "./materialize/effect";
+export type {
+  EffectMaterializeContext,
+  MaterializeOpRequest
+} from "./materialize/types";
 export {
   registerLivePaintedMask,
   sampleLivePaintedMask,

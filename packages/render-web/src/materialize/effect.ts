@@ -33,12 +33,32 @@ import type {
   MaterializeOpResult
 } from "./types";
 
+/**
+ * The plain number behind a TSL node, for the few effects that need a real
+ * JavaScript value rather than something to put in a shader.
+ *
+ * IT HAS TO UNWRAP. A shader parameter materializes as a LITERAL, not a
+ * uniform (see `uniformForParameter` in ShaderRuntime) -- and `float(0.75)`
+ * builds a VarNode whose `.node` is the ConstNode actually holding the number.
+ * Reading `.value` off the outer node finds `undefined`.
+ *
+ * That is not a small miss. This reader silently returned its fallback for
+ * every bloom parameter, so bloom ran at strength 0.4 / radius 0.4 /
+ * threshold 0.9 no matter what a project authored, and editing any of the
+ * three did nothing at all. Which reads exactly like "bloom is broken", and
+ * sent someone hunting through the shader graph twice.
+ *
+ * Walks the wrapper chain rather than reaching for `.node.value` directly,
+ * because how deeply TSL wraps a literal is not a promise it makes.
+ */
 function readNumericFromInput(input: unknown, fallback: number): number {
-  if (input && typeof input === "object" && "value" in input) {
-    const raw = (input as { value: unknown }).value;
+  let current: unknown = input;
+  for (let depth = 0; depth < 8 && current && typeof current === "object"; depth += 1) {
+    const raw = (current as { value?: unknown }).value;
     if (typeof raw === "number" && Number.isFinite(raw)) {
       return raw;
     }
+    current = (current as { node?: unknown }).node;
   }
   return fallback;
 }
