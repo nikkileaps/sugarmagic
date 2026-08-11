@@ -66,13 +66,16 @@ import {
 export const RECORD_STORE_PAGE_SIZE = 250;
 
 /**
- * Keys starting with this are the store's own bookkeeping (sync watermarks)
- * and are never returned to a caller. U+0000 sorts before every printable
- * character, so reserved rows sit at the front of the keyspace and a cursor
- * walk skips them once rather than filtering every page.
+ * Where the store notes how far its last sync got.
+ *
+ * A KEY IN A SEPARATE OBJECT STORE, not a record sitting among the player's.
+ * It was the latter once, hidden behind a U+0000 prefix that every walk over
+ * the records was supposed to skip. One of them didn't, so wiping a player's
+ * data marked the bookkeeping deleted and queued it to be sent -- under a key
+ * containing a byte Postgres will not accept in a text column, which fails and
+ * is then retried forever. See `META_STORE` in `local-record-storage.ts`.
  */
-const RESERVED_KEY_PREFIX = "\u0000";
-const WATERMARK_KEY = `${RESERVED_KEY_PREFIX}watermark`;
+const WATERMARK_KEY = "watermark";
 
 /** One record as a caller sees it. */
 export interface RecordEntry<TData = unknown> {
@@ -343,6 +346,19 @@ export function setSyncedStoreRegistrationListener(
 }
 
 /**
+ * Whether a sync loop exists to reconcile synced stores.
+ *
+ * False is a normal configuration, not a fault: Studio Preview syncs with
+ * nothing on purpose, and a project with no account backend gets local storage
+ * that never leaves the device. Exposed so a caller reporting on its own
+ * storage can say which of those it is looking at, rather than leaving someone
+ * to guess why nothing ever synced.
+ */
+export function isSyncLoopRunning(): boolean {
+  return registrationListener !== null;
+}
+
+/**
  * Module-level, matching `access-token-registry`: plugin runtimes are built
  * before the host is in a position to hand them anything, so the host finds
  * them here rather than being threaded through every plugin's factory.
@@ -469,10 +485,9 @@ function createStore<TData>(
     },
 
     async listPage(cursor, limit = RECORD_STORE_PAGE_SIZE) {
-      const page = await adapter.readPage(cursor ?? RESERVED_KEY_PREFIX, limit);
+      const page = await adapter.readPage(cursor, limit);
       const records: RecordEntry<TData>[] = [];
       for (const stored of page.records) {
-        if (stored.key.startsWith(RESERVED_KEY_PREFIX)) continue;
         const data = readData(stored);
         if (data !== undefined) records.push({ key: stored.key, data });
       }
@@ -508,7 +523,10 @@ function createStore<TData>(
       // each time would stop after one page: those records are tombstoned by
       // then, so the second read finds nothing live and quits with the rest of
       // the store untouched.
-      let cursor = RESERVED_KEY_PREFIX;
+      // Reaches every record and nothing else. The store's own bookkeeping is
+      // in a different object store, so this cannot touch it -- it used to, and
+      // that wedged the store's syncing permanently.
+      let cursor: string | null = null;
       for (;;) {
         const page = await adapter.readPage(cursor, RECORD_STORE_PAGE_SIZE);
         if (page.records.length === 0) break;
@@ -698,24 +716,14 @@ function createSyncHandle(
     },
 
     async getWatermark() {
-      const stored = await adapter.read(WATERMARK_KEY);
-      return typeof stored?.data === "string" ? stored.data : null;
+      return (await adapter.readMeta(WATERMARK_KEY)) ?? null;
     },
 
     async setWatermark(value) {
-      await adapter.write([
-        {
-          key: WATERMARK_KEY,
-          data: value,
-          schemaVersion,
-          updatedAtMs: Date.now(),
-          deleted: false,
-          // Never pushed: this is where THIS device got to, not a fact about
-          // the account.
-          pending: 0,
-          syncedAt: null
-        }
-      ]);
+      // Not a record, so it cannot be pushed, cleared, listed or counted by
+      // accident. This is where THIS device got to, not a fact about the
+      // account, and nothing outside this file has any business seeing it.
+      await adapter.writeMeta(WATERMARK_KEY, value);
     }
   };
 }

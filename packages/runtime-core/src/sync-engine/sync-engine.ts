@@ -302,6 +302,14 @@ export function createSyncEngine(
     void run("store registered");
   }
 
+  // CLAIMED AT CREATION, NOT AT `start()`. Plugins open their storage between
+  // this engine being built and being started, and an unclaimed listener means
+  // "nothing will ever sync this store" -- so those stores would end their
+  // first-sync wait immediately, before a single pass had run. While stopped,
+  // `onStoreRegistered` does nothing; the first pass picks the store up from
+  // the registry and ends the wait properly.
+  setSyncedStoreRegistrationListener(onStoreRegistered);
+
   const onOnline = () => void run("came back online");
   const onVisibility = () => {
     if (typeof document !== "undefined" && document.visibilityState === "hidden") {
@@ -315,10 +323,6 @@ export function createSyncEngine(
     async start() {
       if (!stopped) return;
       stopped = false;
-      // Claimed BEFORE the first pass: a store registering during it must be
-      // seen, and until this is set a new store ends its own wait on the
-      // assumption that nothing is listening.
-      setSyncedStoreRegistrationListener(onStoreRegistered);
       ownerWindow?.addEventListener("online", onOnline);
       ownerWindow?.addEventListener("visibilitychange", onVisibility);
       // Awaited by the caller, not fired and forgotten: this pass is what

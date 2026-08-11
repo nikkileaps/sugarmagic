@@ -753,6 +753,48 @@ export type TelemetryEvent =
         /** True when diverseEncounterCountAfter >= targetEncounters. */
         debtPaid: boolean;
       }
+    >
+  /**
+   * The learner's storage was built at boot, before the sync loop's first
+   * pass. Emitted whether or not anything will sync it.
+   */
+  | TelemetryEventOf<
+      "learner-storage.opened",
+      {
+        targetLanguage: string;
+        supportLanguage: string;
+        /** What was built. Short of two means one of them failed. */
+        storeIds: string[];
+        /**
+         * Whether a sync loop exists to reconcile them. False in Studio
+         * Preview, which deliberately syncs with nothing, and in any project
+         * with no account backend.
+         */
+        syncLoopRunning: boolean;
+      }
+    >
+  /**
+   * The first reconcile attempt for that storage finished -- succeeded, failed,
+   * or was never going to happen.
+   *
+   * ITS ABSENCE IS THE INTERESTING CASE. The wait ends on failure too, so no
+   * event at all means the first pass neither finished nor threw: a request
+   * that hung. That is the one shape that leaves a player waiting.
+   */
+  | TelemetryEventOf<
+      "learner-storage.first-sync",
+      {
+        targetLanguage: string;
+        supportLanguage: string;
+        syncLoopRunning: boolean;
+        /** From opening the storage to the wait ending. */
+        waitedMs: number;
+        /** Words held locally afterwards. Zero on a device that has never
+         *  played AND could not reach the account. */
+        wordCount: number;
+        /** Whether a stored level arrived. False means placement runs. */
+        levelPresent: boolean;
+      }
     >;
 
 export type TelemetryEventKind = TelemetryEvent["kind"];

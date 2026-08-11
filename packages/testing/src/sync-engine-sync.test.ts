@@ -246,6 +246,35 @@ describe("092.6.3 - a device that has never pulled cannot overwrite the account"
     await expect(a.store.whenFirstSynced()).resolves.toBeUndefined();
   });
 
+  it("a store opened before the loop starts waits for the first pass, not for nothing", async () => {
+    // The host builds the loop, then asks plugins to open their storage, then
+    // starts it. If the loop only claimed the registration listener at start(),
+    // those stores would be told nothing would ever sync them and would finish
+    // their wait on the spot -- reporting a first sync that had not happened,
+    // for exactly the stores the wait exists to protect.
+    const { remote, seed } = fakeRemote();
+    seed({
+      key: "from-the-account",
+      columns: { lemma: "known" },
+      deleted: false,
+      updatedAt: new Date(9_999_999).toISOString()
+    });
+
+    const engine = createSyncEngine({ remote, ownerWindow: null });
+    const store = makeStore("user-alice").store;
+
+    const pending = Symbol("still waiting");
+    expect(
+      await Promise.race([store.whenFirstSynced(), Promise.resolve(pending)])
+    ).toBe(pending);
+
+    await engine.start();
+    await expect(store.whenFirstSynced()).resolves.toBeUndefined();
+    // ...and the wait was worth something: the account's record is here.
+    expect(await store.get("from-the-account")).toEqual({ lemma: "known" });
+    engine.stop();
+  });
+
   it("finishes the wait immediately when there is no backend to sync against", async () => {
     // A project with no account plugin is supported, not broken. A caller
     // waiting on this must not wait forever.

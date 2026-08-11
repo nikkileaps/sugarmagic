@@ -2067,18 +2067,6 @@ export function createWebRuntimeHost(
       // separate development backend to point it at yet. Preview therefore
       // reads and writes locally and reconciles with nothing, which is also
       // what an author wants: throwaway state that does not follow them.
-      // OPEN PER-ACCOUNT STORAGE BEFORE THE LOOP STARTS (Plan 092.6.3).
-      //
-      // The first pass below is what the boot screen waits for, and it can
-      // only reconcile stores that exist when it runs. Plugins used to open
-      // theirs in `init`, which needs the world and therefore happens after
-      // boot is over -- so the awaited pass reconciled an empty list, and the
-      // learner's store was built later, on the first conversation, reading
-      // empty on a device where the player already had a history.
-      //
-      // Awaited: a store opened after the pass starts has missed it.
-      await pluginManager.openAccountStorage();
-
       const syncsToBackend = adapter.boot.hostKind === "published-web";
       accountDataSync?.stop();
       accountDataSync = createSyncEngine({
@@ -2087,6 +2075,25 @@ export function createWebRuntimeHost(
           : null,
         ownerWindow
       });
+
+      // OPEN PER-ACCOUNT STORAGE BETWEEN BUILDING THE LOOP AND STARTING IT
+      // (Plan 092.6.3).
+      //
+      // The first pass below is what the boot screen waits for, and it can only
+      // reconcile stores that exist when it runs. Plugins used to open theirs in
+      // `init`, which needs the world and therefore happens after boot is over
+      // -- so the awaited pass reconciled an empty list, and the learner's store
+      // was built later, on the first conversation, reading empty on a device
+      // where the player already had a history.
+      //
+      // AFTER `createSyncEngine`, not before: a store that registers while no
+      // loop exists is told nothing will ever sync it, and ends its first-sync
+      // wait on the spot. Building the loop first means these stores wait for a
+      // pass that is actually coming.
+      //
+      // Awaited: a store opened after the pass starts has missed it.
+      await pluginManager.openAccountStorage();
+
       // Kicked off HERE and awaited further down, so the first pull overlaps
       // asset preloading instead of being serialised behind it.
       firstSyncPass = accountDataSync.start();

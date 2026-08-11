@@ -30,22 +30,49 @@ export const RECORD_STORE_DB_SEGMENT = "records";
 
 const OBJECT_STORE = "records";
 const PENDING_INDEX = "pending";
-const DB_VERSION = 1;
+
+/**
+ * The store's own bookkeeping -- how far the last sync got -- kept in its OWN
+ * object store, away from the player's records.
+ *
+ * It used to live among the records under a key beginning with U+0000, on the
+ * reasoning that the character sorts first and reads could skip it. Two of the
+ * three walks over that list remembered to skip it and one did not, so wiping
+ * a player's data also marked the bookkeeping deleted and queued it to be sent
+ * -- under a key containing a byte Postgres cannot store in a text column. The
+ * send is rejected, rejected sends are retried forever, and that store never
+ * syncs again.
+ *
+ * A separate object store makes the mistake unavailable: a walk over the
+ * records cannot reach the bookkeeping, and no key ever needs a character the
+ * database will refuse.
+ */
+const META_STORE = "sync-meta";
+
+/** 2 moved the sync bookkeeping out of the records store. */
+const DB_VERSION = 2;
 
 export interface LocalRecordStorageAdapter {
   read(key: string): Promise<StoredRecord | undefined>;
   write(records: ReadonlyArray<StoredRecord>): Promise<void>;
+  /** `afterKey` null starts at the beginning; otherwise it is exclusive. */
   readPage(
-    afterKey: string,
+    afterKey: string | null,
     limit: number
   ): Promise<{ records: StoredRecord[]; nextCursor: string | null }>;
   readPending(limit: number): Promise<StoredRecord[]>;
   removeAll(): Promise<void>;
+  /** Bookkeeping, kept apart from the records. See `META_STORE`. */
+  readMeta(key: string): Promise<string | undefined>;
+  writeMeta(key: string, value: string): Promise<void>;
   close?(): Promise<void>;
 }
 
 export function createMemoryRecordStorage(): LocalRecordStorageAdapter {
   const rows = new Map<string, StoredRecord>();
+  // Separate from `rows` for the same reason the IndexedDB version keeps a
+  // separate object store: nothing walking the records can reach it.
+  const meta = new Map<string, string>();
   const sortedKeys = () => Array.from(rows.keys()).sort();
 
   return {
@@ -56,8 +83,15 @@ export function createMemoryRecordStorage(): LocalRecordStorageAdapter {
     async write(records) {
       for (const record of records) rows.set(record.key, { ...record });
     },
+    async readMeta(key) {
+      return meta.get(key);
+    },
+    async writeMeta(key, value) {
+      meta.set(key, value);
+    },
     async readPage(afterKey, limit) {
-      const keys = sortedKeys().filter((k) => k > afterKey);
+      const keys =
+        afterKey === null ? sortedKeys() : sortedKeys().filter((k) => k > afterKey);
       const page = keys.slice(0, limit);
       const records = page.map((k) => ({ ...(rows.get(k) as StoredRecord) }));
       const nextCursor = keys.length > limit ? (page[page.length - 1] ?? null) : null;
@@ -104,10 +138,23 @@ export function createIndexedDBRecordStorage(
     const opened = new Promise<IDBDatabase>((resolve, reject) => {
       const request = factory.open(dbName, DB_VERSION);
       request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
+        const upgrade = event.target as IDBOpenDBRequest;
+        const db = upgrade.result;
         if (!db.objectStoreNames.contains(OBJECT_STORE)) {
           const store = db.createObjectStore(OBJECT_STORE, { keyPath: "key" });
           store.createIndex(PENDING_INDEX, "pending", { unique: false });
+        }
+        if (!db.objectStoreNames.contains(META_STORE)) {
+          db.createObjectStore(META_STORE);
+        }
+        // A version 1 database has the old bookkeeping row sitting among the
+        // records under a U+0000 key. Nothing filters those out any more, so it
+        // would surface as one of the player's words -- and it is the row that
+        // cannot be sent to the server. Dropped rather than migrated: this is
+        // learner data, which is rebuilt by playing, and the alternative is
+        // carrying a range-delete for a shape that should not exist.
+        if (event.oldVersion > 0 && event.oldVersion < 2) {
+          upgrade.transaction?.objectStore(OBJECT_STORE).clear();
         }
       };
       request.onerror = () =>
@@ -159,11 +206,32 @@ export function createIndexedDBRecordStorage(
       await awaitTx(tx);
     },
 
+    async readMeta(key) {
+      const db = await openDb();
+      return new Promise((resolve, reject) => {
+        const req = db
+          .transaction(META_STORE, "readonly")
+          .objectStore(META_STORE)
+          .get(key);
+        req.onsuccess = () =>
+          resolve(typeof req.result === "string" ? req.result : undefined);
+        req.onerror = () => reject(req.error);
+      });
+    },
+
+    async writeMeta(key, value) {
+      const db = await openDb();
+      const tx = db.transaction(META_STORE, "readwrite");
+      tx.objectStore(META_STORE).put(value, key);
+      await awaitTx(tx);
+    },
+
     async readPage(afterKey, limit) {
       const db = await openDb();
       return new Promise((resolve, reject) => {
         const records: StoredRecord[] = [];
-        const range = IDBKeyRange.lowerBound(afterKey, true);
+        // null means from the beginning; there is no sentinel key any more.
+        const range = afterKey === null ? null : IDBKeyRange.lowerBound(afterKey, true);
         const req = db
           .transaction(OBJECT_STORE, "readonly")
           .objectStore(OBJECT_STORE)

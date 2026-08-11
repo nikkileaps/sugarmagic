@@ -42,7 +42,8 @@ import type {
 } from "@sugarmagic/runtime-core";
 import {
   createSyncedRecordStore,
-  getActiveUserId
+  getActiveUserId,
+  isSyncLoopRunning
 } from "@sugarmagic/runtime-core";
 import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
@@ -91,9 +92,10 @@ import {
   initLearnerStores,
   type LearnerStores
 } from "./learner/learner-stores";
-import type {
-  LearnerProfileCoreStore,
-  PersistedLearnerProfileCore
+import {
+  LEARNER_PROFILE_CORE_KEY,
+  type LearnerProfileCoreStore,
+  type PersistedLearnerProfileCore
 } from "./learner/persistence";
 import { SUGARLANG_PLUGIN_ID } from "../plugin-id";
 import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider";
@@ -890,7 +892,52 @@ export class SugarlangRuntimeServices {
     if (!userId) return;
     // "en" matches the ambient path's support language; a conversation that
     // carries its own pair opens that one on demand instead.
-    this.getLearnerStores(userId, targetLanguage, "en");
+    const supportLanguage = "en";
+    const stores = this.getLearnerStores(userId, targetLanguage, supportLanguage);
+    const openedAtMs = Date.now();
+    const languages = { targetLanguage, supportLanguage };
+    const syncLoopRunning = isSyncLoopRunning();
+
+    void emitTelemetry(
+      this.telemetry,
+      createTelemetryEvent("learner-storage.opened", {
+        timestamp: openedAtMs,
+        ...languages,
+        syncLoopRunning,
+        storeIds: [
+          ...(stores.cardStore ? ["cards"] : []),
+          ...(stores.profileCoreStore ? ["profile"] : [])
+        ]
+      })
+    );
+
+    // NOT AWAITED, and it must not be. The host awaits this method BEFORE it
+    // starts the sync loop, so the first pass cannot finish until after we
+    // return -- awaiting it here would wait for something this call is
+    // blocking. Reported when it lands instead.
+    void stores.whenFirstSynced.then(async () => {
+      let wordCount = 0;
+      let levelPresent = false;
+      try {
+        wordCount = await stores.cardStore.count();
+        levelPresent = Boolean(
+          await stores.profileCoreStore?.get(LEARNER_PROFILE_CORE_KEY)
+        );
+      } catch {
+        // Reporting must not be the thing that breaks a boot.
+      }
+      await emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("learner-storage.first-sync", {
+          timestamp: Date.now(),
+          ...languages,
+          syncLoopRunning,
+          waitedMs: Date.now() - openedAtMs,
+          wordCount,
+          levelPresent
+        })
+      );
+    });
   }
 
   /**
