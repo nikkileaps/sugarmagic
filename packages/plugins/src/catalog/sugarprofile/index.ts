@@ -366,7 +366,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
             payload: {
               remoteId: "sugarprofile.supabase-account-records",
               summary:
-                "public.account_records rows keyed on the authenticated user's JWT. Generic over plugin_id + store_id, so any plugin's synced storage lands here without a migration of its own. RLS gates every read + write to auth.uid() = user_id, and a trigger owns updated_at so a client cannot backdate a write to win a conflict.",
+                "Reads and writes whichever table a synced store declares. Each plugin owns its table and ships the migration that creates it, so its records land in real typed columns the database can index and constrain. RLS gates every read + write to auth.uid() = user_id, and a trigger owns updated_at so a client cannot backdate a write to win a conflict.",
               remote: accountDataRemote
             }
           }

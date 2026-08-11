@@ -115,7 +115,11 @@ export function createSupabaseRecordStorage(
       table: RemoteTableSpec,
       since: string | null,
       limit: number
-    ): Promise<{ records: RemoteRecord[]; nextSince: string | null }> {
+    ): Promise<{
+      records: RemoteRecord[];
+      cursor: string | null;
+      hasMore: boolean;
+    }> {
       // Grows only when an entire page turns out to be one timestamp, which
       // means the group cannot be split at any boundary inside it. Doubling
       // once clears a full 250-row batch; the cap stops a pathological group
@@ -142,9 +146,15 @@ export function createSupabaseRecordStorage(
         const rows = (data ?? []) as Array<Record<string, unknown>>;
 
         // A short page is the end of the account's history. Everything is
-        // here, and there is nowhere further to go.
+        // here -- including the whole of the last timestamp's group -- so the
+        // cursor CAN safely move to it. Not doing so is what made an account
+        // smaller than one page re-download itself on every pass.
         if (rows.length < pageLimit) {
-          return { records: rows.map(rowToRecord), nextSince: null };
+          return {
+            records: rows.map(rowToRecord),
+            cursor: String(rows[rows.length - 1]?.[UPDATED_AT] ?? "") || null,
+            hasMore: false
+          };
         }
 
         const lastStamp = String(rows[rows.length - 1]?.[UPDATED_AT] ?? "");
@@ -155,7 +165,8 @@ export function createSupabaseRecordStorage(
         if (kept.length > 0) {
           return {
             records: kept.map(rowToRecord),
-            nextSince: String(kept[kept.length - 1]?.[UPDATED_AT] ?? "") || null
+            cursor: String(kept[kept.length - 1]?.[UPDATED_AT] ?? "") || null,
+            hasMore: true
           };
         }
 
@@ -173,7 +184,8 @@ export function createSupabaseRecordStorage(
           );
           return {
             records: rows.map(rowToRecord),
-            nextSince: lastStamp || null
+            cursor: lastStamp || null,
+            hasMore: true
           };
         }
       }

@@ -44,6 +44,7 @@
  */
 
 import {
+  REMOTE_TABLE_RESERVED_COLUMNS,
   listSyncedRecordStores,
   setSyncedStoreRegistrationListener,
   type RemoteRecordStorageAdapter,
@@ -133,6 +134,38 @@ export function createSyncEngine(
    */
   let registeredDuringPass = false;
 
+/**
+ * The plugin's columns with any of the mechanism's own removed.
+ *
+ * Construction checks this too, by calling `toColumns` with an empty record --
+ * but a spec that reads a nested field throws on that probe and is skipped, so
+ * the check can be silently absent for exactly the specs most likely to be
+ * doing something unusual. This is the same rule applied where the real data
+ * is.
+ *
+ * STRIPS RATHER THAN THROWS. A player mid-session is not the person who can
+ * act on it, and refusing to sync is worse for them than sending the columns
+ * that are genuinely theirs. Writing `updated_at` from a client would let a
+ * device with a wrong clock win every conflict it took part in; writing
+ * `user_id` would let it write into someone else's rows.
+ */
+  function withoutReservedColumns(
+    table: SyncHandle["table"],
+    data: unknown,
+    log: SyncLogger
+  ): Record<string, unknown> {
+    const columns = table.toColumns(data);
+    const clash = REMOTE_TABLE_RESERVED_COLUMNS.filter((name) => name in columns);
+    if (clash.length === 0) return columns;
+    log.warn(
+      `[sync-engine] table "${table.tableName}" produced ${clash.join(", ")}, ` +
+        "which this mechanism owns. Dropped from what is sent."
+    );
+    const safe = { ...columns };
+    for (const name of clash) delete safe[name];
+    return safe;
+  }
+
   async function syncStore(
     handle: SyncHandle,
     remote: RemoteRecordStorageAdapter,
@@ -168,9 +201,26 @@ export function createSyncEngine(
         result.pulled += applied.applied;
         result.conflictsKeptLocal += applied.skippedLocalNewer;
       }
-      if (!page.nextSince) break;
-      since = page.nextSince;
-      await handle.setWatermark(since);
+      // PERSISTED ON EVERY PAGE INCLUDING THE LAST. This only ran on a
+      // continuation once, so an account smaller than one page never advanced
+      // its cursor at all and re-read the player's entire history every pass,
+      // forever.
+      const nextCursor = page.cursor;
+      const advanced = nextCursor !== null && nextCursor !== since;
+      if (advanced) {
+        since = nextCursor;
+        await handle.setWatermark(nextCursor);
+      }
+      if (!page.hasMore) break;
+      if (!advanced) {
+        // More to come, but nothing moved -- asking again would repeat this
+        // page for as long as the game is open.
+        logger.warn(
+          `[sync-engine] ${handle.storeKey.pluginId}:${handle.storeKey.storeId} ` +
+            "reported more records without moving the cursor; stopping this pass."
+        );
+        break;
+      }
     }
     // AFTER the whole pull, not after the first page: every page of a first
     // pull is still the first pull, and flipping this early would let page two
@@ -193,7 +243,7 @@ export function createSyncEngine(
         columns:
           record.deleted || record.data === null
             ? null
-            : handle.table.toColumns(record.data),
+            : withoutReservedColumns(handle.table, record.data, logger),
         deleted: record.deleted,
         // Ignored by the server, which stamps its own.
         updatedAt: new Date(record.updatedAtMs).toISOString()
@@ -266,6 +316,11 @@ export function createSyncEngine(
 
   function schedule(delayMs: number): void {
     if (stopped) return;
+    // Cleared first. An event-driven pass (sign-in, reconnect, tab hidden)
+    // schedules the next one too, and without this the timer already pending
+    // survived -- so every such event permanently added another repeating
+    // chain, and the loop ran more and more often the longer someone played.
+    if (timer !== null) clearTimeout(timer);
     timer = setTimeout(() => {
       void run("interval");
     }, delayMs);

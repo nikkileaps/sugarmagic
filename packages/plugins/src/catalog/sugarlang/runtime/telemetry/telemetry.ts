@@ -1247,6 +1247,28 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
    *  worst, which is already this sink's posture on failure. */
   private lastToken = "";
 
+  /**
+   * Warmed at construction so the unload path has a token even when nothing
+   * flushed first.
+   *
+   * A session shorter than one flush interval sends exactly one request -- the
+   * one on the way out -- and that used to go unauthenticated, because the only
+   * thing that ever set `lastToken` was a flush that had not happened. The
+   * gateway answers 401 and the whole session is thrown away: precisely the
+   * short sessions worth looking at.
+   *
+   * Fire-and-forget: a sink must not make constructing it wait on the network.
+   */
+  private warmToken(): void {
+    void this.getAccessToken()
+      .then((token) => {
+        if (!this.lastToken) this.lastToken = token?.trim() ?? "";
+      })
+      .catch(() => {
+        // No token is the same as the old behaviour; nothing to add.
+      });
+  }
+
   constructor(options: {
     proxyBaseUrl: string;
     flushIntervalMs?: number;
@@ -1258,6 +1280,7 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
     this.url = `${base}/api/sugarlang/telemetry`;
     this.flushIntervalMs = options.flushIntervalMs ?? 5000;
     this.getAccessToken = options.getAccessToken ?? getActiveAccessToken;
+    this.warmToken();
     if (typeof window !== "undefined") {
       window.addEventListener("pagehide", this.handlePageHide);
     }

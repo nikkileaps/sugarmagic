@@ -283,7 +283,18 @@ export interface RemoteRecordStorageAdapter {
     table: RemoteTableSpec,
     since: string | null,
     limit: number
-  ): Promise<{ records: RemoteRecord[]; nextSince: string | null }>;
+  ): Promise<{
+    records: RemoteRecord[];
+    /**
+     * Where to resume next time. Set on the LAST page too, not just on a
+     * continuation -- an account smaller than one page never advanced its
+     * cursor otherwise, so every pass re-downloaded the player's whole history
+     * for as long as the game was open.
+     */
+    cursor: string | null;
+    /** Whether more pages are waiting right now. */
+    hasMore: boolean;
+  }>;
   push(
     key: RecordStoreKey,
     table: RemoteTableSpec,
@@ -422,10 +433,20 @@ function resolveAdapter(
   if (spec.adapter) return spec.adapter;
   try {
     return createIndexedDBRecordStorage(storeKey);
-  } catch {
+  } catch (error) {
     // Every existing plugin store degrades this way when IndexedDB is absent
     // (tests, SSR). Data does not outlive the session, which is the honest
     // outcome when there is nowhere to put it.
+    //
+    // SAID OUT LOUD, because this used to be a bare `catch` that swallowed
+    // everything -- including the deliberate refusal from `storage-names` when
+    // the game id is missing. That throw exists to catch a bad build, and it
+    // was being turned into "storage silently works until you close the tab".
+    console.warn(
+      `[sync-engine] no durable storage for "${spec.pluginId}:${spec.storeId}"; ` +
+        "this session's records will be lost when the tab closes.",
+      error
+    );
     return createMemoryRecordStorage();
   }
 }
@@ -573,6 +594,11 @@ function createStore<TData>(
       // leaving it listed would have a wipe report success for a store that
       // did nothing.
       unregisterPlayerStore(spec.pluginId, spec.storeId);
+      // AND out of the sync loop, which was missed. A closed store left on that
+      // list keeps being reconciled -- and on an account switch that means the
+      // previous account's store is still being pushed and pulled after the
+      // player has moved on.
+      unregisterSyncedRecordStore(storeKey);
       await adapter.close?.();
     }
   };

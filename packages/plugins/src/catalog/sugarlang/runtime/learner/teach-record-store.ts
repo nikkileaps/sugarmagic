@@ -177,7 +177,10 @@ export function createTeachRecordStore(learnerId: string): TeachRecordStore {
   // database by name -- the guess that silently stopped matching once already.
   registerPlayerStore({
     pluginId: SUGARLANG_PLUGIN_ID,
-    storeId: "teach-records",
+    // SCOPED TO THE LEARNER. The wipe registry is keyed on pluginId:storeId, so
+    // a fixed id meant a second language pair replaced the first and only the
+    // last one opened could be cleared.
+    storeId: `teach-records:${learnerId}`,
     clear: () => store.clearAll()
   });
   return store;

@@ -329,7 +329,9 @@ export function createEncounterDebtLedger(learnerId: string): EncounterDebtLedge
   // database by name -- the guess that silently stopped matching once already.
   registerPlayerStore({
     pluginId: SUGARLANG_PLUGIN_ID,
-    storeId: "encounter-debt",
+    // Scoped for the same reason as the teach records: one entry per learner
+    // in the wipe registry, not one per plugin.
+    storeId: `encounter-debt:${learnerId}`,
     clear: () => store.clearAll()
   });
   return store;

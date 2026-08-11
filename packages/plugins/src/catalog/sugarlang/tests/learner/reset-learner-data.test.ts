@@ -18,6 +18,7 @@
 import "fake-indexeddb/auto";
 import { IDBFactory } from "fake-indexeddb";
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
+import { signInTestAccount } from "./signed-in-test-account";
 import {
   CARD_STORE_DB_NAME_PREFIX,
   IndexedDBCardStore
@@ -38,7 +39,14 @@ import { SUGARLANG_PLUGIN_ID } from "../../plugin-id";
 // namer refuses to build a name without one -- a database with no game in its
 // name is shared by every game on the origin. The host registers this from the
 // boot payload in a real run.
-beforeEach(() => registerActiveGameId("test-game"));
+let signOut: (() => void) | undefined;
+// A signed-in account, because every per-player store is scoped to one and
+// refuses to open without it -- the same path production takes.
+beforeEach(() => {
+  registerActiveGameId("test-game");
+  signOut = signInTestAccount();
+});
+afterEach(() => signOut?.());
 
 function openRawDatabase(
   factory: IDBFactory,
@@ -202,7 +210,7 @@ describe("resetSugarlangLearnerDatabases", () => {
     // database that vanished underneath them.
     const factory = new IDBFactory();
     const store = new IndexedDBCardStore({
-      profileId: "user-test:learner-kept",
+      profileId: "user-test-account:learner-kept:it:en",
       indexedDbFactory: factory
     });
     await store.set(createLemmaCard("casa"));
@@ -254,7 +262,7 @@ describe("teach-record reset coverage", () => {
   it("re-opens cleanly after an explicit close", async () => {
     const factory = new IDBFactory();
     const store = new IndexedDBCardStore({
-      profileId: "user-test:learner-reopen",
+      profileId: "user-test-account:learner-reopen:it:en",
       indexedDbFactory: factory
     });
     await store.set(createLemmaCard("gato"));
@@ -268,7 +276,7 @@ describe("teach-record reset coverage", () => {
   it("is safe to call close before any operation and repeatedly", async () => {
     const factory = new IDBFactory();
     const store = new IndexedDBCardStore({
-      profileId: "user-test:learner-idle-close",
+      profileId: "user-test-account:learner-idle-close:it:en",
       indexedDbFactory: factory
     });
 

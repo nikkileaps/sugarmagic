@@ -115,8 +115,8 @@ async function pullEverything(rows: Row[], limit: number): Promise<string[]> {
   for (let page = 0; page < 50; page += 1) {
     const result = await storage.pull(STORE_KEY, TABLE, since, limit);
     seen.push(...result.records.map((record) => record.key));
-    if (!result.nextSince) return seen;
-    since = result.nextSince;
+    if (result.cursor) since = result.cursor;
+    if (!result.hasMore) return seen;
   }
   throw new Error("pull did not terminate");
 }

@@ -98,7 +98,8 @@ function fakeRemote(startMs = 1_000) {
       const page = all.slice(0, limit);
       return {
         records: page,
-        nextSince: all.length > limit ? (page[page.length - 1]?.updatedAt ?? null) : null
+        cursor: page[page.length - 1]?.updatedAt ?? null,
+        hasMore: all.length > limit
       };
     },
     async push(_key, _table, records) {
@@ -323,6 +324,92 @@ describe("092.6.3 - a device that has never pulled cannot overwrite the account"
     expect(await a.adapter.readPending(10)).toHaveLength(0);
   });
 
+  it("remembers how far it got even when everything fits in one page", async () => {
+    // The cursor was only written on a page CONTINUATION, so an account
+    // smaller than one page never advanced it -- and asked for the player's
+    // entire history again every thirty seconds for as long as they played.
+    // Silent, and invisible without watching the network.
+    const { remote, seed } = fakeRemote();
+    seed({
+      key: "known",
+      columns: { lemma: "known" },
+      deleted: false,
+      updatedAt: new Date(5_000).toISOString()
+    });
+    makeStore("user-alice");
+
+    // What each pass ASKS FOR is the thing under test. The number of requests
+    // is identical either way -- one short page each time -- so counting them
+    // proves nothing; the question is whether the second one starts from where
+    // the first finished.
+    const asked: Array<string | null> = [];
+    const watched: RemoteRecordStorageAdapter = {
+      pull: async (key, table, since, limit) => {
+        asked.push(since);
+        return remote.pull(key, table, since, limit);
+      },
+      push: remote.push
+    };
+    const engine = createSyncEngine({ remote: watched, ownerWindow: null });
+
+    await engine.syncNow("first");
+    await engine.syncNow("second");
+
+    expect(asked[0]).toBeNull();
+    expect(asked[1]).toBe(new Date(5_000).toISOString());
+  });
+
+  it("does not stack up extra timers when events trigger passes", async () => {
+    // `schedule` overwrote the pending timer handle without clearing it, so an
+    // event-driven pass left the old chain ticking as well. Every reconnect or
+    // tab-hide permanently added another chain, and the loop ran more and more
+    // often the longer someone played.
+    //
+    // Driven through the WINDOW EVENTS, not `syncNow`: the public one-shot does
+    // not schedule anything, so calling it proves nothing about timers.
+    vi.useFakeTimers();
+    const { remote } = fakeRemote();
+    let passes = 0;
+    const counted: RemoteRecordStorageAdapter = {
+      pull: async (key, table, since, limit) => {
+        passes += 1;
+        return remote.pull(key, table, since, limit);
+      },
+      push: remote.push
+    };
+    const listeners = new Map<string, () => void>();
+    const ownerWindow = {
+      addEventListener: (type: string, handler: EventListenerOrEventListenerObject) => {
+        listeners.set(type, handler as () => void);
+      },
+      removeEventListener: (type: string) => {
+        listeners.delete(type);
+      }
+    };
+    makeStore("user-alice");
+    const engine = createSyncEngine({
+      remote: counted,
+      ownerWindow,
+      intervalMs: 1_000
+    });
+
+    await engine.start();
+
+    // Three reconnects. Each runs a pass AND schedules the next tick.
+    for (let i = 0; i < 3; i += 1) {
+      listeners.get("online")?.();
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    const afterEvents = passes;
+
+    // One interval elapses. However many events fired, exactly one timer
+    // should be outstanding, so exactly one more pass runs.
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(passes - afterEvents).toBe(1);
+    engine.stop();
+  });
+
   it("finishes the wait immediately when there is no backend to sync against", async () => {
     // A project with no account plugin is supported, not broken. A caller
     // waiting on this must not wait forever.
@@ -498,15 +585,20 @@ describe("092.6.3 - conflicts and failures", () => {
 
   it("THE ONE THAT MATTERS: a remote record cannot overwrite an unpushed local edit, and the skip is reported", async () => {
     const { remote, seed } = fakeRemote();
+    const a = makeStore("user-alice");
+    // As above: steady state, not a device that has never pulled.
+    await createSyncEngine({ remote, ownerWindow: null }).syncNow("warm-up");
+
+    // SEEDED AFTER THE WARM-UP, so the pass below genuinely sees it as new.
+    // Seeding first only worked while the cursor never advanced -- the record
+    // was pulled by the warm-up and then handed over again, which is the
+    // re-reading bug, not a conflict.
     seed({
       key: "contested",
       columns: { lemma: "server" },
       deleted: false,
       updatedAt: new Date(9_999_999).toISOString()
     });
-    const a = makeStore("user-alice");
-    // As above: steady state, not a device that has never pulled.
-    await createSyncEngine({ remote, ownerWindow: null }).syncNow("warm-up");
     await a.store.put("contested", { lemma: "local" });
 
     const info = vi.fn();
@@ -604,7 +696,7 @@ describe("092.6.3 - conflicts and failures", () => {
   it("a server that accepts nothing does not spin forever on the same batch", async () => {
     // Without the guard this loops re-sending the identical records.
     const stubborn: RemoteRecordStorageAdapter = {
-      pull: async () => ({ records: [], nextSince: null }),
+      pull: async () => ({ records: [], cursor: null, hasMore: false }),
       push: async () => ({ accepted: [] })
     };
     const a = makeStore("user-alice");

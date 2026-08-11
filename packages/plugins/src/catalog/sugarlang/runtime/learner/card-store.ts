@@ -21,7 +21,7 @@
  */
 
 import type { LemmaCard } from "../types";
-import { gameScopedStorageName } from "@sugarmagic/runtime-core";
+import { gameScopedStorageName, getActiveUserId } from "@sugarmagic/runtime-core";
 
 export const CARD_STORE_PAGE_SIZE = 250;
 
@@ -37,35 +37,42 @@ export const CARD_STORE_PAGE_SIZE = 250;
 export const CARD_STORE_DB_NAME_PREFIX = "sugarlang-cards";
 
 /**
- * How many leading segments of a learner id identify the ACCOUNT. One today;
- * named so the check below reads as a rule rather than a magic number.
- */
-const LEARNER_ID_ACCOUNT_SEGMENTS = 1;
-
-/**
  * Refuse to open a per-player database that is not scoped to an account
  * (Plan 092.6.1).
+ *
+ * CHECKED AGAINST THE SIGNED-IN ACCOUNT, not against the shape of the string.
+ * A learner id is `userId:playerEntityId:target:support`, but `playerEntityId`
+ * is itself something like `wordlark:player:default` -- so the id has four
+ * FIELDS and six colons, and counting segments cannot tell a scoped id from an
+ * unscoped one for any player definition. Two versions of this guard have now
+ * got that wrong in opposite directions: "more than one segment" let the exact
+ * pre-092 unscoped id through, and "exactly four" rejected every real one.
+ *
+ * Asking whether the id leads with the account we are actually signed in as has
+ * no such ambiguity, and it is the property that matters -- storage named for
+ * somebody else's account is the bug.
  *
  * THROWS RATHER THAN DEGRADES, deliberately, and it is the one place in this
  * plugin's runtime that does. A missing account here is not a condition a
  * player can be in -- callers resolve the account first and defer when it is
- * not ready -- so reaching this means a caller skipped that, and the failure
- * it would otherwise cause is silent and permanent: everyone sharing the
- * browser writes into one history, and none of it can ever be attributed back
- * to a person. Falling back to a memory store would hide it just as well.
+ * not ready -- so reaching this means a caller skipped that, and the failure it
+ * would otherwise cause is silent and permanent: everyone sharing the browser
+ * writes into one history, and none of it can ever be attributed back to a
+ * person. Falling back to a memory store would hide it just as well.
  * `NpcMemoryStore` takes the same position for the same reason.
  */
 export function assertAccountScopedLearnerId(
   learnerId: string,
   storeLabel: string
 ): void {
-  const segments = learnerId.split(":").filter((part) => part.length > 0);
-  if (segments.length > LEARNER_ID_ACCOUNT_SEGMENTS) return;
+  const userId = getActiveUserId();
+  if (userId && learnerId.startsWith(`${userId}:`)) return;
   throw new Error(
     `[sugarlang] ${storeLabel} was given the learner id "${learnerId}", which ` +
-      "carries no account. Resolve the signed-in account first and defer " +
-      "construction until identity has settled -- a store opened without one " +
-      "is shared by every account using this browser."
+      `is not scoped to the signed-in account (${userId ?? "nobody signed in"}). ` +
+      "Resolve the account first and defer construction until identity has " +
+      "settled -- a store opened without one is shared by every account using " +
+      "this browser."
   );
 }
 const CARD_STORE_NAME = "lemma-cards";

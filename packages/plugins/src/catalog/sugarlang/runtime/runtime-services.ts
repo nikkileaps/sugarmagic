@@ -970,19 +970,15 @@ export class SugarlangRuntimeServices {
       return null;
     }
 
-    const languages = { targetLanguage, supportLanguage };
-    const key = `${languages.targetLanguage}:${languages.supportLanguage}`;
-    const existing = this.executionServices.get(key);
-    if (existing) {
-      return existing;
-    }
-
     // DEFER RATHER THAN GUESS. Identity settles during boot, and this can be
     // asked before it has. Returning null degrades the turn -- the caller
     // already handles it -- where inventing a learner would open a word store
     // under no account and quietly strand everything written into it. Nothing
-    // is cached under `key` here, so the next call after sign-in resolves for
+    // is cached before this point, so the next call after sign-in resolves for
     // real.
+    //
+    // RESOLVED BEFORE THE CACHE IS CONSULTED, because the account is part of
+    // the cache key below.
     const userId = resolveLearnerScope();
     if (!userId) {
       this.logger.warn(
@@ -990,6 +986,17 @@ export class SugarlangRuntimeServices {
           "This is expected during boot and should not repeat once signed in."
       );
       return null;
+    }
+
+    const languages = { targetLanguage, supportLanguage };
+    // KEYED ON THE ACCOUNT TOO. The learner id leads with it, so without it
+    // here a second account signing in on the same tab was handed the previous
+    // player's stores, reducer and learner -- everything they did would land in
+    // someone else's history.
+    const key = `${userId}:${languages.targetLanguage}:${languages.supportLanguage}`;
+    const existing = this.executionServices.get(key);
+    if (existing) {
+      return existing;
     }
 
     const languageBundle = this.getLanguageBundle(languages.targetLanguage);
