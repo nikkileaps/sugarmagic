@@ -72,14 +72,15 @@ Two storage tiers, split in
 
 2. **Lemma cards + chunk cards** -- `IndexedDBCardStore`
    (`runtime/learner/card-store.ts`), IDB database
-   `sugarlang-card-store:<learnerId>`, object store `lemma-cards` keyed by
+   `<gameId>:sugarlang-cards:<learnerId>`, object store `lemma-cards` keyed by
    `lemmaId`, paged at 250 cards. Falls back to `MemoryCardStore` when
    `indexedDB` is unavailable.
 
 3. **Teach records (085.5)** -- `IndexedDBTeachRecordStore`
    (`runtime/learner/teach-record-store.ts`), IDB database
-   `sugarlang-card-store:teach:<learnerId>` (prefix starts with
-   `CARD_STORE_DB_NAME_PREFIX`, so the reset enforcer auto-covers it).
+   `<gameId>:sugarlang-cards:teach:<learnerId>`. Every name a game creates on
+   a player's device leads with the game id; see
+   [per-player data](/docs/api/per-player-data.md#naming).
    Holds one `{ competencyId, taughtAtMs, realizingChunkId }` record per
    competency the learner has encountered for the first time.
    The no-rewrite guard (`write` is idempotent on `competencyId`) makes the
@@ -88,15 +89,23 @@ Two storage tiers, split in
 
 Consequences on reload:
 
-- **Survives:** every `LemmaCard` (FSRS history, productive strength,
-  provisional evidence), plus the Studio telemetry archive
-  (`sugarlang-telemetry` IDB).
-- **Does not survive:** the CEFR posterior, `estimatedCefrBand`, the
-  `assessment` record (placement result and confidence), session signals, and
-  the placement-status fact (`sugarlang.placement-status`, also
-  blackboard-only). A fresh session reseeds the profile core from
-  `createEmptyLearnerProfile` + the prior provider, then merges the persisted
-  cards back in via `loadLearnerProfile`.
+- **Survives, and follows the player to another device:** every `LemmaCard`
+  (FSRS history, productive strength, provisional evidence), and the profile
+  core -- `estimatedCefrBand`, the `assessment` record, and the CEFR posterior
+  that is the evidence behind the band. Both are per-player record stores; see
+  [per-player data](/docs/api/per-player-data.md).
+- **Does not survive, by design:** the current session's signals and the
+  session history. Both describe one sitting, and a sitting does not travel --
+  a second device inheriting a session it was not present for would be wrong.
+  Carrying history across devices needs it to stop growing first
+  (`sugarmagic-learner-state-tod`).
+- **Not stored at all:** `retrievability`. It is a function of elapsed time, so
+  a stored value would decay from whenever it happened to be written rather
+  than from the last review. It is recomputed on every read.
+
+Until Plan 092.6 the profile core lived only on the blackboard, which is memory
+for the life of the tab. A returning player arrived with every word intact and
+no level attached to them, and was put through placement again.
 
 **Single writer:** `LearnerStateReducer`
 (`runtime/learner/learner-state-reducer.ts`) is the only supported mutation
@@ -222,6 +231,13 @@ __sugarlangDebug.getState()          // SugarlangDebugState snapshot
   suppressed entirely (FSRS card scheduling and session accumulators still
   run). This keeps the band stable during automated verification sessions.
 - `reset()` clears the `sugarlang.learner-profile` and
-  `sugarlang.placement-status` blackboard facts and deletes every IDB
-  database whose name starts with `sugarlang-card-store` or
-  `sugarlang-telemetry` -- a full return to cold start.
+  `sugarlang.placement-status` blackboard facts, then ASKS every store this
+  plugin owns to empty itself -- words, learner core, teach records, encounter
+  debt. A synced store empties itself in a way that reaches the player's
+  account rather than only their device.
+
+  It does NOT hunt for databases by name. It used to, and once those names
+  carried the account that meant deleting the learner data of every account
+  that had ever played in that browser. A name pattern cannot tell whose data
+  it is matching. The only thing still swept by name is the author's own
+  telemetry archive, which is one database and not per player.

@@ -373,6 +373,33 @@ rules 3 and 6 (`docs/adr/005-persistence-strata.md`).
 
 ---
 
+### Learner record
+
+Something a **player** accumulated, as opposed to something an author made.
+Which words they have met and how well they know each, what level they are and
+the evidence behind it.
+
+The distinction from a *derived artifact* is who it belongs to, and it decides
+where the data lives. A derived artifact is made once from authored content and
+is the same for everybody, so it ships with the game as an asset. A learner
+record is different for every player, did not exist when the game was built,
+and belongs to the person rather than the copy of the game.
+
+So it lives in per-player storage: written on the player's device, reconciled
+with their account afterwards, and keyed on the account so two people sharing a
+browser do not share a vocabulary. See
+[per-player data](/docs/api/per-player-data.md) for the mechanism and
+[ADR 029](/docs/adr/029-per-player-data-that-follows-the-player.md) for why it
+is shaped that way.
+
+Two things are deliberately NOT learner records, though they sit next to them.
+A *session* -- this sitting, its turn count, its signals -- describes one visit
+and does not travel to another device. And `retrievability` is not stored at
+all: it is a function of how long it has been since a review, so a stored value
+would decay from whenever it was written instead of from the last review.
+
+---
+
 ## Terms that mean two things
 
 Worth flagging, because each has bitten:

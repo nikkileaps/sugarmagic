@@ -15,7 +15,9 @@ accumulate durable memory of the player rather than only recalling the last
 conversation. Memory has two tiers:
 
 1. **Durable record** -- a per-NPC, per-playthrough JSON record stored in
-   the browser's IndexedDB (`sugaragent-npc-memory:${userId}` database).
+   the browser's IndexedDB (`<gameId>:sugaragent-npc-memory:${userId}`).
+   Every name a game creates on a player's device leads with the game id, so
+   two projects previewed on one origin cannot read each other's memory.
    Written once per conversation end (conversation summarizer). Survives game
    restarts. Keyed by `(userId, playthroughId, npcDefinitionId)`. As of Plan
    080 the list fields **accumulate scored items across conversations**
@@ -109,7 +111,13 @@ truncated response fails validation and drops the whole summary).
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/memory/npc-memory-store.ts`
 
-IndexedDB-backed store, scoped per user (database name) and keyed by
+IndexedDB-backed store on the player's device only -- NPC memory does not yet
+follow a player to another machine. It is a per-player record in every sense
+except that one, and converting it to the shared mechanism
+([per-player data](/docs/api/per-player-data.md)) is the outstanding work;
+the mechanism was designed with this store as its second customer.
+
+Scoped per user (database name) and keyed by
 `(userId, playthroughId, npcDefinitionId)`. All operations serialize on a
 single promise chain (a load issued after a merge observes it).
 

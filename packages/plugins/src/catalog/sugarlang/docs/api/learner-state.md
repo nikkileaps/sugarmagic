@@ -119,8 +119,11 @@ Budgeter-owned productive-strength decay constants live in
 
 Implementations:
 
-- `MemoryCardStore` for tests and non-persistent preview fallback
-- `IndexedDBCardStore` for durable browser-backed storage
+- `MemoryCardStore` for tests and for a browser with no storage at all
+- the synced card store, which keeps a learner's words in per-player storage so
+  they follow the player to another device. See
+  [per-player data](/docs/api/per-player-data.md).
+- `IndexedDBCardStore` -- direct browser storage, no longer the runtime path
 
 Paging is explicit through `listPage()` and chunked `bulkSet()` writes so large
 profiles do not require one monolithic persistence operation.
@@ -142,8 +145,18 @@ Handled event kinds:
 - `decay-provisional-evidence`
 
 The reducer reads the latest profile, produces a new immutable state, persists
-changed cards, writes the updated profile back through the blackboard owner id,
-and emits telemetry audit events.
+changed cards, and emits telemetry audit events.
+
+The profile core is written to TWO places, and they are not the same kind of
+thing. The blackboard copy is what the rest of a session reads, and it lasts as
+long as the tab. The durable copy is a per-player record that outlives the tab
+and follows the player to another device -- their level, how it was arrived at,
+and the evidence behind it. Only the second one makes a returning player a
+returning player; before it existed they were re-placed every session.
+
+Cards are NOT copied into the core record: they are records of their own in the
+same store, and duplicating them would double every write and give the two
+copies a chance to disagree.
 
 ## Placement Seeding
 
