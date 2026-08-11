@@ -100,13 +100,28 @@ The IDB database name is `sugarlang-variant-cache:${workspaceId}` where
 is `"sugarlang-variants"`. `MemoryVariantCache` is used in tests and server-side
 bake runs.
 
-The runtime variant cache is wired through the preview boot payload. Studio
-includes `studioWorkspaceId` in `SugarlangPreviewBootPayload`; the plugin `init`
-reads it via `extractSugarlangStudioWorkspaceId` and calls
-`services.wireStudioVariantCache(studioWorkspaceId)`, which instantiates an
-`IndexedDBVariantCache` against the Studio origin's IDB (shared because Studio
-and Preview run on the same origin). If `studioWorkspaceId` is absent from the
-boot payload, `variantCache` is undefined and the middleware degrades silently.
+ONE SOURCE PER HOST, and never a fallback chain between them.
+
+In **Studio** the live workspace database wins, so a variant edited in the
+popover appears in Preview without saving first.
+
+In a **deployed game** the variants come from the file the game shipped with
+(`assets/sugarlang/variants.json`), loaded once at plugin init into an
+in-memory cache and served from there. Both places that look up a variant --
+scripted dialogue lines and item or document text -- read the same one.
+
+A chain, where the deployed game tried the database and fell back to the file,
+is how the absence of the file went unnoticed for months: a working source
+covers for a broken one and nothing reports the difference. Until Plan 092.4 a
+deployed game had no variants at all, so every scripted line and every item
+description rendered the authored English at every band, with the graded text
+sitting unread in a file the player had already downloaded.
+
+The in-memory cache is sized from the shipped set rather than left at its
+default, which evicts least-recently-used silently -- a line would render
+graded text one moment and English the next with nothing in the log. That
+ceiling is a workaround for the file not being scoped per episode
+(`sugarmagic-boot-scoping-j24`).
 
 On a cache miss at runtime, the middleware serves authored English -- there is no substitution fallback (Tier
 A1) so the turn always completes.
@@ -156,19 +171,20 @@ interface LineIntentFields {
 }
 ```
 
-At bake time, `extractIntent` (compile-scheduler intent pipeline, wired in
-`rebuildSugarlangCompileCache` in 087.5) extracts a structured
-`LineIntentArtifact` from the authored English text and the authored intent
-fields, stored in `IndexedDBIntentCache`. Runtime reads the intent cache to
-populate `constraint.targetVocab.introduce` from `mustConveyFacts` when a
-baked variant is used, and to match against due teachables for the live-render
-trigger.
+Authored intent is read directly off the dialogue node. Nothing extracts a
+separate artifact from it.
 
-The intent content hash is computed by `buildIntentContentHash(nodeId, text,
-intent?)` (intent-cache.ts), shared between the bake pipeline and the runtime.
-Do not use `buildVariantContentHash` for intent keys -- that function uses
-`JSON.stringify({})` on both sides deliberately (intent does not factor into
-variant cache hits).
+A bake pass used to: it called the gateway per line, built a
+`LineIntentArtifact`, and cached it for the live-render trigger to match
+against. That trigger was deleted (Tier C above), which left a pass that spent
+money every rebuild and wrote a cache nothing read -- including variant
+generation, whose only caller passes `intent: null`. Removed in Plan 092.7.
+
+Variants are keyed by `buildDialogueNodeContentHash(nodeId, text)`
+(dialogue-node-source.ts), which puts `JSON.stringify({})` in the intent slot
+deliberately: intent goes into the LLM prompt, not the key, so a cache hit
+survives a hand-authored intent edit. There is no second hash -- the separate
+intent hash went with the extraction pass.
 
 ```typescript
 interface LineIntentArtifact {

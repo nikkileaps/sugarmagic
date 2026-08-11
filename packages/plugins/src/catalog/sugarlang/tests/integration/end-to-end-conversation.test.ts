@@ -21,6 +21,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { signInTestAccount } from "../learner/signed-in-test-account";
 import {
   RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
   createBlackboardScope,
@@ -48,21 +49,12 @@ import { createSugarlangLogger } from "../../runtime/logger";
 import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import { SUGARLANG_CONSTRAINT_ANNOTATION } from "../../runtime/middlewares/shared";
 import { createTestRegion, createTestActiveScene } from "../compile/test-helpers";
-import { createBudgeterSceneLexicon } from "./scene-lexicon-fixture";
 import { clearSugarlangRuntimeCompileCache } from "../../runtime/compile/runtime-cache-state";
 import { installFetchGuard, uninstallFetchGuard, jsonResponse } from "./fetch-guard";
 import { MemoryVariantCache } from "../../runtime/compile/variant-cache";
 import type { VariantCacheEntry } from "../../runtime/compile/variant-cache";
 import { VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 
-// Minimal pre-compiled lexicon for "scene-station" with just "hola" as A1.
-// Seeded via services.seedPreviewLexicons before startSession so the budgeter
-// always prescribes "hola" for an A1 learner, making the observation test
-// independent of the budgeter's ordering heuristics.
-const HOLA_PREVIEW_LEXICON = createBudgeterSceneLexicon({
-  sceneId: "scene-station",
-  entries: [{ lemmaId: "hola", band: "A1", frequencyRank: 1 }]
-});
 
 // Minimal NPC + dialogue fixture that matches the test region overlay presences
 // (npc-orrin is placed in scene-station via createTestActiveScene).
@@ -253,13 +245,17 @@ function makeSharedSetup(
 }
 
 describe("end-to-end conversation golden", () => {
+  let clearTestAccount: (() => void) | undefined;
+
   beforeEach(() => {
+    clearTestAccount = signInTestAccount();
     // 081.5 exit criterion: the suite fails on any unmocked URL. Tests that
     // need a gateway response re-install the guard with an explicit handler.
     installFetchGuard();
     clearSugarlangRuntimeCompileCache();
   });
   afterEach(() => {
+    clearTestAccount?.();
     uninstallFetchGuard();
     clearSugarlangRuntimeCompileCache();
   });
@@ -469,7 +465,6 @@ describe("end-to-end conversation golden", () => {
 
     // Must be called before startSession triggers the first resolveForExecution
     // (which creates the language bundle and seeds the store).
-    services.seedPreviewLexicons({ lexicons: [HOLA_PREVIEW_LEXICON] });
 
     await host.startSession({
       conversationKind: "free-form",
@@ -533,7 +528,6 @@ describe("end-to-end conversation golden", () => {
     const npcText = "Hola.";
     const { telemetry, services, host } = makeSharedSetup({}, npcText);
 
-    services.seedPreviewLexicons({ lexicons: [HOLA_PREVIEW_LEXICON] });
 
     await host.startSession({
       conversationKind: "free-form",
@@ -670,7 +664,6 @@ describe("end-to-end conversation golden", () => {
     });
 
     // Seed the preview lexicon with "hola" so the budgeter prescribes it for A1.
-    services.seedPreviewLexicons({ lexicons: [HOLA_PREVIEW_LEXICON] });
 
     // The fetch guard blocks ALL /generate traffic.
     // Reinstall with explicit handler: allow nothing -- the test must make zero LLM calls.
@@ -720,7 +713,6 @@ describe("end-to-end conversation golden", () => {
       itemDefinitions: [],
       documentDefinitions: []
     });
-    services2.seedPreviewLexicons({ lexicons: [HOLA_PREVIEW_LEXICON] });
 
     const middlewares2 = [
       makeRuntimeContextMiddleware(),
@@ -914,7 +906,7 @@ describe("end-to-end conversation golden", () => {
     // constraint.targetVocab.introduce field is present and is an array --
     // no regression from the deletion.
     //
-    // With the HOLA_PREVIEW_LEXICON seeded, the teacher's FallbackTeacherPolicy
+    // The teacher's FallbackTeacherPolicy
     // (A1 learner) will include "hola" in the introduce list even without an
     // explicit prescription. It then substitutes forms from that
     // list. The introduce list in the constraint after the middleware runs must

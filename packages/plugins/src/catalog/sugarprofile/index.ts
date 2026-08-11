@@ -30,6 +30,7 @@ import { createCookieSessionStorage } from "./runtime/cookie-session-storage";
 import { createSupabaseIdentityProvider } from "./runtime/identity";
 import { createSupabaseGameSaveStore } from "./runtime/save-store";
 import { createSupabaseProfileStore } from "./runtime/profile-store";
+import { createSupabaseRecordStorage } from "./runtime/supabase-record-storage";
 
 export const SUGARPROFILE_PLUGIN_ID = "sugarprofile";
 
@@ -309,6 +310,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       });
       const saveStore = createSupabaseGameSaveStore({ client });
       const profileStore = createSupabaseProfileStore({ client });
+      const accountDataRemote = createSupabaseRecordStorage(client);
       return {
         pluginId: configuration.pluginId,
         displayName: "SugarProfile",
@@ -353,6 +355,19 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
                 "public.profiles row keyed on the authenticated user's JWT. Auto-create trigger on auth.users insert means a row exists for every signed-up user.",
               status: "ready",
               store: profileStore
+            }
+          },
+          {
+            pluginId: configuration.pluginId,
+            contributionId: "sugarprofile.supabase-record-storage",
+            kind: "accountData.remote",
+            displayName: "Supabase Account Record Store",
+            priority: 100,
+            payload: {
+              remoteId: "sugarprofile.supabase-account-records",
+              summary:
+                "Reads and writes whichever table a synced store declares. Each plugin owns its table and ships the migration that creates it, so its records land in real typed columns the database can index and constrain. RLS gates every read + write to auth.uid() = user_id, and a trigger owns updated_at so a client cannot backdate a write to win a conflict.",
+              remote: accountDataRemote
             }
           }
         ]

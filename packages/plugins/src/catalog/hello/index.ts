@@ -48,7 +48,6 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
               }
             ]
           : [],
-        serializeState: () => ({ enabled: configuration.enabled })
       };
     }
   },

@@ -587,7 +587,7 @@ export function projectSceneContextSources(
 
   // Dialogue is projected per NPC rather than per node: the extractor is asking
   // what the scene is ABOUT, and one line rarely is. Per-line meaning is the
-  // LineIntentExtractor's job, at its own scope.
+  // a per-line concern, at its own scope.
   const dialogueProseByNpc = new Map<string, string[]>();
   for (const dialogue of context.dialogues) {
     const boundNpcId = dialogue.interactionBinding.npcDefinitionId;

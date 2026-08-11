@@ -169,7 +169,8 @@ import {
   validateMechanicsDefinition,
   bakeNavMesh,
   buildRegionNavMeshInput,
-  computeNavMeshInputHash
+  computeNavMeshInputHash,
+  registerActiveGameId
 } from "@sugarmagic/runtime-core";
 import {
   createShellStore,
@@ -256,9 +257,68 @@ function renderPluginSectionGroup(
 
   return sections.map((section) => (
     <Fragment key={`${section.pluginId}:${section.sectionId}`}>
-      {section.render(props)}
+      {section.render({
+        ...props,
+        writeAssetFile: writeProjectAssetFile,
+        readAssetFile: readProjectAssetFile,
+        requestSave: requestSaveFromPlugin
+      })}
     </Fragment>
   ));
+}
+
+/**
+ * Plan 092.2 — lets a plugin put a derived artifact into the project's
+ * `assets/`, which is how it reaches a deployed game.
+ *
+ * Injected here rather than spelled out at each of the six prop sites: it
+ * varies with nothing, so repeating it six times would only create six places
+ * to forget it.
+ *
+ * Mirrors the navmesh bake step for step, including the second line, which is
+ * load-bearing: `readBlobFile` intermittently returns null for a file written
+ * moments earlier, so the in-memory blob is published to the asset-source
+ * store rather than read back off disk.
+ */
+async function writeProjectAssetFile(
+  relativeAssetPath: string,
+  blob: Blob
+): Promise<void> {
+  const { handle } = projectStore.getState();
+  if (!handle) {
+    throw new Error(
+      `Cannot write "${relativeAssetPath}": no project is open.`
+    );
+  }
+  if (!relativeAssetPath.startsWith("assets/")) {
+    // Everything outside assets/ is either authored truth or a generated file
+    // the save owns. A plugin writing there would be writing behind the
+    // project's back, and the deploy would not ship it anyway.
+    throw new Error(
+      `Plugin asset paths must start with "assets/": got "${relativeAssetPath}".`
+    );
+  }
+  await writeBlobFile(handle, relativeAssetPath.split("/"), blob);
+  assetSourceStore.getState().setSource(relativeAssetPath, blob);
+}
+
+/**
+ * Plan 092.2 — the read half. Serves the copy the asset-source store already
+ * holds, which is populated on project open for every declared path.
+ *
+ * Going through the store rather than the disk is deliberate: `readBlobFile`
+ * intermittently returns null just after a write, and this file is declared,
+ * so opening the project already loaded it.
+ */
+async function readProjectAssetFile(
+  relativeAssetPath: string
+): Promise<Blob | null> {
+  const url = assetSourceStore.getState().sources[relativeAssetPath];
+  if (!url) {
+    return null;
+  }
+  const response = await fetch(url);
+  return response.ok ? await response.blob() : null;
 }
 
 const shellStore = createShellStore("build");
@@ -884,6 +944,11 @@ async function postPreviewBootMessage(
       creditsDefinition: session.gameProject.creditsDefinition,
       // Plan 059 §059.3 — entry title sequence's first card.
       gameTitle: session.gameProject.displayName,
+      // Plan 092.6 — Preview serves every project from ONE origin, so without
+      // this two projects share the same databases and read each other's
+      // saves and learner data. displayName is for humans; the id is what
+      // storage is keyed on.
+      gameId: session.gameProject.identity.id,
       assetSources,
       // Story 47.10.5 — authored fresh-start record. Studio preview
       // mirrors the published-web boot.json shape so a "New Game"
@@ -932,6 +997,19 @@ export function App() {
   const projectHandle = useStore(projectStore, (s) => s.handle);
   const session = useStore(projectStore, (s) => s.session);
   const previewWindow = useStore(previewStore, (s) => s.previewWindow);
+
+  // Plan 092.6 — Studio itself needs the open project's id, because some
+  // author-facing panels read the PLAYER's storage directly (the SugarProfile
+  // panel's anonymous-user row and its Regenerate button). Those names lead
+  // with the game, so without this they cannot be built and the panel throws.
+  //
+  // Registered from the open project rather than from a preview boot: Studio
+  // and the Preview iframe are separate documents with separate copies of this
+  // registry, and the panel is reachable whether or not Preview is running.
+  const openProjectId = session?.gameProject.identity.id ?? null;
+  useEffect(() => {
+    registerActiveGameId(openProjectId);
+  }, [openProjectId]);
 
   const isDirty = session?.isDirty ?? false;
   const undoCount = session?.undoStack.length ?? 0;

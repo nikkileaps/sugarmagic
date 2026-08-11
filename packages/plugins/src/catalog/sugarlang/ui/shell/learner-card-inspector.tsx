@@ -65,6 +65,19 @@ async function readStoreAll<T>(dbName: string, storeName: string): Promise<T[]> 
   });
 }
 
+/**
+ * The learner id out of a storage name, whatever leads it.
+ *
+ * Slicing a fixed number of characters off the front assumed the name STARTED
+ * with the prefix. It does not any more -- the game id comes first -- and the
+ * old arithmetic silently produced a mangled id rather than failing.
+ */
+function learnerIdFromDbName(dbName: string, prefix: string): string {
+  const at = dbName.indexOf(prefix);
+  if (at < 0) return dbName;
+  return dbName.slice(at + prefix.length).replace(/^:/, "");
+}
+
 async function loadAllProfiles(): Promise<ProfileSnapshot[]> {
   if (typeof indexedDB === "undefined" || typeof indexedDB.databases !== "function") {
     return [];
@@ -72,19 +85,27 @@ async function loadAllProfiles(): Promise<ProfileSnapshot[]> {
 
   const allDbs = await indexedDB.databases();
 
+  // MATCHED ANYWHERE IN THE NAME, NOT AT THE FRONT.
+  //
+  // These databases lead with the GAME id now (`gameScopedStorageName`), so
+  // `{game}:sugarlang-cards:{learnerId}` no longer starts with the prefix this
+  // used to test. The panel matched nothing and showed an empty list, which
+  // reads exactly like a player who has learned nothing.
   const cardDbNames = allDbs
     .map((d) => d.name ?? "")
-    .filter((n) => n.startsWith(CARD_STORE_DB_NAME_PREFIX) && !n.startsWith(TEACH_RECORD_DB_NAME_PREFIX));
+    .filter(
+      (n) => n.includes(CARD_STORE_DB_NAME_PREFIX) && !n.includes(TEACH_RECORD_DB_NAME_PREFIX)
+    );
 
   const teachDbNames = allDbs
     .map((d) => d.name ?? "")
-    .filter((n) => n.startsWith(TEACH_RECORD_DB_NAME_PREFIX));
+    .filter((n) => n.includes(TEACH_RECORD_DB_NAME_PREFIX));
 
   const profileMap = new Map<string, ProfileSnapshot>();
 
   await Promise.all(
     cardDbNames.map(async (dbName) => {
-      const learnerId = dbName.slice(CARD_STORE_DB_NAME_PREFIX.length + 1);
+      const learnerId = learnerIdFromDbName(dbName, CARD_STORE_DB_NAME_PREFIX);
       const allCards = await readStoreAll<LemmaCard>(dbName, LEMMA_CARDS_STORE);
       const exponentCards = allCards.filter((c) => isExponentCardKey(c.lemmaId));
       profileMap.set(learnerId, { learnerId, exponentCards, teachRecords: [] });
@@ -93,7 +114,7 @@ async function loadAllProfiles(): Promise<ProfileSnapshot[]> {
 
   await Promise.all(
     teachDbNames.map(async (dbName) => {
-      const learnerId = dbName.slice(TEACH_RECORD_DB_NAME_PREFIX.length);
+      const learnerId = learnerIdFromDbName(dbName, TEACH_RECORD_DB_NAME_PREFIX);
       const teachRecords = await readStoreAll<TeachRecord>(dbName, TEACH_RECORDS_STORE);
       const existing = profileMap.get(learnerId);
       if (existing) {

@@ -24,6 +24,7 @@ import type {
   QuestNodeDefinition,
   RegionDocument
 } from "@sugarmagic/domain";
+import type { SceneContextModel } from "../../runtime/contracts/scene-context";
 import { compareCefrBands } from "../../runtime/cefr";
 import { CEFR_BAND_ORDER as SCENE_BANDS } from "../../runtime/learner";
 import { MorphologyLoader } from "../../runtime/classifier/morphology-loader";
@@ -34,15 +35,15 @@ import { SUGARLANG_COMPILE_PIPELINE_VERSION } from "../../runtime/compile/conten
 import { SugarlangGatewayClient } from "../../runtime/llm/gateway-client";
 import { SugarlangAuthoringCompileScheduler } from "../../runtime/compile/compile-scheduler";
 import { IndexedDBVariantCache } from "../../runtime/compile/variant-cache";
-import { IndexedDBIntentCache } from "../../runtime/compile/intent-cache";
-import {
-  LINE_INTENT_PROMPT_VERSION,
-  LineIntentExtractor
-} from "../../runtime/compile/line-intent-extractor";
 import {
   SCENE_CONTEXT_PROMPT_VERSION,
   SceneContextExtractor
 } from "../../runtime/compile/scene-context-extractor";
+import {
+  SUGARLANG_ARTIFACT_SCHEMA_VERSION as ARTIFACT_SCHEMA_VERSION,
+  SUGARLANG_SCENE_CONTEXT_ASSET_PATH as SCENE_CONTEXT_ASSET_PATH,
+  SUGARLANG_VARIANT_ASSET_PATH as VARIANT_ASSET_PATH
+} from "../../runtime/compile/artifact-paths";
 import { IndexedDBSceneContextCache } from "../../runtime/compile/scene-context-cache";
 import { planSceneTeaching } from "../../runtime/compile/scene-teach-plan";
 import {
@@ -177,6 +178,293 @@ export function shouldSuggestPlacementEvent(
 
 export function resolveStudioCompileWorkspaceId(gameProjectId: string | null): string {
   return `sugarlang-studio:${gameProjectId ?? "unknown-project"}`;
+}
+
+/**
+ * A derived artifact the bake produces, on its way to the project's `assets/`.
+ *
+ * `json` rather than bytes because every artifact here is JSON and the caller
+ * is the piece that knows how to make a file; keeping the encoding on that
+ * side means this module needs nothing from the platform.
+ */
+export interface SugarlangArtifact {
+  relativeAssetPath: string;
+  json: unknown;
+}
+
+// The paths and the schema version live in runtime/compile/artifact-paths,
+// because the deployed game reads these files and must not import Studio code.
+// Re-exported here so the writing side keeps one import.
+export {
+  SUGARLANG_ARTIFACT_ASSET_PATHS,
+  SUGARLANG_ARTIFACT_SCHEMA_VERSION,
+  SUGARLANG_SCENE_CONTEXT_ASSET_PATH,
+  SUGARLANG_VARIANT_ASSET_PATH
+} from "../../runtime/compile/artifact-paths";
+
+/**
+ * Sweeps every baked variant out of the browser cache into one artifact
+ * (Plan 092.2).
+ *
+ * A SWEEP RATHER THAN A PER-CLICK APPEND, deliberately. Variants have no bulk
+ * bake -- they come from popover clicks one node at a time (docs/backlog/007:
+ * "bulk variant baking has never existed in production") -- so there is no
+ * moment when "all the variants" exist except by reading the cache. Sweeping
+ * also picks up HAND-EDITED variants for free, which matters because those are
+ * authored content and losing them would be losing work, not losing a cache
+ * (ADR 005 rule 6).
+ *
+ * Rewriting the whole file on each change is affordable at this size and has
+ * the property that matters: the file is never a partial view of the cache.
+ */
+export async function collectVariantArtifact(
+  workspaceId: string
+): Promise<SugarlangArtifact | null> {
+  const cache = new IndexedDBVariantCache({ workspaceId });
+  let metas: Awaited<ReturnType<typeof cache.listEntries>>;
+  try {
+    metas = await cache.listEntries();
+  } catch {
+    return null;
+  }
+  if (metas.length === 0) {
+    return null;
+  }
+
+  // MACHINE DRAFTS ARE PRUNED; HAND-WRITTEN ONES ARE NOT.
+  //
+  // The variant key includes `variantPromptVersion`, so bumping that constant
+  // makes every older entry unreachable -- the lookup misses and the game
+  // renders authored English. `docs/backlog/007` calls that "correct for
+  // machine drafts, indefensible for authored text", and it is: a regenerated
+  // draft costs a gateway call, a hand correction costs work nobody can
+  // repeat.
+  //
+  // So a stale DRAFT is dropped, and a stale HAND EDIT is kept even though the
+  // runtime cannot currently serve it. Keeping it means the author's writing
+  // stays in the project and is still there when 007 makes it reachable again;
+  // it also leaves the orphaning visible in the file rather than silently
+  // absent. Measured on wordlark: 126 entries, 24 current drafts, 4 hand
+  // edits, ALL of them already orphaned by prompt-version bumps.
+  const entries = [];
+  for (const meta of metas) {
+    const entry = await cache.get({
+      lang: meta.lang,
+      band: meta.band,
+      contentHash: meta.contentHash,
+      variantPromptVersion: meta.variantPromptVersion
+    });
+    if (!entry) {
+      continue;
+    }
+    const isHandWritten = entry.variant.generatedByModel === "manual";
+    const isCurrentDraft =
+      meta.variantPromptVersion === VARIANT_PROMPT_VERSION;
+    if (isHandWritten || isCurrentDraft) {
+      entries.push(entry);
+    }
+  }
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return {
+    relativeAssetPath: VARIANT_ASSET_PATH,
+    json: {
+      schemaVersion: ARTIFACT_SCHEMA_VERSION,
+      promptVersion: VARIANT_PROMPT_VERSION,
+      variants: entries
+    }
+  };
+}
+
+/**
+ * Puts the variant artifact back into the browser cache, so clearing browser
+ * storage costs a reload rather than every variant ever generated -- including
+ * the hand-written ones, which cannot be regenerated at all.
+ *
+ * Each entry restores under its OWN key, so a line edited since the bake stays
+ * a miss instead of answering with text about the old wording.
+ */
+export async function restoreVariantsFromArtifact(
+  workspaceId: string,
+  readAssetFile: (relativeAssetPath: string) => Promise<Blob | null>
+): Promise<number> {
+  let parsed: unknown;
+  try {
+    const blob = await readAssetFile(VARIANT_ASSET_PATH);
+    if (!blob) {
+      return 0;
+    }
+    parsed = JSON.parse(await blob.text());
+  } catch {
+    return 0;
+  }
+
+  const variants = (parsed as { variants?: unknown })?.variants;
+  if (!Array.isArray(variants)) {
+    return 0;
+  }
+
+  const cache = new IndexedDBVariantCache({ workspaceId });
+  let restored = 0;
+  for (const entry of variants as Array<{ key?: unknown; variant?: unknown }>) {
+    const key = entry?.key as
+      | { lang?: string; band?: CEFRBand; contentHash?: string; variantPromptVersion?: string }
+      | undefined;
+    if (!key?.lang || !key?.band || !key?.contentHash || !entry?.variant) {
+      continue;
+    }
+    await cache.set({
+      key: {
+        lang: key.lang,
+        band: key.band,
+        contentHash: key.contentHash,
+        variantPromptVersion: key.variantPromptVersion ?? VARIANT_PROMPT_VERSION
+      },
+      variant: entry.variant as BakedLineVariant
+    });
+    restored += 1;
+  }
+  return restored;
+}
+
+/**
+ * Sweeps every scene context out of the browser cache into one artifact
+ * (Plan 092.2).
+ *
+ * A SWEEP, NOT A CAPTURE DURING EXTRACTION. The first version of this
+ * collected models as the extractor produced them, which looked right and was
+ * wrong: `compile-scheduler.ts` skips extraction entirely on a cache hit
+ * (`if (cached) { ...; continue; }`), so a project that had been baked before
+ * -- which is every real project -- produced no models and therefore no file.
+ * It would only ever have worked on a first-ever bake.
+ *
+ * Sweeping is also not the thing the plan warned against. That warning is
+ * about looking models up BY KEY (`{contentHash, supportLanguage,
+ * promptVersion}`), which misses for any scene edited since the last Rebuild
+ * (docs/backlog/013). `listEntries` asks for whatever is there and cannot
+ * miss.
+ */
+export async function collectSceneContextArtifact(
+  workspaceId: string,
+  currentHashes?: Map<string, string>
+): Promise<SugarlangArtifact | null> {
+  const cache = new IndexedDBSceneContextCache({ workspaceId });
+  let metas: Awaited<ReturnType<typeof cache.listEntries>>;
+  try {
+    metas = await cache.listEntries();
+  } catch {
+    return null;
+  }
+  if (metas.length === 0) {
+    return null;
+  }
+
+  // CURRENT ONLY, or the file grows forever. The cache keeps every extraction
+  // it has ever made -- one per edit of a scene, plus one per prompt version
+  // -- and none of the old ones can ever be hit again, because the key
+  // includes the content hash and the prompt version. Measured on the wordlark
+  // project before this filter: 7 models, of which 2 were current, and 5 were
+  // superseded editions of two scenes.
+  //
+  // A stale entry is harmless in the cache and NOT harmless in the artifact:
+  // the artifact ships, so dead editions would be downloaded by every player
+  // and would accumulate for the life of the project.
+  //
+  // Without `currentHashes` this cannot tell current from stale, so it keeps
+  // everything -- a bigger file beats a file missing the model in use.
+  const isCurrent = (meta: (typeof metas)[number]): boolean => {
+    if (!currentHashes) return true;
+    const current = currentHashes.get(meta.sceneId);
+    return (
+      current === undefined ||
+      (current === meta.contentHash &&
+        meta.promptVersion === SCENE_CONTEXT_PROMPT_VERSION)
+    );
+  };
+
+  const models: SceneContextModel[] = [];
+  for (const meta of metas.filter(isCurrent)) {
+    const entry = await cache.get({
+      contentHash: meta.contentHash,
+      supportLanguage: meta.supportLanguage,
+      promptVersion: meta.promptVersion
+    });
+    if (entry) {
+      models.push(entry.model);
+    }
+  }
+  if (models.length === 0) {
+    return null;
+  }
+
+  return {
+    relativeAssetPath: SCENE_CONTEXT_ASSET_PATH,
+    json: {
+      schemaVersion: ARTIFACT_SCHEMA_VERSION,
+      promptVersion: SCENE_CONTEXT_PROMPT_VERSION,
+      sceneContextModels: models
+    }
+  };
+}
+
+/**
+ * Puts the scene-context artifact back into the browser cache (Plan 092.2).
+ *
+ * This is what makes the browser copy a CACHE rather than the only copy. The
+ * file in `assets/` is durable, so after clearing browser storage a rebuild
+ * restores from it instead of calling the gateway again -- extraction is paid
+ * work, and paying twice for an unchanged scene is the waste this prevents.
+ *
+ * The cache key is rebuilt from each model, which carries its own
+ * `contentHash`, `promptVersion` and `supportLanguage`. So a model whose scene
+ * has since been edited restores under its OLD hash and is simply never hit --
+ * stale entries cannot masquerade as current ones.
+ *
+ * Returns how many were restored; 0 covers both "no file yet" and "file held
+ * nothing", which are the same thing to a caller.
+ */
+export async function restoreSceneContextsFromArtifact(
+  workspaceId: string,
+  readAssetFile: (relativeAssetPath: string) => Promise<Blob | null>
+): Promise<number> {
+  let parsed: unknown;
+  try {
+    const blob = await readAssetFile(SCENE_CONTEXT_ASSET_PATH);
+    if (!blob) {
+      return 0;
+    }
+    parsed = JSON.parse(await blob.text());
+  } catch {
+    // A missing or unreadable artifact is a legal quiet state: the project may
+    // simply never have been baked. Rebuilding is always available.
+    return 0;
+  }
+
+  const models = (parsed as { sceneContextModels?: unknown })?.sceneContextModels;
+  if (!Array.isArray(models)) {
+    return 0;
+  }
+
+  const cache = new IndexedDBSceneContextCache({ workspaceId });
+  let restored = 0;
+  for (const model of models as SceneContextModel[]) {
+    if (!model?.sceneId || !model?.contentHash) {
+      continue;
+    }
+    await cache.set({
+      key: {
+        contentHash: model.contentHash,
+        supportLanguage: model.supportLanguage,
+        promptVersion: model.promptVersion
+      },
+      sceneId: model.sceneId,
+      model
+    });
+    restored += 1;
+  }
+  return restored;
 }
 
 export function createSugarlangSceneContexts(
@@ -548,6 +836,16 @@ export async function rebuildSugarlangCompileCache(
      * this session, which is a valid (if forgetful) mode.
      */
     onTeachPlanDocument?: (document: SugarlangTeachPlanDocument) => void;
+    /**
+     * Receives the derived artifacts the runtime cannot rebuild, so the caller
+     * can write them into the project's `assets/` (Plan 092.2, ADR 005 rule 3).
+     * Handed out for the same reason as the teach plan: this module has no way
+     * to reach the disk, and should not grow one.
+     *
+     * Omitted means the bake's output stays in this browser -- which is the
+     * state the whole epic exists to end, so callers that CAN write should.
+     */
+    onArtifacts?: (artifacts: SugarlangArtifact[]) => Promise<void> | void;
   }
 ): Promise<SugarlangRebuildResult> {
   // VALIDATE BEFORE DESTROYING ANYTHING (nikki, 2026-07-31).
@@ -656,24 +954,6 @@ export async function rebuildSugarlangCompileCache(
             promptVersion: SUGARLANG_COMPILE_PIPELINE_VERSION
           }
         : undefined,
-    intentPipeline: gatewayClient
-      ? {
-          cache: new IndexedDBIntentCache({ workspaceId }),
-          extractNodeIntent: async (dialogueDefinitionId, node, contentHash) => {
-            return new LineIntentExtractor({
-              llmClient: gatewayClient
-            }).extract({
-              nodeId: node.nodeId,
-              nodeText: node.text,
-              authoredIntent: node.intent,
-              contentHash,
-              dialogueDefinitionId,
-              promptVersion: LINE_INTENT_PROMPT_VERSION
-            });
-          },
-          promptVersion: LINE_INTENT_PROMPT_VERSION
-        }
-      : undefined,
     // STUDIO ONLY, deliberately. The runtime's lazy path (`ensureScene`) runs in
     // the deployed game, and this is a gateway call -- a player's machine must
     // not do authoring work. The runtime receives models by seeding.
@@ -681,7 +961,7 @@ export async function rebuildSugarlangCompileCache(
       ? {
           cache: new IndexedDBSceneContextCache({ workspaceId }),
           extractSceneContext: async (scene, contentHash) => {
-            return new SceneContextExtractor({
+            return await new SceneContextExtractor({
               llmClient: gatewayClient
             }).extract({
               sources: projectSceneContextSources(scene),
@@ -720,7 +1000,6 @@ export async function rebuildSugarlangCompileCache(
   scheduler.rebuildAll();
   await scheduler.flush();
   await scheduler.flushChunks();
-  await scheduler.flushIntents();
   await scheduler.flushSceneContext();
   scheduler.stop();
 
@@ -743,6 +1022,36 @@ export async function rebuildSugarlangCompileCache(
   // the caller is the piece that already holds the dispatcher.
   if (teachPlanDocument) {
     options?.onTeachPlanDocument?.(teachPlanDocument);
+  }
+
+  // Same reason, one step further out: this module cannot reach the disk
+  // either. The caller writes these into the project's `assets/`, which is how
+  // they reach a deployed game (Plan 092.2).
+  //
+  // Swept from the caches rather than collected during the passes: a cache hit
+  // skips its pass entirely, so an already-baked project would otherwise hand
+  // out nothing at all.
+  if (options?.onArtifacts) {
+    const artifacts = (
+      await Promise.all([
+        // Current hashes so superseded editions are left in the cache rather
+        // than shipped: the cache keeps every extraction ever made, and only
+        // the ones matching today's content can ever be used.
+        collectSceneContextArtifact(
+          workspaceId,
+          await readCurrentSceneContentHashes(
+            gameProject,
+            regions,
+            targetLanguage,
+            activeScene
+          )
+        ),
+        collectVariantArtifact(workspaceId)
+      ])
+    ).filter((artifact): artifact is SugarlangArtifact => artifact !== null);
+    if (artifacts.length > 0) {
+      await options.onArtifacts(artifacts);
+    }
   }
 
   return {

@@ -32,3 +32,4 @@ These ADRs capture the implementation-stable architectural decisions derived fro
 - [ADR 026: Surface Painting Model (the Surface Brush)](/Users/nikki/projects/sugarmagic/docs/adr/026-surface-painting-model.md)
 - [ADR 027: Surface Resolution and Material-Cache Semantics](/Users/nikki/projects/sugarmagic/docs/adr/027-surface-resolution-and-material-cache.md)
 - [ADR 028: Instanced Rendering of Repeated Placed Assets](/Users/nikki/projects/sugarmagic/docs/adr/028-placed-asset-instancing.md)
+- [ADR 029: Per-player data that follows the player](/Users/nikki/projects/sugarmagic/docs/adr/029-per-player-data-that-follows-the-player.md)

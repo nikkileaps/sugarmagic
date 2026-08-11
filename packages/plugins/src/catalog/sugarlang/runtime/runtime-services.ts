@@ -40,10 +40,15 @@ import type {
   ConversationExecutionContext,
   RuntimeBlackboard
 } from "@sugarmagic/runtime-core";
+import {
+  createSyncedRecordStore,
+  getActiveUserId,
+  isSyncLoopRunning
+} from "@sugarmagic/runtime-core";
 import type { SugarLangPluginConfig } from "../config";
 import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
 import { IndexedDBVariantCache, type SugarlangVariantCache } from "./compile/variant-cache";
-import { IndexedDBIntentCache, type SugarlangIntentCache } from "./compile/intent-cache";
+import { getShippedVariantCache } from "./compile/shipped-variant-cache";
 import { LiveRenderCache } from "./compile/live-render-cache";
 import { SugarlangGatewayClient } from "./llm/gateway-client";
 import type { SugarlangLLMClient } from "./llm/types";
@@ -83,6 +88,16 @@ import {
 } from "./placement/placement-questionnaire-loader";
 import { PlacementScoreEngine } from "./placement/placement-score-engine";
 import { BlackboardLearnerStore } from "./providers/impls/blackboard-learner-store";
+import {
+  initLearnerStores,
+  type LearnerStores
+} from "./learner/learner-stores";
+import {
+  LEARNER_PROFILE_CORE_KEY,
+  type LearnerProfileCoreStore,
+  type PersistedLearnerProfileCore
+} from "./learner/persistence";
+import { SUGARLANG_PLUGIN_ID } from "../plugin-id";
 import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider";
 import { FsrsLearnerPriorProvider } from "./providers/impls/fsrs-learner-prior-provider";
 import {
@@ -129,8 +144,6 @@ export interface SugarlangExecutionServices {
   llmClient: SugarlangLLMClient | null;
   /** 086.4: optional variant cache injected by callers at bake time. */
   variantCache?: SugarlangVariantCache;
-  /** 086.4: optional intent cache injected by callers at bake time. */
-  intentCache?: SugarlangIntentCache;
   /** 086.5: optional live-render cache (in-memory only; no persistence needed). */
   liveRenderCache?: LiveRenderCache;
   /** 087.1: outer-loop scheduler -- computes the cross-session teach schedule. */
@@ -210,23 +223,41 @@ function getSelectionLanguages(
   return { targetLanguage, supportLanguage };
 }
 
+/**
+ * Identifies ONE learner: this account, this player character, this language
+ * pair.
+ *
+ * THE ACCOUNT LEADS, AND IT USED NOT TO BE HERE AT ALL (Plan 092.6.1). Without
+ * it every store below is shared by whoever sits at the browser: two accounts
+ * on one machine got ONE word history between them, and one account on two
+ * machines got two. That is a correctness bug on its own, and it made syncing
+ * impossible -- pushing an unattributed history to an account would file one
+ * player's words under another's name.
+ *
+ * `userId` is never blank: `resolveLearnerScope` refuses to build one before
+ * identity has settled.
+ */
 function buildLearnerId(
+  userId: string,
   playerEntityId: string,
   targetLanguage: string,
   supportLanguage: string
 ): string {
-  return `${playerEntityId}:${targetLanguage}:${supportLanguage}`;
+  return `${userId}:${playerEntityId}:${targetLanguage}:${supportLanguage}`;
 }
 
-function createCardStore(profileId: string): CardStore {
-  if (typeof indexedDB !== "undefined") {
-    try {
-      return new IndexedDBCardStore({ profileId });
-    } catch {
-      return new MemoryCardStore();
-    }
-  }
-  return new MemoryCardStore();
+/**
+ * The signed-in account, or null when identity has not settled yet.
+ *
+ * Plugin runtimes are constructed BEFORE the host resolves an identity
+ * provider, so this is read per call rather than captured -- the same
+ * late-binding reason `getActiveUserId` exists at all. Callers DEFER: a
+ * learner resolved under a null account would write a history that belongs to
+ * nobody, which is the bug this replaced.
+ */
+function resolveLearnerScope(): string | null {
+  const userId = getActiveUserId();
+  return userId && userId.length > 0 ? userId : null;
 }
 
 export class SugarlangRuntimeServices {
@@ -236,7 +267,19 @@ export class SugarlangRuntimeServices {
   private readonly telemetry: TelemetrySink;
   private readonly languageBundles = new Map<string, LanguageBundle>();
   private readonly executionServices = new Map<string, SugarlangExecutionServices>();
-  private readonly previewLexicons = new Map<string, unknown>();
+  /**
+   * The learner's stores, keyed by account and language pair.
+   *
+   * SEPARATE FROM `executionServices` because they are opened much earlier --
+   * at boot, by `openAccountStorage`, so the boot sync pass can reconcile them
+   * before the player reaches anything. Execution services need a bound world
+   * and cannot exist that early, so caching the stores with them would put
+   * them back on the first conversation turn, which is the bug.
+   */
+  private readonly learnerStores = new Map<
+    string,
+    LearnerStores
+  >();
   private boundContext: BoundRuntimeContext | null = null;
   private readonly gatewayClient: SugarlangLLMClient | null;
   private readonly llmModel: string;
@@ -314,20 +357,6 @@ export class SugarlangRuntimeServices {
     }
   }
 
-  seedPreviewLexicons(payload: unknown): void {
-    if (!isRecord(payload) || !Array.isArray(payload.lexicons)) {
-      return;
-    }
-    for (const lexicon of payload.lexicons) {
-      if (
-        isRecord(lexicon) &&
-        typeof lexicon.sceneId === "string" &&
-        typeof lexicon.contentHash === "string"
-      ) {
-        this.previewLexicons.set(lexicon.sceneId, lexicon);
-      }
-    }
-  }
 
   wireStudioVariantCache(workspaceId: string): void {
     if (this.studioWorkspaceId !== workspaceId) {
@@ -387,11 +416,14 @@ export class SugarlangRuntimeServices {
    * the player had already talked to somebody -- open the book first and you
    * got English with no indication why.
    *
-   * Undefined only in a published game with no studio workspace, where nothing
-   * has been graded anyway.
+   * Undefined only when a project has nothing graded at all. It used to be
+   * undefined in every published game -- the comment here said "nothing has
+   * been graded anyway", which was false: plenty was graded, it just never
+   * left the machine that graded it, so every item description rendered
+   * authored English in production (Plan 092.4).
    */
   getVariantCache(): SugarlangVariantCache | undefined {
-    if (!this.studioWorkspaceId) return undefined;
+    if (!this.studioWorkspaceId) return getShippedVariantCache();
     this._standaloneVariantCache ??= new IndexedDBVariantCache({
       workspaceId: this.studioWorkspaceId
     });
@@ -551,6 +583,10 @@ export class SugarlangRuntimeServices {
       entry.learnerStateReducer.resetSessionAccumulators();
     }
     this.executionServices.clear();
+    // The stores go too: the reset above closed their databases and took them
+    // out of the wipe registry, so a cached one would come back as a handle to
+    // storage nothing can clear again.
+    this.learnerStores.clear();
 
     // Re-seed the authored band override (same DEV guard as bindRuntime), so a
     // reset returns to the configured band rather than to no band at all.
@@ -631,7 +667,14 @@ export class SugarlangRuntimeServices {
     const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
     if (!targetLanguage || !this.boundContext) return null;
 
+    // No account yet means no learner to ask about, so no placement form. A
+    // form offered under a null account would record its result against a
+    // learner that the next read cannot find.
+    const userId = resolveLearnerScope();
+    if (!userId) return null;
+
     const learnerId = buildLearnerId(
+      userId,
       this.boundContext.playerDefinition.definitionId,
       targetLanguage,
       this.config.supportLanguage?.trim().toLowerCase() || "en"
@@ -832,6 +875,92 @@ export class SugarlangRuntimeServices {
     return this.resolveForLanguages(targetLanguage, "en");
   }
 
+  /**
+   * Open the learner's storage for the configured language pair.
+   *
+   * Called at boot, before the sync loop's first pass, so that pass has
+   * something to reconcile and the boot screen's wait covers it. Deliberately
+   * needs no world: there is not one yet.
+   *
+   * Silent when there is no account or no configured language -- neither is a
+   * failure, and neither leaves anything to open.
+   */
+  async openAccountStorage(): Promise<void> {
+    const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
+    if (!targetLanguage) return;
+    const userId = resolveLearnerScope();
+    if (!userId) return;
+    // "en" matches the ambient path's support language; a conversation that
+    // carries its own pair opens that one on demand instead.
+    const supportLanguage = "en";
+    const stores = this.getLearnerStores(userId, targetLanguage, supportLanguage);
+    const openedAtMs = Date.now();
+    const languages = { targetLanguage, supportLanguage };
+    const syncLoopRunning = isSyncLoopRunning();
+
+    void emitTelemetry(
+      this.telemetry,
+      createTelemetryEvent("learner-storage.opened", {
+        timestamp: openedAtMs,
+        ...languages,
+        syncLoopRunning,
+        storeIds: [
+          ...(stores.cardStore ? ["cards"] : []),
+          ...(stores.profileCoreStore ? ["profile"] : [])
+        ]
+      })
+    );
+
+    // NOT AWAITED, and it must not be. The host awaits this method BEFORE it
+    // starts the sync loop, so the first pass cannot finish until after we
+    // return -- awaiting it here would wait for something this call is
+    // blocking. Reported when it lands instead.
+    void stores.whenFirstSynced.then(async () => {
+      let wordCount = 0;
+      let levelPresent = false;
+      try {
+        wordCount = await stores.cardStore.count();
+        levelPresent = Boolean(
+          await stores.profileCoreStore?.get(LEARNER_PROFILE_CORE_KEY)
+        );
+      } catch {
+        // Reporting must not be the thing that breaks a boot.
+      }
+      await emitTelemetry(
+        this.telemetry,
+        createTelemetryEvent("learner-storage.first-sync", {
+          timestamp: Date.now(),
+          ...languages,
+          syncLoopRunning,
+          waitedMs: Date.now() - openedAtMs,
+          wordCount,
+          levelPresent
+        })
+      );
+    });
+  }
+
+  /**
+   * The learner's stores for one account and language pair, opened once.
+   *
+   * Opening a second set for the same pair would register a second sync handle
+   * under the same key and a second connection to the same database -- two
+   * caches of the same rows, and a pending flag cleared in one invisible to
+   * the other.
+   */
+  private getLearnerStores(
+    userId: string,
+    targetLanguage: string,
+    supportLanguage: string
+  ): LearnerStores {
+    const key = `${userId}:${targetLanguage}:${supportLanguage}`;
+    const existing = this.learnerStores.get(key);
+    if (existing) return existing;
+    const created = initLearnerStores(userId, targetLanguage, supportLanguage);
+    this.learnerStores.set(key, created);
+    return created;
+  }
+
   private async resolveForLanguages(
     targetLanguage: string,
     supportLanguage: string
@@ -841,8 +970,30 @@ export class SugarlangRuntimeServices {
       return null;
     }
 
+    // DEFER RATHER THAN GUESS. Identity settles during boot, and this can be
+    // asked before it has. Returning null degrades the turn -- the caller
+    // already handles it -- where inventing a learner would open a word store
+    // under no account and quietly strand everything written into it. Nothing
+    // is cached before this point, so the next call after sign-in resolves for
+    // real.
+    //
+    // RESOLVED BEFORE THE CACHE IS CONSULTED, because the account is part of
+    // the cache key below.
+    const userId = resolveLearnerScope();
+    if (!userId) {
+      this.logger.warn(
+        "Sugarlang learner requested before an account resolved; deferring. " +
+          "This is expected during boot and should not repeat once signed in."
+      );
+      return null;
+    }
+
     const languages = { targetLanguage, supportLanguage };
-    const key = `${languages.targetLanguage}:${languages.supportLanguage}`;
+    // KEYED ON THE ACCOUNT TOO. The learner id leads with it, so without it
+    // here a second account signing in on the same tab was handed the previous
+    // player's stores, reducer and learner -- everything they did would land in
+    // someone else's history.
+    const key = `${userId}:${languages.targetLanguage}:${languages.supportLanguage}`;
     const existing = this.executionServices.get(key);
     if (existing) {
       return existing;
@@ -850,11 +1001,31 @@ export class SugarlangRuntimeServices {
 
     const languageBundle = this.getLanguageBundle(languages.targetLanguage);
     const learnerId = buildLearnerId(
+      userId,
       this.boundContext.playerDefinition.definitionId,
       languages.targetLanguage,
       languages.supportLanguage
     );
-    const cardStore = createCardStore(learnerId);
+    // Plan 092.6.4 — a learner's words and their level both live in
+    // per-account storage now, so they follow the player to another machine
+    // instead of ending with the browser they were learned in. Both fall back
+    // to a local-only store when nothing can reach an account, which is what
+    // a project with no accounts gets.
+    const { cardStore, profileCoreStore, whenFirstSynced } = this.getLearnerStores(
+      userId,
+      languages.targetLanguage,
+      languages.supportLanguage
+    );
+    // ALREADY RECONCILED for the configured pair -- `openAccountStorage` opened
+    // it at boot and the boot screen waited for the pass. This await is for the
+    // other case: a conversation carrying a language pair that is not the
+    // configured one opens its stores here, on the turn, and must not be read
+    // before they have been reconciled once.
+    //
+    // Ends on failure, and immediately when nothing will ever sync these
+    // stores, so an offline player or a project with no account plugin waits
+    // on nothing.
+    await whenFirstSynced;
     const learnerPriorProvider = new FsrsLearnerPriorProvider(languageBundle.atlas);
     const learnerStore = new BlackboardLearnerStore({
       blackboard: this.boundContext.blackboard,
@@ -863,6 +1034,7 @@ export class SugarlangRuntimeServices {
       targetLanguage: languages.targetLanguage,
       supportLanguage: languages.supportLanguage,
       cardStore,
+      profileStore: profileCoreStore,
       learnerPriorProvider
     });
     const learnerStateReducer = new LearnerStateReducer({
@@ -872,6 +1044,7 @@ export class SugarlangRuntimeServices {
       supportLanguage: languages.supportLanguage,
       blackboard: this.boundContext.blackboard,
       cardStore,
+      profileStore: profileCoreStore,
       atlas: languageBundle.atlas,
       learnerPriorProvider,
       telemetry: this.telemetry,
@@ -912,12 +1085,16 @@ export class SugarlangRuntimeServices {
 
     const teachRecordStore = createTeachRecordStore(learnerId);
     const ledgerStore = createEncounterDebtLedger(learnerId);
+    // ONE SOURCE PER HOST, never a fallback chain. In Studio the live
+    // workspace database wins, so a variant hand-edited in the popover shows
+    // in Preview without saving first. Anywhere else it is the shipped file.
+    //
+    // A chain -- try the database, fall back to the file -- is how "the
+    // deployed game has no variants" stayed invisible: the working source
+    // covers for the broken one and nothing reports the difference.
     const variantCache: SugarlangVariantCache | undefined = this.studioWorkspaceId
       ? new IndexedDBVariantCache({ workspaceId: this.studioWorkspaceId })
-      : undefined;
-    const intentCache: SugarlangIntentCache | undefined = this.studioWorkspaceId
-      ? new IndexedDBIntentCache({ workspaceId: this.studioWorkspaceId })
-      : undefined;
+      : getShippedVariantCache();
     const liveRenderCache = new LiveRenderCache();
 
     const services: SugarlangExecutionServices = {
@@ -933,7 +1110,6 @@ export class SugarlangRuntimeServices {
       teacher,
       llmClient: this.gatewayClient,
       variantCache,
-      intentCache,
       liveRenderCache
     };
     this.executionServices.set(key, services);
@@ -1005,16 +1181,6 @@ export class SugarlangRuntimeServices {
       profile: "runtime-preview"
     });
     const sceneLexiconStore = new DefaultSugarlangSceneLexiconStore(scheduler);
-
-    const previewLexicons = Array.from(this.previewLexicons.values()).filter(
-      (lexicon) =>
-        isRecord(lexicon) &&
-        lexicon.profile === "runtime-preview" &&
-        lexicon.sceneId === this.boundContext?.activeRegion?.identity.id
-    );
-    if (previewLexicons.length > 0) {
-      sceneLexiconStore.seed(previewLexicons as never);
-    }
 
     const bundle: LanguageBundle = {
       atlas,

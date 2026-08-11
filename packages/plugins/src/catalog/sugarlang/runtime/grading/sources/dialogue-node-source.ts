@@ -65,7 +65,6 @@ export const DIALOGUE_NODE_SOURCE_KIND = "dialogue-node" as const;
  *
  * The `{}` is the intent slot and stays empty on purpose: intent goes into the
  * LLM prompt, not the key, so cache hits survive hand-authored intent edits.
- * Do NOT use this for the intent cache key; use buildIntentContentHash there.
  */
 export function buildDialogueNodeContentHash(nodeId: string, text: string): string {
   return [nodeId, text, JSON.stringify({})].join("|");

@@ -57,6 +57,7 @@ import type {
 } from "../types";
 import type { LearnerSnapshot } from "../middlewares/shared";
 import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
+import { getActiveAccessToken } from "@sugarmagic/runtime-core";
 
 export const SUGARLANG_TELEMETRY_SCHEMA_VERSION = 1 as const;
 export const SUGARLANG_STUDIO_TELEMETRY_WORKSPACE_ID =
@@ -752,6 +753,48 @@ export type TelemetryEvent =
         /** True when diverseEncounterCountAfter >= targetEncounters. */
         debtPaid: boolean;
       }
+    >
+  /**
+   * The learner's storage was built at boot, before the sync loop's first
+   * pass. Emitted whether or not anything will sync it.
+   */
+  | TelemetryEventOf<
+      "learner-storage.opened",
+      {
+        targetLanguage: string;
+        supportLanguage: string;
+        /** What was built. Short of two means one of them failed. */
+        storeIds: string[];
+        /**
+         * Whether a sync loop exists to reconcile them. False in Studio
+         * Preview, which deliberately syncs with nothing, and in any project
+         * with no account backend.
+         */
+        syncLoopRunning: boolean;
+      }
+    >
+  /**
+   * The first reconcile attempt for that storage finished -- succeeded, failed,
+   * or was never going to happen.
+   *
+   * ITS ABSENCE IS THE INTERESTING CASE. The wait ends on failure too, so no
+   * event at all means the first pass neither finished nor threw: a request
+   * that hung. That is the one shape that leaves a player waiting.
+   */
+  | TelemetryEventOf<
+      "learner-storage.first-sync",
+      {
+        targetLanguage: string;
+        supportLanguage: string;
+        syncLoopRunning: boolean;
+        /** From opening the storage to the wait ending. */
+        waitedMs: number;
+        /** Words held locally afterwards. Zero on a device that has never
+         *  played AND could not reach the account. */
+        wordCount: number;
+        /** Whether a stored level arrived. False means placement runs. */
+        levelPresent: boolean;
+      }
     >;
 
 export type TelemetryEventKind = TelemetryEvent["kind"];
@@ -1191,12 +1234,53 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
     }
   };
 
-  constructor(options: { proxyBaseUrl: string; flushIntervalMs?: number }) {
+  /** Same reason as the LLM client: a gateway in `supabase-jwt` mode answers
+   *  401 without it, so every event a deployed game recorded was thrown away
+   *  and production teaching analytics were silently empty. Injectable so a
+   *  test can assert the header. */
+  private readonly getAccessToken: () => Promise<string | null>;
+
+  /** Last token seen by `flush()`. The unload path is synchronous -- an
+   *  awaited fetch never completes after unload -- so it cannot ask for a
+   *  fresh one and reuses this. Tokens last about an hour and unload follows
+   *  play by seconds, so a stale value here is a dropped final batch at
+   *  worst, which is already this sink's posture on failure. */
+  private lastToken = "";
+
+  /**
+   * Warmed at construction so the unload path has a token even when nothing
+   * flushed first.
+   *
+   * A session shorter than one flush interval sends exactly one request -- the
+   * one on the way out -- and that used to go unauthenticated, because the only
+   * thing that ever set `lastToken` was a flush that had not happened. The
+   * gateway answers 401 and the whole session is thrown away: precisely the
+   * short sessions worth looking at.
+   *
+   * Fire-and-forget: a sink must not make constructing it wait on the network.
+   */
+  private warmToken(): void {
+    void this.getAccessToken()
+      .then((token) => {
+        if (!this.lastToken) this.lastToken = token?.trim() ?? "";
+      })
+      .catch(() => {
+        // No token is the same as the old behaviour; nothing to add.
+      });
+  }
+
+  constructor(options: {
+    proxyBaseUrl: string;
+    flushIntervalMs?: number;
+    getAccessToken?: () => Promise<string | null>;
+  }) {
     const base = options.proxyBaseUrl.endsWith("/")
       ? options.proxyBaseUrl.slice(0, -1)
       : options.proxyBaseUrl;
     this.url = `${base}/api/sugarlang/telemetry`;
     this.flushIntervalMs = options.flushIntervalMs ?? 5000;
+    this.getAccessToken = options.getAccessToken ?? getActiveAccessToken;
+    this.warmToken();
     if (typeof window !== "undefined") {
       window.addEventListener("pagehide", this.handlePageHide);
     }
@@ -1224,9 +1308,15 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
       this.scheduleFlush(0);
     }
     try {
+      const token = (await this.getAccessToken())?.trim() ?? "";
+      // Remembered for the unload path below, which cannot await.
+      this.lastToken = token;
       await fetch(this.url, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          ...(token ? { authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           events: batch.map(stripPii),
           schemaVersion: SUGARLANG_TELEMETRY_SCHEMA_VERSION
@@ -1281,7 +1371,10 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
       try {
         void fetch(this.url, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            ...(this.lastToken ? { authorization: `Bearer ${this.lastToken}` } : {})
+          },
           keepalive: true,
           body: JSON.stringify({
             events: batch.map(stripPii),

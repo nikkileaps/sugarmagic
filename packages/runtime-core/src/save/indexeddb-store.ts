@@ -20,8 +20,11 @@ import {
   type GameSave,
   type GameSaveStore
 } from "./index";
+import { gameScopedStorageName } from "../storage-names";
 
-const DB_NAME = "sugarmagic-saves";
+/** Distinguishes the save database from a game's other storage. The full
+ *  name leads with the game id -- see `gameScopedStorageName`. */
+const DB_SEGMENT = "saves";
 const STORE_NAME = "saves";
 const DB_VERSION = 1;
 
@@ -58,7 +61,7 @@ function awaitRequest<T>(request: IDBRequest<T>): Promise<T> {
 
 function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = factory.open(DB_NAME, DB_VERSION);
+    const request = factory.open(gameScopedStorageName(DB_SEGMENT), DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -70,7 +73,7 @@ function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
       reject(
         request.error ??
           new Error(
-            `[runtime-core] IndexedDB open(${DB_NAME}) failed (no error attached).`
+            `[runtime-core] IndexedDB open(${gameScopedStorageName(DB_SEGMENT)}) failed (no error attached).`
           )
       );
   });

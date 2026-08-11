@@ -665,10 +665,6 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
               ]
             : [])
         ],
-        serializeState: () => ({
-          enabled: configuration.enabled,
-          diagnostics: config.debugLogging
-        }),
         dispose() {
           console.debug("[sugaragent] plugin:dispose", {
             pluginId: configuration.pluginId

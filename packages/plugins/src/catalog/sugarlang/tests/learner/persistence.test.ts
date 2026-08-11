@@ -19,7 +19,8 @@ import "fake-indexeddb/auto";
 import {
   createBlackboardScope
 } from "@sugarmagic/runtime-core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { signInTestAccount } from "./signed-in-test-account";
 import {
   CARD_STORE_PAGE_SIZE,
   IndexedDBCardStore,
@@ -43,6 +44,21 @@ import {
   createLearnerProfile,
   createLemmaCard
 } from "./test-helpers";
+
+import { registerActiveGameId } from "@sugarmagic/runtime-core";
+
+// Storage on a player's device is named for the game they are playing, and the
+// namer refuses to build a name without one -- a database with no game in its
+// name is shared by every game on the origin. The host registers this from the
+// boot payload in a real run.
+let signOut: (() => void) | undefined;
+// A signed-in account, because every per-player store is scoped to one and
+// refuses to open without it -- the same path production takes.
+beforeEach(() => {
+  registerActiveGameId("test-game");
+  signOut = signInTestAccount();
+});
+afterEach(() => signOut?.());
 
 class CountingCardStore implements CardStore {
   public listPageCalls = 0;
@@ -122,14 +138,14 @@ describe("learner persistence", () => {
   it("survives indexeddb reloads and namespaces profiles independently", async () => {
     const cardA = createLemmaCard("hola", "A1");
     const cardB = createLemmaCard("ciao", "A1");
-    const storeA = new IndexedDBCardStore({ profileId: "profile-a" });
-    const storeB = new IndexedDBCardStore({ profileId: "profile-b" });
+    const storeA = new IndexedDBCardStore({ profileId: "user-test-account:profile-a:it:en" });
+    const storeB = new IndexedDBCardStore({ profileId: "user-test-account:profile-b:it:en" });
 
     await storeA.set(cardA);
     await storeB.set(cardB);
 
-    const reloadedA = new IndexedDBCardStore({ profileId: "profile-a" });
-    const reloadedB = new IndexedDBCardStore({ profileId: "profile-b" });
+    const reloadedA = new IndexedDBCardStore({ profileId: "user-test-account:profile-a:it:en" });
+    const reloadedB = new IndexedDBCardStore({ profileId: "user-test-account:profile-b:it:en" });
 
     expect(await reloadedA.get("hola")).toEqual(cardA);
     expect(await reloadedA.get("ciao")).toBeUndefined();

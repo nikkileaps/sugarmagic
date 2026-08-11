@@ -16,7 +16,8 @@
  */
 
 import "fake-indexeddb/auto";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { signInTestAccount } from "./signed-in-test-account";
 import {
   createBlackboardScope
 } from "@sugarmagic/runtime-core";
@@ -49,6 +50,21 @@ import {
   createReducerObservationEvent
 } from "./test-helpers";
 
+import { registerActiveGameId } from "@sugarmagic/runtime-core";
+
+// Storage on a player's device is named for the game they are playing, and the
+// namer refuses to build a name without one -- a database with no game in its
+// name is shared by every game on the origin. The host registers this from the
+// boot payload in a real run.
+let signOut: (() => void) | undefined;
+// A signed-in account, because every per-player store is scoped to one and
+// refuses to open without it -- the same path production takes.
+beforeEach(() => {
+  registerActiveGameId("test-game");
+  signOut = signInTestAccount();
+});
+afterEach(() => signOut?.());
+
 describe("LearnerStateReducer", () => {
   it("defines sugarlang facts with working ownership and placement defaults", () => {
     const blackboard = createLearnerBlackboard();
@@ -72,13 +88,13 @@ describe("LearnerStateReducer", () => {
         sourceSystem: "not-sugarlang"
       })
     ).toThrow(/owned by/i);
-    expect(getSugarlangPlacementStatus(blackboard, "learner-epic-7")).toEqual({
+    expect(getSugarlangPlacementStatus(blackboard, "user-test-account:learner-epic-7:it:en")).toEqual({
       status: "not-started"
     });
     expect(
       blackboard.getFact(
         SUGARLANG_PLACEMENT_STATUS_FACT,
-        createBlackboardScope("global", "learner-epic-7")
+        createBlackboardScope("global", "user-test-account:learner-epic-7:it:en")
       )
     ).toBeNull();
   });
@@ -92,7 +108,7 @@ describe("LearnerStateReducer", () => {
       { lemmaId: "familia", cefrPriorBand: "A1" }
     ]);
     const reducer = new LearnerStateReducer({
-      profileId: "learner-epic-7" as ReturnType<typeof createLearnerProfile>["learnerId"],
+      profileId: "user-test-account:learner-epic-7:it:en" as ReturnType<typeof createLearnerProfile>["learnerId"],
       playerEntityId: "player-1",
       targetLanguage: "es",
       supportLanguage: "en",
@@ -139,7 +155,7 @@ describe("LearnerStateReducer", () => {
     expect(profile?.lemmaCards.familia.reviewCount).toBe(1);
     expect(profile?.lemmaCards.viajar.productiveStrength).toBeGreaterThan(0);
     expect(profile?.currentSession?.turns).toBe(1);
-    expect(getSugarlangPlacementStatus(blackboard, "learner-epic-7")).toEqual({
+    expect(getSugarlangPlacementStatus(blackboard, "user-test-account:learner-epic-7:it:en")).toEqual({
       status: "completed",
       cefrBand: "A2",
       confidence: 0.82,
@@ -160,7 +176,7 @@ describe("LearnerStateReducer", () => {
       { lemmaId: "gracias", cefrPriorBand: "A1" }
     ]);
     const reducer = new LearnerStateReducer({
-      profileId: "learner-epic-7" as ReturnType<typeof createLearnerProfile>["learnerId"],
+      profileId: "user-test-account:learner-epic-7:it:en" as ReturnType<typeof createLearnerProfile>["learnerId"],
       playerEntityId: "player-2",
       targetLanguage: "es",
       supportLanguage: "en",
@@ -211,7 +227,7 @@ describe("LearnerStateReducer", () => {
     const store = new MemoryCardStore();
     const atlas = createAtlasProvider([{ lemmaId: "hola", cefrPriorBand: "A1" }]);
     const reducer = new LearnerStateReducer({
-      profileId: "learner-epic-7" as ReturnType<typeof createLearnerProfile>["learnerId"],
+      profileId: "user-test-account:learner-epic-7:it:en" as ReturnType<typeof createLearnerProfile>["learnerId"],
       playerEntityId: "player-3",
       targetLanguage: "es",
       supportLanguage: "en",
@@ -305,10 +321,10 @@ describe("LearnerStateReducer", () => {
 
   it("round-trips reducer state through persistence and keeps session history capped", async () => {
     const blackboard = createLearnerBlackboard();
-    const cardStore = new IndexedDBCardStore({ profileId: "learner-roundtrip" });
+    const cardStore = new IndexedDBCardStore({ profileId: "user-test-account:learner-roundtrip:it:en" });
     const atlas = createAtlasProvider([{ lemmaId: "hola", cefrPriorBand: "A1" }]);
     const reducer = new LearnerStateReducer({
-      profileId: "learner-roundtrip" as ReturnType<typeof createLearnerProfile>["learnerId"],
+      profileId: "user-test-account:learner-roundtrip:it:en" as ReturnType<typeof createLearnerProfile>["learnerId"],
       playerEntityId: "player-4",
       targetLanguage: "es",
       supportLanguage: "en",
@@ -342,7 +358,7 @@ describe("LearnerStateReducer", () => {
     const learnerStore = new BlackboardLearnerStore({
       blackboard,
       playerEntityId: "player-4",
-      learnerId: "learner-roundtrip" as ReturnType<typeof createLearnerProfile>["learnerId"],
+      learnerId: "user-test-account:learner-roundtrip:it:en" as ReturnType<typeof createLearnerProfile>["learnerId"],
       targetLanguage: "es",
       supportLanguage: "en",
       cardStore,

@@ -17,6 +17,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { signInTestAccount } from "../learner/signed-in-test-account";
 import {
   RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
   QUEST_ACTIVE_STAGE_FACT,
@@ -170,13 +171,17 @@ function makeStableNpcProvider(): ConversationProvider {
 }
 
 describe("preview directive cache hit rate golden", () => {
+  let clearTestAccount: (() => void) | undefined;
+
   beforeEach(async () => {
+    clearTestAccount = signInTestAccount();
     // 081.5 exit criterion: the suite fails on any unmocked URL. This flow is
     // fully deterministic (no proxy URL configured), so any fetch is a bug.
     installFetchGuard();
     await clearSugarlangRuntimeCompileCache();
   });
   afterEach(async () => {
+    clearTestAccount?.();
     uninstallFetchGuard();
     await clearSugarlangRuntimeCompileCache();
   });

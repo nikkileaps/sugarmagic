@@ -145,6 +145,39 @@ describe("telemetry sinks", () => {
 });
 
 describe("GatewaySugarlangTelemetrySink", () => {
+  it("THE PROD BUG: sends the player's token, or the gateway 401s every event", async () => {
+    // A deployed gateway in `supabase-jwt` mode rejected every telemetry POST
+    // because this sink sent no Authorization header at all. Production
+    // teaching analytics were silently empty for the life of the deployment.
+    const { fetchMock } = stubFetch();
+    const sink = new GatewaySugarlangTelemetrySink({
+      proxyBaseUrl: "http://gateway.test",
+      flushIntervalMs: 1,
+      getAccessToken: async () => "jwt-abc"
+    });
+    sink.emit(createTelemetryEvent("session.started", { timestamp: 1 }));
+    await sink.dispose();
+
+    const headers = (fetchMock.mock.calls[0]?.[1] as { headers: Record<string, string> })
+      .headers;
+    expect(headers.authorization).toBe("Bearer jwt-abc");
+  });
+
+  it("sends NO auth header when there is no token, so an open gateway still works", async () => {
+    const { fetchMock } = stubFetch();
+    const sink = new GatewaySugarlangTelemetrySink({
+      proxyBaseUrl: "http://gateway.test",
+      flushIntervalMs: 1,
+      getAccessToken: async () => null
+    });
+    sink.emit(createTelemetryEvent("session.started", { timestamp: 1 }));
+    await sink.dispose();
+
+    const headers = (fetchMock.mock.calls[0]?.[1] as { headers: Record<string, string> })
+      .headers;
+    expect(headers.authorization).toBeUndefined();
+  });
+
   it("drains a burst larger than the batch cap without waiting for a later emit", async () => {
     vi.useFakeTimers();
     const { bodies } = stubFetch();

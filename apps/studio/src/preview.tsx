@@ -77,6 +77,7 @@ import {
   createIndexedDBGameSaveStore,
   createSerializedSaveStore,
   createObservableValue,
+  registerActiveGameId,
   registerActiveIdentityProvider,
   type GameSave,
   type GameSavePayload,
@@ -92,6 +93,7 @@ import {
   createWebRuntimeHost,
   migrateLocalSaveToCloud,
   useAutosave,
+  useAutosaveFailureNotice,
   waitForActiveUser
 } from "@sugarmagic/target-web";
 import {
@@ -144,6 +146,7 @@ interface PreviewBootMessage {
   creditsDefinition?: CreditsDefinition | null;
   /** Plan 059 §059.3 — entry title sequence's first card. */
   gameTitle?: string | null;
+  gameId?: string | null;
   assetSources: Record<string, string>;
   pluginBootPayloads?: Record<string, unknown>;
   defaultGameSavePayload?: GameSavePayload | null;
@@ -251,6 +254,12 @@ window.addEventListener("message", (event) => {
       // Continue / refresh doesn't accidentally skip the start
       // menu. sessionStorage clears on tab close anyway; this
       // guards against same-tab reloads after a New Game click.
+      // Plan 092.6 — BEFORE anything reads the player's storage. The
+      // `currentUser` argument below is evaluated before `host.start` runs, so
+      // leaving this to the host is too late: the identity provider reads
+      // localStorage under a name that leads with the game, and there would be
+      // no game yet.
+      registerActiveGameId(data.gameId ?? null);
       const freshStart = consumeFreshStartFlag();
       // Story 47.10 boot-ordering follow-up — same deferred-save
       // pattern as App.tsx: the host awaits this promise after
@@ -307,6 +316,7 @@ window.addEventListener("message", (event) => {
         musicBindings: data.musicBindings,
         creditsDefinition: data.creditsDefinition,
         gameTitle: data.gameTitle,
+        gameId: data.gameId,
         assetSources: data.assetSources,
         pluginBootPayloads: data.pluginBootPayloads,
         defaultGameSavePayload: data.defaultGameSavePayload ?? null,
@@ -344,6 +354,8 @@ function BootOverlay(props: {
   title: string;
   body: string;
   tone?: "default" | "error";
+  /** Rendered under the body. Used for the still-loading choice. */
+  footer?: React.ReactNode;
 }) {
   const isError = props.tone === "error";
   return (
@@ -388,6 +400,7 @@ function BootOverlay(props: {
           {props.title}
         </p>
         <p style={{ margin: "8px 0 0", fontSize: 15 }}>{props.body}</p>
+        {props.footer}
       </div>
     </div>
   );
@@ -418,6 +431,12 @@ function PreviewOverlay() {
   const assetPreload = useSyncExternalStore(
     host.state.assetPreload.subscribe,
     host.state.assetPreload.getSnapshot
+  );
+  // Plan 092.6 — same choice the deployed game offers. An author sitting at a
+  // stuck loading screen with no way forward is the same problem a player has.
+  const bootStall = useSyncExternalStore(
+    host.state.bootStall.subscribe,
+    host.state.bootStall.getSnapshot
   );
 
   useEffect(() => {
@@ -478,10 +497,16 @@ function PreviewOverlay() {
   // over this hook anyway) doesn't need a callback bridge to
   // the hook. The hook just polls + writes; it knows nothing
   // about destructive flows.
+  // Preview shows the same save-failure notice the published game does.
+  // The Session debug HUD's save rows are an AUTHOR readout of what was
+  // written; they do not tell you that writing has stopped, and Preview is
+  // where a broken store gets noticed first.
+  const autosaveNotice = useAutosaveFailureNotice();
   useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
     onWritten: (written) => {
       host.notifyAutosaveWritten(written);
-    }
+    },
+    onStatusChange: autosaveNotice.onStatusChange
   });
 
   const prevUserRef = useRef<User | null>(null);
@@ -525,8 +550,25 @@ function PreviewOverlay() {
         title="Sugarmagic"
         body={
           assetPreload && assetPreload.total > 0
-            ? `Loading assets ${assetPreload.loaded}/${assetPreload.total}...`
+            ? `Loading ${assetPreload.loaded}/${assetPreload.total}...`
             : "Syncing..."
+        }
+        footer={
+          bootStall ? (
+            <>
+              <p style={{ marginTop: 12 }}>
+                This is taking longer than expected. Starting now may mean
+                missing scenery, or progress that has not caught up yet.
+              </p>
+              <button
+                type="button"
+                onClick={() => host.startWithoutFinishedLoading()}
+                style={{ marginTop: 8, cursor: "pointer" }}
+              >
+                Start anyway
+              </button>
+            </>
+          ) : null
         }
       />
     ) : phase === "failed" ? (
@@ -582,6 +624,7 @@ function PreviewOverlay() {
       {showLoginModal ? (
         <LoginModal provider={active.identityProvider} mode="required" />
       ) : null}
+      {autosaveNotice.notice}
     </>
   );
 }

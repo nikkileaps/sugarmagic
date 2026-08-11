@@ -26,6 +26,7 @@ import type {
   ConversationQuestFormResponse,
   ConversationActionProposal
 } from "../conversation";
+import type { RemoteRecordStorageAdapter } from "../sync-engine";
 import type { UserIdentityProvider } from "../identity";
 import type { UserProfileStore } from "../profile";
 import {
@@ -64,7 +65,8 @@ export type RuntimePluginContributionKind =
   | "mechanics.emitHandler"
   | "identity.provider"
   | "save.store"
-  | "profile.store";
+  | "profile.store"
+  | "accountData.remote";
 
 interface RuntimePluginContributionBase<TKind extends RuntimePluginContributionKind, TPayload> {
   pluginId: string;
@@ -318,6 +320,21 @@ export type GameSaveStoreContribution = RuntimePluginContributionBase<
   }
 >;
 
+// Plan 092.6.3 — plugins that can reach a backend contribute the server
+// side of per-account record storage here. Same single-active model as
+// profile.store, and the same null-when-absent outcome: with nothing
+// contributed, account stores still work, they just never leave the
+// device. runtime-core defines the interface and never learns which
+// backend a project uses.
+export type RemoteRecordStorageAdapterContribution = RuntimePluginContributionBase<
+  "accountData.remote",
+  {
+    remoteId: string;
+    summary: string;
+    remote: RemoteRecordStorageAdapter;
+  }
+>;
+
 // Story 47.8 — plugins that own per-user profile data (display
 // name, locale, preferences) contribute a UserProfileStore here.
 // Unlike identity.provider + save.store, there's no runtime-core
@@ -391,6 +408,7 @@ export type RuntimePluginContribution =
   | MechanicsEmitHandlerContribution
   | IdentityProviderContribution
   | GameSaveStoreContribution
+  | RemoteRecordStorageAdapterContribution
   | ProfileStoreContribution;
 
 export interface RuntimePluginContext {
@@ -407,6 +425,18 @@ export interface RuntimePluginContext {
   ) => ConversationRuntimeContext;
   boot: RuntimeBootModel;
   pluginBootPayloads?: Record<string, unknown>;
+  /**
+   * Every file-backed asset path mapped to the URL that serves it (Plan
+   * 092.3).
+   *
+   * A plugin that shipped a DERIVED ARTIFACT (ADR 005 rule 3) declared its
+   * path into its own configuration; this is how it turns that path back into
+   * something fetchable. Resolve through this rather than hard-coding a URL:
+   * the deploy stamps each value with the deployed sha, and `/assets/*` is
+   * served `immutable` for a year, so a hand-built path would be cached
+   * across deploys and never update.
+   */
+  assetSources?: Record<string, string>;
   blackboard?: RuntimeBlackboard;
   activeRegion?: RegionDocument | null;
   /** Plan 058 §058.1 — the active narrative Scene whose overlay
@@ -428,10 +458,23 @@ export interface RuntimePluginInstance {
   config?: Record<string, unknown>;
   contributions: RuntimePluginContribution[];
   blackboardFactDefinitions?: readonly BlackboardFactDefinition<unknown>[];
+  /**
+   * Open this plugin's per-account storage. Runs at boot, once the player's
+   * account is known and BEFORE the sync loop's first pass.
+   *
+   * SEPARATE FROM `init` BECAUSE IT HAPPENS MUCH EARLIER. `init` needs the
+   * world, the region and the player definition, none of which exist until
+   * after the boot screen is done -- so a store opened there has already
+   * missed the first sync, and the boot wait it should have been part of.
+   * That is how a returning player got put through placement again on a second
+   * device: their stores were built on the first conversation turn and read
+   * empty, because nothing had ever reconciled them.
+   *
+   * Storage is all this may do. There is no world yet.
+   */
+  openAccountStorage?: () => Promise<void> | void;
   init?: (context: RuntimePluginContext) => Promise<void> | void;
   update?: (delta: number) => void;
-  serializeState?: () => unknown;
-  loadState?: (state: unknown) => void;
   dispose?: () => Promise<void> | void;
 }
 
@@ -443,6 +486,9 @@ export interface RuntimePluginManagerOptions {
 
 export interface RuntimePluginManager {
   readonly boot: RuntimeBootModel;
+  /** See `RuntimePluginInstance.openAccountStorage`. Call once, at boot,
+   *  after the account resolves and before the sync loop starts. */
+  openAccountStorage: () => Promise<void>;
   init: (context?: Omit<RuntimePluginContext, "boot">) => Promise<void>;
   update: (delta: number) => void;
   dispose: () => Promise<void>;
@@ -451,8 +497,6 @@ export interface RuntimePluginManager {
   getContributions: <TKind extends RuntimePluginContributionKind>(
     kind: TKind
   ) => Array<Extract<RuntimePluginContribution, { kind: TKind }>>;
-  serializeState: () => Record<string, unknown>;
-  loadState: (stateByPlugin: Record<string, unknown> | null | undefined) => void;
 }
 
 function isContributionAllowedOnHost(
@@ -473,6 +517,22 @@ export function createRuntimePluginManager(
 
   return {
     boot,
+    async openAccountStorage() {
+      for (const plugin of plugins) {
+        // One plugin failing to open its storage must not stop the others, or
+        // take the boot down with it. That plugin's data does not follow the
+        // player this session; the rest of the game is unaffected.
+        try {
+          await plugin.openAccountStorage?.();
+        } catch (error) {
+          console.warn(
+            `[runtime-core] ${plugin.pluginId} could not open its per-account storage; ` +
+              "its data will not sync this session.",
+            error
+          );
+        }
+      }
+    },
     async init(context = {}) {
       if (initialized) return;
       for (const plugin of plugins) {
@@ -511,23 +571,6 @@ export function createRuntimePluginManager(
         )
         .sort((left, right) => left.priority - right.priority);
     },
-    serializeState() {
-      const byPlugin: Record<string, unknown> = {};
-      for (const plugin of plugins) {
-        const state = plugin.serializeState?.();
-        if (state !== undefined) {
-          byPlugin[plugin.pluginId] = state;
-        }
-      }
-      return byPlugin;
-    },
-    loadState(stateByPlugin) {
-      if (!stateByPlugin) return;
-      for (const plugin of plugins) {
-        if (!(plugin.pluginId in stateByPlugin)) continue;
-        plugin.loadState?.(stateByPlugin[plugin.pluginId]);
-      }
-    }
   };
 }
 
@@ -640,4 +683,36 @@ export function resolveActiveProfileStore(
     .slice()
     .sort((a, b) => b.priority - a.priority)[0];
   return winner.payload.store;
+}
+
+/**
+ * Plan 092.6.3 — pick the backend that per-account stores sync against.
+ *
+ * Returns `null` when no plugin contributes one, and that is a working
+ * configuration rather than a failure: every account store keeps serving reads
+ * and writes locally, and nothing syncs. A project with no accounts is exactly
+ * this case.
+ */
+export function resolveActiveRemoteRecordStorageAdapter(
+  manager: RuntimePluginManager,
+  logger: ResolverLogger = defaultResolverLogger
+): RemoteRecordStorageAdapter | null {
+  const contributions = manager.getContributions("accountData.remote");
+  if (contributions.length === 0) return null;
+  if (contributions.length > 1) {
+    logger.warn(
+      `[runtime-core] Multiple plugins contribute accountData.remote; picking highest priority.`,
+      {
+        contributingPluginIds: contributions.map((c) => c.pluginId),
+        priorities: contributions.map((c) => ({
+          pluginId: c.pluginId,
+          priority: c.priority
+        }))
+      }
+    );
+  }
+  const winner = contributions
+    .slice()
+    .sort((a, b) => b.priority - a.priority)[0];
+  return winner.payload.remote;
 }

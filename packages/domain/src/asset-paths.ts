@@ -23,7 +23,18 @@
 import type { ContentLibrarySnapshot } from "./content-library";
 import type { DocumentDefinition } from "./document-definition";
 import type { ItemDefinition } from "./item-definition";
+import type { PluginConfigurationRecord } from "./plugins";
 import type { RegionDocument } from "./region-authoring";
+
+/**
+ * The config key a plugin writes its file-backed asset paths under.
+ *
+ * Generic on purpose: this module must never learn the name of any plugin.
+ * A plugin that produces a derived artifact the runtime cannot rebuild (see
+ * ADR 005 rule 3) declares the file here, and it is collected on exactly the
+ * same footing as a model or an audio clip.
+ */
+export const PLUGIN_ASSET_PATHS_CONFIG_KEY = "fileBackedAssetPaths";
 
 export function collectFileBackedAssetPaths(input: {
   contentLibrary: ContentLibrarySnapshot;
@@ -34,6 +45,11 @@ export function collectFileBackedAssetPaths(input: {
    *  `.bin` on project open, so NPC pathfinding silently falls back to
    *  straight-line after a restart (and deployed games ship no navmesh). */
   regions?: RegionDocument[];
+  /** Plan 092.2 — a DISABLED plugin's files are skipped, so uninstalling or
+   *  switching one off leaves a project that still opens and still deploys.
+   *  That property is the reason this is read generically rather than by
+   *  plugin id. */
+  pluginConfigurations?: PluginConfigurationRecord[];
 }): string[] {
   const sources = [
     ...(input.contentLibrary.assetDefinitions ?? []).map(
@@ -73,6 +89,23 @@ export function collectFileBackedAssetPaths(input: {
   for (const region of input.regions ?? []) {
     if (region.navMesh?.assetPath) {
       paths.push(region.navMesh.assetPath);
+    }
+  }
+  for (const record of input.pluginConfigurations ?? []) {
+    if (!record.enabled) {
+      continue;
+    }
+    // `config` is opaque to the domain, so the shape is checked rather than
+    // trusted: a plugin writing something else under this key must not be able
+    // to break opening a project.
+    const declared = record.config?.[PLUGIN_ASSET_PATHS_CONFIG_KEY];
+    if (!Array.isArray(declared)) {
+      continue;
+    }
+    for (const entry of declared) {
+      if (typeof entry === "string" && entry.length > 0) {
+        paths.push(entry);
+      }
     }
   }
   return paths.sort();

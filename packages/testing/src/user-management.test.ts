@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import {
   createDefaultMechanicsDefinition,
@@ -41,11 +41,22 @@ import {
   normalizeSugarProfilePluginConfig
 } from "@sugarmagic/plugins";
 import {
+  AUTOSAVE_FAILURE_NOTICE_THRESHOLD,
+  AUTOSAVE_MAX_RETRY_DELAY_MS,
+  autosaveRetryDelayMs,
   gameSavePayloadsEqual,
   migrateLocalSaveToCloud,
   runAutosaveTick,
   waitForActiveUser
 } from "@sugarmagic/target-web";
+
+import { registerActiveGameId } from "@sugarmagic/runtime-core";
+
+// Storage on a player's device is named for the game they are playing, and the
+// namer refuses to build a name without one -- a database with no game in its
+// name is shared by every game on the origin. The host registers this from the
+// boot payload in a real run.
+beforeEach(() => registerActiveGameId("test-game"));
 
 function createFakeStorage(): Storage {
   const data = new Map<string, string>();
@@ -597,8 +608,9 @@ describe("AnonymousLocalIdentityProvider", () => {
     expect(user?.email).toBeNull();
     expect(user?.displayName).toBeNull();
     expect(user?.createdAt).toBe("2026-06-25T00:00:00.000Z");
-    // Persistence: storage now carries the record under the canonical key.
-    const raw = storage.getItem("sugarmagic.anonymous-user-id");
+    // Persistence: storage now carries the record under a name that leads
+    // with the GAME, so two games on one origin do not share a player. Canonical key.
+    const raw = storage.getItem("test-game:anonymous-user-id");
     expect(raw).not.toBeNull();
     expect(JSON.parse(raw ?? "{}")).toEqual({
       version: 1,
@@ -631,7 +643,7 @@ describe("AnonymousLocalIdentityProvider", () => {
     });
     const first = provider.currentUser();
     expect(first?.userId).toBe("uuid-0");
-    storage.removeItem("sugarmagic.anonymous-user-id");
+    storage.removeItem("test-game:anonymous-user-id");
     const second = provider.currentUser();
     expect(second?.userId).toBe("uuid-1");
   });
@@ -705,7 +717,7 @@ describe("AnonymousLocalIdentityProvider", () => {
 
   it("recovers from a corrupt persisted record by regenerating", () => {
     const storage = createFakeStorage();
-    storage.setItem("sugarmagic.anonymous-user-id", "{not-json");
+    storage.setItem("test-game:anonymous-user-id", "{not-json");
     const provider = createAnonymousLocalIdentityProvider({
       storage,
       randomUuid: () => "uuid-recovered",
@@ -718,7 +730,7 @@ describe("AnonymousLocalIdentityProvider", () => {
   it("recovers from a wrong-version persisted record by regenerating", () => {
     const storage = createFakeStorage();
     storage.setItem(
-      "sugarmagic.anonymous-user-id",
+      "test-game:anonymous-user-id",
       JSON.stringify({ version: 99, userId: "stale", createdAt: "irrelevant" })
     );
     const provider = createAnonymousLocalIdentityProvider({
@@ -1745,6 +1757,35 @@ describe("extractSupabaseProjectRef", () => {
 });
 
 describe("buildSupabaseManagedFiles", () => {
+  it("THE ONE THAT MATTERS: a new table ships as its own migration, not an edit to 0001", async () => {
+    // `supabase db push` records each applied migration by its filename
+    // version and skips anything already recorded -- "only the timestamps are
+    // compared". A project that has applied 0001 would never see an edit to
+    // it, and the push would report success having changed nothing. This
+    // caught exactly that: account_records was first added by editing 0001.
+    const { buildSupabaseManagedFiles } = await import("@sugarmagic/plugins");
+    const files = buildSupabaseManagedFiles(
+      await makeGameProjectWithSugarProfile({
+        enabled: true,
+        enableLogin: true,
+        supabaseUrl: "https://abcdefghijklmnop.supabase.co"
+      })
+    );
+    const paths = files.map((file) => file.relativePath);
+
+    expect(paths).toContain("deployment/supabase/migrations/0001_initial.sql");
+
+    // The account tables belong to whichever plugins are enabled; this
+    // fixture enables only sugarprofile, so 0001 is the whole set and it must
+    // NOT have grown a plugin's table.
+    const initial = files.find((f) => f.relativePath.includes("0001_initial"));
+    expect(String(initial?.content)).not.toContain("sugarlang_");
+    expect(String(initial?.content)).not.toContain("account_records");
+    expect(paths.filter((p) => p.includes("/migrations/"))).toEqual([
+      "deployment/supabase/migrations/0001_initial.sql"
+    ]);
+  });
+
   // Domain helpers needed only by this block — import lazily so
   // the existing test setup at the top of the file stays focused.
   async function loadDomainHelpers() {
@@ -2579,6 +2620,65 @@ describe("47.10 — runAutosaveTick", () => {
     });
     expect(result.written).toBe(false);
     expect(store.saveCalls).toBe(0);
+  });
+});
+
+describe("a failing autosave backs off instead of hammering the store", () => {
+  // Found by the unbounded-retry sweep after the region-warmer incident.
+  // Autosave polled on a flat 5s interval and a throwing write left
+  // `lastWritten` untouched, so the identical payload was re-upserted every
+  // 5s -- 720 times an hour -- for as long as the failure lasted. Supabase
+  // throws on a 401 or an RLS denial, so it was reachable in production.
+
+  it("THE ONE THAT MATTERS: the delay grows with each consecutive failure", () => {
+    let previous = autosaveRetryDelayMs(0, 5000);
+    for (let failures = 1; failures <= 6; failures++) {
+      const delay = autosaveRetryDelayMs(failures, 5000);
+      expect(delay).toBeGreaterThan(previous);
+      previous = delay;
+    }
+  });
+
+  it("the delay is CAPPED, so it cannot grow into never-retrying", () => {
+    // Unlike the Teacher warm-up, this must never give up: abandoning a save
+    // silently discards the player's progress. It slows down and keeps going.
+    expect(autosaveRetryDelayMs(50, 5000)).toBe(AUTOSAVE_MAX_RETRY_DELAY_MS);
+    expect(autosaveRetryDelayMs(500, 5000)).toBe(AUTOSAVE_MAX_RETRY_DELAY_MS);
+  });
+
+  it("an hour of a broken store costs 60 writes, not 720", () => {
+    // The number that made this worth fixing.
+    let elapsed = 0;
+    let writes = 0;
+    let failures = 0;
+    while (elapsed < 60 * 60 * 1000) {
+      elapsed += autosaveRetryDelayMs(failures, 5000);
+      failures += 1;
+      writes += 1;
+    }
+    expect(writes).toBeLessThanOrEqual(65);
+    // And it never stopped trying.
+    expect(writes).toBeGreaterThan(55);
+  });
+
+  it("a healthy store still polls at the base interval", () => {
+    // The backoff must not slow down the normal case.
+    expect(autosaveRetryDelayMs(0, 5000)).toBe(5000);
+    expect(autosaveRetryDelayMs(-1, 5000)).toBe(5000);
+  });
+
+  it("the player is told after 5 failures in a row -- about a minute", () => {
+    // A blip or a brief reconnect must not flash a notice, but a player who
+    // really is losing progress has to find out fast enough to act on it.
+    // nikki set both numbers: five failures, about a minute.
+    expect(AUTOSAVE_FAILURE_NOTICE_THRESHOLD).toBe(5);
+
+    let untilNoticeMs = 0;
+    for (let n = 0; n < AUTOSAVE_FAILURE_NOTICE_THRESHOLD; n++) {
+      untilNoticeMs += autosaveRetryDelayMs(n, 5000);
+    }
+    expect(untilNoticeMs).toBeGreaterThan(45_000);
+    expect(untilNoticeMs).toBeLessThan(80_000);
   });
 });
 

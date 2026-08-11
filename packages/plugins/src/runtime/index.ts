@@ -45,7 +45,6 @@ function createStaticRuntimePluginInstance(
     displayName,
     config: configuration.config,
     contributions: filtered,
-    serializeState: () => ({ enabled: configuration.enabled })
   };
 }
 

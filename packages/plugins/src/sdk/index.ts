@@ -78,6 +78,28 @@ export interface InstalledPluginDefinition {
    * See `PluginSettingsSchemaField` for field shape.
    */
   pluginSettingsSchema?: PluginSettingsSchemaField[];
+  /**
+   * Plan 092.6.3 — schema this plugin needs in the project's database.
+   *
+   * A plugin whose per-account data follows the player owns the table it
+   * lands in, with real typed columns, and ships the SQL that creates it. The
+   * deploy collects these; it never reads them and names no plugin.
+   *
+   * ONE FILE PER CHANGE, NEVER AN EDIT TO AN EARLIER ONE. The Supabase CLI
+   * records what it has applied by filename version and skips the rest, so a
+   * project that already applied a file will never see it change. Name new
+   * ones so they sort after the existing ones.
+   */
+  deployment?: {
+    supabaseMigrations?: PluginSupabaseMigration[];
+  };
+}
+
+/** One numbered migration file a plugin ships. */
+export interface PluginSupabaseMigration {
+  /** e.g. "0002_sugarlang_learner.sql". Applied in filename order. */
+  filename: string;
+  sql: string;
 }
 
 /**

@@ -7,10 +7,22 @@
  * dispatches save/load across all participants without knowing
  * any slice shape). See Plan 055 §Pattern.
  *
- * Boundary: this contract holds runtime-core system state that
- * contributes to the SHARED GameSave. Per-plugin per-user data
- * still lives in plugin-owned stores per ADR 020. A participant
- * is NOT a hatch for plugin domain data to ride in GameSave.
+ * Boundary: this contract holds state that contributes to the
+ * SHARED GameSave, as a slice keyed by `participantId` and absent
+ * when nothing registers it.
+ *
+ * A participant is NOT a hatch for widening the save's SHAPE —
+ * nothing adds fields to `GameSavePayload` or reads another
+ * participant's slice. It is not a ban on plugin data as such: a
+ * namespaced, opt-in slice is a legitimate home for small plugin
+ * state (ADR 020).
+ *
+ * What decides the home is `serialize()` being SYNCHRONOUS and
+ * called every autosave tick, on a payload that is re-serialised
+ * whole to detect change. So state that is read asynchronously,
+ * grows without bound, or needs to follow a player to another
+ * device belongs in a per-account record store instead —
+ * `runtime-core/src/sync-engine`.
  *
  * Implements: Plan 055 §055.1
  *

@@ -22,7 +22,15 @@
  * Status: active
  */
 
-import { CARD_STORE_DB_NAME_PREFIX } from "./card-store";
+import {
+  assertAccountScopedLearnerId,
+  CARD_STORE_DB_NAME_PREFIX
+} from "./card-store";
+import {
+  gameScopedStorageName,
+  registerPlayerStore
+} from "@sugarmagic/runtime-core";
+import { SUGARLANG_PLUGIN_ID } from "../../plugin-id";
 
 /**
  * All teach-record database names start with this prefix so the shared
@@ -43,6 +51,9 @@ export interface TeachRecordStore {
   has: (competencyId: string) => Promise<boolean>;
   write: (record: TeachRecord) => Promise<void>;
   list: () => Promise<TeachRecord[]>;
+  /** Forget everything, for a player starting over. Empties the store rather
+   *  than deleting its database, so a caller holding it stays valid. */
+  clearAll: () => Promise<void>;
   close?: () => Promise<void>;
 }
 
@@ -65,6 +76,10 @@ export class MemoryTeachRecordStore implements TeachRecordStore {
     return Array.from(this.records.values()).sort((a, b) =>
       a.competencyId.localeCompare(b.competencyId)
     );
+  }
+
+  async clearAll(): Promise<void> {
+    this.records.clear();
   }
 }
 
@@ -126,6 +141,17 @@ export class IndexedDBTeachRecordStore implements TeachRecordStore {
     });
   }
 
+  async clearAll(): Promise<void> {
+    const db = await this.openDb();
+    return new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(TEACH_RECORD_STORE_NAME, "readwrite");
+      tx.objectStore(TEACH_RECORD_STORE_NAME).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
   async close(): Promise<void> {
     if (!this.dbPromise) return;
     const db = await this.dbPromise;
@@ -139,8 +165,23 @@ export class IndexedDBTeachRecordStore implements TeachRecordStore {
  * Falls back to MemoryTeachRecordStore if IndexedDB is unavailable.
  */
 export function createTeachRecordStore(learnerId: string): TeachRecordStore {
+  // Checked BEFORE the memory fallback: an unscoped id is a caller bug in
+  // every environment, and letting it through in one of them is how it
+  // survives to production. See `assertAccountScopedLearnerId`.
+  assertAccountScopedLearnerId(learnerId, "createTeachRecordStore");
   if (typeof indexedDB === "undefined") {
     return new MemoryTeachRecordStore();
   }
-  return new IndexedDBTeachRecordStore(`${TEACH_RECORD_DB_NAME_PREFIX}${learnerId}`);
+  const store = new IndexedDBTeachRecordStore(gameScopedStorageName(TEACH_RECORD_DB_NAME_PREFIX, learnerId));
+  // Registered so a wipe asks it to clear itself rather than hunting for its
+  // database by name -- the guess that silently stopped matching once already.
+  registerPlayerStore({
+    pluginId: SUGARLANG_PLUGIN_ID,
+    // SCOPED TO THE LEARNER. The wipe registry is keyed on pluginId:storeId, so
+    // a fixed id meant a second language pair replaced the first and only the
+    // last one opened could be cleared.
+    storeId: `teach-records:${learnerId}`,
+    clear: () => store.clearAll()
+  });
+  return store;
 }

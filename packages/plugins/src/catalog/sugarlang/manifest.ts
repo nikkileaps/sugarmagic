@@ -35,6 +35,8 @@ import type {
   RuntimePluginInstance
 } from "@sugarmagic/runtime-core";
 import { normalizeSugarLangPluginConfig, resolveSugarlangProxyBaseUrl } from "./config";
+import { loadSceneContextsFromArtifact } from "./runtime/compile/artifact-loader";
+import { seedShippedVariantCache } from "./runtime/compile/shipped-variant-cache";
 import {
   createSugarLangContextMiddleware
 } from "./runtime/middlewares/sugar-lang-context-middleware";
@@ -79,7 +81,11 @@ import {
   setSugarlangChunkExtractionEnabled
 } from "./ui/shell/contributions";
 
-export const SUGARLANG_PLUGIN_ID = "sugarlang";
+// Defined in a leaf module so runtime code can namespace its storage with it
+// without importing this file. Re-exported so callers see one name.
+export { SUGARLANG_PLUGIN_ID } from "./plugin-id";
+import { SUGARLANG_PLUGIN_ID } from "./plugin-id";
+import { SUGARLANG_LEARNER_MIGRATIONS } from "./runtime/learner/learner-tables";
 export const SUGARLANG_DISPLAY_NAME = "Sugarlang";
 
 const deploymentRequirements: DeploymentRequirement[] = [
@@ -258,6 +264,13 @@ export function createSugarlangPlugin(
     displayName: SUGARLANG_DISPLAY_NAME,
     contributions,
     blackboardFactDefinitions: SUGARLANG_BLACKBOARD_FACT_DEFINITIONS,
+    // Plan 092.6.3 — the learner's word history and level, opened at boot so
+    // the first sync pass reconciles them before the player can reach a
+    // conversation. Deliberately NOT in `init` below: that needs a world, and
+    // by the time there is one the boot wait is over.
+    openAccountStorage() {
+      return services.openAccountStorage();
+    },
     update(deltaSeconds) {
       // The runtime's frame delta is SECONDS (runtimeHost.ts: (now - lastTime)
       // / 1000). The warmer counts milliseconds, so this converts. Passing
@@ -271,17 +284,44 @@ export function createSugarlangPlugin(
       const lexicons = extractSugarlangPreviewBootLexicons(bootPayload);
       await seedSugarlangRuntimeCompileCache(lexicons);
       // The runtime cannot build these -- extraction is a gateway call and a
-      // Studio-only pass -- so a boot seed is the only way it ever has them.
-      const seededContexts = extractSugarlangPreviewBootSceneContexts(bootPayload);
+      // Studio-only pass -- so they have to arrive already made.
+      //
+      // ONE SOURCE PER HOST, chosen by host rather than by falling back. In
+      // Studio the Preview window is same-origin with the editor and gets the
+      // models by postMessage, live, so an author sees a rebuild immediately.
+      // A published game has no Studio to message it: it reads the artifact
+      // file it shipped with. A fallback chain would hide a broken source
+      // behind a working one -- exactly how "the Teacher has no scene
+      // concepts" stayed invisible in production for months (Plan 092.3).
+      const isPublished = runtimeContext.boot.hostKind === "published-web";
+      const seededContexts = isPublished
+        ? await loadSceneContextsFromArtifact(runtimeContext.assetSources)
+        : extractSugarlangPreviewBootSceneContexts(bootPayload);
+
+      // Plan 092.4 — the graded text a scripted line and an item description
+      // render. Studio reads the live workspace database instead, so a variant
+      // edited in the popover shows in Preview without saving; only a deployed
+      // game reads the shipped file.
+      if (isPublished) {
+        const shippedVariants = await seedShippedVariantCache(
+          runtimeContext.assetSources
+        );
+        console.info(
+          `[sugarlang runtime] seeded ${shippedVariants} graded line variant(s)`,
+          { source: "shipped artifact" }
+        );
+      }
       seedSugarlangRuntimeSceneContext(seededContexts);
       console.info(
         `[sugarlang runtime] seeded ${seededContexts.length} scene context model(s)`,
-        seededContexts.map((model) => ({
-          sceneId: model.sceneId,
-          concepts: model.concepts.length
-        }))
+        {
+          source: isPublished ? "shipped artifact" : "studio boot payload",
+          models: seededContexts.map((model) => ({
+            sceneId: model.sceneId,
+            concepts: model.concepts.length
+          }))
+        }
       );
-      services.seedPreviewLexicons(bootPayload);
       const studioWorkspaceId = extractSugarlangStudioWorkspaceId(bootPayload);
       if (studioWorkspaceId) {
         services.wireStudioVariantCache(studioWorkspaceId);
@@ -311,7 +351,6 @@ export function createSugarlangPlugin(
       await flushTelemetry(telemetry, logger);
       await telemetry.dispose?.();
     },
-    serializeState: () => ({ enabled: context.configuration.enabled })
   };
 }
 
@@ -325,6 +364,11 @@ export const SUGARLANG_MIDDLEWARE_FACTORIES = [
 
 export const pluginDefinition: DiscoveredPluginDefinition = {
   deploymentRequirements,
+  // Plan 092.6.3 — the tables this plugin's synced learner data lands in.
+  // Its own schema, its own numbered migration file.
+  deployment: {
+    supabaseMigrations: SUGARLANG_LEARNER_MIGRATIONS
+  },
   manifest: {
     pluginId: SUGARLANG_PLUGIN_ID,
     displayName: SUGARLANG_DISPLAY_NAME,

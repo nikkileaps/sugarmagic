@@ -75,27 +75,19 @@ function scriptedConstraint(
 }
 
 /**
- * Services shaped to satisfy the DELETED trigger's every precondition.
+ * Fully-populated services, so a zero-call assertion means something.
  *
- * This matters more than it looks. A stub without an `intentCache` makes the
- * zero-call assertion pass trivially -- it passed against the pre-deletion code
- * too, which is how I caught that the first version of this test proved nothing.
- * The trigger needed: a nodeId, a schedule that is not strain-suppressed, an
- * intent cache, a cached artifact with `mustConveyFacts`, and a DUE teachable
- * whose id appears in those facts. All five are supplied here, so if the path
- * comes back, this test reaches it.
+ * This matters more than it looks: a stub WITHOUT an intent cache makes
+ * "the gateway was not called" pass trivially, because the code never gets far
+ * enough to consider calling it. Everything a render decision could consult is
+ * present -- a nodeId and a schedule that is not strain-suppressed -- so the
+ * assertion is about behaviour rather than about a missing precondition.
  */
 function scriptedServices(llmClient: { generate: unknown }) {
   const resolved = {
     atlas: new CefrLexAtlasProvider(),
     llmClient,
     dialogueDefinitions: [],
-    intentCache: {
-      get: async () => ({
-        artifact: { mustConveyFacts: ["queso"] }
-      }),
-      set: async () => undefined
-    },
     liveRenderCache: undefined,
     variantCache: undefined
   };
@@ -288,12 +280,11 @@ describe("scripted rendering costs nothing", () => {
     expect(llmClient.generate).not.toHaveBeenCalled();
   });
 
-  it("costs nothing on a B1 line with a due teachable -- the exact deleted trigger", async () => {
-    // THIS is the guard. Every precondition the 087.5 path required is present:
-    // target-dominant posture, a nodeId, a non-suppressed schedule, an intent
-    // cache, a cached artifact with mustConveyFacts, and a DUE teachable whose
-    // id is in those facts. Verified to FAIL against the pre-deletion code --
-    // without that check this file would be decoration.
+  it("costs nothing even on a target-dominant line with a due teachable", async () => {
+    // The hardest case for the zero-cost rule: the learner is being pushed
+    // into the target language AND something is due, which is exactly when
+    // rendering on the fly looks tempting. A scripted line is pre-baked text,
+    // so it still costs nothing.
     const llmClient = forbiddenGateway();
     const middleware = createSugarLangScriptedMiddleware({
       services: scriptedServices(llmClient) as never

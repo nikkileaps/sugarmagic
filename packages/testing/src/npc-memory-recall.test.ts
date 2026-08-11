@@ -38,6 +38,14 @@ import {
   type UserIdentityProvider
 } from "@sugarmagic/runtime-core";
 
+import { registerActiveGameId } from "@sugarmagic/runtime-core";
+
+// Storage on a player's device is named for the game they are playing, and the
+// namer refuses to build a name without one -- a database with no game in its
+// name is shared by every game on the origin. The host registers this from the
+// boot payload in a real run.
+beforeEach(() => registerActiveGameId("test-game"));
+
 const TEST_ENVIRONMENT = {
   SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL: "http://localhost:8787"
 };

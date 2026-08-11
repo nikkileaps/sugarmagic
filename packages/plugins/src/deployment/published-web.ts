@@ -112,6 +112,10 @@ function buildBootJsonPayload(
     note: PUBLISHED_WEB_HEADER,
     schemaVersion: BOOT_JSON_SCHEMA_VERSION,
     gameProjectIdentity: gameProject.identity,
+    // Plan 092.6 — the id every storage name on the player's device leads
+    // with. Flat rather than nested so the host reads one field; the nested
+    // identity above is kept for the deploy's own bookkeeping.
+    gameId: gameProject.identity.id,
     gameProjectMajorVersion: gameProject.majorVersion,
     installedPluginIds: gameProject.pluginConfigurations
       .filter((entry) => entry.enabled)
@@ -165,7 +169,12 @@ function buildBootJsonPayload(
               contentLibrary: snapshot.contentLibrary,
               itemDefinitions: gameProject.itemDefinitions,
               documentDefinitions: gameProject.documentDefinitions,
-              regions: snapshot.regions
+              regions: snapshot.regions,
+              // Plan 092.2 — a plugin's derived artifacts ship with the game.
+              // Disabled plugins are skipped inside the collector, so turning
+              // one off deploys a game without its files rather than a game
+              // with dangling ones.
+              pluginConfigurations: gameProject.pluginConfigurations
             }).map((path) => [path, `/${path}`])
           ),
     // Story 47.10.5 — authored fresh-start record. When a returning

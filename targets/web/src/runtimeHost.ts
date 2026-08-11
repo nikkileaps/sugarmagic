@@ -119,7 +119,11 @@ import {
   type RuntimeBannerContribution,
   createPlayerVisualController,
   createSessionHudCard,
+  createSyncEngine,
+  registerActiveGameId,
   registerActiveIdentityProvider,
+  resolveActiveRemoteRecordStorageAdapter,
+  type SyncEngine,
   resolveActiveGameSaveStore,
   resolveActiveIdentityProvider,
   upgradeLegacyPayload,
@@ -207,6 +211,15 @@ export interface WebRuntimeHostOptions {
   request: WebTargetAdapterRequest;
 }
 
+/**
+ * How long boot loads before it stops deciding for the player.
+ *
+ * Long enough that a normal cold start on a slow connection never sees it --
+ * the assets alone allow 20s each -- and short enough that nobody sits in
+ * front of a loading screen wondering whether it is stuck.
+ */
+export const BOOT_READINESS_TIMEOUT_MS = 30_000;
+
 export interface WebRuntimeStartState {
   regions: RegionDocument[];
   /**
@@ -241,6 +254,15 @@ export interface WebRuntimeStartState {
   /** Plan 059 §059.3 — the game's display title, shown as the
    *  first card of the entry title sequence. */
   gameTitle?: string | null;
+  /**
+   * Plan 092.6 — which game this is, from `gameProject.identity.id`.
+   *
+   * Every database and storage key the game creates on the player's device
+   * leads with it, so two projects previewed on one origin cannot read each
+   * other's saves or learner data. Absent means storage refuses to open, which
+   * is a build defect rather than a player condition.
+   */
+  gameId?: string | null;
   /**
    * Story 47.5 — pre-loaded game save record for the current user.
    * When non-null, the host hydrates from the save's payload
@@ -414,6 +436,16 @@ export interface WebRuntimeHostState {
    */
   assetPreload: ObservableValue<AssetPreloadProgress | null>;
   /**
+   * Plan 092.6 — set when boot readiness has overrun and the player is being
+   * asked what to do. Null the rest of the time.
+   *
+   * Starting a game whose world or whose player data has not arrived looks
+   * like a broken game, not a loading one -- missing ground, absent scenery, a
+   * learner taught words they already know. So the choice is the player's, and
+   * this is how the boot screen knows to offer it.
+   */
+  bootStall: ObservableValue<{ waitedMs: number } | null>;
+  /**
    * Plan 054 §054.3 — the canonical Model layer for game
    * lifecycle. `lifecycle: "booting" | "start-menu" | "playing"
    * | "paused"` answers "what phase of the game is the player
@@ -475,6 +507,8 @@ export interface WebRuntimeHost {
    * reflects the latest snapshot. Idempotent; safe to call after
    * every successful write even when the payload didn't change.
    */
+  /** Plan 092.6 — the player's answer to the still-loading prompt. */
+  startWithoutFinishedLoading(): void;
   notifyAutosaveWritten(snapshot: {
     lastPlayed: string;
     payload: GameSavePayload;
@@ -947,6 +981,11 @@ export function createWebRuntimeHost(
   const latestAutosaveStore: MutableObservableValue<SessionHudSavedGameSnapshot | null> =
     createObservableValue<SessionHudSavedGameSnapshot | null>(null);
   // Plan 060 §060.1 — boot asset-preload progress store.
+  const bootStallStore: MutableObservableValue<{ waitedMs: number } | null> =
+    createObservableValue<{ waitedMs: number } | null>(null);
+  /** Resolves the readiness wait when the player chooses to start anyway.
+   *  Replaced each boot; a no-op until readiness has actually overrun. */
+  let startAnyway: (() => void) | null = null;
   const assetPreloadStore: MutableObservableValue<AssetPreloadProgress | null> =
     createObservableValue<AssetPreloadProgress | null>(null);
 
@@ -1307,6 +1346,12 @@ export function createWebRuntimeHost(
   // identity onChange subscription below now writes into
   // `userStore.set(next)` instead of mutating a local `latestUser`.
   let identityUnsubscribe: (() => void) | null = null;
+  // Plan 092.6.3 — per-account record sync. One per host lifetime; stopped
+  // on teardown so a disposed host does not keep reconciling in the
+  // background against an account nobody is playing as.
+  let accountDataSync: SyncEngine | null = null;
+  /** The first reconcile, awaited by boot before the game becomes playable. */
+  let firstSyncPass: Promise<void> | null = null;
   let billboardAssetRegistry: BillboardAssetRegistry | null = null;
   let billboardRenderer: BillboardRenderer | null = null;
   let textBillboardRenderer: TextBillboardRenderer | null = null;
@@ -1522,6 +1567,9 @@ export function createWebRuntimeHost(
 
     identityUnsubscribe?.();
     identityUnsubscribe = null;
+    accountDataSync?.stop();
+    accountDataSync = null;
+    firstSyncPass = null;
     userStore.set(null);
     latestAutosaveStore.set(null);
 
@@ -2003,6 +2051,52 @@ export function createWebRuntimeHost(
       // module-level access-token registry so gateway-routed clients
       // (SugarAgent etc.) read the live access token per request.
       registerActiveIdentityProvider(resolvedIdentity);
+      // Plan 092.6.3 — start reconciling per-account stores now that an
+      // account exists. Started AFTER the identity registration above,
+      // because the stores key on the account and the first pass is what
+      // brings a returning player's data back.
+      //
+      // A null remote is a working configuration, not a failure: with no
+      // plugin contributing a backend, every account store keeps serving
+      // reads and writes locally and simply never leaves the device.
+      //
+      // STUDIO PREVIEW NEVER SYNCS. Preview runs this same host, and the
+      // project it previews is configured against the REAL backend -- so
+      // without this guard every word learned while authoring would be written
+      // into the live database as if a player had learned it. There is no
+      // separate development backend to point it at yet. Preview therefore
+      // reads and writes locally and reconciles with nothing, which is also
+      // what an author wants: throwaway state that does not follow them.
+      const syncsToBackend = adapter.boot.hostKind === "published-web";
+      accountDataSync?.stop();
+      accountDataSync = createSyncEngine({
+        remote: syncsToBackend
+          ? resolveActiveRemoteRecordStorageAdapter(pluginManager)
+          : null,
+        ownerWindow
+      });
+
+      // OPEN PER-ACCOUNT STORAGE BETWEEN BUILDING THE LOOP AND STARTING IT
+      // (Plan 092.6.3).
+      //
+      // The first pass below is what the boot screen waits for, and it can only
+      // reconcile stores that exist when it runs. Plugins used to open theirs in
+      // `init`, which needs the world and therefore happens after boot is over
+      // -- so the awaited pass reconciled an empty list, and the learner's store
+      // was built later, on the first conversation, reading empty on a device
+      // where the player already had a history.
+      //
+      // AFTER `createSyncEngine`, not before: a store that registers while no
+      // loop exists is told nothing will ever sync it, and ends its first-sync
+      // wait on the spot. Building the loop first means these stores wait for a
+      // pass that is actually coming.
+      //
+      // Awaited: a store opened after the pass starts has missed it.
+      await pluginManager.openAccountStorage();
+
+      // Kicked off HERE and awaited further down, so the first pull overlaps
+      // asset preloading instead of being serialised behind it.
+      firstSyncPass = accountDataSync.start();
       // Story 47.10 follow-up — track the resolved user live so the
       // Session debug HUD card's User / Anon rows reflect sign-in /
       // sign-out instead of being frozen at the boot-time user.
@@ -2039,17 +2133,80 @@ export function createWebRuntimeHost(
       state.savedGame ??
       (state.savedGamePromise ? await state.savedGamePromise : null);
 
-    // Plan 060 §060.1 — preload every file-backed asset into the
-    // HTTP cache BEFORE world assembly, so the loading screen
-    // gates on a genuinely ready game (music plays on first
-    // gesture, meshes don't pop in). Per-asset failures warn and
-    // continue; the phase never blocks boot indefinitely. In
-    // Studio preview the sources are local blob URLs, so this is
-    // near-instant there.
-    assetPreloadStore.set({ loaded: 0, total: 0 });
-    await preloadAssetSources(state.assetSources, {
-      onProgress: (progress) => assetPreloadStore.set(progress)
+    // Plan 092.6 — ONE readiness phase, not two.
+    //
+    // A returning player's data has to be here before they can use it: reach a
+    // conversation before it lands and the game teaches words they already
+    // know, then corrects itself minutes later with nothing to show it was
+    // ever wrong. That is the same requirement the asset preload already
+    // exists to meet, so it is the same phase -- one deadline, one progress
+    // readout, one answer to "is this game ready". It was briefly a separate
+    // wait with its own timeout and no presence on the loading screen, which
+    // meant the two could disagree about ready and only one of them told
+    // anybody.
+    //
+    // Counted as one unit of work alongside the assets so the loading screen
+    // can say what it is waiting for.
+    const pendingSync = firstSyncPass;
+    firstSyncPass = null;
+    const syncUnits = pendingSync ? 1 : 0;
+    let assetsLoaded = 0;
+    let assetsTotal = 0;
+    let syncDone = 0;
+    const publishProgress = () =>
+      assetPreloadStore.set({
+        loaded: assetsLoaded + syncDone,
+        total: assetsTotal + syncUnits
+      });
+
+    assetPreloadStore.set({ loaded: 0, total: syncUnits });
+    const readiness = Promise.all([
+      preloadAssetSources(state.assetSources, {
+        onProgress: (progress) => {
+          assetsLoaded = progress.loaded;
+          assetsTotal = progress.total;
+          publishProgress();
+        }
+      }),
+      pendingSync
+        ? pendingSync.then(() => {
+            syncDone = 1;
+            publishProgress();
+          })
+        : Promise.resolve()
+    ]);
+
+    // NOT A SILENT TIMEOUT. Starting a game whose world or whose player data
+    // has not arrived produces missing ground, absent scenery, and a learner
+    // taught words they already know -- all of which look like the game being
+    // broken rather than the game still loading. So when readiness overruns,
+    // the player is told and decides: keep waiting, or start anyway knowing
+    // what that means. Deciding on their behalf is what produced a "working"
+    // boot with black ground.
+    let readinessSettled = false;
+    void readiness.then(() => {
+      readinessSettled = true;
+      bootStallStore.set(null);
     });
+    await Promise.race([
+      readiness,
+      new Promise<void>((resolve) => {
+        ownerWindow.setTimeout(() => {
+          if (readinessSettled) {
+            resolve();
+            return;
+          }
+          console.warn(
+            `[web-runtime] still loading after ${BOOT_READINESS_TIMEOUT_MS}ms; asking the player.`
+          );
+          // Resolved by the player choosing to start anyway; readiness
+          // finishing first wins the race above regardless.
+          startAnyway = resolve;
+          bootStallStore.set({ waitedMs: BOOT_READINESS_TIMEOUT_MS });
+        }, BOOT_READINESS_TIMEOUT_MS);
+      })
+    ]);
+    bootStallStore.set(null);
     assetPreloadStore.set(null);
 
     scene = new THREE.Scene();
@@ -2261,6 +2418,11 @@ export function createWebRuntimeHost(
       state.musicBindings?.creditsThemeMusicId ?? null;
     bootCreditsDefinition = state.creditsDefinition ?? null;
     bootGameTitle = state.gameTitle ?? null;
+    // Plan 092.6 — registered BEFORE anything opens storage. Every database
+    // name on the player's device leads with it, and the helper that builds
+    // those names throws without it rather than sharing an origin's storage
+    // between two games.
+    registerActiveGameId(state.gameId ?? null);
     // Plan 058 §058.4 — per-Scene environment override: the
     // projector reads state.activeEnvironmentId, so a Scene with
     // an override shadows the authored/boot value; null falls
@@ -2703,6 +2865,8 @@ export function createWebRuntimeHost(
         },
         release: (moveName) => cameraMoveDirector.release(moveName, CAMERA_MOVE_BOUNDS)
       },
+      // Plan 092.3 — a plugin resolves its shipped artifacts through this.
+      assetSources: currentAssetSources,
       activeRegion,
       activeScene,
       // Plan 069.3 — NPC movement resolves against the same static world.
@@ -3056,6 +3220,20 @@ export function createWebRuntimeHost(
     };
   }
 
+  /**
+   * The player chose to start before loading finished (Plan 092.6).
+   *
+   * A no-op unless readiness has actually overrun -- there is nothing to
+   * release before then. What is still in flight keeps going; it simply is not
+   * waited on, which is why the prompt says what that costs.
+   */
+  function startWithoutFinishedLoading(): void {
+    const release = startAnyway;
+    startAnyway = null;
+    bootStallStore.set(null);
+    release?.();
+  }
+
   function notifyAutosaveWritten(snapshot: {
     lastPlayed: string;
     payload: GameSavePayload;
@@ -3111,6 +3289,7 @@ export function createWebRuntimeHost(
     user: userStore,
     latestAutosave: latestAutosaveStore,
     assetPreload: assetPreloadStore,
+    bootStall: bootStallStore,
     gameState: gameStateStore,
     uiState: uiStateStore
   };
@@ -3122,6 +3301,7 @@ export function createWebRuntimeHost(
     dispose,
     getCurrentSavePayload,
     notifyAutosaveWritten,
+    startWithoutFinishedLoading,
     showStartMenu,
     setLoginModalOpen,
     startNewGame: hostStartNewGame,

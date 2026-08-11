@@ -19,10 +19,13 @@ import {
   type UserIdentityProvider
 } from "./index";
 
-/** Single localStorage key carrying the JSON-serialized anonymous
- *  identity record. Versioned via the inner `version` field so a
- *  future migration can detect + reshape stale records. */
-const STORAGE_KEY = "sugarmagic.anonymous-user-id";
+/** Distinguishes the anonymous-identity record from a game's other storage.
+ *  The full key leads with the game id, so two games previewed on one origin
+ *  do not hand each other the same anonymous player. Versioned via the inner
+ *  `version` field so a future migration can reshape stale records. */
+import { gameScopedStorageName } from "../storage-names";
+
+const STORAGE_SEGMENT = "anonymous-user-id";
 
 /** Record persisted to localStorage. Stored as JSON so the userId
  *  and the createdAt timestamp travel together. */
@@ -64,7 +67,7 @@ function defaultRandomUuid(): string {
 }
 
 function readPersisted(storage: Storage): PersistedRecord | null {
-  const raw = storage.getItem(STORAGE_KEY);
+  const raw = storage.getItem(gameScopedStorageName(STORAGE_SEGMENT));
   if (raw == null) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<PersistedRecord>;
@@ -84,7 +87,7 @@ function readPersisted(storage: Storage): PersistedRecord | null {
 }
 
 function writePersisted(storage: Storage, record: PersistedRecord): void {
-  storage.setItem(STORAGE_KEY, JSON.stringify(record));
+  storage.setItem(gameScopedStorageName(STORAGE_SEGMENT), JSON.stringify(record));
 }
 
 function toUser(record: PersistedRecord): User {

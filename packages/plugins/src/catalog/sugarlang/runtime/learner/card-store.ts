@@ -21,15 +21,60 @@
  */
 
 import type { LemmaCard } from "../types";
+import { gameScopedStorageName, getActiveUserId } from "@sugarmagic/runtime-core";
 
 export const CARD_STORE_PAGE_SIZE = 250;
 
 /**
- * Owned here: every card-store database name starts with this prefix. The
- * shared learner-data reset (reset-learner-data.ts) is the only other
- * consumer -- do not hard-code the literal anywhere else.
+ * Owned here: every card-store database name contains this segment. The shared
+ * learner-data reset (reset-learner-data.ts) is the only other consumer -- do
+ * not hard-code the literal anywhere else.
+ *
+ * Distinguishes this plugin's learner databases from a game's other storage.
+ *  The full name leads with the GAME id (`gameScopedStorageName`) -- a player's
+ *  device carries the name of the game they are playing, not of the tool it was
+ *  built with, and two games previewed on one origin must not share a store. */
+export const CARD_STORE_DB_NAME_PREFIX = "sugarlang-cards";
+
+/**
+ * Refuse to open a per-player database that is not scoped to an account
+ * (Plan 092.6.1).
+ *
+ * CHECKED AGAINST THE SIGNED-IN ACCOUNT, not against the shape of the string.
+ * A learner id is `userId:playerEntityId:target:support`, but `playerEntityId`
+ * is itself something like `wordlark:player:default` -- so the id has four
+ * FIELDS and six colons, and counting segments cannot tell a scoped id from an
+ * unscoped one for any player definition. Two versions of this guard have now
+ * got that wrong in opposite directions: "more than one segment" let the exact
+ * pre-092 unscoped id through, and "exactly four" rejected every real one.
+ *
+ * Asking whether the id leads with the account we are actually signed in as has
+ * no such ambiguity, and it is the property that matters -- storage named for
+ * somebody else's account is the bug.
+ *
+ * THROWS RATHER THAN DEGRADES, deliberately, and it is the one place in this
+ * plugin's runtime that does. A missing account here is not a condition a
+ * player can be in -- callers resolve the account first and defer when it is
+ * not ready -- so reaching this means a caller skipped that, and the failure it
+ * would otherwise cause is silent and permanent: everyone sharing the browser
+ * writes into one history, and none of it can ever be attributed back to a
+ * person. Falling back to a memory store would hide it just as well.
+ * `NpcMemoryStore` takes the same position for the same reason.
  */
-export const CARD_STORE_DB_NAME_PREFIX = "sugarlang-card-store";
+export function assertAccountScopedLearnerId(
+  learnerId: string,
+  storeLabel: string
+): void {
+  const userId = getActiveUserId();
+  if (userId && learnerId.startsWith(`${userId}:`)) return;
+  throw new Error(
+    `[sugarlang] ${storeLabel} was given the learner id "${learnerId}", which ` +
+      `is not scoped to the signed-in account (${userId ?? "nobody signed in"}). ` +
+      "Resolve the account first and defer construction until identity has " +
+      "settled -- a store opened without one is shared by every account using " +
+      "this browser."
+  );
+}
 const CARD_STORE_NAME = "lemma-cards";
 
 export interface CardStorePage {
@@ -132,6 +177,7 @@ export class IndexedDBCardStore implements CardStore {
     if (!indexedDbFactory) {
       throw new Error("IndexedDBCardStore requires an IndexedDB implementation.");
     }
+    assertAccountScopedLearnerId(options.profileId, "IndexedDBCardStore");
     this.indexedDbFactory = indexedDbFactory;
   }
 
@@ -265,7 +311,7 @@ export class IndexedDBCardStore implements CardStore {
     if (!this.dbPromise) {
       const opened = new Promise<IDBDatabase>((resolve, reject) => {
         const request = this.indexedDbFactory.open(
-          `${CARD_STORE_DB_NAME_PREFIX}:${this.options.profileId}`,
+          gameScopedStorageName(CARD_STORE_DB_NAME_PREFIX, this.options.profileId),
           1
         );
 

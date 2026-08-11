@@ -1,7 +1,7 @@
 # Domain Terms
 
 Status: active
-Last verified against code: 2026-08-05
+Last verified against code: 2026-08-09
 
 The nouns sugarlang uses, and the distinctions between the ones that sound
 alike. Every definition below cites the type or file that owns it; if the code
@@ -329,6 +329,74 @@ A pre-rendered version of an authored line for a specific language, band and
 posture, baked at compile time and read from cache at runtime. Keyed
 `{ lang, band, contentHash, variantPromptVersion }` -- note there is no learner
 in that key.
+
+A variant is a *derived artifact* (below): the runtime cannot produce one, so
+it has to ship with the game.
+
+### Derived artifact
+
+Data produced from authored content by a compile-time pass that **the player's
+machine cannot reproduce** -- because reproducing it needs Studio, a gateway
+call, and money.
+
+That last clause is the whole term. Everything derived is reproducible in
+principle; what matters is BY WHOM. So the test is one question:
+
+> Can the runtime rebuild this on the player's machine?
+
+**Yes -> it is a cache.** Let it be rebuilt; do not ship it. A compiled scene
+lexicon is this: the runtime has a compiler and the scene content, and builds
+its own (`runtime-services.ts`, `RuntimeCompileScheduler`).
+
+**No -> it is a derived artifact, and it must travel with the game.** Baked
+line variants, scene context models and chunk extractions are all this: each
+comes from a gateway call, and a player's browser makes none.
+
+A derived artifact is an ASSET -- data the player downloads before they can
+play -- and it lives where assets live. The precedent is the baked navmesh:
+produced by a Studio pass, written into the project's `assets/`, referenced
+off the region (`region.navMesh.assetPath`), collected by
+`collectFileBackedAssetPaths` (`packages/domain/src/asset-paths.ts`) and
+shipped. When that collection was missed, NPC pathfinding silently fell back
+to straight lines "even though the bake persisted fine"
+(`packages/testing/src/navmesh-asset-path.test.ts`).
+
+**A derived store can hold authored content, and authored content is never
+disposable.** Correcting a variant by hand writes it into the same cache as
+the machine-made ones, marked `generatedByModel: "manual"`
+(`ui/shell/editor-support.ts`). Treating that store as regenerable destroys
+hand-written work. Provenance on the record is what tells them apart; the
+store's name does not.
+
+The architectural rule this term serves is ADR 005 "Persistence Strata",
+rules 3 and 6 (`docs/adr/005-persistence-strata.md`).
+
+---
+
+### Learner record
+
+Something a **player** accumulated, as opposed to something an author made.
+Which words they have met and how well they know each, what level they are and
+the evidence behind it.
+
+The distinction from a *derived artifact* is who it belongs to, and it decides
+where the data lives. A derived artifact is made once from authored content and
+is the same for everybody, so it ships with the game as an asset. A learner
+record is different for every player, did not exist when the game was built,
+and belongs to the person rather than the copy of the game.
+
+So it lives in per-player storage: written on the player's device, reconciled
+with their account afterwards, and keyed on the account so two people sharing a
+browser do not share a vocabulary. See
+[per-player data](/docs/api/per-player-data.md) for the mechanism and
+[ADR 029](/docs/adr/029-per-player-data-that-follows-the-player.md) for why it
+is shaped that way.
+
+Two things are deliberately NOT learner records, though they sit next to them.
+A *session* -- this sitting, its turn count, its signals -- describes one visit
+and does not travel to another device. And `retrievability` is not stored at
+all: it is a function of how long it has been since a review, so a stored value
+would decay from whenever it was written instead of from the last review.
 
 ---
 

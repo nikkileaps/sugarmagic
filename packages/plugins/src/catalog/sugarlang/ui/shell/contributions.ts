@@ -15,6 +15,11 @@
  * Status: active
  */
 
+import { PLUGIN_ASSET_PATHS_CONFIG_KEY } from "@sugarmagic/domain";
+import type {
+  PluginConfigurationRecord,
+  SemanticCommand
+} from "@sugarmagic/domain";
 import type { PluginShellContributionDefinition } from "../../../../shell";
 import { createElement } from "react";
 import { resetSugarlangLearnerDatabases } from "../../runtime/learner";
@@ -30,10 +35,102 @@ import { LearnerOverrideSection } from "./learner-override-section";
 import { VariantReport } from "./variant-report";
 import { VariantsPopoverConnected } from "./variant-popover-connected";
 import { ItemViewVariantsConnected } from "./item-view-variants-connected";
-import { resolveStudioCompileWorkspaceId } from "./editor-support";
+import {
+  collectVariantArtifact,
+  resolveStudioCompileWorkspaceId,
+  type SugarlangArtifact
+} from "./editor-support";
 import { SUGARLANG_TEACH_PLAN_CONFIG_KEY } from "../../runtime/compile/teach-plan-state";
 
 const SUGARLANG_SHELL_PLUGIN_ID = "sugarlang";
+
+/**
+ * Writes derived artifacts into the project's `assets/` and declares their
+ * paths (Plan 092.2).
+ *
+ * TWO STEPS, BOTH REQUIRED. Writing puts the bytes on disk; declaring is what
+ * makes the project reload them on open and the deploy ship them. A written
+ * but undeclared file is invisible to both, which is the shape of the bug this
+ * epic exists to fix.
+ *
+ * Studio supplies the writer because it holds the directory handle. Without a
+ * configuration record there is nothing to patch, so the file is still written
+ * -- it just is not declared until the plugin has a record, which is the same
+ * degradation the teach plan already accepts.
+ */
+async function persistSugarlangArtifacts(
+  props: {
+    pluginConfigurations: PluginConfigurationRecord[];
+    onCommand: (command: SemanticCommand) => void;
+    writeAssetFile?: (relativeAssetPath: string, blob: Blob) => Promise<void>;
+    requestSave?: () => Promise<unknown>;
+  },
+  artifacts: SugarlangArtifact[]
+): Promise<void> {
+  const write = props.writeAssetFile;
+  if (!write || artifacts.length === 0) {
+    return;
+  }
+  for (const artifact of artifacts) {
+    await write(
+      artifact.relativeAssetPath,
+      new Blob([JSON.stringify(artifact.json, null, 2)], {
+        type: "application/json"
+      })
+    );
+  }
+
+  const configuration = props.pluginConfigurations.find(
+    (entry) => entry.pluginId === SUGARLANG_SHELL_PLUGIN_ID
+  );
+  if (!configuration) {
+    return;
+  }
+  const config = configuration.config as Record<string, unknown> | undefined;
+  const already = Array.isArray(config?.[PLUGIN_ASSET_PATHS_CONFIG_KEY])
+    ? (config[PLUGIN_ASSET_PATHS_CONFIG_KEY] as unknown[]).filter(
+        (entry): entry is string => typeof entry === "string"
+      )
+    : [];
+  const declared = [
+    ...new Set([...already, ...artifacts.map((a) => a.relativeAssetPath)])
+  ].sort();
+  // Paths are stable, so after the first write this is the same list every
+  // time. Skipping the no-op keeps a bake off the undo stack entirely.
+  if (declared.length === already.length && declared.every((p, i) => p === already[i])) {
+    return;
+  }
+  props.onCommand({
+    kind: "UpdatePluginConfiguration",
+    target: {
+      aggregateKind: "plugin-config",
+      aggregateId: configuration.identity.id
+    },
+    subject: {
+      subjectKind: "plugin-configuration",
+      subjectId: configuration.identity.id
+    },
+    payload: {
+      configuration: {
+        ...configuration,
+        enabled: true,
+        config: {
+          ...(configuration.config ?? {}),
+          [PLUGIN_ASSET_PATHS_CONFIG_KEY]: declared
+        }
+      }
+    }
+  });
+
+  // SAVE, or the bake is only half durable. The FILES are already on disk --
+  // `writeAssetFile` goes straight there -- but the declaration above is a
+  // command, and a command only marks the session dirty. Closing the tab here
+  // would leave two files that nothing reloads and nothing deploys.
+  //
+  // Only reached when the declaration actually changed, which is the first
+  // bake of a project and never again, because the paths are stable.
+  await props.requestSave?.();
+}
 
 /**
  * Deletes sugarlang-owned IndexedDB databases (FSRS card store and telemetry)
@@ -133,6 +230,19 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
             targetLanguage: props.targetLanguage,
             chunkExtractionEnabled: sugarlangChunkExtractionEnabled,
             storedTeachPlan: config?.[SUGARLANG_TEACH_PLAN_CONFIG_KEY],
+            readAssetFile: props.readAssetFile,
+            // Plan 092.2 — the bake's derived artifacts go into the project's
+            // `assets/`, which is how they reach a deployed game. Studio owns
+            // the disk, so it supplies the writer; this plugin never depends
+            // on the io package.
+            //
+            // Declaring the paths is a SEPARATE step and just as necessary:
+            // an undeclared file neither re-loads on project open nor ships.
+            // The paths are stable, so this write is idempotent and only ever
+            // changes the project the first time.
+            onArtifacts: props.writeAssetFile
+              ? (artifacts) => persistSugarlangArtifacts(props, artifacts)
+              : undefined,
             // Written through the same UpdatePluginConfiguration command the
             // Language panel uses. Without a configuration record there is
             // nothing to patch, so the plan stays in memory for this session --
@@ -273,7 +383,20 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
             onUpdateNode: props.updateDialogueNode,
             targetLanguage: props.targetLanguage,
             dialogue: props.selectedDialogue ?? null,
-            workspaceId: resolveStudioCompileWorkspaceId(props.gameProjectId)
+            workspaceId: resolveStudioCompileWorkspaceId(props.gameProjectId),
+            // Plan 092.2 -- a variant that only exists in this browser never
+            // reaches a player, and a HAND-EDITED one cannot be regenerated at
+            // all. Sweep the cache into the project after either kind changes.
+            onVariantsChanged: props.writeAssetFile
+              ? async () => {
+                  const artifact = await collectVariantArtifact(
+                    resolveStudioCompileWorkspaceId(props.gameProjectId)
+                  );
+                  if (artifact) {
+                    await persistSugarlangArtifacts(props, [artifact]);
+                  }
+                }
+              : undefined
           });
         }
       },

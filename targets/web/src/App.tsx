@@ -49,6 +49,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createAnonymousLocalIdentityProvider,
+  registerActiveGameId,
   createIndexedDBGameSaveStore,
   createSerializedSaveStore,
   type GameSave,
@@ -67,6 +68,7 @@ import {
 import { consumeFreshStartFlag } from "./save/freshStart";
 import { migrateLocalSaveToCloud } from "./save/migrate-local-to-cloud";
 import { useAutosave } from "./save/useAutosave";
+import { useAutosaveFailureNotice } from "./save/AutosaveFailureNotice";
 import { waitForActiveUser } from "./save/waitForActiveUser";
 import { SUGARMAGIC_VERSION } from "./version";
 
@@ -128,6 +130,9 @@ export function App() {
     loaded: number;
     total: number;
   } | null>(null);
+  // Plan 092.6 — set when boot readiness overruns; drives the "start anyway"
+  // choice on the loading screen.
+  const [bootStall, setBootStall] = useState<{ waitedMs: number } | null>(null);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -154,6 +159,9 @@ export function App() {
     hostRef.current = host;
     const unsubscribePreload = host.state.assetPreload.subscribe(() => {
       setAssetPreload(host.state.assetPreload.getSnapshot());
+    });
+    const unsubscribeStall = host.state.bootStall.subscribe(() => {
+      setBootStall(host.state.bootStall.getSnapshot());
     });
 
     // Story 47.10.5 — `__freshStartFlag` is captured at module load
@@ -192,6 +200,12 @@ export function App() {
         const savedGamePromise = new Promise<GameSave | null>((resolve) => {
           resolveSavedGame = resolve;
         });
+        // Plan 092.6 — BEFORE anything reads the player's storage. The
+        // `currentUser` argument below is evaluated before `host.start` runs,
+        // so leaving this to the host is too late: the identity provider reads
+        // localStorage under a name that leads with the game, and there would
+        // be no game yet.
+        registerActiveGameId(payload.gameId ?? null);
         await host.start({
           ...payload,
           pluginRuntimeEnvironment: buildConfig.pluginRuntimeEnvironment,
@@ -239,6 +253,7 @@ export function App() {
     return () => {
       cancelled = true;
       unsubscribePreload();
+      unsubscribeStall();
       host.dispose();
       hostRef.current = null;
     };
@@ -312,10 +327,17 @@ export function App() {
   // active store via resolveActiveGameSaveStore. The hook just
   // polls + writes; it doesn't need to know about start-new-
   // game or sign-out flows.
+  // The Session HUD card also shows save state, but it is
+  // `hostKinds: ["studio"]` -- Preview only. A player in the
+  // published game has no other way to learn their progress is not
+  // being written, so it surfaces here, in React, next to the
+  // build chip.
+  const autosaveNotice = useAutosaveFailureNotice();
   useAutosave(autosaveSource, autosaveStore, autosaveUserId, {
     onWritten: (written) => {
       hostRef.current?.notifyAutosaveWritten(written);
-    }
+    },
+    onStatusChange: autosaveNotice.onStatusChange
   });
 
   // Story 47.10 — migrate the anonymous IndexedDB save to the active
@@ -366,9 +388,27 @@ export function App() {
           <p className="eyebrow">Sugarmagic</p>
           <p>
             {assetPreload && assetPreload.total > 0
-              ? `Loading assets ${assetPreload.loaded}/${assetPreload.total}...`
+              ? `Loading ${assetPreload.loaded}/${assetPreload.total}...`
               : "Loading game data..."}
           </p>
+          {/* Plan 092.6 — readiness overran. The player decides rather than
+              being handed a game whose ground and progress may not have
+              arrived, which reads as broken rather than as loading. */}
+          {bootStall ? (
+            <>
+              <p style={{ marginTop: 12 }}>
+                This is taking longer than expected. Starting now may mean
+                missing scenery, or progress that has not caught up yet.
+              </p>
+              <button
+                type="button"
+                onClick={() => hostRef.current?.startWithoutFinishedLoading()}
+                style={{ marginTop: 8, cursor: "pointer" }}
+              >
+                Start anyway
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
     ) : phase.kind === "failed" ? (
@@ -424,6 +464,10 @@ export function App() {
           mode="required"
         />
       ) : null}
+      {/* Sustained-save-failure notice. Shown only after several writes
+          in a row have failed, so a blip stays silent, and dismissable so
+          it never pins itself over someone's game. */}
+      {autosaveNotice.notice}
       {/* Build version chip — dimmed footer in the bottom-left.
           Always visible in the published bundle so bug reports
           and screenshots include the exact engine build. */}
