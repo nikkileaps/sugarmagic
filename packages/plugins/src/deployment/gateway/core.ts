@@ -102,6 +102,15 @@ type LoreCanonLevel = "hard" | "soft";
  */
 const SOFT_PAGE_CHUNK_SLUG = "_page";
 
+/**
+ * Minimum similarity score applied to a search whose caller sent no
+ * `scoreThreshold`. Matches `DEFAULT_LORE_RELEVANCE_FLOOR` on the game side
+ * (`catalog/sugaragent/runtime/lore-relevance.ts`) so a project that has never
+ * touched the setting behaves the same whether or not the value is sent. A
+ * test holds the two together.
+ */
+export const GATEWAY_DEFAULT_SCORE_THRESHOLD = 0.3;
+
 interface LoreSource {
   sourceKind: string;
   sourcePath: string | null;
@@ -1862,12 +1871,12 @@ export async function handleSugarAgentSearch(
   //
   // `ranking_options.score_threshold` is an OpenAI vector-store search parameter
   // (verified against openai-node's VectorStoreSearchParams.RankingOptions).
-  // Callers may override; 0.3 is deliberately low -- the goal is excluding
-  // near-zero noise, not second-guessing the ranker.
+  // Callers may override; the default is deliberately low -- the goal is
+  // excluding near-zero noise, not second-guessing the ranker.
   const scoreThreshold =
     typeof body["scoreThreshold"] === "number" && Number.isFinite(body["scoreThreshold"])
       ? Math.max(0, Math.min(1, body["scoreThreshold"]))
-      : 0.3;
+      : GATEWAY_DEFAULT_SCORE_THRESHOLD;
 
   if (!query || !vectorStoreId) {
     sendJson(res, 400, {

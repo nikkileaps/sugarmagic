@@ -666,8 +666,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
                     status: "ready" as const,
                     middleware: createQuestContextMiddleware({
                       vectorStoreProvider: createSugarAgentVectorStoreProvider(config),
-                      logger: createSugarAgentLogger(config.debugLogging),
-                      loreRelevanceFloor: config.loreRelevanceFloor
+                      logger: createSugarAgentLogger(config.debugLogging)
                     })
                   }
                 }

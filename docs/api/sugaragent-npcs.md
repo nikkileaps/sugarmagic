@@ -206,23 +206,24 @@ chunk is there:
 
 - **`pinned`** -- the stage fired a second search specifically for the NPC's own
   lore page (`npcLorePageId`) as an identity anchor. This happens when the
-  primary search targets a different page (e.g. a location-anchored turn). The
-  pinned chunk got into the context by identity, not by relevance ranking. A low
-  score on a pinned chunk is expected and should not be treated as noise: it
-  means the NPC's page happened to score low against this particular query, not
-  that the chunk is irrelevant to the NPC.
+  primary search targets a different page (e.g. a location-anchored turn). A low
+  score on a pinned chunk means the NPC's page scored low against this
+  particular query, not that the chunk is irrelevant to the NPC.
+
+  That second search carries the relevance threshold like any other, so a page
+  scoring below it produces no chunk to pin and the anchor is simply absent.
+  See #163 -- an identity anchor being decided by a similarity search is the
+  open question there.
 
 - **`synthetic-location`** -- not from the vector DB at all. It is a string
   assembled at runtime from the blackboard: current area, NPC task, proximity to
   the player, etc. Always given `score: 1` (authoritative fact, not a similarity
-  estimate). The threshold never applies to it.
-
-Only `retrieved` chunks pass through the threshold, because it is applied by the
-vector store during the search. `pinned` and `synthetic-location` chunks are
-added afterward and are unaffected.
+  estimate). The threshold never applies to it, because it never goes through a
+  search.
 
 Every score in a dump is a score that already cleared the threshold. A result
-below it never comes back, so it cannot appear here.
+below it never comes back, so it cannot appear here. `synthetic-location` is the
+one exception, since it is assembled locally rather than retrieved.
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/stages/retrieval-debug.ts`
 
@@ -263,9 +264,14 @@ to be kept in step by hand.
 
 ### What it does not affect
 
-Only searched chunks pass through it. `pinned` chunks (the NPC's own lore page,
-fetched by identity) and `synthetic-location` entries (assembled from the
-blackboard, always scored 1) are added after the search returns.
+`synthetic-location` entries are assembled from the blackboard rather than
+retrieved, so they never meet the threshold at all.
+
+Everything else does, including the `pinned` fetch of the NPC's own lore page --
+it is a search like any other and goes through the same provider. A page that
+scores below the threshold against the player's question yields nothing to pin.
+Whether an identity anchor should be subject to a relevance threshold is open;
+see #163.
 
 ### Why it is 0.3
 

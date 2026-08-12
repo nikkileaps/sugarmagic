@@ -94,7 +94,10 @@ and surfaces other world lore; when degraded it keeps the legacy
 own-page-preferred targeting. Ingest header lines (`Page ID:`/`Title:`/`Section:`)
 are stripped from evidence text before it reaches the prompt.
 
-A `loreRelevanceFloor` config field (0..1, default 0) post-filters retrieved
-chunks below the given score before they reach the prompt. `pinned` and
-`synthetic-location` chunks bypass the floor by structure. See the tuning
-recipe in `docs/api/sugaragent-npcs.md` (Tuning the Relevance Floor).
+A `loreRelevanceFloor` config field (0..1, default 0.3) is the minimum
+similarity score a chunk must reach. It rides on the vector store provider and
+goes out with every search as `scoreThreshold`, so the vector store applies it
+and a chunk below it is never returned. Nothing in the game filters by score.
+`synthetic-location` entries are assembled from the blackboard rather than
+searched, so the threshold does not reach them. See
+`docs/api/sugaragent-npcs.md` (The Relevance Threshold).
