@@ -23,6 +23,8 @@ function makeState(patch: Partial<RuntimeUIState> = {}): RuntimeUIState {
     episodesOpen: false,
     questFormOpen: false,
     questFormDefinition: null,
+    preNewGameStepOpen: false,
+    preNewGameStepDefinition: null,
     ...patch
   };
 }

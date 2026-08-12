@@ -2957,7 +2957,10 @@ describe("47.10.5 — UIStateStore.savePresent", () => {
       episodesOpen: false,
       // 081.8 — quest form overlay state; defaults false/null.
       questFormOpen: false,
-      questFormDefinition: null
+      questFormDefinition: null,
+      // Pre-new-game step overlay state; defaults false/null.
+      preNewGameStepOpen: false,
+      preNewGameStepDefinition: null
     });
   });
 

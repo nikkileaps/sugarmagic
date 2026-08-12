@@ -36,6 +36,7 @@ import { UISpacer } from "./ui/UISpacer";
 import { UIRuntimeBridgeProvider } from "./ui/UIContextProvider";
 import { EpisodesScreen, type EpisodesViewModel } from "./ui/EpisodesScreen";
 import { QuestFormOverlay } from "./ui/QuestFormOverlay";
+import { PreNewGameStepOverlay } from "./ui/PreNewGameStepOverlay";
 import type { ConversationQuestFormResponse } from "@sugarmagic/runtime-core";
 
 export interface GameUILayerProps {
@@ -68,6 +69,10 @@ export interface GameUILayerProps {
   onQuestFormSubmit: (response: ConversationQuestFormResponse) => void;
   /** 081.8 -- called when the user dismisses the quest form overlay. */
   onQuestFormDismiss: () => void;
+  /** Called with the chosen optionId when the player confirms a
+   *  pre-new-game step. There is no dismiss counterpart: a step has no
+   *  way out except answering it. */
+  onPreNewGameStepConfirm: (optionId: string) => void;
 }
 
 /**
@@ -317,6 +322,16 @@ export function GameUILayer(props: GameUILayerProps): JSX.Element {
             definition={state.questFormDefinition}
             onSubmit={props.onQuestFormSubmit}
             onDismiss={props.onQuestFormDismiss}
+          />
+        ) : null}
+        {/* A pre-new-game step sits over the start menu, above everything
+            else on screen: the save is about to be destroyed and this is the
+            last thing the player can still change. */}
+        {state.preNewGameStepOpen && state.preNewGameStepDefinition ? (
+          <PreNewGameStepOverlay
+            key={state.preNewGameStepDefinition.stepId}
+            definition={state.preNewGameStepDefinition}
+            onConfirm={props.onPreNewGameStepConfirm}
           />
         ) : null}
       </div>

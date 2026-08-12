@@ -16,6 +16,8 @@
  * Status: active
  */
 
+export * from "./pre-new-game-steps";
+
 import type { RuntimeBootModel, RuntimeHostKind } from "../index";
 import type { ConversationRuntimeContext } from "../conversation";
 import type {
@@ -26,6 +28,7 @@ import type {
   ConversationQuestFormResponse,
   ConversationActionProposal
 } from "../conversation";
+import type { PreNewGameStepPayload } from "./pre-new-game-steps";
 import type { RemoteRecordStorageAdapter } from "../sync-engine";
 import type { UserIdentityProvider } from "../identity";
 import type { UserProfileStore } from "../profile";
@@ -55,6 +58,7 @@ export type RuntimePluginContributionKind =
   | "conversation.middleware"
   | "dialogue.entryDecorator"
   | "quest.assessment"
+  | "newGame.preStep"
   | "displayText.resolver"
   | "debug.hudCard"
   | "debug.entityBillboard"
@@ -393,8 +397,22 @@ export type QuestAssessmentContribution = RuntimePluginContributionBase<
   }
 >;
 
+/**
+ * Asks the player one question between the New Game press and the wipe.
+ *
+ * The host knows there is an ordered list of questions to put on screen before
+ * it destroys the save. It does not know what any of them are for. It renders
+ * the definition, keeps the answer under the step's own id, and hands the
+ * whole map to the next boot -- see `pre-new-game-steps.ts`.
+ */
+export type PreNewGameStepContribution = RuntimePluginContributionBase<
+  "newGame.preStep",
+  PreNewGameStepPayload
+>;
+
 export type RuntimePluginContribution =
   | ConversationProviderContribution
+  | PreNewGameStepContribution
   | QuestAssessmentContribution
   | ConversationMiddlewareContribution
   | DialogueEntryDecoratorContribution

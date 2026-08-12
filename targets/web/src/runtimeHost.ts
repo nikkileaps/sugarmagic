@@ -158,6 +158,8 @@ import {
   type RuntimeActionRegistry,
   QUEST_MANAGER_PARTICIPANT_ID,
   GAME_SAVE_SCHEMA_VERSION,
+  type PreNewGameStepAnswers,
+  type PreNewGameStepDefinition,
   type UIActionRegistry,
   type UIContextStore,
   type UIStateStore
@@ -172,6 +174,10 @@ import {
 } from "./save/campaignProgressionParticipant";
 import { showEntryTitleSequence } from "./sceneTransitionCard";
 import { showSceneExitOverlay } from "./creditsRoll";
+import {
+  runPreNewGameSteps,
+  writePreNewGameStepAnswers
+} from "./preNewGameSteps";
 import {
   consumeOpenEpisodesFlag,
   consumeSceneEntryFlag,
@@ -369,6 +375,15 @@ export interface WebRuntimeStartState {
    * Default (false / omitted) preserves the menu-on-boot behavior.
    */
   skipStartMenuOnBoot?: boolean;
+  /**
+   * What the player answered in the pre-new-game steps that ran just before
+   * this boot, keyed by stepId (see `preNewGameSteps.ts`).
+   *
+   * Read out of sessionStorage at module load by the caller, alongside the
+   * fresh-start flag, because both are written by the New Game press that
+   * caused this page load. Empty on every other boot.
+   */
+  preNewGameStepAnswers?: PreNewGameStepAnswers;
 }
 
 /**
@@ -501,6 +516,12 @@ export interface WebRuntimeHost {
    * can no-op cleanly during boot. Cheap; safe to call on any tick.
    */
   getCurrentSavePayload(): GameSavePayload | null;
+  /**
+   * What the player answered in the pre-new-game steps that ran just before
+   * this boot, keyed by stepId. Empty on an ordinary boot. Stays readable for
+   * the life of the session; reading it does not consume it.
+   */
+  getPreNewGameStepAnswers(): PreNewGameStepAnswers;
   /**
    * Story 47.10 follow-up — callers tell the host when a fresh save
    * was written (autosave loop) so the Session debug HUD card
@@ -1011,7 +1032,49 @@ export function createWebRuntimeHost(
   // `uiStateStore` fields; the bridge above mirrors the change
   // into `gameStateStore.lifecycle`. 054.4 will flip the
   // direction (write `gameState` directly; legacy fields retire).
+
+  // The plugin manager is built inside start(). New Game is a host action that
+  // runs outside that closure and needs to ask plugins for their pre-new-game
+  // steps, so start() publishes the manager here. Null before the first start()
+  // and after dispose, which reads as "no steps to run".
+  let activePluginManager: ReturnType<
+    typeof createResolvedRuntimePluginManager
+  > | null = null;
+
+  // Set while a pre-new-game step is on screen, and called with the player's
+  // choice by GameUILayer's confirm button. Read at call time rather than
+  // captured, so the callback handed to GameUILayer at mount stays correct for
+  // every step of every New Game press.
+  let resolveOpenPreNewGameStep: ((optionId: string) => void) | null = null;
+
+  /** Put one step on screen and wait for the confirm press. */
+  function presentPreNewGameStep(
+    definition: PreNewGameStepDefinition
+  ): Promise<string> {
+    return new Promise<string>((resolve) => {
+      resolveOpenPreNewGameStep = resolve;
+      uiStateStore.setState({
+        preNewGameStepOpen: true,
+        preNewGameStepDefinition: definition
+      });
+    });
+  }
+
   async function hostStartNewGame(): Promise<void> {
+    // Ask whatever plugins want asked, then destroy the save. The manager is
+    // built inside start(); New Game runs outside it, which is why the handle
+    // above exists. No contributed steps means this loop does nothing and New
+    // Game behaves exactly as it did before the seam existed.
+    const stepContributions =
+      activePluginManager?.getContributions("newGame.preStep") ?? [];
+    if (stepContributions.length > 0) {
+      const answers = await runPreNewGameSteps({
+        contributions: stepContributions,
+        present: presentPreNewGameStep
+      });
+      writePreNewGameStepAnswers(answers);
+    }
+
     const bindings = activeProvidersStore.getSnapshot();
     const settledUser = bindings?.identityProvider.currentUser();
     if (bindings && settledUser) {
@@ -1320,6 +1383,9 @@ export function createWebRuntimeHost(
   // Plan 061 §061.3 — the site's Play page, read from SugarProfile
   // config at boot. Empty = no Exit affordance anywhere.
   let bootPlayPageUrl = "";
+  // What the player answered on the way into this boot. Empty unless the page
+  // load was caused by a New Game press that ran at least one step.
+  let bootPreNewGameStepAnswers: PreNewGameStepAnswers = {};
   saveParticipantRegistry.register(
     createCampaignProgressionParticipant({
       getCurrentSceneId: () => activeSceneIdForSave,
@@ -1565,6 +1631,7 @@ export function createWebRuntimeHost(
       animationId = null;
     }
 
+    activePluginManager = null;
     identityUnsubscribe?.();
     identityUnsubscribe = null;
     accountDataSync?.stop();
@@ -2025,6 +2092,16 @@ export function createWebRuntimeHost(
       state.pluginRuntimeEnvironment ?? {},
       state.pluginBootPayloads ?? {}
     );
+    activePluginManager = pluginManager;
+    bootPreNewGameStepAnswers = state.preNewGameStepAnswers ?? {};
+    if (Object.keys(bootPreNewGameStepAnswers).length > 0) {
+      // The only observable for the handshake in a published build: the debug
+      // HUD is Studio-only and the window handles are dev-only.
+      console.info(
+        "[web-runtime] pre-new-game answers carried into this boot:",
+        bootPreNewGameStepAnswers
+      );
+    }
     // Plan 061 §061.3 — the Exit affordance's target. Only
     // meaningful when SugarProfile is enabled (the Play page is
     // where its auth lives), so reading it from that plugin's
@@ -3164,6 +3241,15 @@ export function createWebRuntimeHost(
         },
         onQuestFormDismiss: () => {
           gameplaySession?.cancelQuestForm();
+        },
+        onPreNewGameStepConfirm: (optionId) => {
+          uiStateStore.setState({
+            preNewGameStepOpen: false,
+            preNewGameStepDefinition: null
+          });
+          const resolve = resolveOpenPreNewGameStep;
+          resolveOpenPreNewGameStep = null;
+          resolve?.(optionId);
         }
       })
     );
@@ -3301,6 +3387,8 @@ export function createWebRuntimeHost(
     dispose,
     getCurrentSavePayload,
     notifyAutosaveWritten,
+    /** What the player answered on the way into this boot, by stepId. */
+    getPreNewGameStepAnswers: () => bootPreNewGameStepAnswers,
     startWithoutFinishedLoading,
     showStartMenu,
     setLoginModalOpen,

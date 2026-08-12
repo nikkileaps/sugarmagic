@@ -66,6 +66,7 @@ import {
   type WebRuntimeStartState
 } from "./runtimeHost";
 import { consumeFreshStartFlag } from "./save/freshStart";
+import { consumePreNewGameStepAnswers } from "./preNewGameSteps";
 import { migrateLocalSaveToCloud } from "./save/migrate-local-to-cloud";
 import { useAutosave } from "./save/useAutosave";
 import { useAutosaveFailureNotice } from "./save/AutosaveFailureNotice";
@@ -81,6 +82,10 @@ import { SUGARMAGIC_VERSION } from "./version";
 // level runs once per page load regardless. Belt-and-suspenders
 // for both dev and prod builds.
 const __freshStartFlag = consumeFreshStartFlag();
+// Written by the same New Game press that set the flag above, and read here
+// for the same reason: module level runs once per page load, so StrictMode's
+// double-invoked effects both see the same value.
+const __preNewGameStepAnswers = consumePreNewGameStepAnswers();
 
 type BootPhase =
   | { kind: "loading" }
@@ -233,7 +238,8 @@ export function App() {
               resolveSavedGame(save);
             })();
           },
-          skipStartMenuOnBoot: freshStart
+          skipStartMenuOnBoot: freshStart,
+          preNewGameStepAnswers: __preNewGameStepAnswers
           // Plan 054 §054.3 — `onStartNewGame` is gone from
           // host.start opts. The host owns the destructive
           // transition (`host.startNewGame()`) and wires the

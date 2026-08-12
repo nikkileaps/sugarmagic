@@ -29,6 +29,16 @@ export {
   FRESH_START_SESSION_STORAGE_KEY,
   consumeFreshStartFlag
 } from "./save/freshStart";
+// The questions plugins ask between the New Game press and the wipe, and the
+// handshake that carries the answers across the reload.
+export {
+  PRE_NEW_GAME_ANSWERS_SESSION_STORAGE_KEY,
+  consumePreNewGameStepAnswers,
+  runPreNewGameSteps,
+  writePreNewGameStepAnswers,
+  type PreNewGameStepPresenter,
+  type PreNewGameStepStorage
+} from "./preNewGameSteps";
 export { SUGARMAGIC_VERSION } from "./version";
 // Plan 058 §058.6 — card styling constants shared with Studio's
 // Scene properties preview so preview and runtime card can't

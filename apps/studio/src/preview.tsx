@@ -90,6 +90,7 @@ import {
 } from "@sugarmagic/runtime-core";
 import {
   consumeFreshStartFlag,
+  consumePreNewGameStepAnswers,
   createWebRuntimeHost,
   migrateLocalSaveToCloud,
   useAutosave,
@@ -261,6 +262,10 @@ window.addEventListener("message", (event) => {
       // no game yet.
       registerActiveGameId(data.gameId ?? null);
       const freshStart = consumeFreshStartFlag();
+      // Same New Game press wrote both. Consumed here as well as in the
+      // published target's App.tsx: preview boots through this path instead,
+      // and missing it drops the player's answers silently.
+      const preNewGameStepAnswers = consumePreNewGameStepAnswers();
       // Story 47.10 boot-ordering follow-up — same deferred-save
       // pattern as App.tsx: the host awaits this promise after
       // provider resolution so a signed-in author resumes from the
@@ -320,7 +325,8 @@ window.addEventListener("message", (event) => {
         assetSources: data.assetSources,
         pluginBootPayloads: data.pluginBootPayloads,
         defaultGameSavePayload: data.defaultGameSavePayload ?? null,
-        skipStartMenuOnBoot: freshStart
+        skipStartMenuOnBoot: freshStart,
+        preNewGameStepAnswers
         // Plan 054 §054.3 — host owns the destructive transition.
       })
         .then(() => publishBootPhase("running"))
