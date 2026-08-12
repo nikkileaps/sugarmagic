@@ -28,6 +28,7 @@ import { compareCefrBands, isBandAbove } from "../cefr";
 import type { ChunkMatcher, ChunkSpec } from "./chunk-matcher";
 import { lemmatize } from "./lemmatize";
 import type { Token } from "./tokenize";
+import { requireSugarlangTargetLanguage } from "../target-language-save-participant";
 
 function createBandHistogram(): Record<CEFRBand, number> {
   return {
@@ -74,7 +75,15 @@ export function computeCoverage(
    * multi-word spans (exponents, scene chunks) are already handled by the
    * chunk matcher, whose tokens never reach the guard.
    */
-  recognizedTargetSurfaces?: Set<string>
+  recognizedTargetSurfaces?: Set<string>,
+  /**
+   * The language being read. Defaults to the language this game is in.
+   *
+   * Passed rather than taken off the learner profile: a profile lives under a
+   * language-keyed id, so its own language field is a copy of its key, and a
+   * stale copy sends every lookup here to the wrong half of the atlas.
+   */
+  targetLanguage: string = requireSugarlangTargetLanguage()
 ): CoverageProfile {
   const learnerBand = learner.estimatedCefrBand;
   const bandHistogram = createBandHistogram();
@@ -115,7 +124,7 @@ export function computeCoverage(
 
     const lemmaRef = {
       lemmaId: chunkToken.normalizedForm,
-      lang: learner.targetLanguage,
+      lang: targetLanguage,
       surfaceForm: chunkToken.surfaceMatched
     };
     outOfEnvelopeLemmas.set(lemmaRef.lemmaId, lemmaRef);
@@ -153,7 +162,7 @@ export function computeCoverage(
 
     ratioCheckTokens += 1;
 
-    const lemma = lemmatize(token, learner.targetLanguage, morphologyIndex);
+    const lemma = lemmatize(token, targetLanguage, morphologyIndex);
     if (!lemma) {
       unknownTokens += 1;
       continue;

@@ -49,6 +49,7 @@
 import type { LemmaRef } from "../contracts/lexical-prescription";
 import type { LearnerProfile } from "./learner-profile";
 import { isExponentCardKey } from "../inventory/card-display-name";
+import { getSugarlangTargetLanguage, requireSugarlangTargetLanguage } from "../target-language-save-participant";
 
 /** Probe is REQUIRED at or beyond this many turns, or this many turns pending. */
 const HARD_FLOOR_TURNS = 25;
@@ -98,7 +99,7 @@ export function computePendingProvisionalLemmas(
     .map((card) => ({
       lemmaRef: {
         lemmaId: card.lemmaId,
-        lang: learner.targetLanguage
+        lang: requireSugarlangTargetLanguage()
       },
       evidenceAmount: card.provisionalEvidence,
       turnsPending:

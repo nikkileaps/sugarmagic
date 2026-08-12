@@ -95,7 +95,10 @@ export function verifyLiveRender(input: VerifyLiveRenderInput): VariantVerdict {
     new Set(),
     chunkMatcher,
     undefined,
-    text
+    text,
+    undefined,
+    undefined,
+    targetLang
   );
 
   // Gate 1: Mixed-text envelope predicate (allowance + ceiling; no coverage floor).

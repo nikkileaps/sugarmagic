@@ -122,7 +122,6 @@ export async function planSceneTeaching(args: {
         // bake directive turning up in learner telemetry is obviously synthetic
         // rather than looking like a player whose cards are all empty.
         learnerId: `bake:${band}` as LearnerId,
-        targetLanguage,
         supportLanguage,
         estimatedCefrBand: band
       }),

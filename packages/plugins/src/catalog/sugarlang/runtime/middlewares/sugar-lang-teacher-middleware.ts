@@ -15,6 +15,7 @@
  * Status: active
  */
 
+import { requireSugarlangTargetLanguage } from "../target-language-save-participant";
 import {
   isCompetencyRef,
   teachableRefKey,
@@ -283,7 +284,7 @@ export function createSugarLangTeacherMiddleware(
       // (anchored/supported), zero LLM.
       if (isScriptedMode(execution)) {
         const targetLanguage =
-          execution.selection.targetLanguage ?? learner.targetLanguage;
+          execution.selection.targetLanguage ?? requireSugarlangTargetLanguage();
         // 090.8b: was an inlined band ternary plus its own 0.2/0.5/0.8 table --
         // a second answer to "how much target language at this band", living
         // alongside band-envelope's 0.3/0.65/0.85. Both were real and they
@@ -452,7 +453,7 @@ export function createSugarLangTeacherMiddleware(
             : { situation, situationKey: situationKey(situation) }),
           ...(learnerProgress ? { learnerProgress } : {}),
           lang: {
-            targetLanguage: execution.selection.targetLanguage ?? learner.targetLanguage,
+            targetLanguage: execution.selection.targetLanguage ?? requireSugarlangTargetLanguage(),
             supportLanguage: execution.selection.supportLanguage ?? learner.supportLanguage
           },
           calibrationActive: false
@@ -469,7 +470,7 @@ export function createSugarLangTeacherMiddleware(
         interactionStyle: directive.interactionStyle,
         glossingStrategy: directive.glossingStrategy,
         sentenceComplexityCap: directive.sentenceComplexityCap,
-        targetLanguage: execution.selection.targetLanguage ?? learner.targetLanguage,
+        targetLanguage: execution.selection.targetLanguage ?? requireSugarlangTargetLanguage(),
         learnerCefr: learner.estimatedCefrBand,
         ...(directive.comprehensionCheck.trigger
           ? {

@@ -72,7 +72,7 @@ import {
 
 import type { ChunkMatcher } from "../classifier/chunk-matcher";
 import { englishCollisionSurfaces } from "../classifier/english-collisions";
-import { getSugarlangTargetLanguage } from "../target-language-save-participant";
+import { getSugarlangTargetLanguage, requireSugarlangTargetLanguage } from "../target-language-save-participant";
 
 // Trie rebuild is O(inventory * avgSurfaceForms). Cache per language so it happens once per session.
 const chunkMatcherCache = new Map<
@@ -270,6 +270,13 @@ export function createSugarLangObserveMiddleware(
         }
 
         const learner = await services.learnerStore.getCurrentProfile();
+        // THE LANGUAGE THIS GAME IS IN, asked once for the whole turn.
+        //
+        // A learner profile already lives under a language-keyed id, so asking
+        // the profile which language it is would be reading a copy of its own
+        // key. Empty is unreachable in practice: the context middleware throws
+        // SugarlangMissingTargetLanguageError before a turn gets this far.
+        const targetLanguage = requireSugarlangTargetLanguage();
         const storedCheck = getStoredComprehensionCheck(execution);
         if (storedCheck && execution.input?.kind === "free_text") {
           const predictedRetrievabilities: Record<string, number> = {};
@@ -285,7 +292,7 @@ export function createSugarLangObserveMiddleware(
             // a correct "ten" for `tener` scored as a miss -- and every one of
             // the core verbs (tener, comer, decir, salir, venir) is a collision
             // surface, so probes on the most important words always failed.
-            collectLemmasFromText(execution.input.text, learner.targetLanguage, null, new Set(
+            collectLemmasFromText(execution.input.text, targetLanguage, null, new Set(
               storedCheck.targetLemmas.map((lemma) => lemma.lemmaId)
             ))
               .map((entry) => entry.lemmaId)
@@ -456,21 +463,21 @@ export function createSugarLangObserveMiddleware(
 
         // 085.3: Build chunk matcher from the hand-curated competency inventory so dynamic
         // NPC greetings are detected even when the phrase never appears in authored scene text.
-        if (!chunkMatcherCache.has(learner.targetLanguage)) {
+        if (!chunkMatcherCache.has(targetLanguage)) {
           let inventoryExponents: Exponent[] = [];
           try {
-            inventoryExponents = getAllInventoryExponents(learner.targetLanguage);
+            inventoryExponents = getAllInventoryExponents(targetLanguage);
           } catch {
             // Missing inventory for this language -- chunk detection skipped.
           }
           chunkMatcherCache.set(
-            learner.targetLanguage,
+            targetLanguage,
             inventoryExponents.length > 0
-              ? createChunkMatcher(inventoryExponents, learner.targetLanguage)
+              ? createChunkMatcher(inventoryExponents, targetLanguage)
               : null
           );
         }
-        const chunkMatcher = chunkMatcherCache.get(learner.targetLanguage) ?? null;
+        const chunkMatcher = chunkMatcherCache.get(targetLanguage) ?? null;
 
         const appliedObservations = [] as ReturnType<typeof createObservationEvent>[];
         // Track chunks the player already produced so the NPC-turn isNewCard check doesn't fire
@@ -480,7 +487,7 @@ export function createSugarLangObserveMiddleware(
         if (execution.input?.kind === "free_text") {
           const lemmaCandidates = collectLemmasFromText(
             execution.input.text,
-            learner.targetLanguage,
+            targetLanguage,
             chunkMatcher
           );
           // Deduplicate: only one observation per lemma per turn.
@@ -505,7 +512,7 @@ export function createSugarLangObserveMiddleware(
             observedLemmaIds.add(candidate.lemmaId);
             const lemmaRef: LemmaRef = {
               lemmaId: candidate.lemmaId,
-              lang: learner.targetLanguage
+              lang: targetLanguage
             };
             const observationEvent = createObservationEvent({
               execution,
@@ -530,7 +537,7 @@ export function createSugarLangObserveMiddleware(
 
           // 085.3: Chunk-produced observations for player free-text input.
           if (chunkMatcher) {
-            const inputTokens = tokenize(execution.input.text, learner.targetLanguage);
+            const inputTokens = tokenize(execution.input.text, targetLanguage);
             const chunkMatches = chunkMatcher.match(inputTokens, execution.input.text);
             const observedChunkIds = new Set<string>();
             for (const match of chunkMatches) {
@@ -541,7 +548,7 @@ export function createSugarLangObserveMiddleware(
                 execution,
                 lemma: {
                   lemmaId: exponentCardKey(match.item.exponentId),
-                  lang: learner.targetLanguage
+                  lang: targetLanguage
                 },
                 observation: {
                   kind: "chunk-produced",
@@ -650,7 +657,7 @@ export function createSugarLangObserveMiddleware(
 
         const turnLemmas = collectLemmasFromText(
           normalizedTurn.text,
-          learner.targetLanguage,
+          targetLanguage,
           chunkMatcher,
           // The Teacher directed these words for this situation, so a matching
           // surface in the NPC's own line is the Spanish it was told to teach.
@@ -759,7 +766,7 @@ export function createSugarLangObserveMiddleware(
         // and a teach-line annotation on the turn (one per turn, earliest new function wins).
         let teachLineSurface: string | null = null;
         if (chunkMatcher) {
-          const turnTokens = tokenize(normalizedTurn.text, learner.targetLanguage);
+          const turnTokens = tokenize(normalizedTurn.text, targetLanguage);
           const chunkMatches = chunkMatcher.match(turnTokens, normalizedTurn.text);
           const isPlayerTurn = isPlayerSpokenTurn(
             normalizedTurn,
@@ -782,7 +789,7 @@ export function createSugarLangObserveMiddleware(
               execution,
               lemma: {
                 lemmaId: exponentCardKey(match.item.exponentId),
-                lang: learner.targetLanguage
+                lang: targetLanguage
               },
               observation: isPlayerTurn
                 ? {
@@ -809,7 +816,7 @@ export function createSugarLangObserveMiddleware(
             //   for every NPC chunk match (not just first-teach).
             const fnEntry = getInventoryCompetencyForExponent(
               match.item.exponentId,
-              learner.targetLanguage
+              targetLanguage
             );
             if (isNewCard && !teachLineWritten && fnEntry) {
               const alreadyTaught = await services.teachRecordStore.has(fnEntry.competencyId);
@@ -900,7 +907,7 @@ export function createSugarLangObserveMiddleware(
             if (!completedObjectiveNodeIds.includes(active.nodeId)) {
               continue;
             }
-            for (const entry of collectLemmasFromText(active.description, learner.targetLanguage)) {
+            for (const entry of collectLemmasFromText(active.description, targetLanguage)) {
               if (!entry.lemmaId) {
                 continue;
               }
@@ -908,7 +915,7 @@ export function createSugarLangObserveMiddleware(
                 execution,
                 lemma: {
                   lemmaId: entry.lemmaId,
-                  lang: learner.targetLanguage
+                  lang: targetLanguage
                 },
                 observation: {
                   kind: "quest-success",
@@ -1035,7 +1042,7 @@ export function createSugarLangObserveMiddleware(
           introduce: constraint.targetVocab.introduce,
           reinforce: constraint.targetVocab.reinforce,
           atlas: services.atlas,
-          targetLanguage: learner.targetLanguage,
+          targetLanguage: targetLanguage,
           supportLanguage: supportLang,
           chunkMatcher
         });
@@ -1067,7 +1074,7 @@ export function createSugarLangObserveMiddleware(
         try {
           ambientSpans = findAmbientSpans({
             text: normalizedTurn.text,
-            targetLanguage: learner.targetLanguage,
+            targetLanguage: targetLanguage,
             atlas: services.atlas,
             // The SHARED loader, not a fresh one. `MorphologyLoader` caches per
             // INSTANCE, so `new MorphologyLoader()` here meant re-running

@@ -27,7 +27,7 @@ import { lookupSelection } from "./grading/lookup-selection";
 import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider";
 import { MorphologyLoader } from "./classifier/morphology-loader";
 import { termKey } from "./grading/highlight-terms";
-import { getSugarlangTargetLanguage } from "./target-language-save-participant";
+import { getSugarlangTargetLanguage, requireSugarlangTargetLanguage } from "./target-language-save-participant";
 
 export interface PendingHover {
   lemmaId: string;
@@ -81,7 +81,7 @@ export function createSugarlangDialogueContribution(): {
 
   /** What language to read a word in: what the turn said, else this game's. */
   const targetLanguage = (): string =>
-    constraintTargetLanguage ?? getSugarlangTargetLanguage() ?? "";
+    constraintTargetLanguage ?? requireSugarlangTargetLanguage();
 
   // 090.12: the lookup resolver owns its atlas and morphology rather than
   // taking them from the async service graph. Both are lazy and cache

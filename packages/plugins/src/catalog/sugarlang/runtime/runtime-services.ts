@@ -16,6 +16,7 @@
  * Status: active
  */
 
+import { requireSugarlangTargetLanguage } from "./target-language-save-participant";
 import { composeRegionContents } from "@sugarmagic/domain";
 import type {
   DocumentDefinition,
@@ -900,7 +901,7 @@ export class SugarlangRuntimeServices {
             // `targetLanguage` is a copy of its key -- and a stale copy sends
             // the Teacher to the wrong half of the atlas, which is how an
             // Italian game got slated `estación` and `maleta`.
-            targetLanguage: this.getTargetLanguage() ?? learner.targetLanguage,
+            targetLanguage: requireSugarlangTargetLanguage(),
             supportLanguage: learner.supportLanguage
           },
           calibrationActive: false

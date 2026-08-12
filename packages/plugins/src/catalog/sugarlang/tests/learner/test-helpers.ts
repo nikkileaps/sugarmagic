@@ -19,6 +19,7 @@
  * Status: active
  */
 
+import { setSugarlangTargetLanguage } from "../../runtime/target-language-save-participant";
 import {
   createRuntimeBlackboard,
   type RuntimeBlackboard
@@ -65,9 +66,10 @@ export function createLearnerProfile(
   estimatedCefrBand: CEFRBand = "A1",
   overrides: Partial<LearnerProfile> = {}
 ): LearnerProfile {
+  // The language lives on the game now, not the profile.
+  setSugarlangTargetLanguage("es");
   return {
     learnerId: "learner-epic-7" as LearnerProfile["learnerId"],
-    targetLanguage: "es",
     supportLanguage: "en",
     assessment: {
       status: "unassessed",

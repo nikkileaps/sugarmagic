@@ -32,6 +32,7 @@
  */
 
 import type { SaveParticipant, SaveSlice } from "@sugarmagic/runtime-core";
+import { SugarlangMissingTargetLanguageError } from "../config";
 
 export const SUGARLANG_TARGET_LANGUAGE_PARTICIPANT_ID =
   "sugarlang.targetLanguage";
@@ -44,8 +45,36 @@ export interface SugarlangTargetLanguageSlice {
 
 let activeTargetLanguage: string | null = null;
 
-/** This game's target language. Null before boot has settled one. */
+/**
+ * This game's target language. Null before boot has settled one.
+ *
+ * Callers that cannot proceed without one should use
+ * `requireSugarlangTargetLanguage` instead of substituting a default. An empty
+ * string is NOT a safe stand-in: it reaches `toLocaleLowerCase(lang)` in
+ * lemmatization and throws `RangeError: Incorrect locale information provided`.
+ */
 export function getSugarlangTargetLanguage(): string | null {
+  return activeTargetLanguage;
+}
+
+/**
+ * This game's target language, or a loud failure.
+ *
+ * THE ONE PLACE THAT DECIDES WHAT AN UNSETTLED LANGUAGE MEANS. Everything that
+ * reads a word, lemmatizes, or plans a lesson needs a real language, and the
+ * runtime is already past every layer allowed to be relaxed about it: Studio
+ * tolerates a null language because a fresh project has none, and preview
+ * refuses to launch. Reaching here without one means a built game shipped
+ * misconfigured, which is the same condition the conversation middleware
+ * throws on.
+ *
+ * Compile-time callers have a language in hand and no running game -- they take
+ * it as an argument rather than calling this.
+ */
+export function requireSugarlangTargetLanguage(): string {
+  if (!activeTargetLanguage) {
+    throw new SugarlangMissingTargetLanguageError();
+  }
   return activeTargetLanguage;
 }
 

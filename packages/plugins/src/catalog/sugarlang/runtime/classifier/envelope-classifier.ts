@@ -43,6 +43,7 @@ import {
   type TelemetrySink
 } from "../telemetry/telemetry";
 import { computeLanguageRatioVerdict } from "./language-ratio";
+import { getSugarlangTargetLanguage, requireSugarlangTargetLanguage } from "../target-language-save-participant";
 
 /**
  * Returns [0,1]: fraction of the voice spec's markers (interjections, gesture tags)
@@ -222,7 +223,7 @@ export class EnvelopeClassifier {
     learner: LearnerProfile,
     options: EnvelopeClassifierCheckOptions = {}
   ): EnvelopeVerdict {
-    const lang = options.lang ?? learner.targetLanguage;
+    const lang = options.lang ?? requireSugarlangTargetLanguage();
     const tokens = tokenize(text, lang);
     const chunkMatcher = this.resolveChunkMatcher(
       lang,

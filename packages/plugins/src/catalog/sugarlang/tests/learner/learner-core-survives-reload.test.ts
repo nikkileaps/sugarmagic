@@ -38,7 +38,6 @@ const PLAYER = "player-1";
 function emptyProfile() {
   return createEmptyLearnerProfile({
     learnerId: "user-a:player-1:it:en" as never,
-    targetLanguage: "it",
     supportLanguage: "en"
   });
 }
@@ -88,6 +87,7 @@ describe("092.6.4 - a returning player keeps their level", () => {
       profile: placed,
       cardStore,
       profileStore,
+      targetLanguage: "it",
       sourceSystem: LEARNER_PROFILE_FACT.ownerSystem
     });
 
@@ -117,6 +117,7 @@ describe("092.6.4 - a returning player keeps their level", () => {
       playerEntityId: PLAYER,
       profile: placed,
       cardStore,
+      targetLanguage: "it",
       sourceSystem: LEARNER_PROFILE_FACT.ownerSystem
     });
 
@@ -160,6 +161,7 @@ describe("092.6.4 - a returning player keeps their level", () => {
       profile,
       cardStore,
       profileStore,
+      targetLanguage: "it",
       sourceSystem: LEARNER_PROFILE_FACT.ownerSystem
     });
 
@@ -189,7 +191,8 @@ describe("092.6.4 - a returning player keeps their level", () => {
         profile: emptyProfile(),
         cardStore,
         profileStore: failing,
-        sourceSystem: LEARNER_PROFILE_FACT.ownerSystem
+        targetLanguage: "it",
+      sourceSystem: LEARNER_PROFILE_FACT.ownerSystem
       })
     ).resolves.not.toThrow();
 

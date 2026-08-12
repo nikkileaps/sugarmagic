@@ -167,6 +167,7 @@ describe("learner persistence", () => {
       playerEntityId: "player-1",
       profile,
       cardStore: store,
+      targetLanguage: "es",
       sourceSystem: SUGARLANG_LEARNER_STATE_WRITER
     });
     const loaded = await loadLearnerProfile({
@@ -208,6 +209,7 @@ describe("learner persistence", () => {
       playerEntityId: "player-2",
       profile,
       cardStore: store,
+      targetLanguage: "es",
       sourceSystem: SUGARLANG_LEARNER_STATE_WRITER,
       changedCards: [profile.lemmaCards.hablar]
     });

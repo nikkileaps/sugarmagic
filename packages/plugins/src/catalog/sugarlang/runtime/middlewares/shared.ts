@@ -18,6 +18,7 @@
  * Status: active
  */
 
+import { requireSugarlangTargetLanguage } from "../target-language-save-participant";
 import type {
   ConversationChoice,
   ConversationExecutionContext,
@@ -143,7 +144,7 @@ export function buildLearnerSnapshot(profile: LearnerProfile): LearnerSnapshot {
     learnerId: profile.learnerId,
     cefrBand: profile.estimatedCefrBand,
     cefrConfidence: profile.assessment.cefrConfidence,
-    targetLanguage: profile.targetLanguage,
+    targetLanguage: requireSugarlangTargetLanguage(),
     supportLanguage: profile.supportLanguage,
     currentSessionTurns: profile.currentSession?.turns ?? 0,
     knownLemmaCount: Object.keys(profile.lemmaCards).length
