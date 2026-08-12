@@ -186,3 +186,121 @@ describe("ingest excludes ## Secrets from the vector index", () => {
     ).toBe(false);
   });
 });
+
+describe("readLorePages canon_level", () => {
+  let loreDir: string | null = null;
+  const savedPath = process.env["SUGARMAGIC_LORE_SOURCE_PATH"];
+  const savedKind = process.env["SUGARMAGIC_LORE_SOURCE_KIND"];
+
+  afterEach(() => {
+    if (loreDir) rmSync(loreDir, { recursive: true, force: true });
+    loreDir = null;
+    if (savedPath === undefined) delete process.env["SUGARMAGIC_LORE_SOURCE_PATH"];
+    else process.env["SUGARMAGIC_LORE_SOURCE_PATH"] = savedPath;
+    if (savedKind === undefined) delete process.env["SUGARMAGIC_LORE_SOURCE_KIND"];
+    else process.env["SUGARMAGIC_LORE_SOURCE_KIND"] = savedKind;
+  });
+
+  function writeLore(files: { name: string; lines: string[] }[]) {
+    loreDir = mkdtempSync(join(tmpdir(), "sm-lore-canon-"));
+    mkdirSync(join(loreDir, "pages"), { recursive: true });
+    for (const file of files) {
+      writeFileSync(join(loreDir, "pages", file.name), file.lines.join("\n"), "utf8");
+    }
+    process.env["SUGARMAGIC_LORE_SOURCE_KIND"] = "local";
+    process.env["SUGARMAGIC_LORE_SOURCE_PATH"] = loreDir;
+  }
+
+  const softPodcast = {
+    name: "podcast.md",
+    lines: [
+      "---",
+      "id: lore.media.podcast.ep1",
+      "title: Archivado -- Episode 1",
+      "canon_level: soft",
+      "---",
+      "## Scene 4",
+      "In my apartment I packed a SUITCASE_MARKER and left for the station.",
+      ""
+    ]
+  };
+
+  it("indexes a soft page as one identity chunk, with none of its contents", () => {
+    writeLore([softPodcast]);
+
+    const { pages, chunks } = readLorePages();
+
+    const pageChunks = chunks.filter((c) => c.pageId === "lore.media.podcast.ep1");
+    expect(pageChunks).toHaveLength(1);
+    expect(pageChunks[0]!.canonLevel).toBe("soft");
+    expect(pageChunks[0]!.embeddingText).toContain("Archivado -- Episode 1");
+    expect(pageChunks[0]!.embeddingText).not.toContain("SUITCASE_MARKER");
+    expect(pageChunks[0]!.embeddingText).not.toContain("Scene 4");
+
+    // The full text is untouched, so lore/resolve can still reach it.
+    const page = pages.find((p) => p.pageId === "lore.media.podcast.ep1");
+    expect(page?.sections.some((s) => s.content.includes("SUITCASE_MARKER"))).toBe(true);
+  });
+
+  it("gives a soft page an address that cannot collide with a real section", () => {
+    writeLore([softPodcast]);
+
+    const chunk = readLorePages().chunks.find(
+      (c) => c.pageId === "lore.media.podcast.ep1"
+    );
+
+    // slugify() emits [a-z0-9-] only, so an underscore is unreachable.
+    expect(chunk?.sectionSlug).toBe("_page");
+    expect(chunk?.chunkId).toBe("lore.media.podcast.ep1#_page");
+  });
+
+  it("indexes every section when canon_level is absent", () => {
+    writeLore([
+      {
+        name: "station.md",
+        lines: [
+          "---",
+          "id: lore.locations.station",
+          "title: Air Station",
+          "---",
+          "## Overview",
+          "Travellers arrive here.",
+          "",
+          "## Baggage",
+          "Lost luggage goes to the claim desk.",
+          ""
+        ]
+      }
+    ]);
+
+    const chunks = readLorePages().chunks.filter(
+      (c) => c.pageId === "lore.locations.station"
+    );
+    expect(chunks.map((c) => c.sectionSlug).sort()).toEqual(["baggage", "overview"]);
+    expect(chunks.every((c) => c.canonLevel === "hard")).toBe(true);
+  });
+
+  it("warns and indexes fully when canon_level is not a value it knows", () => {
+    writeLore([
+      {
+        name: "odd.md",
+        lines: [
+          "---",
+          "id: lore.odd",
+          "title: Odd",
+          "canon_level: medium-ish",
+          "---",
+          "## Overview",
+          "Some content.",
+          ""
+        ]
+      }
+    ]);
+
+    const { chunks, warnings } = readLorePages();
+
+    expect(chunks.filter((c) => c.pageId === "lore.odd")).toHaveLength(1);
+    expect(chunks.find((c) => c.pageId === "lore.odd")!.canonLevel).toBe("hard");
+    expect(warnings.some((w) => w.includes("medium-ish"))).toBe(true);
+  });
+});
