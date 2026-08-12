@@ -132,7 +132,6 @@ import {
   type GameSave,
   type GameSavePayload,
   type GameSaveStore,
-  type SaveParticipant,
   SaveParticipantRegistry,
   type SerializedSaveStore,
   type User,
@@ -593,22 +592,6 @@ export interface WebRuntimeHost {
    * (boot still uses `showStartMenu()` for the initial menu open).
    */
   quitToMenu(): void;
-  /**
-   * Plan 055 §055.1 — register a save participant. Called by
-   * runtime-core systems (QuestManager, Inventory, world-presence
-   * tracker, host-owned player/region tracker) at construction
-   * time. Participants registered here contribute slices to
-   * `getCurrentSavePayload()` and receive `deserialize` calls in
-   * tier order at `host.start()` after the save loads. See Plan
-   * 055 §Pattern for save/load flow.
-   */
-  registerSaveParticipant(participant: SaveParticipant): void;
-  /**
-   * Plan 055 §055.1 — unregister a save participant by id. Used
-   * when a system tears down mid-session (rare). No-op if the id
-   * isn't currently registered.
-   */
-  unregisterSaveParticipant(participantId: string): void;
 }
 
 const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
@@ -3439,10 +3422,6 @@ export function createWebRuntimeHost(
     continueGame: hostContinueGame,
     pauseGame: hostPauseGame,
     resumeGame: hostResumeGame,
-    quitToMenu: hostQuitToMenu,
-    registerSaveParticipant: (participant) =>
-      saveParticipantRegistry.register(participant),
-    unregisterSaveParticipant: (participantId) =>
-      saveParticipantRegistry.unregister(participantId)
+    quitToMenu: hostQuitToMenu
   };
 }
