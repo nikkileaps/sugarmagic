@@ -189,7 +189,12 @@ __sugaragentRetrieval.dump()
 __sugaragentRetrieval.dump("npc:finnick")
 ```
 
-Each entry: `{ npcDefinitionId, loreScores, loreSearchPerformed, broadenedBeyondLorePage, ownPageExcluded, droppedByFloor }`.
+Each entry: `{ npcDefinitionId, loreScores, loreSearchPerformed, broadenedBeyondLorePage, ownPageExcluded, noSearchReason }`.
+
+`noSearchReason` is null when a search ran. Otherwise it names why one did not:
+`social-fast-turn` (a greeting, which skips retrieval), `no-vector-store-provider`,
+`no-proxy-base-url` (the gateway is not configured), or `search-failed`. Without
+it, all four look identical from outside: `loreSearchPerformed` false and no scores.
 
 `loreScores` is an array of `{ score, source, pageId, fileId }`, one entry per
 chunk in the final `loreContext` for that turn. The `source` tag says why the
@@ -210,67 +215,73 @@ chunk is there:
 - **`synthetic-location`** -- not from the vector DB at all. It is a string
   assembled at runtime from the blackboard: current area, NPC task, proximity to
   the player, etc. Always given `score: 1` (authoritative fact, not a similarity
-  estimate). The relevance floor never drops it.
+  estimate). The threshold never applies to it.
 
-Reading `source` alongside `score` is what makes the floor tunable: a score of
-0.3 on a `retrieved` chunk is a candidate for filtering; the same score on a
-`pinned` chunk is the identity anchor doing its job.
+Only `retrieved` chunks pass through the threshold, because it is applied by the
+vector store during the search. `pinned` and `synthetic-location` chunks are
+added afterward and are unaffected.
+
+Every score in a dump is a score that already cleared the threshold. A result
+below it never comes back, so it cannot appear here.
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/stages/retrieval-debug.ts`
 
-## Tuning the Relevance Floor
+## Tuning the Relevance Threshold
 
-Use `__sugaragentRetrieval.dump()` to observe score distributions before
-setting `loreRelevanceFloor`. Four steps:
+`loreRelevanceFloor` is the minimum similarity score a lore chunk must reach.
+It travels with every search request as `scoreThreshold` and the vector store
+applies it, so a chunk below it is never returned. Nothing in the game filters
+by score.
+
+Scores are corpus-dependent. A value that works for one lore set means nothing
+for another, and a wiki dominated by one topic can score unrelated pages high.
+Measure, do not guess.
 
 **Step 1 -- Read on-topic vs off-topic scores.**
 Start a session with a representative NPC. Ask one clear on-topic question
-(something the NPC's lore page covers) and one off-topic question (a topic
-from a different part of the world). After each turn:
+(something the world lore covers) and one off-topic question. After each turn:
 
 ```javascript
 __sugaragentRetrieval.dump("npc:your-npc-id")
 ```
 
-Look at `loreScores.filter(s => s.source === "retrieved")`. On-topic turns
-should return higher scores; off-topic turns should return lower scores or
-nothing. Note where relevance visibly flips.
+Look at `loreScores.filter(s => s.source === "retrieved")`. Note what a good
+match scores and what a bad one scores. The gap between them is what a
+threshold can separate. If there is no gap, no value will fix the problem and
+the lore set itself needs attention.
+
+Set the threshold to 0 first, or you will be measuring against a filter that
+is already hiding the low end.
 
 **Step 2 -- Check stability across repeats.**
-Ask the same question twice without advancing the conversation. Compare
-scores across two dumps. If scores vary by more than 0.05-0.10 on the same
-query, the boundary is noisy. Your floor must be at least 0.1 below the
-lowest score you want to reliably keep, or you will intermittently filter
-chunks you need.
+Ask the same question twice without advancing the conversation. If scores vary
+by more than 0.05-0.10 on the same query, the boundary is noisy. Leave at least
+0.1 of margin below the lowest score you want to keep reliably, or you will
+intermittently drop chunks you need.
 
-**Step 3 -- Set the floor conservatively LOW.**
-Pick a value that clears obvious noise (0.2-0.35 is a typical noise floor for
-OpenAI text-embedding-3) with a comfortable margin below your weakest
-on-topic score. A floor of 0.3 is a reasonable first cut for most lore sets.
-Do not set above 0.7 without verifying on a large sample of on-topic queries.
+**Step 3 -- Set it between the two bands.**
+Above the best bad match, below the worst good match, closer to the low end.
+Set it in Studio > SugarAgent > NPC Behavior > Lore Relevance Floor.
 
-**Step 4 -- Confirm graceful abstain on off-topic turns.**
-With the floor set, ask a clearly off-topic question. If all retrieved chunks
-fall below the floor, `loreContext` will be empty and the NPC will abstain
-("I don't know enough about that yet") rather than hallucinating. Check
-`droppedByFloor` in the dump to confirm chunks were dropped rather than simply
-absent from the search results.
+**Step 4 -- Confirm the NPC abstains rather than inventing.**
+Ask a clearly off-topic question. If nothing clears the threshold, `loreScores`
+comes back with no `retrieved` entries and the NPC says it does not know,
+rather than answering from an unrelated page.
 
 **Step 5 -- Check the quest world-context block.**
-The same floor governs the world-context block the quest-context middleware
-pins for a quest stage, and that path is stricter about a bad result: it uses
-one item and keeps it for the whole stage. Start a conversation with a quest
-active, then:
+The same threshold governs the world-context block the quest-context middleware
+pins for a quest stage, and that path is less forgiving: it uses one item and
+keeps it for the whole stage. With a quest active:
 
 ```javascript
 __sugaragentQuestContext.dump("npc:your-npc-id")
 ```
 
-`worldContextScore` is the score of the text that reached the prompt, and
-`droppedScores` lists what the floor rejected. If a visibly unrelated page is
-being used, its score is your ceiling: the floor must sit above it. If
-`worldContext` is null and `droppedScores` holds a result you wanted, the
-floor is too high.
+`worldContextScore` is the score of the text that reached the prompt. If a
+visibly unrelated page is being used, its score is your ceiling. If
+`worldContext` is null, nothing cleared the threshold and the NPC is running
+without world context, which is the intended outcome when the lore has no
+answer.
 
 ## NPC Identity Fallback (no lore page)
 
@@ -388,17 +399,23 @@ check. Without it the judge grades against generic RPG assumptions. Example:
 
 Set in Studio > SugarAgent > NPC Behavior > World Premise.
 
-`loreRelevanceFloor: number` (default `0`) -- minimum vector similarity score
-for a retrieved lore chunk to enter the NPC's context. Range: 0..1 (0 = no
-filter, 1 = nothing passes). Only filters `retrieved` chunks; `pinned` and
-`synthetic-location` chunks always pass. The same value governs the
-quest-context world block: when no candidate clears the floor, the NPC gets no
-world context rather than the best of a poor set. See Tuning the Relevance
-Floor above.
+`loreRelevanceFloor: number` (default `0.3`) -- minimum vector similarity score
+for a lore chunk to be returned at all. Range: 0..1 (0 = no filter, 1 = nothing
+passes). It is sent with every search as `scoreThreshold` and applied by the
+vector store, so a chunk below it never reaches the game. Only affects searched
+chunks; `pinned` and `synthetic-location` entries are added afterward. The same
+value governs the quest-context world block: when nothing clears it, the NPC
+gets no world context rather than the best of a poor set. See Tuning the
+Relevance Threshold above.
 
-The filter itself lives in one place,
-`packages/plugins/src/catalog/sugaragent/runtime/lore-relevance.ts`, which also
-owns the shipped default.
+Set it to 0 to measure a corpus, since a non-zero value hides the low end of
+the score distribution from the debug dumps.
+
+The bounds and the shipped default live in
+`packages/plugins/src/catalog/sugaragent/runtime/lore-relevance.ts`. The gateway
+carries the same default as its fallback for a request that omits the field
+(`packages/plugins/src/deployment/gateway/core.ts`); the two are on opposite
+sides of an HTTP call and have to be kept in step by hand.
 
 Set in Studio > SugarAgent > NPC Behavior > Lore Relevance Floor.
 

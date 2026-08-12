@@ -92,6 +92,11 @@ export interface GatewayVectorSearchRequest {
   query: string;
   maxResults: number;
   filters?: OpenAIVectorStoreFilter | null;
+  /**
+   * Minimum similarity score, applied by the vector store itself. The
+   * gateway falls back to its own default when this is absent.
+   */
+  scoreThreshold?: number;
 }
 
 export interface GatewayVectorSearchResult {
@@ -386,14 +391,24 @@ export class SugarAgentGatewayModerationProvider implements ModerationProvider {
 }
 
 export class SugarAgentGatewayVectorStoreProvider implements VectorStoreProvider {
-  constructor(private readonly client: SugarAgentGatewayVectorStoreClient) {}
+  /**
+   * `scoreThreshold` is the project's minimum similarity score. It travels
+   * with every search so no call site has to remember it, and so the
+   * filtering happens in the vector store rather than after the results
+   * have been sent back.
+   */
+  constructor(
+    private readonly client: SugarAgentGatewayVectorStoreClient,
+    private readonly scoreThreshold: number
+  ) {}
 
   async searchLore(request: VectorStoreSearchRequest): Promise<RetrievedEvidenceItem[]> {
     const response = await this.client.search({
       vectorStoreId: request.vectorStoreId.trim() || undefined,
       query: normalizePrompt(request.query, "query"),
       maxResults: normalizeMaxResults(request.maxResults),
-      filters: request.filters ?? undefined
+      filters: request.filters ?? undefined,
+      scoreThreshold: this.scoreThreshold
     });
     return response.results;
   }

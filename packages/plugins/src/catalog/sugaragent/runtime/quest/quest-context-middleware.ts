@@ -26,10 +26,10 @@
  *
  * ## Which result gets used
  *
- * The search returns several candidates; the relevance floor
- * (`loreRelevanceFloor`, shared with RetrieveStage) drops the ones that
- * score too low, and the highest-scoring survivor becomes the world
- * context. When nothing clears the floor the NPC gets no world context
+ * The search returns several candidates and the highest-scoring one
+ * becomes the world context. Anything below the project's relevance
+ * threshold was already dropped by the vector store, so an empty result
+ * means nothing was relevant enough and the NPC gets no world context
  * -- an unrelated page presented as the current state of the world is
  * worse than none, and it would stay pinned for the whole quest stage.
  *
@@ -52,10 +52,6 @@ import type {
 import type { SugarAgentLogger } from "../logger";
 import type { VectorStoreProvider } from "../clients";
 import type { RetrievedEvidenceItem } from "../types";
-import {
-  applyRelevanceFloor,
-  DEFAULT_LORE_RELEVANCE_FLOOR
-} from "../lore-relevance";
 import { recordQuestContextSnapshot } from "./quest-context-debug";
 
 export const QUEST_CONTEXT_MIDDLEWARE_ID = "sugaragent.questContext";
@@ -66,9 +62,8 @@ const DEFAULT_MAX_WORLD_CONTEXT_CHARS = 400;
 
 /**
  * How many lore results to consider before picking one. Only a single
- * item is ever used, but asking for several means a top hit below the
- * relevance floor falls through to the next candidate instead of
- * leaving the NPC with no world context at all.
+ * item is ever used, but asking for several leaves room for the vector
+ * store to have dropped some below the relevance threshold.
  */
 const WORLD_CONTEXT_CANDIDATE_COUNT = 5;
 
@@ -82,8 +77,6 @@ export interface MemoizedQuestContext {
   worldContext: string | null;
   /** Similarity score of the chosen result; null when nothing was chosen. */
   worldContextScore: number | null;
-  /** Scores of the results the relevance floor rejected, for calibration. */
-  droppedScores: number[];
 }
 
 /**
@@ -109,12 +102,6 @@ export interface QuestContextMiddlewareOptions {
    * Keeps the uncached user half bounded. Defaults to 400 chars.
    */
   maxWorldContextChars?: number;
-  /**
-   * Minimum similarity score a lore result must reach to be used as
-   * world context. Same value RetrieveStage applies to per-turn
-   * evidence. 0 means no floor.
-   */
-  loreRelevanceFloor?: number;
 }
 
 function isAgentSelection(
@@ -149,11 +136,10 @@ function buildRetrievalQuery(
 interface WorldContextResolution {
   text: string | null;
   score: number | null;
-  droppedScores: number[];
 }
 
 function noWorldContext(): WorldContextResolution {
-  return { text: null, score: null, droppedScores: [] };
+  return { text: null, score: null };
 }
 
 /** Highest-scoring result that has text, or null when there is none. */
@@ -167,11 +153,12 @@ function pickBest(items: RetrievedEvidenceItem[]): RetrievedEvidenceItem | null 
 }
 
 /**
- * Search lore for something that describes the world around this
- * quest objective, and keep the best result that clears the relevance
- * floor. When nothing clears it the NPC gets no world context, which
- * is better than presenting an unrelated page as the current state of
- * the world.
+ * Search lore for something that describes the world around this quest
+ * objective and keep the best result. The vector store has already
+ * dropped anything below the project's relevance threshold, so an empty
+ * result means nothing was relevant enough -- and the NPC gets no world
+ * context, which beats presenting an unrelated page as the current
+ * state of the world.
  */
 async function resolveWorldContext(
   execution: ConversationExecutionContext,
@@ -190,16 +177,13 @@ async function resolveWorldContext(
       maxResults: WORLD_CONTEXT_CANDIDATE_COUNT
     });
 
-    const floor = options.loreRelevanceFloor ?? DEFAULT_LORE_RELEVANCE_FLOOR;
-    const { kept, droppedScores } = applyRelevanceFloor(results, floor);
-
-    const best = pickBest(kept);
-    if (!best) return { text: null, score: null, droppedScores };
+    const best = pickBest(results);
+    if (!best) return noWorldContext();
 
     const raw = best.text.trim();
     const max = options.maxWorldContextChars ?? DEFAULT_MAX_WORLD_CONTEXT_CHARS;
     const text = raw.length > max ? raw.slice(0, max).trimEnd() + "..." : raw;
-    return { text, score: best.score, droppedScores };
+    return { text, score: best.score };
   } catch (error) {
     options.logger?.logPluginEvent("quest-context-resolve-failed", {
       error: error instanceof Error ? error.message : String(error)
@@ -252,16 +236,14 @@ export function createQuestContextMiddleware(
           questId,
           stageId,
           worldContext: resolution.text,
-          worldContextScore: resolution.score,
-          droppedScores: resolution.droppedScores
+          worldContextScore: resolution.score
         };
         execution.state[QUEST_CONTEXT_STATE_KEY] = memoized;
         options.logger?.logPluginEvent("quest-context-resolved", {
           questId,
           stageId,
           hasContext: resolution.text !== null,
-          score: resolution.score,
-          droppedByFloor: resolution.droppedScores.length
+          score: resolution.score
         });
       }
 
@@ -281,7 +263,6 @@ export function createQuestContextMiddleware(
           stageId,
           worldContext: memoized.worldContext,
           worldContextScore: memoized.worldContextScore,
-          droppedScores: memoized.droppedScores,
           goalSurfacedCount: execution.runtimeContext?.goalSurfacedCount ?? null
         });
       }

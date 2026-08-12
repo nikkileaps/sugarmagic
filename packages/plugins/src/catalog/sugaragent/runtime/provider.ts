@@ -259,7 +259,8 @@ function resolveProviders(
       new SugarAgentGatewayJudgeClient(baseUrl, getBearerToken)
     ),
     vectorStoreProvider: new SugarAgentGatewayVectorStoreProvider(
-      new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken)
+      new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken),
+      config.loreRelevanceFloor
     ),
     personaLoader: new SugarAgentGatewayPersonaProvider(
       new SugarAgentGatewayLoreClient(baseUrl, getBearerToken)

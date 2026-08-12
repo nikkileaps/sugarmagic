@@ -255,58 +255,13 @@ describe("createQuestContextMiddleware", () => {
   });
 });
 
-describe("createQuestContextMiddleware -- relevance floor", () => {
-  it("skips a top hit below the floor and uses the best result that clears it", async () => {
-    const { provider } = fakeVectorStore([
-      fakeLore("An unrelated podcast script about packing a suitcase.", 0.42),
-      fakeLore("Travelers with lost luggage are directed to baggage claim.", 0.71)
-    ]);
-    const middleware = createQuestContextMiddleware({
-      vectorStoreProvider: provider,
-      loreRelevanceFloor: 0.6
-    });
-    const execution = makeExecution();
-
-    await middleware.prepare?.(execution);
-
-    const annotation = execution.annotations[
-      QUEST_CONTEXT_ANNOTATION_KEY
-    ] as QuestContextAnnotation;
-    expect(annotation.hasContext).toBe(true);
-    expect(annotation.worldContext).toBe(
-      "Travelers with lost luggage are directed to baggage claim."
-    );
-  });
-
-  it("emits no world context when nothing clears the floor", async () => {
-    const { provider } = fakeVectorStore([
-      fakeLore("An unrelated podcast script about packing a suitcase.", 0.42),
-      fakeLore("Another loosely related page.", 0.3)
-    ]);
-    const middleware = createQuestContextMiddleware({
-      vectorStoreProvider: provider,
-      loreRelevanceFloor: 0.6
-    });
-    const execution = makeExecution();
-
-    await middleware.prepare?.(execution);
-
-    const annotation = execution.annotations[
-      QUEST_CONTEXT_ANNOTATION_KEY
-    ] as QuestContextAnnotation;
-    expect(annotation.hasContext).toBe(false);
-    expect(annotation.worldContext).toBeNull();
-  });
-
+describe("createQuestContextMiddleware -- result selection", () => {
   it("takes the highest-scoring result rather than the first one returned", async () => {
     const { provider } = fakeVectorStore([
       fakeLore("Lower scoring page.", 0.65),
       fakeLore("Higher scoring page.", 0.88)
     ]);
-    const middleware = createQuestContextMiddleware({
-      vectorStoreProvider: provider,
-      loreRelevanceFloor: 0.6
-    });
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
     const execution = makeExecution();
 
     await middleware.prepare?.(execution);
@@ -317,7 +272,23 @@ describe("createQuestContextMiddleware -- relevance floor", () => {
     expect(annotation.worldContext).toBe("Higher scoring page.");
   });
 
-  it("asks for more than one candidate so a rejected top hit can fall through", async () => {
+  it("skips a result with empty text and uses the next one", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("   ", 0.92),
+      fakeLore("Real world fact.", 0.71)
+    ]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution();
+
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContext).toBe("Real world fact.");
+  });
+
+  it("asks for more than one candidate", async () => {
     const { provider, searchLore } = fakeVectorStore([fakeLore("world fact")]);
     const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
 
@@ -329,35 +300,15 @@ describe("createQuestContextMiddleware -- relevance floor", () => {
     expect(callArg?.maxResults).toBeGreaterThan(1);
   });
 
-  it("keeps everything when no floor is configured", async () => {
-    const { provider } = fakeVectorStore([fakeLore("Weak but usable.", 0.05)]);
+  it("memoizes the chosen score for threshold calibration", async () => {
+    const { provider } = fakeVectorStore([fakeLore("Chosen page.", 0.71)]);
     const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
-    const execution = makeExecution();
-
-    await middleware.prepare?.(execution);
-
-    const annotation = execution.annotations[
-      QUEST_CONTEXT_ANNOTATION_KEY
-    ] as QuestContextAnnotation;
-    expect(annotation.worldContext).toBe("Weak but usable.");
-  });
-
-  it("memoizes the chosen score and the rejected scores for floor calibration", async () => {
-    const { provider } = fakeVectorStore([
-      fakeLore("Rejected page.", 0.42),
-      fakeLore("Chosen page.", 0.71)
-    ]);
-    const middleware = createQuestContextMiddleware({
-      vectorStoreProvider: provider,
-      loreRelevanceFloor: 0.6
-    });
     const state: Record<string, unknown> = {};
 
     await middleware.prepare?.(makeExecution(state));
 
     const memo = state[QUEST_CONTEXT_STATE_KEY] as MemoizedQuestContext;
     expect(memo.worldContextScore).toBe(0.71);
-    expect(memo.droppedScores).toEqual([0.42]);
   });
 });
 
