@@ -208,6 +208,17 @@ describe("EnvelopeClassifier", () => {
 
     expect(spanishVerdict.withinEnvelope).toBe(true);
     expect(italianVerdict.withinEnvelope).toBe(true);
+
+    // THE WORDS HAVE TO BE RECOGNIZED, not merely fail to violate anything.
+    //
+    // `withinEnvelope` alone passed while the Spanish line resolved ZERO of its
+    // 60 tokens -- reading Spanish text against the Italian half of the atlas
+    // recognizes nothing, and recognizing nothing violates nothing. Asserting
+    // the coverage is what makes reading a line in the wrong language fail.
+    expect(spanishVerdict.profile.unknownTokens).toBe(0);
+    expect(spanishVerdict.profile.knownTokens).toBeGreaterThan(0);
+    expect(italianVerdict.profile.unknownTokens).toBe(0);
+    expect(italianVerdict.profile.knownTokens).toBeGreaterThan(0);
   });
 
   // DELETED a wall-clock performance assertion (2026-08-02).

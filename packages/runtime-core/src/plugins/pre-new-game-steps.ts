@@ -66,10 +66,19 @@ export type PreNewGameStepAnswers = Record<string, string>;
 export function isRenderablePreNewGameStep(
   definition: PreNewGameStepDefinition | null
 ): definition is PreNewGameStepDefinition {
+  // Checked rather than assumed, field by field. A step arrives from a plugin,
+  // so the types are a promise the plugin made and not one this can rely on --
+  // and this runs mid-New-Game-press, where a thrown TypeError would abandon
+  // the whole thing: no wipe, no reload, a player stuck on a menu.
   if (!definition) return false;
-  if (!definition.stepId || !definition.confirmLabel) return false;
-  if (definition.options.length === 0) return false;
+  if (typeof definition.stepId !== "string" || !definition.stepId) return false;
+  if (typeof definition.confirmLabel !== "string" || !definition.confirmLabel) {
+    return false;
+  }
+  if (!Array.isArray(definition.options) || definition.options.length === 0) {
+    return false;
+  }
   return definition.options.some(
-    (option) => option.optionId === definition.defaultOptionId
+    (option) => option?.optionId === definition.defaultOptionId
   );
 }

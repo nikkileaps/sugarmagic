@@ -49,7 +49,7 @@
 import type { LemmaRef } from "../contracts/lexical-prescription";
 import type { LearnerProfile } from "./learner-profile";
 import { isExponentCardKey } from "../inventory/card-display-name";
-import { getSugarlangTargetLanguage, requireSugarlangTargetLanguage } from "../target-language-save-participant";
+import { requireSugarlangTargetLanguage } from "../target-language-save-participant";
 
 /** Probe is REQUIRED at or beyond this many turns, or this many turns pending. */
 const HARD_FLOOR_TURNS = 25;

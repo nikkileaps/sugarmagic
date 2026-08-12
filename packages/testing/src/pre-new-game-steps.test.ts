@@ -194,12 +194,35 @@ describe("pre-new-game steps", () => {
 
   it("an unreadable handshake does not stop the boot", () => {
     // sessionStorage is shared with everything else on this origin.
+    //
+    // ONE CONSUME PER CASE. This used to call consume twice -- once inside
+    // `not.toThrow()` and once for the value -- and the first call REMOVES the
+    // key, so the second returned {} whether or not the junk had been filtered.
+    // The test could not fail: deleting the string filter kept it green.
     const storage = fakeStorage();
     for (const junk of ["not json", "[]", "42", '{"language":7}', "null"]) {
       storage.setItem("sugarmagic.pre-new-game-answers", junk);
-      expect(() => consumePreNewGameStepAnswers(storage)).not.toThrow();
-      expect(consumePreNewGameStepAnswers(storage)).toEqual({});
+      let answers: unknown;
+      expect(() => {
+        answers = consumePreNewGameStepAnswers(storage);
+      }, `junk value ${junk}`).not.toThrow();
+      expect(answers, `junk value ${junk}`).toEqual({});
     }
+  });
+
+  it("keeps only the string answers out of a partly-readable handshake", () => {
+    // The case the loop above cannot reach: a readable map where SOME entries
+    // are unusable. A non-string answer is dropped and the rest survive, which
+    // is what the string filter is actually for.
+    const storage = fakeStorage();
+    storage.setItem(
+      "sugarmagic.pre-new-game-answers",
+      JSON.stringify({ good: "chosen", bad: 7, alsoBad: null, third: "kept" })
+    );
+    expect(consumePreNewGameStepAnswers(storage)).toEqual({
+      good: "chosen",
+      third: "kept"
+    });
   });
 
   it("THE ARCHITECTURAL GUARD: the seam and the runner name no plugin", () => {

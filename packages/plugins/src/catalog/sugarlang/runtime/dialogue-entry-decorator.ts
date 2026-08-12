@@ -27,7 +27,7 @@ import { lookupSelection } from "./grading/lookup-selection";
 import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider";
 import { MorphologyLoader } from "./classifier/morphology-loader";
 import { termKey } from "./grading/highlight-terms";
-import { getSugarlangTargetLanguage, requireSugarlangTargetLanguage } from "./target-language-save-participant";
+import { requireSugarlangTargetLanguage } from "./target-language-save-participant";
 
 export interface PendingHover {
   lemmaId: string;
