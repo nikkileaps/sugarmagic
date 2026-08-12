@@ -27,6 +27,7 @@ import { lookupSelection } from "./grading/lookup-selection";
 import { CefrLexAtlasProvider } from "./providers/impls/cefr-lex-atlas-provider";
 import { MorphologyLoader } from "./classifier/morphology-loader";
 import { termKey } from "./grading/highlight-terms";
+import { getSugarlangTargetLanguage } from "./target-language-save-participant";
 
 export interface PendingHover {
   lemmaId: string;
@@ -66,7 +67,21 @@ export function createSugarlangDialogueContribution(): {
    * observe rejects it and the hover is dropped.
    */
   let currentCreditByTerm: Record<string, string> = {};
-  let currentTargetLanguage = "es";
+  /**
+   * The language a turn told us it was in, when one did.
+   *
+   * Null until an NPC turn carries a constraint, which is why the reader below
+   * falls back to the game's language rather than this holding a guess. It
+   * used to start at the literal "es": until the player's first annotated
+   * turn, hovering a word and asking for a translation resolved against the
+   * Spanish word list -- wrong for an Italian game whether the language was
+   * picked or authored.
+   */
+  let constraintTargetLanguage: string | null = null;
+
+  /** What language to read a word in: what the turn said, else this game's. */
+  const targetLanguage = (): string =>
+    constraintTargetLanguage ?? getSugarlangTargetLanguage() ?? "";
 
   // 090.12: the lookup resolver owns its atlas and morphology rather than
   // taking them from the async service graph. Both are lazy and cache
@@ -91,7 +106,7 @@ export function createSugarlangDialogueContribution(): {
       constraint !== null &&
       typeof (constraint as Record<string, unknown>).targetLanguage === "string"
     ) {
-      currentTargetLanguage = (constraint as Record<string, unknown>)
+      constraintTargetLanguage = (constraint as Record<string, unknown>)
         .targetLanguage as string;
     }
 
@@ -142,7 +157,7 @@ export function createSugarlangDialogueContribution(): {
     const credit = currentCreditByTerm[termKey(term)] ?? term;
     pendingHover = {
       lemmaId: credit,
-      lang: event.lang || currentTargetLanguage,
+      lang: event.lang || targetLanguage(),
       dwellMs: event.dwellMs,
       hoveredAtMs: Date.now()
     };
@@ -161,7 +176,7 @@ export function createSugarlangDialogueContribution(): {
   ): { surface: string; gloss: string } | null {
     const result = lookupSelection({
       selection,
-      targetLanguage: currentTargetLanguage,
+      targetLanguage: targetLanguage(),
       supportLanguage: "en",
       atlas: lookupAtlas,
       morphology: lookupMorphology

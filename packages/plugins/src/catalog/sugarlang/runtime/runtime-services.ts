@@ -34,6 +34,7 @@ import type {
   ConversationActionProposal,
   ConversationQuestFormResponse,
   QuestFormDefinition,
+  PluginAccountStorageContext,
   RuntimePluginContext
 } from "@sugarmagic/runtime-core";
 import type {
@@ -708,7 +709,10 @@ export class SugarlangRuntimeServices {
    */
   getPlacementQuestForm(): QuestFormDefinition | null {
     if (!this.config.placement.enabled) return null;
-    const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
+    // The language being PLAYED, not the one the project was authored for.
+    // Reading config here offered a player who picked Italian the Spanish
+    // questionnaire, keyed to the Spanish learner.
+    const targetLanguage = this.getTargetLanguage();
     if (!targetLanguage || !this.boundContext) return null;
 
     // No account yet means no learner to ask about, so no placement form. A
@@ -759,8 +763,10 @@ export class SugarlangRuntimeServices {
       this.logger.warn("Placement submitted with no services available.");
       return [];
     }
+    // Scored against the questionnaire the player was actually shown. Reading
+    // config here scored Italian answers against the Spanish questionnaire.
     const questionnaire = services.placementQuestionnaireLoader.getQuestionnaire(
-      this.config.targetLanguage
+      this.getTargetLanguage() ?? ""
     );
     const scoreResult = services.placementScoreEngine.scoreResponses(
       response,
@@ -889,7 +895,12 @@ export class SugarlangRuntimeServices {
           situation,
           situationKey: situationKey(situation),
           lang: {
-            targetLanguage: learner.targetLanguage,
+            // THE GAME'S LANGUAGE, NOT THE PROFILE'S FIELD. A learner profile
+            // already lives under a language-keyed id, so its own
+            // `targetLanguage` is a copy of its key -- and a stale copy sends
+            // the Teacher to the wrong half of the atlas, which is how an
+            // Italian game got slated `estación` and `maleta`.
+            targetLanguage: this.getTargetLanguage() ?? learner.targetLanguage,
             supportLanguage: learner.supportLanguage
           },
           calibrationActive: false
@@ -899,7 +910,9 @@ export class SugarlangRuntimeServices {
   }
 
   async getAmbientServices(): Promise<SugarlangExecutionServices | null> {
-    const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
+    // The language being PLAYED. Reading config here warmed teaching
+    // directives for a learner the player is not.
+    const targetLanguage = this.getTargetLanguage();
     if (!targetLanguage) return null;
     // "en" HERE IS DELIBERATE, AND IT IS NOT THE SAME CHOICE getPlacementQuestForm
     // MAKES. This must match what a TURN resolves, because a turn is who reads
@@ -929,8 +942,38 @@ export class SugarlangRuntimeServices {
    * Silent when there is no account or no configured language -- neither is a
    * failure, and neither leaves anything to open.
    */
-  async openAccountStorage(): Promise<void> {
-    const targetLanguage = this.config.targetLanguage?.trim().toLowerCase();
+  async openAccountStorage(
+    context: PluginAccountStorageContext
+  ): Promise<void> {
+    // WHICH LANGUAGE'S STORES TO OPEN, WHEN THE LANGUAGE IS NOT SETTLED YET.
+    //
+    // This runs before the save has even been requested, so the slice holding
+    // the language has not been read. Two cases:
+    //
+    //   - the player just picked one. It is right here in the step answers,
+    //     so the right stores open and the boot's first sync covers them.
+    //   - any other boot. The best guess available is the project's language.
+    //
+    // ACCEPTED, AND IT IS A REAL COST: a player who picked a language other
+    // than the project's and then quits and continues opens the project
+    // language's stores at boot, and their own language's stores open at the
+    // first conversation instead -- after the boot sync pass has gone. On a
+    // second device that reads empty, which is the "returning player is asked
+    // to place again" case.
+    //
+    // REVISIT IF THAT IS SEEN: open the stores for every language the game
+    // could be in (the teachable list) rather than guessing one. It costs an
+    // extra store pair in the boot wait per language, which is why it is not
+    // the default with two languages and one of them usually right.
+    //
+    // Not fixed by reordering boot: the save load is triggered by provider
+    // resolution, so waiting for it here would put a network round trip in
+    // front of the sync loop that is meant to overlap asset preloading.
+    const picked =
+      context.preNewGameStepAnswers[SUGARLANG_TARGET_LANGUAGE_STEP_ID];
+    const targetLanguage = (picked ?? this.config.targetLanguage)
+      ?.trim()
+      .toLowerCase();
     if (!targetLanguage) return;
     const userId = resolveLearnerScope();
     if (!userId) return;

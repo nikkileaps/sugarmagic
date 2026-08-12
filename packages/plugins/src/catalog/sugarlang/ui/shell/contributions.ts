@@ -278,8 +278,9 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
         pluginId: SUGARLANG_SHELL_PLUGIN_ID,
         workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
         sectionId: "language-config",
-        label: "Language",
-        summary: "Target and support language configuration for the learning pipeline.",
+        label: "Learner Debug",
+        summary:
+          "Band override, debug logging, and resetting learner data. The project's language is set in the Sugarlang settings.",
         render: (props) => {
           const configuration = props.pluginConfigurations.find(
             (entry) => entry.pluginId === SUGARLANG_SHELL_PLUGIN_ID
@@ -314,13 +315,11 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
               typeof currentConfig?.targetLanguage === "string"
                 ? currentConfig.targetLanguage
                 : "",
-            supportLanguage: "en",
             debugLogging: currentConfig?.debugLogging === true,
             debugBandOverride:
               typeof currentConfig?.debugBandOverride === "string"
                 ? currentConfig.debugBandOverride
                 : "",
-            onChangeTargetLanguage: (lang: string) => updateConfig({ targetLanguage: lang }),
             onChangeDebugLogging: (enabled: boolean) => updateConfig({ debugLogging: enabled }),
             onChangeDebugBandOverride: (band: string) => updateConfig({ debugBandOverride: band }),
             onResetLearner: () => resetSugarlangLearnerData()

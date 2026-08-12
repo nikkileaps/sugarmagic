@@ -1,7 +1,14 @@
 /**
  * packages/plugins/src/catalog/sugarlang/ui/shell/language-config-section.tsx
  *
- * Purpose: Design section for setting the target and support languages in the Sugarlang workspace.
+ * Purpose: Sugarlang's authoring controls that are not the project's language:
+ *   the CEFR band override, debug logging, and resetting learner data.
+ *
+ * The language itself is edited in the project's Sugarlang settings, and only
+ * there. This section used to carry a second Target Language select writing
+ * the same config field, plus a Support Language select that was disabled and
+ * always "en". It still READS the language, to warn when none is set and to
+ * say which one the sections around it are scoped to.
  *
  * Exports:
  *   - LanguageConfigSection
@@ -17,11 +24,10 @@ import { useState, type ReactElement } from "react";
 import { PanelSection } from "@sugarmagic/ui";
 
 export interface LanguageConfigSectionProps {
+  /** Read-only here. The project's Sugarlang settings own the edit. */
   targetLanguage: string;
-  supportLanguage: string;
   debugLogging: boolean;
   debugBandOverride: string;
-  onChangeTargetLanguage: (lang: string) => void;
   onChangeDebugLogging: (enabled: boolean) => void;
   onChangeDebugBandOverride: (band: string) => void;
   onResetLearner?: () => Promise<void>;
@@ -30,12 +36,12 @@ export interface LanguageConfigSectionProps {
 export function LanguageConfigSection(
   props: LanguageConfigSectionProps
 ): ReactElement {
-  const { targetLanguage, supportLanguage, debugLogging, debugBandOverride, onChangeTargetLanguage, onChangeDebugLogging, onChangeDebugBandOverride, onResetLearner } = props;
+  const { targetLanguage, debugLogging, debugBandOverride, onChangeDebugLogging, onChangeDebugBandOverride, onResetLearner } = props;
   const [resetting, setResetting] = useState(false);
   const [resetDone, setResetDone] = useState(false);
 
   return (
-    <PanelSection title="Language Config" icon="🌐">
+    <PanelSection title="Learner Debug" icon="🌐">
     <div style={{ display: "grid", gap: "0.75rem" }}>
       {!targetLanguage && (
         <div
@@ -48,59 +54,10 @@ export function LanguageConfigSection(
             fontWeight: 600
           }}
         >
-          Target language not set — Sugarlang cannot function without one.
+          Target language not set — Sugarlang cannot function without one. Set
+          it in the project's Sugarlang settings.
         </div>
       )}
-
-      <label style={{ display: "grid", gap: "0.35rem" }}>
-        <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
-          Target Language
-        </span>
-        <span style={{ fontSize: "0.7rem", color: "var(--sm-color-subtext)" }}>
-          The language the player is learning. Required.
-        </span>
-        <select
-          aria-label="Target language"
-          value={targetLanguage}
-          onChange={(event) => onChangeTargetLanguage(event.target.value)}
-          style={{
-            padding: "0.4rem",
-            borderRadius: "0.25rem",
-            border: "1px solid var(--sm-color-surface1, #444)",
-            background: "var(--sm-color-base, #1e1e2e)",
-            color: "var(--sm-color-text, #cdd6f4)",
-            fontSize: "0.85rem"
-          }}
-        >
-          <option value="">Select a language...</option>
-          <option value="es">Spanish (Español)</option>
-          <option value="it">Italian (Italiano)</option>
-        </select>
-      </label>
-
-      <label style={{ display: "grid", gap: "0.35rem" }}>
-        <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>
-          Support Language
-        </span>
-        <span style={{ fontSize: "0.7rem", color: "var(--sm-color-subtext)" }}>
-          The player's native language. Used for glosses and placement form.
-        </span>
-        <select
-          aria-label="Support language"
-          value={supportLanguage}
-          disabled
-          style={{
-            padding: "0.4rem",
-            borderRadius: "0.25rem",
-            border: "1px solid var(--sm-color-surface1, #444)",
-            background: "var(--sm-color-surface0, #313244)",
-            color: "var(--sm-color-overlay0, #6c7086)",
-            fontSize: "0.85rem"
-          }}
-        >
-          <option value="en">English</option>
-        </select>
-      </label>
 
       <label style={{ display: "grid", gap: "0.35rem" }}>
         <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>

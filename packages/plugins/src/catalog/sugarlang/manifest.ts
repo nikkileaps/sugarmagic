@@ -302,8 +302,8 @@ export function createSugarlangPlugin(
     // the first sync pass reconciles them before the player can reach a
     // conversation. Deliberately NOT in `init` below: that needs a world, and
     // by the time there is one the boot wait is over.
-    openAccountStorage() {
-      return services.openAccountStorage();
+    openAccountStorage(context) {
+      return services.openAccountStorage(context);
     },
     update(deltaSeconds) {
       // The runtime's frame delta is SECONDS (runtimeHost.ts: (now - lastTime)

@@ -481,6 +481,20 @@ export interface RuntimePluginContext {
   questDefinitions?: QuestDefinition[];
 }
 
+/**
+ * What a plugin gets when it opens its per-account storage at boot.
+ *
+ * Only what exists that early. There is no world, and the save has not
+ * arrived: `onProvidersResolved` is what triggers the save load, and it fires
+ * after this runs. So a plugin whose storage depends on something it keeps in
+ * the save can only know it here on a boot that answered a step.
+ */
+export interface PluginAccountStorageContext {
+  /** See `RuntimePluginContext.preNewGameStepAnswers`. Empty on any boot that
+   *  did not follow a New Game press. */
+  preNewGameStepAnswers: Readonly<Record<string, string>>;
+}
+
 export interface RuntimePluginInstance {
   pluginId: string;
   displayName: string;
@@ -515,7 +529,9 @@ export interface RuntimePluginInstance {
    *
    * Storage is all this may do. There is no world yet.
    */
-  openAccountStorage?: () => Promise<void> | void;
+  openAccountStorage?: (
+    context: PluginAccountStorageContext
+  ) => Promise<void> | void;
   init?: (context: RuntimePluginContext) => Promise<void> | void;
   update?: (delta: number) => void;
   dispose?: () => Promise<void> | void;
@@ -531,7 +547,7 @@ export interface RuntimePluginManager {
   readonly boot: RuntimeBootModel;
   /** See `RuntimePluginInstance.openAccountStorage`. Call once, at boot,
    *  after the account resolves and before the sync loop starts. */
-  openAccountStorage: () => Promise<void>;
+  openAccountStorage: (context: PluginAccountStorageContext) => Promise<void>;
   init: (context?: Omit<RuntimePluginContext, "boot">) => Promise<void>;
   update: (delta: number) => void;
   dispose: () => Promise<void>;
@@ -565,13 +581,13 @@ export function createRuntimePluginManager(
 
   return {
     boot,
-    async openAccountStorage() {
+    async openAccountStorage(context) {
       for (const plugin of plugins) {
         // One plugin failing to open its storage must not stop the others, or
         // take the boot down with it. That plugin's data does not follow the
         // player this session; the rest of the game is unaffected.
         try {
-          await plugin.openAccountStorage?.();
+          await plugin.openAccountStorage?.(context);
         } catch (error) {
           console.warn(
             `[runtime-core] ${plugin.pluginId} could not open its per-account storage; ` +

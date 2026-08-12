@@ -2154,7 +2154,9 @@ export function createWebRuntimeHost(
       // pass that is actually coming.
       //
       // Awaited: a store opened after the pass starts has missed it.
-      await pluginManager.openAccountStorage();
+      await pluginManager.openAccountStorage({
+        preNewGameStepAnswers: bootPreNewGameStepAnswers
+      });
 
       // Kicked off HERE and awaited further down, so the first pull overlaps
       // asset preloading instead of being serialised behind it.

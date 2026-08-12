@@ -72,6 +72,7 @@ import {
 
 import type { ChunkMatcher } from "../classifier/chunk-matcher";
 import { englishCollisionSurfaces } from "../classifier/english-collisions";
+import { getSugarlangTargetLanguage } from "../target-language-save-participant";
 
 // Trie rebuild is O(inventory * avgSurfaceForms). Cache per language so it happens once per session.
 const chunkMatcherCache = new Map<

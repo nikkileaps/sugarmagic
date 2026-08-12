@@ -86,14 +86,14 @@ describe("092.6.3 - the learner's storage is open before the boot sync pass", ()
     // more -- there is no world yet -- and it silently slides back to the
     // first conversation turn, which is the bug.
     const runtime = services();
-    await runtime.openAccountStorage();
+    await runtime.openAccountStorage({ preNewGameStepAnswers: {} });
 
     expect(sugarlangStoreIds()).toEqual(["cards:it:en", "profile:it:en"]);
   });
 
   it("registers the stores with the sync loop, so a pass can reconcile them", async () => {
     const runtime = services();
-    await runtime.openAccountStorage();
+    await runtime.openAccountStorage({ preNewGameStepAnswers: {} });
 
     const keys = listSyncedRecordStores()
       .filter((handle) => handle.storeKey.pluginId === "sugarlang")
@@ -101,19 +101,43 @@ describe("092.6.3 - the learner's storage is open before the boot sync pass", ()
     expect(keys).toEqual([USER, USER]);
   });
 
+  it("opens the language the player just picked, not the project's", async () => {
+    // A pick reaches this before the save does -- the save is not even
+    // requested until provider resolution fires, which is after this runs. So
+    // the answers carried across the reload are the only way a New Game
+    // session opens the right stores at boot rather than at the first
+    // conversation.
+    const runtime = services({ targetLanguage: "it" });
+    await runtime.openAccountStorage({
+      preNewGameStepAnswers: { "sugarlang.targetLanguage": "es" }
+    });
+
+    expect(sugarlangStoreIds()).toEqual(["cards:es:en", "profile:es:en"]);
+  });
+
+  it("falls back to the project's language when nothing was picked", async () => {
+    // Every boot that was not a New Game press. The language the game is
+    // actually in lives in the save, which has not arrived yet -- see the
+    // accepted cost written down in openAccountStorage.
+    const runtime = services({ targetLanguage: "it" });
+    await runtime.openAccountStorage({ preNewGameStepAnswers: {} });
+
+    expect(sugarlangStoreIds()).toEqual(["cards:it:en", "profile:it:en"]);
+  });
+
   it("opens nothing when no account has resolved, rather than under a null one", async () => {
     // Storage opened without an account is shared by everyone using the
     // browser, and nothing written into it can be attributed afterwards.
     signedIn(null);
     const runtime = services();
-    await runtime.openAccountStorage();
+    await runtime.openAccountStorage({ preNewGameStepAnswers: {} });
 
     expect(sugarlangStoreIds()).toEqual([]);
   });
 
   it("opens nothing when no language is configured", async () => {
     const runtime = services({ targetLanguage: "" });
-    await runtime.openAccountStorage();
+    await runtime.openAccountStorage({ preNewGameStepAnswers: {} });
 
     expect(sugarlangStoreIds()).toEqual([]);
   });
@@ -123,8 +147,8 @@ describe("092.6.3 - the learner's storage is open before the boot sync pass", ()
     // second connection to the same database -- two caches of the same rows,
     // and a pending flag cleared in one invisible to the other.
     const runtime = services();
-    await runtime.openAccountStorage();
-    await runtime.openAccountStorage();
+    await runtime.openAccountStorage({ preNewGameStepAnswers: {} });
+    await runtime.openAccountStorage({ preNewGameStepAnswers: {} });
 
     expect(sugarlangStoreIds()).toEqual(["cards:it:en", "profile:it:en"]);
   });
