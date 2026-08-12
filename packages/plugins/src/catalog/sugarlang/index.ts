@@ -31,9 +31,17 @@ import { buildSugarlangPreviewBootPayloadForSession } from "./preview-boot";
 
 export { createSugarlangPlugin } from "./manifest";
 export {
+  SUGARLANG_TEACHABLE_LANGUAGES,
+  SUGARLANG_TARGET_LANGUAGE_STEP_ID,
   normalizeSugarLangPluginConfig,
   resolveSugarLangTargetLanguage
 } from "./config";
+// This game's language, and the test-only reset for it. Read through the
+// getter rather than the slice: the slice is sugarlang's own business.
+export {
+  getSugarlangTargetLanguage,
+  resetSugarlangTargetLanguageForTests
+} from "./runtime/target-language-save-participant";
 export { buildSugarlangPreviewBootPayloadForSession } from "./preview-boot";
 export {
   pluginDefinition,

@@ -149,7 +149,6 @@ export interface LearnerAssessment {
  */
 export interface LearnerProfile {
   learnerId: LearnerId;
-  targetLanguage: string;
   supportLanguage: string;
   assessment: LearnerAssessment;
   estimatedCefrBand: CEFRBand;

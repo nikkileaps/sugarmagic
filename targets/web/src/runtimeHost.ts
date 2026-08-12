@@ -132,7 +132,6 @@ import {
   type GameSave,
   type GameSavePayload,
   type GameSaveStore,
-  type SaveParticipant,
   SaveParticipantRegistry,
   type SerializedSaveStore,
   type User,
@@ -158,6 +157,8 @@ import {
   type RuntimeActionRegistry,
   QUEST_MANAGER_PARTICIPANT_ID,
   GAME_SAVE_SCHEMA_VERSION,
+  type PreNewGameStepAnswers,
+  type PreNewGameStepDefinition,
   type UIActionRegistry,
   type UIContextStore,
   type UIStateStore
@@ -172,6 +173,10 @@ import {
 } from "./save/campaignProgressionParticipant";
 import { showEntryTitleSequence } from "./sceneTransitionCard";
 import { showSceneExitOverlay } from "./creditsRoll";
+import {
+  runPreNewGameSteps,
+  writePreNewGameStepAnswers
+} from "./preNewGameSteps";
 import {
   consumeOpenEpisodesFlag,
   consumeSceneEntryFlag,
@@ -369,6 +374,15 @@ export interface WebRuntimeStartState {
    * Default (false / omitted) preserves the menu-on-boot behavior.
    */
   skipStartMenuOnBoot?: boolean;
+  /**
+   * What the player answered in the pre-new-game steps that ran just before
+   * this boot, keyed by stepId (see `preNewGameSteps.ts`).
+   *
+   * Read out of sessionStorage at module load by the caller, alongside the
+   * fresh-start flag, because both are written by the New Game press that
+   * caused this page load. Empty on every other boot.
+   */
+  preNewGameStepAnswers?: PreNewGameStepAnswers;
 }
 
 /**
@@ -502,6 +516,12 @@ export interface WebRuntimeHost {
    */
   getCurrentSavePayload(): GameSavePayload | null;
   /**
+   * What the player answered in the pre-new-game steps that ran just before
+   * this boot, keyed by stepId. Empty on an ordinary boot. Stays readable for
+   * the life of the session; reading it does not consume it.
+   */
+  getPreNewGameStepAnswers(): PreNewGameStepAnswers;
+  /**
    * Story 47.10 follow-up — callers tell the host when a fresh save
    * was written (autosave loop) so the Session debug HUD card
    * reflects the latest snapshot. Idempotent; safe to call after
@@ -572,22 +592,6 @@ export interface WebRuntimeHost {
    * (boot still uses `showStartMenu()` for the initial menu open).
    */
   quitToMenu(): void;
-  /**
-   * Plan 055 §055.1 — register a save participant. Called by
-   * runtime-core systems (QuestManager, Inventory, world-presence
-   * tracker, host-owned player/region tracker) at construction
-   * time. Participants registered here contribute slices to
-   * `getCurrentSavePayload()` and receive `deserialize` calls in
-   * tier order at `host.start()` after the save loads. See Plan
-   * 055 §Pattern for save/load flow.
-   */
-  registerSaveParticipant(participant: SaveParticipant): void;
-  /**
-   * Plan 055 §055.1 — unregister a save participant by id. Used
-   * when a system tears down mid-session (rare). No-op if the id
-   * isn't currently registered.
-   */
-  unregisterSaveParticipant(participantId: string): void;
 }
 
 const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
@@ -1011,7 +1015,49 @@ export function createWebRuntimeHost(
   // `uiStateStore` fields; the bridge above mirrors the change
   // into `gameStateStore.lifecycle`. 054.4 will flip the
   // direction (write `gameState` directly; legacy fields retire).
+
+  // The plugin manager is built inside start(). New Game is a host action that
+  // runs outside that closure and needs to ask plugins for their pre-new-game
+  // steps, so start() publishes the manager here. Null before the first start()
+  // and after dispose, which reads as "no steps to run".
+  let activePluginManager: ReturnType<
+    typeof createResolvedRuntimePluginManager
+  > | null = null;
+
+  // Set while a pre-new-game step is on screen, and called with the player's
+  // choice by GameUILayer's confirm button. Read at call time rather than
+  // captured, so the callback handed to GameUILayer at mount stays correct for
+  // every step of every New Game press.
+  let resolveOpenPreNewGameStep: ((optionId: string) => void) | null = null;
+
+  /** Put one step on screen and wait for the confirm press. */
+  function presentPreNewGameStep(
+    definition: PreNewGameStepDefinition
+  ): Promise<string> {
+    return new Promise<string>((resolve) => {
+      resolveOpenPreNewGameStep = resolve;
+      uiStateStore.setState({
+        preNewGameStepOpen: true,
+        preNewGameStepDefinition: definition
+      });
+    });
+  }
+
   async function hostStartNewGame(): Promise<void> {
+    // Ask whatever plugins want asked, then destroy the save. The manager is
+    // built inside start(); New Game runs outside it, which is why the handle
+    // above exists. No contributed steps means this loop does nothing and New
+    // Game behaves exactly as it did before the seam existed.
+    const stepContributions =
+      activePluginManager?.getContributions("newGame.preStep") ?? [];
+    if (stepContributions.length > 0) {
+      const answers = await runPreNewGameSteps({
+        contributions: stepContributions,
+        present: presentPreNewGameStep
+      });
+      writePreNewGameStepAnswers(answers);
+    }
+
     const bindings = activeProvidersStore.getSnapshot();
     const settledUser = bindings?.identityProvider.currentUser();
     if (bindings && settledUser) {
@@ -1114,31 +1160,9 @@ export function createWebRuntimeHost(
   async function runExitSequenceAndReload(
     target: Scene | null
   ): Promise<void> {
-    // Force-write the save NOW — the reload can't wait for the
-    // next 5s autosave tick or the advance would be lost.
-    const bindings = activeProvidersStore.getSnapshot();
-    const settledUser = bindings?.identityProvider.currentUser();
-    const payload = getCurrentSavePayload();
-    if (bindings && settledUser && payload) {
-      try {
-        await bindings.saveStore.save(settledUser.userId, {
-          userId: settledUser.userId,
-          lastPlayed: new Date().toISOString(),
-          schemaVersion: GAME_SAVE_SCHEMA_VERSION,
-          writtenByVersion: SUGARMAGIC_VERSION,
-          payload
-        });
-      } catch (error) {
-        console.warn(
-          "[web-runtime] scene advance: save write failed; continuing anyway (advance may be lost).",
-          error
-        );
-      }
-    } else {
-      console.warn(
-        "[web-runtime] scene advance: no active store/user; Scene advance will not persist."
-      );
-    }
+    // The reload can't wait for the next 5s autosave tick or the
+    // advance would be lost.
+    await forceWriteSave("scene advance");
 
     // One overlay: credits scroll with the routing control in the
     // bottom-right corner over them (Netflix model). The credits
@@ -1320,6 +1344,9 @@ export function createWebRuntimeHost(
   // Plan 061 §061.3 — the site's Play page, read from SugarProfile
   // config at boot. Empty = no Exit affordance anywhere.
   let bootPlayPageUrl = "";
+  // What the player answered on the way into this boot. Empty unless the page
+  // load was caused by a New Game press that ran at least one step.
+  let bootPreNewGameStepAnswers: PreNewGameStepAnswers = {};
   saveParticipantRegistry.register(
     createCampaignProgressionParticipant({
       getCurrentSceneId: () => activeSceneIdForSave,
@@ -1565,6 +1592,7 @@ export function createWebRuntimeHost(
       animationId = null;
     }
 
+    activePluginManager = null;
     identityUnsubscribe?.();
     identityUnsubscribe = null;
     accountDataSync?.stop();
@@ -2025,6 +2053,23 @@ export function createWebRuntimeHost(
       state.pluginRuntimeEnvironment ?? {},
       state.pluginBootPayloads ?? {}
     );
+    activePluginManager = pluginManager;
+    // Whatever the plugins declared they keep in the save. Registered here,
+    // right after construction and before the first deserialize pass, so a
+    // plugin's own state is restored by the time it binds. The host does not
+    // look inside any of them.
+    for (const participant of pluginManager.getSaveParticipants()) {
+      saveParticipantRegistry.register(participant);
+    }
+    bootPreNewGameStepAnswers = state.preNewGameStepAnswers ?? {};
+    if (Object.keys(bootPreNewGameStepAnswers).length > 0) {
+      // The only observable for the handshake in a published build: the debug
+      // HUD is Studio-only and the window handles are dev-only.
+      console.info(
+        "[web-runtime] pre-new-game answers carried into this boot:",
+        bootPreNewGameStepAnswers
+      );
+    }
     // Plan 061 §061.3 — the Exit affordance's target. Only
     // meaningful when SugarProfile is enabled (the Play page is
     // where its auth lives), so reading it from that plugin's
@@ -2092,7 +2137,9 @@ export function createWebRuntimeHost(
       // pass that is actually coming.
       //
       // Awaited: a store opened after the pass starts has missed it.
-      await pluginManager.openAccountStorage();
+      await pluginManager.openAccountStorage({
+        preNewGameStepAnswers: bootPreNewGameStepAnswers
+      });
 
       // Kicked off HERE and awaited further down, so the first pull overlaps
       // asset preloading instead of being serialised behind it.
@@ -2851,6 +2898,9 @@ export function createWebRuntimeHost(
       root,
       world,
       inputManager,
+      // Handed to plugin init so whoever asked a question on the way in can
+      // read its own answer. The host never looks up a key.
+      preNewGameStepAnswers: bootPreNewGameStepAnswers,
       // The session asks for a framing by NAME; the host resolves it against
       // the live camera. Requesting captures wherever the camera is now as the
       // framing to give back, so a player who had zoomed gets their own zoom
@@ -3164,9 +3214,36 @@ export function createWebRuntimeHost(
         },
         onQuestFormDismiss: () => {
           gameplaySession?.cancelQuestForm();
+        },
+        onPreNewGameStepConfirm: (optionId) => {
+          uiStateStore.setState({
+            preNewGameStepOpen: false,
+            preNewGameStepDefinition: null
+          });
+          const resolve = resolveOpenPreNewGameStep;
+          resolveOpenPreNewGameStep = null;
+          resolve?.(optionId);
         }
       })
     );
+    // Anything answered on the way in has to reach the save NOW. Autosave runs
+    // every 5 seconds, and a tab closed inside that window would come back to a
+    // game with no answers, so whoever asked would quietly fall back to its own
+    // default -- the player's choice lost with no sign it ever happened. The
+    // world and the session exist by this point, which is what
+    // getCurrentSavePayload needs.
+    if (Object.keys(bootPreNewGameStepAnswers).length > 0) {
+      // AFTER PLUGIN INIT, or this writes the answer nobody has read yet.
+      //
+      // Plugins turn a carried answer into their own state during `init`, and
+      // `init` is started without being awaited so a slow plugin cannot hold up
+      // the first frame. Serializing before it settles captured whatever the
+      // slices held BEFORE the answer was applied -- and it only looked correct
+      // when the answering plugin happened to be first in the project's list.
+      await gameplayAssembly.pluginsInitialized;
+      await forceWriteSave("pre-new-game answers");
+    }
+
     // Runtime host drives its own render loop (renderFrame ticks gameplay
     // then calls renderView.render()). We wait one tick so the view's async init
     // can resolve and create the pipeline before we try to render.
@@ -3232,6 +3309,49 @@ export function createWebRuntimeHost(
     startAnyway = null;
     bootStallStore.set(null);
     release?.();
+  }
+
+  /**
+   * Write the save immediately instead of waiting for the next autosave tick.
+   *
+   * For the moments where the 5-second gap is the difference between something
+   * being kept and being silently lost: a Scene advance about to reload, and a
+   * language picked on the way into a fresh game.
+   *
+   * `reason` only names the caller in the warnings. Failing to write is not
+   * fatal here -- the player keeps playing, and the log says what they stand to
+   * lose.
+   */
+  async function forceWriteSave(reason: string): Promise<void> {
+    const bindings = activeProvidersStore.getSnapshot();
+    const settledUser = bindings?.identityProvider.currentUser();
+    const payload = getCurrentSavePayload();
+    if (!bindings || !settledUser || !payload) {
+      console.warn(
+        `[web-runtime] ${reason}: no active store/user/payload; this will not persist.`
+      );
+      return;
+    }
+    const lastPlayed = new Date().toISOString();
+    try {
+      await bindings.saveStore.save(settledUser.userId, {
+        userId: settledUser.userId,
+        lastPlayed,
+        schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+        writtenByVersion: SUGARMAGIC_VERSION,
+        payload
+      });
+    } catch (error) {
+      console.warn(
+        `[web-runtime] ${reason}: save write failed; continuing anyway.`,
+        error
+      );
+      return;
+    }
+    // Tell the rest of the host a save now exists. Without this a player who
+    // quits to the menu right after picking sees no Continue button, because
+    // savePresent only flips on an autosave tick.
+    notifyAutosaveWritten({ lastPlayed, payload });
   }
 
   function notifyAutosaveWritten(snapshot: {
@@ -3301,6 +3421,8 @@ export function createWebRuntimeHost(
     dispose,
     getCurrentSavePayload,
     notifyAutosaveWritten,
+    /** What the player answered on the way into this boot, by stepId. */
+    getPreNewGameStepAnswers: () => bootPreNewGameStepAnswers,
     startWithoutFinishedLoading,
     showStartMenu,
     setLoginModalOpen,
@@ -3308,10 +3430,6 @@ export function createWebRuntimeHost(
     continueGame: hostContinueGame,
     pauseGame: hostPauseGame,
     resumeGame: hostResumeGame,
-    quitToMenu: hostQuitToMenu,
-    registerSaveParticipant: (participant) =>
-      saveParticipantRegistry.register(participant),
-    unregisterSaveParticipant: (participantId) =>
-      saveParticipantRegistry.unregister(participantId)
+    quitToMenu: hostQuitToMenu
   };
 }

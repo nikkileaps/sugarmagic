@@ -34,7 +34,20 @@ export interface SugarLangChunkExtractionConfig {
   enabled: boolean;
 }
 
-export type SugarlangTargetLanguage = "es" | "it" | "";
+/**
+ * The languages sugarlang can teach, in the order a player is offered them.
+ *
+ * One list. The config validator, the Studio setting's dropdown and the
+ * new-game picker all read it, so adding a language is one edit and none of
+ * them can drift out of step with the others. What each code is CALLED is a
+ * separate lookup (`languageDisplayName`) covering far more languages than
+ * these -- it answers "what is 'it'", not "can we teach it".
+ */
+export const SUGARLANG_TEACHABLE_LANGUAGES = ["es", "it"] as const;
+
+export type SugarlangTargetLanguage =
+  | (typeof SUGARLANG_TEACHABLE_LANGUAGES)[number]
+  | "";
 export type SugarlangSupportLanguage = "en";
 export type SugarlangDebugBandOverride = "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "";
 
@@ -56,6 +69,14 @@ export interface SugarLangPluginConfig {
    *  Set to "" to disable. Never affects production deployments. */
   debugBandOverride: SugarlangDebugBandOverride;
 }
+
+/**
+ * The pre-new-game step sugarlang contributes: which language this game is
+ * played in. The answer is stored under this id in the host's step-answer
+ * slice, and sugarlang is the only thing that knows the id or what the answer
+ * means -- the host asked the question and kept the answer without reading it.
+ */
+export const SUGARLANG_TARGET_LANGUAGE_STEP_ID = "sugarlang.targetLanguage";
 
 export const SUGARLANG_PROXY_BASE_URL_ENV =
   "SUGARMAGIC_SUGARLANG_PROXY_BASE_URL";
@@ -97,7 +118,9 @@ function normalizeConfidenceFloor(value: unknown, fallback: number): number {
   return Math.min(0.95, Math.max(0.05, value));
 }
 
-const VALID_TARGET_LANGUAGES = new Set<SugarlangTargetLanguage>(["es", "it"]);
+const VALID_TARGET_LANGUAGES = new Set<SugarlangTargetLanguage>(
+  SUGARLANG_TEACHABLE_LANGUAGES
+);
 const VALID_DEBUG_BANDS = new Set<SugarlangDebugBandOverride>(["A1", "A2", "B1", "B2", "C1", "C2"]);
 
 function normalizeTargetLanguage(value: unknown): SugarlangTargetLanguage {

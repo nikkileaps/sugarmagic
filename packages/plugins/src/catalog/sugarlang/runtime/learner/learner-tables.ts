@@ -153,6 +153,9 @@ export const SUGARLANG_LEARNER_TABLE: RemoteTableSpec<PersistedLearnerProfileCor
     tableName: LEARNER_TABLE_NAME,
 
     toColumns: (core) => ({
+      // The row still says which language pair it is, but the value comes
+      // from the game rather than from the profile: the profile no longer
+      // carries one, because it lives under a language-keyed id already.
       target_language: core.targetLanguage,
       support_language: core.supportLanguage,
       estimated_cefr_band: core.estimatedCefrBand,

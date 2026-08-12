@@ -19,6 +19,19 @@ a label:
 Nothing enforces these, so set the label at creation. An issue with no `type:` label is
 untyped and will not show up in a type-filtered query.
 
+## Epic and story titles carry a type prefix
+
+An epic's title starts with `epic: ` and a story's with `story: ` (lowercase), in
+addition to the `type:` label. The prefix is for humans scanning a title list; the label
+is for queries. Forward-only: older issues with inconsistent titles stay as they are. If
+a ticket is reclassified later, fix its title and label at that point.
+
+## Bodies describe the present
+
+A ticket body states what is true now. When rewriting one, do not narrate what an
+earlier version said or when a stale claim was corrected -- the issue's edit history
+already records that.
+
 ## Hierarchy is sub-issues
 
 Epic -> story -> task is modelled with GitHub sub-issues, not labels or naming schemes.

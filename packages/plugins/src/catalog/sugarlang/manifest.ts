@@ -21,6 +21,8 @@
 
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import { createRegionTeacherWarmer } from "./runtime/teacher/warm-region-teacher";
+import { createSugarlangTargetLanguageSaveParticipant } from "./runtime/target-language-save-participant";
+import { buildTargetLanguagePreNewGameStep } from "./runtime/target-language-pre-new-game-step";
 import type { RuntimePluginFactoryContext } from "../../runtime";
 import {
   createDeploymentRequirementId,
@@ -30,11 +32,17 @@ import type {
   ConversationMiddlewareContribution,
   DebugHudCardContribution,
   DialogueEntryDecoratorContribution,
+  PreNewGameStepContribution,
   QuestAssessmentContribution,
   DisplayTextResolverContribution,
   RuntimePluginInstance
 } from "@sugarmagic/runtime-core";
-import { normalizeSugarLangPluginConfig, resolveSugarlangProxyBaseUrl } from "./config";
+import {
+  SUGARLANG_TEACHABLE_LANGUAGES,
+  normalizeSugarLangPluginConfig,
+  resolveSugarlangProxyBaseUrl
+} from "./config";
+import { languageDisplayName } from "./runtime/language-names";
 import { loadSceneContextsFromArtifact } from "./runtime/compile/artifact-loader";
 import { seedShippedVariantCache } from "./runtime/compile/shipped-variant-cache";
 import {
@@ -222,14 +230,35 @@ export function createSugarlangPlugin(
     }
   };
 
+  /**
+   * The language question, asked once between the New Game press and the wipe.
+   *
+   * The game knows there is a question to put on screen before it destroys the
+   * save. It does not know this one is about language, and does not read the
+   * answer -- it hands the answer back at the next boot and sugarlang decides
+   * what it meant.
+   */
+  const languagePickerContribution: PreNewGameStepContribution = {
+    pluginId: context.configuration.pluginId,
+    contributionId: "sugarlang.new-game.language-picker",
+    kind: "newGame.preStep",
+    displayName: "Sugarlang Language Picker",
+    priority: 10,
+    payload: {
+      summary: "Asks which language this game is played in.",
+      getStep: () => buildTargetLanguagePreNewGameStep(config)
+    }
+  };
+
   const contributions: (
     | ConversationMiddlewareContribution
     | DialogueEntryDecoratorContribution
     | DisplayTextResolverContribution
     | DebugHudCardContribution
     | QuestAssessmentContribution
+    | PreNewGameStepContribution
   )[] =
-    [decoratorContribution, displayTextContribution, sceneContextCardContribution, learnerCardContribution, assessmentContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
+    [decoratorContribution, displayTextContribution, sceneContextCardContribution, learnerCardContribution, assessmentContribution, languagePickerContribution, ...SUGARLANG_MIDDLEWARE_FACTORIES.map((factory) => {
       const middleware = factory({ services, logger, telemetry });
       return {
         pluginId: context.configuration.pluginId,
@@ -264,12 +293,17 @@ export function createSugarlangPlugin(
     displayName: SUGARLANG_DISPLAY_NAME,
     contributions,
     blackboardFactDefinitions: SUGARLANG_BLACKBOARD_FACT_DEFINITIONS,
+    // This game's target language lives in the game's save, in a slice
+    // sugarlang owns. Declared here rather than set up in init: the host
+    // registers declared participants before the first deserialize pass, and
+    // the runtime reads the language when it binds, which is after that pass.
+    saveParticipants: [createSugarlangTargetLanguageSaveParticipant()],
     // Plan 092.6.3 — the learner's word history and level, opened at boot so
     // the first sync pass reconciles them before the player can reach a
     // conversation. Deliberately NOT in `init` below: that needs a world, and
     // by the time there is one the boot wait is over.
-    openAccountStorage() {
-      return services.openAccountStorage();
+    openAccountStorage(context) {
+      return services.openAccountStorage(context);
     },
     update(deltaSeconds) {
       // The runtime's frame delta is SECONDS (runtimeHost.ts: (now - lastTime)
@@ -388,10 +422,16 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       type: "select",
       description:
         "Language the player is learning. Sugarlang biases generation + verification toward this language at gateway request time.",
+      // Built from the same list the player's picker offers, so a language
+      // added in one place cannot go missing from the other. "(unset)" is
+      // authoring-only -- a project with no language set is something the
+      // author is still working on, not something a player can choose.
       options: [
         { value: "", label: "(unset)" },
-        { value: "es", label: "Spanish (es)" },
-        { value: "it", label: "Italian (it)" }
+        ...SUGARLANG_TEACHABLE_LANGUAGES.map((code) => ({
+          value: code,
+          label: `${languageDisplayName(code)} (${code})`
+        }))
       ],
       default: ""
     },

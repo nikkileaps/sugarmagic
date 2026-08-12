@@ -39,7 +39,7 @@ describe("sugarlang plugin registration", () => {
 
     expect(instance.pluginId).toBe(SUGARLANG_PLUGIN_ID);
     expect(instance.displayName).toBe(SUGARLANG_DISPLAY_NAME);
-    expect(instance.contributions).toHaveLength(10);
+    expect(instance.contributions).toHaveLength(11);
     expect(instance.contributions.map((entry) => entry.kind)).toEqual([
       "dialogue.entryDecorator",
       // Runtime grading seam. Its absence is what makes the game plain English,
@@ -56,6 +56,11 @@ describe("sugarlang plugin registration", () => {
       // assessment objective open a form without a conversation -- placement
       // used to ride on a dialogue turn and so only worked for free-form NPCs.
       "quest.assessment",
+      // The language question, asked once between the New Game press and the
+      // save being wiped. Its presence here is what makes the game ask at all;
+      // without it every game silently runs in the project's authored
+      // language.
+      "newGame.preStep",
       "conversation.middleware",
       "conversation.middleware",
       "conversation.middleware",

@@ -207,12 +207,12 @@ describe("sugarlang runtime contracts", () => {
       minimalGreetingMode: false,
       targetVocab: directive.targetVocab,
       supportPosture: directive.supportPosture,
+      targetLanguage: "es",
       targetLanguageRatio: directive.targetLanguageRatio,
       interactionStyle: directive.interactionStyle,
       glossingStrategy: directive.glossingStrategy,
       sentenceComplexityCap: directive.sentenceComplexityCap,
-      targetLanguage: "es",
-      learnerCefr: "A2",
+        learnerCefr: "A2",
       comprehensionCheckInFlight: {
         active: true,
         probeStyle: "recognition",
@@ -273,7 +273,6 @@ describe("sugarlang runtime contracts", () => {
     };
     const learner: LearnerProfile = {
       learnerId: "learner-1" as LearnerProfile["learnerId"],
-      targetLanguage: "es",
       supportLanguage: "en",
       assessment: {
         status: "estimated",

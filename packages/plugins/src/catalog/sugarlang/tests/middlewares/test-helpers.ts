@@ -20,6 +20,7 @@
  * Status: active
  */
 
+import { setSugarlangTargetLanguage } from "../../runtime/target-language-save-participant";
 import type {
   ConversationExecutionContext,
   ConversationTurnEnvelope
@@ -44,9 +45,10 @@ function createPosterior(): CefrPosterior {
 export function createTestLearnerProfile(
   overrides: Partial<LearnerProfile> = {}
 ): LearnerProfile {
+  // The language lives on the game now, not the profile.
+  setSugarlangTargetLanguage("es");
   return {
     learnerId: "learner:es:en" as LearnerProfile["learnerId"],
-    targetLanguage: "es",
     supportLanguage: "en",
     assessment: {
       status: "estimated",

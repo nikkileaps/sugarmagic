@@ -17,6 +17,7 @@
  * Status: active
  */
 
+import { setSugarlangTargetLanguage } from "../../runtime/target-language-save-participant";
 import type {
   AtlasLemmaEntry,
   CEFRBand,
@@ -68,9 +69,10 @@ export function createLearnerProfile(
     };
   }
 
+  // The language lives on the game now, not the profile.
+  setSugarlangTargetLanguage(options.targetLanguage ?? "es");
   return {
     learnerId: "learner-epic-5" as LearnerProfile["learnerId"],
-    targetLanguage: options.targetLanguage ?? "es",
     supportLanguage: options.supportLanguage ?? "en",
     assessment: {
       status: "estimated",

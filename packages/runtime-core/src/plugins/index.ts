@@ -16,6 +16,8 @@
  * Status: active
  */
 
+export * from "./pre-new-game-steps";
+
 import type { RuntimeBootModel, RuntimeHostKind } from "../index";
 import type { ConversationRuntimeContext } from "../conversation";
 import type {
@@ -26,12 +28,14 @@ import type {
   ConversationQuestFormResponse,
   ConversationActionProposal
 } from "../conversation";
+import type { PreNewGameStepPayload } from "./pre-new-game-steps";
 import type { RemoteRecordStorageAdapter } from "../sync-engine";
 import type { UserIdentityProvider } from "../identity";
 import type { UserProfileStore } from "../profile";
 import {
   createSerializedSaveStore,
   type GameSaveStore,
+  type SaveParticipant,
   type SerializedSaveStore
 } from "../save";
 import type { BlackboardFactDefinition, RuntimeBlackboard } from "../state";
@@ -55,6 +59,7 @@ export type RuntimePluginContributionKind =
   | "conversation.middleware"
   | "dialogue.entryDecorator"
   | "quest.assessment"
+  | "newGame.preStep"
   | "displayText.resolver"
   | "debug.hudCard"
   | "debug.entityBillboard"
@@ -393,8 +398,22 @@ export type QuestAssessmentContribution = RuntimePluginContributionBase<
   }
 >;
 
+/**
+ * Asks the player one question between the New Game press and the wipe.
+ *
+ * The host knows there is an ordered list of questions to put on screen before
+ * it destroys the save. It does not know what any of them are for. It renders
+ * the definition, keeps the answer under the step's own id, and hands the
+ * whole map to the next boot -- see `pre-new-game-steps.ts`.
+ */
+export type PreNewGameStepContribution = RuntimePluginContributionBase<
+  "newGame.preStep",
+  PreNewGameStepPayload
+>;
+
 export type RuntimePluginContribution =
   | ConversationProviderContribution
+  | PreNewGameStepContribution
   | QuestAssessmentContribution
   | ConversationMiddlewareContribution
   | DialogueEntryDecoratorContribution
@@ -426,6 +445,16 @@ export interface RuntimePluginContext {
   boot: RuntimeBootModel;
   pluginBootPayloads?: Record<string, unknown>;
   /**
+   * What the player answered in the pre-new-game steps that ran just before
+   * this boot, keyed by stepId. Empty on every boot that was not a New Game.
+   *
+   * Opaque here: a plugin looks up its OWN step id and is the only thing that
+   * knows what the answer means. Keeping it is the plugin's job too -- the
+   * host carries it across the reload and hands it over, and persists none of
+   * it.
+   */
+  preNewGameStepAnswers?: Readonly<Record<string, string>>;
+  /**
    * Every file-backed asset path mapped to the URL that serves it (Plan
    * 092.3).
    *
@@ -452,12 +481,40 @@ export interface RuntimePluginContext {
   questDefinitions?: QuestDefinition[];
 }
 
+/**
+ * What a plugin gets when it opens its per-account storage at boot.
+ *
+ * Only what exists that early. There is no world, and the save has not
+ * arrived: `onProvidersResolved` is what triggers the save load, and it fires
+ * after this runs. So a plugin whose storage depends on something it keeps in
+ * the save can only know it here on a boot that answered a step.
+ */
+export interface PluginAccountStorageContext {
+  /** See `RuntimePluginContext.preNewGameStepAnswers`. Empty on any boot that
+   *  did not follow a New Game press. */
+  preNewGameStepAnswers: Readonly<Record<string, string>>;
+}
+
 export interface RuntimePluginInstance {
   pluginId: string;
   displayName: string;
   config?: Record<string, unknown>;
   contributions: RuntimePluginContribution[];
   blackboardFactDefinitions?: readonly BlackboardFactDefinition<unknown>[];
+  /**
+   * State this plugin keeps in the game's save, as its own slices.
+   *
+   * Declared rather than registered: the host collects these the way it
+   * collects contributions, and registers them without reading them. What is
+   * in a slice is the plugin's business.
+   *
+   * DECLARED AND NOT SET UP IN `init` BECAUSE OF WHEN THEY HAVE TO RUN. A
+   * plugin is constructed before the first deserialize pass; `init` happens
+   * long after it. A participant that arrived during `init` would have missed
+   * the pass that restores it, so a plugin reading its own state at bind would
+   * find nothing on the one boot that matters.
+   */
+  saveParticipants?: readonly SaveParticipant<unknown>[];
   /**
    * Open this plugin's per-account storage. Runs at boot, once the player's
    * account is known and BEFORE the sync loop's first pass.
@@ -472,7 +529,9 @@ export interface RuntimePluginInstance {
    *
    * Storage is all this may do. There is no world yet.
    */
-  openAccountStorage?: () => Promise<void> | void;
+  openAccountStorage?: (
+    context: PluginAccountStorageContext
+  ) => Promise<void> | void;
   init?: (context: RuntimePluginContext) => Promise<void> | void;
   update?: (delta: number) => void;
   dispose?: () => Promise<void> | void;
@@ -488,12 +547,17 @@ export interface RuntimePluginManager {
   readonly boot: RuntimeBootModel;
   /** See `RuntimePluginInstance.openAccountStorage`. Call once, at boot,
    *  after the account resolves and before the sync loop starts. */
-  openAccountStorage: () => Promise<void>;
+  openAccountStorage: (context: PluginAccountStorageContext) => Promise<void>;
   init: (context?: Omit<RuntimePluginContext, "boot">) => Promise<void>;
   update: (delta: number) => void;
   dispose: () => Promise<void>;
   getPlugins: () => readonly RuntimePluginInstance[];
   getEnabledPluginIds: () => string[];
+  /**
+   * Every save participant the enabled plugins declared, in plugin order. The
+   * host registers these; it does not read them.
+   */
+  getSaveParticipants: () => readonly SaveParticipant<unknown>[];
   getContributions: <TKind extends RuntimePluginContributionKind>(
     kind: TKind
   ) => Array<Extract<RuntimePluginContribution, { kind: TKind }>>;
@@ -517,13 +581,13 @@ export function createRuntimePluginManager(
 
   return {
     boot,
-    async openAccountStorage() {
+    async openAccountStorage(context) {
       for (const plugin of plugins) {
         // One plugin failing to open its storage must not stop the others, or
         // take the boot down with it. That plugin's data does not follow the
         // player this session; the rest of the game is unaffected.
         try {
-          await plugin.openAccountStorage?.();
+          await plugin.openAccountStorage?.(context);
         } catch (error) {
           console.warn(
             `[runtime-core] ${plugin.pluginId} could not open its per-account storage; ` +
@@ -560,6 +624,9 @@ export function createRuntimePluginManager(
     },
     getEnabledPluginIds() {
       return plugins.map((plugin) => plugin.pluginId);
+    },
+    getSaveParticipants() {
+      return plugins.flatMap((plugin) => plugin.saveParticipants ?? []);
     },
     getContributions(kind) {
       return plugins

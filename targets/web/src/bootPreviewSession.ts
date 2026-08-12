@@ -124,7 +124,9 @@ export function bootPreviewSession(
         exitToSiteAvailable: true,
         // 081.8 -- quest form not used in UI preview; no-ops.
         onQuestFormSubmit: () => {},
-        onQuestFormDismiss: () => {}
+        onQuestFormDismiss: () => {},
+        // New Game never runs in the UI preview, so no step can be on screen.
+        onPreNewGameStepConfirm: () => {}
       })
     );
   }

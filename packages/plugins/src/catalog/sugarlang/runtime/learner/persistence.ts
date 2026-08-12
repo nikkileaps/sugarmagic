@@ -52,7 +52,16 @@ import { LEARNER_PROFILE_FACT } from "./fact-definitions";
 export type PersistedLearnerProfileCore = Omit<
   LearnerProfile,
   "lemmaCards" | "learnerId"
->;
+> & {
+  /**
+   * Which language pair this ROW is. Carried here and not on `LearnerProfile`:
+   * the in-memory model must not offer a language for the runtime to read --
+   * that is the game's answer -- but the stored row still has to say what it
+   * is, because the column is NOT NULL and a row that cannot name its own pair
+   * is unreadable on another device.
+   */
+  targetLanguage: string;
+};
 
 interface LoadLearnerProfileOptions {
   blackboard: RuntimeBlackboard;
@@ -88,6 +97,8 @@ interface SaveLearnerProfileOptions {
   profileStore?: LearnerProfileCoreStore;
   sourceSystem: string;
   changedCards?: LemmaCard[];
+  /** Which language pair this store is. Stamped onto the persisted row. */
+  targetLanguage: string;
 }
 
 /**
@@ -121,7 +132,9 @@ function cloneCard(card: LemmaCard): LemmaCard {
 
 /** Deep-copies everything that is stored, which is neither the cards nor the
  *  derived learner id -- see `PersistedLearnerProfileCore`. */
-function toPersistedCore(profile: LearnerProfile): PersistedLearnerProfileCore {
+function toPersistedCore(
+  profile: LearnerProfile
+): Omit<PersistedLearnerProfileCore, "targetLanguage"> {
   const { lemmaCards: _lemmaCards, learnerId: _learnerId, ...core } = profile;
   return {
     ...core,
@@ -146,7 +159,6 @@ export function cloneLearnerProfile(profile: LearnerProfile): LearnerProfile {
 
 export function createEmptyLearnerProfile(options: {
   learnerId: LearnerId;
-  targetLanguage: string;
   supportLanguage: string;
   estimatedCefrBand?: CEFRBand;
 }): LearnerProfile {
@@ -154,7 +166,6 @@ export function createEmptyLearnerProfile(options: {
 
   return {
     learnerId: options.learnerId,
-    targetLanguage: options.targetLanguage,
     supportLanguage: options.supportLanguage,
     assessment: {
       status: "unassessed",
@@ -193,9 +204,6 @@ export function deserializeLearnerProfile(json: string): LearnerProfile {
   if (typeof parsed.learnerId !== "string") {
     throw new Error("Invalid learner profile JSON: missing learnerId.");
   }
-  if (typeof parsed.targetLanguage !== "string" || parsed.targetLanguage.length === 0) {
-    throw new Error("Invalid learner profile JSON: missing targetLanguage.");
-  }
   if (typeof parsed.supportLanguage !== "string" || parsed.supportLanguage.length === 0) {
     throw new Error("Invalid learner profile JSON: missing supportLanguage.");
   }
@@ -214,7 +222,6 @@ export function deserializeLearnerProfile(json: string): LearnerProfile {
 
   return {
     learnerId: parsed.learnerId as LearnerId,
-    targetLanguage: parsed.targetLanguage,
     supportLanguage: parsed.supportLanguage,
     assessment: {
       status:
@@ -398,7 +405,12 @@ export async function saveLearnerProfile(
   // disagree. And without the learner id, which the reader stamps -- see
   // `PersistedLearnerProfileCore`.
   if (options.profileStore) {
-    const core = toPersistedCore(options.profile);
+    // The row says which pair it is; the in-memory profile does not carry
+    // one, so it is stamped here from the store this save belongs to.
+    const core: PersistedLearnerProfileCore = {
+      ...toPersistedCore(options.profile),
+      targetLanguage: options.targetLanguage
+    };
     try {
       await options.profileStore.put(LEARNER_PROFILE_CORE_KEY, core);
     } catch (error) {

@@ -21,6 +21,7 @@
  */
 
 import type { QuestFormDefinition } from "../conversation";
+import type { PreNewGameStepDefinition } from "../plugins/pre-new-game-steps";
 
 export interface RuntimeUIState {
   /**
@@ -60,6 +61,14 @@ export interface RuntimeUIState {
    */
   questFormOpen: boolean;
   questFormDefinition: QuestFormDefinition | null;
+  /**
+   * True while a pre-new-game step is on screen. Set by the host after the
+   * New Game press and before it wipes the save; GameUILayer renders
+   * PreNewGameStepOverlay when true. Lifecycle is still "start-menu" while
+   * this is up, so input gating needs no new mode.
+   */
+  preNewGameStepOpen: boolean;
+  preNewGameStepDefinition: PreNewGameStepDefinition | null;
 }
 
 export interface RuntimeStore<TState> {
@@ -119,6 +128,8 @@ export function createUIStateStore(
     loginModalOpen: initialState.loginModalOpen ?? false,
     episodesOpen: initialState.episodesOpen ?? false,
     questFormOpen: initialState.questFormOpen ?? false,
-    questFormDefinition: initialState.questFormDefinition ?? null
+    questFormDefinition: initialState.questFormDefinition ?? null,
+    preNewGameStepOpen: initialState.preNewGameStepOpen ?? false,
+    preNewGameStepDefinition: initialState.preNewGameStepDefinition ?? null
   });
 }

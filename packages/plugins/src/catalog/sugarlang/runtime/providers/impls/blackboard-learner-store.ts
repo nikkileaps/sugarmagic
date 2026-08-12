@@ -55,7 +55,6 @@ export class BlackboardLearnerStore {
       profileStore: this.options.profileStore,
       fallbackProfile: createEmptyLearnerProfile({
         learnerId: this.options.learnerId,
-        targetLanguage: this.options.targetLanguage,
         supportLanguage: this.options.supportLanguage
       })
     });

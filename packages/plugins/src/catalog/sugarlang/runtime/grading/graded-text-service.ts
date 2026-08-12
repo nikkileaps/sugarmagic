@@ -589,7 +589,10 @@ export class GradedTextService {
       new Set(),
       chunkMatcher,
       undefined,
-      generatedText
+      generatedText,
+      undefined,
+      undefined,
+      request.targetLang
     );
 
     // No prescription here: must-convey facts are source-language narrative

@@ -207,7 +207,6 @@ function createSeedProfile(options: LearnerStateReducerOptions): LearnerProfile 
   return {
     ...createEmptyLearnerProfile({
       learnerId: options.profileId,
-      targetLanguage: options.targetLanguage,
       supportLanguage: options.supportLanguage
     }),
     cefrPosterior: options.learnerPriorProvider.getCefrInitialPosterior()
@@ -411,6 +410,7 @@ export class LearnerStateReducer {
     }
 
     await saveLearnerProfile({
+      targetLanguage: this.options.targetLanguage,
       blackboard: this.options.blackboard,
       playerEntityId: this.options.playerEntityId,
       profile,
