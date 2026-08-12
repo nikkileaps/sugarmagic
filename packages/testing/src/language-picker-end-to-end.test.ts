@@ -130,6 +130,49 @@ describe("picking a language at New Game", () => {
     });
   });
 
+  it("THE RACE: the pick is in the save even when sugarlang is not the first plugin", async () => {
+    // Plugin `init` is started without being awaited, and the manager runs the
+    // plugins in the order the project lists them. With anything ahead of
+    // sugarlang that awaits, sugarlang has not settled the language yet when a
+    // synchronous serialize happens -- so the save captured `null` and the
+    // player's choice survived only until the tab closed.
+    let resolveSlowPlugin: () => void = () => {};
+    const slowPlugin: RuntimePluginInstance = {
+      pluginId: "slow-plugin",
+      displayName: "slow",
+      contributions: [],
+      init: () =>
+        new Promise<void>((resolve) => {
+          resolveSlowPlugin = resolve;
+        })
+    };
+
+    const manager = createRuntimePluginManager({
+      boot: boot(),
+      plugins: [slowPlugin, spanishProjectPlugin()]
+    });
+    const registry = new SaveParticipantRegistry();
+    for (const participant of manager.getSaveParticipants()) {
+      registry.register(participant);
+    }
+    registry.deserializeAll({}, ["host-owned"]);
+
+    const initialized = manager.init({
+      preNewGameStepAnswers: { "sugarlang.targetLanguage": "it" }
+    });
+    // Serializing here is what the host used to do: sugarlang has not run.
+    expect(() => registry.serializeAll()).not.toThrow();
+    expect(getSugarlangTargetLanguage()).toBeNull();
+
+    // Awaiting init first is the fix, and then the save carries the pick.
+    resolveSlowPlugin();
+    await initialized;
+    expect(getSugarlangTargetLanguage()).toBe("it");
+    expect(registry.serializeAll()["sugarlang.targetLanguage"]?.data).toEqual({
+      targetLanguage: "it"
+    });
+  });
+
   it("Continue keeps the picked language, not the project's", async () => {
     const first = await pressNewGameAndReboot({ chooses: "it" });
 

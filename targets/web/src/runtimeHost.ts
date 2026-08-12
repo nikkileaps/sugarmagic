@@ -3233,6 +3233,14 @@ export function createWebRuntimeHost(
     // world and the session exist by this point, which is what
     // getCurrentSavePayload needs.
     if (Object.keys(bootPreNewGameStepAnswers).length > 0) {
+      // AFTER PLUGIN INIT, or this writes the answer nobody has read yet.
+      //
+      // Plugins turn a carried answer into their own state during `init`, and
+      // `init` is started without being awaited so a slow plugin cannot hold up
+      // the first frame. Serializing before it settles captured whatever the
+      // slices held BEFORE the answer was applied -- and it only looked correct
+      // when the answering plugin happened to be first in the project's list.
+      await gameplayAssembly.pluginsInitialized;
       await forceWriteSave("pre-new-game answers");
     }
 

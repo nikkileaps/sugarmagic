@@ -39,7 +39,13 @@ export const SUGARLANG_TARGET_LANGUAGE_PARTICIPANT_ID =
 export const SUGARLANG_TARGET_LANGUAGE_SLICE_SCHEMA_VERSION = 1;
 
 export interface SugarlangTargetLanguageSlice {
-  /** Language tag, lowercased ("es", "it"). Null before one is settled. */
+  /**
+   * Language tag, lowercased ("es", "it").
+   *
+   * Nullable on the way IN only: a save written before this slice existed has
+   * nothing here, and `deserialize` treats that as "not settled" and leaves the
+   * backfill to bind. Nothing ever writes null -- see `serialize`.
+   */
   targetLanguage: string | null;
 }
 
@@ -116,7 +122,16 @@ export function createSugarlangTargetLanguageSaveParticipant(): SaveParticipant<
     tier: "host-owned",
     schemaVersion: SUGARLANG_TARGET_LANGUAGE_SLICE_SCHEMA_VERSION,
     serialize(): SugarlangTargetLanguageSlice {
-      return { targetLanguage: activeTargetLanguage };
+      // NEVER WRITES A NON-LANGUAGE. A slice saying `null` is a lie in the
+      // file: the next boot reads it, finds nothing usable, and quietly falls
+      // back to the project's authored language -- so a player's choice
+      // disappears with no error anywhere. If this plugin is running and has no
+      // language, something is wrong upstream and it should be loud.
+      //
+      // Only reachable while sugarlang is enabled: the participant exists
+      // because sugarlang declared it, so a game without the plugin has no
+      // slice to write and nothing here to check.
+      return { targetLanguage: requireSugarlangTargetLanguage() };
     },
     deserialize(slice: SaveSlice<SugarlangTargetLanguageSlice> | null): void {
       // An absent or unusable stored language leaves the holder alone. Nothing

@@ -370,6 +370,17 @@ export interface RuntimeGameplayAssemblyOptions extends RuntimeGameplaySessionCo
 export interface RuntimeGameplayAssembly {
   readonly pluginManager: RuntimePluginManager | null;
   readonly gameplaySession: RuntimeGameplaySessionController;
+  /**
+   * Settles when every plugin's `init` has run.
+   *
+   * Boot does not wait on this -- a plugin that is slow to initialize must not
+   * hold up the first frame. But anything that reads state a plugin sets up in
+   * `init` has to await it, or it reads whatever was there before. That is not
+   * a race you can see in a diff: `init` is kicked off without awaiting, so a
+   * later synchronous read appears to be "after" it and is only actually after
+   * it when that plugin happens to be first in the project's list.
+   */
+  readonly pluginsInitialized: Promise<void>;
   dispose: () => Promise<void>;
 }
 
@@ -2636,8 +2647,9 @@ export function createRuntimeGameplayAssembly(
   const pluginManager = options.pluginManager ?? null;
   const gameplaySession = createRuntimeGameplaySessionController(options);
 
+  let pluginsInitialized: Promise<void> = Promise.resolve();
   if (pluginManager) {
-    void pluginManager.init({
+    pluginsInitialized = pluginManager.init({
       blackboard: gameplaySession.blackboard,
       assetSources: options.assetSources,
       preNewGameStepAnswers: options.preNewGameStepAnswers ?? {},
@@ -2659,6 +2671,7 @@ export function createRuntimeGameplayAssembly(
   return {
     pluginManager,
     gameplaySession,
+    pluginsInitialized,
     async dispose() {
       gameplaySession.dispose();
       await pluginManager?.dispose();
