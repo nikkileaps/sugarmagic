@@ -324,7 +324,40 @@ export class SugarlangRuntimeServices {
       : null;
   }
 
+  /**
+   * Decide which language this game is in, once per boot.
+   *
+   * Precedence, highest first:
+   *
+   *   - the answer to the new-game picker, which only arrives on a boot that
+   *     followed a New Game press. The save row is gone on that boot, so there
+   *     is nothing for it to conflict with.
+   *   - what the save restored, for every ordinary boot.
+   *   - the project's authored language, for a save older than this slice.
+   *     Settling it once means the next write persists it, so that game is
+   *     pinned to it exactly as a picked one is -- an author changing the
+   *     project default later cannot move a game already under way.
+   */
+  private settleTargetLanguage(context: RuntimePluginContext): void {
+    const picked =
+      context.preNewGameStepAnswers?.[SUGARLANG_TARGET_LANGUAGE_STEP_ID];
+    const stored = getSugarlangTargetLanguage();
+    setSugarlangTargetLanguage(picked ?? stored ?? this.config.targetLanguage);
+    // The only observable for this in a published build: the debug HUD is
+    // Studio-only and the window handles are dev-only.
+    console.info(
+      `[sugarlang] target language "${this.getTargetLanguage()}" from ` +
+        `${picked ? "the picker" : stored ? "the save" : "project config"}.`
+    );
+  }
+
   bindRuntime(context: RuntimePluginContext): void {
+    // BEFORE the world check below. Which language this game is in does not
+    // depend on there being a world -- and a boot that returns early here
+    // would otherwise never settle one, so nothing would persist it and the
+    // player's pick would be gone by the next boot.
+    this.settleTargetLanguage(context);
+
     if (!context.blackboard || !context.playerDefinition) {
       return;
     }
@@ -342,31 +375,6 @@ export class SugarlangRuntimeServices {
         ? { buildConversationRuntimeContext: context.buildConversationRuntimeContext }
         : {})
     };
-
-    // Settle this game's language, then say which one it is.
-    //
-    // A save written before the language was part of the save has no language
-    // in it, so the getter is null here. Writing the project default in once
-    // means that game is now locked to that language like a picked one: if the
-    // author changes the project default later, this game keeps what it was
-    // being played in. Everything already taught is keyed by language, so
-    // moving it would orphan all of it. No modal, nothing the player sees.
-    const picked = context.preNewGameStepAnswers?.[
-      SUGARLANG_TARGET_LANGUAGE_STEP_ID
-    ];
-    const stored = getSugarlangTargetLanguage();
-    const source = picked ? "the picker" : stored ? "the save" : "project config";
-    // A pick only arrives on a boot that followed a New Game press, and the
-    // save row is gone on that boot, so there is nothing to conflict with.
-    // With neither, this is a save older than this slice: settle the project
-    // default once and the next autosave persists it, which locks this game to
-    // it exactly as a pick would.
-    setSugarlangTargetLanguage(picked ?? stored ?? this.config.targetLanguage);
-    // The only observable for this in a published build: the debug HUD is
-    // Studio-only and the window handles are dev-only.
-    console.info(
-      `[sugarlang] target language "${this.getTargetLanguage()}" from ${source}.`
-    );
 
     // Seed the band pin from config HERE, at bind, rather than waiting for a
     // conversation.
