@@ -256,6 +256,22 @@ fall below the floor, `loreContext` will be empty and the NPC will abstain
 `droppedByFloor` in the dump to confirm chunks were dropped rather than simply
 absent from the search results.
 
+**Step 5 -- Check the quest world-context block.**
+The same floor governs the world-context block the quest-context middleware
+pins for a quest stage, and that path is stricter about a bad result: it uses
+one item and keeps it for the whole stage. Start a conversation with a quest
+active, then:
+
+```javascript
+__sugaragentQuestContext.dump("npc:your-npc-id")
+```
+
+`worldContextScore` is the score of the text that reached the prompt, and
+`droppedScores` lists what the floor rejected. If a visibly unrelated page is
+being used, its score is your ceiling: the floor must sit above it. If
+`worldContext` is null and `droppedScores` holds a result you wanted, the
+floor is too high.
+
 ## NPC Identity Fallback (no lore page)
 
 When an agentified NPC has no lore page attached (or the lore API is
@@ -375,7 +391,14 @@ Set in Studio > SugarAgent > NPC Behavior > World Premise.
 `loreRelevanceFloor: number` (default `0`) -- minimum vector similarity score
 for a retrieved lore chunk to enter the NPC's context. Range: 0..1 (0 = no
 filter, 1 = nothing passes). Only filters `retrieved` chunks; `pinned` and
-`synthetic-location` chunks always pass. See Tuning the Relevance Floor above.
+`synthetic-location` chunks always pass. The same value governs the
+quest-context world block: when no candidate clears the floor, the NPC gets no
+world context rather than the best of a poor set. See Tuning the Relevance
+Floor above.
+
+The filter itself lives in one place,
+`packages/plugins/src/catalog/sugaragent/runtime/lore-relevance.ts`, which also
+owns the shipped default.
 
 Set in Studio > SugarAgent > NPC Behavior > Lore Relevance Floor.
 

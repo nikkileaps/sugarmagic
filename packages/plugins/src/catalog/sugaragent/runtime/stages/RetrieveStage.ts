@@ -8,6 +8,7 @@ import { createDiagnostics } from "./diagnostics";
 import { normalizeRetrievedEvidenceText, summarizeEvidence } from "./helpers";
 import { recordRetrievalSnapshot } from "./retrieval-debug";
 import { collectContributions } from "../contributions";
+import { applyRelevanceFloor } from "../lore-relevance";
 import type {
   InterpretResult,
   RetrievalScoreEntry,
@@ -294,14 +295,11 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
             (item) =>
               item.attributes[OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE] !== npcLorePageId
           );
-          // Plan 078.2 -- floor filter (Branch A): after own-page drop, before slice.
-          if (floor > 0) {
-            for (const item of loreContext) {
-              if (item.score < floor) droppedScores.push(item.score);
-            }
-            droppedByFloor += droppedScores.length;
-            loreContext = loreContext.filter((item) => item.score >= floor);
-          }
+          // Floor filter (Branch A): after own-page drop, before slice.
+          const filtered = applyRelevanceFloor(loreContext, floor);
+          loreContext = filtered.kept;
+          droppedScores.push(...filtered.droppedScores);
+          droppedByFloor += filtered.droppedScores.length;
           loreContext = loreContext.slice(0, context.config.maxLoreResults);
           ownPageExcluded = true;
           loreSearchPerformed = true;
@@ -327,15 +325,12 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
             broadenedBeyondLorePage = true;
           }
 
-          // Plan 078.2 -- floor filter (Branch B): after broaden, before pin merge.
-          // Pin bypasses for free: filtering happens here, pin is merged below.
-          if (floor > 0) {
-            for (const item of loreContext) {
-              if (item.score < floor) droppedScores.push(item.score);
-            }
-            droppedByFloor += droppedScores.length;
-            loreContext = loreContext.filter((item) => item.score >= floor);
-          }
+          // Floor filter (Branch B): after broaden, before pin merge. The
+          // pinned NPC chunk bypasses the floor because it is merged below.
+          const filtered = applyRelevanceFloor(loreContext, floor);
+          loreContext = filtered.kept;
+          droppedScores.push(...filtered.droppedScores);
+          droppedByFloor += filtered.droppedScores.length;
 
           if (shouldPinNpcLore && npcLorePageId) {
             const npcLoreEvidence = await this.vectorStoreProvider.searchLore({

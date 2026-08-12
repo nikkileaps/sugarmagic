@@ -76,11 +76,11 @@ function makeExecution(
   };
 }
 
-function fakeLore(text: string): RetrievedEvidenceItem {
+function fakeLore(text: string, score = 0.9): RetrievedEvidenceItem {
   return {
     fileId: "lore.station-info",
     filename: "station-info.md",
-    score: 0.9,
+    score,
     text,
     attributes: {}
   };
@@ -252,6 +252,112 @@ describe("createQuestContextMiddleware", () => {
     const callArg = searchLore.mock.calls[0]?.[0] as { query: string } | undefined;
     expect(callArg?.query).toBeTruthy();
     expect(callArg?.query).toContain("Track down the missing suitcase");
+  });
+});
+
+describe("createQuestContextMiddleware -- relevance floor", () => {
+  it("skips a top hit below the floor and uses the best result that clears it", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("An unrelated podcast script about packing a suitcase.", 0.42),
+      fakeLore("Travelers with lost luggage are directed to baggage claim.", 0.71)
+    ]);
+    const middleware = createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      loreRelevanceFloor: 0.6
+    });
+    const execution = makeExecution();
+
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.hasContext).toBe(true);
+    expect(annotation.worldContext).toBe(
+      "Travelers with lost luggage are directed to baggage claim."
+    );
+  });
+
+  it("emits no world context when nothing clears the floor", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("An unrelated podcast script about packing a suitcase.", 0.42),
+      fakeLore("Another loosely related page.", 0.3)
+    ]);
+    const middleware = createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      loreRelevanceFloor: 0.6
+    });
+    const execution = makeExecution();
+
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.hasContext).toBe(false);
+    expect(annotation.worldContext).toBeNull();
+  });
+
+  it("takes the highest-scoring result rather than the first one returned", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Lower scoring page.", 0.65),
+      fakeLore("Higher scoring page.", 0.88)
+    ]);
+    const middleware = createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      loreRelevanceFloor: 0.6
+    });
+    const execution = makeExecution();
+
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContext).toBe("Higher scoring page.");
+  });
+
+  it("asks for more than one candidate so a rejected top hit can fall through", async () => {
+    const { provider, searchLore } = fakeVectorStore([fakeLore("world fact")]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+
+    await middleware.prepare?.(makeExecution());
+
+    const callArg = searchLore.mock.calls[0]?.[0] as
+      | { maxResults: number }
+      | undefined;
+    expect(callArg?.maxResults).toBeGreaterThan(1);
+  });
+
+  it("keeps everything when no floor is configured", async () => {
+    const { provider } = fakeVectorStore([fakeLore("Weak but usable.", 0.05)]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution();
+
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContext).toBe("Weak but usable.");
+  });
+
+  it("memoizes the chosen score and the rejected scores for floor calibration", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Rejected page.", 0.42),
+      fakeLore("Chosen page.", 0.71)
+    ]);
+    const middleware = createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      loreRelevanceFloor: 0.6
+    });
+    const state: Record<string, unknown> = {};
+
+    await middleware.prepare?.(makeExecution(state));
+
+    const memo = state[QUEST_CONTEXT_STATE_KEY] as MemoizedQuestContext;
+    expect(memo.worldContextScore).toBe(0.71);
+    expect(memo.droppedScores).toEqual([0.42]);
   });
 });
 
