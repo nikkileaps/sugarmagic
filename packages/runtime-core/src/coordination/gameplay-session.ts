@@ -362,6 +362,9 @@ export interface RuntimeGameplaySessionController {
 
 export interface RuntimeGameplayAssemblyOptions extends RuntimeGameplaySessionControllerOptions {
   pluginManager?: RuntimePluginManager | null;
+  /** Threaded to plugin init; see RuntimePluginContext.preNewGameStepAnswers.
+   *  Opaque here -- a plugin looks up its own step id. */
+  preNewGameStepAnswers?: Readonly<Record<string, string>>;
 }
 
 export interface RuntimeGameplayAssembly {
@@ -2637,6 +2640,7 @@ export function createRuntimeGameplayAssembly(
     void pluginManager.init({
       blackboard: gameplaySession.blackboard,
       assetSources: options.assetSources,
+      preNewGameStepAnswers: options.preNewGameStepAnswers ?? {},
       activeRegion: options.activeRegion,
       activeScene: options.activeScene ?? null,
       playerDefinition: options.playerDefinition,

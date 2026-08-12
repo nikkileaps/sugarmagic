@@ -35,6 +35,7 @@ import type { UserProfileStore } from "../profile";
 import {
   createSerializedSaveStore,
   type GameSaveStore,
+  type SaveParticipant,
   type SerializedSaveStore
 } from "../save";
 import type { BlackboardFactDefinition, RuntimeBlackboard } from "../state";
@@ -444,6 +445,16 @@ export interface RuntimePluginContext {
   boot: RuntimeBootModel;
   pluginBootPayloads?: Record<string, unknown>;
   /**
+   * What the player answered in the pre-new-game steps that ran just before
+   * this boot, keyed by stepId. Empty on every boot that was not a New Game.
+   *
+   * Opaque here: a plugin looks up its OWN step id and is the only thing that
+   * knows what the answer means. Keeping it is the plugin's job too -- the
+   * host carries it across the reload and hands it over, and persists none of
+   * it.
+   */
+  preNewGameStepAnswers?: Readonly<Record<string, string>>;
+  /**
    * Every file-backed asset path mapped to the URL that serves it (Plan
    * 092.3).
    *
@@ -476,6 +487,20 @@ export interface RuntimePluginInstance {
   config?: Record<string, unknown>;
   contributions: RuntimePluginContribution[];
   blackboardFactDefinitions?: readonly BlackboardFactDefinition<unknown>[];
+  /**
+   * State this plugin keeps in the game's save, as its own slices.
+   *
+   * Declared rather than registered: the host collects these the way it
+   * collects contributions, and registers them without reading them. What is
+   * in a slice is the plugin's business.
+   *
+   * DECLARED AND NOT SET UP IN `init` BECAUSE OF WHEN THEY HAVE TO RUN. A
+   * plugin is constructed before the first deserialize pass; `init` happens
+   * long after it. A participant that arrived during `init` would have missed
+   * the pass that restores it, so a plugin reading its own state at bind would
+   * find nothing on the one boot that matters.
+   */
+  saveParticipants?: readonly SaveParticipant<unknown>[];
   /**
    * Open this plugin's per-account storage. Runs at boot, once the player's
    * account is known and BEFORE the sync loop's first pass.
@@ -512,6 +537,11 @@ export interface RuntimePluginManager {
   dispose: () => Promise<void>;
   getPlugins: () => readonly RuntimePluginInstance[];
   getEnabledPluginIds: () => string[];
+  /**
+   * Every save participant the enabled plugins declared, in plugin order. The
+   * host registers these; it does not read them.
+   */
+  getSaveParticipants: () => readonly SaveParticipant<unknown>[];
   getContributions: <TKind extends RuntimePluginContributionKind>(
     kind: TKind
   ) => Array<Extract<RuntimePluginContribution, { kind: TKind }>>;
@@ -578,6 +608,9 @@ export function createRuntimePluginManager(
     },
     getEnabledPluginIds() {
       return plugins.map((plugin) => plugin.pluginId);
+    },
+    getSaveParticipants() {
+      return plugins.flatMap((plugin) => plugin.saveParticipants ?? []);
     },
     getContributions(kind) {
       return plugins

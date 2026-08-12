@@ -21,6 +21,7 @@
 
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import { createRegionTeacherWarmer } from "./runtime/teacher/warm-region-teacher";
+import { createSugarlangTargetLanguageSaveParticipant } from "./runtime/target-language-save-participant";
 import type { RuntimePluginFactoryContext } from "../../runtime";
 import {
   createDeploymentRequirementId,
@@ -264,6 +265,11 @@ export function createSugarlangPlugin(
     displayName: SUGARLANG_DISPLAY_NAME,
     contributions,
     blackboardFactDefinitions: SUGARLANG_BLACKBOARD_FACT_DEFINITIONS,
+    // This game's target language lives in the game's save, in a slice
+    // sugarlang owns. Declared here rather than set up in init: the host
+    // registers declared participants before the first deserialize pass, and
+    // the runtime reads the language when it binds, which is after that pass.
+    saveParticipants: [createSugarlangTargetLanguageSaveParticipant()],
     // Plan 092.6.3 — the learner's word history and level, opened at boot so
     // the first sync pass reconciles them before the player can reach a
     // conversation. Deliberately NOT in `init` below: that needs a world, and

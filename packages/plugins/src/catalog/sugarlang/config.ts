@@ -57,6 +57,14 @@ export interface SugarLangPluginConfig {
   debugBandOverride: SugarlangDebugBandOverride;
 }
 
+/**
+ * The pre-new-game step sugarlang contributes: which language this game is
+ * played in. The answer is stored under this id in the host's step-answer
+ * slice, and sugarlang is the only thing that knows the id or what the answer
+ * means -- the host asked the question and kept the answer without reading it.
+ */
+export const SUGARLANG_TARGET_LANGUAGE_STEP_ID = "sugarlang.targetLanguage";
+
 export const SUGARLANG_PROXY_BASE_URL_ENV =
   "SUGARMAGIC_SUGARLANG_PROXY_BASE_URL";
 

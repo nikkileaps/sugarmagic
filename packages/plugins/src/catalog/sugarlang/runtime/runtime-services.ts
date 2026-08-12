@@ -45,8 +45,16 @@ import {
   getActiveUserId,
   isSyncLoopRunning
 } from "@sugarmagic/runtime-core";
+import {
+  getSugarlangTargetLanguage,
+  setSugarlangTargetLanguage
+} from "./target-language-save-participant";
 import type { SugarLangPluginConfig } from "../config";
-import { resolveSugarLangTargetLanguage, resolveSugarlangProxyBaseUrl } from "../config";
+import {
+  SUGARLANG_TARGET_LANGUAGE_STEP_ID,
+  resolveSugarLangTargetLanguage,
+  resolveSugarlangProxyBaseUrl
+} from "../config";
 import { IndexedDBVariantCache, type SugarlangVariantCache } from "./compile/variant-cache";
 import { getShippedVariantCache } from "./compile/shipped-variant-cache";
 import { LiveRenderCache } from "./compile/live-render-cache";
@@ -335,6 +343,31 @@ export class SugarlangRuntimeServices {
         : {})
     };
 
+    // Settle this game's language, then say which one it is.
+    //
+    // A save written before the language was part of the save has no language
+    // in it, so the getter is null here. Writing the project default in once
+    // means that game is now locked to that language like a picked one: if the
+    // author changes the project default later, this game keeps what it was
+    // being played in. Everything already taught is keyed by language, so
+    // moving it would orphan all of it. No modal, nothing the player sees.
+    const picked = context.preNewGameStepAnswers?.[
+      SUGARLANG_TARGET_LANGUAGE_STEP_ID
+    ];
+    const stored = getSugarlangTargetLanguage();
+    const source = picked ? "the picker" : stored ? "the save" : "project config";
+    // A pick only arrives on a boot that followed a New Game press, and the
+    // save row is gone on that boot, so there is nothing to conflict with.
+    // With neither, this is a save older than this slice: settle the project
+    // default once and the next autosave persists it, which locks this game to
+    // it exactly as a pick would.
+    setSugarlangTargetLanguage(picked ?? stored ?? this.config.targetLanguage);
+    // The only observable for this in a published build: the debug HUD is
+    // Studio-only and the window handles are dev-only.
+    console.info(
+      `[sugarlang] target language "${this.getTargetLanguage()}" from ${source}.`
+    );
+
     // Seed the band pin from config HERE, at bind, rather than waiting for a
     // conversation.
     //
@@ -398,7 +431,10 @@ export class SugarlangRuntimeServices {
    */
   getTargetLanguage(player?: string | null): string | null {
     return resolveSugarLangTargetLanguage({
-      player,
+      // The player rung is this game's settled language, which this plugin's
+      // own save slice carries for the life of the game. An explicit argument
+      // still wins, for callers that already have a learner's language.
+      player: player ?? getSugarlangTargetLanguage(),
       config: this.config.targetLanguage
     });
   }

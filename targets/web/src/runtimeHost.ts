@@ -1177,31 +1177,9 @@ export function createWebRuntimeHost(
   async function runExitSequenceAndReload(
     target: Scene | null
   ): Promise<void> {
-    // Force-write the save NOW — the reload can't wait for the
-    // next 5s autosave tick or the advance would be lost.
-    const bindings = activeProvidersStore.getSnapshot();
-    const settledUser = bindings?.identityProvider.currentUser();
-    const payload = getCurrentSavePayload();
-    if (bindings && settledUser && payload) {
-      try {
-        await bindings.saveStore.save(settledUser.userId, {
-          userId: settledUser.userId,
-          lastPlayed: new Date().toISOString(),
-          schemaVersion: GAME_SAVE_SCHEMA_VERSION,
-          writtenByVersion: SUGARMAGIC_VERSION,
-          payload
-        });
-      } catch (error) {
-        console.warn(
-          "[web-runtime] scene advance: save write failed; continuing anyway (advance may be lost).",
-          error
-        );
-      }
-    } else {
-      console.warn(
-        "[web-runtime] scene advance: no active store/user; Scene advance will not persist."
-      );
-    }
+    // The reload can't wait for the next 5s autosave tick or the
+    // advance would be lost.
+    await forceWriteSave("scene advance");
 
     // One overlay: credits scroll with the routing control in the
     // bottom-right corner over them (Netflix model). The credits
@@ -2093,6 +2071,13 @@ export function createWebRuntimeHost(
       state.pluginBootPayloads ?? {}
     );
     activePluginManager = pluginManager;
+    // Whatever the plugins declared they keep in the save. Registered here,
+    // right after construction and before the first deserialize pass, so a
+    // plugin's own state is restored by the time it binds. The host does not
+    // look inside any of them.
+    for (const participant of pluginManager.getSaveParticipants()) {
+      saveParticipantRegistry.register(participant);
+    }
     bootPreNewGameStepAnswers = state.preNewGameStepAnswers ?? {};
     if (Object.keys(bootPreNewGameStepAnswers).length > 0) {
       // The only observable for the handshake in a published build: the debug
@@ -2928,6 +2913,9 @@ export function createWebRuntimeHost(
       root,
       world,
       inputManager,
+      // Handed to plugin init so whoever asked a question on the way in can
+      // read its own answer. The host never looks up a key.
+      preNewGameStepAnswers: bootPreNewGameStepAnswers,
       // The session asks for a framing by NAME; the host resolves it against
       // the live camera. Requesting captures wherever the camera is now as the
       // framing to give back, so a player who had zoomed gets their own zoom
@@ -3253,6 +3241,16 @@ export function createWebRuntimeHost(
         }
       })
     );
+    // Anything answered on the way in has to reach the save NOW. Autosave runs
+    // every 5 seconds, and a tab closed inside that window would come back to a
+    // game with no answers, so whoever asked would quietly fall back to its own
+    // default -- the player's choice lost with no sign it ever happened. The
+    // world and the session exist by this point, which is what
+    // getCurrentSavePayload needs.
+    if (Object.keys(bootPreNewGameStepAnswers).length > 0) {
+      await forceWriteSave("pre-new-game answers");
+    }
+
     // Runtime host drives its own render loop (renderFrame ticks gameplay
     // then calls renderView.render()). We wait one tick so the view's async init
     // can resolve and create the pipeline before we try to render.
@@ -3318,6 +3316,49 @@ export function createWebRuntimeHost(
     startAnyway = null;
     bootStallStore.set(null);
     release?.();
+  }
+
+  /**
+   * Write the save immediately instead of waiting for the next autosave tick.
+   *
+   * For the moments where the 5-second gap is the difference between something
+   * being kept and being silently lost: a Scene advance about to reload, and a
+   * language picked on the way into a fresh game.
+   *
+   * `reason` only names the caller in the warnings. Failing to write is not
+   * fatal here -- the player keeps playing, and the log says what they stand to
+   * lose.
+   */
+  async function forceWriteSave(reason: string): Promise<void> {
+    const bindings = activeProvidersStore.getSnapshot();
+    const settledUser = bindings?.identityProvider.currentUser();
+    const payload = getCurrentSavePayload();
+    if (!bindings || !settledUser || !payload) {
+      console.warn(
+        `[web-runtime] ${reason}: no active store/user/payload; this will not persist.`
+      );
+      return;
+    }
+    const lastPlayed = new Date().toISOString();
+    try {
+      await bindings.saveStore.save(settledUser.userId, {
+        userId: settledUser.userId,
+        lastPlayed,
+        schemaVersion: GAME_SAVE_SCHEMA_VERSION,
+        writtenByVersion: SUGARMAGIC_VERSION,
+        payload
+      });
+    } catch (error) {
+      console.warn(
+        `[web-runtime] ${reason}: save write failed; continuing anyway.`,
+        error
+      );
+      return;
+    }
+    // Tell the rest of the host a save now exists. Without this a player who
+    // quits to the menu right after picking sees no Continue button, because
+    // savePresent only flips on an autosave tick.
+    notifyAutosaveWritten({ lastPlayed, payload });
   }
 
   function notifyAutosaveWritten(snapshot: {
