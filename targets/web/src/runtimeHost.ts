@@ -29,7 +29,6 @@ import * as THREE from "three";
 import { createElement } from "react";
 import { createRoot, type Root as ReactRoot } from "react-dom/client";
 import { WebGPURenderer } from "three/webgpu";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   getCharacterAnimationDefinition,
@@ -157,6 +156,7 @@ import {
   type RuntimeActionRegistry,
   QUEST_MANAGER_PARTICIPANT_ID,
   GAME_SAVE_SCHEMA_VERSION,
+  createGltfLoader,
   type PreNewGameStepAnswers,
   type PreNewGameStepDefinition,
   type UIActionRegistry,
@@ -222,8 +222,16 @@ export interface WebRuntimeHostOptions {
  * Long enough that a normal cold start on a slow connection never sees it --
  * the assets alone allow 20s each -- and short enough that nobody sits in
  * front of a loading screen wondering whether it is stuck.
+ *
+ * 60s is a placeholder, not a judgement about what a player should tolerate.
+ * A cold first play currently fetches ~84 MiB, over half of which is texture
+ * data the renderer discards: four PBR maps are stored 16-bit and every
+ * texture loads through an HTMLImageElement, which keeps 8. Re-encoding them
+ * takes that category from 47.4 MiB to roughly 9-12 MiB. Once that lands this
+ * should come back down -- a 60s loading screen is not a target.
+ * See issue #165, "Cut, and why".
  */
-export const BOOT_READINESS_TIMEOUT_MS = 30_000;
+export const BOOT_READINESS_TIMEOUT_MS = 60_000;
 
 export interface WebRuntimeStartState {
   regions: RegionDocument[];
@@ -596,7 +604,7 @@ export interface WebRuntimeHost {
 
 const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
 
-const gltfLoader = new GLTFLoader();
+const gltfLoader = createGltfLoader();
 
 /** Plan 070.2 — NPCs stash their idle AnimationMixer in the reconciler
  *  entry's `host` slot (driven each frame from the runtime loop). */

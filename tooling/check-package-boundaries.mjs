@@ -98,6 +98,9 @@ const restrictedExternalImports = {
       label: "three.js runtime-core boundary",
       specifierPattern: /^three(?:\/.*)?$/,
       allowedFiles: new Set([
+        // The shared GLTFLoader factory — every other loader site goes
+        // through it so the Draco decoder is always attached.
+        "packages/runtime-core/src/asset-loading/gltf-loader.ts",
         "packages/runtime-core/src/item/index.ts",
         "packages/runtime-core/src/landscape/index.ts",
         "packages/runtime-core/src/landscape/mesh.ts",

@@ -782,8 +782,8 @@ describe("plugin infrastructure", () => {
     // gateway URL and bakes VITE_SUGARMAGIC_* envs on the build
     // step; restores the env injection lost when 053.2 moved the
     // build off Studio's Build Frontend action).
-    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 9");
-    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(9);
+    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 13");
+    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(13);
     // Template v9 — the game-repo checkout fetches full history
     // (so `git describe` in the next step sees tags) and exports
     // SUGARMAGIC_GAME_VERSION into the engine build env.
@@ -797,6 +797,87 @@ describe("plugin infrastructure", () => {
 
     // Workflow name pulls in the project slug + major version.
     expect(yaml).toContain("name: SugarDeploy — project v1");
+
+    // Template v10 — the frontend job stages exactly the files
+    // boot.json references, from whatever directory they live in, and
+    // fails the deploy when one is missing.
+    expect(yaml).toContain(
+      "jq -r '.assetSources | keys[]'"
+    );
+    expect(yaml).toContain(
+      'cp "$asset" ".sugarmagic/published-web/dist/$asset"'
+    );
+    expect(yaml).toContain(
+      "::error::boot.json references a file that is not in the repo: $asset"
+    );
+    // A missing referenced asset must stop the deploy, not warn.
+    expect(yaml).toContain('if [ "$missing" -ne 0 ]; then');
+    expect(yaml).toMatch(/missing.*referenced asset\(s\) missing[\s\S]*?exit 1/);
+    // The wholesale copy is gone: it published unreferenced files and
+    // never staged masks/ at all.
+    expect(yaml).not.toContain("cp -R assets/.");
+    // Reads the list from a file, never a pipe — a piped `while` runs
+    // in a subshell and would discard the missing-file flag.
+    expect(yaml).not.toMatch(/jq[^\n]*keys\[\][^\n]*\|\s*while/);
+
+    // Template v13 — staged GLBs are Draco-compressed.
+    expect(yaml).toContain("scripts/compress-staged-glbs.ts");
+    // Uses the tsx installed in the sugarmagic checkout rather than
+    // letting npx re-download an unpinned one on every deploy.
+    expect(yaml).toContain("sugarmagic/node_modules/.bin/tsx");
+    // Compression MUST precede the hash stamp: the hash has to cover
+    // the bytes actually shipped, and _headers marks them immutable
+    // for a year.
+    expect(yaml.indexOf("compress-staged-glbs.ts")).toBeLessThan(
+      yaml.indexOf("sha256sum")
+    );
+    // ...and must follow staging, since it rewrites staged files.
+    expect(yaml.indexOf("jq -r '.assetSources | keys[]'")).toBeLessThan(
+      yaml.indexOf("compress-staged-glbs.ts")
+    );
+
+    // Template v12 — each asset URL carries a hash of its own bytes,
+    // so an unchanged asset keeps its URL and stays cached across
+    // deploys. The old single per-deploy sha made every deploy
+    // re-download everything.
+    expect(yaml).toContain('sha256sum ".sugarmagic/published-web/dist/$asset"');
+    expect(yaml).toContain('"?v=" + ($h[0][.key]');
+    expect(yaml).not.toContain(
+      "jq --arg v \"$GITHUB_SHA\" '.assetSources |= with_entries(.value += \"?v=\" + $v)'"
+    );
+    // A key with no hash means the stamp silently lost an asset — fail
+    // rather than ship a URL that never busts.
+    expect(yaml).toContain('error("no content hash for "');
+    // The stamp must come AFTER staging: it has to cover the bytes
+    // actually shipped, and story 4's compression slots in above it.
+    expect(yaml.indexOf("jq -r '.assetSources | keys[]'")).toBeLessThan(
+      yaml.indexOf("sha256sum")
+    );
+
+    // Template v11 — _headers is SUBSTITUTED, not copied, so
+    // X-Game-Version carries the version actually being deployed.
+    expect(yaml).toContain("s|__SUGARMAGIC_GAME_VERSION__|");
+    expect(yaml).not.toContain(
+      "cp .sugarmagic/published-web/_headers .sugarmagic/published-web/dist/_headers"
+    );
+    // An unsubstituted placeholder reaching production would serve a
+    // literal token as the version, so it fails the deploy.
+    expect(yaml).toContain(
+      "::error::_headers still contains the version placeholder after substitution."
+    );
+
+    // Template v11 — the deploy proves it landed instead of assuming.
+    expect(yaml).toContain("      - name: Verify the deployed build");
+    expect(yaml).toContain("        id: netlify");
+    // Needs the deploy URL, which only the CLI's own JSON output has.
+    expect(yaml).toContain("--json");
+    expect(yaml).toContain("jq -r '.url // .deploy_url // empty' netlify-deploy.json");
+    // Retries, because a CDN may not have propagated yet.
+    expect(yaml).toContain("for attempt in 1 2 3 4 5; do");
+    // A mismatch must fail the workflow, not warn.
+    expect(yaml).toMatch(
+      /is serving[\s\S]*?expected[\s\S]*?exit 1/
+    );
 
     // Both triggers wired up.
     expect(yaml).toContain("on:");
@@ -1233,6 +1314,65 @@ describe("plugin infrastructure", () => {
     // deploy-frontend job now.
     expect(readme?.content).toContain("Generated at deploy time (gitignored)");
     expect(readme?.content).not.toContain("Generated by the Build Frontend button");
+
+    // Story 165.2 — one writer owns _headers, carrying BOTH the cache
+    // rules and X-Game-Version. targets/web's Vite build used to write
+    // a second copy that the deploy overwrote, so the header never
+    // reached production.
+    const headers = withFrontend.managedFiles.find(
+      (file) => file.relativePath === ".sugarmagic/published-web/_headers"
+    );
+    expect(headers).toBeDefined();
+    // The version is only knowable on the deploy runner, so the
+    // managed file carries a placeholder the workflow substitutes.
+    expect(headers?.content).toContain(
+      "  X-Game-Version: __SUGARMAGIC_GAME_VERSION__"
+    );
+    expect(headers?.content).toContain("/boot.json");
+    expect(headers?.content).toContain(
+      "  Cache-Control: public, max-age=0, must-revalidate"
+    );
+  });
+
+  it("gives every directory its assets live in an immutable cache rule (story 165.2)", () => {
+    // Asset directories are derived from the referenced paths, not
+    // hardcoded: relativeAssetPath is authored and a plugin's derived
+    // artifacts can introduce a directory nothing here knows about.
+    // Hardcoding `assets/` is what left every mask URL uncached.
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        deployment: {
+          backendDeploymentTargetId: "google-cloud-run",
+          frontendDeploymentTargetId: "netlify",
+          targetOverrides: {
+            netlify: {
+              siteId: "abc12345-6789-4def-9012-3456789abcde",
+              siteName: "wordlark-prod"
+            }
+          }
+        }
+      }),
+      {
+        regions: [],
+        contentLibrary: { items: [] } as never,
+        assetSources: {
+          "assets/models/tree.glb": "/assets/models/tree.glb",
+          "masks/mask-1.png": "/masks/mask-1.png",
+          "plugin-artifacts/lexicon.json": "/plugin-artifacts/lexicon.json"
+        }
+      } as never
+    );
+    const headers = plan.managedFiles.find(
+      (file) => file.relativePath === ".sugarmagic/published-web/_headers"
+    );
+    const content = headers?.content ?? "";
+    for (const directory of ["assets", "masks", "plugin-artifacts"]) {
+      expect(content).toContain(`/${directory}/*`);
+    }
+    // boot.json must NOT be immutable — it is how a new deploy reaches
+    // a returning player at all.
+    expect(content).toContain("/boot.json\n  Cache-Control: public, max-age=0, must-revalidate");
   });
 
   it("omits allowed_origins entries when no frontend target is configured (story 46.9)", () => {
