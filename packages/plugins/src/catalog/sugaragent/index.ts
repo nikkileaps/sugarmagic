@@ -5,6 +5,7 @@ import {
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import {
   createSugarAgentConversationProvider,
+  createSugarAgentLorePageResolver,
   createSugarAgentVectorStoreProvider
 } from "./runtime/provider";
 import { createSugarAgentLogger } from "./runtime/logger";
@@ -666,6 +667,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
                     status: "ready" as const,
                     middleware: createQuestContextMiddleware({
                       vectorStoreProvider: createSugarAgentVectorStoreProvider(config),
+                      lorePageResolver: createSugarAgentLorePageResolver(config),
                       logger: createSugarAgentLogger(config.debugLogging)
                     })
                   }

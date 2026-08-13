@@ -19,8 +19,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   composeLoreBody,
   designateLoreSections,
+  findRelationshipEntry,
+  isCharacterPage,
   isPersonaCardSection,
   isSecretSection,
+  parseRelationshipEntries,
   type DesignatableLoreSection
 } from "./lore-designation";
 import { readLorePages } from "./core";
@@ -302,5 +305,72 @@ describe("readLorePages canon_level", () => {
     expect(chunks.filter((c) => c.pageId === "lore.odd")).toHaveLength(1);
     expect(chunks.find((c) => c.pageId === "lore.odd")!.canonLevel).toBe("hard");
     expect(warnings.some((w) => w.includes("medium-ish"))).toBe(true);
+  });
+});
+
+// #171 -- another character's page is not world context. What one character
+// knows about another is what their own page says under `## Relationships`.
+describe("relationships sections", () => {
+  it("recognizes a page with a persona card or relationships as a character page", () => {
+    expect(isCharacterPage([{ heading: "Persona", slug: "persona", content: "x" }])).toBe(true);
+    expect(
+      isCharacterPage([{ heading: "Relationships", slug: "relationships", content: "x" }])
+    ).toBe(true);
+    expect(
+      isCharacterPage([{ heading: "Overview", slug: "overview", content: "A busy dock." }])
+    ).toBe(false);
+  });
+
+  it("reads a linked name, its page, and what is said about them", () => {
+    const entries = parseRelationshipEntries(
+      "- [Horace Pennyfeather](lore.entities.npcs.horace_pennyfeather) -- She finds him tediously literal."
+    );
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual({
+      name: "Horace Pennyfeather",
+      pageId: "lore.entities.npcs.horace_pennyfeather",
+      description: "She finds him tediously literal."
+    });
+  });
+
+  it("reads a bare name written without a link", () => {
+    const entries = parseRelationshipEntries("- Finnick Thorn: An unbearable cheese bore.");
+    expect(entries[0]?.name).toBe("Finnick Thorn");
+    expect(entries[0]?.pageId).toBeNull();
+    expect(entries[0]?.description).toBe("An unbearable cheese bore.");
+  });
+
+  it("continues a description that wraps onto the next line", () => {
+    const entries = parseRelationshipEntries(
+      [
+        "- [Horace Pennyfeather](lore.entities.npcs.horace_pennyfeather) -- She finds him",
+        "  tediously literal.",
+        "- Finnick Thorn -- Smells of rind."
+      ].join("\n")
+    );
+    expect(entries).toHaveLength(2);
+    expect(entries[0]?.description).toBe("She finds him tediously literal.");
+    expect(entries[1]?.description).toBe("Smells of rind.");
+  });
+
+  it("matches an entry by page id, and by name when no link was written", () => {
+    const entries = parseRelationshipEntries(
+      [
+        "- [Horace Pennyfeather](lore.entities.npcs.horace_pennyfeather) -- Tediously literal.",
+        "- Finnick Thorn -- Smells of rind."
+      ].join("\n")
+    );
+    expect(
+      findRelationshipEntry(entries, {
+        pageId: "lore.entities.npcs.horace_pennyfeather",
+        title: null
+      })?.description
+    ).toBe("Tediously literal.");
+    expect(
+      findRelationshipEntry(entries, { pageId: null, title: "finnick thorn" })?.description
+    ).toBe("Smells of rind.");
+    expect(
+      findRelationshipEntry(entries, { pageId: "lore.entities.npcs.mim", title: "Mim" })
+    ).toBeNull();
   });
 });

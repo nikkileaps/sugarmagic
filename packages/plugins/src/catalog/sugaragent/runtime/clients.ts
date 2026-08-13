@@ -486,6 +486,26 @@ export interface PersonaLoader {
   loadPersona: (pageId: string | null) => Promise<LoadedPersona>;
 }
 
+/**
+ * Fetch whole lore pages by id. The quest-context middleware uses it to see
+ * what kind of page a search result came from, and to read the speaking NPC's
+ * `## Relationships` section.
+ */
+export interface LorePageResolver {
+  resolvePages: (pageIds: string[]) => Promise<ResolvedLorePage[]>;
+}
+
+export class SugarAgentGatewayLorePageResolver implements LorePageResolver {
+  constructor(private readonly client: SugarAgentGatewayLoreClient) {}
+
+  async resolvePages(pageIds: string[]): Promise<ResolvedLorePage[]> {
+    const wanted = pageIds.map((id) => id.trim()).filter((id) => id.length > 0);
+    if (wanted.length === 0) return [];
+    const result = await this.client.resolve({ pageIds: wanted });
+    return result.pages;
+  }
+}
+
 function degradedPersona(pageId: string | null): LoadedPersona {
   return {
     pageId,

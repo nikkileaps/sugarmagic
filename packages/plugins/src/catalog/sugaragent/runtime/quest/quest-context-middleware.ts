@@ -26,12 +26,21 @@
  *
  * ## Which result gets used
  *
- * The search returns several candidates and the highest-scoring one
- * becomes the world context. Anything below the project's relevance
+ * The search returns several candidates and they are considered
+ * highest-scoring first. Anything below the project's relevance
  * threshold was already dropped by the vector store, so an empty result
  * means nothing was relevant enough and the NPC gets no world context
  * -- an unrelated page presented as the current state of the world is
  * worse than none, and it would stay pinned for the whole quest stage.
+ *
+ * ## Another character's page is not the world
+ *
+ * A candidate that describes a different character is not world context:
+ * handed one, an NPC reads it as a description of itself and speaks as
+ * that character. What this NPC knows about them is what its OWN page
+ * says under `## Relationships`, so that text is used instead. When its
+ * page says nothing about them, the candidate is dropped and the next
+ * one is considered.
  *
  * ## Invalidation vs memory
  *
@@ -53,8 +62,18 @@ import type { SugarAgentLogger } from "../logger";
 import {
   OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE,
   OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE,
+  type LorePageResolver,
+  type ResolvedLorePage,
   type VectorStoreProvider
 } from "../clients";
+// Pure, browser-safe classifier shared with the gateway's ingest.
+import {
+  findRelationshipEntry,
+  isCharacterPage,
+  isRelationshipsSection,
+  parseRelationshipEntries,
+  type LoreRelationshipEntry
+} from "../../../../deployment/gateway/lore-designation";
 import type { RetrievedEvidenceItem } from "../types";
 import { recordQuestContextSnapshot } from "./quest-context-debug";
 
@@ -115,6 +134,12 @@ export interface QuestContextMiddlewareOptions {
    * is correct when the gateway is not configured.
    */
   vectorStoreProvider?: VectorStoreProvider | null;
+  /**
+   * Fetches whole lore pages, to tell which search results describe a
+   * character and to read the speaker's `## Relationships`. Absent means no
+   * page can be classified, so results are used as they were before #171.
+   */
+  lorePageResolver?: LorePageResolver | null;
   logger?: SugarAgentLogger;
   /**
    * Hard cap on the world-context text spliced into the user message.
@@ -157,10 +182,18 @@ interface WorldContextResolution {
   score: number | null;
   title: string | null;
   isOwnPage: boolean;
+  /** How many other-character pages were passed over to get here. */
+  droppedCharacterPages: number;
 }
 
 function noWorldContext(): WorldContextResolution {
-  return { text: null, score: null, title: null, isOwnPage: false };
+  return {
+    text: null,
+    score: null,
+    title: null,
+    isOwnPage: false,
+    droppedCharacterPages: 0
+  };
 }
 
 /** A chunk attribute, or null when it is absent or not a non-empty string. */
@@ -174,23 +207,63 @@ function readStringAttribute(
   return trimmed.length > 0 ? trimmed : null;
 }
 
-/** Highest-scoring result that has text, or null when there is none. */
-function pickBest(items: RetrievedEvidenceItem[]): RetrievedEvidenceItem | null {
-  let best: RetrievedEvidenceItem | null = null;
-  for (const item of items) {
-    if (item.text.trim().length === 0) continue;
-    if (!best || item.score > best.score) best = item;
+/** Results that carry text, best-scoring first. */
+function rankCandidates(items: RetrievedEvidenceItem[]): RetrievedEvidenceItem[] {
+  return items
+    .filter((item) => item.text.trim().length > 0)
+    .sort((left, right) => right.score - left.score);
+}
+
+function truncate(raw: string, options: QuestContextMiddlewareOptions): string {
+  const max = options.maxWorldContextChars ?? DEFAULT_MAX_WORLD_CONTEXT_CHARS;
+  const trimmed = raw.trim();
+  return trimmed.length > max
+    ? trimmed.slice(0, max).trimEnd() + "..."
+    : trimmed;
+}
+
+/**
+ * The lore pages behind a set of search results, by page id. Empty when there
+ * is no resolver or the fetch fails: the caller then cannot tell a character
+ * page from a place, and keeps the best result as it always did.
+ */
+async function fetchCandidatePages(
+  pageIds: string[],
+  options: QuestContextMiddlewareOptions
+): Promise<Map<string, ResolvedLorePage>> {
+  const resolver = options.lorePageResolver ?? null;
+  if (!resolver || pageIds.length === 0) return new Map();
+  try {
+    const pages = await resolver.resolvePages(pageIds);
+    return new Map(pages.map((page) => [page.pageId, page]));
+  } catch (error) {
+    options.logger?.logPluginEvent("quest-context-page-fetch-failed", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return new Map();
   }
-  return best;
+}
+
+/** The `## Relationships` bullets on a page, or none when it has no such section. */
+function readRelationships(
+  page: ResolvedLorePage | undefined
+): LoreRelationshipEntry[] {
+  const section = page?.sections.find(isRelationshipsSection);
+  return section ? parseRelationshipEntries(section.content) : [];
 }
 
 /**
  * Search lore for something that describes the world around this quest
- * objective and keep the best result. The vector store has already
- * dropped anything below the project's relevance threshold, so an empty
- * result means nothing was relevant enough -- and the NPC gets no world
- * context, which beats presenting an unrelated page as the current
- * state of the world.
+ * objective, and choose what the NPC is allowed to be told.
+ *
+ * Candidates are considered best-scoring first. The vector store has already
+ * dropped everything below the project's relevance threshold, so an empty
+ * result means nothing was relevant enough and the NPC gets no world context.
+ *
+ * A page that describes another character is not world context. What this NPC
+ * knows about that character is what their OWN page says in `## Relationships`,
+ * so that is what gets injected; when their page says nothing about them, the
+ * candidate is dropped and the next one is considered (#171).
  */
 async function resolveWorldContext(
   execution: ConversationExecutionContext,
@@ -209,23 +282,78 @@ async function resolveWorldContext(
       maxResults: WORLD_CONTEXT_CANDIDATE_COUNT
     });
 
-    const best = pickBest(results);
-    if (!best) return noWorldContext();
+    const candidates = rankCandidates(results);
+    if (candidates.length === 0) return noWorldContext();
 
-    const raw = best.text.trim();
-    const max = options.maxWorldContextChars ?? DEFAULT_MAX_WORLD_CONTEXT_CHARS;
-    const text = raw.length > max ? raw.slice(0, max).trimEnd() + "..." : raw;
-    const ownLorePageId =
+    const ownPageId =
       typeof execution.selection.lorePageId === "string"
         ? execution.selection.lorePageId.trim()
         : "";
-    const pageId = readStringAttribute(best, OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE);
-    return {
-      text,
-      score: best.score,
-      title: readStringAttribute(best, OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE),
-      isOwnPage: ownLorePageId.length > 0 && pageId === ownLorePageId
-    };
+    const candidatePageIds = candidates
+      .map((item) => readStringAttribute(item, OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE))
+      .filter((id): id is string => id !== null);
+    const pages = await fetchCandidatePages(
+      Array.from(new Set([...candidatePageIds, ownPageId].filter(Boolean))),
+      options
+    );
+    const ownPage = ownPageId ? pages.get(ownPageId) : undefined;
+    const relationships = readRelationships(ownPage);
+    let droppedCharacterPages = 0;
+
+    for (const candidate of candidates) {
+      const pageId = readStringAttribute(
+        candidate,
+        OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE
+      );
+      const title = readStringAttribute(
+        candidate,
+        OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE
+      );
+
+      if (ownPageId && pageId === ownPageId) {
+        return {
+          text: truncate(candidate.text, options),
+          score: candidate.score,
+          title,
+          isOwnPage: true,
+          droppedCharacterPages
+        };
+      }
+
+      const page = pageId ? pages.get(pageId) : undefined;
+      if (page && isCharacterPage(page.sections)) {
+        const entry = findRelationshipEntry(relationships, {
+          pageId,
+          title: title ?? page.title
+        });
+        if (entry && entry.description.trim().length > 0) {
+          // Their own words about that character, so the block is about
+          // somebody else without ever being that somebody else's page.
+          return {
+            text: truncate(
+              `What you know of ${entry.name}: ${entry.description}`,
+              options
+            ),
+            score: candidate.score,
+            title: ownPage?.title ?? null,
+            isOwnPage: true,
+            droppedCharacterPages
+          };
+        }
+        droppedCharacterPages += 1;
+        continue;
+      }
+
+      return {
+        text: truncate(candidate.text, options),
+        score: candidate.score,
+        title,
+        isOwnPage: false,
+        droppedCharacterPages
+      };
+    }
+
+    return { ...noWorldContext(), droppedCharacterPages };
   } catch (error) {
     options.logger?.logPluginEvent("quest-context-resolve-failed", {
       error: error instanceof Error ? error.message : String(error)
@@ -287,7 +415,10 @@ export function createQuestContextMiddleware(
           questId,
           stageId,
           hasContext: resolution.text !== null,
-          score: resolution.score
+          score: resolution.score,
+          sourceTitle: resolution.title,
+          fromOwnPage: resolution.isOwnPage,
+          droppedCharacterPages: resolution.droppedCharacterPages
         });
       }
 
