@@ -99,27 +99,28 @@ export interface LoreRelationshipEntry {
   description: string;
 }
 
-const BULLET_LINE = /^[-*]\s+(.*)$/;
-const LINKED_NAME = /^\[([^\]]+)\]\(([^)]+)\)\s*(.*)$/;
-// Separates the name from what is said about them: "--", an em dash (escaped
-// so this file stays ASCII), or a colon.
-const NAME_SEPARATOR = /\s+--\s+|\s+\u2014\s+|:\s+/;
+// An entry is a markdown link and whatever follows it. A leading list marker
+// is allowed and ignored.
+const LINKED_NAME = /^(?:[-*]\s+)?\[([^\]]+)\]\(([^)]+)\)\s*(.*)$/;
 
+// Between the name and what is said about them: "--", an em dash (escaped so
+// this file stays ASCII), or a colon.
 function stripLeadingSeparator(text: string): string {
   return text.replace(/^(--|\u2014|:)\s*/, "").trim();
 }
 
 /**
- * Read the bullets out of a `## Relationships` section.
+ * Read the entries out of a `## Relationships` section.
  *
- * The exact form is a linked name and a description:
+ * An entry is a line carrying a markdown link -- the link text is the
+ * character's name, the target is their lore page, and the rest of the line is
+ * what this page says about them:
  *
- *     - [Horace Pennyfeather](lore.entities.npcs.horace_pennyfeather) -- She
- *       finds him tediously literal.
+ *     [Finnick Thorn](lore.entities.npcs.finnick_thorn) -- An unbearable
+ *     cheese bore.
  *
- * A bare name is also read (`- Horace Pennyfeather -- ...`), matched on the
- * name instead of the page. A line that is not a bullet continues the
- * description of the bullet above it, so an entry can wrap.
+ * A line with no link continues the description of the entry above it, so an
+ * entry can wrap. A line before the first entry is ignored.
  */
 export function parseRelationshipEntries(content: string): LoreRelationshipEntry[] {
   const entries: LoreRelationshipEntry[] = [];
@@ -127,20 +128,7 @@ export function parseRelationshipEntries(content: string): LoreRelationshipEntry
     const line = rawLine.trim();
     if (line.length === 0) continue;
 
-    const bullet = BULLET_LINE.exec(line);
-    if (!bullet) {
-      // A wrapped description line: it belongs to the bullet above.
-      const previous = entries[entries.length - 1];
-      if (previous) {
-        previous.description = previous.description
-          ? `${previous.description} ${line}`
-          : line;
-      }
-      continue;
-    }
-
-    const body = bullet[1]!.trim();
-    const linked = LINKED_NAME.exec(body);
+    const linked = LINKED_NAME.exec(line);
     if (linked) {
       entries.push({
         name: linked[1]!.trim(),
@@ -150,16 +138,12 @@ export function parseRelationshipEntries(content: string): LoreRelationshipEntry
       continue;
     }
 
-    const separator = NAME_SEPARATOR.exec(body);
-    if (!separator) {
-      entries.push({ name: body, pageId: null, description: "" });
-      continue;
+    const previous = entries[entries.length - 1];
+    if (previous) {
+      previous.description = previous.description
+        ? `${previous.description} ${line}`
+        : line;
     }
-    entries.push({
-      name: body.slice(0, separator.index).trim(),
-      pageId: null,
-      description: body.slice(separator.index + separator[0].length).trim()
-    });
   }
   return entries;
 }

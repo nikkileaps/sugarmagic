@@ -321,31 +321,42 @@ describe("relationships sections", () => {
     ).toBe(false);
   });
 
+  // The wiki writes these as plain linked lines, with no list marker.
   it("reads a linked name, its page, and what is said about them", () => {
     const entries = parseRelationshipEntries(
-      "- [Horace Pennyfeather](lore.entities.npcs.horace_pennyfeather) -- She finds him tediously literal."
+      [
+        "[Reginald Beauregard McCrick III](lore.entities.npcs.reginald_mccrick) -- Her late husband.",
+        "",
+        "[Finnick Thorn](lore.entities.npcs.finnick_thorn) -- An unbearable cheese bore."
+      ].join("\n")
     );
-    expect(entries).toHaveLength(1);
-    expect(entries[0]).toEqual({
-      name: "Horace Pennyfeather",
-      pageId: "lore.entities.npcs.horace_pennyfeather",
-      description: "She finds him tediously literal."
+    expect(entries).toHaveLength(2);
+    expect(entries[1]).toEqual({
+      name: "Finnick Thorn",
+      pageId: "lore.entities.npcs.finnick_thorn",
+      description: "An unbearable cheese bore."
     });
   });
 
-  it("reads a bare name written without a link", () => {
-    const entries = parseRelationshipEntries("- Finnick Thorn: An unbearable cheese bore.");
+  it("allows a list marker in front of the link", () => {
+    const entries = parseRelationshipEntries(
+      "- [Finnick Thorn](lore.entities.npcs.finnick_thorn) -- An unbearable cheese bore."
+    );
     expect(entries[0]?.name).toBe("Finnick Thorn");
-    expect(entries[0]?.pageId).toBeNull();
-    expect(entries[0]?.description).toBe("An unbearable cheese bore.");
+    expect(entries[0]?.pageId).toBe("lore.entities.npcs.finnick_thorn");
+  });
+
+  it("ignores a line with no link", () => {
+    const entries = parseRelationshipEntries("Finnick Thorn -- An unbearable cheese bore.");
+    expect(entries).toHaveLength(0);
   });
 
   it("continues a description that wraps onto the next line", () => {
     const entries = parseRelationshipEntries(
       [
-        "- [Horace Pennyfeather](lore.entities.npcs.horace_pennyfeather) -- She finds him",
-        "  tediously literal.",
-        "- Finnick Thorn -- Smells of rind."
+        "[Horace Pennyfeather](lore.entities.npcs.horace_pennyfeather) -- She finds him",
+        "tediously literal.",
+        "[Finnick Thorn](lore.entities.npcs.finnick_thorn) -- Smells of rind."
       ].join("\n")
     );
     expect(entries).toHaveLength(2);
@@ -353,11 +364,13 @@ describe("relationships sections", () => {
     expect(entries[1]?.description).toBe("Smells of rind.");
   });
 
-  it("matches an entry by page id, and by name when no link was written", () => {
+  it("matches an entry by page id, and by name when the link target is wrong", () => {
     const entries = parseRelationshipEntries(
       [
-        "- [Horace Pennyfeather](lore.entities.npcs.horace_pennyfeather) -- Tediously literal.",
-        "- Finnick Thorn -- Smells of rind."
+        "[Horace Pennyfeather](lore.entities.npcs.horace_pennyfeather) -- Tediously literal.",
+        // A real typo from the wiki: "ncps" instead of "npcs". The page id will
+        // never match, so the name is what saves it.
+        "[Reginald Beauregard McCrick III](lore.entities.ncps.reginald_mccrick) -- Her late husband."
       ].join("\n")
     );
     expect(
@@ -367,8 +380,11 @@ describe("relationships sections", () => {
       })?.description
     ).toBe("Tediously literal.");
     expect(
-      findRelationshipEntry(entries, { pageId: null, title: "finnick thorn" })?.description
-    ).toBe("Smells of rind.");
+      findRelationshipEntry(entries, {
+        pageId: "lore.entities.npcs.reginald_mccrick",
+        title: "Reginald Beauregard McCrick III"
+      })?.description
+    ).toBe("Her late husband.");
     expect(
       findRelationshipEntry(entries, { pageId: "lore.entities.npcs.mim", title: "Mim" })
     ).toBeNull();
