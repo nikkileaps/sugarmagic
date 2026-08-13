@@ -22,19 +22,25 @@ import {
   type MemoizedQuestContext,
   type QuestContextAnnotation
 } from "./quest-context-middleware";
-import type { VectorStoreProvider } from "../clients";
+import type {
+  LorePageResolver,
+  ResolvedLorePage,
+  VectorStoreProvider
+} from "../clients";
 import type { RetrievedEvidenceItem } from "../types";
 
 function makeExecution(
   state: Record<string, unknown> = {},
-  runtimeOverrides: Partial<ConversationExecutionContext["runtimeContext"]> = {}
+  runtimeOverrides: Partial<ConversationExecutionContext["runtimeContext"]> = {},
+  selectionOverrides: Partial<ConversationExecutionContext["selection"]> = {}
 ): ConversationExecutionContext {
   return {
     selection: {
       conversationKind: "free-form",
       npcDefinitionId: "npc.finnick",
       npcDisplayName: "Finnick",
-      interactionMode: "agent"
+      interactionMode: "agent",
+      ...selectionOverrides
     } as ConversationExecutionContext["selection"],
     input: null,
     state,
@@ -76,13 +82,17 @@ function makeExecution(
   };
 }
 
-function fakeLore(text: string, score = 0.9): RetrievedEvidenceItem {
+function fakeLore(
+  text: string,
+  score = 0.9,
+  attributes: Record<string, unknown> = {}
+): RetrievedEvidenceItem {
   return {
     fileId: "lore.station-info",
     filename: "station-info.md",
     score,
     text,
-    attributes: {}
+    attributes
   };
 }
 
@@ -353,5 +363,273 @@ describe("createQuestContextMiddleware -- 077.5 cost guard", () => {
 
     // The one allowed call: vector-index lookup (not an LLM call).
     expect(searchLore).toHaveBeenCalledOnce();
+  });
+});
+
+// #171 -- the prompt has to be able to say WHOSE page this is. Without a title
+// the block reads as an unattributed statement about the present world, and an
+// NPC handed a page written about someone else speaks as that character.
+describe("createQuestContextMiddleware -- source attribution", () => {
+  it("carries the source page title from the chunk attributes", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("A no nonsense station manager.", 0.9, {
+        page_id: "lore.entities.npcs.horace_pennyfeather",
+        title: "Horace Pennyfeather"
+      })
+    ]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution();
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContextTitle).toBe("Horace Pennyfeather");
+  });
+
+  it("leaves the title null when the chunk carries no title attribute", async () => {
+    const { provider } = fakeVectorStore([fakeLore("Baggage claim is on level B.")]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution();
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContextTitle).toBeNull();
+  });
+
+  it("reports another NPC's page as not the speaker's own", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("A no nonsense station manager.", 0.9, {
+        page_id: "lore.entities.npcs.horace_pennyfeather",
+        title: "Horace Pennyfeather"
+      })
+    ]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution({}, {}, {
+      lorePageId: "lore.entities.npcs.penelope_mccrick"
+    });
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContextIsOwnPage).toBe(false);
+  });
+
+  it("reports the speaker's own page as their own", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Penelope keeps a suite above the dock.", 0.9, {
+        page_id: "lore.entities.npcs.penelope_mccrick",
+        title: "Penelope McCrick"
+      })
+    ]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution({}, {}, {
+      lorePageId: "lore.entities.npcs.penelope_mccrick"
+    });
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContextIsOwnPage).toBe(true);
+  });
+});
+
+
+// #171 -- what stops an NPC speaking as somebody else is the label on the
+// block, not a filter. The one substitution: when the speaker's own page has a
+// line about the page that won, they are told their line instead of the page.
+describe("createQuestContextMiddleware -- relationships", () => {
+  const PENELOPE = "lore.entities.npcs.penelope_mccrick";
+  const FINNICK = "lore.entities.npcs.finnick_thorn";
+
+  function ownPage(relationships?: string): ResolvedLorePage {
+    return {
+      pageId: PENELOPE,
+      title: "Penelope McCrick",
+      relativePath: "entities/npcs/npc.penelope_mccrick.md",
+      sectionCount: 2,
+      body: "",
+      sections: [
+        { heading: "Voice", slug: "voice", content: "Clipped and grand." },
+        ...(relationships
+          ? [{ heading: "Relationships", slug: "relationships", content: relationships }]
+          : [])
+      ]
+    };
+  }
+
+  function fakeResolver(pages: ResolvedLorePage[]): {
+    resolver: LorePageResolver;
+    resolvePages: ReturnType<typeof vi.fn>;
+  } {
+    const resolvePages = vi.fn(async (ids: string[]) =>
+      pages.filter((page) => ids.includes(page.pageId))
+    );
+    return { resolver: { resolvePages }, resolvePages };
+  }
+
+  function speaking(): ConversationExecutionContext {
+    return makeExecution({}, {}, { lorePageId: PENELOPE });
+  }
+
+  function annotationOf(
+    execution: ConversationExecutionContext
+  ): QuestContextAnnotation {
+    return execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as QuestContextAnnotation;
+  }
+
+  it("uses the speaker's own line about a character instead of that character's page", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Finnick is obsessed with cheese to an unhinged degree.", 0.9, {
+        page_id: FINNICK,
+        title: "Finnick Thorn"
+      })
+    ]);
+    const { resolver } = fakeResolver([
+      ownPage(`[Finnick Thorn](${FINNICK}) -- An unbearable cheese bore.`)
+    ]);
+    const execution = speaking();
+    await createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      lorePageResolver: resolver
+    }).prepare?.(execution);
+
+    const annotation = annotationOf(execution);
+    expect(annotation.worldContext).toBe(
+      "What you know of Finnick Thorn: An unbearable cheese bore."
+    );
+    expect(annotation.worldContext).not.toContain("obsessed with cheese");
+    // The text came off the speaker's page, so the prompt must not disown it.
+    expect(annotation.worldContextIsOwnPage).toBe(true);
+    expect(annotation.worldContextTitle).toBe("Penelope McCrick");
+  });
+
+  it("fetches the speaker's own page and nothing else", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Finnick is obsessed with cheese.", 0.9, {
+        page_id: FINNICK,
+        title: "Finnick Thorn"
+      })
+    ]);
+    const { resolver, resolvePages } = fakeResolver([ownPage()]);
+    await createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      lorePageResolver: resolver
+    }).prepare?.(speaking());
+
+    expect(resolvePages).toHaveBeenCalledTimes(1);
+    expect(resolvePages).toHaveBeenCalledWith([PENELOPE]);
+  });
+
+  it("keeps another character's page when the speaker has no line about them", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("A no nonsense station manager.", 0.9, {
+        page_id: "lore.entities.npcs.horace_pennyfeather",
+        title: "Horace Pennyfeather"
+      })
+    ]);
+    const { resolver } = fakeResolver([
+      ownPage(`[Finnick Thorn](${FINNICK}) -- An unbearable cheese bore.`)
+    ]);
+    const execution = speaking();
+    await createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      lorePageResolver: resolver
+    }).prepare?.(execution);
+
+    const annotation = annotationOf(execution);
+    expect(annotation.worldContext).toBe("A no nonsense station manager.");
+    expect(annotation.worldContextTitle).toBe("Horace Pennyfeather");
+    expect(annotation.worldContextIsOwnPage).toBe(false);
+  });
+
+  it("matches a relationship by name when the link target is a typo", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Reginald built the dock fortune.", 0.9, {
+        page_id: "lore.entities.npcs.reginald_mccrick",
+        title: "Reginald Beauregard McCrick III"
+      })
+    ]);
+    const { resolver } = fakeResolver([
+      // "ncps" instead of "npcs", as in the wiki today.
+      ownPage(
+        "[Reginald Beauregard McCrick III](lore.entities.ncps.reginald_mccrick) -- Her late husband."
+      )
+    ]);
+    const execution = speaking();
+    await createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      lorePageResolver: resolver
+    }).prepare?.(execution);
+
+    expect(annotationOf(execution).worldContext).toBe(
+      "What you know of Reginald Beauregard McCrick III: Her late husband."
+    );
+  });
+
+  it("reports no score when the text came from the speaker's page, not the search hit", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Finnick is obsessed with cheese.", 0.77, {
+        page_id: FINNICK,
+        title: "Finnick Thorn"
+      })
+    ]);
+    const { resolver } = fakeResolver([
+      ownPage(`[Finnick Thorn](${FINNICK}) -- An unbearable cheese bore.`)
+    ]);
+    const state: Record<string, unknown> = {};
+    await createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      lorePageResolver: resolver
+    }).prepare?.(makeExecution(state, {}, { lorePageId: PENELOPE }));
+
+    const memo = state[QUEST_CONTEXT_STATE_KEY] as MemoizedQuestContext;
+    expect(memo.worldContextScore).toBeNull();
+  });
+
+  it("uses the search result as it stands when the speaker has no lore page", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Finnick is obsessed with cheese.", 0.9, {
+        page_id: FINNICK,
+        title: "Finnick Thorn"
+      })
+    ]);
+    const { resolver, resolvePages } = fakeResolver([ownPage()]);
+    const execution = makeExecution();
+    await createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      lorePageResolver: resolver
+    }).prepare?.(execution);
+
+    expect(resolvePages).not.toHaveBeenCalled();
+    expect(annotationOf(execution).worldContext).toBe(
+      "Finnick is obsessed with cheese."
+    );
+  });
+
+  it("keeps playing when the page fetch fails", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Lost luggage is held at the dock office.", 0.9, {
+        page_id: "lore.places.dock",
+        title: "The Dock"
+      })
+    ]);
+    const execution = speaking();
+    await createQuestContextMiddleware({
+      vectorStoreProvider: provider,
+      lorePageResolver: {
+        resolvePages: async () => {
+          throw new Error("gateway down");
+        }
+      }
+    }).prepare?.(execution);
+
+    expect(annotationOf(execution).worldContext).toBe(
+      "Lost luggage is held at the dock office."
+    );
   });
 });

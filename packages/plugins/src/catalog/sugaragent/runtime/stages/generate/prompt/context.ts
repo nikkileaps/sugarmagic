@@ -101,6 +101,18 @@ export interface BasePromptContext {
   questWorldContext: string | null;
 
   /**
+   * Title of the lore page questWorldContext came from, so the block can say
+   * which page it is quoting. Null when the chunk carries no title.
+   */
+  questWorldContextTitle: string | null;
+
+  /**
+   * True when that page is the speaking NPC's own. The block tells the NPC the
+   * text is about someone else, which must not be said when it is about them.
+   */
+  questWorldContextIsOwnPage: boolean;
+
+  /**
    * Plan 077.3 (D4) -- how many times the active quest objective has been
    * raised to the player via NPC dialogue this session (coarse proxy: counts
    * PROMPTING, not saying). Goes into the UNCACHED user half alongside

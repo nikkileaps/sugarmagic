@@ -26,12 +26,24 @@
  *
  * ## Which result gets used
  *
- * The search returns several candidates and the highest-scoring one
- * becomes the world context. Anything below the project's relevance
+ * The search returns several candidates and they are considered
+ * highest-scoring first. Anything below the project's relevance
  * threshold was already dropped by the vector store, so an empty result
  * means nothing was relevant enough and the NPC gets no world context
  * -- an unrelated page presented as the current state of the world is
  * worse than none, and it would stay pinned for the whole quest stage.
+ *
+ * ## Saying whose page it is
+ *
+ * An unlabelled block of lore reads as a description of the speaker, so
+ * an NPC handed a page about somebody else introduces itself as that
+ * character. The prompt therefore names the page every block came from
+ * and says it is not the speaker; nothing is filtered out on the
+ * strength of what kind of page it is.
+ *
+ * When the speaker's `## Relationships` has a line about the page that
+ * won the search, that line is used instead of the page -- their own
+ * words about someone are what they know of them.
  *
  * ## Invalidation vs memory
  *
@@ -50,7 +62,21 @@ import type {
   ConversationMiddleware
 } from "@sugarmagic/runtime-core";
 import type { SugarAgentLogger } from "../logger";
-import type { VectorStoreProvider } from "../clients";
+import {
+  OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE,
+  OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE,
+  type LorePageResolver,
+  type ResolvedLorePage,
+  type VectorStoreProvider
+} from "../clients";
+// Pure, browser-safe lore-format helpers. The section designation is shared
+// with the gateway; the relationship reading is used here only.
+import {
+  findRelationshipEntry,
+  isRelationshipsSection,
+  parseRelationshipEntries,
+  type LoreRelationshipEntry
+} from "../../../../deployment/gateway/lore-designation";
 import type { RetrievedEvidenceItem } from "../types";
 import { recordQuestContextSnapshot } from "./quest-context-debug";
 
@@ -77,6 +103,10 @@ export interface MemoizedQuestContext {
   worldContext: string | null;
   /** Similarity score of the chosen result; null when nothing was chosen. */
   worldContextScore: number | null;
+  /** Title of the lore page the text came from; null when the chunk has none. */
+  worldContextTitle: string | null;
+  /** True when the chosen page is the speaking NPC's own lore page. */
+  worldContextIsOwnPage: boolean;
 }
 
 /**
@@ -87,6 +117,17 @@ export interface MemoizedQuestContext {
 export interface QuestContextAnnotation {
   hasContext: boolean;
   worldContext: string | null;
+  /**
+   * Title of the lore page the text came from, so the prompt can say whose
+   * page it is. Null when the chunk carries no title attribute.
+   */
+  worldContextTitle: string | null;
+  /**
+   * True when the chosen page is the speaking NPC's own lore page. Prompts
+   * that tell the NPC the block is about someone else must not say that when
+   * it is in fact about them.
+   */
+  worldContextIsOwnPage: boolean;
 }
 
 export interface QuestContextMiddlewareOptions {
@@ -96,6 +137,12 @@ export interface QuestContextMiddlewareOptions {
    * is correct when the gateway is not configured.
    */
   vectorStoreProvider?: VectorStoreProvider | null;
+  /**
+   * Fetches whole lore pages, to tell which search results describe a
+   * character and to read the speaker's `## Relationships`. Absent means no
+   * page can be classified, so results are used as they were before #171.
+   */
+  lorePageResolver?: LorePageResolver | null;
   logger?: SugarAgentLogger;
   /**
    * Hard cap on the world-context text spliced into the user message.
@@ -136,29 +183,88 @@ function buildRetrievalQuery(
 interface WorldContextResolution {
   text: string | null;
   score: number | null;
+  title: string | null;
+  isOwnPage: boolean;
 }
 
 function noWorldContext(): WorldContextResolution {
-  return { text: null, score: null };
+  return {
+    text: null,
+    score: null,
+    title: null,
+    isOwnPage: false
+  };
 }
 
-/** Highest-scoring result that has text, or null when there is none. */
-function pickBest(items: RetrievedEvidenceItem[]): RetrievedEvidenceItem | null {
-  let best: RetrievedEvidenceItem | null = null;
-  for (const item of items) {
-    if (item.text.trim().length === 0) continue;
-    if (!best || item.score > best.score) best = item;
+/** A chunk attribute, or null when it is absent or not a non-empty string. */
+function readStringAttribute(
+  item: RetrievedEvidenceItem,
+  key: string
+): string | null {
+  const value = item.attributes[key];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/** Results that carry text, best-scoring first. */
+function rankCandidates(items: RetrievedEvidenceItem[]): RetrievedEvidenceItem[] {
+  return items
+    .filter((item) => item.text.trim().length > 0)
+    .sort((left, right) => right.score - left.score);
+}
+
+function truncate(raw: string, options: QuestContextMiddlewareOptions): string {
+  const max = options.maxWorldContextChars ?? DEFAULT_MAX_WORLD_CONTEXT_CHARS;
+  const trimmed = raw.trim();
+  return trimmed.length > max
+    ? trimmed.slice(0, max).trimEnd() + "..."
+    : trimmed;
+}
+
+/**
+ * The speaking NPC's own lore page, for its `## Relationships`. Undefined when
+ * they have no page, there is no resolver, or the fetch fails -- the NPC then
+ * has no relationships and the search result is used as it stands.
+ */
+async function fetchOwnPage(
+  ownPageId: string,
+  options: QuestContextMiddlewareOptions
+): Promise<ResolvedLorePage | undefined> {
+  const resolver = options.lorePageResolver ?? null;
+  if (!resolver || ownPageId.length === 0) return undefined;
+  try {
+    const pages = await resolver.resolvePages([ownPageId]);
+    return pages.find((page) => page.pageId === ownPageId);
+  } catch (error) {
+    options.logger?.logPluginEvent("quest-context-page-fetch-failed", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return undefined;
   }
-  return best;
+}
+
+/** The `## Relationships` bullets on a page, or none when it has no such section. */
+function readRelationships(
+  page: ResolvedLorePage | undefined
+): LoreRelationshipEntry[] {
+  const section = page?.sections.find(isRelationshipsSection);
+  return section ? parseRelationshipEntries(section.content) : [];
 }
 
 /**
  * Search lore for something that describes the world around this quest
- * objective and keep the best result. The vector store has already
- * dropped anything below the project's relevance threshold, so an empty
- * result means nothing was relevant enough -- and the NPC gets no world
- * context, which beats presenting an unrelated page as the current
- * state of the world.
+ * objective and keep the best result. The vector store has already dropped
+ * everything below the project's relevance threshold, so an empty result means
+ * nothing was relevant enough and the NPC gets no world context.
+ *
+ * When the speaking NPC's `## Relationships` has a line about the page that
+ * won, that line is used instead of the page. Their own words about someone
+ * are what they know of them; the page itself is that person's own account.
+ *
+ * Nothing else is filtered. Whatever goes in is labelled with the page it came
+ * from and stated not to be the speaker, which is what stops an NPC reading a
+ * description of somebody else as a description of itself (#171).
  */
 async function resolveWorldContext(
   execution: ConversationExecutionContext,
@@ -177,13 +283,38 @@ async function resolveWorldContext(
       maxResults: WORLD_CONTEXT_CANDIDATE_COUNT
     });
 
-    const best = pickBest(results);
+    const best = rankCandidates(results)[0];
     if (!best) return noWorldContext();
 
-    const raw = best.text.trim();
-    const max = options.maxWorldContextChars ?? DEFAULT_MAX_WORLD_CONTEXT_CHARS;
-    const text = raw.length > max ? raw.slice(0, max).trimEnd() + "..." : raw;
-    return { text, score: best.score };
+    const pageId = readStringAttribute(best, OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE);
+    const title = readStringAttribute(best, OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE);
+    const ownPageId =
+      typeof execution.selection.lorePageId === "string"
+        ? execution.selection.lorePageId.trim()
+        : "";
+
+    const ownPage = await fetchOwnPage(ownPageId, options);
+    const entry = findRelationshipEntry(readRelationships(ownPage), {
+      pageId,
+      title
+    });
+    if (entry && entry.description.trim().length > 0) {
+      return {
+        text: truncate(`What you know of ${entry.name}: ${entry.description}`, options),
+        // The text is from the speaker's own page, so the search score that
+        // won belongs to a different page and is not reported.
+        score: null,
+        title: ownPage?.title ?? null,
+        isOwnPage: true
+      };
+    }
+
+    return {
+      text: truncate(best.text, options),
+      score: best.score,
+      title,
+      isOwnPage: ownPageId.length > 0 && pageId === ownPageId
+    };
   } catch (error) {
     options.logger?.logPluginEvent("quest-context-resolve-failed", {
       error: error instanceof Error ? error.message : String(error)
@@ -236,20 +367,26 @@ export function createQuestContextMiddleware(
           questId,
           stageId,
           worldContext: resolution.text,
-          worldContextScore: resolution.score
+          worldContextScore: resolution.score,
+          worldContextTitle: resolution.title,
+          worldContextIsOwnPage: resolution.isOwnPage
         };
         execution.state[QUEST_CONTEXT_STATE_KEY] = memoized;
         options.logger?.logPluginEvent("quest-context-resolved", {
           questId,
           stageId,
           hasContext: resolution.text !== null,
-          score: resolution.score
+          score: resolution.score,
+          sourceTitle: resolution.title,
+          fromOwnPage: resolution.isOwnPage
         });
       }
 
       const annotation: QuestContextAnnotation = {
         hasContext: memoized.worldContext !== null,
-        worldContext: memoized.worldContext
+        worldContext: memoized.worldContext,
+        worldContextTitle: memoized.worldContextTitle,
+        worldContextIsOwnPage: memoized.worldContextIsOwnPage
       };
       execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] = annotation;
 
@@ -263,6 +400,8 @@ export function createQuestContextMiddleware(
           stageId,
           worldContext: memoized.worldContext,
           worldContextScore: memoized.worldContextScore,
+          worldContextTitle: memoized.worldContextTitle,
+          worldContextIsOwnPage: memoized.worldContextIsOwnPage,
           goalSurfacedCount: execution.runtimeContext?.goalSurfacedCount ?? null
         });
       }

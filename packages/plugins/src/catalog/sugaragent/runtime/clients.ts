@@ -9,6 +9,13 @@ import {
 
 export const OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE = "page_id";
 
+/**
+ * The lore page's title, attached to every chunk by the gateway's
+ * `chunkAttributes`. Read when a prompt has to say which page a piece of text
+ * came from.
+ */
+export const OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE = "title";
+
 export interface OpenAIVectorStoreEqFilter {
   type: "eq";
   key: string;
@@ -477,6 +484,26 @@ export class SugarAgentGatewayLoreClient {
 export interface PersonaLoader {
   /** Resolve + designate the NPC's page. Null/empty id -> degraded persona. */
   loadPersona: (pageId: string | null) => Promise<LoadedPersona>;
+}
+
+/**
+ * Fetch whole lore pages by id. The quest-context middleware uses it to see
+ * what kind of page a search result came from, and to read the speaking NPC's
+ * `## Relationships` section.
+ */
+export interface LorePageResolver {
+  resolvePages: (pageIds: string[]) => Promise<ResolvedLorePage[]>;
+}
+
+export class SugarAgentGatewayLorePageResolver implements LorePageResolver {
+  constructor(private readonly client: SugarAgentGatewayLoreClient) {}
+
+  async resolvePages(pageIds: string[]): Promise<ResolvedLorePage[]> {
+    const wanted = pageIds.map((id) => id.trim()).filter((id) => id.length > 0);
+    if (wanted.length === 0) return [];
+    const result = await this.client.resolve({ pageIds: wanted });
+    return result.pages;
+  }
 }
 
 function degradedPersona(pageId: string | null): LoadedPersona {

@@ -17,12 +17,14 @@ import {
   SugarAgentGatewayLLMClient,
   SugarAgentGatewayLLMProvider,
   SugarAgentGatewayLoreClient,
+  SugarAgentGatewayLorePageResolver,
   SugarAgentGatewayPersonaProvider,
   SugarAgentGatewayVectorStoreClient,
   SugarAgentGatewayVectorStoreProvider,
   type BearerTokenGetter,
   type JudgeProvider,
   type LLMProvider,
+  type LorePageResolver,
   type PersonaLoader,
   type VectorStoreProvider
 } from "./clients";
@@ -285,6 +287,24 @@ export function createSugarAgentVectorStoreProvider(
   return new SugarAgentGatewayVectorStoreProvider(
     new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken),
     config.loreRelevanceFloor
+  );
+}
+
+/**
+ * Fetch whole lore pages, using the same gateway routing and bearer-token
+ * logic as everything else here. Used by the quest-context middleware to see
+ * which pages describe characters and to read a speaker's relationships.
+ */
+export function createSugarAgentLorePageResolver(
+  config: SugarAgentPluginConfig
+): LorePageResolver {
+  const baseUrl = config.proxyBaseUrl.trim();
+  const staticToken = config.gatewayBearerToken.trim();
+  const getBearerToken: BearerTokenGetter = staticToken
+    ? async () => staticToken
+    : getActiveAccessToken;
+  return new SugarAgentGatewayLorePageResolver(
+    new SugarAgentGatewayLoreClient(baseUrl, getBearerToken)
   );
 }
 

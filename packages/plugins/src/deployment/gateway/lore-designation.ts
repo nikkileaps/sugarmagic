@@ -5,9 +5,12 @@
  * Knowledge Model's three layers (Plan 072, story 072.1).
  *
  * Exports:
- *   - DesignatableLoreSection, DesignatedLore
- *   - PERSONA_CARD_SECTION_SLUGS, SECRETS_SECTION_SLUG
- *   - isPersonaCardSection, isSecretSection, designateLoreSections
+ *   - DesignatableLoreSection, DesignatedLore, LoreRelationshipEntry
+ *   - PERSONA_CARD_SECTION_SLUGS, SECRETS_SECTION_SLUG,
+ *     RELATIONSHIPS_SECTION_SLUG
+ *   - isPersonaCardSection, isSecretSection, isRelationshipsSection,
+ *     designateLoreSections
+ *   - parseRelationshipEntries, findRelationshipEntry
  *
  * Relationships:
  *   - Operates on the EXISTING parser output (core.ts `splitLoreSections`);
@@ -56,8 +59,96 @@ export const PERSONA_CARD_SECTION_SLUGS: readonly string[] = ["persona", "voice"
  */
 export const SECRETS_SECTION_SLUG = "secrets";
 
+/**
+ * `## Relationships` -- what this character knows about other characters. It
+ * stays in core knowledge like any other section; the slug is reserved so a
+ * caller can find it and read one entry out of it.
+ */
+export const RELATIONSHIPS_SECTION_SLUG = "relationships";
+
 export function isPersonaCardSection(section: DesignatableLoreSection): boolean {
   return PERSONA_CARD_SECTION_SLUGS.includes(section.slug);
+}
+
+export function isRelationshipsSection(section: DesignatableLoreSection): boolean {
+  return section.slug === RELATIONSHIPS_SECTION_SLUG;
+}
+
+/** One entry from a `## Relationships` section. */
+export interface LoreRelationshipEntry {
+  /** The other character's name, as written. */
+  name: string;
+  /** The lore page linked in the entry; null when the author wrote a bare name. */
+  pageId: string | null;
+  /** What this page says about them. Empty when the bullet is only a name. */
+  description: string;
+}
+
+// An entry is a markdown link and whatever follows it. A leading list marker
+// is allowed and ignored.
+const LINKED_NAME = /^(?:[-*]\s+)?\[([^\]]+)\]\(([^)]+)\)\s*(.*)$/;
+
+// Between the name and what is said about them: "--", an em dash (escaped so
+// this file stays ASCII), or a colon.
+function stripLeadingSeparator(text: string): string {
+  return text.replace(/^(--|\u2014|:)\s*/, "").trim();
+}
+
+/**
+ * Read the entries out of a `## Relationships` section.
+ *
+ * An entry is a line carrying a markdown link -- the link text is the
+ * character's name, the target is their lore page, and the rest of the line is
+ * what this page says about them:
+ *
+ *     [Finnick Thorn](lore.entities.npcs.finnick_thorn) -- An unbearable
+ *     cheese bore.
+ *
+ * A line with no link continues the description of the entry above it, so an
+ * entry can wrap. A line before the first entry is ignored.
+ */
+export function parseRelationshipEntries(content: string): LoreRelationshipEntry[] {
+  const entries: LoreRelationshipEntry[] = [];
+  for (const rawLine of content.split("\n")) {
+    const line = rawLine.trim();
+    if (line.length === 0) continue;
+
+    const linked = LINKED_NAME.exec(line);
+    if (linked) {
+      entries.push({
+        name: linked[1]!.trim(),
+        pageId: linked[2]!.trim() || null,
+        description: stripLeadingSeparator(linked[3] ?? "")
+      });
+      continue;
+    }
+
+    const previous = entries[entries.length - 1];
+    if (previous) {
+      previous.description = previous.description
+        ? `${previous.description} ${line}`
+        : line;
+    }
+  }
+  return entries;
+}
+
+/**
+ * The entry describing a given page, or null when this character has nothing
+ * written about them. Matched on the linked page id, or on the name when the
+ * author wrote a bare name.
+ */
+export function findRelationshipEntry(
+  entries: readonly LoreRelationshipEntry[],
+  target: { pageId?: string | null; title?: string | null }
+): LoreRelationshipEntry | null {
+  const pageId = target.pageId?.trim() ?? "";
+  const title = target.title?.trim().toLowerCase() ?? "";
+  for (const entry of entries) {
+    if (pageId && entry.pageId === pageId) return entry;
+    if (title && entry.name.trim().toLowerCase() === title) return entry;
+  }
+  return null;
 }
 
 export function isSecretSection(section: DesignatableLoreSection): boolean {
