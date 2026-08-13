@@ -95,6 +95,60 @@ function emptySnapshot(): PublishedWebRuntimeSnapshot {
 }
 
 /**
+ * Placeholder the deploy workflow substitutes with the version it is
+ * deploying. The version is only known on the runner (`git describe`),
+ * not when Studio writes this file.
+ */
+export const PUBLISHED_WEB_VERSION_PLACEHOLDER = "__SUGARMAGIC_GAME_VERSION__";
+
+/**
+ * Every file-backed asset the game references, as
+ * `relativeAssetPath -> site-relative URL`. Read by boot.json (so the
+ * runtime can fetch them), by the deploy (so it stages exactly these),
+ * and by the `_headers` writer (so each directory they live in gets
+ * cache rules). One list, three consumers.
+ *
+ * A non-empty snapshot map (tests, future CDN hosting) wins.
+ */
+function resolveAssetSources(
+  gameProject: GameProject,
+  snapshot: PublishedWebRuntimeSnapshot
+): Record<string, string> {
+  if (Object.keys(snapshot.assetSources).length > 0) {
+    return snapshot.assetSources;
+  }
+  return Object.fromEntries(
+    collectFileBackedAssetPaths({
+      contentLibrary: snapshot.contentLibrary,
+      itemDefinitions: gameProject.itemDefinitions,
+      documentDefinitions: gameProject.documentDefinitions,
+      regions: snapshot.regions,
+      // Plan 092.2 — a plugin's derived artifacts ship with the game.
+      // Disabled plugins are skipped inside the collector, so turning
+      // one off deploys a game without its files rather than a game
+      // with dangling ones.
+      pluginConfigurations: gameProject.pluginConfigurations
+    }).map((path) => [path, `/${path}`])
+  );
+}
+
+/**
+ * The top-level directories the referenced assets live in, sorted.
+ * Derived rather than hardcoded: `relativeAssetPath` is authored, and
+ * a plugin's derived artifacts can introduce a directory nothing here
+ * knows about. Hardcoding `assets/` is what left every mask URL
+ * without cache headers.
+ */
+function assetDirectories(assetSources: Record<string, string>): string[] {
+  const directories = new Set<string>();
+  for (const path of Object.keys(assetSources)) {
+    const [first] = path.split("/");
+    if (first && first !== path) directories.add(first);
+  }
+  return [...directories].sort();
+}
+
+/**
  * Build the boot.json payload from a game project + the in-memory
  * runtime snapshot Studio has loaded. The shape mirrors
  * `WebRuntimeStartState`; mismatches between this shape and the
@@ -161,22 +215,7 @@ function buildBootJsonPayload(
     // survive a deploy — which silently broke ALL file-backed
     // assets in prod; deployed music was the first to notice.)
     // A non-empty snapshot map (tests, future CDN hosting) wins.
-    assetSources:
-      Object.keys(snapshot.assetSources).length > 0
-        ? snapshot.assetSources
-        : Object.fromEntries(
-            collectFileBackedAssetPaths({
-              contentLibrary: snapshot.contentLibrary,
-              itemDefinitions: gameProject.itemDefinitions,
-              documentDefinitions: gameProject.documentDefinitions,
-              regions: snapshot.regions,
-              // Plan 092.2 — a plugin's derived artifacts ship with the game.
-              // Disabled plugins are skipped inside the collector, so turning
-              // one off deploys a game without its files rather than a game
-              // with dangling ones.
-              pluginConfigurations: gameProject.pluginConfigurations
-            }).map((path) => [path, `/${path}`])
-          ),
+    assetSources: resolveAssetSources(gameProject, snapshot),
     // Story 47.10.5 — authored fresh-start record. When a returning
     // player loads with no save (or just clicked New Game + reset),
     // the runtime spawns at these values instead of the implicit
@@ -191,33 +230,45 @@ export function buildPublishedWebManagedFiles(
   snapshot: PublishedWebRuntimeSnapshot = emptySnapshot()
 ): ManagedProjectFile[] {
   const files: ManagedProjectFile[] = [];
+  const assetSources = resolveAssetSources(gameProject, snapshot);
   files.push(
     asJsonFile(
       `${PUBLISHED_WEB_DIRECTORY}/boot.json`,
       buildBootJsonPayload(gameProject, snapshot)
     )
   );
-  // Plan 060 §060.2 — Netlify `_headers`: authored assets cache
-  // immutably. Safe because the deploy workflow stamps every
-  // assetSources URL with the deployed sha (`?v=<sha>`), so a
-  // URL's bytes can never change — new deploys hand browsers new
-  // URLs via boot.json, which always revalidates (pinned below).
-  // The stamp is per-DEPLOY, so every deploy re-downloads all
-  // assets once; per-file content hashing (only changed files
-  // re-download) is the deferred upgrade when asset payloads get
-  // big (see Plan 060 Defers).
+  // The ONLY writer of `_headers`. targets/web's Vite build used to
+  // write its own copy carrying X-Game-Version, which the deploy then
+  // overwrote with this one — so that header never reached production.
+  // Both concerns live here now, and the version arrives via the
+  // placeholder the workflow substitutes.
+  //
+  // Assets cache immutably: the deploy stamps every assetSources URL,
+  // so a URL's bytes never change. boot.json always revalidates, which
+  // is how a new deploy reaches a returning player at all.
+  //
+  // The `/*` version rule and the per-directory cache rules never need
+  // to combine on one request: verification reads the site root, which
+  // only `/*` matches, and caching applies to the asset directories.
+  // So this does not depend on how Netlify merges overlapping rules.
+  const headerLines = [
+    `# ${PUBLISHED_WEB_HEADER}`,
+    "/*",
+    `  X-Game-Version: ${PUBLISHED_WEB_VERSION_PLACEHOLDER}`
+  ];
+  for (const directory of assetDirectories(assetSources)) {
+    headerLines.push(
+      `/${directory}/*`,
+      "  Cache-Control: public, max-age=31536000, immutable"
+    );
+  }
+  headerLines.push(
+    "/boot.json",
+    "  Cache-Control: public, max-age=0, must-revalidate",
+    ""
+  );
   files.push(
-    asTextFile(
-      `${PUBLISHED_WEB_DIRECTORY}/_headers`,
-      [
-        `# ${PUBLISHED_WEB_HEADER}`,
-        "/assets/*",
-        "  Cache-Control: public, max-age=31536000, immutable",
-        "/boot.json",
-        "  Cache-Control: public, max-age=0, must-revalidate",
-        ""
-      ].join("\n")
-    )
+    asTextFile(`${PUBLISHED_WEB_DIRECTORY}/_headers`, headerLines.join("\n"))
   );
   files.push(
     asTextFile(
