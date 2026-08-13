@@ -20,6 +20,11 @@ import {
 } from "./runtime/quest/quest-context-middleware";
 import { installQuestContextDebugHandle } from "./runtime/quest/quest-context-debug";
 import {
+  DEFAULT_LORE_RELEVANCE_FLOOR,
+  MAX_LORE_RELEVANCE_FLOOR,
+  MIN_LORE_RELEVANCE_FLOOR
+} from "./runtime/lore-relevance";
+import {
   createModerationMiddleware,
   MODERATION_MIDDLEWARE_ID
 } from "./runtime/moderation/moderation-middleware";
@@ -256,8 +261,11 @@ export function normalizeSugarAgentPluginConfig(
     loreRelevanceFloor:
       typeof config?.loreRelevanceFloor === "number" &&
       Number.isFinite(config.loreRelevanceFloor)
-        ? Math.max(0, Math.min(1, config.loreRelevanceFloor))
-        : 0,
+        ? Math.max(
+            MIN_LORE_RELEVANCE_FLOOR,
+            Math.min(MAX_LORE_RELEVANCE_FLOOR, config.loreRelevanceFloor)
+          )
+        : DEFAULT_LORE_RELEVANCE_FLOOR,
     memoryEnabled: config?.memoryEnabled !== false,
     memoryDigestMaxChars:
       typeof config?.memoryDigestMaxChars === "number" &&
@@ -383,9 +391,9 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       label: "Lore Relevance Floor",
       type: "number",
       group: "Runtime Behavior",
-      default: 0,
-      min: 0,
-      max: 1,
+      default: DEFAULT_LORE_RELEVANCE_FLOOR,
+      min: MIN_LORE_RELEVANCE_FLOOR,
+      max: MAX_LORE_RELEVANCE_FLOOR,
       description:
         "Minimum similarity score (0-1) a retrieved lore chunk must reach to be injected. 0 = off. Set conservatively low -- scores are corpus-dependent and can be volatile."
     },
@@ -512,7 +520,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
     anthropicRegenModel: "",
     maxLoreResults: 4,
     maxLoreCharsPerItem: 600,
-    loreRelevanceFloor: 0,
+    loreRelevanceFloor: DEFAULT_LORE_RELEVANCE_FLOOR,
     memoryEnabled: true,
     memoryDigestMaxChars: 800,
     questAwareNpcsEnabled: true,

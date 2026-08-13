@@ -6,7 +6,7 @@ import {
 } from "../clients";
 import { createDiagnostics } from "./diagnostics";
 import { normalizeRetrievedEvidenceText, summarizeEvidence } from "./helpers";
-import { recordRetrievalSnapshot } from "./retrieval-debug";
+import { recordRetrievalSnapshot, type RetrievalSnapshot } from "./retrieval-debug";
 import { collectContributions } from "../contributions";
 import type {
   InterpretResult,
@@ -236,14 +236,21 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
         ? `${searchQuery}\nVocabulary in focus: ${retrieveBiasTerms.join(", ")}`
         : searchQuery;
 
-    const floor = context.config.loreRelevanceFloor;
-    let droppedByFloor = 0;
-    const droppedScores: number[] = [];
     let loreSearchPerformed = false;
     let loreContext: RetrieveResult["loreContext"] = [];
     let fallbackReason: string | null = null;
     let status: TurnStageResult<RetrieveResult>["status"] = "ok";
     const canUseProxyDefaults = context.config.proxyBaseUrl.trim().length > 0;
+    // Why no lore search ran. All three causes otherwise look identical from
+    // the outside: loreSearchPerformed false and no scores.
+    let noSearchReason: RetrievalSnapshot["noSearchReason"] = null;
+    if (skipRetrieval) {
+      noSearchReason = "social-fast-turn";
+    } else if (!this.vectorStoreProvider) {
+      noSearchReason = "no-vector-store-provider";
+    } else if (!canUseProxyDefaults) {
+      noSearchReason = "no-proxy-base-url";
+    }
     let broadenedBeyondLorePage = false;
     let pinnedNpcLoreEvidence = false;
     const targetedLorePageId =
@@ -289,19 +296,11 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
             maxResults: requested,
             filters: undefined
           });
-          // Branch A: own-page filter first, floor filter second, slice last.
+          // Branch A: drop own-page results, then slice.
           loreContext = broad.filter(
             (item) =>
               item.attributes[OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE] !== npcLorePageId
           );
-          // Plan 078.2 -- floor filter (Branch A): after own-page drop, before slice.
-          if (floor > 0) {
-            for (const item of loreContext) {
-              if (item.score < floor) droppedScores.push(item.score);
-            }
-            droppedByFloor += droppedScores.length;
-            loreContext = loreContext.filter((item) => item.score >= floor);
-          }
           loreContext = loreContext.slice(0, context.config.maxLoreResults);
           ownPageExcluded = true;
           loreSearchPerformed = true;
@@ -327,16 +326,6 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
             broadenedBeyondLorePage = true;
           }
 
-          // Plan 078.2 -- floor filter (Branch B): after broaden, before pin merge.
-          // Pin bypasses for free: filtering happens here, pin is merged below.
-          if (floor > 0) {
-            for (const item of loreContext) {
-              if (item.score < floor) droppedScores.push(item.score);
-            }
-            droppedByFloor += droppedScores.length;
-            loreContext = loreContext.filter((item) => item.score >= floor);
-          }
-
           if (shouldPinNpcLore && npcLorePageId) {
             const npcLoreEvidence = await this.vectorStoreProvider.searchLore({
               vectorStoreId: "",
@@ -360,6 +349,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
         status = "degraded";
         fallbackReason = fallbackReason ?? "vector-search-unavailable";
         loreContext = [];
+        noSearchReason = "search-failed";
       }
     }
 
@@ -404,11 +394,12 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
 
     recordRetrievalSnapshot({
       npcDefinitionId: context.selection.npcDefinitionId ?? "unknown",
+      searchQuery: loreSearchPerformed ? effectiveSearchQuery : null,
       loreScores,
       loreSearchPerformed,
       broadenedBeyondLorePage,
       ownPageExcluded,
-      droppedByFloor
+      noSearchReason
     });
 
     const output: RetrieveResult = {
@@ -432,8 +423,7 @@ export class RetrieveStage implements TurnStage<RetrieveStageInput, RetrieveResu
           }),
           loreContextCount: loreContext.length,
           loreScores,
-          droppedByFloor,
-          droppedScores,
+          noSearchReason,
           // Plan 072.6 — retrieval rebalance observability.
           personaLoaded: input.personaLoaded,
           ownPageExcluded,

@@ -76,11 +76,11 @@ function makeExecution(
   };
 }
 
-function fakeLore(text: string): RetrievedEvidenceItem {
+function fakeLore(text: string, score = 0.9): RetrievedEvidenceItem {
   return {
     fileId: "lore.station-info",
     filename: "station-info.md",
-    score: 0.9,
+    score,
     text,
     attributes: {}
   };
@@ -252,6 +252,63 @@ describe("createQuestContextMiddleware", () => {
     const callArg = searchLore.mock.calls[0]?.[0] as { query: string } | undefined;
     expect(callArg?.query).toBeTruthy();
     expect(callArg?.query).toContain("Track down the missing suitcase");
+  });
+});
+
+describe("createQuestContextMiddleware -- result selection", () => {
+  it("takes the highest-scoring result rather than the first one returned", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Lower scoring page.", 0.65),
+      fakeLore("Higher scoring page.", 0.88)
+    ]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution();
+
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContext).toBe("Higher scoring page.");
+  });
+
+  it("skips a result with empty text and uses the next one", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("   ", 0.92),
+      fakeLore("Real world fact.", 0.71)
+    ]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution();
+
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContext).toBe("Real world fact.");
+  });
+
+  it("asks for more than one candidate", async () => {
+    const { provider, searchLore } = fakeVectorStore([fakeLore("world fact")]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+
+    await middleware.prepare?.(makeExecution());
+
+    const callArg = searchLore.mock.calls[0]?.[0] as
+      | { maxResults: number }
+      | undefined;
+    expect(callArg?.maxResults).toBeGreaterThan(1);
+  });
+
+  it("memoizes the chosen score for threshold calibration", async () => {
+    const { provider } = fakeVectorStore([fakeLore("Chosen page.", 0.71)]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const state: Record<string, unknown> = {};
+
+    await middleware.prepare?.(makeExecution(state));
+
+    const memo = state[QUEST_CONTEXT_STATE_KEY] as MemoizedQuestContext;
+    expect(memo.worldContextScore).toBe(0.71);
   });
 });
 

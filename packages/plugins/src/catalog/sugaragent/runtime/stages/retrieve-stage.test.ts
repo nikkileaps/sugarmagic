@@ -238,149 +238,66 @@ describe("RetrieveStage loreScores tagging (078.1)", () => {
 });
 
 // Plan 078.2 exit-criteria unit tests (a)-(f)
-describe("RetrieveStage loreRelevanceFloor (078.2)", () => {
-  function makeFloorContext(floor: number) {
-    return { ...makeContext(), config: { ...makeContext().config, loreRelevanceFloor: floor } };
-  }
-
-  // Branch B, no pin: personaLoaded=false + contextAnchor="npc" so targetedLorePageId
-  // equals npcLorePageId -> shouldPinNpcLore=false. Clean isolation for floor tests.
-  function makeBranchBInput() {
-    const base = makeInput(false);
+describe("RetrieveStage noSearchReason", () => {
+  function makeProvider() {
     return {
-      ...base,
-      interpret: {
-        ...base.interpret,
-        interpretation: {
-          ...base.interpret.interpretation,
-          contextAnchor: "npc" as never,
-          facet: "character" as never
-        }
-      }
-    };
-  }
-
-  function makeProvider(scores: number[]) {
-    return {
-      searchLore: vi.fn(async () =>
-        scores.map((score, i) => ({
-          fileId: `f${i}`,
-          filename: `chunk-${i}.md`,
-          score,
-          text: `Chunk ${i} text.`,
+      searchLore: vi.fn(async () => [
+        {
+          fileId: "f0",
+          filename: "chunk.md",
+          score: 0.8,
+          text: "Chunk text.",
           attributes: { page_id: "lore.npc.horace" }
-        }))
-      )
+        }
+      ])
     } as VectorStoreProvider;
   }
 
-  it("(a) floor=0 is a no-op -- all chunks pass", async () => {
-    const stage = new RetrieveStage(makeProvider([0.8, 0.3]));
-    const result = await stage.execute(makeBranchBInput() as never, makeFloorContext(0) as never);
-    expect(result.diagnostics.payload.droppedByFloor).toBe(0);
-    expect((result.diagnostics.payload.droppedScores as number[]).length).toBe(0);
-    const lore = result.output.loreContext.filter((item) => !item.fileId.startsWith("runtime:"));
-    expect(lore.length).toBe(2);
+  it("is null when a search ran", async () => {
+    const stage = new RetrieveStage(makeProvider());
+    const result = await stage.execute(makeInput(false) as never, makeContext() as never);
+    expect(result.diagnostics.payload.noSearchReason).toBeNull();
   });
 
-  it("(b) floor between two scores drops the weak chunk, keeps the strong one", async () => {
-    const stage = new RetrieveStage(makeProvider([0.8, 0.3]));
-    const result = await stage.execute(makeBranchBInput() as never, makeFloorContext(0.5) as never);
-    expect(result.diagnostics.payload.droppedByFloor).toBe(1);
-    expect(result.diagnostics.payload.droppedScores).toEqual([0.3]);
-    const kept = result.output.loreContext.filter((item) => item.fileId === "f0");
-    const dropped = result.output.loreContext.filter((item) => item.fileId === "f1");
-    expect(kept.length).toBe(1);
-    expect(dropped.length).toBe(0);
-  });
-
-  it("(c) pinned own-page chunk below the floor survives (pin bypasses filter)", async () => {
-    // Primary search returns a strong doc-page chunk.
-    // Pin search returns a weak NPC-page chunk (score 0.2, below floor 0.5).
-    let callCount = 0;
-    const provider: VectorStoreProvider = {
-      searchLore: vi.fn(async () => {
-        callCount += 1;
-        if (callCount === 1) {
-          return [{ fileId: "loc-1", filename: "dock.md", score: 0.9, text: "Dock text.", attributes: { page_id: "lore.location.dock" } }];
-        }
-        return [{ fileId: "npc-1", filename: "horace.md", score: 0.2, text: "Horace text.", attributes: { page_id: "lore.npc.horace" } }];
-      })
-    };
-    const stage = new RetrieveStage(provider);
-    const result = await stage.execute(makeInput(true) as never, makeFloorContext(0.5) as never);
-    // The weak NPC pin must be present (pin bypasses filter).
-    const pin = result.output.loreContext.find((item) => item.fileId === "npc-1");
-    expect(pin).toBeDefined();
-    expect(pin?.score).toBe(0.2);
-    // The strong dock chunk should also be present.
-    const strong = result.output.loreContext.find((item) => item.fileId === "loc-1");
-    expect(strong).toBeDefined();
-    // Only the primary results are filtered; droppedByFloor = 0 (loc-1 passes, pin bypasses).
-    expect(result.diagnostics.payload.droppedByFloor).toBe(0);
-  });
-
-  it("(d) floor above all retrieved scores yields empty loreContext, status ok, loreSearchPerformed true", async () => {
-    const stage = new RetrieveStage(makeProvider([0.4, 0.3]));
-    const result = await stage.execute(makeBranchBInput() as never, makeFloorContext(0.9) as never);
-    expect(result.status).toBe("ok");
-    expect(result.output.loreSearchPerformed).toBe(true);
-    expect(result.diagnostics.payload.droppedByFloor).toBe(2);
-    // No retrieved chunks in loreContext (synthetic-location is absent too since
-    // makeBranchBInput uses contextAnchor="npc", not "current_location").
-    expect(result.output.loreContext.length).toBe(0);
-  });
-
-  it("(e) synthetic runtime-location evidence survives any floor <= 1", async () => {
-    // Use makeInput(true) with location-anchored turn so runtime-location is prepended.
-    // The retrieved chunk (0.1) is dropped by the floor; the synthetic prepend survives.
-    const stage = new RetrieveStage(makeProvider([0.1]));
-    const result = await stage.execute(makeInput(true) as never, makeFloorContext(0.99) as never);
-    // shouldPinNpcLore fires here (location-anchored, persona loaded). makeProvider returns
-    // page_id="lore.npc.horace" which IS the NPC's own page -- the pin page_id check passes
-    // and the chunk IS merged into loreContext after the floor filter (pin bypasses floor by
-    // structure). droppedByFloor covers only the primary search drop (1); the synthetic
-    // runtime-location item is also present since contextAnchor="current_location".
-    const synth = result.output.loreContext.find(
-      (item) => item.fileId === "runtime:blackboard:current-location"
-    );
-    expect(synth).toBeDefined();
-    expect(synth?.score).toBe(1);
-  });
-
-  it("(f) with excludeOwnPage, floor filters other-lore before the slice", async () => {
-    // personaLoaded=true + non-location-anchored turn triggers Branch A (excludeOwnPage).
-    const nonLocationInput = {
-      ...makeInput(true),
+  it("reports a greeting turn that skipped retrieval", async () => {
+    const base = makeInput(false);
+    const input = {
+      ...base,
       interpret: {
-        ...makeInput(true).interpret,
-        interpretation: {
-          ...makeInput(true).interpret.interpretation,
-          contextAnchor: "npc" as never,
-          facet: "character" as never
-        }
+        ...base.interpret,
+        turnRouting: { ...base.interpret.turnRouting, path: "social_fast" as never }
       }
     };
-    // Provider returns 3 chunks from other pages: scores 0.8, 0.4, 0.3.
-    // NPC own page (lore.npc.horace) is excluded; the other 3 are from other pages.
-    const provider: VectorStoreProvider = {
-      searchLore: vi.fn(async () => [
-        { fileId: "a", filename: "a.md", score: 0.8, text: "A.", attributes: { page_id: "lore.world.a" } },
-        { fileId: "b", filename: "b.md", score: 0.4, text: "B.", attributes: { page_id: "lore.world.b" } },
-        { fileId: "own", filename: "horace.md", score: 0.9, text: "Own.", attributes: { page_id: "lore.npc.horace" } }
-      ])
-    };
-    const stage = new RetrieveStage(provider);
-    // Floor 0.5: drops chunk b (0.4) and the own-page is already excluded, a (0.8) survives.
-    const result = await stage.execute(nonLocationInput as never, makeFloorContext(0.5) as never);
-    expect(result.diagnostics.payload.ownPageExcluded).toBe(true);
-    expect(result.diagnostics.payload.droppedByFloor).toBe(1);
-    const kept = result.output.loreContext.filter((item) => item.fileId === "a");
-    const weakDropped = result.output.loreContext.filter((item) => item.fileId === "b");
-    const ownDropped = result.output.loreContext.filter((item) => item.fileId === "own");
-    expect(kept.length).toBe(1);
-    expect(weakDropped.length).toBe(0);
-    expect(ownDropped.length).toBe(0);
+    const stage = new RetrieveStage(makeProvider());
+    const result = await stage.execute(input as never, makeContext() as never);
+    expect(result.diagnostics.payload.noSearchReason).toBe("social-fast-turn");
+  });
+
+  it("reports a missing vector store provider", async () => {
+    const stage = new RetrieveStage(null as never);
+    const result = await stage.execute(makeInput(false) as never, makeContext() as never);
+    expect(result.diagnostics.payload.noSearchReason).toBe("no-vector-store-provider");
+  });
+
+  it("reports an unconfigured gateway url", async () => {
+    const context = makeContext();
+    const stage = new RetrieveStage(makeProvider());
+    const result = await stage.execute(makeInput(false) as never, {
+      ...context,
+      config: { ...context.config, proxyBaseUrl: "" }
+    } as never);
+    expect(result.diagnostics.payload.noSearchReason).toBe("no-proxy-base-url");
+  });
+
+  it("reports a failed search", async () => {
+    const failing = {
+      searchLore: vi.fn(async () => {
+        throw new Error("gateway down");
+      })
+    } as unknown as VectorStoreProvider;
+    const stage = new RetrieveStage(failing);
+    const result = await stage.execute(makeInput(false) as never, makeContext() as never);
+    expect(result.diagnostics.payload.noSearchReason).toBe("search-failed");
   });
 });
 

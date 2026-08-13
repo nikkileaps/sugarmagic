@@ -189,7 +189,12 @@ __sugaragentRetrieval.dump()
 __sugaragentRetrieval.dump("npc:finnick")
 ```
 
-Each entry: `{ npcDefinitionId, loreScores, loreSearchPerformed, broadenedBeyondLorePage, ownPageExcluded, droppedByFloor }`.
+Each entry: `{ npcDefinitionId, loreScores, loreSearchPerformed, broadenedBeyondLorePage, ownPageExcluded, noSearchReason }`.
+
+`noSearchReason` is null when a search ran. Otherwise it names why one did not:
+`social-fast-turn` (a greeting, which skips retrieval), `no-vector-store-provider`,
+`no-proxy-base-url` (the gateway is not configured), or `search-failed`. Without
+it, all four look identical from outside: `loreSearchPerformed` false and no scores.
 
 `loreScores` is an array of `{ score, source, pageId, fileId }`, one entry per
 chunk in the final `loreContext` for that turn. The `source` tag says why the
@@ -201,60 +206,192 @@ chunk is there:
 
 - **`pinned`** -- the stage fired a second search specifically for the NPC's own
   lore page (`npcLorePageId`) as an identity anchor. This happens when the
-  primary search targets a different page (e.g. a location-anchored turn). The
-  pinned chunk got into the context by identity, not by relevance ranking. A low
-  score on a pinned chunk is expected and should not be treated as noise: it
-  means the NPC's page happened to score low against this particular query, not
-  that the chunk is irrelevant to the NPC.
+  primary search targets a different page (e.g. a location-anchored turn). A low
+  score on a pinned chunk means the NPC's page scored low against this
+  particular query, not that the chunk is irrelevant to the NPC.
+
+  That second search carries the relevance threshold like any other, so a page
+  scoring below it produces no chunk to pin and the anchor is simply absent.
+  See #163 -- an identity anchor being decided by a similarity search is the
+  open question there.
 
 - **`synthetic-location`** -- not from the vector DB at all. It is a string
   assembled at runtime from the blackboard: current area, NPC task, proximity to
   the player, etc. Always given `score: 1` (authoritative fact, not a similarity
-  estimate). The relevance floor never drops it.
+  estimate). The threshold never applies to it, because it never goes through a
+  search.
 
-Reading `source` alongside `score` is what makes the floor tunable: a score of
-0.3 on a `retrieved` chunk is a candidate for filtering; the same score on a
-`pinned` chunk is the identity anchor doing its job.
+Every score in a dump is a score that already cleared the threshold. A result
+below it never comes back, so it cannot appear here. `synthetic-location` is the
+one exception, since it is assembled locally rather than retrieved.
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/stages/retrieval-debug.ts`
 
-## Tuning the Relevance Floor
+## The Relevance Threshold
 
-Use `__sugaragentRetrieval.dump()` to observe score distributions before
-setting `loreRelevanceFloor`. Four steps:
+### What it is
 
-**Step 1 -- Read on-topic vs off-topic scores.**
-Start a session with a representative NPC. Ask one clear on-topic question
-(something the NPC's lore page covers) and one off-topic question (a topic
-from a different part of the world). After each turn:
+`loreRelevanceFloor` is the minimum similarity score a lore chunk must reach to
+be returned by a search at all. Range 0..1, where 0 means no filtering and 1
+means nothing passes.
+
+### Where it lives
+
+One value, set per project in **Studio > SugarAgent > NPC Behavior > Lore
+Relevance Floor**.
+
+It is handed to `SugarAgentGatewayVectorStoreProvider` at construction
+(`runtime/provider.ts`) and travels on every search request as `scoreThreshold`.
+The gateway passes it to the vector store as `ranking_options.score_threshold`
+(`deployment/gateway/core.ts`). A request that omits the field gets the
+gateway's own fallback.
+
+Both search paths are covered because both go through that one provider: the
+per-turn `RetrieveStage` search and the quest-context world block. Neither one
+knows the threshold exists, which is deliberate -- there is no call site that
+can forget to apply it.
+
+**Nothing in the game filters by score.** The vector store does it. A chunk
+below the threshold is never returned, never sent over the wire, and cannot
+appear in any debug dump. If you are trying to measure the low end of a score
+distribution, set the threshold to 0 first or you will be measuring through a
+filter.
+
+The bounds and the shipped default live in
+`catalog/sugaragent/runtime/lore-relevance.ts`. The gateway carries the same
+default as its fallback; the two sit on opposite sides of an HTTP call and have
+to be kept in step by hand.
+
+### What it does not affect
+
+`synthetic-location` entries are assembled from the blackboard rather than
+retrieved, so they never meet the threshold at all.
+
+Everything else does, including the `pinned` fetch of the NPC's own lore page --
+it is a search like any other and goes through the same provider. A page that
+scores below the threshold against the player's question yields nothing to pin.
+Whether an identity anchor should be subject to a relevance threshold is open;
+see #163.
+
+### Why it is 0.3
+
+Because that is what the gateway had been applying all along, as a hardcoded
+fallback, before the setting was wired through to it. 0.3 is inherited, not
+chosen. No measurement supports it, and no measurement supports anything else
+either.
+
+That is not for lack of looking. The failure that prompted this work -- a
+Spanish-language podcast page presented to an NPC as the state of the world --
+turned out not to be a relevance failure. The player asked about a lost
+suitcase; the podcast narrates a character packing one and leaving for a
+station. Scored against that query, it was a genuinely good match, and it lost
+to the correct page by 0.019.
+
+A threshold separates relevant results from irrelevant ones. It cannot separate
+results that are relevant and wanted from results that are relevant and
+unwanted. Raising it to exclude that podcast would have excluded the correct
+page on the next phrasing.
+
+So the value stays where it is until an actual irrelevant result is observed --
+something unrelated to the query, scoring low, reaching an NPC. None has been
+seen yet.
+
+### What would justify changing it
+
+Evidence of noise, not evidence of a bad ranking. Concretely:
+
+1. Set the threshold to 0 so nothing is hidden.
+2. Ask an NPC several questions, on and off topic. After each turn read
+   `__sugaragentRetrieval.dump()` and look at `searchQuery` alongside
+   `loreScores.filter(s => s.source === "retrieved")`.
+3. Look for results that are unrelated to the query that was actually sent --
+   not results that are related in a way you did not want.
+4. Repeat a question unchanged to see how far scores move. Run-to-run drift of
+   0.05-0.10 on the same query is normal, so any threshold needs more margin
+   than that to be stable.
+
+If the unwanted results turn out to be correct matches, the lever is the lore
+set or how it is indexed, not this number.
+
+The quest-context path deserves its own check, because it uses a single result
+and keeps it for a whole quest stage:
 
 ```javascript
-__sugaragentRetrieval.dump("npc:your-npc-id")
+__sugaragentQuestContext.dump("npc:your-npc-id")
 ```
 
-Look at `loreScores.filter(s => s.source === "retrieved")`. On-topic turns
-should return higher scores; off-topic turns should return lower scores or
-nothing. Note where relevance visibly flips.
+`worldContextScore` is the score of the text that reached the prompt.
+`worldContext` of null means nothing cleared the threshold and the NPC is
+running without world context, which is the intended outcome when the lore has
+no answer.
 
-**Step 2 -- Check stability across repeats.**
-Ask the same question twice without advancing the conversation. Compare
-scores across two dumps. If scores vary by more than 0.05-0.10 on the same
-query, the boundary is noisy. Your floor must be at least 0.1 below the
-lowest score you want to reliably keep, or you will intermittently filter
-chunks you need.
+## Indexing Depth: `canon_level`
 
-**Step 3 -- Set the floor conservatively LOW.**
-Pick a value that clears obvious noise (0.2-0.35 is a typical noise floor for
-OpenAI text-embedding-3) with a comfortable margin below your weakest
-on-topic score. A floor of 0.3 is a reasonable first cut for most lore sets.
-Do not set above 0.7 without verifying on a large sample of on-topic queries.
+A lore page's metadata may carry `canon_level`, which decides how much of the
+page enters the search index.
 
-**Step 4 -- Confirm graceful abstain on off-topic turns.**
-With the floor set, ask a clearly off-topic question. If all retrieved chunks
-fall below the floor, `loreContext` will be empty and the NPC will abstain
-("I don't know enough about that yet") rather than hallucinating. Check
-`droppedByFloor` in the dump to confirm chunks were dropped rather than simply
-absent from the search results.
+```
+---
+id: lore.media.podcasts.archivado.episode_01
+title: Archivado -- Episodio 1
+canon_level: soft
+---
+```
+
+**`hard`** (the default, and what a page without the key gets) -- one chunk per
+section. The page's contents are searchable.
+
+**`soft`** -- one chunk carrying the page's id and title and nothing else. A
+search can discover that the page EXISTS. It cannot reach anything described
+inside it.
+
+### Why this exists
+
+For in-world media: a documentary, a book, a broadcast. Such a page is as true
+as any other, so excluding it would be wrong, and filtering by page kind would
+be wrong for the same reason.
+
+The problem is not truth, it is distance. The world contains the podcast; the
+podcast contains a suitcase. Index its contents and every noun inside somebody
+else's story competes with the same noun in the world itself. Asked about a
+lost suitcase, a page narrating a character packing one scores about as well as
+the station where the luggage actually is -- a correct match, and the wrong
+answer.
+
+Indexing only the identity removes the competition without removing the page. A
+player asking about the Handbook for the Recently Transported still finds it,
+because that query matches its title. A player asking about a suitcase no
+longer finds a scene inside it.
+
+### What it does not do
+
+The full text is untouched. `pages[]` keeps every section and `lore/resolve`
+returns the whole page by id. Only the search index is shallow, so "know that
+it exists, fetch the contents when something warrants it" remains open.
+
+`## Secrets` exclusion is unaffected and applies to both levels.
+
+### Changing a page's level
+
+Chunks are addressed by page plus section, and the ingest removes any indexed
+address the source no longer has. Flip a page to `soft` and its section chunks
+are deleted on the next Update Lore; flip it back and they return. Nothing to
+migrate.
+
+A soft page's chunk is addressed `<pageId>#_page`. Generated section slugs are
+`[a-z0-9-]` only, so the underscore cannot collide with a real section.
+
+An unrecognized value is reported in the ingest warnings and treated as `hard`.
+Indexing too much is recoverable by fixing the page; indexing too little looks
+like the lore is simply missing.
+
+Chunks also carry `canon_level` as a vector store attribute, so it is visible on
+search results. Because `content_hash` covers embedding text only, that
+attribute lands on an existing chunk the next time its text changes, or on
+everything after a full Ingest Lore.
+
+**Files:** `readCanonLevel`, `chunkAttributes` in
+`packages/plugins/src/deployment/gateway/core.ts`.
 
 ## NPC Identity Fallback (no lore page)
 
@@ -372,10 +509,12 @@ check. Without it the judge grades against generic RPG assumptions. Example:
 
 Set in Studio > SugarAgent > NPC Behavior > World Premise.
 
-`loreRelevanceFloor: number` (default `0`) -- minimum vector similarity score
-for a retrieved lore chunk to enter the NPC's context. Range: 0..1 (0 = no
-filter, 1 = nothing passes). Only filters `retrieved` chunks; `pinned` and
-`synthetic-location` chunks always pass. See Tuning the Relevance Floor above.
+`loreRelevanceFloor: number` (default `0.3`) -- minimum vector similarity score
+for a lore chunk to be returned at all. Range: 0..1 (0 = no filter, 1 = nothing
+passes). Sent with every search as `scoreThreshold` and applied by the vector
+store, so a chunk below it never reaches the game. Governs both the per-turn
+retrieval search and the quest-context world block. See The Relevance Threshold
+above for where the value comes from and why it has not been changed.
 
 Set in Studio > SugarAgent > NPC Behavior > Lore Relevance Floor.
 

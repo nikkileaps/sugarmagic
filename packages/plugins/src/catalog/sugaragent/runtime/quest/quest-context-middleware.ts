@@ -24,6 +24,15 @@
  * never shown to the model). What enters the prompt is ONLY the
  * downstream world-lore text returned by the lore search.
  *
+ * ## Which result gets used
+ *
+ * The search returns several candidates and the highest-scoring one
+ * becomes the world context. Anything below the project's relevance
+ * threshold was already dropped by the vector store, so an empty result
+ * means nothing was relevant enough and the NPC gets no world context
+ * -- an unrelated page presented as the current state of the world is
+ * worse than none, and it would stay pinned for the whole quest stage.
+ *
  * ## Invalidation vs memory
  *
  * Memory: load once, never re-load (the digest must be byte-stable).
@@ -42,6 +51,7 @@ import type {
 } from "@sugarmagic/runtime-core";
 import type { SugarAgentLogger } from "../logger";
 import type { VectorStoreProvider } from "../clients";
+import type { RetrievedEvidenceItem } from "../types";
 import { recordQuestContextSnapshot } from "./quest-context-debug";
 
 export const QUEST_CONTEXT_MIDDLEWARE_ID = "sugaragent.questContext";
@@ -51,6 +61,13 @@ export const QUEST_CONTEXT_ANNOTATION_KEY = "sugaragent.questContext";
 const DEFAULT_MAX_WORLD_CONTEXT_CHARS = 400;
 
 /**
+ * How many lore results to consider before picking one. Only a single
+ * item is ever used, but asking for several leaves room for the vector
+ * store to have dropped some below the relevance threshold.
+ */
+const WORLD_CONTEXT_CANDIDATE_COUNT = 5;
+
+/**
  * Per-quest-state memo stored in `execution.state`. Cleared and
  * recomputed whenever questId or stageId changes.
  */
@@ -58,6 +75,8 @@ export interface MemoizedQuestContext {
   questId: string;
   stageId: string;
   worldContext: string | null;
+  /** Similarity score of the chosen result; null when nothing was chosen. */
+  worldContextScore: number | null;
 }
 
 /**
@@ -113,34 +132,63 @@ function buildRetrievalQuery(
   return parts.join(" ");
 }
 
+/** What one resolution attempt produced. `text` is null when nothing was usable. */
+interface WorldContextResolution {
+  text: string | null;
+  score: number | null;
+}
+
+function noWorldContext(): WorldContextResolution {
+  return { text: null, score: null };
+}
+
+/** Highest-scoring result that has text, or null when there is none. */
+function pickBest(items: RetrievedEvidenceItem[]): RetrievedEvidenceItem | null {
+  let best: RetrievedEvidenceItem | null = null;
+  for (const item of items) {
+    if (item.text.trim().length === 0) continue;
+    if (!best || item.score > best.score) best = item;
+  }
+  return best;
+}
+
+/**
+ * Search lore for something that describes the world around this quest
+ * objective and keep the best result. The vector store has already
+ * dropped anything below the project's relevance threshold, so an empty
+ * result means nothing was relevant enough -- and the NPC gets no world
+ * context, which beats presenting an unrelated page as the current
+ * state of the world.
+ */
 async function resolveWorldContext(
   execution: ConversationExecutionContext,
   options: QuestContextMiddlewareOptions
-): Promise<string | null> {
+): Promise<WorldContextResolution> {
   const vectorStoreProvider = options.vectorStoreProvider ?? null;
-  if (!vectorStoreProvider) return null;
+  if (!vectorStoreProvider) return noWorldContext();
 
   const query = buildRetrievalQuery(execution);
-  if (!query) return null;
+  if (!query) return noWorldContext();
 
   try {
     const results = await vectorStoreProvider.searchLore({
       vectorStoreId: "",
       query,
-      maxResults: 2
+      maxResults: WORLD_CONTEXT_CANDIDATE_COUNT
     });
-    if (results.length === 0) return null;
 
-    const raw = results[0]!.text.trim();
-    if (!raw) return null;
+    const best = pickBest(results);
+    if (!best) return noWorldContext();
 
+    const raw = best.text.trim();
     const max = options.maxWorldContextChars ?? DEFAULT_MAX_WORLD_CONTEXT_CHARS;
-    return raw.length > max ? raw.slice(0, max).trimEnd() + "..." : raw;
+    const text = raw.length > max ? raw.slice(0, max).trimEnd() + "..." : raw;
+    return { text, score: best.score };
   } catch (error) {
     options.logger?.logPluginEvent("quest-context-resolve-failed", {
       error: error instanceof Error ? error.message : String(error)
     });
-    return null;
+    return noWorldContext();
   }
 }
 
@@ -183,13 +231,19 @@ export function createQuestContextMiddleware(
       ) {
         memoized = existing;
       } else {
-        const worldContext = await resolveWorldContext(execution, options);
-        memoized = { questId, stageId, worldContext };
+        const resolution = await resolveWorldContext(execution, options);
+        memoized = {
+          questId,
+          stageId,
+          worldContext: resolution.text,
+          worldContextScore: resolution.score
+        };
         execution.state[QUEST_CONTEXT_STATE_KEY] = memoized;
         options.logger?.logPluginEvent("quest-context-resolved", {
           questId,
           stageId,
-          hasContext: worldContext !== null
+          hasContext: resolution.text !== null,
+          score: resolution.score
         });
       }
 
@@ -208,6 +262,7 @@ export function createQuestContextMiddleware(
           questId,
           stageId,
           worldContext: memoized.worldContext,
+          worldContextScore: memoized.worldContextScore,
           goalSurfacedCount: execution.runtimeContext?.goalSurfacedCount ?? null
         });
       }

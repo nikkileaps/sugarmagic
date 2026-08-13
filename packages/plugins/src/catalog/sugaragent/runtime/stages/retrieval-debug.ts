@@ -9,12 +9,17 @@
  *   __sugaragentRetrieval.dump()                // all NPCs seen this session
  *   __sugaragentRetrieval.dump("npc:finnick")   // one NPC
  *
- * Each entry reports loreScores: score, source tag
+ * Each entry reports searchQuery, the exact string that was embedded, and
+ * loreScores: score, source tag
  * (retrieved/pinned/synthetic-location), pageId, and fileId for every
- * chunk in that NPC's most recent turn. Use this to calibrate the
- * loreRelevanceFloor config knob (Plan 078.2).
+ * chunk in that NPC's most recent turn. Use this to choose a value for
+ * the Lore Relevance Floor setting.
  *
- * Status: active (Plan 078.1)
+ * Scores here are what survived the threshold, because the vector store
+ * applies it during the search. A result below it never arrives, so it
+ * cannot appear in this dump.
+ *
+ * Status: active
  */
 
 import type { RetrievalScoreEntry } from "../types";
@@ -23,12 +28,27 @@ export const SUGARAGENT_RETRIEVAL_WINDOW_KEY = "__sugaragentRetrieval";
 
 export interface RetrievalSnapshot {
   npcDefinitionId: string;
+  /**
+   * The exact string that was embedded and searched. It is the player's
+   * message, plus location and quest lines on the turns that add them.
+   * Null when no search ran.
+   */
+  searchQuery: string | null;
   loreScores: RetrievalScoreEntry[];
   loreSearchPerformed: boolean;
   broadenedBeyondLorePage: boolean;
   ownPageExcluded: boolean;
-  /** Number of chunks dropped by loreRelevanceFloor this turn (0 when floor=0). */
-  droppedByFloor: number;
+  /**
+   * Why no lore search ran, or null when one did. Without this a skipped
+   * greeting, a missing gateway URL, and a failed search all look the same:
+   * loreSearchPerformed false with no scores.
+   */
+  noSearchReason:
+    | "social-fast-turn"
+    | "no-vector-store-provider"
+    | "no-proxy-base-url"
+    | "search-failed"
+    | null;
 }
 
 const snapshots = new Map<string, RetrievalSnapshot>();

@@ -76,7 +76,40 @@ interface LoreChunk {
   sectionSlug: string;
   relativePath: string;
   embeddingText: string;
+  canonLevel: LoreCanonLevel;
 }
+
+/**
+ * How deeply a page is indexed, read from its `canon_level` metadata.
+ *
+ * `hard` -- one chunk per section. The page's contents are searchable.
+ *
+ * `soft` -- one chunk carrying the page's identity and nothing else. An NPC
+ * can find out the page EXISTS but cannot retrieve what is inside it. This is
+ * for in-world media: a documentary, a book, a broadcast. Such a page is as
+ * true as any other, but the things described inside it are one hop further
+ * from the world than a location or a character is, and indexing its contents
+ * makes every noun in a story compete with the same noun in the world. The
+ * full text stays available through `lore/resolve` -- only the search index is
+ * shallow.
+ */
+type LoreCanonLevel = "hard" | "soft";
+
+/**
+ * Address of the single chunk a `soft` page contributes. Generated section
+ * slugs are `[a-z0-9-]` only (`slugify`), so an underscore cannot collide with
+ * a real section.
+ */
+const SOFT_PAGE_CHUNK_SLUG = "_page";
+
+/**
+ * Minimum similarity score applied to a search whose caller sent no
+ * `scoreThreshold`. Matches `DEFAULT_LORE_RELEVANCE_FLOOR` on the game side
+ * (`catalog/sugaragent/runtime/lore-relevance.ts`) so a project that has never
+ * touched the setting behaves the same whether or not the value is sent. A
+ * test holds the two together.
+ */
+export const GATEWAY_DEFAULT_SCORE_THRESHOLD = 0.3;
 
 interface LoreSource {
   sourceKind: string;
@@ -407,6 +440,28 @@ export function parseFrontmatter(raw: string): { metadata: Record<string, string
   };
 }
 
+/**
+ * Read `canon_level` from a page's metadata. A page that does not say gets
+ * `hard`, so a wiki that has never heard of the key indexes exactly as before.
+ * An unrecognized value is reported and treated as `hard`: indexing too much
+ * is recoverable by fixing the page, indexing too little looks like the lore
+ * is simply missing.
+ */
+export function readCanonLevel(
+  metadata: Record<string, string>,
+  relativePath: string,
+  warnings: string[]
+): LoreCanonLevel {
+  const raw = (metadata["canon_level"] ?? "").trim().toLowerCase();
+  if (!raw) return "hard";
+  if (raw === "hard" || raw === "soft") return raw;
+  warnings.push(
+    "Lore page " + relativePath + " has canon_level \"" + raw +
+      "\", which is not hard or soft. Indexed as hard."
+  );
+  return "hard";
+}
+
 export function splitLoreSections(markdown: string): LoreSection[] {
   const lines = markdown.split("\n");
   const sections: LoreSection[] = [];
@@ -584,6 +639,24 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
       sections
     });
 
+    const canonLevel = readCanonLevel(metadata, relativePath, warnings);
+
+    if (canonLevel === "soft") {
+      // One chunk, identity only. Searching can find that this page exists;
+      // it cannot reach anything described inside it.
+      chunks.push({
+        pageId,
+        chunkId: pageId + "#" + SOFT_PAGE_CHUNK_SLUG,
+        title,
+        sectionHeading: title,
+        sectionSlug: SOFT_PAGE_CHUNK_SLUG,
+        relativePath,
+        embeddingText: ["Page ID: " + pageId, "Title: " + title].join("\n\n"),
+        canonLevel
+      });
+      continue;
+    }
+
     for (const section of sections) {
       // Plan 072.1: `## Secrets` never enters the vector index. The section
       // stays in `pages[].sections` (072.2 strips it from lore/resolve); only
@@ -606,7 +679,8 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
         sectionHeading: section.heading,
         sectionSlug: section.slug,
         relativePath,
-        embeddingText
+        embeddingText,
+        canonLevel
       });
     }
   }
@@ -799,8 +873,13 @@ export function chunkContentHash(chunk: LoreChunk): string {
  * `content_hash` is its VERSION. Address plus version, like a file path and the
  * hash of its contents: you do not rename a file because you edited it.
  *
- * Seven of an allowed sixteen keys, values well inside the 512-character limit
+ * Eight of an allowed sixteen keys, values well inside the 512-character limit
  * (openai-node `VectorStoreFile`).
+ *
+ * `content_hash` covers the embedding text only, so adding a key here does not
+ * re-upload chunks that are already indexed. A new attribute appears on a
+ * chunk the next time its text changes, or on every chunk after a full
+ * overwrite ingest.
  */
 export function chunkAttributes(chunk: LoreChunk): Record<string, string> {
   return {
@@ -810,6 +889,7 @@ export function chunkAttributes(chunk: LoreChunk): Record<string, string> {
     section_heading: chunk.sectionHeading,
     title: chunk.title,
     relative_path: chunk.relativePath,
+    canon_level: chunk.canonLevel,
     content_hash: chunkContentHash(chunk)
   };
 }
@@ -1791,12 +1871,12 @@ export async function handleSugarAgentSearch(
   //
   // `ranking_options.score_threshold` is an OpenAI vector-store search parameter
   // (verified against openai-node's VectorStoreSearchParams.RankingOptions).
-  // Callers may override; 0.3 is deliberately low -- the goal is excluding
-  // near-zero noise, not second-guessing the ranker.
+  // Callers may override; the default is deliberately low -- the goal is
+  // excluding near-zero noise, not second-guessing the ranker.
   const scoreThreshold =
     typeof body["scoreThreshold"] === "number" && Number.isFinite(body["scoreThreshold"])
       ? Math.max(0, Math.min(1, body["scoreThreshold"]))
-      : 0.3;
+      : GATEWAY_DEFAULT_SCORE_THRESHOLD;
 
   if (!query || !vectorStoreId) {
     sendJson(res, 400, {

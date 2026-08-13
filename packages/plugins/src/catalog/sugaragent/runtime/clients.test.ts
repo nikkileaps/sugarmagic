@@ -12,8 +12,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildPersonaDigest,
   SugarAgentGatewayPersonaProvider,
+  SugarAgentGatewayVectorStoreProvider,
+  type GatewayVectorSearchRequest,
   type LoreResolveResult,
-  type SugarAgentGatewayLoreClient
+  type SugarAgentGatewayLoreClient,
+  type SugarAgentGatewayVectorStoreClient
 } from "./clients";
 import type { LoreCardSection } from "./types";
 
@@ -108,5 +111,43 @@ describe("SugarAgentGatewayPersonaProvider.loadPersona (072.3)", () => {
     expect(result.loaded).toBe(false);
     expect(result.pageId).toBe("lore.ghost");
     expect(result.fallbackReason).toBe("persona-unavailable");
+  });
+});
+
+describe("SugarAgentGatewayVectorStoreProvider.searchLore", () => {
+  function fakeClient(): {
+    client: SugarAgentGatewayVectorStoreClient;
+    requests: GatewayVectorSearchRequest[];
+  } {
+    const requests: GatewayVectorSearchRequest[] = [];
+    const search = vi.fn(async (request: GatewayVectorSearchRequest) => {
+      requests.push(request);
+      return { results: [], requestId: null };
+    });
+    return {
+      client: { search } as unknown as SugarAgentGatewayVectorStoreClient,
+      requests
+    };
+  }
+
+  it("sends the project's relevance threshold with every search", async () => {
+    const { client, requests } = fakeClient();
+    const provider = new SugarAgentGatewayVectorStoreProvider(client, 0.78);
+
+    await provider.searchLore({ vectorStoreId: "", query: "dock", maxResults: 4 });
+    await provider.searchLore({ vectorStoreId: "", query: "suitcase", maxResults: 2 });
+
+    expect(requests.map((request) => request.scoreThreshold)).toEqual([0.78, 0.78]);
+  });
+
+  it("sends a threshold of 0 rather than omitting it", async () => {
+    // Omitting the field makes the gateway apply its own default, which would
+    // silently override an author who deliberately turned the threshold off.
+    const { client, requests } = fakeClient();
+    const provider = new SugarAgentGatewayVectorStoreProvider(client, 0);
+
+    await provider.searchLore({ vectorStoreId: "", query: "dock", maxResults: 4 });
+
+    expect(requests[0]?.scoreThreshold).toBe(0);
   });
 });

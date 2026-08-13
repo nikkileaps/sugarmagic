@@ -25,9 +25,13 @@ from the ingest chunks, so it can never surface in a conversation or a search.
 
 Note that persona/voice/core sections DO stay in the vector index: another NPC
 must be able to retrieve this NPC's page as world lore ("who is Maren?" asked of
-the blacksmith). Only `## Secrets` is withheld from the index.
+the blacksmith). `## Secrets` is the only section withheld from the index on a
+normal page. A page marked `canon_level: soft` withholds all of its contents --
+see below.
 
-## Frontmatter
+## Metadata
+
+The block at the top of the page, between `---` lines.
 
 Required: an `id`. This is the canonical page id used everywhere (bindings,
 retrieval, the card fetch). Example:
@@ -39,8 +43,47 @@ title: Maren
 ---
 ```
 
-A page with no frontmatter `id` is skipped by ingest entirely (with a warning),
-same as before this convention.
+A page with no `id` is skipped by ingest entirely (with a warning), same as
+before this convention.
+
+### `canon_level` -- how deeply the page is indexed
+
+Optional. `hard` (the default, and what a page without the key gets) or `soft`.
+
+**`hard`** -- one search chunk per section. The page's contents are findable.
+
+**`soft`** -- one chunk carrying the page's id and title and nothing else. A
+search can discover the page EXISTS but cannot reach anything described inside
+it.
+
+```
+---
+id: lore.media.podcasts.archivado.episode_01
+title: Archivado -- Episodio 1
+canon_level: soft
+---
+```
+
+Use `soft` for in-world media: a documentary, a book, a broadcast. Such a page
+is as true as any other, so excluding it would be wrong. The problem is
+distance. The world contains the podcast; the podcast contains a suitcase. Index
+its contents and every noun inside somebody else's story competes with the same
+noun in the world itself -- a player asking about a lost suitcase gets a scene
+where a character packs one, which is a correct match and the wrong answer.
+
+Indexing only the identity removes the competition without removing the page. A
+player asking about the *Handbook for the Recently Transported* still finds it,
+because that query matches its title.
+
+The full text is untouched either way: the page keeps all its sections and can
+still be fetched whole by id. Only the search index is shallow.
+
+`## Secrets` exclusion applies at both levels.
+
+Changing a page's level needs no migration. Run Update Lore and the chunks
+rearrange themselves -- flip to `soft` and the section chunks are deleted, flip
+back and they return. An unrecognized value is reported in the ingest warnings
+and treated as `hard`.
 
 ## Reserved headings: exact match, any level, case-insensitive
 

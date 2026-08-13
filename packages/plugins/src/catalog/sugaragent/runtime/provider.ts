@@ -258,9 +258,10 @@ function resolveProviders(
     judgeProvider: new SugarAgentGatewayJudgeProvider(
       new SugarAgentGatewayJudgeClient(baseUrl, getBearerToken)
     ),
-    vectorStoreProvider: new SugarAgentGatewayVectorStoreProvider(
-      new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken)
-    ),
+    // One construction site for the lore search provider, shared with the
+    // quest-context middleware. Building it here as well let the two drift:
+    // the threshold reached one and not the other.
+    vectorStoreProvider: createSugarAgentVectorStoreProvider(config),
     personaLoader: new SugarAgentGatewayPersonaProvider(
       new SugarAgentGatewayLoreClient(baseUrl, getBearerToken)
     )
@@ -282,7 +283,8 @@ export function createSugarAgentVectorStoreProvider(
     ? async () => staticToken
     : getActiveAccessToken;
   return new SugarAgentGatewayVectorStoreProvider(
-    new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken)
+    new SugarAgentGatewayVectorStoreClient(baseUrl, getBearerToken),
+    config.loreRelevanceFloor
   );
 }
 
