@@ -50,7 +50,11 @@ import type {
   ConversationMiddleware
 } from "@sugarmagic/runtime-core";
 import type { SugarAgentLogger } from "../logger";
-import type { VectorStoreProvider } from "../clients";
+import {
+  OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE,
+  OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE,
+  type VectorStoreProvider
+} from "../clients";
 import type { RetrievedEvidenceItem } from "../types";
 import { recordQuestContextSnapshot } from "./quest-context-debug";
 
@@ -77,6 +81,10 @@ export interface MemoizedQuestContext {
   worldContext: string | null;
   /** Similarity score of the chosen result; null when nothing was chosen. */
   worldContextScore: number | null;
+  /** Title of the lore page the text came from; null when the chunk has none. */
+  worldContextTitle: string | null;
+  /** True when the chosen page is the speaking NPC's own lore page. */
+  worldContextIsOwnPage: boolean;
 }
 
 /**
@@ -87,6 +95,17 @@ export interface MemoizedQuestContext {
 export interface QuestContextAnnotation {
   hasContext: boolean;
   worldContext: string | null;
+  /**
+   * Title of the lore page the text came from, so the prompt can say whose
+   * page it is. Null when the chunk carries no title attribute.
+   */
+  worldContextTitle: string | null;
+  /**
+   * True when the chosen page is the speaking NPC's own lore page. Prompts
+   * that tell the NPC the block is about someone else must not say that when
+   * it is in fact about them.
+   */
+  worldContextIsOwnPage: boolean;
 }
 
 export interface QuestContextMiddlewareOptions {
@@ -136,10 +155,23 @@ function buildRetrievalQuery(
 interface WorldContextResolution {
   text: string | null;
   score: number | null;
+  title: string | null;
+  isOwnPage: boolean;
 }
 
 function noWorldContext(): WorldContextResolution {
-  return { text: null, score: null };
+  return { text: null, score: null, title: null, isOwnPage: false };
+}
+
+/** A chunk attribute, or null when it is absent or not a non-empty string. */
+function readStringAttribute(
+  item: RetrievedEvidenceItem,
+  key: string
+): string | null {
+  const value = item.attributes[key];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 /** Highest-scoring result that has text, or null when there is none. */
@@ -183,7 +215,17 @@ async function resolveWorldContext(
     const raw = best.text.trim();
     const max = options.maxWorldContextChars ?? DEFAULT_MAX_WORLD_CONTEXT_CHARS;
     const text = raw.length > max ? raw.slice(0, max).trimEnd() + "..." : raw;
-    return { text, score: best.score };
+    const ownLorePageId =
+      typeof execution.selection.lorePageId === "string"
+        ? execution.selection.lorePageId.trim()
+        : "";
+    const pageId = readStringAttribute(best, OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE);
+    return {
+      text,
+      score: best.score,
+      title: readStringAttribute(best, OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE),
+      isOwnPage: ownLorePageId.length > 0 && pageId === ownLorePageId
+    };
   } catch (error) {
     options.logger?.logPluginEvent("quest-context-resolve-failed", {
       error: error instanceof Error ? error.message : String(error)
@@ -236,7 +278,9 @@ export function createQuestContextMiddleware(
           questId,
           stageId,
           worldContext: resolution.text,
-          worldContextScore: resolution.score
+          worldContextScore: resolution.score,
+          worldContextTitle: resolution.title,
+          worldContextIsOwnPage: resolution.isOwnPage
         };
         execution.state[QUEST_CONTEXT_STATE_KEY] = memoized;
         options.logger?.logPluginEvent("quest-context-resolved", {
@@ -249,7 +293,9 @@ export function createQuestContextMiddleware(
 
       const annotation: QuestContextAnnotation = {
         hasContext: memoized.worldContext !== null,
-        worldContext: memoized.worldContext
+        worldContext: memoized.worldContext,
+        worldContextTitle: memoized.worldContextTitle,
+        worldContextIsOwnPage: memoized.worldContextIsOwnPage
       };
       execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] = annotation;
 
@@ -263,6 +309,8 @@ export function createQuestContextMiddleware(
           stageId,
           worldContext: memoized.worldContext,
           worldContextScore: memoized.worldContextScore,
+          worldContextTitle: memoized.worldContextTitle,
+          worldContextIsOwnPage: memoized.worldContextIsOwnPage,
           goalSurfacedCount: execution.runtimeContext?.goalSurfacedCount ?? null
         });
       }

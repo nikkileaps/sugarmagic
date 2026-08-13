@@ -15,6 +15,8 @@
  *   - worldContext: the lore text injected into the NPC prompt (null if none)
  *   - worldContextScore: similarity score of the text that was used,
  *     for choosing a Lore Relevance Floor value
+ *   - worldContextTitle: which lore page the text came from
+ *   - worldContextIsOwnPage: whether that page is this NPC's own
  *   - goalSurfacedCount: how many times the objective has been raised (blackboard)
  *
  * Status: active
@@ -30,6 +32,10 @@ export interface QuestContextSnapshot {
   worldContext: string | null;
   /** Similarity score of the chosen result; null when nothing was chosen. */
   worldContextScore: number | null;
+  /** Title of the lore page the text came from; null when the chunk has none. */
+  worldContextTitle: string | null;
+  /** True when the chosen page is the speaking NPC's own lore page. */
+  worldContextIsOwnPage: boolean;
   /**
    * How many times the quest objective has been raised across all NPC
    * conversations this session (read from runtimeContext at annotation time).

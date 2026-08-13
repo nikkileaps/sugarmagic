@@ -45,6 +45,25 @@ export interface JudgeStageInput {
   generate: GenerateResult;
 }
 
+/**
+ * Name the lore page the world context was quoted from before the judge reads
+ * it. The judge scores the reply against this block, so an unattributed page
+ * written about a different character reads as the NPC's own ground truth and
+ * an in-character reply comes back as an IN-CHARACTER failure (#171).
+ */
+function attributeWorldContext(
+  annotation: QuestContextAnnotation | undefined
+): string | null {
+  const text = annotation?.worldContext ?? null;
+  if (!text) return null;
+  const title = annotation?.worldContextTitle ?? null;
+  const source = title ? `the lore page "${title}"` : "a lore page";
+  if (annotation?.worldContextIsOwnPage) {
+    return `From ${source}, this NPC's own:\n${text}`;
+  }
+  return `From ${source} -- background about the world, not a description of this NPC:\n${text}`;
+}
+
 function skipResult(
   startedAt: number,
   skipReason: string
@@ -127,7 +146,7 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
       input.execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as
         | QuestContextAnnotation
         | undefined;
-    const worldContext = questAnnotation?.worldContext ?? null;
+    const worldContext = attributeWorldContext(questAnnotation);
 
     const { judgeDirectives } = collectContributions(input.execution.annotations);
 

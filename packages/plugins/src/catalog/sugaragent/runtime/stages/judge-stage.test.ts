@@ -217,6 +217,40 @@ describe("JudgeStage", () => {
     );
   });
 
+  // #171 -- the judge scored an in-character reply as an IN-CHARACTER failure
+  // because it read another character's lore page as the world the NPC lives in.
+  it("attributes the world context to its source page before sending it to the judge", async () => {
+    const provider = makeProvider({ passed: true, violations: [], repairHint: null });
+    const stage = new JudgeStage(provider);
+    const input = makeInput({
+      npcDescription: "A snobby racoon lady.",
+      annotations: {
+        "sugaragent.questContext": {
+          hasContext: true,
+          worldContext: "A no nonsense station manager. Kind. Patient.",
+          worldContextTitle: "Horace Pennyfeather",
+          worldContextIsOwnPage: false
+        }
+      }
+    });
+    await stage.execute(input as never, makeContext() as never);
+
+    const call = (provider.judgeReply as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(call?.worldContext).toContain('lore page "Horace Pennyfeather"');
+    expect(call?.worldContext).toContain("not a description of this NPC");
+    expect(call?.worldContext).toContain("A no nonsense station manager.");
+  });
+
+  it("leaves the world context null when the quest middleware resolved nothing", async () => {
+    const provider = makeProvider({ passed: true, violations: [], repairHint: null });
+    const stage = new JudgeStage(provider);
+    const input = makeInput({ npcDescription: "A village merchant." });
+    await stage.execute(input as never, makeContext() as never);
+
+    const call = (provider.judgeReply as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
+    expect(call?.worldContext).toBeNull();
+  });
+
   it("omits externalDirectives from the request when no contributions are present", async () => {
     const provider = makeProvider({ passed: true, violations: [], repairHint: null });
     const stage = new JudgeStage(provider);

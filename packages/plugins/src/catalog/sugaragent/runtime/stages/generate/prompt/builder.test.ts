@@ -32,6 +32,8 @@ function baseContext(
     activeQuestDisplayName: "Lost Locket",
     activeQuestStageDisplayName: "Ask around",
     questWorldContext: "Travelers with lost luggage are directed to baggage claim.",
+    questWorldContextTitle: null,
+    questWorldContextIsOwnPage: false,
     goalSurfacedCount: null,
     currentLocationDisplayName: "Bakery",
     currentParentAreaDisplayName: "Market Square",
@@ -219,9 +221,48 @@ describe("buildGeneratePrompt -- D2 quest-context firewall (077.1)", () => {
         questWorldContext: "Travelers with lost luggage are directed to baggage claim."
       })
     );
-    expect(userPrompt).toContain("World context right now:");
+    expect(userPrompt).toContain("Background about the world,");
     expect(userPrompt).toContain("offer what you would plausibly know in character");
     expect(userPrompt).toContain("Do not act as though you know the player's private business");
+  });
+
+  // #171 -- an unattributed block reads as a statement about the present world,
+  // so an NPC handed a page written about someone else speaks as that character.
+  it("names the source page and says it is not the speaker", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "A no nonsense station manager. Kind. Patient.",
+        questWorldContextTitle: "Horace Pennyfeather",
+        questWorldContextIsOwnPage: false
+      })
+    );
+    expect(userPrompt).toContain('from the lore page "Horace Pennyfeather"');
+    expect(userPrompt).toContain("not about you");
+    expect(userPrompt).toContain("do not speak as its subject");
+  });
+
+  it("still says the block is not the speaker when the source page has no title", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "A no nonsense station manager.",
+        questWorldContextTitle: null,
+        questWorldContextIsOwnPage: false
+      })
+    );
+    expect(userPrompt).toContain("Background about the world,");
+    expect(userPrompt).toContain("not about you");
+  });
+
+  it("does not disown the page when it is the speaker's own", () => {
+    const { userPrompt } = buildGeneratePrompt(
+      baseContext({
+        questWorldContext: "Penelope keeps a suite above the dock.",
+        questWorldContextTitle: "Penelope McCrick",
+        questWorldContextIsOwnPage: true
+      })
+    );
+    expect(userPrompt).toContain('your own lore page "Penelope McCrick"');
+    expect(userPrompt).not.toContain("not about you");
   });
 
   it("omits the quest block entirely when questWorldContext is null", () => {
@@ -229,7 +270,7 @@ describe("buildGeneratePrompt -- D2 quest-context firewall (077.1)", () => {
       baseContext({ questWorldContext: null, activeQuestDisplayName: "Lost Locket" })
     );
     expect(userPrompt).not.toContain("Lost Locket");
-    expect(userPrompt).not.toContain("World context right now:");
+    expect(userPrompt).not.toContain("Background about the world,");
   });
 
   it("omits the quest block during minimal-greeting mode even when context is set", () => {
@@ -239,7 +280,7 @@ describe("buildGeneratePrompt -- D2 quest-context firewall (077.1)", () => {
         minimalGreetingMode: true
       })
     );
-    expect(userPrompt).not.toContain("World context right now:");
+    expect(userPrompt).not.toContain("Background about the world,");
   });
 
   it("keeps the raw quest title out of the system prompt regardless of world context", () => {
@@ -250,7 +291,7 @@ describe("buildGeneratePrompt -- D2 quest-context firewall (077.1)", () => {
       })
     );
     expect(systemPrompt).not.toContain("Lost Locket");
-    expect(systemPrompt).not.toContain("World context right now:");
+    expect(systemPrompt).not.toContain("Background about the world,");
   });
 
   it("keeps the SYSTEM prompt byte-stable whether or not world context is set", () => {

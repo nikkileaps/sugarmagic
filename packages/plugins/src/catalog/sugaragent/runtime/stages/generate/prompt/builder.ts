@@ -113,6 +113,25 @@ function buildStableSystemLines(
 }
 
 /**
+ * The line that introduces the quest world-context block.
+ *
+ * It names the lore page the text was quoted from and, when that page is
+ * somebody else's, says so. Without this the block reads as an unattributed
+ * statement about the present world, and an NPC handed a page written about
+ * another character speaks as that character (#171).
+ */
+function worldContextHeading(context: AgentPromptContext): string {
+  const title = context.questWorldContextTitle;
+  if (context.questWorldContextIsOwnPage) {
+    return title
+      ? `Background about the world, from your own lore page "${title}":`
+      : "Background about the world, from your own lore page:";
+  }
+  const source = title ? `the lore page "${title}"` : "a lore page";
+  return `Background about the world, from ${source}. This page is not about you -- do not speak as its subject or take its details as your own:`;
+}
+
+/**
  * The per-turn world-state block, relocated from the system prompt to the user
  * message (Plan 072.4). Phrasings + minimal-greeting gating preserved from the
  * prior user-message block; the quest line (previously only in the system half)
@@ -130,7 +149,7 @@ function buildWorldStateUserLines(
     // block. The raw activeQuestDisplayName is kept for search seeding only
     // (RetrieveStage) and must never appear here.
     context.questWorldContext && !suppress
-      ? `World context right now: ${context.questWorldContext}\nIf this is something you could naturally help with, offer what you would plausibly know in character. Do not act as though you know the player's private business. Do not repeat what has already been said.`
+      ? `${worldContextHeading(context)}\n${context.questWorldContext}\nIf this is something you could naturally help with, offer what you would plausibly know in character. Do not act as though you know the player's private business. Do not repeat what has already been said.`
       : null,
 
     // Plan 077.3 (D4): coarse ease-off hint. goalSurfacedCount counts PROMPTING

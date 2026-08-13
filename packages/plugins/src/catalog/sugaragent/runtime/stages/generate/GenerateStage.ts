@@ -355,6 +355,20 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
               | QuestContextAnnotation
               | undefined
           )?.worldContext ?? null,
+        // #171 -- which page the text came from, and whether it is this NPC's
+        // own. The block says so; an unattributed page gets read as self.
+        questWorldContextTitle:
+          (
+            input.execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as
+              | QuestContextAnnotation
+              | undefined
+          )?.worldContextTitle ?? null,
+        questWorldContextIsOwnPage:
+          (
+            input.execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as
+              | QuestContextAnnotation
+              | undefined
+          )?.worldContextIsOwnPage ?? false,
         // Plan 077.3 (D4): how many times the objective has been raised this
         // session. Read from runtimeContext (populated by the blackboard
         // middleware via bumpGoalSurfacedCount). Null -> first NPC to offer.

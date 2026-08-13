@@ -9,6 +9,13 @@ import {
 
 export const OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE = "page_id";
 
+/**
+ * The lore page's title, attached to every chunk by the gateway's
+ * `chunkAttributes`. Read when a prompt has to say which page a piece of text
+ * came from.
+ */
+export const OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE = "title";
+
 export interface OpenAIVectorStoreEqFilter {
   type: "eq";
   key: string;

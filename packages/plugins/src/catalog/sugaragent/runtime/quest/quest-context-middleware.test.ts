@@ -27,14 +27,16 @@ import type { RetrievedEvidenceItem } from "../types";
 
 function makeExecution(
   state: Record<string, unknown> = {},
-  runtimeOverrides: Partial<ConversationExecutionContext["runtimeContext"]> = {}
+  runtimeOverrides: Partial<ConversationExecutionContext["runtimeContext"]> = {},
+  selectionOverrides: Partial<ConversationExecutionContext["selection"]> = {}
 ): ConversationExecutionContext {
   return {
     selection: {
       conversationKind: "free-form",
       npcDefinitionId: "npc.finnick",
       npcDisplayName: "Finnick",
-      interactionMode: "agent"
+      interactionMode: "agent",
+      ...selectionOverrides
     } as ConversationExecutionContext["selection"],
     input: null,
     state,
@@ -76,13 +78,17 @@ function makeExecution(
   };
 }
 
-function fakeLore(text: string, score = 0.9): RetrievedEvidenceItem {
+function fakeLore(
+  text: string,
+  score = 0.9,
+  attributes: Record<string, unknown> = {}
+): RetrievedEvidenceItem {
   return {
     fileId: "lore.station-info",
     filename: "station-info.md",
     score,
     text,
-    attributes: {}
+    attributes
   };
 }
 
@@ -353,5 +359,77 @@ describe("createQuestContextMiddleware -- 077.5 cost guard", () => {
 
     // The one allowed call: vector-index lookup (not an LLM call).
     expect(searchLore).toHaveBeenCalledOnce();
+  });
+});
+
+// #171 -- the prompt has to be able to say WHOSE page this is. Without a title
+// the block reads as an unattributed statement about the present world, and an
+// NPC handed a page written about someone else speaks as that character.
+describe("createQuestContextMiddleware -- source attribution", () => {
+  it("carries the source page title from the chunk attributes", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("A no nonsense station manager.", 0.9, {
+        page_id: "lore.entities.npcs.horace_pennyfeather",
+        title: "Horace Pennyfeather"
+      })
+    ]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution();
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContextTitle).toBe("Horace Pennyfeather");
+  });
+
+  it("leaves the title null when the chunk carries no title attribute", async () => {
+    const { provider } = fakeVectorStore([fakeLore("Baggage claim is on level B.")]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution();
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContextTitle).toBeNull();
+  });
+
+  it("reports another NPC's page as not the speaker's own", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("A no nonsense station manager.", 0.9, {
+        page_id: "lore.entities.npcs.horace_pennyfeather",
+        title: "Horace Pennyfeather"
+      })
+    ]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution({}, {}, {
+      lorePageId: "lore.entities.npcs.penelope_mccrick"
+    });
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContextIsOwnPage).toBe(false);
+  });
+
+  it("reports the speaker's own page as their own", async () => {
+    const { provider } = fakeVectorStore([
+      fakeLore("Penelope keeps a suite above the dock.", 0.9, {
+        page_id: "lore.entities.npcs.penelope_mccrick",
+        title: "Penelope McCrick"
+      })
+    ]);
+    const middleware = createQuestContextMiddleware({ vectorStoreProvider: provider });
+    const execution = makeExecution({}, {}, {
+      lorePageId: "lore.entities.npcs.penelope_mccrick"
+    });
+    await middleware.prepare?.(execution);
+
+    const annotation = execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation;
+    expect(annotation.worldContextIsOwnPage).toBe(true);
   });
 });
