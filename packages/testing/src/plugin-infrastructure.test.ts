@@ -782,8 +782,8 @@ describe("plugin infrastructure", () => {
     // gateway URL and bakes VITE_SUGARMAGIC_* envs on the build
     // step; restores the env injection lost when 053.2 moved the
     // build off Studio's Build Frontend action).
-    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 9");
-    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(9);
+    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 10");
+    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(10);
     // Template v9 — the game-repo checkout fetches full history
     // (so `git describe` in the next step sees tags) and exports
     // SUGARMAGIC_GAME_VERSION into the engine build env.
@@ -797,6 +797,28 @@ describe("plugin infrastructure", () => {
 
     // Workflow name pulls in the project slug + major version.
     expect(yaml).toContain("name: SugarDeploy — project v1");
+
+    // Template v10 — the frontend job stages exactly the files
+    // boot.json references, from whatever directory they live in, and
+    // fails the deploy when one is missing.
+    expect(yaml).toContain(
+      "jq -r '.assetSources | keys[]'"
+    );
+    expect(yaml).toContain(
+      'cp "$asset" ".sugarmagic/published-web/dist/$asset"'
+    );
+    expect(yaml).toContain(
+      "::error::boot.json references a file that is not in the repo: $asset"
+    );
+    // A missing referenced asset must stop the deploy, not warn.
+    expect(yaml).toContain('if [ "$missing" -ne 0 ]; then');
+    expect(yaml).toMatch(/missing.*referenced asset\(s\) missing[\s\S]*?exit 1/);
+    // The wholesale copy is gone: it published unreferenced files and
+    // never staged masks/ at all.
+    expect(yaml).not.toContain("cp -R assets/.");
+    // Reads the list from a file, never a pipe — a piped `while` runs
+    // in a subshell and would discard the missing-file flag.
+    expect(yaml).not.toMatch(/jq[^\n]*keys\[\][^\n]*\|\s*while/);
 
     // Both triggers wired up.
     expect(yaml).toContain("on:");

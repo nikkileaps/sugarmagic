@@ -1,7 +1,14 @@
 # ADR 010: Asset Pipeline Layers
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 030: Asset transforms run at authoring time](/Users/nikki/projects/sugarmagic/docs/adr/030-asset-transforms-run-at-authoring-time.md)
 **Date:** 2026-04-18
+
+> This ADR reserved `packages/io/src/publish/` for a layer that was never built
+> there; the deploy artifact is assembled in
+> `packages/plugins/src/deployment/`. Its use of "Publisher" also collides with
+> the Publish productmode, which is a different thing. The layer-direction
+> rules and "identity survives a transform" carry forward into ADR 030; the
+> reserved location and its ownership of per-target conversions do not.
 
 ## Context
 

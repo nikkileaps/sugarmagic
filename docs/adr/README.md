@@ -13,7 +13,7 @@ These ADRs capture the implementation-stable architectural decisions derived fro
 - [ADR 007: Execution and Concurrency Model](/Users/nikki/projects/sugarmagic/docs/adr/007-execution-and-concurrency-model.md)
 - [ADR 008: Material Semantics and Compile Profiles](/Users/nikki/projects/sugarmagic/docs/adr/008-material-semantics-and-compile-profiles.md)
 - [ADR 009: Game Root Contract](/Users/nikki/projects/sugarmagic/docs/adr/009-game-root-contract.md)
-- [ADR 010: Asset Pipeline Layers](/Users/nikki/projects/sugarmagic/docs/adr/010-asset-pipeline-layers.md)
+- [ADR 010: Asset Pipeline Layers](/Users/nikki/projects/sugarmagic/docs/adr/010-asset-pipeline-layers.md) — superseded by ADR 030
 - [ADR 011: Viewport As Subscriber](/Users/nikki/projects/sugarmagic/docs/adr/011-viewport-as-subscriber.md)
 - [ADR 012: Surface / Deform / Effect Traits](/Users/nikki/projects/sugarmagic/docs/adr/012-surface-deform-effect-traits.md)
 - [ADR 013: Surface as Layer Stack](/Users/nikki/projects/sugarmagic/docs/adr/013-surface-as-layer-stack.md)
@@ -33,3 +33,4 @@ These ADRs capture the implementation-stable architectural decisions derived fro
 - [ADR 027: Surface Resolution and Material-Cache Semantics](/Users/nikki/projects/sugarmagic/docs/adr/027-surface-resolution-and-material-cache.md)
 - [ADR 028: Instanced Rendering of Repeated Placed Assets](/Users/nikki/projects/sugarmagic/docs/adr/028-placed-asset-instancing.md)
 - [ADR 029: Per-player data that follows the player](/Users/nikki/projects/sugarmagic/docs/adr/029-per-player-data-that-follows-the-player.md)
+- [ADR 030: Asset transforms run at authoring time](/Users/nikki/projects/sugarmagic/docs/adr/030-asset-transforms-run-at-authoring-time.md)
