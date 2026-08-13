@@ -222,8 +222,16 @@ export interface WebRuntimeHostOptions {
  * Long enough that a normal cold start on a slow connection never sees it --
  * the assets alone allow 20s each -- and short enough that nobody sits in
  * front of a loading screen wondering whether it is stuck.
+ *
+ * 60s is a placeholder, not a judgement about what a player should tolerate.
+ * A cold first play currently fetches ~84 MiB, over half of which is texture
+ * data the renderer discards: four PBR maps are stored 16-bit and every
+ * texture loads through an HTMLImageElement, which keeps 8. Re-encoding them
+ * takes that category from 47.4 MiB to roughly 9-12 MiB. Once that lands this
+ * should come back down -- a 60s loading screen is not a target.
+ * See issue #165, "Cut, and why".
  */
-export const BOOT_READINESS_TIMEOUT_MS = 30_000;
+export const BOOT_READINESS_TIMEOUT_MS = 60_000;
 
 export interface WebRuntimeStartState {
   regions: RegionDocument[];
