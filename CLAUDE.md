@@ -20,6 +20,8 @@ Build one application where:
 - When interacting with Nikki in the terminal: Use plain english with a task based approach. Keep writing concise and clear. Keep sentences short and understandable. Do not introduce new terms when a domain term, software engineering term, or a plain english term will suffice. Avoid idioms, slang, jargon, abbreviations, acronyms. Your audience are software engineers and architects. You are working in a software engineering domain. Do not assume that the reader knows the code inside and out, but they will be familiar with the domain.
 - Grep the repo and docs before introducing a noun. Never overload term that already means something here, and never invent one when an existing word will do.
 
+Use the technical-writing SKILL to help write good technical docs. 
+
 # Architecture
 Sugarmagic Studio is a browser-based authoring tool for creating 3D narrative games, built as a pnpm/TypeScript monorepo where Studio and the shipped game are two front ends over the same core packages — Studio in React, the game runtime in vanilla DOM with three.js/WebGPU underneath, and a pure domain layer both depend on.
 - **Dependencies run one way.** Core declares an interface; a plugin supplies the implementation (`GameSaveStore`, `RemoteRecordStorageAdapter`). Core and the host never name a specific plugin — there are tests that read the source and fail if one appears.
@@ -40,3 +42,6 @@ Sugarmagic Studio is a browser-based authoring tool for creating 3D narrative ga
 * **Comments**: Comments explain what the code does now, in plain words. No invented nouns, no rhetoric, no changelog in headers. History goes in git and the PR. Related: "say forms, not paradigm" — even when repo docs use a word, if it's wrong it stays banned.
 * **Errors**: Throw when a caller made a mistake; catch at the boundary; degrade at runtime, fail loud in a build. Prefix the message with the subsystem — `[sync-engine]`, `[sugarlang]` — and say what the caller should do, not just what broke. Subclass `Error` only when something branches on it, and give the subclass the fields the caller needs to act (`NotSupportedError` carries the plugin id the UI should offer).
 * **Casting** A cast that erases a type — as never, as unknown as, as any — needs a comment saying why the checker is wrong.
+
+# Summary
+The key is to write clean, testable, functional code that evolves through well-defined, bounded increments. Drive production-behavior changes with a test that describes the desired behavior; use claim-appropriate evidence for documentation, configuration, dependency, generated, CI, and operational changes. When in doubt, favor simplicity and readability over cleverness.
