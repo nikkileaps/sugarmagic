@@ -33,14 +33,17 @@
  * -- an unrelated page presented as the current state of the world is
  * worse than none, and it would stay pinned for the whole quest stage.
  *
- * ## Another character's page is not the world
+ * ## Saying whose page it is
  *
- * A candidate that describes a different character is not world context:
- * handed one, an NPC reads it as a description of itself and speaks as
- * that character. What this NPC knows about them is what its OWN page
- * says under `## Relationships`, so that text is used instead. When its
- * page says nothing about them, the candidate is dropped and the next
- * one is considered.
+ * An unlabelled block of lore reads as a description of the speaker, so
+ * an NPC handed a page about somebody else introduces itself as that
+ * character. The prompt therefore names the page every block came from
+ * and says it is not the speaker; nothing is filtered out on the
+ * strength of what kind of page it is.
+ *
+ * When the speaker's `## Relationships` has a line about the page that
+ * won the search, that line is used instead of the page -- their own
+ * words about someone are what they know of them.
  *
  * ## Invalidation vs memory
  *
@@ -66,10 +69,10 @@ import {
   type ResolvedLorePage,
   type VectorStoreProvider
 } from "../clients";
-// Pure, browser-safe classifier shared with the gateway's ingest.
+// Pure, browser-safe lore-format helpers. The section designation is shared
+// with the gateway; the relationship reading is used here only.
 import {
   findRelationshipEntry,
-  isCharacterPage,
   isRelationshipsSection,
   parseRelationshipEntries,
   type LoreRelationshipEntry
@@ -182,8 +185,6 @@ interface WorldContextResolution {
   score: number | null;
   title: string | null;
   isOwnPage: boolean;
-  /** How many other-character pages were passed over to get here. */
-  droppedCharacterPages: number;
 }
 
 function noWorldContext(): WorldContextResolution {
@@ -191,8 +192,7 @@ function noWorldContext(): WorldContextResolution {
     text: null,
     score: null,
     title: null,
-    isOwnPage: false,
-    droppedCharacterPages: 0
+    isOwnPage: false
   };
 }
 
@@ -223,24 +223,24 @@ function truncate(raw: string, options: QuestContextMiddlewareOptions): string {
 }
 
 /**
- * The lore pages behind a set of search results, by page id. Empty when there
- * is no resolver or the fetch fails: the caller then cannot tell a character
- * page from a place, and keeps the best result as it always did.
+ * The speaking NPC's own lore page, for its `## Relationships`. Undefined when
+ * they have no page, there is no resolver, or the fetch fails -- the NPC then
+ * has no relationships and the search result is used as it stands.
  */
-async function fetchCandidatePages(
-  pageIds: string[],
+async function fetchOwnPage(
+  ownPageId: string,
   options: QuestContextMiddlewareOptions
-): Promise<Map<string, ResolvedLorePage>> {
+): Promise<ResolvedLorePage | undefined> {
   const resolver = options.lorePageResolver ?? null;
-  if (!resolver || pageIds.length === 0) return new Map();
+  if (!resolver || ownPageId.length === 0) return undefined;
   try {
-    const pages = await resolver.resolvePages(pageIds);
-    return new Map(pages.map((page) => [page.pageId, page]));
+    const pages = await resolver.resolvePages([ownPageId]);
+    return pages.find((page) => page.pageId === ownPageId);
   } catch (error) {
     options.logger?.logPluginEvent("quest-context-page-fetch-failed", {
       error: error instanceof Error ? error.message : String(error)
     });
-    return new Map();
+    return undefined;
   }
 }
 
@@ -254,16 +254,17 @@ function readRelationships(
 
 /**
  * Search lore for something that describes the world around this quest
- * objective, and choose what the NPC is allowed to be told.
+ * objective and keep the best result. The vector store has already dropped
+ * everything below the project's relevance threshold, so an empty result means
+ * nothing was relevant enough and the NPC gets no world context.
  *
- * Candidates are considered best-scoring first. The vector store has already
- * dropped everything below the project's relevance threshold, so an empty
- * result means nothing was relevant enough and the NPC gets no world context.
+ * When the speaking NPC's `## Relationships` has a line about the page that
+ * won, that line is used instead of the page. Their own words about someone
+ * are what they know of them; the page itself is that person's own account.
  *
- * A page that describes another character is not world context. What this NPC
- * knows about that character is what their OWN page says in `## Relationships`,
- * so that is what gets injected; when their page says nothing about them, the
- * candidate is dropped and the next one is considered (#171).
+ * Nothing else is filtered. Whatever goes in is labelled with the page it came
+ * from and stated not to be the speaker, which is what stops an NPC reading a
+ * description of somebody else as a description of itself (#171).
  */
 async function resolveWorldContext(
   execution: ConversationExecutionContext,
@@ -282,78 +283,38 @@ async function resolveWorldContext(
       maxResults: WORLD_CONTEXT_CANDIDATE_COUNT
     });
 
-    const candidates = rankCandidates(results);
-    if (candidates.length === 0) return noWorldContext();
+    const best = rankCandidates(results)[0];
+    if (!best) return noWorldContext();
 
+    const pageId = readStringAttribute(best, OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE);
+    const title = readStringAttribute(best, OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE);
     const ownPageId =
       typeof execution.selection.lorePageId === "string"
         ? execution.selection.lorePageId.trim()
         : "";
-    const candidatePageIds = candidates
-      .map((item) => readStringAttribute(item, OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE))
-      .filter((id): id is string => id !== null);
-    const pages = await fetchCandidatePages(
-      Array.from(new Set([...candidatePageIds, ownPageId].filter(Boolean))),
-      options
-    );
-    const ownPage = ownPageId ? pages.get(ownPageId) : undefined;
-    const relationships = readRelationships(ownPage);
-    let droppedCharacterPages = 0;
 
-    for (const candidate of candidates) {
-      const pageId = readStringAttribute(
-        candidate,
-        OPENAI_VECTOR_STORE_PAGE_ID_ATTRIBUTE
-      );
-      const title = readStringAttribute(
-        candidate,
-        OPENAI_VECTOR_STORE_TITLE_ATTRIBUTE
-      );
-
-      if (ownPageId && pageId === ownPageId) {
-        return {
-          text: truncate(candidate.text, options),
-          score: candidate.score,
-          title,
-          isOwnPage: true,
-          droppedCharacterPages
-        };
-      }
-
-      const page = pageId ? pages.get(pageId) : undefined;
-      if (page && isCharacterPage(page.sections)) {
-        const entry = findRelationshipEntry(relationships, {
-          pageId,
-          title: title ?? page.title
-        });
-        if (entry && entry.description.trim().length > 0) {
-          // Their own words about that character, so the block is about
-          // somebody else without ever being that somebody else's page.
-          return {
-            text: truncate(
-              `What you know of ${entry.name}: ${entry.description}`,
-              options
-            ),
-            score: candidate.score,
-            title: ownPage?.title ?? null,
-            isOwnPage: true,
-            droppedCharacterPages
-          };
-        }
-        droppedCharacterPages += 1;
-        continue;
-      }
-
+    const ownPage = await fetchOwnPage(ownPageId, options);
+    const entry = findRelationshipEntry(readRelationships(ownPage), {
+      pageId,
+      title
+    });
+    if (entry && entry.description.trim().length > 0) {
       return {
-        text: truncate(candidate.text, options),
-        score: candidate.score,
-        title,
-        isOwnPage: false,
-        droppedCharacterPages
+        text: truncate(`What you know of ${entry.name}: ${entry.description}`, options),
+        // The text is from the speaker's own page, so the search score that
+        // won belongs to a different page and is not reported.
+        score: null,
+        title: ownPage?.title ?? null,
+        isOwnPage: true
       };
     }
 
-    return { ...noWorldContext(), droppedCharacterPages };
+    return {
+      text: truncate(best.text, options),
+      score: best.score,
+      title,
+      isOwnPage: ownPageId.length > 0 && pageId === ownPageId
+    };
   } catch (error) {
     options.logger?.logPluginEvent("quest-context-resolve-failed", {
       error: error instanceof Error ? error.message : String(error)
@@ -417,8 +378,7 @@ export function createQuestContextMiddleware(
           hasContext: resolution.text !== null,
           score: resolution.score,
           sourceTitle: resolution.title,
-          fromOwnPage: resolution.isOwnPage,
-          droppedCharacterPages: resolution.droppedCharacterPages
+          fromOwnPage: resolution.isOwnPage
         });
       }
 

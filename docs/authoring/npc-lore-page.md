@@ -18,6 +18,24 @@ load the card into the prompt (072.3/072.4) and serve it through the gateway
 | every other section | Core knowledge | Same load, same moment, same system prompt. What the NPC *always* knows. |
 | `## Secrets` | Excluded | Never enters any prompt, and never enters the vector index (ingest skips it). A place to author unrevealable truths. |
 
+`## Relationships` is core knowledge like any other section, and is also read
+line by line. Each line carrying a markdown link is one entry -- the link text
+is the other character's name, the target is their page id, and the rest of the
+line is what this character knows of them:
+
+```markdown
+## Relationships
+
+[Tomas the Miller](lore.entities.npcs.tomas) -- Feuds with him, fondly, over
+flour prices.
+```
+
+A line with no link continues the entry above it, so a description can wrap.
+When quest world context lands on a page this character has a line about, the
+NPC is given the line instead of the page. With no line they get the page,
+labelled with whose it is. A section written as prose still loads as core
+knowledge; it just yields no entries.
+
 Everything on the page except `## Secrets` is **potentially player-visible**
 until epic E adds quest-stage gating. `## Secrets` is the only guaranteed-hidden
 section today: it is stripped from the persona card, from core knowledge, and
@@ -124,7 +142,8 @@ Opens before dawn. Sells bread, buns, and the seasonal spiced loaf. Trades
 gossip for a discount.
 
 ## Relationships
-Feuds -- fondly -- with Tomas the miller over flour prices.
+[Tomas the Miller](lore.entities.npcs.tomas) -- Feuds with him, fondly, over
+flour prices.
 
 ## Secrets
 Maren is the last of the Aldermere line. She does not know this herself yet;

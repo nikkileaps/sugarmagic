@@ -20,7 +20,6 @@ import {
   composeLoreBody,
   designateLoreSections,
   findRelationshipEntry,
-  isCharacterPage,
   isPersonaCardSection,
   isSecretSection,
   parseRelationshipEntries,
@@ -311,16 +310,6 @@ describe("readLorePages canon_level", () => {
 // #171 -- another character's page is not world context. What one character
 // knows about another is what their own page says under `## Relationships`.
 describe("relationships sections", () => {
-  it("recognizes a page with a persona card or relationships as a character page", () => {
-    expect(isCharacterPage([{ heading: "Persona", slug: "persona", content: "x" }])).toBe(true);
-    expect(
-      isCharacterPage([{ heading: "Relationships", slug: "relationships", content: "x" }])
-    ).toBe(true);
-    expect(
-      isCharacterPage([{ heading: "Overview", slug: "overview", content: "A busy dock." }])
-    ).toBe(false);
-  });
-
   // The wiki writes these as plain linked lines, with no list marker.
   it("reads a linked name, its page, and what is said about them", () => {
     const entries = parseRelationshipEntries(

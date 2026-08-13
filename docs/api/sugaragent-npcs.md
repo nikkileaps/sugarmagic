@@ -67,6 +67,11 @@ middleware at -100) that:
 - When `runtimeContext.trackedQuest` is set, resolves world-lore via
   `vectorStoreProvider.searchLore` using the active objective's text as the
   retrieval query (private, never shown to the model).
+- Takes the best-scoring result. When the speaking NPC's `## Relationships` has
+  a line about the page that won, that line is used instead of the page --
+  their own words about someone are what they know of them. Nothing else is
+  filtered; the prompt labels every block with the page it came from and says
+  it is not the speaker.
 - Memoizes the result in `execution.state` keyed by `questId::stageId` and
   re-resolves only when the quest state changes (stage advance, new quest).
 - Publishes a `QuestContextAnnotation` to `execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY]`
@@ -77,13 +82,19 @@ middleware at -100) that:
 - `QUEST_CONTEXT_MIDDLEWARE_ID` -- the middleware's stable id
 - `QUEST_CONTEXT_ANNOTATION_KEY` -- annotation key for GenerateStage / PlanStage
 - `createQuestContextMiddleware(options)` -- factory; options: `vectorStoreProvider`,
-  `logger`, `maxWorldContextChars` (default 400)
+  `lorePageResolver`, `logger`, `maxWorldContextChars` (default 400)
 - `MemoizedQuestContext` -- the per-quest-state memo shape
-- `QuestContextAnnotation` -- `{ hasContext: boolean; worldContext: string | null }`
+- `QuestContextAnnotation` -- `{ hasContext: boolean; worldContext: string | null;
+  worldContextTitle: string | null; worldContextIsOwnPage: boolean }`
 
-**Cost:** zero extra LLM calls per turn. The one allowed network call
-(`vectorStoreProvider.searchLore`) fires at most once per quest-state change,
-then is memo-served until the stage advances. See the 077.5 cost guard tests
+`lorePageResolver` fetches whole lore pages by id. It is what tells a page that
+describes a character from a page that describes a place. Without it every
+result is used as-is, so an NPC can be handed another character's page.
+
+**Cost:** zero extra LLM calls per turn. Two network calls fire at most once per
+quest-state change and are memo-served until the stage advances:
+`vectorStoreProvider.searchLore`, then `lorePageResolver.resolvePages` for the
+candidate pages plus the speaking NPC's own page. See the 077.5 cost guard tests
 in `quest-context-middleware.test.ts`.
 
 **Config flag:** `questAwareNpcsEnabled` (default `true`). When `false`, the
@@ -145,8 +156,11 @@ writes a QUEST FLAG via `questManager.setFlag`).
 `buildGeneratePrompt` (`prompt/builder.ts`) splices both into the UNCACHED user
 half only (D7 -- the byte-stable system prompt is never touched by quest state):
 
-1. When `questWorldContext` is set: emits the world-framed context block
-   ("World context right now: ...") and the NPC framing instruction.
+1. When `questWorldContext` is set: emits the world-framed context block and the
+   NPC framing instruction. The block is headed by the page it was taken from
+   ("Background about the world, from the lore page ..."), and says the page is
+   not about the NPC unless it is their own -- an unattributed page is read as
+   self-description, and the NPC speaks as its subject.
 2. When `goalSurfacedCount > 0` and quest context is set: emits the ease-off
    hint ("This topic has been brought up N time(s) already...").
 
@@ -166,8 +180,11 @@ __sugaragentQuestContext.dump()
 __sugaragentQuestContext.dump("npc:finnick")
 ```
 
-Each entry: `{ npcDefinitionId, questId, stageId, worldContext, goalSurfacedCount }`.
+Each entry: `{ npcDefinitionId, questId, stageId, worldContext, worldContextScore,
+worldContextTitle, worldContextIsOwnPage, goalSurfacedCount }`.
 `worldContext` is the lore text injected into the prompt (or `null`).
+`worldContextTitle` is the page it came from, and `worldContextIsOwnPage` says
+whether that page is this NPC's own.
 `goalSurfacedCount` is the blackboard fact value at annotation time.
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/quest/quest-context-debug.ts`

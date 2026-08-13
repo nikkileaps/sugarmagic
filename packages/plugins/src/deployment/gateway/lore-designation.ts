@@ -9,7 +9,7 @@
  *   - PERSONA_CARD_SECTION_SLUGS, SECRETS_SECTION_SLUG,
  *     RELATIONSHIPS_SECTION_SLUG
  *   - isPersonaCardSection, isSecretSection, isRelationshipsSection,
- *     isCharacterPage, designateLoreSections
+ *     designateLoreSections
  *   - parseRelationshipEntries, findRelationshipEntry
  *
  * Relationships:
@@ -74,22 +74,7 @@ export function isRelationshipsSection(section: DesignatableLoreSection): boolea
   return section.slug === RELATIONSHIPS_SECTION_SLUG;
 }
 
-/**
- * A page describes a character when it carries a persona card or a
- * relationships section. Places, events and objects carry neither.
- *
- * A character page authored with neither heading is not recognized, and is
- * treated as ordinary world lore.
- */
-export function isCharacterPage(
-  sections: readonly DesignatableLoreSection[]
-): boolean {
-  return sections.some(
-    (section) => isPersonaCardSection(section) || isRelationshipsSection(section)
-  );
-}
-
-/** One bullet from a `## Relationships` section. */
+/** One entry from a `## Relationships` section. */
 export interface LoreRelationshipEntry {
   /** The other character's name, as written. */
   name: string;
