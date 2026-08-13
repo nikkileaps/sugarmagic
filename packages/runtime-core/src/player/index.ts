@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { createGltfLoader } from "../asset-loading/gltf-loader";
 import type {
   AssetDefinition,
   CharacterAnimationDefinition,
@@ -27,7 +27,7 @@ import {
 } from "../ecs";
 import { createStatCarrier } from "../mechanics";
 
-const gltfLoader = new GLTFLoader();
+const gltfLoader = createGltfLoader();
 
 const DEFAULT_CAPSULE_COLOR = 0x89b4fa;
 

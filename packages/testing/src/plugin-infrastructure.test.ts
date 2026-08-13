@@ -782,8 +782,8 @@ describe("plugin infrastructure", () => {
     // gateway URL and bakes VITE_SUGARMAGIC_* envs on the build
     // step; restores the env injection lost when 053.2 moved the
     // build off Studio's Build Frontend action).
-    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 12");
-    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(12);
+    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 13");
+    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(13);
     // Template v9 — the game-repo checkout fetches full history
     // (so `git describe` in the next step sees tags) and exports
     // SUGARMAGIC_GAME_VERSION into the engine build env.
@@ -819,6 +819,22 @@ describe("plugin infrastructure", () => {
     // Reads the list from a file, never a pipe — a piped `while` runs
     // in a subshell and would discard the missing-file flag.
     expect(yaml).not.toMatch(/jq[^\n]*keys\[\][^\n]*\|\s*while/);
+
+    // Template v13 — staged GLBs are Draco-compressed.
+    expect(yaml).toContain("scripts/compress-staged-glbs.ts");
+    // Uses the tsx installed in the sugarmagic checkout rather than
+    // letting npx re-download an unpinned one on every deploy.
+    expect(yaml).toContain("sugarmagic/node_modules/.bin/tsx");
+    // Compression MUST precede the hash stamp: the hash has to cover
+    // the bytes actually shipped, and _headers marks them immutable
+    // for a year.
+    expect(yaml.indexOf("compress-staged-glbs.ts")).toBeLessThan(
+      yaml.indexOf("sha256sum")
+    );
+    // ...and must follow staging, since it rewrites staged files.
+    expect(yaml.indexOf("jq -r '.assetSources | keys[]'")).toBeLessThan(
+      yaml.indexOf("compress-staged-glbs.ts")
+    );
 
     // Template v12 — each asset URL carries a hash of its own bytes,
     // so an unchanged asset keeps its URL and stays cached across

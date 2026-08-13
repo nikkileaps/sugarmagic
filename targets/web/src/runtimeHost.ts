@@ -29,7 +29,6 @@ import * as THREE from "three";
 import { createElement } from "react";
 import { createRoot, type Root as ReactRoot } from "react-dom/client";
 import { WebGPURenderer } from "three/webgpu";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinnedObject } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   getCharacterAnimationDefinition,
@@ -157,6 +156,7 @@ import {
   type RuntimeActionRegistry,
   QUEST_MANAGER_PARTICIPANT_ID,
   GAME_SAVE_SCHEMA_VERSION,
+  createGltfLoader,
   type PreNewGameStepAnswers,
   type PreNewGameStepDefinition,
   type UIActionRegistry,
@@ -596,7 +596,7 @@ export interface WebRuntimeHost {
 
 const FOLIAGE_FALLBACK_COLOR = 0x8ad26a;
 
-const gltfLoader = new GLTFLoader();
+const gltfLoader = createGltfLoader();
 
 /** Plan 070.2 — NPCs stash their idle AnimationMixer in the reconciler
  *  entry's `host` slot (driven each frame from the runtime loop). */

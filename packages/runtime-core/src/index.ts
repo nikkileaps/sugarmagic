@@ -47,6 +47,7 @@ export * from "./ui-actions";
 export * from "./ui-context";
 export * from "./ui-state";
 export * from "./util/observable-value";
+export * from "./asset-loading/gltf-loader";
 export * from "./vfx";
 export * from "./world";
 
