@@ -243,9 +243,11 @@ export function buildPublishedWebManagedFiles(
   // Both concerns live here now, and the version arrives via the
   // placeholder the workflow substitutes.
   //
-  // Assets cache immutably: the deploy stamps every assetSources URL,
-  // so a URL's bytes never change. boot.json always revalidates, which
-  // is how a new deploy reaches a returning player at all.
+  // Assets cache immutably: the deploy stamps each assetSources URL
+  // with a hash of that file's own bytes, so a URL's bytes never
+  // change and an unchanged asset keeps its URL across deploys.
+  // boot.json always revalidates, which is how a new deploy reaches a
+  // returning player at all.
   //
   // The `/*` version rule and the per-directory cache rules never need
   // to combine on one request: verification reads the site root, which

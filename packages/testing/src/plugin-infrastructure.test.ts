@@ -782,8 +782,8 @@ describe("plugin infrastructure", () => {
     // gateway URL and bakes VITE_SUGARMAGIC_* envs on the build
     // step; restores the env injection lost when 053.2 moved the
     // build off Studio's Build Frontend action).
-    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 11");
-    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(11);
+    expect(yaml).toContain("# SUGARMAGIC WORKFLOW TEMPLATE VERSION: 12");
+    expect(parseWorkflowTemplateVersionStamp(yaml)).toBe(12);
     // Template v9 — the game-repo checkout fetches full history
     // (so `git describe` in the next step sees tags) and exports
     // SUGARMAGIC_GAME_VERSION into the engine build env.
@@ -819,6 +819,24 @@ describe("plugin infrastructure", () => {
     // Reads the list from a file, never a pipe — a piped `while` runs
     // in a subshell and would discard the missing-file flag.
     expect(yaml).not.toMatch(/jq[^\n]*keys\[\][^\n]*\|\s*while/);
+
+    // Template v12 — each asset URL carries a hash of its own bytes,
+    // so an unchanged asset keeps its URL and stays cached across
+    // deploys. The old single per-deploy sha made every deploy
+    // re-download everything.
+    expect(yaml).toContain('sha256sum ".sugarmagic/published-web/dist/$asset"');
+    expect(yaml).toContain('"?v=" + ($h[0][.key]');
+    expect(yaml).not.toContain(
+      "jq --arg v \"$GITHUB_SHA\" '.assetSources |= with_entries(.value += \"?v=\" + $v)'"
+    );
+    // A key with no hash means the stamp silently lost an asset — fail
+    // rather than ship a URL that never busts.
+    expect(yaml).toContain('error("no content hash for "');
+    // The stamp must come AFTER staging: it has to cover the bytes
+    // actually shipped, and story 4's compression slots in above it.
+    expect(yaml.indexOf("jq -r '.assetSources | keys[]'")).toBeLessThan(
+      yaml.indexOf("sha256sum")
+    );
 
     // Template v11 — _headers is SUBSTITUTED, not copied, so
     // X-Game-Version carries the version actually being deployed.

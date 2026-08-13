@@ -24,8 +24,8 @@
 
 /**
  * STABLE, not content-hashed. The deploy stamps every `assetSources` URL with
- * the deployed sha (Plan 060), so cache-busting is already handled -- and a
- * stable name means the declared path list never changes, so writing an
+ * a hash of that file's own bytes, so cache-busting is already handled -- and
+ * a stable name means the declared path list never changes, so writing an
  * artifact never touches the project session.
  */
 export const SUGARLANG_SCENE_CONTEXT_ASSET_PATH =
