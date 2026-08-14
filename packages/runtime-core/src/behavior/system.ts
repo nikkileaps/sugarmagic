@@ -570,10 +570,6 @@ export function createRuntimeNpcBehaviorSystem(
     if (!position) {
       return null;
     }
-    // Where this tick started, so the step below is the distance actually
-    // covered rather than the distance asked for.
-    const tickStartX = position.x;
-    const tickStartZ = position.z;
 
     const behavior = behaviorByNpcId.get(npc.npcDefinitionId) ?? null;
     const task = resolveBehaviorTask(
@@ -610,6 +606,13 @@ export function createRuntimeNpcBehaviorSystem(
       nowMs: now()
     });
     state = directiveResult.nextState;
+    // Standing still until this tick's locomotion says otherwise. Only the
+    // en-route branch walks, so every other outcome -- parked, blocked, no
+    // task -- reports zero without having to remember to say so.
+    //
+    // The heading is NOT cleared here: it is the way the NPC last faced, and
+    // an NPC that stops should keep facing that way rather than snap to yaw 0.
+    state.speedMetersPerSecond = 0;
 
     if (directiveResult.changed) {
       emitDebug("npc-movement-directive-changed", {
@@ -701,7 +704,29 @@ export function createRuntimeNpcBehaviorSystem(
         });
         // Plan 069.3 — resolved move (collide-and-slide + agent push-out);
         // the RESOLVED position feeds stuck-detection below.
+        //
+        // Motion for the renderer is measured across THIS call and nowhere
+        // else. It has to be the resolved step, so an NPC pinned against a
+        // prop reads as standing still rather than walking on the spot -- and
+        // it has to be only the locomotion step, because `resolveMove` also
+        // shoves agents apart, and being walked into by the player is not
+        // walking.
+        const stepFromX = position.x;
+        const stepFromZ = position.z;
         commitNpcMove(position, npc.presenceId, stepResult.x, stepResult.z);
+        const stepX = position.x - stepFromX;
+        const stepZ = position.z - stepFromZ;
+        const stepMeters = Math.sqrt(stepX * stepX + stepZ * stepZ);
+        // Capped at the walk speed: push-out inside this same resolve can
+        // carry the NPC further than it asked to go, and reporting that as
+        // speed would describe a shove as a sprint.
+        state.speedMetersPerSecond =
+          deltaSeconds > 0
+            ? Math.min(stepMeters / deltaSeconds, movementSpeedMetersPerSecond)
+            : 0;
+        if (stepMeters > HEADING_UPDATE_MIN_STEP_METERS) {
+          state.headingRadians = Math.atan2(stepX, stepZ);
+        }
         state.status = "en_route";
         advanceWaypoints(npc.npcDefinitionId, position);
 
@@ -735,19 +760,6 @@ export function createRuntimeNpcBehaviorSystem(
       } else {
         failureReason = "stuck";
       }
-    }
-
-    // What the renderer needs to animate the walk: the step this tick, taken
-    // AFTER collide-and-slide, so an NPC pinned against a prop reads as
-    // standing still instead of walking on the spot. The heading is held
-    // through ticks that do not move, so an NPC that arrives keeps facing the
-    // way it came rather than snapping back to its authored yaw.
-    const stepX = position.x - tickStartX;
-    const stepZ = position.z - tickStartZ;
-    const stepMeters = Math.sqrt(stepX * stepX + stepZ * stepZ);
-    state.speedMetersPerSecond = deltaSeconds > 0 ? stepMeters / deltaSeconds : 0;
-    if (stepMeters > HEADING_UPDATE_MIN_STEP_METERS) {
-      state.headingRadians = Math.atan2(stepX, stepZ);
     }
 
     movementStateByNpcId.set(npc.npcDefinitionId, state);

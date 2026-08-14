@@ -2732,6 +2732,16 @@ export function createWebRuntimeHost(
               entry,
               clips.has("idle") ? "idle" : [...clips.keys()][0]!
             );
+          })
+          .catch((error) => {
+            // Mixer construction and slot selection run after the loads
+            // resolve, so their failures land here rather than in the
+            // per-clip catch above. A player mid-session keeps playing with
+            // an unanimated NPC.
+            console.error("[web-runtime] npc-animation-bind-failed", {
+              instanceId: entry.object.instanceId,
+              error
+            });
           });
         }
       });

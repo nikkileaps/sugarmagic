@@ -231,6 +231,101 @@ describe("runtime NPC behavior system", () => {
     expect(arrived?.headingRadians).toBe(walking?.headingRadians);
   });
 
+  it("does not report being shoved by another agent as walking", () => {
+    const region = makeRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    // The player, parked far away until the shove below.
+    const player = { id: "player", x: -50, z: -50, radius: 0.4 };
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      getCollisionContext: () => ({
+        world: createEmptyCollisionWorld(),
+        agents: [player, { id: "presence:rick-roll", x: 0, z: 0, radius: 0.35 }]
+      }),
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    const activeQuest = {
+      questDefinitionId: "quest:find-suitcase",
+      stageId: "stage:arrival"
+    };
+    for (let tick = 0; tick < 30; tick += 1) {
+      system.sync({ deltaSeconds: 1, activeQuest });
+    }
+    expect(getEntityMovement(blackboard, "npc:rick-roll")?.status).toBe("at_target");
+    const parked = system.getMotion("npc:rick-roll")!;
+    expect(parked.speedMetersPerSecond).toBe(0);
+
+    // Walk the player into him. `resolveMove` pushes the overlapping circles
+    // apart, which moves the NPC without the NPC walking anywhere -- the
+    // renderer must not read that as locomotion, or approaching an NPC to
+    // talk makes it stride on the spot and turn away from you.
+    //
+    // A shove hard enough to push him off his post does make him walk back,
+    // and that IS locomotion. What must never happen is the shove itself
+    // being counted: while he is parked his speed stays zero and he keeps his
+    // facing, and no tick reports the push-out distance as a speed.
+    const position = world.getComponent(entity, Position)!;
+    let sawParkedTick = false;
+    for (let tick = 0; tick < 5; tick += 1) {
+      player.x = position.x - 0.3 + tick * 0.05;
+      player.z = position.z;
+      system.sync({ deltaSeconds: 1 / 60, activeQuest });
+      const shoved = system.getMotion("npc:rick-roll")!;
+      expect(shoved.speedMetersPerSecond).toBeLessThanOrEqual(2.5);
+      if (getEntityMovement(blackboard, "npc:rick-roll")?.status === "at_target") {
+        sawParkedTick = true;
+        expect(shoved.speedMetersPerSecond).toBe(0);
+        expect(shoved.headingRadians).toBe(parked.headingRadians);
+      }
+    }
+    expect(sawParkedTick).toBe(true);
+  });
+
+  it("never reports a speed above the walk speed", () => {
+    const region = makeRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    // Arrival snaps the NPC onto the target point in one tick. At a small
+    // delta that snap divided by the delta is a large number, and it is not
+    // locomotion.
+    for (let tick = 0; tick < 400; tick += 1) {
+      system.sync({
+        deltaSeconds: 1 / 60,
+        activeQuest: {
+          questDefinitionId: "quest:find-suitcase",
+          stageId: "stage:arrival"
+        }
+      });
+      expect(system.getMotion("npc:rick-roll")!.speedMetersPerSecond).toBeLessThanOrEqual(
+        2.5
+      );
+    }
+    expect(getEntityMovement(blackboard, "npc:rick-roll")?.status).toBe("at_target");
+  });
+
   it("reports no motion for an NPC whose task has no target area", () => {
     const region = makeRegion();
     const world = new World();
