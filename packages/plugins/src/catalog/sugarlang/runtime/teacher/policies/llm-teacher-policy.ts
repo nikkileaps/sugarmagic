@@ -292,11 +292,10 @@ export class ClaudeTeacherPolicy implements TeacherPolicy {
         maxTokens: this.maxTokens,
         cacheMarkers: prompt.cacheMarkers
       });
-      // Spike (sugarmagic-latency-cex). The Teacher is the largest single cost
-      // in a turn and nothing has ever confirmed its prompt cache actually
-      // hits: the telemetry that would have said so has been 404ing. A cache
-      // read of 0 on a repeat call means 222.9's caching is not working in
-      // production, which would be most of the explanation.
+      // Token counts on the turn timeline. Read and write are separate facts
+      // because they answer different questions: a repeat call should READ the
+      // cached prefix rather than pay to write it again, so a cache read of 0
+      // on a repeat is the signal that caching has stopped working.
       noteTeacherFact(context, "teacherIn", response.inputTokens ?? -1);
       noteTeacherFact(context, "teacherCacheRead", response.cacheReadInputTokens ?? -1);
       noteTeacherFact(context, "teacherCacheWrite", response.cacheCreationInputTokens ?? -1);
