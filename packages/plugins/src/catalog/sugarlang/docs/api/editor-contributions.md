@@ -100,38 +100,6 @@ Behavior:
 - Groups questions by CEFR band
 - Stays read-only in v1
 
-## Turn Inspector
-
-File:
-
-`packages/plugins/src/catalog/sugarlang/ui/shell/sugarlang-turn-inspector.tsx`
-
-Workspace:
-
-- `sugarlang`
-
-Behavior:
-
-- Lists recent telemetry-backed conversations
-- Lists the turns inside a selected conversation
-- Renders the reconstructed rationale trace for a selected turn
-
-## Comprehension Check Monitor
-
-File:
-
-`packages/plugins/src/catalog/sugarlang/ui/shell/comprehension-check-monitor.tsx`
-
-Workspace:
-
-- `sugarlang`
-
-Behavior:
-
-- Lists recent comprehension probes from preview telemetry
-- Shows a per-session probe rollup
-- Shows the full lifecycle detail for a selected probe
-
 ## Quest Placement Event Hint
 
 File:

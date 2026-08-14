@@ -127,7 +127,7 @@ export function createSugarlangPlugin(
   setSugarlangChunkExtractionEnabled(config.chunkExtraction.enabled);
   const logger = createSugarlangLogger({ debugLogging: config.debugLogging });
   const proxyBaseUrl = resolveSugarlangProxyBaseUrl(context.environment);
-  const telemetry = resolveSugarlangTelemetrySink(context.boot, { proxyBaseUrl });
+  const telemetry = resolveSugarlangTelemetrySink({ proxyBaseUrl });
   const services = new SugarlangRuntimeServices({
     config,
     environment: context.environment,

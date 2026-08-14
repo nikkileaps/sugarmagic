@@ -260,11 +260,6 @@ export function createSugarLangContextMiddleware(
         execution.annotations[SUGARLANG_FORCE_COMPREHENSION_CHECK_ANNOTATION] = true;
       }
 
-      // 090.10: `budgeter.prescription-generated` deleted with the budgeter that
-      // emitted it. `rationale-trace` reads that event optionally and falls back
-      // through `??` chains, so the debug panel degrades rather than breaking;
-      // retargeting the trace onto the slate + realization is 090.7's job.
-
       // Drain any pending hover observation from the UI layer so the
       // observer middleware can process it during finalize.
       const hover = drainPendingHover();

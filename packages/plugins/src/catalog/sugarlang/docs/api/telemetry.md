@@ -10,19 +10,14 @@ exposes two Studio-facing readers on top of the same event stream.
 Files:
 
 - `packages/plugins/src/catalog/sugarlang/runtime/telemetry/telemetry.ts`
-- `packages/plugins/src/catalog/sugarlang/runtime/telemetry/rationale-trace.ts`
-- `packages/plugins/src/catalog/sugarlang/runtime/telemetry/debug-panel-data.ts`
-- `packages/plugins/src/catalog/sugarlang/runtime/telemetry/comprehension-monitor-data.ts`
 
 This module is the single source of truth for:
 
 - the `TelemetryEvent` discriminated union
 - `TelemetrySink`
 - `MemoryTelemetrySink`
-- `IndexedDBTelemetrySink`
 - `NoOpTelemetrySink`
-- rationale-trace reconstruction
-- Studio debug aggregation
+- `GatewaySugarlangTelemetrySink`
 
 ## Event Families
 
@@ -85,10 +80,14 @@ Every event includes:
 
 ## Sink Selection
 
-Runtime sink selection is compile-profile-based:
+Sink selection does not depend on the compile profile. Studio, Preview and the
+published game all send to the same place:
 
-- `authoring-preview` and `runtime-preview` use `IndexedDBTelemetrySink`
-- `published-target` uses `NoOpTelemetrySink`
+- a gateway proxy base URL is configured: `GatewaySugarlangTelemetrySink`
+- otherwise: `NoOpTelemetrySink`
+
+Events are read where the gateway writes them -- `docker compose logs` locally,
+Cloud Logging in production. See `docs/api/sugarlang-telemetry.md`.
 
 Telemetry is best-effort. Gameplay code emits through the safe helper and drops
 events on sink failure rather than surfacing errors to the player.

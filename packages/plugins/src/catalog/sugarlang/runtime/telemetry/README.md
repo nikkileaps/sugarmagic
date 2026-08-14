@@ -5,10 +5,10 @@ This module is the single source of truth for Sugarlang runtime telemetry.
 It owns:
 
 - the canonical event schema
-- sink implementations for tests and Studio preview
-- rationale-trace reconstruction
-- debug-panel data aggregation
+- sink implementations: the gateway sink, a no-op, and an in-memory one for
+  tests
 
 Gameplay systems should only emit typed telemetry events through this module.
-Studio debug panels should only query through this module. That keeps event
-shape, persistence, and debug reconstruction aligned behind one contract.
+Delivery is one path everywhere -- Studio, Preview and the published game all
+send to the gateway, which writes each event to stdout. Events are read there:
+`docker compose logs` locally, Cloud Logging in production.

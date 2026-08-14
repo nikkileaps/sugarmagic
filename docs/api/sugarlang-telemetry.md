@@ -42,10 +42,10 @@ producers pass `timestamp` and the join keys explicitly.
 `SUGARLANG_TELEMETRY_SCHEMA_VERSION` is `1`; the version rides on every event
 and on every gateway batch, so a future payload change is a deliberate bump.
 
-`TelemetryQuery` + `matchesTelemetryQuery` provide the read side used by the
-Studio debug readers (`runtime/telemetry/debug-panel-data.ts`,
-`comprehension-monitor-data.ts`): filter by `conversationId`, `turnId`,
+`TelemetryQuery` + `matchesTelemetryQuery` provide the read side used by
+`MemoryTelemetrySink` in tests: filter by `conversationId`, `turnId`,
 `sessionId`, `eventKinds`, `probeId`, `lemmaId`, `npcId`, time range, limit.
+No shipped sink is queryable -- reading happens in the logs, not in-product.
 
 ## Event Taxonomy
 
@@ -146,10 +146,8 @@ the plugin's `dispose()` in `manifest.ts` calls `flushTelemetry` and then
 | Sink | Storage | Notes |
 |---|---|---|
 | `MemoryTelemetrySink` | in-memory ring | capacity 1000 (default), queryable; used in tests |
-| `IndexedDBTelemetrySink` | IDB db `sugarlang-telemetry`, store `sugarlang-telemetry` | workspace `sugarlang-telemetry:studio`, capacity 50,000, batched flush every 100ms, queryable |
 | `NoOpTelemetrySink` | none | `query()` throws `NotSupportedTelemetryQueryError` |
 | `GatewaySugarlangTelemetrySink` | POST to gateway | batches up to 100 events per request, flush every 5s, drop-on-failure |
-| `CompositeTelemetrySink` | fan-out | `emit`/`flush`/`dispose` fan out to all member sinks; `query` served by the first queryable member |
 
 `GatewaySugarlangTelemetrySink` delivery guarantees:
 
@@ -163,22 +161,30 @@ the plugin's `dispose()` in `manifest.ts` calls `flushTelemetry` and then
 - `dispose()` clears the flush timer, removes both listeners, and drains
   everything still pending.
 
-`resolveSugarlangTelemetrySink(boot, { proxyBaseUrl })` picks one, called once
-per plugin instance in `manifest.ts`:
+`resolveSugarlangTelemetrySink({ proxyBaseUrl })` picks one, called once per
+plugin instance in `manifest.ts`. There is no compile-profile branch:
 
-- `boot.compileProfile === "published-target"`: `GatewaySugarlangTelemetrySink`
-  when a proxy base URL is configured, else `NoOpTelemetrySink` (events
-  dropped).
-- Otherwise (Studio / preview): `NoOpTelemetrySink` when `indexedDB` is
-  missing; `IndexedDBTelemetrySink` when no proxy base URL is configured;
-  with a proxy base URL, a `CompositeTelemetrySink` of
-  `[IndexedDBTelemetrySink, GatewaySugarlangTelemetrySink]` -- the local
-  queryable copy for the Studio inspector plus the same gateway path a
-  published target uses.
+- proxy base URL configured: `GatewaySugarlangTelemetrySink`.
+- otherwise: `NoOpTelemetrySink` (events dropped).
 
-So Studio sessions always accumulate locally queryable events (and also ship
-to the gateway when a proxy is configured); published games ship them to the
-gateway; a published game without a gateway drops everything.
+Studio, Preview and the published game therefore have the same destination,
+so a gateway fault is visible while authoring instead of only in production,
+and a reading taken in Preview is evidence about what the deployed game does.
+
+## Reading Events
+
+There is no in-product reader. The gateway writes each accepted event as one
+JSON line to stdout, and the platform collects it:
+
+- **Local:** `docker compose logs -f sugarmagic-gateway` from the project's
+  `deployment/local/` directory.
+- **Deployed:** Cloud Run collects stdout into Cloud Logging; read it in the
+  Logs Explorer filtered to the gateway service.
+
+Aggregation (sessions per week, turns per session, probe pass rates) needs a
+log sink into BigQuery. That is configuration on the Cloud Run project rather
+than code here; every event already carries `sessionId`, `conversationId`,
+`turnId` and a timestamp to join on.
 
 ## Gateway Ingestion Route
 
