@@ -23,13 +23,11 @@ import type {
 import type { PluginShellContributionDefinition } from "../../../../shell";
 import { createElement } from "react";
 import { resetSugarlangLearnerDatabases } from "../../runtime/learner";
-import { ComprehensionCheckMonitor } from "./comprehension-check-monitor";
 import { LanguageConfigSection } from "./language-config-section";
 import { ManualRebuildButton } from "./manual-rebuild-button";
 import { PlacementQuestionBankViewer } from "./placement-question-bank-viewer";
 import { QuestNodeEventHint } from "./quest-node-event-hint";
 import { SceneDensityHistogram } from "./scene-density-histogram";
-import { SugarlangTurnInspector } from "./sugarlang-turn-inspector";
 import { LearnerCardInspector } from "./learner-card-inspector";
 import { LearnerOverrideSection } from "./learner-override-section";
 import { VariantReport } from "./variant-report";
@@ -336,22 +334,6 @@ export const sugarlangShellContributionDefinition: PluginShellContributionDefini
           createElement(PlacementQuestionBankViewer, {
             targetLanguage: props.targetLanguage
           })
-      },
-      {
-        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
-        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
-        sectionId: "turn-inspector",
-        label: "Turn Inspector",
-        summary: "Inspects per-turn Sugarlang rationale traces from preview telemetry.",
-        render: () => createElement(SugarlangTurnInspector)
-      },
-      {
-        pluginId: SUGARLANG_SHELL_PLUGIN_ID,
-        workspaceKind: SUGARLANG_SHELL_PLUGIN_ID,
-        sectionId: "comprehension-check-monitor",
-        label: "Comprehension Monitor",
-        summary: "Shows probe lifecycle telemetry, outcomes, and session rollups.",
-        render: () => createElement(ComprehensionCheckMonitor)
       },
       {
         pluginId: SUGARLANG_SHELL_PLUGIN_ID,

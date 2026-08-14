@@ -38,8 +38,6 @@ describe("sugarlang shell contributions", () => {
       "compile-status",
       "language-config",
       "placement-question-bank",
-      "turn-inspector",
-      "comprehension-check-monitor",
       "learner-card-inspector",
       "learner-override",
       "line-variants",

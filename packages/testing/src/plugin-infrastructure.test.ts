@@ -616,6 +616,44 @@ describe("plugin infrastructure", () => {
     ]);
   });
 
+  it("serves a proxy route from a plugin that declares no runtime service", () => {
+    // Sugarlang declares a proxy route (its telemetry ingestion path) and no
+    // runtime service. Sugaragent is the only plugin that runs a service, so
+    // it owns the gateway -- and sugarlang's route has to reach that gateway
+    // anyway, or the path is generated into nothing and 404s in the game.
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        deployment: { backendDeploymentTargetId: "local" },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true),
+          createPluginConfigurationRecord(SUGARLANG_PLUGIN_ID, true)
+        ]
+      })
+    );
+
+    const gateway = plan.serviceUnits.find(
+      (unit) => unit.serviceUnitId === "sugarmagic-gateway"
+    );
+    expect(gateway).toBeDefined();
+    expect(gateway!.proxyRoutes.map((route) => route.pathHint)).toContain(
+      "/api/sugarlang/telemetry"
+    );
+    expect(gateway!.ownerIds).toContain(SUGARLANG_PLUGIN_ID);
+
+    // And it reaches the generated route table the running gateway matches on.
+    const routesFile = plan.managedFiles.find((file) =>
+      file.relativePath.endsWith("services/sugarmagic-gateway/routes.json")
+    );
+    expect(routesFile).toBeDefined();
+    expect(routesFile!.content).toContain("/api/sugarlang/telemetry");
+
+    // No route may be left unplaced -- that is the failure this pins.
+    expect(
+      plan.conflicts.filter((conflict) => conflict.kind === "proxy-route-unplaced")
+    ).toEqual([]);
+  });
+
   it("emits Netlify managed files when the frontend deployment target is selected (story 46.6)", () => {
     // No frontend target selected → no netlify/ files appear.
     const withoutFrontend = planGameDeployment(

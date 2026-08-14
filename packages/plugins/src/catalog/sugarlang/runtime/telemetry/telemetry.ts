@@ -8,40 +8,29 @@
  *   - Telemetry sink interfaces and helpers
  *   - TELEMETRY_DB_NAME
  *   - MemoryTelemetrySink
- *   - IndexedDBTelemetrySink
  *   - NoOpTelemetrySink
  *   - GatewaySugarlangTelemetrySink
- *   - CompositeTelemetrySink
  *   - resolveSugarlangTelemetrySink
  *
  * Relationships:
- *   - Is the single telemetry contract consumed by middlewares, Teacher, learner-state, and Studio debug readers.
- *   - Owns persistence/query behavior so gameplay producers stay fire-and-forget.
+ *   - Is the single telemetry contract consumed by middlewares, Teacher, and learner-state.
+ *   - Delivery only. Reading happens where the gateway writes: `docker compose
+ *     logs` locally, Cloud Logging in production.
  *
  * Implements: Proposal 001 §v2 Training Path / §Verification, Failure Modes, and Guardrails
  *
  * Status: active
  *
- * TODO (v1.1): Production analytics via GCP Cloud Logging + BigQuery
+ * WHERE EVENTS GO
  *
- *   The three current sink implementations are all local (Memory, IndexedDB, NoOp).
- *   Published builds use NoOp, which drops every event. To get production analytics
- *   (sessions per week, turns per session, probe pass rate, CEFR distribution,
- *   rough-spot detection, error analysis), implement a GCPCloudLoggingSink that:
+ *   `GatewaySugarlangTelemetrySink` batches and POSTs to the gateway, which
+ *   writes each event as one JSON line to stdout. Cloud Run collects that into
+ *   Cloud Logging; locally the same line shows up in `docker compose logs`.
  *
- *   1. Batches events and POSTs them as structured log entries to the GCP Cloud
- *      Logging API (events are already structured JSON with typed payloads).
- *   2. Set up a GCP log sink that routes sugarlang.* events to BigQuery.
- *   3. Query BigQuery for aggregations — session.started / session.ended give
- *      sessions-per-week and turns-per-session; comprehension.probe-passed/failed
- *      give probe pass rates; verify.repair-triggered spikes flag rough-spot scenes.
- *   4. Wire via a config flag so published builds use GCPCloudLoggingSink instead
- *      of NoOpTelemetrySink.
- *
- *   The TelemetrySink interface (`emit` + `flush`) is the extension point — the new
- *   sink is ~100 lines implementing the same interface. No schema or middleware
- *   changes required. Every event already carries sessionId, conversationId, turnId,
- *   and timestamp as join keys for BigQuery.
+ *   Aggregating them -- sessions per week, turns per session, probe pass rate --
+ *   needs a log sink into BigQuery, which is configuration on the Cloud Run
+ *   project rather than code here. Every event already carries sessionId,
+ *   conversationId, turnId and a timestamp to join on.
  */
 
 import type {
@@ -56,21 +45,18 @@ import type {
   SugarlangConstraint
 } from "../types";
 import type { LearnerSnapshot } from "../middlewares/shared";
-import type { RuntimeBootModel } from "@sugarmagic/runtime-core";
 import { getActiveAccessToken } from "@sugarmagic/runtime-core";
 
 export const SUGARLANG_TELEMETRY_SCHEMA_VERSION = 1 as const;
-export const SUGARLANG_STUDIO_TELEMETRY_WORKSPACE_ID =
-  "sugarlang-telemetry:studio";
 
 /**
- * Owned here: the telemetry sink's database name. The shared learner-data
- * reset (learner/reset-learner-data.ts) is the only other consumer -- do not
- * hard-code the literal anywhere else.
+ * The IndexedDB database telemetry used to be written to. Nothing writes it
+ * now -- events go to the gateway -- but the learner-data reset
+ * (learner/reset-learner-data.ts) still deletes it, so a player who authored
+ * or played before this change does not keep the orphaned store forever.
+ * Do not hard-code the literal anywhere else.
  */
 export const TELEMETRY_DB_NAME = "sugarlang-telemetry";
-const TELEMETRY_DB_VERSION = 1;
-const TELEMETRY_STORE_NAME = "sugarlang-telemetry";
 
 let telemetryEventCounter = 0;
 
@@ -1002,154 +988,6 @@ export class MemoryTelemetrySink implements QueryableTelemetrySink {
   }
 }
 
-interface StoredTelemetryEvent {
-  workspaceId: string;
-  event: TelemetryEvent;
-}
-
-function openTelemetryDatabase(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(TELEMETRY_DB_NAME, TELEMETRY_DB_VERSION);
-    request.onerror = () =>
-      reject(request.error ?? new Error("Failed to open sugarlang telemetry IndexedDB."));
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      const store = db.objectStoreNames.contains(TELEMETRY_STORE_NAME)
-        ? request.transaction!.objectStore(TELEMETRY_STORE_NAME)
-        : db.createObjectStore(TELEMETRY_STORE_NAME, {
-            keyPath: ["workspaceId", "event.eventId"]
-          });
-      if (!store.indexNames.contains("workspaceId")) {
-        store.createIndex("workspaceId", "workspaceId", { unique: false });
-      }
-      if (!store.indexNames.contains("timestamp")) {
-        store.createIndex("timestamp", "event.timestamp", { unique: false });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-  });
-}
-
-async function withStore<T>(
-  mode: IDBTransactionMode,
-  run: (store: IDBObjectStore) => void | Promise<T>
-): Promise<T> {
-  const db = await openTelemetryDatabase();
-  return await new Promise<T>((resolve, reject) => {
-    const transaction = db.transaction(TELEMETRY_STORE_NAME, mode);
-    const store = transaction.objectStore(TELEMETRY_STORE_NAME);
-    Promise.resolve(run(store))
-      .then((value) => {
-        transaction.oncomplete = () => {
-          db.close();
-          resolve(value as T);
-        };
-      })
-      .catch((error) => {
-        db.close();
-        reject(error);
-      });
-    transaction.onerror = () => {
-      db.close();
-      reject(transaction.error ?? new Error("Sugarlang telemetry transaction failed."));
-    };
-  });
-}
-
-async function getAllStoredEvents(workspaceId: string): Promise<TelemetryEvent[]> {
-  return withStore("readonly", (store) => {
-    return new Promise<TelemetryEvent[]>((resolve, reject) => {
-      const request = store.index("workspaceId").getAll(IDBKeyRange.only(workspaceId));
-      request.onerror = () =>
-        reject(request.error ?? new Error("Failed to read sugarlang telemetry events."));
-      request.onsuccess = () => {
-        const rows = (request.result as StoredTelemetryEvent[] | undefined) ?? [];
-        resolve(
-          rows
-            .map((row) => row.event)
-            .sort((left, right) => left.timestamp - right.timestamp)
-        );
-      };
-    });
-  });
-}
-
-export interface IndexedDBTelemetrySinkOptions {
-  workspaceId?: string;
-  capacity?: number;
-  flushIntervalMs?: number;
-}
-
-export class IndexedDBTelemetrySink implements QueryableTelemetrySink {
-  private readonly workspaceId: string;
-  private readonly capacity: number;
-  private readonly flushIntervalMs: number;
-  private readonly pending: TelemetryEvent[] = [];
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
-
-  constructor(options: IndexedDBTelemetrySinkOptions = {}) {
-    this.workspaceId =
-      options.workspaceId ?? SUGARLANG_STUDIO_TELEMETRY_WORKSPACE_ID;
-    this.capacity = Math.max(1, options.capacity ?? 50_000);
-    this.flushIntervalMs = Math.max(0, options.flushIntervalMs ?? 100);
-  }
-
-  emit(event: TelemetryEvent): void {
-    this.pending.push(event);
-    if (this.flushTimer !== null) {
-      return;
-    }
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = null;
-      void this.flush();
-    }, this.flushIntervalMs);
-  }
-
-  async flush(): Promise<void> {
-    if (typeof indexedDB === "undefined") {
-      this.pending.length = 0;
-      return;
-    }
-
-    if (this.pending.length === 0) {
-      return;
-    }
-
-    const batch = this.pending.splice(0, this.pending.length);
-    await withStore("readwrite", async (store) => {
-      for (const event of batch) {
-        store.put({
-          workspaceId: this.workspaceId,
-          event
-        } satisfies StoredTelemetryEvent);
-      }
-    });
-
-    const events = await getAllStoredEvents(this.workspaceId);
-    if (events.length <= this.capacity) {
-      return;
-    }
-
-    const deleteIds = events
-      .slice(0, events.length - this.capacity)
-      .map((event) => [this.workspaceId, event.eventId]);
-    await withStore("readwrite", async (store) => {
-      for (const key of deleteIds) {
-        store.delete(key);
-      }
-    });
-  }
-
-  async query(filter: TelemetryQuery = {}): Promise<TelemetryEvent[]> {
-    await this.flush();
-    const events = await getAllStoredEvents(this.workspaceId);
-    return applyLimit(
-      events.filter((event) => matchesTelemetryQuery(event, filter)),
-      filter.limit
-    );
-  }
-}
-
 export class NoOpTelemetrySink implements TelemetrySink {
   emit(_event: TelemetryEvent): void {
     return undefined;
@@ -1388,70 +1226,29 @@ export class GatewaySugarlangTelemetrySink implements TelemetrySink {
   }
 }
 
+
 /**
- * Fans out emit/flush/dispose to every sink; query is served by the first
- * queryable sink (the Studio inspector reads from IndexedDB).
+ * ONE DESTINATION, EVERYWHERE.
+ *
+ * Events go to the gateway or nowhere. Studio, Preview and the published game
+ * all take the same path, so what you watch while authoring is what the
+ * deployed game does.
+ *
+ * This used to branch on the compile profile: the published game sent to the
+ * gateway, while Studio and Preview wrote to a local IndexedDB store that two
+ * Studio panels read. That made Preview a different system from the one that
+ * ships -- a gateway fault was invisible in Preview and a Preview reading was
+ * no evidence about production.
+ *
+ * Reading is now the same everywhere too: the gateway writes each event to
+ * stdout, so it is `docker compose logs` locally and Cloud Logging in
+ * production.
  */
-export class CompositeTelemetrySink implements TelemetrySink {
-  private readonly sinks: TelemetrySink[];
-
-  constructor(sinks: TelemetrySink[]) {
-    this.sinks = sinks;
-  }
-
-  emit(event: TelemetryEvent): void {
-    for (const sink of this.sinks) {
-      void sink.emit(event);
-    }
-  }
-
-  async flush(): Promise<void> {
-    await Promise.all(this.sinks.map((sink) => sink.flush?.()));
-  }
-
-  async query(filter: TelemetryQuery): Promise<TelemetryEvent[]> {
-    for (const sink of this.sinks) {
-      if (sink.query) {
-        return sink.query(filter);
-      }
-    }
-    throw new NotSupportedTelemetryQueryError();
-  }
-
-  async dispose(): Promise<void> {
-    await Promise.all(this.sinks.map((sink) => sink.dispose?.()));
-  }
-}
-
 export function resolveSugarlangTelemetrySink(
-  boot: RuntimeBootModel,
   options?: { proxyBaseUrl?: string }
 ): TelemetrySink {
   const proxyBaseUrl = options?.proxyBaseUrl?.trim() ?? "";
-
-  if (boot.compileProfile === "published-target") {
-    return proxyBaseUrl
-      ? new GatewaySugarlangTelemetrySink({ proxyBaseUrl })
-      : new NoOpTelemetrySink();
-  }
-
-  if (typeof indexedDB === "undefined") {
-    return new NoOpTelemetrySink();
-  }
-
-  const indexedDbSink = new IndexedDBTelemetrySink({
-    workspaceId: SUGARLANG_STUDIO_TELEMETRY_WORKSPACE_ID
-  });
-
-  // Studio/preview with a configured proxy also ships events to the gateway
-  // (same production path as published targets); IndexedDB stays first so
-  // the Studio inspector keeps its queryable local copy.
-  if (proxyBaseUrl) {
-    return new CompositeTelemetrySink([
-      indexedDbSink,
-      new GatewaySugarlangTelemetrySink({ proxyBaseUrl })
-    ]);
-  }
-
-  return indexedDbSink;
+  return proxyBaseUrl
+    ? new GatewaySugarlangTelemetrySink({ proxyBaseUrl })
+    : new NoOpTelemetrySink();
 }

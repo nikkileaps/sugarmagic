@@ -15,12 +15,9 @@
  * Status: active
  */
 
-import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  CompositeTelemetrySink,
   GatewaySugarlangTelemetrySink,
-  IndexedDBTelemetrySink,
   MemoryTelemetrySink,
   NoOpTelemetrySink,
   createTelemetryEvent,
@@ -74,33 +71,6 @@ describe("telemetry sinks", () => {
     expect(events).toHaveLength(2);
     expect(events[0]?.sessionId).toBe("session-2");
     expect(events[1]?.sessionId).toBe("session-3");
-  });
-
-  it("persists and queries events through IndexedDB", async () => {
-    const sink = new IndexedDBTelemetrySink({
-      workspaceId: "telemetry-test",
-      flushIntervalMs: 0,
-      capacity: 20
-    });
-    sink.emit(
-      createTelemetryEvent("session.started", {
-        sessionId: "session-idb",
-        conversationId: "conversation-1",
-        turnId: "turn-1",
-        timestamp: 10,
-        learnerId: "learner-idb"
-      })
-    );
-    await sink.flush();
-
-    const events = await sink.query({ conversationId: "conversation-1" });
-    expect(events).toHaveLength(1);
-    expect(events[0]).toEqual(
-      expect.objectContaining({
-        kind: "session.started",
-        sessionId: "session-idb"
-      })
-    );
   });
 
   it("stores and queries the chunk telemetry event family", async () => {
@@ -295,75 +265,39 @@ describe("GatewaySugarlangTelemetrySink", () => {
 });
 
 describe("resolveSugarlangTelemetrySink", () => {
-  it("returns GatewaySugarlangTelemetrySink for published-target with proxy URL", () => {
-    const sink = resolveSugarlangTelemetrySink(
-      {
-        hostKind: "published-web",
-        compileProfile: "published-target",
-        contentSource: "published-artifact",
-        runtimeFamily: "sugarmagic-shared-runtime",
-        usesSharedSemantics: true,
-        sessionBoundary: "isolated-runtime-session"
-      },
-      { proxyBaseUrl: "http://localhost:8080" }
-    );
+  it("sends to the gateway when a proxy URL is configured", () => {
+    const sink = resolveSugarlangTelemetrySink({
+      proxyBaseUrl: "http://localhost:8080"
+    });
     expect(sink).toBeInstanceOf(GatewaySugarlangTelemetrySink);
   });
 
-  it("returns NoOpTelemetrySink for published-target without proxy URL", () => {
-    const sink = resolveSugarlangTelemetrySink({
-      hostKind: "published-web",
-      compileProfile: "published-target",
-      contentSource: "published-artifact",
-      runtimeFamily: "sugarmagic-shared-runtime",
-      usesSharedSemantics: true,
-      sessionBoundary: "isolated-runtime-session"
-    });
-    expect(sink).toBeInstanceOf(NoOpTelemetrySink);
-  });
-
-  it("returns IndexedDBTelemetrySink for Studio without proxy URL", () => {
-    const sink = resolveSugarlangTelemetrySink({
-      hostKind: "studio",
-      compileProfile: "authoring-preview",
-      contentSource: "authored-game-root",
-      runtimeFamily: "sugarmagic-shared-runtime",
-      usesSharedSemantics: true,
-      sessionBoundary: "isolated-runtime-session"
-    });
-    expect(sink).toBeInstanceOf(IndexedDBTelemetrySink);
-  });
-
-  it("composes IndexedDB + gateway sinks for Studio with a proxy URL", async () => {
-    const { fetchMock } = stubFetch();
-    const sink = resolveSugarlangTelemetrySink(
-      {
-        hostKind: "studio",
-        compileProfile: "authoring-preview",
-        contentSource: "authored-game-root",
-        runtimeFamily: "sugarmagic-shared-runtime",
-        usesSharedSemantics: true,
-        sessionBoundary: "isolated-runtime-session"
-      },
-      { proxyBaseUrl: "http://gateway.test" }
+  it("drops events when no proxy URL is configured", () => {
+    expect(resolveSugarlangTelemetrySink()).toBeInstanceOf(NoOpTelemetrySink);
+    expect(resolveSugarlangTelemetrySink({ proxyBaseUrl: "  " })).toBeInstanceOf(
+      NoOpTelemetrySink
     );
-    expect(sink).toBeInstanceOf(CompositeTelemetrySink);
+  });
+
+  it("gives Studio and the published game the same destination", async () => {
+    // The whole point: no compile-profile branch. Preview cannot observe a
+    // different system from the one that ships, so a gateway fault shows up
+    // while authoring instead of only in production.
+    const { fetchMock } = stubFetch();
+    const sink = resolveSugarlangTelemetrySink({
+      proxyBaseUrl: "http://gateway.test"
+    });
+    expect(sink).toBeInstanceOf(GatewaySugarlangTelemetrySink);
 
     sink.emit(
       createTelemetryEvent("session.started", {
-        sessionId: "session-composite",
+        sessionId: "session-one-path",
         timestamp: 5,
-        learnerId: "learner-composite"
+        learnerId: "learner-one-path"
       })
     );
     await sink.flush?.();
-
-    // Gateway leg got the event...
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    // ...and the local IndexedDB copy stays queryable for the inspector.
-    const events = await sink.query?.({ sessionId: "session-composite" });
-    expect(events).toHaveLength(1);
-    expect(events?.[0]?.sessionId).toBe("session-composite");
     await sink.dispose?.();
   });
 });
