@@ -279,6 +279,89 @@ describe("handleSugarAgentGenerate", () => {
     expect(requestBody.system).toBe("you are helpful");
   });
 
+  it("logs model usage without making the turn wait for it", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          content: [{ type: "text", text: "Hola" }],
+          model: "served-model-z",
+          usage: {
+            input_tokens: 120,
+            output_tokens: 34,
+            cache_read_input_tokens: 900,
+            cache_creation_input_tokens: 0
+          }
+        }),
+      headers: { get: (_k: string) => "req-id-usage" }
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const lines: string[] = [];
+    const writeSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk: unknown) => {
+        lines.push(String(chunk));
+        return true;
+      });
+
+    try {
+      const req = makeReq({
+        method: "POST",
+        url: "/api/sugaragent/generate",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          systemPrompt: "you are helpful",
+          userPrompt: "say hello",
+          purpose: "teacher"
+        })
+      });
+      // The auth gate assigns this before any route dispatches.
+      (req as IncomingMessage & { user?: { userId: string; email: string } }).user = {
+        userId: "user-abc",
+        email: "player@example.test"
+      };
+      const res = makeRes();
+      await handleSugarAgentGenerate(req, res);
+
+      // THE CONSTRAINT: the player's reply is already sent and this call's
+      // measurement has not been written. Measurement never sits in front of
+      // a turn. (Earlier tests' deferred writes can land in this spy, so the
+      // assertion is about THIS call, identified by its user.)
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).text).toBe("Hola");
+      expect(lines.some((line) => line.includes("user-abc"))).toBe(false);
+
+      // It lands on a later tick.
+      await new Promise((resolve) => setImmediate(resolve));
+
+      const usage = lines
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .find(
+          (entry) =>
+            entry["kind"] === "gateway.model-usage" && entry["userId"] === "user-abc"
+        );
+      expect(usage).toMatchObject({
+        vendor: "anthropic",
+        purpose: "teacher",
+        model: "served-model-z",
+        userId: "user-abc",
+        ok: true,
+        inputTokens: 120,
+        outputTokens: 34,
+        cacheReadInputTokens: 900,
+        cacheCreationInputTokens: 0
+      });
+      // Raw counts only -- a computed cost cannot be recomputed when prices move.
+      expect(usage).not.toHaveProperty("costUsd");
+      // An email address has no business in a log line.
+      expect(JSON.stringify(usage)).not.toContain("player@example.test");
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
   it("073.2 — resolves the model server-side by purpose (no model id from the client)", async () => {
     process.env["SUGARMAGIC_SUGARAGENT_ANTHROPIC_MODEL"] = "dialogue-model-x";
     process.env["SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL"] = "summary-model-y";
