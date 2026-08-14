@@ -43,7 +43,10 @@ const S: Record<string, CSSProperties> = {
     display: "flex",
     alignItems: "flex-start",
     justifyContent: "center",
-    overflowY: "auto",
+    // The backdrop does NOT scroll. If it did, a long form would be scrolled by
+    // the window scrollbar at the far edge of the screen, half a metre from the
+    // 600px card it belongs to. The card owns its own scrolling below.
+    overflow: "hidden",
     pointerEvents: "auto",
     zIndex: 50,
     padding: "32px 16px 64px"
@@ -54,15 +57,38 @@ const S: Record<string, CSSProperties> = {
     borderRadius: 8,
     width: "100%",
     maxWidth: 600,
+    // Never taller than the space the backdrop's padding leaves it, so the
+    // questions scroll inside the card instead of growing the page. Needs
+    // border-box or the card's own padding is added on top of the cap and it
+    // overflows the bottom of the screen.
+    maxHeight: "100%",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    minHeight: 0,
     padding: "32px 28px",
     color: "var(--sm-game-ui-color-text, #f6f1ff)",
     fontFamily: "var(--sm-game-ui-font-body, sans-serif)"
+  },
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    minHeight: 0
+  },
+  // The only part that scrolls. Title, intro and Submit stay put.
+  questionScroll: {
+    overflowY: "auto",
+    minHeight: 0,
+    // Keeps text off the scrollbar without shifting the layout when absent.
+    paddingRight: 8,
+    marginRight: -8
   },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 20
+    marginBottom: 20,
+    flexShrink: 0
   },
   title: {
     fontSize: 20,
@@ -86,7 +112,8 @@ const S: Record<string, CSSProperties> = {
     opacity: 0.72,
     marginTop: 0,
     marginBottom: 28,
-    lineHeight: 1.6
+    lineHeight: 1.6,
+    flexShrink: 0
   },
   question: {
     marginBottom: 28,
@@ -172,7 +199,13 @@ const S: Record<string, CSSProperties> = {
   footer: {
     display: "flex",
     justifyContent: "flex-end",
-    marginTop: 8
+    alignItems: "center",
+    gap: 12,
+    marginTop: 8,
+    paddingTop: 16,
+    borderTop: "1px solid rgba(246, 241, 255, 0.08)",
+    // Stays visible while the questions scroll past it.
+    flexShrink: 0
   },
   submitBtn: {
     padding: "10px 28px",
@@ -231,7 +264,8 @@ export function QuestFormOverlay({ definition, onSubmit, onDismiss }: QuestFormO
           <button style={S.closeBtn} onClick={onDismiss} aria-label="Close form">x</button>
         </div>
         <p style={S.intro}>{definition.formIntro}</p>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} style={S.form}>
+          <div style={S.questionScroll}>
           {definition.questions.map((q) => {
             const current = answers.get(q.questionId);
             return (
@@ -323,6 +357,7 @@ export function QuestFormOverlay({ definition, onSubmit, onDismiss }: QuestFormO
               </section>
             );
           })}
+          </div>
           <div style={S.footer}>
             {belowConfidenceThreshold ? (
               <span style={S.submitNote}>
