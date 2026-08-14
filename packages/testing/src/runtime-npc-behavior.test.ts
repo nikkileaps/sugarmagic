@@ -185,6 +185,79 @@ describe("runtime NPC behavior system", () => {
     });
   });
 
+  it("reports the speed and heading it moved at, and holds the heading on arrival", () => {
+    const region = makeRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    // Nothing has ticked yet, so there is no motion to report.
+    expect(system.getMotion("npc:rick-roll")).toBeNull();
+
+    const activeQuest = {
+      questDefinitionId: "quest:find-suitcase",
+      stageId: "stage:arrival"
+    };
+    system.sync({ deltaSeconds: 1, activeQuest });
+
+    // The dock is at +x from the origin, and the default walk is 2.5 m/s.
+    // The exact angle depends on where inside the area the target point was
+    // sampled, so assert the direction rather than a bearing: sin(yaw) is the
+    // x component of the facing, and 1 is due +x.
+    const walking = system.getMotion("npc:rick-roll");
+    expect(walking?.speedMetersPerSecond).toBeCloseTo(2.5, 5);
+    expect(Math.sin(walking!.headingRadians!)).toBeGreaterThan(0.99);
+
+    // Walk until it gets there. The dock is 10m away at 2.5 m/s.
+    for (let tick = 0; tick < 20; tick += 1) {
+      system.sync({ deltaSeconds: 1, activeQuest });
+    }
+    expect(getEntityMovement(blackboard, "npc:rick-roll")?.status).toBe("at_target");
+
+    const arrived = system.getMotion("npc:rick-roll");
+    expect(arrived?.speedMetersPerSecond).toBeCloseTo(0, 5);
+    // Still facing the way it walked, rather than snapping back to yaw 0.
+    expect(arrived?.headingRadians).toBe(walking?.headingRadians);
+  });
+
+  it("reports no motion for an NPC whose task has no target area", () => {
+    const region = makeRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: () => false,
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    // No quest active, so the fixture falls through to `task:idle`, which has
+    // no target area.
+    system.sync({ deltaSeconds: 1, activeQuest: null });
+
+    expect(system.getMotion("npc:rick-roll")).toEqual({
+      speedMetersPerSecond: 0,
+      headingRadians: null
+    });
+  });
+
   it("moves NPCs toward the target area and switches tasks when quest stage changes", () => {
     const region = makeRegion();
     const world = new World();

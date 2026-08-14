@@ -36,6 +36,7 @@ import {
   type DocumentDefinition,
   type DialogueDefinition,
   type ItemDefinition,
+  type NPCAnimationSlot,
   type NPCDefinition,
   type PluginConfigurationRecord,
   type PlayerDefinition,
@@ -610,6 +611,10 @@ const gltfLoader = createGltfLoader();
  *  entry's `host` slot (driven each frame from the runtime loop). */
 interface HostEntryData {
   mixer?: THREE.AnimationMixer;
+  /** Every clip bound to this NPC, by slot. One mixer plays one of them. */
+  animationClips?: Map<NPCAnimationSlot, THREE.AnimationClip>;
+  activeAnimationSlot?: NPCAnimationSlot;
+  activeAnimationAction?: THREE.AnimationAction;
 }
 
 /** Plan 068.13a -- a placed asset is instanceable if it is a static model
@@ -1594,6 +1599,30 @@ export function createWebRuntimeHost(
   const npcMixer = (entry: ReconciledEntry): THREE.AnimationMixer | undefined =>
     (entry.host as HostEntryData).mixer;
 
+  /**
+   * Play one of an NPC's bound clips.
+   *
+   * Asking for a slot the NPC has no clip for leaves the current one playing.
+   * Most NPCs are bound for idle alone, and stopping their only clip to honour
+   * a walk request would freeze them in the bind pose mid-stride.
+   */
+  function setNpcAnimationSlot(
+    entry: ReconciledEntry,
+    slot: NPCAnimationSlot
+  ): void {
+    const host = entry.host as HostEntryData;
+    const clip = host.animationClips?.get(slot);
+    if (!host.mixer || !clip || host.activeAnimationSlot === slot) {
+      return;
+    }
+    host.activeAnimationAction?.stop();
+    const action = host.mixer.clipAction(clip);
+    action.reset();
+    action.play();
+    host.activeAnimationAction = action;
+    host.activeAnimationSlot = slot;
+  }
+
   function disposeRuntime() {
     if (animationId !== null) {
       ownerWindow.cancelAnimationFrame(animationId);
@@ -1792,6 +1821,19 @@ export function createWebRuntimeHost(
         continue;
       }
       entry.root.position.set(...snapshot.position);
+      // Same two thresholds the player uses below: walk above 0.1 m/s so a
+      // slow approach does not flicker between clips, and turn above
+      // 0.01 m/s so a standing NPC keeps the facing it was authored with.
+      setNpcAnimationSlot(
+        entry,
+        snapshot.speedMetersPerSecond > 0.1 ? "walk" : "idle"
+      );
+      if (
+        snapshot.headingRadians !== null &&
+        snapshot.speedMetersPerSecond > 0.01
+      ) {
+        entry.root.rotation.y = snapshot.headingRadians;
+      }
     }
 
     // Plan 079.3 -- sync NPC visibility from the presence reconciler each
@@ -2621,8 +2663,9 @@ export function createWebRuntimeHost(
             console.warn(`[web-runtime] ${message}`, payload)
         },
         onEntryLoaded: (entry, renderable) => {
-          // NPCs with a bound idle clip get an AnimationMixer stashed in the
-          // entry's host slot; the frame loop ticks it via npcMixer().
+          // An NPC gets one AnimationMixer plus every clip bound to it, kept
+          // in the entry's host slot. The frame loop ticks the mixer via
+          // npcMixer() and swaps slots with setNpcAnimationSlot().
           if (entry.object.kind !== "npc") {
             return;
           }
@@ -2634,40 +2677,62 @@ export function createWebRuntimeHost(
                 (d) => d.definitionId === presence.npcDefinitionId
               )
             : null;
-          const idleBindingId =
-            npcDefinition?.presentation.animationAssetBindings.idle ?? null;
-          const idleAnimDef = idleBindingId
-            ? getCharacterAnimationDefinition(
-                state.contentLibrary,
-                idleBindingId
-              )
-            : null;
-          const idleSourceUrl = idleAnimDef
-            ? state.assetSources[idleAnimDef.source.relativeAssetPath] ?? null
-            : null;
-          if (!idleSourceUrl) {
+          const bindings = npcDefinition?.presentation.animationAssetBindings;
+          if (!bindings) {
             return;
           }
-          void gltfLoader
-            .loadAsync(idleSourceUrl)
-            .then((animGltf) => {
-              const clip = animGltf.animations[0];
-              if (!clip) {
-                return;
+          const slotSources = (
+            Object.entries(bindings) as Array<[NPCAnimationSlot, string | null]>
+          ).flatMap(([slot, bindingId]) => {
+            const animDef = bindingId
+              ? getCharacterAnimationDefinition(state.contentLibrary, bindingId)
+              : null;
+            const sourceUrl = animDef
+              ? state.assetSources[animDef.source.relativeAssetPath] ?? null
+              : null;
+            return sourceUrl ? [{ slot, sourceUrl }] : [];
+          });
+          if (slotSources.length === 0) {
+            return;
+          }
+          void Promise.all(
+            slotSources.map(({ slot, sourceUrl }) =>
+              gltfLoader
+                .loadAsync(sourceUrl)
+                .then((animGltf) => ({ slot, clip: animGltf.animations[0] ?? null }))
+                .catch((error) => {
+                  // One unreadable clip must not cost the NPC the others: a
+                  // missing walk should leave it idling, not standing in its
+                  // bind pose.
+                  console.error("[web-runtime] npc-animation-load-failed", {
+                    instanceId: entry.object.instanceId,
+                    slot,
+                    sourceUrl,
+                    error
+                  });
+                  return { slot, clip: null };
+                })
+            )
+          ).then((loaded) => {
+            const clips = new Map<NPCAnimationSlot, THREE.AnimationClip>();
+            for (const { slot, clip } of loaded) {
+              if (clip) {
+                clips.set(slot, clip);
               }
-              const mixer = new THREE.AnimationMixer(renderable);
-              const action = mixer.clipAction(clip);
-              action.reset();
-              action.play();
-              (entry.host as HostEntryData).mixer = mixer;
-            })
-            .catch((error) => {
-              console.error("[web-runtime] npc-animation-load-failed", {
-                instanceId: entry.object.instanceId,
-                sourceUrl: idleSourceUrl,
-                error
-              });
-            });
+            }
+            if (clips.size === 0) {
+              return;
+            }
+            const host = entry.host as HostEntryData;
+            host.mixer = new THREE.AnimationMixer(renderable);
+            host.animationClips = clips;
+            // Start idle where it exists, otherwise whatever is bound, so an
+            // NPC with only a walk clip still animates instead of freezing.
+            setNpcAnimationSlot(
+              entry,
+              clips.has("idle") ? "idle" : [...clips.keys()][0]!
+            );
+          });
         }
       });
       renderableReconciler.reconcile(
