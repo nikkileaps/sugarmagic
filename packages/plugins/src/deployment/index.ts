@@ -90,7 +90,9 @@ export interface DeploymentConflict {
     | "missing-plugin-definition"
     | "runtime-family-split"
     | "missing-target"
-    | "unsupported-target";
+    | "unsupported-target"
+    // A declared proxy route reached no service unit, so nothing would serve it.
+    | "proxy-route-unplaced";
   message: string;
   ownerIds: string[];
   requirementIds: string[];
@@ -1373,6 +1375,26 @@ function buildServiceUnits(
     (requirement) => !sharedRequestResponse.includes(requirement)
   );
 
+  // A plugin can declare a proxy route without running a service of its own --
+  // it wants a path on the shared gateway, not a container. Every unit filters
+  // its routes by owner, and owners come from runtime-service requirements, so
+  // a route-only plugin owns no unit and its route reaches none of them. The
+  // route is then declared, generated into nothing, and 404s at runtime with
+  // the handler sitting there unreachable.
+  //
+  // These owners join the shared gateway instead. They bring their secrets and
+  // topology with them, which is what serving their route requires.
+  const serviceOwnerIds = new Set(
+    serviceRequirements.map((requirement) => requirement.ownerId)
+  );
+  const routeOnlyOwnerIds = Array.from(
+    new Set(
+      proxyRoutes
+        .map((route) => route.ownerId)
+        .filter((ownerId) => !serviceOwnerIds.has(ownerId))
+    )
+  );
+
   const sharedByRuntime = new Map<
     RuntimeServiceFamily | "unspecified",
     RuntimeServiceRequirement[]
@@ -1398,9 +1420,20 @@ function buildServiceUnits(
     });
   }
 
+  // Route-only owners land on exactly ONE shared unit, or the same route would
+  // be generated into every gateway when runtime families split.
+  const routeHostFamilyKey = sharedByRuntime.has("unspecified")
+    ? ("unspecified" as const)
+    : Array.from(sharedByRuntime.keys())[0] ?? null;
+
   const serviceUnits: DeploymentServiceUnit[] = [];
   for (const [runtimeFamilyKey, bucket] of sharedByRuntime.entries()) {
-    const ownerIds = Array.from(new Set(bucket.map((requirement) => requirement.ownerId)));
+    const ownerIds = Array.from(
+      new Set([
+        ...bucket.map((requirement) => requirement.ownerId),
+        ...(runtimeFamilyKey === routeHostFamilyKey ? routeOnlyOwnerIds : [])
+      ])
+    );
     const relatedRequirements = requirements.filter((requirement) =>
       ownerIds.includes(requirement.ownerId)
     );
@@ -1455,18 +1488,46 @@ function buildServiceUnits(
   // (those go through the bucket logic above and produce their own unit,
   // so this branch is skipped).
   if (serviceUnits.length === 0 && backendDeploymentTargetId !== null) {
+    // Route-only plugins are the reason this unit may be more than a healthz
+    // stub: with no plugin running a service, the baseline gateway is the only
+    // thing that can serve their paths.
+    const ownerIds = routeOnlyOwnerIds.length > 0 ? routeOnlyOwnerIds : ["sugardeploy"];
     serviceUnits.push({
       serviceUnitId: "sugarmagic-gateway",
       label: "Sugarmagic Gateway",
       runtimeFamily: null,
       executionModel: "request-response",
       isolation: "shared-allowed",
-      ownerIds: ["sugardeploy"],
-      requirements: [],
+      ownerIds,
+      requirements: requirements.filter((requirement) =>
+        ownerIds.includes(requirement.ownerId)
+      ),
       serviceRequirements: [],
-      secrets: [],
-      proxyRoutes: [],
-      topology: []
+      secrets: secrets.filter((requirement) => ownerIds.includes(requirement.ownerId)),
+      proxyRoutes: proxyRoutes.filter((route) => ownerIds.includes(route.ownerId)),
+      topology: topology.filter((requirement) => ownerIds.includes(requirement.ownerId))
+    });
+  }
+
+  // A route that reached no unit is generated into nothing and 404s in the
+  // running game. This is a build pass, so say so rather than shipping a
+  // gateway that silently does not answer.
+  const placedRouteIds = new Set(
+    serviceUnits.flatMap((unit) => unit.proxyRoutes.map((route) => route.requirementId))
+  );
+  const unplacedRoutes = proxyRoutes.filter(
+    (route) => !placedRouteIds.has(route.requirementId)
+  );
+  if (unplacedRoutes.length > 0) {
+    conflicts.push({
+      conflictId: "proxy-route-unplaced",
+      severity: "error",
+      kind: "proxy-route-unplaced",
+      message: `No gateway service unit can serve ${unplacedRoutes
+        .map((route) => route.pathHint ?? route.routeId)
+        .join(", ")}. Select a backend deployment target, or the declaring plugin must contribute a runtime service.`,
+      ownerIds: Array.from(new Set(unplacedRoutes.map((route) => route.ownerId))),
+      requirementIds: unplacedRoutes.map((route) => route.requirementId)
     });
   }
 
