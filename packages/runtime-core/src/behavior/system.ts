@@ -90,12 +90,26 @@ export interface RuntimeNpcCurrentTask {
   description: string | null;
 }
 
+/**
+ * How an NPC is moving right now, for whoever draws it.
+ *
+ * Measured by the system that does the moving. A renderer that instead
+ * differenced positions frame to frame would report a teleport or a
+ * save-restore as a very fast walk.
+ */
+export interface RuntimeNpcMotion {
+  speedMetersPerSecond: number;
+  /** Yaw in radians, or null until the NPC has moved at least once. */
+  headingRadians: number | null;
+}
+
 export interface RuntimeNpcBehaviorSystem {
   sync: (input: {
     deltaSeconds: number;
     activeQuest: RuntimeBehaviorQuestState | null;
   }) => RuntimeNpcBehaviorSyncResult;
   getCurrentTask: (npcDefinitionId: string) => RuntimeNpcCurrentTask | null;
+  getMotion: (npcDefinitionId: string) => RuntimeNpcMotion | null;
   reset: () => void;
   serializeSaveSlice: () => NpcBehaviorSlice;
   deserializeSaveSlice: (slice: NpcBehaviorSaveSlice | null) => void;
@@ -134,6 +148,10 @@ interface MovementState {
   lastProgressAtMs: number;
   blockedAtMs: number | null;
   status: "idle" | "en_route" | "at_target" | "blocked";
+  /** Metres per second covered last tick, measured after collision. */
+  speedMetersPerSecond: number;
+  /** Yaw the NPC was travelling along, held from the last tick it moved. */
+  headingRadians: number | null;
 }
 
 interface MovementDirective {
@@ -159,6 +177,10 @@ const MOVEMENT_PROGRESS_THRESHOLD_METERS = 0.05;
 const WAYPOINT_ARRIVAL_METERS = 0.6; // advance to the next corner within this
 const REPATH_TARGET_MOVE_METERS = 1.0; // re-path when the final target shifts
 const REPATH_DRIFT_METERS = 2.5; // re-path when collision shoved us off route
+// Below this, a tick's step is jitter rather than travel, and turning to face
+// it would spin a standing NPC. Speed still reports the real number; only the
+// heading holds.
+const HEADING_UPDATE_MIN_STEP_METERS = 0.0001;
 
 function hashString(value: string): number {
   let hash = 2166136261;
@@ -285,7 +307,9 @@ function createInitialMovementState(
     lastZ: position.z,
     lastProgressAtMs: nowMs,
     blockedAtMs: null,
-    status: "idle"
+    status: "idle",
+    speedMetersPerSecond: 0,
+    headingRadians: null
   };
 }
 
@@ -582,6 +606,13 @@ export function createRuntimeNpcBehaviorSystem(
       nowMs: now()
     });
     state = directiveResult.nextState;
+    // Standing still until this tick's locomotion says otherwise. Only the
+    // en-route branch walks, so every other outcome -- parked, blocked, no
+    // task -- reports zero without having to remember to say so.
+    //
+    // The heading is NOT cleared here: it is the way the NPC last faced, and
+    // an NPC that stops should keep facing that way rather than snap to yaw 0.
+    state.speedMetersPerSecond = 0;
 
     if (directiveResult.changed) {
       emitDebug("npc-movement-directive-changed", {
@@ -673,7 +704,29 @@ export function createRuntimeNpcBehaviorSystem(
         });
         // Plan 069.3 — resolved move (collide-and-slide + agent push-out);
         // the RESOLVED position feeds stuck-detection below.
+        //
+        // Motion for the renderer is measured across THIS call and nowhere
+        // else. It has to be the resolved step, so an NPC pinned against a
+        // prop reads as standing still rather than walking on the spot -- and
+        // it has to be only the locomotion step, because `resolveMove` also
+        // shoves agents apart, and being walked into by the player is not
+        // walking.
+        const stepFromX = position.x;
+        const stepFromZ = position.z;
         commitNpcMove(position, npc.presenceId, stepResult.x, stepResult.z);
+        const stepX = position.x - stepFromX;
+        const stepZ = position.z - stepFromZ;
+        const stepMeters = Math.sqrt(stepX * stepX + stepZ * stepZ);
+        // Capped at the walk speed: push-out inside this same resolve can
+        // carry the NPC further than it asked to go, and reporting that as
+        // speed would describe a shove as a sprint.
+        state.speedMetersPerSecond =
+          deltaSeconds > 0
+            ? Math.min(stepMeters / deltaSeconds, movementSpeedMetersPerSecond)
+            : 0;
+        if (stepMeters > HEADING_UPDATE_MIN_STEP_METERS) {
+          state.headingRadians = Math.atan2(stepX, stepZ);
+        }
         state.status = "en_route";
         advanceWaypoints(npc.npcDefinitionId, position);
 
@@ -770,6 +823,16 @@ export function createRuntimeNpcBehaviorSystem(
     getCurrentTask(npcDefinitionId) {
       return currentTaskByNpcId.get(npcDefinitionId) ?? null;
     },
+    getMotion(npcDefinitionId) {
+      const state = movementStateByNpcId.get(npcDefinitionId);
+      if (!state) {
+        return null;
+      }
+      return {
+        speedMetersPerSecond: state.speedMetersPerSecond,
+        headingRadians: state.headingRadians
+      };
+    },
     reset() {
       movementStateByNpcId.clear();
       currentTaskByNpcId.clear();
@@ -846,7 +909,12 @@ export function createRuntimeNpcBehaviorSystem(
           lastZ: saved.position.z,
           lastProgressAtMs: nowMs,
           blockedAtMs: null,
-          status: saved.status
+          status: saved.status,
+          // Motion is not persisted: a restored NPC is standing still until
+          // it takes its first step, and a saved heading would face it along
+          // a walk that finished in the previous session.
+          speedMetersPerSecond: 0,
+          headingRadians: null
         });
       }
     }

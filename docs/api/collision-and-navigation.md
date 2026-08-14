@@ -92,6 +92,36 @@ region-global — a runtime playing a different Scene paths against the baked
 Scene's obstacle set. Rebake per Scene as needed; per-Scene artifacts are a
 deferred seam.
 
+## NPC motion for the renderer
+
+`getMotion(npcDefinitionId)` on the behavior system returns `RuntimeNpcMotion`
+(`behavior/system.ts`) — `speedMetersPerSecond` plus `headingRadians`, or `null`
+for an NPC the system has not ticked. It is how a renderer knows to play the
+walk clip and which way to face; `getCurrentTask` answers a different question
+(what the NPC is doing) and the blackboard's `EntityMovementFact` a third
+(target area, status, distance).
+
+Both values are measured **only across the en-route locomotion step**, from the
+position `resolveMove` actually resolved:
+
+- Measuring the resolved step, not the requested one, means an NPC pinned
+  against a prop reports ~0 rather than walking on the spot.
+- Measuring only the en-route step means displacement that is not locomotion
+  never counts. `resolveMove` also shoves overlapping agents apart, and the
+  arrival branch snaps the NPC onto its target point; neither is walking, and
+  both used to read as speeds far above the walk speed.
+- Speed is capped at `movementSpeedMetersPerSecond`, since push-out inside the
+  same resolve can carry an NPC further than it asked to go.
+- `headingRadians` is **held** when the NPC stops, so an NPC that arrives keeps
+  facing the way it travelled instead of snapping to yaw 0. It is `null` until
+  the NPC first moves, and is not persisted — a restored NPC starts at rest
+  with no heading.
+
+The web host consumes it in `runtimeHost.ts`: above 0.1 m/s it plays the `walk`
+slot, otherwise `idle`; above 0.01 m/s it writes `root.rotation.y`. Asking for a
+slot an NPC has no clip bound for leaves the current clip playing, so an
+idle-only NPC keeps idling rather than freezing in its bind pose.
+
 ## Deferred seams
 
 Commented in-code with revisit triggers (grep `DEFERRED SEAM`): vertical/terrain

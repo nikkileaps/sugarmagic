@@ -331,6 +331,10 @@ export interface RuntimeGameplaySessionController {
     presenceId: string;
     npcDefinitionId: string;
     position: [number, number, number];
+    /** Metres per second, for picking the animation slot to play. */
+    speedMetersPerSecond: number;
+    /** Yaw to face, or null while the NPC has never moved. */
+    headingRadians: number | null;
   }>;
   /** Plan 079.2 -- true when the presence's condition is satisfied (or the
    *  presence has no condition). False while the ECS entity is despawned. */
@@ -2517,6 +2521,10 @@ export function createRuntimeGameplaySessionController(
           if (!position) {
             return [];
           }
+          // Null for an NPC the behavior system has not ticked yet, and for
+          // every NPC in a region with no behaviors at all. Standing still is
+          // the right answer in both cases.
+          const motion = npcBehaviorSystem?.getMotion(entry.npcDefinitionId) ?? null;
           return [
             {
               presenceId,
@@ -2525,7 +2533,9 @@ export function createRuntimeGameplaySessionController(
                 number,
                 number,
                 number
-              ]
+              ],
+              speedMetersPerSecond: motion?.speedMetersPerSecond ?? 0,
+              headingRadians: motion?.headingRadians ?? null
             }
           ];
         }
