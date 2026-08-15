@@ -63,6 +63,110 @@ function baseContext(
   };
 }
 
+describe("judgeContext — the judge is given what the writer was given (#185)", () => {
+  it("carries the writer's own core knowledge, not a persona summary of it", () => {
+    const { judgeContext } = buildGeneratePrompt(baseContext());
+    // The specific failure: the judge held four lines of persona and no core
+    // knowledge, so an NPC stating its own occupation looked like invention.
+    expect(judgeContext).toContain("Runs the bakery on the square.");
+    expect(judgeContext).toContain("Warm, brisk, proud.");
+  });
+
+  it("carries the conversation so far, so a callback is not read as invention", () => {
+    const { judgeContext } = buildGeneratePrompt(
+      baseContext({
+        recentHistory: [
+          { role: "user", text: "I love a good sourdough." },
+          { role: "assistant", text: "Then you have come to the right stall, love." }
+        ]
+      })
+    );
+    expect(judgeContext).toContain("I love a good sourdough.");
+  });
+
+  it("carries what the player just said", () => {
+    const { judgeContext } = buildGeneratePrompt(
+      baseContext({ playerText: "Do you sell the soft one?" })
+    );
+    expect(judgeContext).toContain("Player said: Do you sell the soft one?");
+  });
+
+  it("withholds the writer's brief", () => {
+    // THE POINT OF THE SPLIT. A judge shown these can excuse a bad reply on the
+    // grounds that it was told to be brief, generic, or to abstain.
+    const { userPrompt, judgeContext } = buildGeneratePrompt(
+      baseContext({ responseIntent: "abstain", responseSpecificity: "generic" })
+    );
+    for (const brief of [
+      "Goal:",
+      "Intent:",
+      "Turn path:",
+      "State clearly that you do not know enough",
+      "Keep the reply generic, in-character, and low-specificity."
+    ]) {
+      expect(userPrompt).toContain(brief);
+      expect(judgeContext).not.toContain(brief);
+    }
+  });
+
+  it("withholds the language overlay, which is a phrasing directive", () => {
+    const ctx = baseContext({
+      languageLearningOverlay: "Language constraint: about 30% Spanish."
+    });
+    expect(buildGeneratePrompt(ctx).userPrompt).toContain("Language constraint:");
+    expect(buildGeneratePrompt(ctx).judgeContext).not.toContain("Language constraint:");
+  });
+
+  it("the opening turn contributes nothing to the judge, having no player text", () => {
+    // The no-player-text branch of that slot is an instruction about how to
+    // open, not a fact, so it must not cross.
+    const { judgeContext } = buildGeneratePrompt(baseContext({ playerText: null }));
+    expect(judgeContext).not.toContain("This is the opening turn.");
+  });
+
+  it("carries the facts out of the system half", () => {
+    const { judgeContext } = buildGeneratePrompt(baseContext());
+    expect(judgeContext).toContain("Speak as Maren.");
+    expect(judgeContext).toContain("Who you are (persona):");
+    expect(judgeContext).toContain("What you know (your life and immediate world):");
+    expect(judgeContext).toContain("Short sentences; says 'love'."); // voice
+  });
+
+  it("carries the memory digest, which only the judge could not see before", () => {
+    const { judgeContext } = buildGeneratePrompt(
+      baseContext({ memoryDigest: "You remember: Mim cannot stand blue cheese." })
+    );
+    expect(judgeContext).toContain("Mim cannot stand blue cheese.");
+  });
+
+  it("withholds the brief that lives in the SYSTEM half", () => {
+    // The first version of this change passed the system half through whole on
+    // the assumption it was facts throughout. It is not: the formatting rules
+    // and the five grounding rules are instructions to the writer.
+    const { systemPrompt, judgeContext } = buildGeneratePrompt(baseContext());
+    for (const brief of [
+      "Return only the NPC's spoken words.",
+      "Do not include stage directions",
+      "Interaction mode:",
+      "Use only the provided evidence",
+      "Do not introduce institutions, locations, factions"
+    ]) {
+      expect(systemPrompt).toContain(brief);
+      expect(judgeContext).not.toContain(brief);
+    }
+  });
+
+  it("THE POINTED ONE: the judge is not told an NPC may refuse when context is thin", () => {
+    // "If grounded context is insufficient, ask a clarifying question or say
+    // you do not know enough yet" is an excuse for exactly the refusal in #184.
+    // A judge holding it can wave that refusal through.
+    const { systemPrompt, judgeContext } = buildGeneratePrompt(baseContext());
+    const excuse = "If grounded context is insufficient";
+    expect(systemPrompt).toContain(excuse);
+    expect(judgeContext).not.toContain(excuse);
+  });
+});
+
 describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
   it("puts persona card, core knowledge, and voice directive in the system prompt", () => {
     const { systemPrompt } = buildGeneratePrompt(baseContext());

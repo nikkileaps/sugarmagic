@@ -7,6 +7,11 @@
  * they can be inspected programmatically (by a dev in devtools, or by an
  * automated browser session) without scrolling the console.
  *
+ * The judge's context is printed here too, from the same dump, because it is
+ * built in the same place and the interesting question is what the judge was
+ * NOT given. Only the part that differs is printed -- the system half is
+ * identical and already above it.
+ *
  * Exports:
  *   - SUGARAGENT_PROMPTS_WINDOW_KEY
  *   - dumpConstructedPrompt
@@ -26,6 +31,8 @@ export interface ConstructedPromptDump {
   npcDisplayName: string;
   systemPrompt: string;
   userPrompt: string;
+  /** What the judge is given: the system half plus the FACTS from the user half. */
+  judgeContext: string;
   /** Milliseconds; the caller stamps it so this module stays side-effect free. */
   at: number;
 }
@@ -34,7 +41,19 @@ interface DumpArgs {
   npcDisplayName: string;
   systemPrompt: string;
   userPrompt: string;
+  judgeContext: string;
   enabled: boolean;
+}
+
+/**
+ * The judge's user half: what is left after the system prompt it shares with
+ * the writer. Printing the whole context would repeat the system half a second
+ * time for no gain -- the readable question is which per-turn lines crossed.
+ */
+function judgeUserHalf(systemPrompt: string, judgeContext: string): string {
+  return judgeContext.startsWith(systemPrompt)
+    ? judgeContext.slice(systemPrompt.length).trim()
+    : judgeContext;
 }
 
 /**
@@ -48,6 +67,7 @@ export function dumpConstructedPrompt(args: DumpArgs): void {
     npcDisplayName: args.npcDisplayName,
     systemPrompt: args.systemPrompt,
     userPrompt: args.userPrompt,
+    judgeContext: args.judgeContext,
     at: Date.now()
   };
 
@@ -56,7 +76,9 @@ export function dumpConstructedPrompt(args: DumpArgs): void {
     console.debug(
       `[sugaragent] generate:prompt (${args.npcDisplayName})\n` +
         `=== SYSTEM ===\n${args.systemPrompt}\n` +
-        `=== USER ===\n${args.userPrompt}`
+        `=== USER ===\n${args.userPrompt}\n` +
+        `=== JUDGE SEES (same SYSTEM as above, plus these) ===\n` +
+        judgeUserHalf(args.systemPrompt, args.judgeContext)
     );
   } catch {
     // ignore console failures

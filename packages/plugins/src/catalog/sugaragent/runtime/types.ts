@@ -137,13 +137,6 @@ export interface SugarAgentPluginConfig {
    * initial value is version-controlled; fast updates bypass this path.
    */
   blocklist: string;
-  /**
-   * Plan 075 -- short author-written description of the game world, sent to
-   * the judge so WORLD-GROUNDED checks against the actual setting rather than
-   * generic RPG assumptions. Optional; leave empty to omit the world premise
-   * block from the judge prompt.
-   */
-  worldPremise: string;
 }
 
 export interface SugarAgentSessionHistoryEntry {
@@ -362,6 +355,14 @@ export interface GenerateResult {
   llmBackend: "anthropic" | "deterministic";
   actionProposals: ConversationActionProposal[];
   envelopeOverride?: ConversationTurnEnvelope;
+  /**
+   * The text the writer was given, carried forward so the judge scores against
+   * the same grounding rather than a smaller reconstruction of it (#185).
+   *
+   * Absent on the deterministic paths, which build no prompt. JudgeStage skips
+   * those turns anyway (`usedLlm === false`), so the two agree by construction.
+   */
+  judgeContext?: string;
 }
 
 export interface AuditResult {

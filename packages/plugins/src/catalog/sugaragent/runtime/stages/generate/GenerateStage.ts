@@ -186,6 +186,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
     let systemPromptPreview = "";
     let systemPrompt = "";
     let userPrompt = "";
+    let judgeContext = "";
     let retryCount = 0;
     // Plan 072.7 — usage + model actually used, surfaced in diagnostics.
     let turnUsage: {
@@ -391,6 +392,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       const prompts = buildGeneratePrompt(promptContext);
       systemPrompt = prompts.systemPrompt;
       userPrompt = prompts.userPrompt;
+      judgeContext = prompts.judgeContext;
       systemPromptPreview = systemPrompt.slice(0, 220);
 
       // Plan 072.4 — troubleshooting dump (console + window.__sugaragentPrompts),
@@ -399,6 +401,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         npcDisplayName,
         systemPrompt,
         userPrompt,
+        judgeContext,
         enabled: context.config.debugLogging
       });
 
@@ -463,6 +466,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       text,
       usedLlm: llmBackend === "anthropic",
       llmBackend,
+      ...(judgeContext ? { judgeContext } : {}),
       actionProposals:
         fallbackReason === "llm-retry-exhausted"
           ? [

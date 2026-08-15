@@ -1498,18 +1498,30 @@ export async function handleSugarAgentGenerate(
 // ---------------------------------------------------------------------------
 
 /**
- * Plan 084.2 -- pure helper, exported for testability.
- * Builds the judge user prompt. When externalDirectives are present, a
- * directive block is spliced after the persona summary; rubric 1 gains a
- * guard sentence; the block closes with a SAFETY-override prohibition so a
- * directive can never soften rubric 3.
+ * Pure helper, exported for testability.
+ *
+ * `context` is what the writer KNEW this turn, taken from the writer's own
+ * prompt build: identity, core knowledge, memory, retrieved evidence, world
+ * state and the conversation. NOT the writer's brief -- a judge shown the
+ * per-turn instructions can excuse a bad reply on the grounds that it was told
+ * to be brief, or generic, or to abstain, and the brief is not evidence the
+ * reply could be checked against.
+ *
+ * This function used to take five pieces of that and assemble a smaller
+ * substitute -- a four-line persona summary, the retrieved evidence, the world
+ * premise -- with no core knowledge, no memory and no conversation. The judge
+ * then failed true statements as inventions, because it had never been told
+ * they were true (#185).
+ *
+ * The reply and rubric go AFTER the context, so the stable head of the prompt
+ * leads.
+ *
+ * When externalDirectives are present a directive block is spliced in before
+ * the reply, rubric 1 gains a guard sentence, and the block closes with a
+ * SAFETY-override prohibition so a directive can never soften rubric 3.
  */
 export function buildJudgeUserPrompt(
-  worldPremise: string,
-  personaDigest: string,
-  responseIntent: string,
-  worldContext: string | null,
-  loreContextLines: string,
+  context: string,
   replyText: string,
   externalDirectives: string[]
 ): string {
@@ -1546,16 +1558,13 @@ export function buildJudgeUserPrompt(
       : "";
 
   return (
-    (worldPremise ? `World premise:\n${worldPremise}\n\n` : "") +
-    `NPC persona summary (this is the NPC's established identity — treat all facts here as in-world):\n${personaDigest || "(none)"}\n\n` +
+    `Everything below, up to the reply, is what the NPC knew when it wrote this turn -- its identity, what it knows, what it remembers, what was retrieved for it, and the conversation so far. Treat every fact stated in it as true in this world.\n\n` +
+    `${context}\n\n` +
     directivesBlock +
-    `Response intent: ${responseIntent}\n\n` +
-    (worldContext ? `World context right now:\n${worldContext}\n\n` : "") +
-    (loreContextLines ? `Lore context available to this NPC:\n${loreContextLines}\n\n` : "") +
     `NPC reply to score:\n"${replyText}"\n\n` +
     `Rubric (each must PASS for overall pass):\n` +
     `1. IN-CHARACTER: The reply matches the NPC persona voice, temperament, and knowledge level.${inCharacterGuard}\n` +
-    `2. WORLD-GROUNDED: The reply does not introduce facts incompatible with the world premise or the NPC persona. Facts stated in either are established and must not be flagged as violations.\n` +
+    `2. WORLD-GROUNDED: The reply does not introduce facts incompatible with what the NPC knew, above. Anything stated there is established and must not be flagged as a violation.\n` +
     `3. SAFETY: No out-of-character references to the real world, game mechanics, AI/developer, or secrets.\n\n` +
     languageBlock +
     `Use the score_reply tool.`
@@ -1670,17 +1679,8 @@ export async function handleSugarAgentJudge(
   const body = await readJsonBody(req);
   const replyText =
     typeof body["replyText"] === "string" ? body["replyText"].trim() : "";
-  const personaDigest =
-    typeof body["personaDigest"] === "string" ? body["personaDigest"].trim() : "";
-  const responseIntent =
-    typeof body["responseIntent"] === "string" ? body["responseIntent"].trim() : "chat";
-  const worldContext =
-    typeof body["worldContext"] === "string" ? body["worldContext"].trim() : null;
-  const rawLoreContext = Array.isArray(body["loreContextSummary"])
-    ? (body["loreContextSummary"] as unknown[]).filter((e): e is string => typeof e === "string")
-    : [];
-  const worldPremise =
-    typeof body["worldPremise"] === "string" ? body["worldPremise"].trim() : "";
+  const judgeContext =
+    typeof body["context"] === "string" ? body["context"].trim() : "";
   const externalDirectives = Array.isArray(body["externalDirectives"])
     ? (body["externalDirectives"] as unknown[]).filter((e): e is string => typeof e === "string")
     : [];
@@ -1690,19 +1690,26 @@ export async function handleSugarAgentJudge(
     return;
   }
 
+  // REQUIRED, NOT DEFAULTED. A missing context used to be survivable because
+  // the route rebuilt its own from other fields; that second assembly is what
+  // #185 removed. Defaulting to "" here would restore the old behavior in its
+  // worst form -- a judge scoring groundedness against nothing at all, silently.
+  // A client that has not been deployed alongside this gateway must fail loud.
+  if (!judgeContext) {
+    sendJson(res, 400, {
+      ok: false,
+      error: "InvalidRequest",
+      message:
+        "context is required: send the prompt the generator was given (GeneratePromptResult.judgeContext)."
+    });
+    return;
+  }
+
   const model = resolveEnv("SUGARMAGIC_SUGARAGENT_JUDGE_MODEL", "claude-haiku-4-5");
   const baseUrl = resolveEnv("SUGARMAGIC_SUGARAGENT_JUDGE_BASE_URL", "https://api.anthropic.com");
 
-  const loreContextLines = rawLoreContext
-    .map((e, i) => `[${i + 1}] ${e.slice(0, 300)}`)
-    .join("\n");
-
   const judgeUserPrompt = buildJudgeUserPrompt(
-    worldPremise,
-    personaDigest,
-    responseIntent,
-    worldContext,
-    loreContextLines,
+    judgeContext,
     replyText,
     externalDirectives
   );
@@ -1716,7 +1723,7 @@ export async function handleSugarAgentJudge(
   const judgeSystemPrompt =
     "You are a quality reviewer for NPC dialogue in a cozy fantasy RPG. " +
     "Score the NPC reply strictly against the rubric. " +
-    "The world premise and NPC persona define what is real in this world — any fact stated there is in-world by definition and must never be flagged as a violation. " +
+    "The context you are shown is what the NPC knew when it wrote the reply — any fact stated there is in-world by definition and must never be flagged as a violation. " +
     "Flag any violation that a player would notice as immersion-breaking or unsafe. " +
     "Be strict on SAFETY; be reasonable on IN-CHARACTER (minor voice slips are ok if the content is sound).";
 
@@ -1814,7 +1821,10 @@ export async function handleSugarAgentJudge(
     languageNote,
     model,
     durationMs: Date.now() - startedAt,
-    responseIntent
+    // How much grounding the judge actually held. The failure this route was
+    // built wrong around -- scoring a reply against far less than the writer
+    // saw -- is invisible in a verdict but obvious in this number (#185).
+    contextChars: judgeContext.length
   });
 
   const judgeUsage = (payload as { usage?: Record<string, unknown> }).usage ?? {};
