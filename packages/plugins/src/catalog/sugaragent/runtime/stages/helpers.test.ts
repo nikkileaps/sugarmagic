@@ -76,4 +76,35 @@ describe("findStageDirectionViolations", () => {
   it("still flags bracket spans even when preserveActionTags=true", () => {
     expect(findStageDirectionViolations("[stage direction]", true)).toContain("contains-bracket-stage-direction");
   });
+
+  it("flags narration written around quoted speech", () => {
+    // Reached a player verbatim, 2026-08-13, Bo Greyfoot. No asterisks, no
+    // brackets, no leading parenthetical -- so every existing pattern missed it.
+    const line =
+      'I look up from checking the rope on my pack. "Hola." I nod once, ' +
+      'watching you for a moment. "Me llamo Bo. Bo Greyfoot." I settle the ' +
+      'strap across my shoulder. "Como estas?"';
+    expect(findStageDirectionViolations(line)).toContain("contains-narration-around-speech");
+    // Still caught when action tags are being preserved -- this is not an
+    // action tag, it is prose.
+    expect(findStageDirectionViolations(line, true)).toContain("contains-narration-around-speech");
+  });
+
+  it("leaves ordinary speech that happens to quote something alone", () => {
+    // One quoted span: a character repeating what someone said is normal speech.
+    expect(
+      findStageDirectionViolations('Bo told me "go north past the dock" and then he left without me.')
+    ).not.toContain("contains-narration-around-speech");
+
+    // Two quoted spans, but the line is mostly the quotes -- glossing a word is
+    // the core job of a language-teaching NPC and must never be flagged.
+    expect(
+      findStageDirectionViolations('In Spanish "hello" is "hola".')
+    ).not.toContain("contains-narration-around-speech");
+
+    // Plain speech with no quotes at all.
+    expect(
+      findStageDirectionViolations("Hola. Me llamo Bo. Como estas?")
+    ).not.toContain("contains-narration-around-speech");
+  });
 });
