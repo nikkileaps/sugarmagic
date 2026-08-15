@@ -20,6 +20,46 @@ const STAGE_DIRECTION_PATTERNS: Array<{ violation: string; pattern: RegExp }> = 
   { violation: "contains-parenthetical-stage-direction", pattern: /^\s*\([^)]{2,}\)\s*/m }
 ];
 
+/** Straight and curly double quotes, as a model may emit either. */
+const QUOTED_SPAN = /["“]([^"“”]+)["”]/g;
+
+/**
+ * Narration written AROUND quoted speech, the way a novel renders dialogue:
+ *
+ *   I look up from checking the rope. "Hola." I nod once. "Me llamo Bo."
+ *
+ * Marked-up stage directions are caught by the patterns above. This shape uses
+ * no markers at all -- ordinary sentences with quotation marks -- so it reached
+ * a player unflagged.
+ *
+ * DELIBERATELY NARROW, because the alternative is rejecting good lines. An NPC
+ * may legitimately quote something once ("he told me \"go north\""), and in a
+ * language-teaching game may legitimately gloss a word (In Spanish "hello" is
+ * "hola"). Both are normal speech. Three conditions must hold together before
+ * this is called narration:
+ *
+ *   1. two or more quoted spans -- a single quote is ordinary speech
+ *   2. the unquoted remainder is the MAJORITY of the line
+ *   3. that remainder is long enough to be prose rather than connecting words
+ *
+ * The gloss example fails 2 and 3; a single quotation fails 1. Bo's line above
+ * fails all three tests in the other direction: three spans, two thirds of the
+ * text outside them, a hundred characters of it.
+ */
+const NARRATION_MIN_UNQUOTED_CHARS = 40;
+
+function findNarrationAroundSpeech(text: string): boolean {
+  const spans = [...text.matchAll(QUOTED_SPAN)];
+  if (spans.length < 2) {
+    return false;
+  }
+  const quotedChars = spans.reduce((total, span) => total + span[0].length, 0);
+  const unquotedChars = text.trim().length - quotedChars;
+  return (
+    unquotedChars >= NARRATION_MIN_UNQUOTED_CHARS && unquotedChars > quotedChars
+  );
+}
+
 export interface EvidenceBudget {
   /** Max number of evidence items to forward. */
   maxItems: number;
@@ -85,9 +125,13 @@ export function findStageDirectionViolations(text: string, preserveActionTags?: 
   const patterns = preserveActionTags
     ? STAGE_DIRECTION_PATTERNS.filter((e) => e.violation !== "contains-asterisk-stage-direction")
     : STAGE_DIRECTION_PATTERNS;
-  return patterns
+  const violations = patterns
     .filter((entry) => entry.pattern.test(text))
     .map((entry) => entry.violation);
+  if (findNarrationAroundSpeech(text)) {
+    violations.push("contains-narration-around-speech");
+  }
+  return violations;
 }
 
 export function findGenericOnlyViolations(text: string): string[] {

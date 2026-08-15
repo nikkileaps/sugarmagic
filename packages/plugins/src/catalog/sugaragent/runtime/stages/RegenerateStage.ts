@@ -26,6 +26,7 @@ import {
   findStageDirectionViolations,
   normalizeNpcSpeech
 } from "./helpers";
+import { SPOKEN_WORDS_ONLY_RULES } from "./generate/prompt/template";
 import type {
   AuditResult,
   GenerateResult,
@@ -216,8 +217,13 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
 
     const npcDisplayName = input.execution.selection.npcDisplayName ?? "the NPC";
     const personaDigest = input.state.persona?.digest ?? "";
+    // The output-format rules come from the same constant the first attempt
+    // uses. Restating them here in different words is how a rewrite ended up
+    // being the only path that never said "spoken words only".
     const regenSystemPrompt =
       `Speak as ${npcDisplayName}. ` +
+      SPOKEN_WORDS_ONLY_RULES.join(" ") +
+      " " +
       (personaDigest ? personaDigest + "\n\n" : "") +
       "You are rewriting a previous reply that failed a quality check. " +
       "Stay completely in character. Use only facts you plausibly know. " +

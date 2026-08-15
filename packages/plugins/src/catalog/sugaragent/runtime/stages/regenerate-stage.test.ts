@@ -17,6 +17,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { RegenerateStage } from "./RegenerateStage";
+import { SPOKEN_WORDS_ONLY_RULES } from "./generate/prompt/template";
 import type { LLMProvider } from "../clients";
 
 function makeContext() {
@@ -248,6 +249,47 @@ describe("RegenerateStage", () => {
     expect(result.output.llmBackend).toBe("anthropic");
     expect(result.status).toBe("ok");
     expect(llmProvider.generateStructuredTurn).toHaveBeenCalledOnce();
+  });
+
+  it("tells the rewrite to return only spoken words", async () => {
+    // The rewrite prompt is built separately from the first attempt's, and used
+    // to omit this rule entirely -- which is how prose narration reached a
+    // player. Assert against the shared constant so the two cannot drift again.
+    const llmProvider = makeLlmProvider("Hola. Me llamo Bo.");
+    const stage = new RegenerateStage(llmProvider);
+    const input = makeInput({
+      auditPassed: true,
+      judgePassed: false,
+      violations: ["IN-CHARACTER"],
+      repairHint: null
+    });
+    await stage.execute(input as never, makeContext() as never);
+
+    const call = (llmProvider.generateStructuredTurn as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    for (const rule of SPOKEN_WORDS_ONLY_RULES) {
+      expect(call.systemPrompt).toContain(rule);
+    }
+  });
+
+  it("rejects a rewrite that comes back as narration around quoted speech", async () => {
+    const llmProvider = makeLlmProvider(
+      'I look up from checking the rope on my pack. "Hola." I nod once, ' +
+        'watching you for a moment. "Me llamo Bo. Bo Greyfoot." I settle the ' +
+        'strap across my shoulder. "Como estas?"'
+    );
+    const stage = new RegenerateStage(llmProvider);
+    const input = makeInput({
+      auditPassed: true,
+      judgePassed: false,
+      violations: ["IN-CHARACTER"],
+      repairHint: null
+    });
+    const result = await stage.execute(input as never, makeContext() as never);
+
+    // The re-lint catches it, so the player gets the deterministic fallback
+    // rather than a novel excerpt.
+    expect(result.output.text).not.toContain("I nod once");
+    expect(result.output.llmBackend).toBe("deterministic");
   });
 
   it("falls back deterministically when regen text still fails re-lint", async () => {

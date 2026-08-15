@@ -30,13 +30,27 @@
  */
 
 /**
+ * What the reply must LOOK like: speech and nothing else.
+ *
+ * Separate from the identity block because every path that asks a model for an
+ * NPC line has to say this, not just the first attempt. A rewrite that omits it
+ * comes back as prose narration around quoted speech, which reads as a novel
+ * excerpt and reaches the player.
+ *
+ * No slots, so it can be dropped into any prompt as-is.
+ */
+export const SPOKEN_WORDS_ONLY_RULES = [
+  "Return only the NPC's spoken words.",
+  "Do not include stage directions, action narration, scene description, asterisks, bracketed cues, or quoted dialogue wrappers."
+] as const;
+
+/**
  * Core NPC identity and output format rules. Always present.
  * Slot: {npcDisplayName}, {interactionMode}
  */
 export const SYSTEM_PROMPT_IDENTITY = [
   "Speak as {npcDisplayName}.",
-  "Return only the NPC's spoken words.",
-  "Do not include stage directions, action narration, scene description, asterisks, bracketed cues, or quoted dialogue wrappers.",
+  ...SPOKEN_WORDS_ONLY_RULES,
   "Interaction mode: {interactionMode}."
 ] as const;
 
