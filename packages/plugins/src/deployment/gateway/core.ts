@@ -237,6 +237,64 @@ export function logInfo(message: string, payload?: unknown): void {
   console.log("[sugardeploy] " + message + suffix);
 }
 
+/**
+ * The caller's id, when the auth gate verified one.
+ *
+ * The gate assigns `req.user` from the Supabase JWT before any route
+ * dispatches, so every gameplay request carries it. Only the id is read: the
+ * verifier also returns `email`, and an email address has no business in a
+ * log line.
+ */
+function callerUserId(req: IncomingMessage): string | null {
+  // The auth gate is injected into this file at build time and widens the
+  // request; IncomingMessage itself has no `user`.
+  const user = (req as IncomingMessage & { user?: { userId?: unknown } }).user;
+  return typeof user?.userId === "string" ? user.userId : null;
+}
+
+/**
+ * One line per paid vendor call, so spend can be attributed to a day, a user
+ * and a purpose instead of arriving as one number at the end of the month.
+ *
+ * NEVER IN THE REQUEST PATH. A turn must not wait on its own measurement, so
+ * the write is deferred with `setImmediate`: the handler finishes and sends
+ * its response on the current tick, and this runs after. It also swallows its
+ * own failures, because a logging fault must not cost a player their turn.
+ *
+ * RAW COUNTS, NEVER A COMPUTED COST. Prices change, and a dollar figure
+ * written into a log cannot be recomputed later. Cost is a multiplication done
+ * at read time against a price table.
+ *
+ * `kind` matches the shape sugarlang telemetry already writes here, so both
+ * are queryable the same way (`jsonPayload.kind`).
+ */
+export function logModelUsage(usage: {
+  vendor: "anthropic" | "openai";
+  purpose: string;
+  model?: string | null;
+  userId?: string | null;
+  latencyMs: number;
+  ok: boolean;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+}): void {
+  setImmediate(() => {
+    try {
+      process.stdout.write(
+        JSON.stringify({
+          kind: "gateway.model-usage",
+          timestamp: Date.now(),
+          ...usage
+        }) + "\n"
+      );
+    } catch {
+      // Measurement must never take gameplay down with it.
+    }
+  });
+}
+
 export function logError(message: string, error: unknown, payload?: Record<string, unknown>): void {
   const details = {
     ...(payload && typeof payload === "object" ? payload : {}),
@@ -1351,6 +1409,7 @@ export async function handleSugarAgentGenerate(
       }))
     : systemPrompt;
 
+  const generateStartedAt = Date.now();
   const { payload, headers } = await requestJson(
     "https://api.anthropic.com/v1/messages",
     {
@@ -1403,6 +1462,19 @@ export async function handleSugarAgentGenerate(
     (payload as { model: string }).model.trim().length > 0
       ? (payload as { model: string }).model
       : model;
+
+  logModelUsage({
+    vendor: "anthropic",
+    purpose: purpose || "generate",
+    model: servedModel,
+    userId: callerUserId(req),
+    latencyMs: Date.now() - generateStartedAt,
+    ok: true,
+    inputTokens: usageNumber("input_tokens"),
+    outputTokens: usageNumber("output_tokens"),
+    cacheReadInputTokens: usageNumber("cache_read_input_tokens"),
+    cacheCreationInputTokens: usageNumber("cache_creation_input_tokens")
+  });
 
   sendJson(res, 200, {
     text,
@@ -1745,6 +1817,24 @@ export async function handleSugarAgentJudge(
     responseIntent
   });
 
+  const judgeUsage = (payload as { usage?: Record<string, unknown> }).usage ?? {};
+  const judgeUsageNumber = (key: string): number => {
+    const value = judgeUsage[key];
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  };
+  logModelUsage({
+    vendor: "anthropic",
+    purpose: "judge",
+    model,
+    userId: callerUserId(req),
+    latencyMs: Date.now() - startedAt,
+    ok: true,
+    inputTokens: judgeUsageNumber("input_tokens"),
+    outputTokens: judgeUsageNumber("output_tokens"),
+    cacheReadInputTokens: judgeUsageNumber("cache_read_input_tokens"),
+    cacheCreationInputTokens: judgeUsageNumber("cache_creation_input_tokens")
+  });
+
   sendJson(res, 200, {
     passed,
     violations,
@@ -1830,6 +1920,16 @@ export async function handleSugarAgentModerate(
       logInfo("sugaragent.moderation-flagged", { categories, durationMs: Date.now() - startedAt });
     }
 
+    // No token counts: moderation is priced per call, not per token, so the
+    // call count is the whole measurement.
+    logModelUsage({
+      vendor: "openai",
+      purpose: "moderation",
+      userId: callerUserId(req),
+      latencyMs: Date.now() - startedAt,
+      ok: true
+    });
+
     sendJson(res, 200, { flagged, categories, blocklisted: false });
   } catch (error) {
     logError("sugaragent.moderation-error", error, {
@@ -1887,6 +1987,7 @@ export async function handleSugarAgentSearch(
     return;
   }
 
+  const searchStartedAt = Date.now();
   const { payload, headers } = await requestJson(
     "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/search",
     {
@@ -1927,6 +2028,16 @@ export async function handleSugarAgentSearch(
           : ""
       }))
     : [];
+
+  // Vector search is priced per query, so again the call count is the
+  // measurement and there are no tokens to report.
+  logModelUsage({
+    vendor: "openai",
+    purpose: "lore-search",
+    userId: callerUserId(req),
+    latencyMs: Date.now() - searchStartedAt,
+    ok: true
+  });
 
   sendJson(res, 200, {
     results,
