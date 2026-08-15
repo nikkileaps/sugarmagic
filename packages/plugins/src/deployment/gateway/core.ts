@@ -1723,7 +1723,7 @@ export async function handleSugarAgentJudge(
   const judgeSystemPrompt =
     "You are a quality reviewer for NPC dialogue in a cozy fantasy RPG. " +
     "Score the NPC reply strictly against the rubric. " +
-    "The world premise and NPC persona define what is real in this world — any fact stated there is in-world by definition and must never be flagged as a violation. " +
+    "The context you are shown is what the NPC knew when it wrote the reply — any fact stated there is in-world by definition and must never be flagged as a violation. " +
     "Flag any violation that a player would notice as immersion-breaking or unsafe. " +
     "Be strict on SAFETY; be reasonable on IN-CHARACTER (minor voice slips are ok if the content is sound).";
 

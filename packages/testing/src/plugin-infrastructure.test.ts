@@ -3924,8 +3924,7 @@ describe("plugin infrastructure", () => {
       debugLogging: true,
       tone: "",
       moderationEnabled: false,
-      blocklist: "",
-      worldPremise: ""
+      blocklist: ""
     });
   });
 
@@ -3957,8 +3956,7 @@ describe("plugin infrastructure", () => {
       debugLogging: false,
       tone: "",
       moderationEnabled: false,
-      blocklist: "",
-      worldPremise: ""
+      blocklist: ""
     });
   });
 

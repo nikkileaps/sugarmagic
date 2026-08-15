@@ -74,15 +74,18 @@ const fact = (text: string | null): PromptPart | null =>
 const instruction = (text: string | null): PromptPart | null =>
   text === null ? null : { text, kind: "instruction" };
 
-function renderParts(parts: (PromptPart | null)[]): string {
+function renderParts(parts: (PromptPart | null)[], separator: string): string {
   return parts
     .filter((part): part is PromptPart => part !== null)
     .map((part) => part.text)
-    .join("\n\n");
+    .join(separator);
 }
 
-function renderFacts(parts: (PromptPart | null)[]): string {
-  return renderParts(parts.filter((part) => part?.kind === "fact"));
+function renderFacts(parts: (PromptPart | null)[], separator: string): string {
+  return renderParts(
+    parts.filter((part) => part?.kind === "fact"),
+    separator
+  );
 }
 
 function renderSections(sections: PersonaSection[]): string {
@@ -100,7 +103,7 @@ function renderSections(sections: PersonaSection[]): string {
 function buildStableSystemLines(
   context: BasePromptContext,
   interactionMode: string
-): (string | null)[] {
+): (PromptPart | null)[] {
   const slots = {
     npcDisplayName: context.npcDisplayName,
     interactionMode
@@ -119,41 +122,61 @@ function buildStableSystemLines(
     : null;
 
   return [
-    // 1. Identity
-    ...SYSTEM_PROMPT_IDENTITY.map((line) => fillSlot(line, slots)),
+    // 1. Identity. WHO is speaking is a fact; how the reply must be FORMATTED
+    // is not. `SPOKEN_WORDS_ONLY_RULES` is spliced into this block, so the two
+    // are separated here rather than in the template.
+    fact(fillSlot(SYSTEM_PROMPT_IDENTITY[0] as string, slots)),
+    ...SYSTEM_PROMPT_IDENTITY.slice(1).map((line) =>
+      instruction(fillSlot(line, slots))
+    ),
 
-    // 2. Grounding rules (the "NPC profile" they cite now refers to the card below)
-    ...SYSTEM_PROMPT_GROUNDING_RULES,
+    // 2. Grounding rules -- a brief for the writer, not facts about the world.
+    // WITHHELD FROM THE JUDGE, and this is the pointed case: one of them is
+    // "If grounded context is insufficient, ask a clarifying question or say
+    // you do not know enough yet", which is an excuse for exactly the refusal
+    // recorded in #184. A judge holding that line can wave the refusal through.
+    ...SYSTEM_PROMPT_GROUNDING_RULES.map((line) => instruction(line)),
 
-    // 3. Persona card (## Persona) — who you are
-    personaSections.length > 0
-      ? `Who you are (persona):\n${renderSections(personaSections)}`
-      : null,
+    // 3. Persona card (## Persona) -- who you are
+    fact(
+      personaSections.length > 0
+        ? `Who you are (persona):\n${renderSections(personaSections)}`
+        : null
+    ),
 
-    // 4. Core knowledge (rest of your page) — what you always know
-    coreSections.length > 0
-      ? `What you know (your life and immediate world):\n${renderSections(coreSections)}`
-      : null,
+    // 4. Core knowledge (rest of your page) -- what you always know
+    fact(
+      coreSections.length > 0
+        ? `What you know (your life and immediate world):\n${renderSections(coreSections)}`
+        : null
+    ),
 
     // 4a. No-lore fallback: when no persona page is loaded, ground the NPC in
     // their display name and description so the model cannot adopt retrieved
     // world-context (e.g. another character's lore page) as its own identity.
-    personaSections.length === 0 && coreSections.length === 0 && context.npcDescription
-      ? `Who you are: ${context.npcDescription}`
-      : null,
+    fact(
+      personaSections.length === 0 && coreSections.length === 0 && context.npcDescription
+        ? `Who you are: ${context.npcDescription}`
+        : null
+    ),
 
-    // 4b. Memory (Plan 073.3, D4) — what you remember about THIS player from
+    // 4b. Memory (Plan 073.3, D4) -- what you remember about THIS player from
     // earlier conversations. Byte-stable within a session (the record is
     // loaded once); empty on a first meeting. Slots after core knowledge and
     // before the voice directive so the cached-half stays stable.
-    context.memoryDigest ? context.memoryDigest : null,
+    fact(context.memoryDigest ? context.memoryDigest : null),
 
-    // 5. Voice directive — authored ## Voice wins, else game tone
-    voiceText
-      ? `Voice: ${voiceText}\nLet this guide word choice, pacing, and warmth — but stay in character.`
-      : context.tone
-        ? `Tone: ${context.tone}. Let this tone guide word choice, pacing, and warmth — but stay in character.`
-        : null
+    // 5. Voice directive -- authored ## Voice wins, else game tone. HOW the
+    // character speaks is a fact the judge needs to score IN-CHARACTER; the
+    // trailing sentence telling the writer to be guided by it is not, but it
+    // rides along rather than splitting one authored block in two.
+    fact(
+      voiceText
+        ? `Voice: ${voiceText}\nLet this guide word choice, pacing, and warmth — but stay in character.`
+        : context.tone
+          ? `Tone: ${context.tone}. Let this tone guide word choice, pacing, and warmth — but stay in character.`
+          : null
+    )
   ];
 }
 
@@ -281,7 +304,7 @@ function buildWorldStateUserLines(
 // ── Agent mode builder ──
 
 function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
-  const systemLines = buildStableSystemLines(context, "agent");
+  const systemParts = buildStableSystemLines(context, "agent");
 
   const userParts: (PromptPart | null)[] = [
     instruction(
@@ -374,20 +397,21 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
     )
   ];
 
-  const systemPrompt = systemLines.filter(Boolean).join("\n");
-  const userPrompt = renderParts(userParts);
+  const systemPrompt = renderParts(systemParts, "\n");
+  const userPrompt = renderParts(userParts, "\n\n");
 
   return {
     systemPrompt,
     userPrompt,
-    // FACTS ONLY. The system half is all facts -- identity, knowledge, memory,
-    // voice -- so it crosses whole; the user half is filtered.
+    // FACTS ONLY, FROM BOTH HALVES. The system half is not all facts: it
+    // carries the formatting rules and the five grounding rules, which are a
+    // brief for the writer. Passing it through whole was the first version of
+    // this and it leaked about ten instruction lines to the judge.
     //
-    // The writer's brief is withheld deliberately. A judge shown the
-    // instructions can excuse a bad reply on the grounds that it was told to be
-    // brief, or generic, or to abstain, and the brief is not evidence of
-    // anything the reply could be checked against.
-    judgeContext: `${systemPrompt}\n\n${renderFacts(userParts)}`
+    // A judge shown the brief can excuse a bad reply on the grounds that it was
+    // told to be brief, or generic, or to abstain, and the brief is not
+    // evidence the reply could be checked against.
+    judgeContext: `${renderFacts(systemParts, "\n")}\n\n${renderFacts(userParts, "\n\n")}`
   };
 }
 

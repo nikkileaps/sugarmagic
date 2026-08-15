@@ -300,8 +300,12 @@ export interface JudgeRequest {
    * the gateway assemble its own smaller version of the same thing -- persona
    * digest, world context, lore summary, world premise, response intent,
    * recent turns. An optional field would have kept both assemblies alive and
-   * reachable, which is the defect (#185). The gateway rejects a request
-   * without it, so client and gateway deploy together or the judge fails loud.
+   * reachable, which is the defect (#185).
+   *
+   * A gateway that predates this answers 400. That is NOT loud at runtime:
+   * JudgeStage fails open on any judge error, and `isStalledTurn` excludes
+   * `judge-error`, so a stale gateway means every turn ships unjudged and only
+   * a collapsed diagnostics object says so. Deploy the gateway with the bundle.
    */
   context: string;
   /** Plan 084.2: directive strings from co-installed plugins; absent/empty = today's behavior. */

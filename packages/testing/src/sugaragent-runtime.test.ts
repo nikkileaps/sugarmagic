@@ -1048,4 +1048,91 @@ describe("SugarAgent runtime provider", () => {
       });
     });
   });
+
+  // #185 -- the handoff nothing else covers. The judge context is built in
+  // GenerateStage (that is where buildGeneratePrompt runs) and read in
+  // JudgeStage. The builder tests cover the builder; the JudgeStage tests feed
+  // it a fixture. Delete the one line that carries the text between them and
+  // both suites still pass, while in a real turn JudgeStage sees an empty
+  // string, takes the `no-prompt` skip, and the judge silently stops running.
+  //
+  // This drives a real turn and reads what the judge route actually received.
+  describe("the judge receives the writer's context (#185)", () => {
+    function judgeHarness() {
+      const judgeBodies: Record<string, unknown>[] = [];
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.endsWith("/api/sugaragent/lore/resolve")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              pages: [
+                {
+                  pageId: "lore.npc.maren",
+                  title: "Maren",
+                  relativePath: "npc/maren.md",
+                  sectionCount: 3,
+                  body: "## Persona\n\nWarm.\n\n## Voice\n\nCalls you 'love'.\n\n## Work\n\nRuns the bakery on the square.",
+                  sections: [
+                    { heading: "Persona", slug: "persona", content: "Warm." },
+                    { heading: "Voice", slug: "voice", content: "Calls you 'love'." },
+                    { heading: "Work", slug: "work", content: "Runs the bakery on the square." }
+                  ]
+                }
+              ],
+              missingPageIds: []
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.endsWith("/api/sugaragent/retrieve/search")) {
+          return new Response(JSON.stringify({ results: [], requestId: "s" }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (url.endsWith("/api/sugaragent/generate/judge")) {
+          judgeBodies.push(JSON.parse((init as RequestInit).body as string));
+          return new Response(
+            JSON.stringify({ passed: true, violations: [], repairHint: null }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.endsWith("/api/sugaragent/generate")) {
+          return new Response(
+            JSON.stringify({ text: "Morning, love!", requestId: "g" }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error("Unexpected fetch in test: " + url);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      return { judgeBodies };
+    }
+
+    it("sends core knowledge the judge could not otherwise see", async () => {
+      const { judgeBodies } = judgeHarness();
+      const host = createConversationHost({
+        providers: [resolveSugarAgentProvider()]
+      });
+      await host.startSession({
+        conversationKind: "free-form",
+        npcDefinitionId: "npc:maren",
+        npcDisplayName: "Maren",
+        interactionMode: "agent",
+        lorePageId: "lore.npc.maren"
+      });
+      // The opening turn is deterministic and never calls a model; a submitted
+      // turn is what runs Generate and therefore Judge.
+      await host.submitInput({ kind: "free_text", text: "Do you sell bread?" });
+
+      expect(judgeBodies.length).toBeGreaterThan(0);
+      const body = judgeBodies[0] as { context?: string };
+      expect(typeof body.context).toBe("string");
+      // Core knowledge: in the writer's prompt, absent from the old digest.
+      expect(body.context).toContain("Runs the bakery on the square.");
+      // And the brief stays behind.
+      expect(body.context).not.toContain("Use only the provided evidence");
+    });
+  });
 });

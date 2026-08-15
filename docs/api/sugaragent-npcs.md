@@ -519,13 +519,6 @@ When `false`:
   no ease-off blackboard, pre-077 behavior).
 - The `__sugaragentQuestContext` dev handle is not installed.
 
-`worldPremise: string` (default `""`) -- a short paragraph describing your game
-world. Sent to the judge as the grounding source for the WORLD-GROUNDED rubric
-check. Without it the judge grades against generic RPG assumptions. Example:
-`"Wordlark Hollow is a cozy village where everyone is an anthropomorphic animal."`
-
-Set in Studio > SugarAgent > NPC Behavior > World Premise.
-
 `loreRelevanceFloor: number` (default `0.3`) -- minimum vector similarity score
 for a lore chunk to be returned at all. Range: 0..1 (0 = no filter, 1 = nothing
 passes). Sent with every search as `scoreThreshold` and applied by the vector
@@ -574,7 +567,9 @@ interface JudgeResult {
 ```
 
 **Gateway route:** `POST /api/sugaragent/generate/judge`
-Body: `{ replyText, personaDigest, responseIntent, worldContext, loreContextSummary, worldPremise }`
+Body: `{ replyText, context, externalDirectives? }` -- `context` is what the NPC
+knew when it wrote the reply, taken from the writer's own prompt build and
+required. See `catalog/sugaragent/docs/api/judge.md`.
 Uses Anthropic `tool_use` with `score_reply` tool and `tool_choice: { type: "tool", name: "score_reply" }`.
 
 ### RegenerateStage (bounded LLM regen + 3-strike governor)

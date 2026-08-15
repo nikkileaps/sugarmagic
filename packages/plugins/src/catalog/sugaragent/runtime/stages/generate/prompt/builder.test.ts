@@ -124,9 +124,46 @@ describe("judgeContext — the judge is given what the writer was given (#185)",
     expect(judgeContext).not.toContain("This is the opening turn.");
   });
 
-  it("keeps the whole system half, which is facts throughout", () => {
+  it("carries the facts out of the system half", () => {
+    const { judgeContext } = buildGeneratePrompt(baseContext());
+    expect(judgeContext).toContain("Speak as Maren.");
+    expect(judgeContext).toContain("Who you are (persona):");
+    expect(judgeContext).toContain("What you know (your life and immediate world):");
+    expect(judgeContext).toContain("Short sentences; says 'love'."); // voice
+  });
+
+  it("carries the memory digest, which only the judge could not see before", () => {
+    const { judgeContext } = buildGeneratePrompt(
+      baseContext({ memoryDigest: "You remember: Mim cannot stand blue cheese." })
+    );
+    expect(judgeContext).toContain("Mim cannot stand blue cheese.");
+  });
+
+  it("withholds the brief that lives in the SYSTEM half", () => {
+    // The first version of this change passed the system half through whole on
+    // the assumption it was facts throughout. It is not: the formatting rules
+    // and the five grounding rules are instructions to the writer.
     const { systemPrompt, judgeContext } = buildGeneratePrompt(baseContext());
-    expect(judgeContext.startsWith(`${systemPrompt}\n\n`)).toBe(true);
+    for (const brief of [
+      "Return only the NPC's spoken words.",
+      "Do not include stage directions",
+      "Interaction mode:",
+      "Use only the provided evidence",
+      "Do not introduce institutions, locations, factions"
+    ]) {
+      expect(systemPrompt).toContain(brief);
+      expect(judgeContext).not.toContain(brief);
+    }
+  });
+
+  it("THE POINTED ONE: the judge is not told an NPC may refuse when context is thin", () => {
+    // "If grounded context is insufficient, ask a clarifying question or say
+    // you do not know enough yet" is an excuse for exactly the refusal in #184.
+    // A judge holding it can wave that refusal through.
+    const { systemPrompt, judgeContext } = buildGeneratePrompt(baseContext());
+    const excuse = "If grounded context is insufficient";
+    expect(systemPrompt).toContain(excuse);
+    expect(judgeContext).not.toContain(excuse);
   });
 });
 
