@@ -84,11 +84,49 @@ describe("judgeContext — the judge is given what the writer was given (#185)",
     expect(judgeContext).toContain("I love a good sourdough.");
   });
 
-  it("is exactly the two halves the writer received, and nothing else", () => {
-    const { systemPrompt, userPrompt, judgeContext } = buildGeneratePrompt(baseContext());
-    // Pins the single construction. If this ever has to be assembled a second
-    // way to stay true, the design has regressed to what #185 removed.
-    expect(judgeContext).toBe(`${systemPrompt}\n\n${userPrompt}`);
+  it("carries what the player just said", () => {
+    const { judgeContext } = buildGeneratePrompt(
+      baseContext({ playerText: "Do you sell the soft one?" })
+    );
+    expect(judgeContext).toContain("Player said: Do you sell the soft one?");
+  });
+
+  it("withholds the writer's brief", () => {
+    // THE POINT OF THE SPLIT. A judge shown these can excuse a bad reply on the
+    // grounds that it was told to be brief, generic, or to abstain.
+    const { userPrompt, judgeContext } = buildGeneratePrompt(
+      baseContext({ responseIntent: "abstain", responseSpecificity: "generic" })
+    );
+    for (const brief of [
+      "Goal:",
+      "Intent:",
+      "Turn path:",
+      "State clearly that you do not know enough",
+      "Keep the reply generic, in-character, and low-specificity."
+    ]) {
+      expect(userPrompt).toContain(brief);
+      expect(judgeContext).not.toContain(brief);
+    }
+  });
+
+  it("withholds the language overlay, which is a phrasing directive", () => {
+    const ctx = baseContext({
+      languageLearningOverlay: "Language constraint: about 30% Spanish."
+    });
+    expect(buildGeneratePrompt(ctx).userPrompt).toContain("Language constraint:");
+    expect(buildGeneratePrompt(ctx).judgeContext).not.toContain("Language constraint:");
+  });
+
+  it("the opening turn contributes nothing to the judge, having no player text", () => {
+    // The no-player-text branch of that slot is an instruction about how to
+    // open, not a fact, so it must not cross.
+    const { judgeContext } = buildGeneratePrompt(baseContext({ playerText: null }));
+    expect(judgeContext).not.toContain("This is the opening turn.");
+  });
+
+  it("keeps the whole system half, which is facts throughout", () => {
+    const { systemPrompt, judgeContext } = buildGeneratePrompt(baseContext());
+    expect(judgeContext.startsWith(`${systemPrompt}\n\n`)).toBe(true);
   });
 });
 

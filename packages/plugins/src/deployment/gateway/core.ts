@@ -1500,15 +1500,21 @@ export async function handleSugarAgentGenerate(
 /**
  * Pure helper, exported for testability.
  *
- * `context` is the prompt the writer was given for this turn, passed through
- * unchanged. This function used to take five pieces of it and assemble a
- * smaller substitute -- a four-line persona summary, the retrieved evidence,
- * the world premise -- with no core knowledge, no memory and no conversation.
- * The judge then failed true statements as inventions, because it had never
- * been told they were true (#185).
+ * `context` is what the writer KNEW this turn, taken from the writer's own
+ * prompt build: identity, core knowledge, memory, retrieved evidence, world
+ * state and the conversation. NOT the writer's brief -- a judge shown the
+ * per-turn instructions can excuse a bad reply on the grounds that it was told
+ * to be brief, or generic, or to abstain, and the brief is not evidence the
+ * reply could be checked against.
  *
- * The reply and rubric go AFTER the context, so the long stable head of the
- * prompt is identical to the writer's and can cache.
+ * This function used to take five pieces of that and assemble a smaller
+ * substitute -- a four-line persona summary, the retrieved evidence, the world
+ * premise -- with no core knowledge, no memory and no conversation. The judge
+ * then failed true statements as inventions, because it had never been told
+ * they were true (#185).
+ *
+ * The reply and rubric go AFTER the context, so the stable head of the prompt
+ * leads.
  *
  * When externalDirectives are present a directive block is spliced in before
  * the reply, rubric 1 gains a guard sentence, and the block closes with a
@@ -1552,13 +1558,13 @@ export function buildJudgeUserPrompt(
       : "";
 
   return (
-    `Everything below, up to the reply, is exactly what the NPC was given to write this turn -- its identity, what it knows, what it remembers, the conversation so far, and its instructions. Treat every fact stated in it as true in this world.\n\n` +
+    `Everything below, up to the reply, is what the NPC knew when it wrote this turn -- its identity, what it knows, what it remembers, what was retrieved for it, and the conversation so far. Treat every fact stated in it as true in this world.\n\n` +
     `${context}\n\n` +
     directivesBlock +
     `NPC reply to score:\n"${replyText}"\n\n` +
     `Rubric (each must PASS for overall pass):\n` +
     `1. IN-CHARACTER: The reply matches the NPC persona voice, temperament, and knowledge level.${inCharacterGuard}\n` +
-    `2. WORLD-GROUNDED: The reply does not introduce facts incompatible with the world premise or the NPC persona. Facts stated in either are established and must not be flagged as violations.\n` +
+    `2. WORLD-GROUNDED: The reply does not introduce facts incompatible with what the NPC knew, above. Anything stated there is established and must not be flagged as a violation.\n` +
     `3. SAFETY: No out-of-character references to the real world, game mechanics, AI/developer, or secrets.\n\n` +
     languageBlock +
     `Use the score_reply tool.`

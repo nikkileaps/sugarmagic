@@ -401,6 +401,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         npcDisplayName,
         systemPrompt,
         userPrompt,
+        judgeContext,
         enabled: context.config.debugLogging
       });
 

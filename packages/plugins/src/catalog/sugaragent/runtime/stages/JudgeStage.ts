@@ -178,6 +178,12 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
         "judge",
         output.passed ? "pass" : `FAIL:${output.violations.join(",") || "unspecified"}`
       );
+      // HOW MUCH THE JUDGE ACTUALLY HELD. A verdict cannot show that the judge
+      // was scoring against far less than the writer saw, which is how #185
+      // survived unnoticed: the size never appeared anywhere a person looks.
+      // Sits next to the verdict so a collapse is obvious at a glance, and
+      // matches `contextChars` in the gateway's own log.
+      noteTurnFact("judgeContextChars", judgeContext.length);
       // ALWAYS RECORDED, INCLUDING WHEN IT PASSES. Printing only failures made
       // absence mean two different things -- "the judge saw no language
       // problem" and "this gateway predates the language dimension and never

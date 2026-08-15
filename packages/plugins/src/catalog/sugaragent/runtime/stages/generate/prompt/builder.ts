@@ -54,6 +54,37 @@ function fillSlot(line: string, slots: Record<string, string>): string {
 
 type PersonaSection = { heading: string; slug: string; content: string };
 
+/**
+ * One line of the user half, and what kind of line it is.
+ *
+ * `fact` states something true of the world, the NPC or the conversation.
+ * `instruction` tells the writer how to reply this turn.
+ *
+ * The writer gets both. The judge gets only the facts: a judge shown the brief
+ * has been reported to excuse a bad reply because it was told to be brief, and
+ * the brief is not evidence of anything anyway. Classification is declared at
+ * the point each line is written, so a line added later is classified once and
+ * both callers stay correct without a second list to maintain.
+ */
+type PromptPart = { text: string; kind: "fact" | "instruction" };
+
+const fact = (text: string | null): PromptPart | null =>
+  text === null ? null : { text, kind: "fact" };
+
+const instruction = (text: string | null): PromptPart | null =>
+  text === null ? null : { text, kind: "instruction" };
+
+function renderParts(parts: (PromptPart | null)[]): string {
+  return parts
+    .filter((part): part is PromptPart => part !== null)
+    .map((part) => part.text)
+    .join("\n\n");
+}
+
+function renderFacts(parts: (PromptPart | null)[]): string {
+  return renderParts(parts.filter((part) => part?.kind === "fact"));
+}
+
 function renderSections(sections: PersonaSection[]): string {
   return sections
     .map((section) => `## ${section.heading}\n${section.content}`)
@@ -153,7 +184,7 @@ function worldContextHeading(context: AgentPromptContext): string {
  */
 function buildWorldStateUserLines(
   context: AgentPromptContext
-): (string | null)[] {
+): (PromptPart | null)[] {
   const suppress = context.minimalGreetingMode;
   return [
     // Plan 077.1 (D2): world-framed quest context -- NEVER the raw objective
@@ -162,62 +193,88 @@ function buildWorldStateUserLines(
     // not in minimal-greeting mode, surface the world fact + the NPC guidance
     // block. The raw activeQuestDisplayName is kept for search seeding only
     // (RetrieveStage) and must never appear here.
-    context.questWorldContext && !suppress
-      ? `${worldContextHeading(context)}\n${context.questWorldContext}\nIf this is something you could naturally help with, offer what you would plausibly know in character. Do not act as though you know the player's private business. Do not repeat what has already been said.`
-      : null,
+    fact(
+      context.questWorldContext && !suppress
+        ? `${worldContextHeading(context)}\n${context.questWorldContext}\nIf this is something you could naturally help with, offer what you would plausibly know in character. Do not act as though you know the player's private business. Do not repeat what has already been said.`
+        : null
+    ),
 
     // Plan 077.3 (D4): coarse ease-off hint. goalSurfacedCount counts PROMPTING
     // (not saying), so > 0 means at least one NPC turn already steered toward
     // this topic. The player has had a chance to find it; be more subtle.
-    context.questWorldContext && !suppress &&
-    typeof context.goalSurfacedCount === "number" &&
-    context.goalSurfacedCount > 0
-      ? `This topic has been brought up in conversation ${context.goalSurfacedCount} time(s) already. If another character has already offered guidance on this, let the player discover it without repeating the nudge. You can acknowledge the topic if the player raises it, but do not volunteer the same information again.`
-      : null,
+    instruction(
+      context.questWorldContext && !suppress &&
+      typeof context.goalSurfacedCount === "number" &&
+      context.goalSurfacedCount > 0
+        ? `This topic has been brought up in conversation ${context.goalSurfacedCount} time(s) already. If another character has already offered guidance on this, let the player discover it without repeating the nudge. You can acknowledge the topic if the player raises it, but do not volunteer the same information again.`
+        : null
+    ),
 
-    context.timeOfDay
-      ? `Time of day: ${context.timeOfDay}.`
-      : null,
+    fact(
+      context.timeOfDay
+        ? `Time of day: ${context.timeOfDay}.`
+        : null
+    ),
 
-    context.knownFacts && context.knownFacts.length > 0
-      ? `The player already knows:\n${context.knownFacts.map((f) => `- ${f}`).join("\n")}`
-      : null,
+    fact(
+      context.knownFacts && context.knownFacts.length > 0
+        ? `The player already knows:\n${context.knownFacts.map((f) => `- ${f}`).join("\n")}`
+        : null
+    ),
 
-    context.recentWorldEvents && context.recentWorldEvents.length > 0
-      ? `Recent world events:\n${context.recentWorldEvents.map((e) => `- ${e}`).join("\n")}`
-      : null,
+    fact(
+      context.recentWorldEvents && context.recentWorldEvents.length > 0
+        ? `Recent world events:\n${context.recentWorldEvents.map((e) => `- ${e}`).join("\n")}`
+        : null
+    ),
 
-    context.currentLocationDisplayName
-      ? `Current runtime location: ${context.currentLocationDisplayName}.`
-      : null,
+    fact(
+      context.currentLocationDisplayName
+        ? `Current runtime location: ${context.currentLocationDisplayName}.`
+        : null
+    ),
 
-    context.currentParentAreaDisplayName && !suppress
-      ? `Current containing area: ${context.currentParentAreaDisplayName}.`
-      : null,
+    fact(
+      context.currentParentAreaDisplayName && !suppress
+        ? `Current containing area: ${context.currentParentAreaDisplayName}.`
+        : null
+    ),
 
-    context.npcPlayerRelation
-      ? `Player/NPC proximity band: ${context.npcPlayerRelation.proximityBand}.`
-      : null,
+    fact(
+      context.npcPlayerRelation
+        ? `Player/NPC proximity band: ${context.npcPlayerRelation.proximityBand}.`
+        : null
+    ),
 
-    context.npcCurrentTask && !suppress
-      ? `NPC current task: ${context.npcCurrentTask.displayName}.`
-      : null,
+    fact(
+      context.npcCurrentTask && !suppress
+        ? `NPC current task: ${context.npcCurrentTask.displayName}.`
+        : null
+    ),
 
-    context.npcCurrentTask?.description && !suppress
-      ? `NPC task context: ${context.npcCurrentTask.description}.`
-      : null,
+    fact(
+      context.npcCurrentTask?.description && !suppress
+        ? `NPC task context: ${context.npcCurrentTask.description}.`
+        : null
+    ),
 
-    context.npcCurrentActivity && !suppress
-      ? `NPC current activity: ${context.npcCurrentActivity}.`
-      : null,
+    fact(
+      context.npcCurrentActivity && !suppress
+        ? `NPC current activity: ${context.npcCurrentActivity}.`
+        : null
+    ),
 
-    context.npcCurrentGoal && !suppress
-      ? `NPC current goal: ${context.npcCurrentGoal}.`
-      : null,
+    fact(
+      context.npcCurrentGoal && !suppress
+        ? `NPC current goal: ${context.npcCurrentGoal}.`
+        : null
+    ),
 
-    context.npcMovement && !suppress
-      ? `NPC movement status: ${context.npcMovement.status}${context.npcMovement.targetAreaDisplayName ? ` toward ${context.npcMovement.targetAreaDisplayName}` : ""}.`
-      : null
+    fact(
+      context.npcMovement && !suppress
+        ? `NPC movement status: ${context.npcMovement.status}${context.npcMovement.targetAreaDisplayName ? ` toward ${context.npcMovement.targetAreaDisplayName}` : ""}.`
+        : null
+    )
   ];
 }
 
@@ -226,82 +283,111 @@ function buildWorldStateUserLines(
 function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
   const systemLines = buildStableSystemLines(context, "agent");
 
-  const userLines: (string | null)[] = [
-    context.minimalGreetingMode
-      ? "Reply in exactly 1 short sentence. Use at most 2 very short sentences only if absolutely necessary."
-      : "Respond to the player naturally, matching the tone and length to the conversation.",
+  const userParts: (PromptPart | null)[] = [
+    instruction(
+      context.minimalGreetingMode
+        ? "Reply in exactly 1 short sentence. Use at most 2 very short sentences only if absolutely necessary."
+        : "Respond to the player naturally, matching the tone and length to the conversation."
+    ),
 
-    `Intent: ${context.responseIntent}.`,
-    `Turn path: ${context.turnPath}.`,
-    `Interpret intent: ${context.interpretIntent}.`,
-    `Goal: ${context.responseGoal}`,
+    instruction(`Intent: ${context.responseIntent}.`),
+    instruction(`Turn path: ${context.turnPath}.`),
+    instruction(`Interpret intent: ${context.interpretIntent}.`),
+    instruction(`Goal: ${context.responseGoal}`),
 
+    // The one slot whose kind depends on which branch is taken: what the player
+    // said is the central fact of the turn, while its absence is an instruction
+    // about how to open.
     context.playerText
-      ? `Player said: ${context.playerText}`
-      : "This is the opening turn. Open with a brief, warm greeting -- 1 to 2 sentences. Leave room for the player to respond before you elaborate.",
+      ? fact(`Player said: ${context.playerText}`)
+      : instruction(
+          "This is the opening turn. Open with a brief, warm greeting -- 1 to 2 sentences. Leave room for the player to respond before you elaborate."
+        ),
 
-    context.minimalGreetingMode
-      ? "Keep this greeting brief, warm, and simple for a beginner learner. Do not volunteer what the NPC is doing unless asked."
-      : null,
+    instruction(
+      context.minimalGreetingMode
+        ? "Keep this greeting brief, warm, and simple for a beginner learner. Do not volunteer what the NPC is doing unless asked."
+        : null
+    ),
 
     // Relocated from the system prompt (Plan 072.4).
-    context.minimalGreetingMode ? MINIMAL_GREETING_INSTRUCTION : null,
+    instruction(context.minimalGreetingMode ? MINIMAL_GREETING_INSTRUCTION : null),
 
-    context.responseIntent === "clarify"
-      ? "Ask one concise clarifying question. Do not answer beyond what is grounded."
-      : null,
+    instruction(
+      context.responseIntent === "clarify"
+        ? "Ask one concise clarifying question. Do not answer beyond what is grounded."
+        : null
+    ),
 
-    context.responseIntent === "abstain"
-      ? "State clearly that you do not know enough grounded information to answer yet. Invite the player to provide more context. Do not fabricate."
-      : null,
+    instruction(
+      context.responseIntent === "abstain"
+        ? "State clearly that you do not know enough grounded information to answer yet. Invite the player to provide more context. Do not fabricate."
+        : null
+    ),
 
-    context.responseIntent === "chat"
-      ? "Respond as natural in-character social speech. Warmth is allowed. Do not turn a social reply into a factual worldbuilding answer."
-      : null,
+    instruction(
+      context.responseIntent === "chat"
+        ? "Respond as natural in-character social speech. Warmth is allowed. Do not turn a social reply into a factual worldbuilding answer."
+        : null
+    ),
 
-    context.responseSpecificity === "grounded"
-      ? "Use grounded evidence when present, but do not add unsupported specifics."
-      : "Keep the reply generic, in-character, and low-specificity.",
+    instruction(
+      context.responseSpecificity === "grounded"
+        ? "Use grounded evidence when present, but do not add unsupported specifics."
+        : "Keep the reply generic, in-character, and low-specificity."
+    ),
 
     // World state (relocated from the system prompt, Plan 072.4).
     ...buildWorldStateUserLines(context),
 
-    // Sugarlang (or other) overlay — opaque, per-turn (relocated from system).
-    context.languageLearningOverlay || null,
+    // Sugarlang (or other) overlay -- opaque, per-turn (relocated from system).
+    // A directive to the writer about how to phrase the reply, not a fact about
+    // the world. A language plugin tells the judge what it needs to know
+    // separately, through judgeDirectives on the contribution bus.
+    instruction(context.languageLearningOverlay || null),
 
-    context.loreContextSummary.length > 0
-      ? `Evidence:\n- ${context.loreContextSummary.join("\n- ")}`
-      : "Evidence: none retrieved.",
+    fact(
+      context.loreContextSummary.length > 0
+        ? `Evidence:\n- ${context.loreContextSummary.join("\n- ")}`
+        : "Evidence: none retrieved."
+    ),
 
-    context.recentHistory.length > 0
-      ? `Recent history:\n${context.recentHistory
-          .map((entry) => `${entry.role}: ${entry.text}`)
-          .join("\n")}`
-      : "Recent history: none.",
+    fact(
+      context.recentHistory.length > 0
+        ? `Recent history:\n${context.recentHistory
+            .map((entry) => `${entry.role}: ${entry.text}`)
+            .join("\n")}`
+        : "Recent history: none."
+    ),
 
-    // 083.5 — constraint reminder, terminal slot (before personaDigest).
-    context.constraintReminder || null,
+    // 083.5 -- constraint reminder, terminal slot (before personaDigest).
+    instruction(context.constraintReminder || null),
 
-    // Plan 072.8 — persona drift reminder, LAST block (after history). Lives in
+    // Plan 072.8 -- persona drift reminder, LAST block (after history). Lives in
     // the uncached user half, so it doesn't disturb 072.4 system byte-stability.
-    context.personaDigest
-      ? `Before you reply, stay in character. Remember who you are:\n${context.personaDigest}`
-      : null
+    // An instruction: it re-states persona the judge already holds in the system
+    // half, wrapped in a "stay in character" nudge meant for the writer.
+    instruction(
+      context.personaDigest
+        ? `Before you reply, stay in character. Remember who you are:\n${context.personaDigest}`
+        : null
+    )
   ];
 
   const systemPrompt = systemLines.filter(Boolean).join("\n");
-  const userPrompt = userLines.filter(Boolean).join("\n\n");
+  const userPrompt = renderParts(userParts);
 
   return {
     systemPrompt,
     userPrompt,
-    // Everything, including the per-turn instructions. Whether hiding those
-    // makes the judge stricter was measured before this was written: four
-    // replies, three defective, ten runs per cell with the instructions shown
-    // and ten without. The verdicts did not move (#185). Splitting the user
-    // half by kind would mean reordering it -- "Player said" sits between two
-    // instruction lines -- so it is not worth doing on no evidence.
-    judgeContext: `${systemPrompt}\n\n${userPrompt}`
+    // FACTS ONLY. The system half is all facts -- identity, knowledge, memory,
+    // voice -- so it crosses whole; the user half is filtered.
+    //
+    // The writer's brief is withheld deliberately. A judge shown the
+    // instructions can excuse a bad reply on the grounds that it was told to be
+    // brief, or generic, or to abstain, and the brief is not evidence of
+    // anything the reply could be checked against.
+    judgeContext: `${systemPrompt}\n\n${renderFacts(userParts)}`
   };
 }
 
