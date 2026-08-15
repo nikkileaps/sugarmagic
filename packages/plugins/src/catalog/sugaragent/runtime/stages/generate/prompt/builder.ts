@@ -32,6 +32,20 @@ import {
 export interface GeneratePromptResult {
   systemPrompt: string;
   userPrompt: string;
+  /**
+   * What the judge is given to score against: the same text the writer got,
+   * from the same build.
+   *
+   * The judge is asked whether a reply is grounded, so it needs the grounding.
+   * It used to be handed a separate, smaller reconstruction -- four lines of
+   * persona and the retrieved evidence, with no core knowledge, no memory and
+   * no conversation -- and failed true statements as inventions because it had
+   * never been told they were true (#185).
+   *
+   * Composed here rather than by the caller so there is one assembly of this
+   * text, not two that can drift apart.
+   */
+  judgeContext: string;
 }
 
 function fillSlot(line: string, slots: Record<string, string>): string {
@@ -275,9 +289,19 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
       : null
   ];
 
+  const systemPrompt = systemLines.filter(Boolean).join("\n");
+  const userPrompt = userLines.filter(Boolean).join("\n\n");
+
   return {
-    systemPrompt: systemLines.filter(Boolean).join("\n"),
-    userPrompt: userLines.filter(Boolean).join("\n\n")
+    systemPrompt,
+    userPrompt,
+    // Everything, including the per-turn instructions. Whether hiding those
+    // makes the judge stricter was measured before this was written: four
+    // replies, three defective, ten runs per cell with the instructions shown
+    // and ten without. The verdicts did not move (#185). Splitting the user
+    // half by kind would mean reordering it -- "Player said" sits between two
+    // instruction lines -- so it is not worth doing on no evidence.
+    judgeContext: `${systemPrompt}\n\n${userPrompt}`
   };
 }
 

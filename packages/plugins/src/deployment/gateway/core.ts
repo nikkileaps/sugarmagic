@@ -1498,18 +1498,24 @@ export async function handleSugarAgentGenerate(
 // ---------------------------------------------------------------------------
 
 /**
- * Plan 084.2 -- pure helper, exported for testability.
- * Builds the judge user prompt. When externalDirectives are present, a
- * directive block is spliced after the persona summary; rubric 1 gains a
- * guard sentence; the block closes with a SAFETY-override prohibition so a
- * directive can never soften rubric 3.
+ * Pure helper, exported for testability.
+ *
+ * `context` is the prompt the writer was given for this turn, passed through
+ * unchanged. This function used to take five pieces of it and assemble a
+ * smaller substitute -- a four-line persona summary, the retrieved evidence,
+ * the world premise -- with no core knowledge, no memory and no conversation.
+ * The judge then failed true statements as inventions, because it had never
+ * been told they were true (#185).
+ *
+ * The reply and rubric go AFTER the context, so the long stable head of the
+ * prompt is identical to the writer's and can cache.
+ *
+ * When externalDirectives are present a directive block is spliced in before
+ * the reply, rubric 1 gains a guard sentence, and the block closes with a
+ * SAFETY-override prohibition so a directive can never soften rubric 3.
  */
 export function buildJudgeUserPrompt(
-  worldPremise: string,
-  personaDigest: string,
-  responseIntent: string,
-  worldContext: string | null,
-  loreContextLines: string,
+  context: string,
   replyText: string,
   externalDirectives: string[]
 ): string {
@@ -1546,12 +1552,9 @@ export function buildJudgeUserPrompt(
       : "";
 
   return (
-    (worldPremise ? `World premise:\n${worldPremise}\n\n` : "") +
-    `NPC persona summary (this is the NPC's established identity — treat all facts here as in-world):\n${personaDigest || "(none)"}\n\n` +
+    `Everything below, up to the reply, is exactly what the NPC was given to write this turn -- its identity, what it knows, what it remembers, the conversation so far, and its instructions. Treat every fact stated in it as true in this world.\n\n` +
+    `${context}\n\n` +
     directivesBlock +
-    `Response intent: ${responseIntent}\n\n` +
-    (worldContext ? `World context right now:\n${worldContext}\n\n` : "") +
-    (loreContextLines ? `Lore context available to this NPC:\n${loreContextLines}\n\n` : "") +
     `NPC reply to score:\n"${replyText}"\n\n` +
     `Rubric (each must PASS for overall pass):\n` +
     `1. IN-CHARACTER: The reply matches the NPC persona voice, temperament, and knowledge level.${inCharacterGuard}\n` +
@@ -1670,17 +1673,8 @@ export async function handleSugarAgentJudge(
   const body = await readJsonBody(req);
   const replyText =
     typeof body["replyText"] === "string" ? body["replyText"].trim() : "";
-  const personaDigest =
-    typeof body["personaDigest"] === "string" ? body["personaDigest"].trim() : "";
-  const responseIntent =
-    typeof body["responseIntent"] === "string" ? body["responseIntent"].trim() : "chat";
-  const worldContext =
-    typeof body["worldContext"] === "string" ? body["worldContext"].trim() : null;
-  const rawLoreContext = Array.isArray(body["loreContextSummary"])
-    ? (body["loreContextSummary"] as unknown[]).filter((e): e is string => typeof e === "string")
-    : [];
-  const worldPremise =
-    typeof body["worldPremise"] === "string" ? body["worldPremise"].trim() : "";
+  const judgeContext =
+    typeof body["context"] === "string" ? body["context"].trim() : "";
   const externalDirectives = Array.isArray(body["externalDirectives"])
     ? (body["externalDirectives"] as unknown[]).filter((e): e is string => typeof e === "string")
     : [];
@@ -1690,19 +1684,26 @@ export async function handleSugarAgentJudge(
     return;
   }
 
+  // REQUIRED, NOT DEFAULTED. A missing context used to be survivable because
+  // the route rebuilt its own from other fields; that second assembly is what
+  // #185 removed. Defaulting to "" here would restore the old behavior in its
+  // worst form -- a judge scoring groundedness against nothing at all, silently.
+  // A client that has not been deployed alongside this gateway must fail loud.
+  if (!judgeContext) {
+    sendJson(res, 400, {
+      ok: false,
+      error: "InvalidRequest",
+      message:
+        "context is required: send the prompt the generator was given (GeneratePromptResult.judgeContext)."
+    });
+    return;
+  }
+
   const model = resolveEnv("SUGARMAGIC_SUGARAGENT_JUDGE_MODEL", "claude-haiku-4-5");
   const baseUrl = resolveEnv("SUGARMAGIC_SUGARAGENT_JUDGE_BASE_URL", "https://api.anthropic.com");
 
-  const loreContextLines = rawLoreContext
-    .map((e, i) => `[${i + 1}] ${e.slice(0, 300)}`)
-    .join("\n");
-
   const judgeUserPrompt = buildJudgeUserPrompt(
-    worldPremise,
-    personaDigest,
-    responseIntent,
-    worldContext,
-    loreContextLines,
+    judgeContext,
     replyText,
     externalDirectives
   );
@@ -1814,7 +1815,10 @@ export async function handleSugarAgentJudge(
     languageNote,
     model,
     durationMs: Date.now() - startedAt,
-    responseIntent
+    // How much grounding the judge actually held. The failure this route was
+    // built wrong around -- scoring a reply against far less than the writer
+    // saw -- is invisible in a verdict but obvious in this number (#185).
+    contextChars: judgeContext.length
   });
 
   const judgeUsage = (payload as { usage?: Record<string, unknown> }).usage ?? {};

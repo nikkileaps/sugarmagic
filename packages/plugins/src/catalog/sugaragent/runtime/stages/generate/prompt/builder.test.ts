@@ -63,6 +63,35 @@ function baseContext(
   };
 }
 
+describe("judgeContext — the judge is given what the writer was given (#185)", () => {
+  it("carries the writer's own core knowledge, not a persona summary of it", () => {
+    const { judgeContext } = buildGeneratePrompt(baseContext());
+    // The specific failure: the judge held four lines of persona and no core
+    // knowledge, so an NPC stating its own occupation looked like invention.
+    expect(judgeContext).toContain("Runs the bakery on the square.");
+    expect(judgeContext).toContain("Warm, brisk, proud.");
+  });
+
+  it("carries the conversation so far, so a callback is not read as invention", () => {
+    const { judgeContext } = buildGeneratePrompt(
+      baseContext({
+        recentHistory: [
+          { role: "user", text: "I love a good sourdough." },
+          { role: "assistant", text: "Then you have come to the right stall, love." }
+        ]
+      })
+    );
+    expect(judgeContext).toContain("I love a good sourdough.");
+  });
+
+  it("is exactly the two halves the writer received, and nothing else", () => {
+    const { systemPrompt, userPrompt, judgeContext } = buildGeneratePrompt(baseContext());
+    // Pins the single construction. If this ever has to be assembled a second
+    // way to stay true, the design has regressed to what #185 removed.
+    expect(judgeContext).toBe(`${systemPrompt}\n\n${userPrompt}`);
+  });
+});
+
 describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
   it("puts persona card, core knowledge, and voice directive in the system prompt", () => {
     const { systemPrompt } = buildGeneratePrompt(baseContext());

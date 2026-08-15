@@ -292,11 +292,18 @@ export class SugarAgentGatewayLLMProvider implements LLMProvider {
 
 export interface JudgeRequest {
   replyText: string;
-  personaDigest: string;
-  responseIntent: string;
-  worldContext: string | null;
-  loreContextSummary: string[];
-  worldPremise: string;
+  /**
+   * The text the writer was given for this turn, verbatim, from the same build
+   * (`GeneratePromptResult.judgeContext`).
+   *
+   * REQUIRED, and deliberately not optional. This replaced six fields that let
+   * the gateway assemble its own smaller version of the same thing -- persona
+   * digest, world context, lore summary, world premise, response intent,
+   * recent turns. An optional field would have kept both assemblies alive and
+   * reachable, which is the defect (#185). The gateway rejects a request
+   * without it, so client and gateway deploy together or the judge fails loud.
+   */
+  context: string;
   /** Plan 084.2: directive strings from co-installed plugins; absent/empty = today's behavior. */
   externalDirectives?: string[];
 }

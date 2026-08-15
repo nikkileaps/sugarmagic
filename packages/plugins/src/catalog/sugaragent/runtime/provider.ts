@@ -441,7 +441,7 @@ async function executePipeline(args: {
   }
   const { output: judge, diagnostics: judgeDiagnostics } = await runStage(
     stages.judge,
-    { execution, state, plan, retrieve, generate },
+    { execution, generate },
     context
   );
   const { output: audit, diagnostics: auditDiagnostics } = await runStage(

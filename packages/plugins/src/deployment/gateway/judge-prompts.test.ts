@@ -18,12 +18,21 @@ import {
   enforceLanguageReportingOnly
 } from "./core";
 
+// The prompt the writer was given, passed through verbatim (#185). Standing in
+// for a real one: identity, core knowledge, and the conversation -- exactly
+// the material the judge used to be denied.
+const CONTEXT = [
+  "Speak as Finnick.",
+  "Who you are (persona):",
+  "A weather-beaten fisherman, gruff but kind.",
+  "What you know (your life and immediate world):",
+  "Finnick owns a boat and sells his catch on the quay at Wordlark Hollow.",
+  "Recent history:",
+  "user: Do you sell fish?"
+].join("\n");
+
 const BASE_PARAMS = {
-  worldPremise: "A cozy fantasy port town called Wordlark Hollow.",
-  personaDigest: "Finnick: a weather-beaten fisherman, gruff but kind.",
-  responseIntent: "chat",
-  worldContext: null,
-  loreContextLines: "",
+  context: CONTEXT,
   replyText: "Aye, the nets were heavy this morning.",
   externalDirectives: [] as string[]
 };
@@ -31,18 +40,12 @@ const BASE_PARAMS = {
 describe("buildJudgeUserPrompt -- no directives (084.2 byte-identical baseline)", () => {
   it("contains world premise, persona summary, rubric, and score_reply tool instruction", () => {
     const prompt = buildJudgeUserPrompt(
-      BASE_PARAMS.worldPremise,
-      BASE_PARAMS.personaDigest,
-      BASE_PARAMS.responseIntent,
-      BASE_PARAMS.worldContext,
-      BASE_PARAMS.loreContextLines,
+      BASE_PARAMS.context,
       BASE_PARAMS.replyText,
       []
     );
-    expect(prompt).toContain("World premise:");
-    expect(prompt).toContain(BASE_PARAMS.worldPremise);
-    expect(prompt).toContain("NPC persona summary");
-    expect(prompt).toContain(BASE_PARAMS.personaDigest);
+    expect(prompt).toContain(CONTEXT);
+    expect(prompt).toContain(BASE_PARAMS.replyText);
     expect(prompt).toContain("1. IN-CHARACTER:");
     expect(prompt).toContain("2. WORLD-GROUNDED:");
     expect(prompt).toContain("3. SAFETY:");
@@ -51,11 +54,7 @@ describe("buildJudgeUserPrompt -- no directives (084.2 byte-identical baseline)"
 
   it("empty directives array produces the same prompt as no directives (byte-identical)", () => {
     const withEmpty = buildJudgeUserPrompt(
-      BASE_PARAMS.worldPremise,
-      BASE_PARAMS.personaDigest,
-      BASE_PARAMS.responseIntent,
-      BASE_PARAMS.worldContext,
-      BASE_PARAMS.loreContextLines,
+      BASE_PARAMS.context,
       BASE_PARAMS.replyText,
       []
     );
@@ -73,11 +72,7 @@ describe("buildJudgeUserPrompt -- with externalDirectives (084.2 the fix)", () =
 
   it("includes the directive block heading after the persona summary", () => {
     const prompt = buildJudgeUserPrompt(
-      BASE_PARAMS.worldPremise,
-      BASE_PARAMS.personaDigest,
-      BASE_PARAMS.responseIntent,
-      BASE_PARAMS.worldContext,
-      BASE_PARAMS.loreContextLines,
+      BASE_PARAMS.context,
       BASE_PARAMS.replyText,
       [directive]
     );
@@ -87,31 +82,23 @@ describe("buildJudgeUserPrompt -- with externalDirectives (084.2 the fix)", () =
     expect(prompt).toContain(directive);
   });
 
-  it("directive block appears between the persona summary and the response intent", () => {
+  it("directive block appears between the writer prompt and the reply", () => {
     const prompt = buildJudgeUserPrompt(
-      BASE_PARAMS.worldPremise,
-      BASE_PARAMS.personaDigest,
-      BASE_PARAMS.responseIntent,
-      BASE_PARAMS.worldContext,
-      BASE_PARAMS.loreContextLines,
+      BASE_PARAMS.context,
       BASE_PARAMS.replyText,
       [directive]
     );
-    const personaIdx = prompt.indexOf("NPC persona summary");
+    const contextIdx = prompt.indexOf(CONTEXT);
     const directiveIdx = prompt.indexOf("Established directives");
-    const intentIdx = prompt.indexOf("Response intent:");
-    expect(personaIdx).toBeGreaterThanOrEqual(0);
-    expect(directiveIdx).toBeGreaterThan(personaIdx);
-    expect(intentIdx).toBeGreaterThan(directiveIdx);
+    const replyIdx = prompt.indexOf("NPC reply to score:");
+    expect(contextIdx).toBeGreaterThanOrEqual(0);
+    expect(directiveIdx).toBeGreaterThan(contextIdx);
+    expect(replyIdx).toBeGreaterThan(directiveIdx);
   });
 
   it("includes the SAFETY-override prohibition in the directive block", () => {
     const prompt = buildJudgeUserPrompt(
-      BASE_PARAMS.worldPremise,
-      BASE_PARAMS.personaDigest,
-      BASE_PARAMS.responseIntent,
-      BASE_PARAMS.worldContext,
-      BASE_PARAMS.loreContextLines,
+      BASE_PARAMS.context,
       BASE_PARAMS.replyText,
       [directive]
     );
@@ -120,11 +107,7 @@ describe("buildJudgeUserPrompt -- with externalDirectives (084.2 the fix)", () =
 
   it("rubric 1 gains the IN-CHARACTER guard sentence", () => {
     const prompt = buildJudgeUserPrompt(
-      BASE_PARAMS.worldPremise,
-      BASE_PARAMS.personaDigest,
-      BASE_PARAMS.responseIntent,
-      BASE_PARAMS.worldContext,
-      BASE_PARAMS.loreContextLines,
+      BASE_PARAMS.context,
       BASE_PARAMS.replyText,
       [directive]
     );
@@ -135,11 +118,7 @@ describe("buildJudgeUserPrompt -- with externalDirectives (084.2 the fix)", () =
 
   it("rubric 1 guard is scoped to IN-CHARACTER only -- SAFETY rubric is unchanged", () => {
     const prompt = buildJudgeUserPrompt(
-      BASE_PARAMS.worldPremise,
-      BASE_PARAMS.personaDigest,
-      BASE_PARAMS.responseIntent,
-      BASE_PARAMS.worldContext,
-      BASE_PARAMS.loreContextLines,
+      BASE_PARAMS.context,
       BASE_PARAMS.replyText,
       [directive]
     );
@@ -155,11 +134,7 @@ describe("buildJudgeUserPrompt -- with externalDirectives (084.2 the fix)", () =
 
   it("multiple directives are numbered", () => {
     const prompt = buildJudgeUserPrompt(
-      BASE_PARAMS.worldPremise,
-      BASE_PARAMS.personaDigest,
-      BASE_PARAMS.responseIntent,
-      BASE_PARAMS.worldContext,
-      BASE_PARAMS.loreContextLines,
+      BASE_PARAMS.context,
       BASE_PARAMS.replyText,
       ["First directive.", "Second directive."]
     );
@@ -170,11 +145,7 @@ describe("buildJudgeUserPrompt -- with externalDirectives (084.2 the fix)", () =
 
 describe("the language dimension is REPORTING ONLY (sugarmagic-latency-tsg phase 1)", () => {
   const prompt = buildJudgeUserPrompt(
-    BASE_PARAMS.worldPremise,
-    BASE_PARAMS.personaDigest,
-    BASE_PARAMS.responseIntent,
-    BASE_PARAMS.worldContext,
-    BASE_PARAMS.loreContextLines,
+    BASE_PARAMS.context,
     BASE_PARAMS.replyText,
     ["The player reads Spanish at CEFR A1."]
   );
@@ -217,11 +188,7 @@ describe("sugaragent stands alone: no language plugin, no language prompt", () =
   // rubric it has always got -- not a judge quietly assuming a
   // language-learning game and asking about a player level nobody stated.
   const prompt = buildJudgeUserPrompt(
-    BASE_PARAMS.worldPremise,
-    BASE_PARAMS.personaDigest,
-    BASE_PARAMS.responseIntent,
-    BASE_PARAMS.worldContext,
-    BASE_PARAMS.loreContextLines,
+    BASE_PARAMS.context,
     BASE_PARAMS.replyText,
     []
   );

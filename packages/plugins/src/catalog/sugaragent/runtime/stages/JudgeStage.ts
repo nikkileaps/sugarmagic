@@ -20,48 +20,27 @@
 
 import { noteTurnFact } from "@sugarmagic/runtime-core";
 import type { ConversationExecutionContext } from "@sugarmagic/runtime-core";
-import { QUEST_CONTEXT_ANNOTATION_KEY } from "../quest/quest-context-middleware";
-import type { QuestContextAnnotation } from "../quest/quest-context-middleware";
 import { collectContributions } from "../contributions";
 import { createDiagnostics } from "./diagnostics";
 import { findMetaLeakViolations } from "./helpers";
 import type {
   GenerateResult,
   JudgeResult,
-  PlanResult,
-  RetrieveResult,
-  SugarAgentProviderState,
   TurnStage,
   TurnStageContext,
   TurnStageResult
 } from "../types";
 import type { JudgeProvider } from "../clients";
 
+/**
+ * Two inputs, both of which the judge actually reads: the turn's annotations
+ * (for contributed directives) and what Generate produced. The persona, plan
+ * and retrieval results are gone from here -- this stage used to reassemble a
+ * context out of them, and now takes the writer's own (#185).
+ */
 export interface JudgeStageInput {
   execution: ConversationExecutionContext;
-  state: SugarAgentProviderState;
-  plan: PlanResult;
-  retrieve: RetrieveResult;
   generate: GenerateResult;
-}
-
-/**
- * Name the lore page the world context was quoted from before the judge reads
- * it. The judge scores the reply against this block, so an unattributed page
- * written about a different character reads as the NPC's own ground truth and
- * an in-character reply comes back as an IN-CHARACTER failure (#171).
- */
-function attributeWorldContext(
-  annotation: QuestContextAnnotation | undefined
-): string | null {
-  const text = annotation?.worldContext ?? null;
-  if (!text) return null;
-  const title = annotation?.worldContextTitle ?? null;
-  const source = title ? `the lore page "${title}"` : "a lore page";
-  if (annotation?.worldContextIsOwnPage) {
-    return `From ${source}, this NPC's own:\n${text}`;
-  }
-  return `From ${source} -- background about the world, not a description of this NPC:\n${text}`;
 }
 
 function skipResult(
@@ -128,36 +107,28 @@ export class JudgeStage implements TurnStage<JudgeStageInput, JudgeResult> {
       };
     }
 
-    // Build judge inputs from execution context.
-    // Fallback: if no lore-page persona, use the NPC definition description
-    // as the identity anchor -- the same fallback buildStableSystemLines uses.
-    const personaDigest =
-      input.state.persona?.digest ||
-      (input.execution.selection.npcDescription
-        ? `NPC description: ${input.execution.selection.npcDescription}`
-        : "");
-    if (!personaDigest) {
-      return skipResult(startedAt, "no-persona");
+    // WHAT THE WRITER WAS GIVEN, NOT A SUMMARY OF IT. GenerateStage carries the
+    // prompt forward on its result; this stage passes it straight through.
+    //
+    // This stage used to rebuild its own version from six pieces of the
+    // execution context. That version dropped core knowledge, the memory digest
+    // and the conversation, so a reply resting on any of them looked invented:
+    // the NPC's own shop, its wife, anything it remembered about this player
+    // (#185).
+    //
+    // Empty only if Generate built no prompt, which is the deterministic path,
+    // which `usedLlm` already skipped above.
+    const judgeContext = input.generate.judgeContext ?? "";
+    if (!judgeContext) {
+      return skipResult(startedAt, "no-prompt");
     }
-    const loreContextSummary = input.retrieve.loreContext.map((item) =>
-      item.text.slice(0, 300)
-    );
-    const questAnnotation =
-      input.execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as
-        | QuestContextAnnotation
-        | undefined;
-    const worldContext = attributeWorldContext(questAnnotation);
 
     const { judgeDirectives } = collectContributions(input.execution.annotations);
 
     try {
       const verdict = await this.judgeProvider.judgeReply({
         replyText: input.generate.text,
-        personaDigest,
-        responseIntent: input.plan.responseIntent,
-        worldContext,
-        loreContextSummary,
-        worldPremise: context.config.worldPremise ?? "",
+        context: judgeContext,
         ...(judgeDirectives.length > 0 ? { externalDirectives: judgeDirectives } : {})
       });
 

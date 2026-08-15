@@ -41,11 +41,26 @@ function makeContext() {
   };
 }
 
+/**
+ * Stands in for what GenerateStage handed the writer. The judge is given this
+ * verbatim, so a fixture only has to look like a prompt (#185).
+ */
+const WRITER_PROMPT = [
+  "Speak as Mira.",
+  "Who you are (persona):",
+  "Brisk, fond of the market.",
+  "What you know (your life and immediate world):",
+  "Mira runs the fruit stall on the square.",
+  "",
+  "Recent history:",
+  "user: hello"
+].join("\n");
+
 function makeInput(overrides: {
   usedLlm?: boolean;
   text?: string;
-  personaDigest?: string;
-  npcDescription?: string;
+  /** Empty string models Generate having built no prompt. */
+  judgeContext?: string;
   annotations?: Record<string, unknown>;
 }) {
   return {
@@ -54,7 +69,6 @@ function makeInput(overrides: {
         conversationKind: "free-form" as const,
         npcDefinitionId: "npc-1",
         npcDisplayName: "Mira",
-        npcDescription: overrides.npcDescription ?? null,
         interactionMode: "agent" as const
       },
       input: { kind: "free_text" as const, text: "hello" },
@@ -75,39 +89,12 @@ function makeInput(overrides: {
         activeQuestObjectives: null
       }
     },
-    state: {
-      sessionId: "s1",
-      turnCount: 1,
-      consecutiveFallbackTurns: 0,
-      consecutiveJudgeFailures: 0,
-      closeRequested: false,
-      history: [],
-      lastTurnDiagnostics: {},
-      persona: overrides.personaDigest !== undefined
-        ? { pageId: "lore.npc.mira", loaded: true, fallbackReason: null, personaCard: [], coreKnowledge: [], digest: overrides.personaDigest }
-        : undefined
-    },
-    retrieve: {
-      loreContext: [],
-      loreSearchPerformed: false
-    },
-    plan: {
-      responseIntent: "answer" as const,
-      responseGoal: "answer naturally",
-      responseSpecificity: "grounded" as const,
-      turnPath: "grounded" as const,
-      initiativeAction: "player_respond" as const,
-      noveltyState: { repeatedUserMessage: false, repeatedAssistantReplyRisk: false, exhausted: false, recentAssistantQuestionCount: 0 },
-      claims: [],
-      actionProposals: [],
-      replyInputMode: "advance" as const,
-      replyPlaceholder: ""
-    },
     generate: {
       text: overrides.text ?? "The market opens at dawn.",
       usedLlm: overrides.usedLlm ?? true,
       llmBackend: "anthropic" as const,
-      actionProposals: []
+      actionProposals: [],
+      judgeContext: overrides.judgeContext ?? WRITER_PROMPT
     }
   };
 }
@@ -155,7 +142,7 @@ describe("JudgeStage", () => {
   it("returns passed=true when provider approves the reply", async () => {
     const provider = makeProvider({ passed: true, violations: [], repairHint: null });
     const stage = new JudgeStage(provider);
-    const result = await stage.execute(makeInput({ npcDescription: "A village merchant." }) as never, makeContext() as never);
+    const result = await stage.execute(makeInput({}) as never, makeContext() as never);
 
     expect(result.output.passed).toBe(true);
     expect(result.output.skipped).toBe(false);
@@ -168,7 +155,7 @@ describe("JudgeStage", () => {
     const violations = ["NPC broke character by mentioning the real world."];
     const provider = makeProvider({ passed: false, violations, repairHint: "Stay in character." });
     const stage = new JudgeStage(provider);
-    const result = await stage.execute(makeInput({ npcDescription: "A village merchant." }) as never, makeContext() as never);
+    const result = await stage.execute(makeInput({}) as never, makeContext() as never);
 
     expect(result.output.passed).toBe(false);
     expect(result.output.violations).toEqual(violations);
@@ -184,7 +171,7 @@ describe("JudgeStage", () => {
       judgeReply: vi.fn().mockRejectedValue(new Error("network timeout"))
     };
     const stage = new JudgeStage(provider);
-    const result = await stage.execute(makeInput({ npcDescription: "A village merchant." }) as never, makeContext() as never);
+    const result = await stage.execute(makeInput({}) as never, makeContext() as never);
 
     expect(result.output.passed).toBe(true);
     expect(result.output.errorOccurred).toBe(true);
@@ -200,7 +187,6 @@ describe("JudgeStage", () => {
     const stage = new JudgeStage(provider);
     const directive = "This reply is language-directed: 85% Spanish is intentional. Language mixing is never an IN-CHARACTER violation.";
     const input = makeInput({
-      npcDescription: "A harbour fisherman.",
       annotations: {
         "sugaragent.contrib/sugarlang": {
           schemaVersion: 1,
@@ -217,44 +203,61 @@ describe("JudgeStage", () => {
     );
   });
 
-  // #171 -- the judge scored an in-character reply as an IN-CHARACTER failure
-  // because it read another character's lore page as the world the NPC lives in.
-  it("attributes the world context to its source page before sending it to the judge", async () => {
+  // #185 -- the judge is given what the writer was given, not a summary of it.
+  // The two tests this replaced pinned the source-page attribution that this
+  // stage used to apply to the quest world context (#171). That attribution was
+  // never removed: it lives in the generate prompt builder, which already
+  // guards it ("not about you" / "your own lore page"), and the judge now
+  // inherits it by reading the same prompt. One enforcer instead of two.
+  it("sends the writer's prompt through verbatim as the judge context", async () => {
     const provider = makeProvider({ passed: true, violations: [], repairHint: null });
     const stage = new JudgeStage(provider);
-    const input = makeInput({
-      npcDescription: "A snobby racoon lady.",
-      annotations: {
-        "sugaragent.questContext": {
-          hasContext: true,
-          worldContext: "A no nonsense station manager. Kind. Patient.",
-          worldContextTitle: "Horace Pennyfeather",
-          worldContextIsOwnPage: false
-        }
-      }
-    });
+    const input = makeInput({});
     await stage.execute(input as never, makeContext() as never);
 
     const call = (provider.judgeReply as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
-    expect(call?.worldContext).toContain('lore page "Horace Pennyfeather"');
-    expect(call?.worldContext).toContain("not a description of this NPC");
-    expect(call?.worldContext).toContain("A no nonsense station manager.");
+    expect(call?.context).toBe(WRITER_PROMPT);
   });
 
-  it("leaves the world context null when the quest middleware resolved nothing", async () => {
+  it("no longer sends the fragments the gateway used to rebuild a context from", async () => {
     const provider = makeProvider({ passed: true, violations: [], repairHint: null });
     const stage = new JudgeStage(provider);
-    const input = makeInput({ npcDescription: "A village merchant." });
-    await stage.execute(input as never, makeContext() as never);
+    await stage.execute(makeInput({}) as never, makeContext() as never);
 
-    const call = (provider.judgeReply as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
-    expect(call?.worldContext).toBeNull();
+    const call = (provider.judgeReply as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    // Each of these was a partial restatement of something already in the
+    // prompt. Sending any of them again would be a second source of truth.
+    for (const field of [
+      "personaDigest",
+      "worldContext",
+      "loreContextSummary",
+      "worldPremise",
+      "responseIntent",
+      "recentTurns"
+    ]) {
+      expect(call?.[field]).toBeUndefined();
+    }
+  });
+
+  it("skips without calling the judge when Generate built no prompt", async () => {
+    const provider = makeProvider({ passed: true, violations: [], repairHint: null });
+    const stage = new JudgeStage(provider);
+    const result = await stage.execute(
+      makeInput({ judgeContext: "" }) as never,
+      makeContext() as never
+    );
+
+    expect(provider.judgeReply).not.toHaveBeenCalled();
+    expect(result.output.skipped).toBe(true);
+    expect(result.output.passed).toBe(true);
   });
 
   it("omits externalDirectives from the request when no contributions are present", async () => {
     const provider = makeProvider({ passed: true, violations: [], repairHint: null });
     const stage = new JudgeStage(provider);
-    const input = makeInput({ npcDescription: "A village merchant." });
+    const input = makeInput({});
     await stage.execute(input as never, makeContext() as never);
 
     const call = (provider.judgeReply as ReturnType<typeof vi.fn>).mock.calls[0]?.[0];
@@ -266,7 +269,6 @@ describe("JudgeStage", () => {
     const stage = new JudgeStage(provider);
     // This is the contribution the teacher middleware writes on a B2 Finnick turn.
     const input = makeInput({
-      npcDescription: "Finnick: a harbour fisherman.",
       text: "Mira el mar -- esta tranquilo esta manana, si?",
       annotations: {
         "sugaragent.contrib/sugarlang": {
@@ -313,7 +315,7 @@ describe("phase 2: a language failure gates the turn (sugarmagic-latency-tsg)", 
     );
 
     const result = await stage.execute(
-      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeInput({}) as never,
       makeContext() as never
     );
 
@@ -339,7 +341,7 @@ describe("phase 2: a language failure gates the turn (sugarmagic-latency-tsg)", 
     );
 
     const result = await stage.execute(
-      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeInput({}) as never,
       makeContext() as never
     );
 
@@ -359,7 +361,7 @@ describe("phase 2: a language failure gates the turn (sugarmagic-latency-tsg)", 
     );
 
     const result = await stage.execute(
-      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeInput({}) as never,
       makeContext() as never
     );
 
@@ -381,7 +383,7 @@ describe("phase 2: a language failure gates the turn (sugarmagic-latency-tsg)", 
     );
 
     const result = await stage.execute(
-      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeInput({}) as never,
       makeContext() as never
     );
 
@@ -396,7 +398,7 @@ describe("phase 2: a language failure gates the turn (sugarmagic-latency-tsg)", 
     const stage = new JudgeStage(provider({ passed: true, violations: [], repairHint: null }));
 
     const result = await stage.execute(
-      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeInput({}) as never,
       makeContext() as never
     );
 
@@ -413,7 +415,7 @@ describe("mini-review fix: a language failure must not escalate (sugarmagic-late
   async function run(verdict: Record<string, unknown>) {
     const stage = new JudgeStage(provider(verdict));
     return stage.execute(
-      makeInput({ personaDigest: "Mira: a calm herbalist." }) as never,
+      makeInput({}) as never,
       makeContext() as never
     );
   }

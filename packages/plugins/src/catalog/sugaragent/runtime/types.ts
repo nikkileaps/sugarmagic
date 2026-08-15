@@ -362,6 +362,14 @@ export interface GenerateResult {
   llmBackend: "anthropic" | "deterministic";
   actionProposals: ConversationActionProposal[];
   envelopeOverride?: ConversationTurnEnvelope;
+  /**
+   * The text the writer was given, carried forward so the judge scores against
+   * the same grounding rather than a smaller reconstruction of it (#185).
+   *
+   * Absent on the deterministic paths, which build no prompt. JudgeStage skips
+   * those turns anyway (`usedLlm === false`), so the two agree by construction.
+   */
+  judgeContext?: string;
 }
 
 export interface AuditResult {
