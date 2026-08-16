@@ -73,12 +73,25 @@ export class AuditStage implements TurnStage<AuditStageInput, AuditResult> {
     ) {
       violations.push("missing-clarifying-question");
     }
+    // TWO REFUSALS, TWO VOCABULARIES (#184).
+    //
+    // "I need more context" and "I have never heard of it" are both abstains,
+    // and they share no words. This check was written for the first and had the
+    // second's wording nowhere in it, so a perfectly good "never heard of it"
+    // was flagged `missing-abstention-cue`, treated by RegenerateStage as a
+    // structural violation, and replaced with the canned fallback line.
+    //
+    // Observed live 2026-08-16: three runs, three in-character refusals from the
+    // model, three thrown away, and the player read the same canned sentence
+    // every time.
+    const abstainCue =
+      (input.plan.unknownNamedEntities?.length ?? 0) > 0
+        ? /(never heard|not heard|no idea|don'?t know (of|it|that)|do not know (of|it|that)|not familiar|doesn'?t ring|new to me|nunca)/i
+        : /(don't know enough|do not know enough|need more context|not enough)/i;
     if (
       input.plan.responseIntent === "abstain" &&
       !Object.keys(interpretLexicon).length &&
-      !/(don't know enough|do not know enough|need more context|not enough)/i.test(
-        input.generate.text
-      )
+      !abstainCue.test(input.generate.text)
     ) {
       violations.push("missing-abstention-cue");
     }

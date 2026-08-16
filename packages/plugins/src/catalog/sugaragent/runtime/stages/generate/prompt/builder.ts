@@ -342,10 +342,18 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
         : null
     ),
 
+    // TWO DIFFERENT REFUSALS, and the wording is not interchangeable.
+    //
+    // "I need more context" invites the player to explain. "I have never heard
+    // of it" closes the subject. Sending the first when the NPC has simply
+    // never heard of the thing produced a flat, canned-sounding reply that
+    // contradicted the goal line directly above it (#184).
     instruction(
-      context.responseIntent === "abstain"
-        ? "State clearly that you do not know enough grounded information to answer yet. Invite the player to provide more context. Do not fabricate."
-        : null
+      context.responseIntent !== "abstain"
+        ? null
+        : (context.unknownNamedEntities?.length ?? 0) > 0
+          ? "Say plainly, in your own voice, that this is not something you have ever heard of. Do not describe it, guess at it, place it, or invent anything you have heard about it. Do not ask the player to explain it to you. You may offer what you do know instead."
+          : "State clearly that you do not know enough grounded information to answer yet. Invite the player to provide more context. Do not fabricate."
     ),
 
     instruction(

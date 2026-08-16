@@ -278,6 +278,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
             usedLlm: false,
             responseIntent: input.plan.responseIntent,
             responseGoal: input.plan.responseGoal,
+        ...(input.plan.unknownNamedEntities
+          ? { unknownNamedEntities: input.plan.unknownNamedEntities }
+          : {}),
             responseSpecificity: input.plan.responseSpecificity,
             turnPath: input.plan.turnPath,
             loreContextCount: input.retrieve.loreContext.length,

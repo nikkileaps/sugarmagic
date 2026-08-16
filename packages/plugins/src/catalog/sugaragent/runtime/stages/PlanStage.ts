@@ -4,9 +4,11 @@ import type {
 } from "@sugarmagic/runtime-core";
 import { createDiagnostics } from "./diagnostics";
 import { summarizeEvidence } from "./helpers";
-import { resolvePlanDecision } from "./planning";
+import { resolvePlanDecision, findUnrecognisedNames } from "./planning";
 import {
   MEMORY_ANNOTATION_KEY,
+  MEMORY_STATE_KEY,
+  type MemoizedNpcMemory,
   type NpcMemoryAnnotation
 } from "../memory/digest";
 import {
@@ -90,18 +92,59 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
     // Plan 077.2 -- quest-context middleware publishes this annotation when
     // world-framed lore was resolved for the active objective (D3). When
     // absent (no active quest, or middleware degraded), defaults to false.
-    const hasQuestWorldContext = Boolean(
-      (
-        input.execution.annotations[QUEST_CONTEXT_ANNOTATION_KEY] as
-          | QuestContextAnnotation
-          | undefined
-      )?.hasContext
+    const questAnnotation = input.execution.annotations[
+      QUEST_CONTEXT_ANNOTATION_KEY
+    ] as QuestContextAnnotation | undefined;
+    const hasQuestWorldContext = Boolean(questAnnotation?.hasContext);
+
+    // #184 -- `loaded` alone is not enough: a page can resolve with every
+    // section stripped (an all-`## Secrets` page) and ground nothing.
+    const hasPersonaPage = Boolean(
+      input.state.persona?.loaded &&
+        (input.state.persona.personaCard.length > 0 ||
+          input.state.persona.coreKnowledge.length > 0)
+    );
+
+    // #184 -- everything reality said this turn. The wiki, the quest and the
+    // scene are the source of truth: a name none of them recognises is a name
+    // for something that does not exist, and the NPC should say so rather than
+    // invent it. His own page is included because his life is real too.
+    const realityCorpus = [
+      ...(input.state.persona?.personaCard ?? []).map((section) => section.content),
+      ...(input.state.persona?.coreKnowledge ?? []).map((section) => section.content),
+      ...input.retrieve.loreContext.map((item) => item.text),
+      questAnnotation?.worldContext ?? "",
+      input.execution.selection.npcDisplayName ?? "",
+      // What this NPC actually remembers about this player, persisted across
+      // sessions. Not conversation -- it survived a previous one and was
+      // written down, which is what separates it from anything just typed.
+      (input.execution.state[MEMORY_STATE_KEY] as MemoizedNpcMemory | undefined)
+        ?.digest ?? "",
+      // What the player has told us they are called. Authority over their own
+      // identity, and none over the world -- only self-introductions reach here.
+      ...(input.state.playerDeclaredNames ?? [])
+    ].join("\n");
+    // THE CONVERSATION IS NOT REALITY, and must never be in this corpus.
+    //
+    // `provider.ts` pushes the player's message into history BEFORE Plan runs,
+    // so including history let the player's own sentence vouch for itself: the
+    // check could never fire on the one thing it exists to check. The NPC's
+    // reply leaks the same way -- "never heard of Brindlebear's Book Emporium"
+    // would make that name real for the rest of the session.
+    //
+    // Reality is the wiki, the quest and the scene. A player can type anything.
+
+    const unknownNamedEntities = findUnrecognisedNames(
+      input.interpret.userText,
+      realityCorpus
     );
 
     const decision = resolvePlanDecision({
       interpret: input.interpret,
       hasEvidence,
       hasMemory,
+      hasPersonaPage,
+      unknownNamedEntities,
       hasActiveQuest,
       hasQuestWorldContext,
       hasScriptedFollowup,
@@ -127,6 +170,9 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
     }
 
     const output: PlanResult = {
+      ...(decision.unknownNamedEntities
+        ? { unknownNamedEntities: decision.unknownNamedEntities }
+        : {}),
       responseIntent,
       responseGoal: decision.responseGoal,
       responseSpecificity: decision.responseSpecificity,
