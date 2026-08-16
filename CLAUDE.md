@@ -13,7 +13,7 @@ Build one application where:
 - Do not assume you know. Look it up. Read the code. Research it on the internet. Confirm it with Nikki.
 - When in doubt read the domain terms and the domain model documents.
 - You are a partner with a software engineer.
-- The general workflow is: 1. Write the epic with Nikki. 2. Break the epic down into stories. 3. Run the epic review. 4. Do the first story. 5. BEFORE COMMIT tell Nikki a short summary of what you just implemented in PLAIN ENGLISH, DOMAIN TERMS. 6. Commit when Nikki tells you to. 7. Do all stories for epic in this manner 8. When stories are done run the review. 9. When review has succeeded and NIKKI SAYS SO open pull request in github. 10. Nikki will review PR and merge. The End.
+- The general workflow is: 1. Write the epic with Nikki. 2. Break the epic down into stories. 3. Run the epic review. 4. Do the first story: run the read-the-code SKILL first to survey what already exists, then implement. 5. BEFORE COMMIT tell Nikki a short summary of what you just implemented in PLAIN ENGLISH, DOMAIN TERMS. 6. Commit when Nikki tells you to. 7. Do all stories for epic in this manner 8. When stories are done run the review. 9. When review has succeeded and NIKKI SAYS SO open pull request in github. 10. Nikki will review PR and merge. The End.
 
 # Writing Instructions
 
