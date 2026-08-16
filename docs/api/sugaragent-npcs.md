@@ -429,13 +429,15 @@ quest-context middleware) as its own identity.
 editor. It is the fallback floor and costs nothing. A lore page with a
 `## Persona` section overrides it completely when loaded.
 
-The **judge** applies the same fallback: when `persona.digest` is empty,
-`JudgeStage` passes `"NPC description: <value>"` as the persona anchor. If
-neither is set, the judge skips with `skipReason: "no-persona"` (no basis for
-consistency evaluation).
+The **judge** inherits it without a fallback of its own. It scores against the
+prompt the writer was given, so the same `Who you are: <description>` line is
+what it sees; `JudgeStage` builds no persona anchor and reads no digest. It
+skips a turn only when Generate produced no prompt at all
+(`skipReason: "no-prompt"`). See
+`packages/plugins/src/catalog/sugaragent/docs/api/judge.md`.
 
 **Files:** `ConversationSelectionContext.npcDescription` (runtime-core),
-`buildStableSystemLines` in `prompt/builder.ts`, `JudgeStage.ts`.
+`buildStableSystemLines` in `prompt/builder.ts`.
 
 ## World Events: Compose Existing Machinery (D5)
 
@@ -536,41 +538,14 @@ Set in Studio > SugarAgent > NPC Behavior > Lore Relevance Floor.
 
 **File:** `packages/plugins/src/catalog/sugaragent/runtime/stages/JudgeStage.ts`
 
-JudgeStage runs AFTER GenerateStage and BEFORE AuditStage. It calls the
-gateway judge route (`/api/sugaragent/generate/judge`) to evaluate the NPC
-reply against a semantic rubric via the Anthropic tool-use API
-(`SUGARMAGIC_SUGARAGENT_JUDGE_MODEL`, default: `claude-haiku-4-5`).
+Documented in `packages/plugins/src/catalog/sugaragent/docs/api/judge.md`: what
+the judge is given and what is deliberately withheld, the rubric, contributed
+scoring directives, the language dimension, what a failure costs, the skip
+conditions, fail-open behaviour, and what lands in the logs.
 
-**Skip conditions** (no LLM call, `skipped: true`):
-- `generate.usedLlm === false` (deterministic/envelope-override turn)
-- No judge provider (proxy URL missing)
-- No NPC identity: both `persona.digest` and `npcDefinition.description` are empty (`no-persona`)
-
-**Internal regex short-circuit:** calls `findMetaLeakViolations` on the
-generated text before any LLM call. If structural violations are found,
-returns `passed: false` immediately (saves a vendor round-trip).
-
-**Fail-open on error:** any provider exception returns
-`{ passed: true, errorOccurred: true }` and `fallbackReason: "judge-error"`.
-This never triggers `isStalledTurn` (judge errors are excluded from the
-stall governor).
-
-**`JudgeResult` type:**
-```typescript
-interface JudgeResult {
-  passed: boolean;
-  violations: string[];
-  repairHint: string | null;
-  skipped: boolean;
-  errorOccurred: boolean;
-}
-```
-
-**Gateway route:** `POST /api/sugaragent/generate/judge`
-Body: `{ replyText, context, externalDirectives? }` -- `context` is what the NPC
-knew when it wrote the reply, taken from the writer's own prompt build and
-required. See `catalog/sugaragent/docs/api/judge.md`.
-Uses Anthropic `tool_use` with `score_reply` tool and `tool_choice: { type: "tool", name: "score_reply" }`.
+Summarised here only so the pipeline order below reads: it runs after Generate
+and before Audit, calls `POST /api/sugaragent/generate/judge`, and a failed
+verdict is what gives RegenerateStage something to repair.
 
 ### RegenerateStage (bounded LLM regen + 3-strike governor)
 

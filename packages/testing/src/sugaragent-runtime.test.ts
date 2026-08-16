@@ -1110,6 +1110,79 @@ describe("SugarAgent runtime provider", () => {
       return { judgeBodies };
     }
 
+    it("refuses a place reality has never heard of, mid-sentence, in a real turn", async () => {
+      // #184, verbatim from play 2026-08-16. Three other things are going on in
+      // this message -- a compliment, a translation request, and the NPC's own
+      // shop name -- and the invented shop arrives at the end.
+      const { judgeBodies } = judgeHarness();
+      void judgeBodies;
+      const host = createConversationHost({
+        providers: [resolveSugarAgentProvider()]
+      });
+      await host.startSession({
+        conversationKind: "free-form",
+        npcDefinitionId: "npc:maren",
+        npcDisplayName: "Maren",
+        interactionMode: "agent",
+        lorePageId: "lore.npc.maren"
+      });
+      const reply = await host.submitInput({
+        kind: "free_text",
+        text:
+          'Wow! That\'s muchas bueno! ( so great? como se dice "so great" en espanol? ) ' +
+          "Say Cheese is a great name for a shop amigo. " +
+          "Do you know anything about a place called Brindlebear's Book Emporium?"
+      });
+
+      const plan = (
+        reply?.diagnostics as {
+          stages?: { Plan?: { payload?: Record<string, unknown> } };
+        }
+      )?.stages?.Plan?.payload;
+      // The goal wording is covered by the planning unit tests. What only a
+      // real turn can prove is that the name survives the whole path --
+      // Interpret -> PlanStage's corpus -> the decision -- and still refuses.
+      expect(plan?.["responseIntent"]).toBe("abstain");
+    });
+
+    it("the player names themselves, and is remembered; they do not get to name the world", async () => {
+      // #184 -- authority over your own identity, none over what exists.
+      // Both names below are two capitalised words and neither is in the wiki.
+      // Only one of them arrives via a self-introduction.
+      const { judgeBodies } = judgeHarness();
+      void judgeBodies;
+      const host = createConversationHost({
+        providers: [resolveSugarAgentProvider()]
+      });
+      await host.startSession({
+        conversationKind: "free-form",
+        npcDefinitionId: "npc:maren",
+        npcDisplayName: "Maren",
+        interactionMode: "agent",
+        lorePageId: "lore.npc.maren"
+      });
+
+      await host.submitInput({ kind: "free_text", text: "My name is Mim Featherstone." });
+
+      const planOf = (reply: unknown) =>
+        (reply as { diagnostics?: { stages?: { Plan?: { payload?: Record<string, unknown> } } } })
+          ?.diagnostics?.stages?.Plan?.payload;
+
+      // Their own name, referred back to: reality now knows it.
+      const aboutSelf = await host.submitInput({
+        kind: "free_text",
+        text: "Do you remember Mim Featherstone?"
+      });
+      expect(planOf(aboutSelf)?.["responseIntent"]).not.toBe("abstain");
+
+      // A place they merely mentioned: still not real.
+      const aboutWorld = await host.submitInput({
+        kind: "free_text",
+        text: "Do you know anything about Brindlebear's Book Emporium?"
+      });
+      expect(planOf(aboutWorld)?.["responseIntent"]).toBe("abstain");
+    });
+
     it("sends core knowledge the judge could not otherwise see", async () => {
       const { judgeBodies } = judgeHarness();
       const host = createConversationHost({

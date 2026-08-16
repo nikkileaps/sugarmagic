@@ -73,6 +73,7 @@ function ensureProviderState(
 
   const next: SugarAgentProviderState = {
     sessionId: createUuid(),
+    playerDeclaredNames: [],
     turnCount: 0,
     consecutiveFallbackTurns: 0,
     consecutiveJudgeFailures: 0,
@@ -390,6 +391,12 @@ async function executePipeline(args: {
   );
   if (interpret.userText) {
     pushHistoryEntry(state, "user", interpret.userText);
+    // #184 -- the player gets to say who they are. Recorded next to the message
+    // it came from, so the name is reality from the moment it is offered.
+    const declaredName = interpret.interpretation.declaredIdentityName;
+    if (declaredName && !state.playerDeclaredNames.includes(declaredName)) {
+      state.playerDeclaredNames = [...state.playerDeclaredNames, declaredName];
+    }
   }
 
   const { output: retrieve, diagnostics: retrieveDiagnostics } = await runStage(

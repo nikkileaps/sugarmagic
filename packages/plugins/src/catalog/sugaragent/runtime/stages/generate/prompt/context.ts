@@ -174,6 +174,12 @@ export interface AgentPromptContext extends BasePromptContext {
 
   /** The response goal from the plan stage. */
   responseGoal: string;
+  /**
+   * #184 -- names reality did not recognise, when that is WHY the turn
+   * abstains. Selects the "never heard of it" instruction over the generic
+   * "you need more context" one, which otherwise contradicts the goal.
+   */
+  unknownNamedEntities?: string[];
 
   /** The interpreted intent from the interpret stage. */
   interpretIntent: string;

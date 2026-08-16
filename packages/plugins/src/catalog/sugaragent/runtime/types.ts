@@ -189,6 +189,16 @@ export interface SugarAgentProviderState {
   consecutiveJudgeFailures: number;
   closeRequested: boolean;
   history: SugarAgentSessionHistoryEntry[];
+  /**
+   * #184 -- names the player has given for THEMSELVES this session, from
+   * Interpret's `declaredIdentityName` ("my name is X", "I'm X").
+   *
+   * A player has authority over who they are; they have none over what exists.
+   * So a self-introduction is real, and is checked against as reality, while an
+   * arbitrary name they mention is not. Only the introduction patterns feed
+   * this, so "Do you know Brindlebear's Book Emporium?" never lands here.
+   */
+  playerDeclaredNames: string[];
   lastTurnDiagnostics: Record<string, TurnStageDiagnostics>;
   /** Plan 072.3 -- loaded once at session start; undefined until then. */
   persona?: LoadedPersona;
@@ -325,6 +335,14 @@ export interface RetrieveResult {
 }
 
 export interface PlanResult {
+  /**
+   * #184 -- names the player used that reality did not recognise. Present only
+   * when the turn abstains BECAUSE of them, so the writer's instruction can say
+   * "you have never heard of it" instead of "you need more context" -- two very
+   * different sentences, and the generic one produced a canned-sounding reply
+   * that read as out of character.
+   */
+  unknownNamedEntities?: string[];
   responseIntent:
     | "greet"
     | "chat"
