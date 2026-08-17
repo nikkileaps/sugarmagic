@@ -50,6 +50,7 @@
  */
 
 import { noteTurnFact } from "@sugarmagic/runtime-core";
+import { describeSituationKeyChange } from "../situation/situation-key";
 import type { DirectiveLifetime, PedagogicalDirective } from "../types";
 
 export type InvalidationReason =
@@ -154,6 +155,18 @@ export class DirectiveCache {
 
     if (inspection.staleness) {
       noteTurnFact("teacherCache", `miss:${inspection.staleness}`);
+      if (inspection.staleness === "situation_change") {
+        // WHICH PART MOVED. One reason name covers five different events --
+        // another scene, a rebuilt scene, a quest advancing, an objective
+        // moving, the clock crossing a band -- and they need different fixes.
+        noteTurnFact(
+          "situationMoved",
+          describeSituationKeyChange(
+            inspection.plannedFor.situationKey,
+            keysNow?.situationKey
+          )
+        );
+      }
       this.invalidate();
       return null;
     }

@@ -32,6 +32,7 @@ import {
   type TelemetrySink
 } from "../telemetry/telemetry";
 import { EMPTY_NPC_CONTEXT } from "../situation";
+import { describeSituationKeyChange } from "../situation/situation-key";
 import { TeacherInvocationError } from "./policies/llm-teacher-policy";
 
 /**
@@ -196,6 +197,17 @@ export class SugarLangTeacher {
     if (inspection?.staleness && !this.replanBoundTripped()) {
       this.cache.spendTurn();
       noteTurnFact("teacherCache", `stale-served:${inspection.staleness}`);
+      if (inspection.staleness === "situation_change") {
+        // The turn that gets served stale is the one worth explaining: it is
+        // where a warm that should have covered this did not.
+        noteTurnFact(
+          "situationMoved",
+          describeSituationKeyChange(
+            inspection.plannedFor.situationKey,
+            keysNow.situationKey
+          )
+        );
+      }
       this.scheduleBackgroundReplan(effectiveContext, keysNow);
       traceTeacherDirective({
         context: effectiveContext,
