@@ -645,6 +645,17 @@ export class SugarlangRuntimeServices {
     return resetResult;
   }
 
+  /**
+   * Drops every cached teaching directive and refuses later writes, for a
+   * plugin tearing down. A Teacher call in flight can land ~10s after the
+   * region unloaded, and its result must not survive into whatever loads next.
+   */
+  disposeTeachers(): void {
+    for (const entry of this.executionServices.values()) {
+      entry.teacher.dispose();
+    }
+  }
+
   getDialogueDefinitions(): import("@sugarmagic/domain").DialogueDefinition[] {
     return this.boundContext?.dialogueDefinitions ?? [];
   }
@@ -886,10 +897,9 @@ export class SugarlangRuntimeServices {
       warmAll: async (npcDefinitionIds: readonly string[]) => {
         const learner = await services.learnerStore.getCurrentProfile();
         if (!learner) return "failed" as const;
-        return services.teacher.warmConversations(npcDefinitionIds, {
-          // Slots are addressed by NPC id -- see getSugarlangConversationId.
-          // `conversationId` here is only the context's own field; the ids
-          // above are what actually get written.
+        return services.teacher.warmRegion({
+          // One directive serves every NPC in the region, so there is nothing
+          // to address per NPC. This names the call for telemetry only.
           conversationId: npcDefinitionIds[0] ?? "warm",
           learner,
           atlas: services.atlas,
@@ -1138,10 +1148,7 @@ export class SugarlangRuntimeServices {
       telemetry: this.telemetry,
       debugPinnedBand: () => this._debugPinnedBand
     });
-    const directiveCache = new DirectiveCache({
-      blackboard: this.boundContext.blackboard,
-      telemetry: this.telemetry
-    });
+    const directiveCache = new DirectiveCache();
     const fallbackPolicy = new FallbackTeacherPolicy();
     const llmPolicy =
       this.gatewayClient

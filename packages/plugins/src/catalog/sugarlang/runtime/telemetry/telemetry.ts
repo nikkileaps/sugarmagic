@@ -649,18 +649,6 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "directive-cache.invalidated",
-      {
-        conversationId: string;
-        reason:
-          | "max_turns_exceeded"
-          | "quest_stage_change"
-          | "location_change"
-          | "player_code_switch"
-          | "manual";
-      }
-    >
-  | TelemetryEventOf<
       "calibration.window-closed",
       {
         closeReason: "confidence" | "turn-backstop";

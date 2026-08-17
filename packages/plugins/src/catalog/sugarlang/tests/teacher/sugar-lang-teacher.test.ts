@@ -15,10 +15,6 @@
  * Status: active
  */
 
-import {
-  RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
-  createRuntimeBlackboard
-} from "@sugarmagic/runtime-core";
 import { describe, expect, it, vi } from "vitest";
 import {
   ClaudeTeacherPolicy,
@@ -27,24 +23,17 @@ import {
 import { DirectiveCache } from "../../runtime/teacher/directive-cache";
 import { FallbackTeacherPolicy } from "../../runtime/teacher/policies/fallback-teacher-policy";
 import { SugarLangTeacher } from "../../runtime/teacher/sugar-lang-teacher";
-import { SUGARLANG_BLACKBOARD_FACT_DEFINITIONS } from "../../runtime/learner/fact-definitions";
+import type { TeacherContext } from "../../runtime/types";
 import { createDirectiveFixture, createTeacherContext } from "./test-helpers";
 
 function createFacade() {
-  const blackboard = createRuntimeBlackboard({
-    definitions: [
-      ...RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
-      ...SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
-    ]
-  });
-  const cache = new DirectiveCache({ blackboard, now: () => 1000 });
-  return { blackboard, cache };
+  return { cache: new DirectiveCache() };
 }
 
 describe("SugarLangTeacher", () => {
   it("short-circuits on cache hit", async () => {
     const { cache } = createFacade();
-    cache.set("conversation-1", createDirectiveFixture());
+    cache.set(createDirectiveFixture());
     const llmPolicy = {
       invoke: vi.fn(async () => createDirectiveFixture())
     };
@@ -75,7 +64,7 @@ describe("SugarLangTeacher", () => {
 
     const directive = await teacher.invoke(createTeacherContext());
     expect(directive.rationale).toBe("LLM success.");
-    expect(cache.get("conversation-1")).toEqual(llmDirective);
+    expect(cache.get()).toEqual(llmDirective);
   });
 
   it("falls back and caches when the LLM policy fails", async () => {
@@ -91,18 +80,25 @@ describe("SugarLangTeacher", () => {
       cache
     });
 
-    // 090.4: hard floor is derived from turnsSinceLastProbe >= 25.
+    // The hard floor has to be reached by LEMMA AGE here, not by turn count.
+    // The entry is shared by every NPC, so it is planned without the count of
+    // turns since this conversation's last probe -- see sharedPlanContext. A
+    // lemma pending since turn 3 with the session at turn 30 is 27 turns old,
+    // past the 25-turn floor, and that floor reads the learner's own cards.
     const base = createTeacherContext();
     const directive = await teacher.invoke({
       ...base,
-      situation: { ...base.situation!, turnsSinceLastProbe: 30 }
+      learner: {
+        ...base.learner,
+        currentSession: { ...base.learner.currentSession!, turns: 30 }
+      }
     });
 
     expect(directive.isFallbackDirective).toBe(true);
     expect(directive.comprehensionCheck.triggerReason).toBe(
       "teacher-deferred-override"
     );
-    expect(cache.get("conversation-1")?.isFallbackDirective).toBe(true);
+    expect(cache.get()?.isFallbackDirective).toBe(true);
   });
 
   it("flows calibration state through before Claude invocation", async () => {
@@ -124,6 +120,63 @@ describe("SugarLangTeacher", () => {
 
     await teacher.invoke(context);
     expect(llmPolicy.invoke).toHaveBeenCalledTimes(1);
+  });
+
+  it("plans the shared entry without the NPC that asked for it", async () => {
+    // What comes back is written into the one entry every NPC reads, so it may
+    // not be shaped by whichever conversation happened to miss the cache. The
+    // turn keeps its own NPC -- only the plan call is narrowed.
+    const { cache } = createFacade();
+    const llmPolicy = {
+      invoke: vi.fn(async (_context: TeacherContext) => createDirectiveFixture())
+    };
+    const teacher = new SugarLangTeacher({
+      llmPolicy,
+      fallbackPolicy: new FallbackTeacherPolicy(),
+      cache
+    });
+    const base = createTeacherContext();
+
+    await teacher.invoke({
+      ...base,
+      situation: {
+        ...base.situation!,
+        npc: {
+          npcDefinitionId: "npc-finnick",
+          displayName: "Finnick Thorn",
+          lorePageId: null
+        },
+        recentTurns: [
+          { turnId: "t1", speaker: "player", text: "hello" },
+          { turnId: "t2", speaker: "npc", text: "hola" }
+        ],
+        turnsSinceLastProbe: 9
+      }
+    });
+
+    const planned = llmPolicy.invoke.mock.calls[0]![0];
+    expect(planned.situation?.npc).toBeUndefined();
+    expect(planned.situation?.recentTurns).toBeUndefined();
+    expect(planned.situation?.turnsSinceLastProbe).toBeUndefined();
+    // The rest of the situation is untouched -- this narrows, it does not
+    // rebuild.
+    expect(planned.situation?.sceneId).toBe(base.situation?.sceneId);
+  });
+
+  it("refuses to serve a directive after dispose", async () => {
+    // A region unloaded. A Teacher call started before it can still land ~10s
+    // later, and its result must not become the next region's teaching.
+    const { cache } = createFacade();
+    const teacher = new SugarLangTeacher({
+      llmPolicy: { invoke: vi.fn(async () => createDirectiveFixture()) },
+      fallbackPolicy: new FallbackTeacherPolicy(),
+      cache
+    });
+    cache.set(createDirectiveFixture());
+
+    teacher.dispose();
+
+    expect(cache.peek()).toBeNull();
   });
 
   it("supports an end-to-end mocked LLM policy path", async () => {

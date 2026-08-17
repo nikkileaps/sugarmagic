@@ -127,16 +127,41 @@ Rule summary:
 
 ## Cache And Invalidation
 
-`DirectiveCache` stores the active directive on the conversation-scoped blackboard
-using `ACTIVE_DIRECTIVE_FACT`.
+`DirectiveCache` holds the active directive in memory, in one entry shared by
+every NPC. It is not world state and not on the blackboard: the Teacher can
+always be asked again, so it is a cache.
 
 Current validity rules:
 
-- the cached entry is usable for `directiveLifetime.maxTurns` reads
-- quest stage changes invalidate all active conversation directives
-- location changes invalidate all active conversation directives
-- affective changes invalidate all active conversation directives
-- manual invalidation is supported for explicit middleware control
+- the entry records the situation key and learner key it was planned against
+- a situation key that no longer matches retires it, however few turns it has
+  consumed
+- a learner key that no longer matches retires it, independently of the
+  situation
+- a key the entry never recorded cannot be checked, and does not count as a
+  match
+- `directiveLifetime.maxTurns` is a backstop, counted across every NPC the
+  entry serves
+- everything planned into the entry is planned without an NPC, without recent
+  turns, and without a per-conversation probe count, because the keys carry
+  none of those
+
+## Serving A Stale Directive
+
+A turn is never made to wait for the Teacher while there is a directive to
+serve. A retired entry is still served for the turn that found it, and one
+re-plan runs behind that turn and writes back when it lands. The cost is that
+the Teacher picks what to teach from a slightly old read of the situation for
+as long as the re-plan takes, normally two or three turns; the directive is
+never shown to the player, it biases which words the NPC's line leans on.
+
+The exception is a bound. After three Teacher calls have COMPLETED with a
+failure in a row, the next turn stops being served a stale directive and waits
+for a real plan; a call that succeeds clears the count. Only completions count,
+so turns taken while a slow call is still running never trip it.
+
+A turn waits for the Teacher in two cases only: nothing is cached at all, or
+the bound above has tripped.
 
 ## Post-Placement Calibration Hint
 

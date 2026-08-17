@@ -1,7 +1,11 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/learner/fact-definitions.ts
  *
- * Purpose: Declares the blackboard facts owned by sugarlang learner state and directive state.
+ * Purpose: Declares the blackboard facts owned by sugarlang learner state.
+ *
+ * The Teacher's current directive is NOT here. It is a cache -- rebuildable by
+ * asking the Teacher again -- and it lives in the directive store
+ * (teacher/directive-cache.ts) rather than in the world state.
  *
  * Exports:
  *   - SUGARLANG_LEARNER_STATE_WRITER
@@ -9,16 +13,13 @@
  *   - SUGARLANG_TEACHER_WRITER
  *   - SUGARLANG_OBSERVER_WRITER
  *   - SugarlangPlacementStatus
- *   - ActiveDirectiveFactValue
  *   - DEFAULT_SUGARLANG_PLACEMENT_STATUS
  *   - LEARNER_PROFILE_FACT
  *   - SUGARLANG_PLACEMENT_STATUS_FACT
  *   - LEMMA_OBSERVATION_FACT
- *   - ACTIVE_DIRECTIVE_FACT
  *   - SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
  *   - createLearnerProfileFactScope
  *   - createSugarlangPlacementStatusScope
- *   - createActiveDirectiveFactScope
  *   - createLemmaObservationFactScope
  *   - getSugarlangPlacementStatus
  *
@@ -38,13 +39,7 @@ import {
   type BlackboardScopeRef,
   type RuntimeBlackboard
 } from "@sugarmagic/runtime-core";
-import type {
-  CEFRBand,
-  LearnerProfile,
-  LemmaObservation,
-  PedagogicalDirective
-} from "../types";
-import type { DirectiveLifetime } from "../types";
+import type { CEFRBand, LearnerProfile, LemmaObservation } from "../types";
 
 export const SUGARLANG_LEARNER_STATE_WRITER = "sugarlang.learner-state";
 export const SUGARLANG_PLACEMENT_WRITER = "sugarlang.placement";
@@ -56,35 +51,6 @@ export interface SugarlangPlacementStatus {
   cefrBand?: CEFRBand;
   confidence?: number;
   completedAt?: number;
-}
-
-export interface ActiveDirectiveFactValue {
-  directive: PedagogicalDirective;
-  issuedAtMs: number;
-  lifetime: DirectiveLifetime;
-  turnsConsumed: number;
-  /**
-   * 090.3b: the situation this decision was made FOR.
-   *
-   * The cache compares it against the situation now, and a mismatch retires the
-   * directive however few turns it has consumed -- a decision made for a
-   * different situation is wrong, not merely old.
-   *
-   * Optional because a directive written before this shipped, or by a caller
-   * that has no situation in hand, has none. Absent means "cannot be checked",
-   * which must NOT read as "matches" -- the cache treats it as unverifiable and
-   * falls through to the turn backstop rather than assuming the decision still
-   * applies.
-   */
-  situationKey?: string;
-  /**
-   * 090.4: what the learner knew when this was decided.
-   *
-   * SEPARATE from situationKey on purpose -- the world and the person change for
-   * unrelated reasons, and collapsing them into one key would mean a quest
-   * advancing looked the same as a word being learned.
-   */
-  learnerKey?: string;
 }
 
 export const DEFAULT_SUGARLANG_PLACEMENT_STATUS: SugarlangPlacementStatus = {
@@ -115,19 +81,10 @@ export const LEMMA_OBSERVATION_FACT: BlackboardFactDefinition<LemmaObservation[]
     lifecycle: { kind: "frame" }
   });
 
-export const ACTIVE_DIRECTIVE_FACT: BlackboardFactDefinition<ActiveDirectiveFactValue> =
-  defineBlackboardFact({
-    key: "sugarlang.active-directive",
-    ownerSystem: SUGARLANG_TEACHER_WRITER,
-    allowedScopeKinds: ["conversation"],
-    lifecycle: { kind: "session" }
-  });
-
 export const SUGARLANG_BLACKBOARD_FACT_DEFINITIONS = [
   LEARNER_PROFILE_FACT,
   SUGARLANG_PLACEMENT_STATUS_FACT,
-  LEMMA_OBSERVATION_FACT,
-  ACTIVE_DIRECTIVE_FACT
+  LEMMA_OBSERVATION_FACT
 ] as const satisfies readonly BlackboardFactDefinition<unknown>[];
 
 export function createLearnerProfileFactScope(playerEntityId: string): BlackboardScopeRef {
@@ -136,10 +93,6 @@ export function createLearnerProfileFactScope(playerEntityId: string): Blackboar
 
 export function createSugarlangPlacementStatusScope(profileId: string): BlackboardScopeRef {
   return createBlackboardScope("global", profileId);
-}
-
-export function createActiveDirectiveFactScope(conversationId: string): BlackboardScopeRef {
-  return createBlackboardScope("conversation", conversationId);
 }
 
 export function createLemmaObservationFactScope(conversationId: string): BlackboardScopeRef {

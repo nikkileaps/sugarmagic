@@ -151,6 +151,27 @@ describe("buildTeacherPrompt", () => {
     expect(prompt.user).toContain("A brief greeting or tiny self-introduction is enough.");
   });
 
+  it("says the relationship is unknown when there was no conversation to read", () => {
+    // A directive shared by every NPC is planned with no recent turns AT ALL,
+    // which is not the same as reading the conversation and finding none. Read
+    // as a first meeting, it would ask for a greeting from an NPC the player is
+    // twenty turns into talking to.
+    const base = createTeacherContext();
+    const situation = { ...base.situation! };
+    delete situation.recentTurns;
+    delete situation.turnsSinceLastProbe;
+    const prompt = buildTeacherPrompt({ ...base, situation });
+
+    expect(prompt.user).toContain("relationship state: (unknown)");
+    expect(prompt.user).toContain("opening turn: (unknown)");
+    expect(prompt.user).not.toContain(
+      "A brief greeting or tiny self-introduction is enough."
+    );
+    // Turns since the last probe are conversation state too, so the prompt must
+    // not state a count it never read.
+    expect(prompt.user).toContain("turnsSinceLastProbe=(unknown)");
+  });
+
   it("085.6: includes the pragmatic feedback block verbatim in the system prompt", () => {
     const prompt = buildTeacherPrompt(createTeacherContext());
     expect(prompt.system).toContain(TEACHER_PRAGMATIC_FEEDBACK_BLOCK);
