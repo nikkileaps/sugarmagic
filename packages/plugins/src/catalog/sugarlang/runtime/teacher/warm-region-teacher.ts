@@ -159,8 +159,22 @@ export function createRegionTeacherWarmer(deps: RegionWarmerDeps): RegionTeacher
     // meant a failed warm -- gateway down, model erroring -- was recorded as
     // done and never retried until the world moved, which on a fixed region
     // can be a long time.
-    if (outcome !== "failed") {
+    //
+    // "fresh" counts: the entry already suits this world state, which is what
+    // warming is for. "warmed" counts: this call wrote it.
+    if (outcome === "fresh" || outcome === "warmed") {
       warmedForKey = built.situationKey;
+      return;
+    }
+
+    // "in-flight" and "skipped" are not warms and are not failures. Another
+    // call owns this key -- a turn's background re-plan, or the boot warm --
+    // and it will write the entry. Do not remember the state (nothing was
+    // warmed yet) and do not spend the budget, which exists for a Teacher that
+    // cannot be reached. A ~11s call outlasts several 2s ticks, so counting
+    // these would give up on a key while the work for it is still running.
+    if (outcome === "in-flight" || outcome === "skipped") {
+      attempts -= 1;
       return;
     }
 

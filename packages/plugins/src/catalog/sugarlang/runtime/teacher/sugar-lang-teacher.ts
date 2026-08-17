@@ -548,7 +548,11 @@ export class SugarLangTeacher {
     if (this.teacherCallsInFlight.has(callKey)) {
       return;
     }
-    const replan = this.runBackgroundReplan(context, plannedFor);
+    // What the entry holds NOW, so the write after the call can be a
+    // compare-and-set rather than a blind overwrite. Same shape as
+    // `warmRegion`, and for the same reason.
+    const claimedBefore = this.cache.inspect()?.plannedFor.situationKey;
+    const replan = this.runBackgroundReplan(context, plannedFor, claimedBefore);
     this.teacherCallsInFlight.set(callKey, { keys: plannedFor, promise: replan });
     void replan
       .catch(() => undefined)
@@ -559,7 +563,8 @@ export class SugarLangTeacher {
 
   private async runBackgroundReplan(
     context: TeacherContext,
-    plannedFor: DirectiveKeys
+    plannedFor: DirectiveKeys,
+    claimedBefore: string | undefined
   ): Promise<void> {
     // `backgroundReplan` keeps this call's tokens and latency off whatever
     // turn happens to be open when it lands. Attributing them to a turn that
@@ -595,12 +600,18 @@ export class SugarLangTeacher {
     // If the player walked into a new scene, a turn has already written the
     // directive for where they now are. This result was planned for where they
     // WERE, and writing it would put the wrong place's teaching back.
+    //
+    // COMPARE AGAINST WHAT WAS THERE WHEN THE CALL STARTED, not against the
+    // keys about to be written. A re-plan for a world change exists precisely
+    // because the entry holds an OLDER key than the turn observed, so comparing
+    // the entry to the new keys reports a race on every single world change and
+    // nothing is ever written back. Unchanged means unclaimed.
     const currentInspection = this.cache.inspect();
     if (!currentInspection) {
       // The entry was cleared, or the store was disposed. Do not resurrect.
       return;
     }
-    if (currentInspection.plannedFor.situationKey !== plannedFor.situationKey) {
+    if (currentInspection.plannedFor.situationKey !== claimedBefore) {
       return;
     }
 

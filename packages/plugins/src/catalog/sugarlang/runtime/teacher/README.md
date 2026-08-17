@@ -24,5 +24,5 @@ Key files:
 - `schema-parser.ts`: strict parse, validation, repair, and hard requirement enforcement
 - `policies/llm-teacher-policy.ts`: gateway-backed LLM invocation boundary and telemetry
 - `policies/fallback-teacher-policy.ts`: deterministic no-LLM fallback
-- `directive-cache.ts`: blackboard-backed conversation cache
+- `directive-cache.ts`: in-memory cache of the one directive every present NPC reads, keyed by situation and learner
 - `sugar-lang-teacher.ts`: canonical facade other runtime code should call

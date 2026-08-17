@@ -125,6 +125,17 @@ describe("running the Teacher off the critical path", () => {
 
     release();
     await settle();
+
+    // AND IT LANDS. Serving stale is only half the design -- if the
+    // replacement is not written back, every later turn serves the same
+    // outdated directive and spends another Teacher call to discard.
+    expect(cache.inspect()?.directive.rationale).toBe("planned for here");
+    expect(cache.inspect()?.plannedFor.situationKey).toBe(SITUATION_KEY);
+
+    // A second turn now hits instead of re-planning again.
+    const secondTurn = await teacher.invoke(context);
+    expect(secondTurn.rationale).toBe("planned for here");
+    expect(invoke).toHaveBeenCalledTimes(1);
   });
 
   it("THE DANGEROUS ONE: a re-plan landing after the world moved is discarded", async () => {
