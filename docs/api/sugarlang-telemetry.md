@@ -195,13 +195,12 @@ consulted, and carries the whole decision on one row:
 |---|---|
 | `outcome` | `hit`, `stale-served`, or `blocking-miss` |
 | `staleness` | which axis retired the entry; null on a hit |
-| `movedSegments` | segment NAMES of the situation key that moved — `["nodes"]`, `["quest","time"]`. Never values: every segment but `time` is a uuid or a hash, and values would give this one distinct value per player |
-| `firstTurnOfConversation` | the only turn the caching work is about; later turns hit regardless |
-| `teacherMs` | what the turn actually waited — ~0 when served, seconds when blocking |
+| `movedSegments` | segment NAMES of the situation key that moved -- `["nodes"]`, `["quest","time"]`. Never values: every segment but `time` is a uuid or a hash, and values would give this one distinct value per player |
+| `firstTurnOfConversation` | the turn the cache is measured on; later turns hit regardless |
+| `teacherMs` | what the turn actually waited -- ~0 when served, seconds when blocking |
 
-One row per decision is deliberate. A rate needs its numerator and denominator
-from the same event, which is why this replaced `teacher.cache-hit`: an event
-that only fired on the good outcome could never show the fleet regressing.
+One row per decision is deliberate: a rate needs its numerator and its
+denominator on the same event.
 
 Three questions it answers:
 
