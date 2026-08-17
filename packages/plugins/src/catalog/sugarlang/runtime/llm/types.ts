@@ -58,11 +58,45 @@ export interface SugarlangLLMRequest {
   systemBlocks?: Array<{ text: string; cache?: boolean }>;
   userPrompt: string;
   maxTokens?: number;
+  /**
+   * A JSON Schema the reply must satisfy.
+   *
+   * WHY THIS EXISTS. Every compile-time extractor used to ask for JSON in the
+   * prompt and hope: pull the JSON-looking substring out of the reply, parse
+   * it, and only then check it against a schema. One malformed array element
+   * lost the whole extraction, and it did -- the scene-context pass failed on
+   * `arrival-station` across several edits with "Expected ',' or ']' after
+   * array element", so that scene reached the Teacher with no concepts at all
+   * and nobody noticed until a play session showed the slate frozen.
+   *
+   * With a schema here the model is CONSTRAINED as it generates, so invalid
+   * JSON stops being a thing that can happen rather than a thing to catch.
+   *
+   * PLAIN JSON SCHEMA, not a vendor shape. The gateway owns the translation to
+   * whatever the model provider calls this, including dropping the keywords
+   * the provider does not accept -- a caller writes one schema and does not
+   * track that list.
+   *
+   * Callers should keep validating what comes back. This makes malformed
+   * output unreachable through the gateway, not unimaginable.
+   */
+  outputSchema?: Record<string, unknown>;
 }
 
 export interface SugarlangLLMResult {
   text: string;
   requestId: string | null;
+  /**
+   * Why the model stopped: "end_turn" for a finished reply, "max_tokens" for
+   * one cut off at the ceiling, or null from a gateway too old to say.
+   *
+   * A truncated reply and a malformed one both arrive as text that will not
+   * parse, and telling them apart from the parser's message alone is guesswork
+   * -- the scene-context pass was misdiagnosed as bad JSON for days when every
+   * failing reply had simply run out of room. Check this before blaming the
+   * model's syntax.
+   */
+  stopReason?: string | null;
   /**
    * What the call cost. The gateway has always returned these; nothing carried
    * them, so a cache hit was indistinguishable from a miss.

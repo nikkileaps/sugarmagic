@@ -123,11 +123,34 @@ configured at all, the LLM policy is a stub that always throws and the runtime
 is permanently in fallback mode -- worth knowing, because it looks like the
 Teacher is running.
 
-Directives are cached per conversation in the **blackboard** by `DirectiveCache`,
-keyed on `situationKey` + `learnerKey`. The key deliberately excludes recent
+One directive is held in memory by `DirectiveCache`, keyed on `situationKey` +
+`learnerKey` and shared by every NPC in the region. Neither key has an NPC axis,
+so one decision is the right answer for all of them; the cache is not world
+state and does not live in the blackboard. The key deliberately excludes recent
 turns and volatile world facts; including them would mean never getting a cache
-hit. A directive is invalidated when the situation changes, when the learner
-changes, or after a maximum number of turns as a backstop.
+hit. It stops applying when the situation changes, when the learner changes, or
+after a maximum number of turns as a backstop.
+
+Because the entry is shared, everything written into it is planned WITHOUT an
+NPC, without recent turns, and without a per-conversation probe count — a cache
+value has to be a function of its key, and the key carries none of those.
+
+**A turn does not wait for the Teacher.** A directive that has stopped applying
+is still served for the turn that found it, and one replacement is planned in
+the background and written back when it lands. The cost is that the Teacher
+picks what to teach from a slightly old read of the situation for as long as
+the replacement takes — usually a turn or three. The directive is never shown
+to the player; it biases which words the NPC's line leans on.
+
+The exception is bounded: after three Teacher calls have COMPLETED with a
+failure in a row, the next turn stops being served a stale directive and waits
+for a real plan. A call still running has not failed, so turns taken during a
+slow-but-healthy re-plan never trip it. A turn otherwise waits only when nothing
+is cached at all.
+
+Warming keeps that from happening on the first conversation: the region's
+directive is planned once at boot, after the save is restored and before the
+first frame, and re-planned whenever the situation key moves.
 
 Two paths skip the Teacher entirely: **scripted mode**, which builds a
 lightweight constraint straight from the band, and the **pre-placement opening
@@ -208,7 +231,7 @@ BUILD TIME (Studio)
   authored prose -> concepts        (SceneContextExtractor -> SceneContextModel)
   authored lines -> variants        (per band, cached)
 
-RUNTIME, per conversation
+RUNTIME, per turn
   1. player interacts               -> scripted or free-form?
   2. context middlewares            -> world facts + learner profile
   3. composeSituation               -> SITUATION (total, never null)

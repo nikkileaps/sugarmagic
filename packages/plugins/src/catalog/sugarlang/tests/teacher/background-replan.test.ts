@@ -7,18 +7,11 @@
  * Status: active
  */
 
-import {
-  RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
-  createRuntimeBlackboard,
-  beginTurnTimeline,
-  endTurnTimeline
-} from "@sugarmagic/runtime-core";
+import { beginTurnTimeline, endTurnTimeline } from "@sugarmagic/runtime-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DirectiveCache } from "../../runtime/teacher/directive-cache";
 import { SugarLangTeacher } from "../../runtime/teacher/sugar-lang-teacher";
-import { isDeferrableStaleness } from "../../runtime/teacher/staleness-policy";
 import { TeacherInvocationError } from "../../runtime/teacher/policies/llm-teacher-policy";
-import { SUGARLANG_BLACKBOARD_FACT_DEFINITIONS } from "../../runtime/learner/fact-definitions";
 import { createDirectiveFixture, createTeacherContext } from "./test-helpers";
 import type { PedagogicalDirective } from "../../runtime/types";
 
@@ -53,13 +46,7 @@ function deferredPolicy(directive: PedagogicalDirective) {
 }
 
 function createTeacher(llmInvoke: (...args: never[]) => Promise<PedagogicalDirective>) {
-  const blackboard = createRuntimeBlackboard({
-    definitions: [
-      ...RUNTIME_BLACKBOARD_FACT_DEFINITIONS,
-      ...SUGARLANG_BLACKBOARD_FACT_DEFINITIONS
-    ]
-  });
-  const cache = new DirectiveCache({ blackboard, now: () => 1000 });
+  const cache = new DirectiveCache();
   const teacher = new SugarLangTeacher({
     llmPolicy: { invoke: llmInvoke } as never,
     fallbackPolicy: {
@@ -67,7 +54,7 @@ function createTeacher(llmInvoke: (...args: never[]) => Promise<PedagogicalDirec
     } as never,
     cache
   });
-  return { teacher, cache, blackboard };
+  return { teacher, cache };
 }
 
 /** Lets a scheduled background promise chain run to completion. */
@@ -76,21 +63,6 @@ async function settle(): Promise<void> {
     await Promise.resolve();
   }
 }
-
-describe("the staleness policy", () => {
-  it("defers the learner axis and blocks every world axis", () => {
-    expect(isDeferrableStaleness("learner_change")).toBe(true);
-    expect(isDeferrableStaleness("max_turns_exceeded")).toBe(true);
-
-    // Serving a stale plan after the world moved would have the NPC teaching
-    // dock words in a forest. These must keep the player waiting.
-    expect(isDeferrableStaleness("situation_change")).toBe(false);
-    expect(isDeferrableStaleness("quest_stage_change")).toBe(false);
-    expect(isDeferrableStaleness("location_change")).toBe(false);
-    expect(isDeferrableStaleness("player_code_switch")).toBe(false);
-    expect(isDeferrableStaleness("manual")).toBe(false);
-  });
-});
 
 describe("running the Teacher off the critical path", () => {
   beforeEach(() => {
@@ -111,7 +83,7 @@ describe("running the Teacher off the critical path", () => {
     const { teacher, cache } = createTeacher(invoke as never);
 
     const context = contextHere();
-    cache.set(CONVERSATION, outgoing, {
+    cache.set(outgoing, {
       situationKey: SITUATION_KEY,
       learnerKey: "learner-key-BEFORE"
     });
@@ -125,24 +97,44 @@ describe("running the Teacher off the critical path", () => {
 
     release();
     await settle();
-    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("the replacement");
+    expect(cache.inspect()?.directive.rationale).toBe("the replacement");
   });
 
-  it("a world change STILL blocks: the player waits for the right place", async () => {
+  it("a WORLD change is served stale too, and re-planned behind the turn", async () => {
+    // This used to block. The player waited ~11s so the plan would be about
+    // where they are -- and the cost of not waiting is only that the Teacher
+    // picks what to teach from a slightly old read of the world for a turn or
+    // three. The directive never reaches the player; it biases word choice.
     const outgoing = createDirectiveFixture({ rationale: "planned for elsewhere" });
     const replacement = createDirectiveFixture({ rationale: "planned for here" });
-    const invoke = vi.fn(async () => replacement);
+    const { invoke, release } = deferredPolicy(replacement);
     const { teacher, cache } = createTeacher(invoke as never);
 
     const context = contextHere();
-    cache.set(CONVERSATION, outgoing, {
+    cache.set(outgoing, {
       situationKey: "a-DIFFERENT-situation",
       learnerKey: "same"
     });
 
+    // The re-plan never settles before this resolves. If the turn waited for
+    // it, this would hang rather than fail.
     const served = await teacher.invoke(context);
 
-    expect(served.rationale).toBe("planned for here");
+    expect(served.rationale).toBe("planned for elsewhere");
+    expect(invoke).toHaveBeenCalledTimes(1);
+
+    release();
+    await settle();
+
+    // AND IT LANDS. Serving stale is only half the design -- if the
+    // replacement is not written back, every later turn serves the same
+    // outdated directive and spends another Teacher call to discard.
+    expect(cache.inspect()?.directive.rationale).toBe("planned for here");
+    expect(cache.inspect()?.plannedFor.situationKey).toBe(SITUATION_KEY);
+
+    // A second turn now hits instead of re-planning again.
+    const secondTurn = await teacher.invoke(context);
+    expect(secondTurn.rationale).toBe("planned for here");
     expect(invoke).toHaveBeenCalledTimes(1);
   });
 
@@ -156,7 +148,7 @@ describe("running the Teacher off the critical path", () => {
     const { teacher, cache } = createTeacher(invoke as never);
 
     const context = contextHere();
-    cache.set(CONVERSATION, outgoing, {
+    cache.set(outgoing, {
       situationKey: SITUATION_KEY,
       learnerKey: "learner-key-BEFORE"
     });
@@ -165,7 +157,7 @@ describe("running the Teacher off the critical path", () => {
 
     // Meanwhile the world moves and something writes the correct plan for it.
     const correctForNewPlace = createDirectiveFixture({ rationale: "correct for the NEW place" });
-    cache.set(CONVERSATION, correctForNewPlace, {
+    cache.set(correctForNewPlace, {
       situationKey: "the-new-situation",
       learnerKey: "learner-key-NOW"
     });
@@ -173,7 +165,7 @@ describe("running the Teacher off the critical path", () => {
     release();
     await settle();
 
-    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("correct for the NEW place");
+    expect(cache.inspect()?.directive.rationale).toBe("correct for the NEW place");
   });
 
   it("two turns inside one re-plan window spend exactly one Teacher call", async () => {
@@ -182,7 +174,7 @@ describe("running the Teacher off the critical path", () => {
     const { teacher, cache } = createTeacher(invoke as never);
 
     const context = contextHere();
-    cache.set(CONVERSATION, outgoing, {
+    cache.set(outgoing, {
       situationKey: SITUATION_KEY,
       learnerKey: "learner-key-BEFORE"
     });
@@ -206,7 +198,7 @@ describe("running the Teacher off the critical path", () => {
     const { teacher, cache } = createTeacher(invoke as never);
 
     const context = contextHere();
-    cache.set(CONVERSATION, outgoing, {
+    cache.set(outgoing, {
       situationKey: SITUATION_KEY,
       learnerKey: "learner-key-BEFORE"
     });
@@ -217,7 +209,7 @@ describe("running the Teacher off the critical path", () => {
     expect(served.rationale).toBe("outgoing");
     // NOT swapped for a fallback directive: a fallback is a different quality
     // of teaching, and the real outgoing plan beats it.
-    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("outgoing");
+    expect(cache.inspect()?.directive.rationale).toBe("outgoing");
   });
 
   it("does not resurrect a directive for a conversation that ended", async () => {
@@ -226,18 +218,137 @@ describe("running the Teacher off the critical path", () => {
     const { teacher, cache } = createTeacher(invoke as never);
 
     const context = contextHere();
-    cache.set(CONVERSATION, outgoing, {
+    cache.set(outgoing, {
       situationKey: SITUATION_KEY,
       learnerKey: "learner-key-BEFORE"
     });
 
     await teacher.invoke(context);
-    cache.invalidate(CONVERSATION, "manual"); // the conversation ends
+    cache.invalidate(); // the conversation ends
 
     release();
     await settle();
 
-    expect(cache.inspect(CONVERSATION)).toBeNull();
+    expect(cache.inspect()).toBeNull();
+  });
+});
+
+describe("how long a stale directive may be served", () => {
+  beforeEach(() => {
+    beginTurnTimeline("test");
+  });
+  afterEach(() => {
+    endTurnTimeline();
+    vi.restoreAllMocks();
+  });
+
+  /** A stale entry the next turn will be offered. */
+  function seedStale(cache: DirectiveCache, rationale = "outgoing"): void {
+    cache.set(createDirectiveFixture({ rationale }), {
+      situationKey: "an-OLD-situation",
+      learnerKey: "old"
+    });
+  }
+
+  it("THE BOUND: blocks once three re-plans in a row have FAILED", async () => {
+    // Without this, a gateway that stays down means every turn for the rest of
+    // the session is taught from a plan for somewhere the player has left --
+    // which is the failure the old blocking rule existed to prevent.
+    const invoke = vi.fn(async () => {
+      throw new TeacherInvocationError("gateway down");
+    });
+    const { teacher, cache } = createTeacher(invoke as never);
+
+    for (let turn = 1; turn <= 3; turn++) {
+      seedStale(cache);
+      const served = await teacher.invoke(contextHere());
+      await settle();
+      expect(served.rationale).toBe("outgoing");
+    }
+    expect(invoke).toHaveBeenCalledTimes(3);
+
+    // The fourth turn stops serving stale. It calls, that call fails too, and
+    // the player gets the deterministic fallback rather than an old plan.
+    seedStale(cache);
+    const blocked = await teacher.invoke(contextHere());
+
+    expect(blocked.isFallbackDirective).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(4);
+  });
+
+  it("THE SAD CASE: a blocked turn that also fails serves the fallback, and caches it", async () => {
+    // The Teacher is still down when the bound trips. The stale plan is gone,
+    // so the turn gets deterministic teaching -- and that fallback is cached
+    // for the CURRENT world, which is what stops the next few turns from each
+    // paying for another failing call.
+    const invoke = vi.fn(async () => {
+      throw new TeacherInvocationError("gateway down");
+    });
+    const { teacher, cache } = createTeacher(invoke as never);
+
+    for (let turn = 1; turn <= 3; turn++) {
+      seedStale(cache);
+      await teacher.invoke(contextHere());
+      await settle();
+    }
+
+    seedStale(cache);
+    const blocked = await teacher.invoke(contextHere());
+    expect(blocked.isFallbackDirective).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(4);
+
+    // The fallback is now the entry, planned for where the player IS, so the
+    // turns after it are hits rather than four more failing calls.
+    const next = await teacher.invoke(contextHere());
+    expect(next.isFallbackDirective).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(4);
+  });
+
+  it("LATENCY IS NOT FAILURE: turns inside ONE slow re-plan never trip it", async () => {
+    // A fast player can send three turns inside an ~11s call. Counting those as
+    // failures would turn a healthy slow re-plan into the blocking wait this
+    // story exists to remove.
+    const { invoke, release } = deferredPolicy(
+      createDirectiveFixture({ rationale: "the replacement" })
+    );
+    const { teacher, cache } = createTeacher(invoke as never);
+    seedStale(cache);
+
+    for (let turn = 1; turn <= 4; turn++) {
+      const served = await teacher.invoke(contextHere());
+      expect(served.rationale).toBe("outgoing");
+    }
+    // ONE call for all four turns, and none of them waited for it.
+    expect(invoke).toHaveBeenCalledTimes(1);
+
+    release();
+    await settle();
+  });
+
+  it("a re-plan that succeeds clears the count", async () => {
+    let attempt = 0;
+    const invoke = vi.fn(async () => {
+      attempt += 1;
+      if (attempt <= 2) throw new TeacherInvocationError("blip");
+      return createDirectiveFixture({ rationale: "recovered" });
+    });
+    const { teacher, cache } = createTeacher(invoke as never);
+
+    // Two failures, then one that works.
+    for (let turn = 1; turn <= 3; turn++) {
+      seedStale(cache);
+      await teacher.invoke(contextHere());
+      await settle();
+    }
+
+    // Back to zero, so the next stale turn is served rather than blocked --
+    // proven by it not calling again.
+    seedStale(cache);
+    const served = await teacher.invoke(contextHere());
+    await settle();
+
+    expect(served.rationale).toBe("outgoing");
+    expect(invoke).toHaveBeenCalledTimes(4);
   });
 });
 
@@ -259,21 +370,21 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
     const planned = createDirectiveFixture({ rationale: "warmed" });
     const { teacher, cache, context } = warmSetup(async () => planned);
 
-    expect(await teacher.warmConversations([CONVERSATION], context)).toBe("warmed");
-    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("warmed");
+    expect(await teacher.warmRegion(context)).toBe("warmed");
+    expect(cache.inspect()?.directive.rationale).toBe("warmed");
   });
 
   it("does not spend a call on a slot that is already fresh", async () => {
     const invoke = vi.fn(async () => createDirectiveFixture());
     const { teacher, cache, context } = warmSetup(invoke as never);
-    cache.set(CONVERSATION, createDirectiveFixture({ rationale: "already here" }), {
+    cache.set(createDirectiveFixture({ rationale: "already here" }), {
       situationKey: SITUATION_NOW,
       learnerKey: "matching"
     });
 
     // learnerKey differs from the fixture's real one, so this is learner-stale
     // at worst -- which is served instantly anyway. Either way: no call.
-    const outcome = await teacher.warmConversations([CONVERSATION], context);
+    const outcome = await teacher.warmRegion(context);
 
     expect(outcome).toBe("fresh");
     expect(invoke).not.toHaveBeenCalled();
@@ -283,13 +394,13 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
     const planned = createDirectiveFixture({ rationale: "refilled" });
     const invoke = vi.fn(async () => planned);
     const { teacher, cache, context } = warmSetup(invoke as never);
-    cache.set(CONVERSATION, createDirectiveFixture({ rationale: "for elsewhere" }), {
+    cache.set(createDirectiveFixture({ rationale: "for elsewhere" }), {
       situationKey: "a-DIFFERENT-situation",
       learnerKey: "whatever"
     });
 
-    expect(await teacher.warmConversations([CONVERSATION], context)).toBe("warmed");
-    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("refilled");
+    expect(await teacher.warmRegion(context)).toBe("warmed");
+    expect(cache.inspect()?.directive.rationale).toBe("refilled");
   });
 
   it("NEVER AGES A REAL DIRECTIVE -- it must not go through invoke()", async () => {
@@ -297,7 +408,7 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
     // took. That is the bug `peek` was split out of `get` to prevent.
     const invoke = vi.fn(async () => createDirectiveFixture());
     const { teacher, cache, context } = warmSetup(invoke as never);
-    cache.set(CONVERSATION, createDirectiveFixture(), {
+    cache.set(createDirectiveFixture(), {
       situationKey: SITUATION_NOW,
       learnerKey: "x"
     });
@@ -306,7 +417,7 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
     // counter moved -- it asserted nothing and passed with the bug present.
     const spendTurn = vi.spyOn(cache, "spendTurn");
 
-    await teacher.warmConversations([CONVERSATION], context);
+    await teacher.warmRegion(context);
 
     expect(spendTurn).not.toHaveBeenCalled();
   });
@@ -320,23 +431,23 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
     );
     const { teacher, cache, context } = warmSetup(invoke as never);
 
-    const warming = teacher.warmConversations([CONVERSATION], context);
-    cache.set(CONVERSATION, createDirectiveFixture({ rationale: "the real one" }), {
+    const warming = teacher.warmRegion(context);
+    cache.set(createDirectiveFixture({ rationale: "the real one" }), {
       situationKey: SITUATION_NOW,
       learnerKey: "from-the-real-turn"
     });
     release();
 
     expect(await warming).toBe("skipped");
-    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("the real one");
+    expect(cache.inspect()?.directive.rationale).toBe("the real one");
   });
 
-  it("one call in flight per conversation", async () => {
+  it("one call in flight per situation", async () => {
     const { invoke, release } = deferredPolicy(createDirectiveFixture());
     const { teacher, context } = warmSetup(invoke as never);
 
-    const first = teacher.warmConversations([CONVERSATION], context);
-    expect(await teacher.warmConversations([CONVERSATION], context)).toBe("in-flight");
+    const first = teacher.warmRegion(context);
+    expect(await teacher.warmRegion(context)).toBe("in-flight");
 
     release();
     await first;
@@ -350,8 +461,8 @@ describe("warming a conversation that has not happened yet (sugarmagic-latency-0
       throw new TeacherInvocationError("gateway down");
     });
 
-    expect(await teacher.warmConversations([CONVERSATION], context)).toBe("failed");
-    expect(cache.inspect(CONVERSATION)).toBeNull();
+    expect(await teacher.warmRegion(context)).toBe("failed");
+    expect(cache.inspect()).toBeNull();
   });
 });
 
@@ -365,7 +476,7 @@ describe("a turn joins a warm-up already in flight (sugarmagic-latency-00m)", ()
     const { teacher } = createTeacher(invoke as never);
     const context = contextHere();
 
-    const warming = teacher.warmConversations([CONVERSATION], context);
+    const warming = teacher.warmRegion(context);
     // The player presses interact while the warm-up is still running.
     const turn = teacher.invoke(context);
 
@@ -389,7 +500,7 @@ describe("a turn joins a warm-up already in flight (sugarmagic-latency-00m)", ()
     const { teacher } = createTeacher(invoke as never);
     const context = contextHere();
 
-    await teacher.warmConversations([CONVERSATION], context);
+    await teacher.warmRegion(context);
     const served = await teacher.invoke(context);
 
     expect(served.rationale).toBe("the turn's own");
@@ -398,38 +509,33 @@ describe("a turn joins a warm-up already in flight (sugarmagic-latency-00m)", ()
 });
 
 describe("mini-review fixes: cost and the join (sugarmagic-latency-00m)", () => {
-  it("THE COST BUG: warming N NPCs spends ONE Teacher call, not N", async () => {
-    // The directive cache is scoped per conversation
-    // (createActiveDirectiveFactScope -> ("conversation", conversationId)), so
-    // NPC B's slot can never be a cache hit off NPC A's. An earlier version
-    // looped per NPC believing otherwise: a region with 5 NPCs fired 5 full
-    // ~9s Teacher calls, repeating on every time-of-day and quest change.
+  it("THE COST BUG: warming a region of NPCs spends ONE Teacher call, not N", async () => {
+    // One entry serves everyone standing in the region, so warming is one call
+    // and one write. An early version looped per NPC while the cache was scoped
+    // per conversation: a region with 5 NPCs fired 5 full ~9s Teacher calls,
+    // repeating on every time-of-day and quest change.
     const invoke = vi.fn(async () => createDirectiveFixture({ rationale: "one plan" }));
     const { teacher, cache } = createTeacher(invoke as never);
     const context = contextHere();
 
-    const outcome = await teacher.warmConversations(["npc-a", "npc-b", "npc-c"], context);
+    const outcome = await teacher.warmRegion(context);
 
     expect(outcome).toBe("warmed");
     expect(invoke).toHaveBeenCalledTimes(1);
-    // ...and every slot got filled from that one call.
-    for (const npcId of ["npc-a", "npc-b", "npc-c"]) {
-      expect(cache.inspect(npcId)?.directive.rationale).toBe("one plan");
-    }
+    // ...and it is what any NPC's first turn reads.
+    expect(cache.inspect()?.directive.rationale).toBe("one plan");
   });
 
-  it("skips slots that are already fresh, and spends nothing when all are", async () => {
+  it("spends nothing when the entry is already fresh", async () => {
     const invoke = vi.fn(async () => createDirectiveFixture());
     const { teacher, cache } = createTeacher(invoke as never);
     const context = contextHere();
-    for (const npcId of ["npc-a", "npc-b"]) {
-      cache.set(npcId, createDirectiveFixture({ rationale: "already here" }), {
-        situationKey: SITUATION_KEY,
-        learnerKey: "whatever"
-      });
-    }
+    cache.set(createDirectiveFixture({ rationale: "already here" }), {
+      situationKey: SITUATION_KEY,
+      learnerKey: "whatever"
+    });
 
-    expect(await teacher.warmConversations(["npc-a", "npc-b"], context)).toBe("fresh");
+    expect(await teacher.warmRegion(context)).toBe("fresh");
     expect(invoke).not.toHaveBeenCalled();
   });
 
@@ -456,8 +562,7 @@ describe("mini-review fixes: cost and the join (sugarmagic-latency-00m)", () => 
     });
     const { teacher } = createTeacher(invoke as never);
 
-    const warming = teacher.warmConversations(
-      [CONVERSATION],
+    const warming = teacher.warmRegion(
       createTeacherContext({ conversationId: CONVERSATION, situationKey: "the-OLD-situation" })
     );
 
@@ -488,29 +593,29 @@ describe("mini-review round 2: the warm write is a compare-and-set", () => {
     });
     const { teacher, cache } = createTeacher(invoke as never);
 
-    const warming = teacher.warmConversations([CONVERSATION], contextHere());
+    const warming = teacher.warmRegion(contextHere());
 
     // The world moves and a real turn writes a directive for the new one.
-    cache.set(CONVERSATION, createDirectiveFixture({ rationale: "newer, for the new world" }), {
+    cache.set(createDirectiveFixture({ rationale: "newer, for the new world" }), {
       situationKey: "the-NEW-situation",
       learnerKey: "from-the-real-turn"
     });
 
     release();
     expect(await warming).toBe("skipped");
-    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("newer, for the new world");
+    expect(cache.inspect()?.directive.rationale).toBe("newer, for the new world");
   });
 
   it("still refills a slot nothing else claimed", async () => {
     // The guard must not over-correct into never writing.
     const invoke = vi.fn(async () => createDirectiveFixture({ rationale: "refilled" }));
     const { teacher, cache } = createTeacher(invoke as never);
-    cache.set(CONVERSATION, createDirectiveFixture({ rationale: "for elsewhere" }), {
+    cache.set(createDirectiveFixture({ rationale: "for elsewhere" }), {
       situationKey: "an-OLD-situation",
       learnerKey: "x"
     });
 
-    expect(await teacher.warmConversations([CONVERSATION], contextHere())).toBe("warmed");
-    expect(cache.inspect(CONVERSATION)?.directive.rationale).toBe("refilled");
+    expect(await teacher.warmRegion(contextHere())).toBe("warmed");
+    expect(cache.inspect()?.directive.rationale).toBe("refilled");
   });
 });

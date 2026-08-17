@@ -76,6 +76,45 @@ const REQUEST = {
 };
 
 describe("SceneContextExtractor", () => {
+  it("sends the schema so the reply cannot be JSON that fails to parse", async () => {
+    const { extractor, calls } = makeExtractor(
+      JSON.stringify({ prose: "A dock.", concepts: [] })
+    );
+    await extractor.extract(REQUEST);
+
+    // Constrained, not merely requested. Without this a single missing comma
+    // lost a whole scene's concepts, and it did for several edits.
+    expect(calls[0]?.outputSchema).toBeDefined();
+    expect((calls[0]?.outputSchema as { type?: string }).type).toBe("object");
+  });
+
+  it("calls a truncated reply truncated, not invalid JSON", async () => {
+    // These are indistinguishable once the text reaches a parser: both arrive
+    // as something that will not parse. Reporting truncation as bad syntax is
+    // what sent a real diagnosis days in the wrong direction -- every failing
+    // reply had simply run out of room.
+    const calls: SugarlangLLMRequest[] = [];
+    const extractor = new SceneContextExtractor({
+      llmClient: {
+        generate: vi.fn(async (request: SugarlangLLMRequest) => {
+          calls.push(request);
+          return {
+            text: '{"prose":"A dock.","concepts":[{"label":"cargo"',
+            requestId: "req-1",
+            stopReason: "max_tokens"
+          };
+        })
+      } as unknown as SugarlangLLMClient
+    });
+
+    const result = await extractor.extract(REQUEST);
+
+    expect(result.failure?.code).toBe("extractor_response_truncated");
+    expect(result.failure?.message).toContain("did not fit");
+    // Still fail-soft: authored prose survives, concepts do not.
+    expect(result.model.concepts).toEqual([]);
+  });
+
   it("extracts concepts inferred from prose, not copied from it", async () => {
     // The motivating case: "cheese" never appears as a standalone word in
     // Finnick's bio, and the word-scanning path therefore cannot nominate it.

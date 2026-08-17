@@ -52,8 +52,10 @@ game shipped misconfigured, and the previous behaviour -- returning early --
 ran every conversation with sugarlang silently inert.
 
 **`sugarlang.teacher` (policy, 30).** Composes the `Situation` and invokes the
-Teacher (`runtime/teacher/sugar-lang-teacher.ts`): directive cache first, then
-the Claude policy via the gateway, then the deterministic fallback policy. Turns
+Teacher (`runtime/teacher/sugar-lang-teacher.ts`): the in-memory directive
+cache first -- which serves what it holds rather than making the turn wait,
+even when that directive has stopped applying -- then the Claude policy via the
+gateway, then the deterministic fallback policy. Turns
 the resulting `PedagogicalDirective` into the `sugarlang.constraint` annotation
 (including the `generatorPromptOverlay` string the NPC generator splices
 verbatim), decides comprehension-probe triggering against the probe floor, and

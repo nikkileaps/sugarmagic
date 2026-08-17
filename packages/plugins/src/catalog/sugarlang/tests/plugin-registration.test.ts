@@ -67,7 +67,14 @@ describe("sugarlang plugin registration", () => {
       "conversation.middleware",
       "conversation.middleware"
     ]);
-    expect(instance.blackboardFactDefinitions).toHaveLength(4);
+    // Learner state only. The Teacher's current directive is NOT among these:
+    // it is a cache, rebuildable by asking the Teacher again, and it lives in
+    // the directive store rather than in the world state.
+    expect(instance.blackboardFactDefinitions?.map((fact) => fact.key)).toEqual([
+      "sugarlang.learner-profile",
+      "sugarlang.placement-status",
+      "sugarlang.lemma-observation"
+    ]);
     expect(typeof instance.init).toBe("function");
     expect(typeof instance.dispose).toBe("function");
   });

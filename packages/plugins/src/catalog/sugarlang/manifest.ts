@@ -374,12 +374,22 @@ export function createSugarlangPlugin(
         };
       }
     },
+    // The first conversation of a session is the one the frame-tick warmer
+    // cannot help: it fires on a timer that the player can outrun. Warming here
+    // means the directive is decided against the world the save just restored,
+    // rather than against whatever had loaded when the timer happened to fire.
+    async beforeFirstFrame() {
+      await regionWarmer.warmNow();
+    },
     async dispose() {
       // Stop the warmer FIRST: a ~9s Teacher call in flight would otherwise
-      // land and write into a torn-down blackboard. Its own test asserts this
-      // guarantee, and until this line existed the guarantee was untested
-      // behaviour that production never invoked.
+      // land and write a directive for a region nobody is in any more. Its own
+      // test asserts this guarantee, and until this line existed the guarantee
+      // was untested behaviour that production never invoked.
       regionWarmer.dispose();
+      // Then the directive itself. Stopping the warmer stops new calls; this
+      // drops what is held and refuses a write from a call already running.
+      services.disposeTeachers();
       // 081.2: flush buffered telemetry on conversation/plugin teardown so
       // the session tail is not lost, then tear down sink timers/listeners.
       await flushTelemetry(telemetry, logger);

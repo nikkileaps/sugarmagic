@@ -81,7 +81,11 @@ export class SugarlangGatewayClient implements SugarlangLLMClient {
         systemPrompt: request.systemPrompt,
         ...(request.systemBlocks ? { systemBlocks: request.systemBlocks } : {}),
         userPrompt: request.userPrompt,
-        maxTokens: request.maxTokens
+        maxTokens: request.maxTokens,
+        // Omitted when absent so an older gateway sees the request it always
+        // saw. A gateway that does not know this field ignores it and the
+        // caller falls back to parsing whatever the model chose to write.
+        ...(request.outputSchema ? { outputSchema: request.outputSchema } : {})
       })
     });
 
@@ -102,6 +106,7 @@ export class SugarlangGatewayClient implements SugarlangLLMClient {
     return {
       text: typeof result.text === "string" ? result.text : "",
       requestId: typeof result.requestId === "string" ? result.requestId : null,
+      stopReason: typeof result.stopReason === "string" ? result.stopReason : null,
       inputTokens: count("inputTokens"),
       outputTokens: count("outputTokens"),
       cacheReadInputTokens: count("cacheReadInputTokens"),

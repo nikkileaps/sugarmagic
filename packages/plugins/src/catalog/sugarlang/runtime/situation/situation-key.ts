@@ -31,6 +31,8 @@
  *
  * Exports:
  *   - situationKey
+ *   - describeSituationKeyChange
+ *   - movedSituationKeySegments
  *
  * Relationships:
  *   - Pure. Consumed by the directive cache to decide whether a cached decision
@@ -70,4 +72,75 @@ export function situationKey(situation: Situation): string {
     `nodes:${objectives}`,
     `time:${time}`
   ].join("|");
+}
+
+/**
+ * Which parts of the key moved, for a reader trying to find out why a cached
+ * decision stopped applying.
+ *
+ * `situation_change` is one word for five different events -- the player walked
+ * into another scene, the scene was rebuilt, a quest advanced, an objective
+ * moved, the clock crossed a band -- and they call for different fixes. Which
+ * one it was has been guessed at repeatedly and never measured, so this makes
+ * the key say it.
+ *
+ * Pure, and returns a short string meant to sit on one log line.
+ */
+export function describeSituationKeyChange(
+  plannedFor: string | undefined,
+  now: string | undefined
+): string {
+  if (!plannedFor || !now) return "unknown (a key was missing)";
+  if (plannedFor === now) return "no change";
+
+  const before = readKey(plannedFor);
+  const after = readKey(now);
+  const moved = movedSegmentNames(before, after).map(
+    (segment) =>
+      `${segment}: ${before.get(segment) ?? "(absent)"} -> ${after.get(segment) ?? "(absent)"}`
+  );
+
+  // A key that changed in no named segment means the FORMAT changed, which is
+  // worth saying rather than reporting nothing moved.
+  return moved.length > 0 ? moved.join("; ") : "the key format changed";
+}
+
+/**
+ * The NAMES of the parts that moved -- `["nodes"]`, `["quest", "time"]` -- with
+ * no values.
+ *
+ * FOR TELEMETRY, where the values are worse than useless. Every segment but
+ * `time` holds a uuid or a hash, so a field carrying values has a cardinality
+ * of roughly one per player and nothing can be grouped by it. The names are the
+ * question anyone actually asks of a fleet: what invalidates these directives
+ * out there, and has it changed.
+ *
+ * Empty when the keys match, or when either is missing.
+ */
+export function movedSituationKeySegments(
+  plannedFor: string | undefined,
+  now: string | undefined
+): string[] {
+  if (!plannedFor || !now || plannedFor === now) return [];
+  return movedSegmentNames(readKey(plannedFor), readKey(now));
+}
+
+function readKey(key: string): Map<string, string> {
+  return new Map(
+    key.split("|").map((part) => {
+      const at = part.indexOf(":");
+      return at === -1
+        ? ([part, ""] as [string, string])
+        : ([part.slice(0, at), part.slice(at + 1)] as [string, string]);
+    })
+  );
+}
+
+function movedSegmentNames(
+  before: Map<string, string>,
+  after: Map<string, string>
+): string[] {
+  return [...new Set([...before.keys(), ...after.keys()])].filter(
+    (segment) => before.get(segment) !== after.get(segment)
+  );
 }

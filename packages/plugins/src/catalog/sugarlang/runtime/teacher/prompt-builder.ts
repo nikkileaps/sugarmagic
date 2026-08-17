@@ -304,19 +304,44 @@ function estimateDueScore(card: TeacherContext["learner"]["lemmaCards"][string])
     card.provisionalEvidence;
 }
 
-function isProbableFirstMeeting(context: TeacherContext): boolean {
-  return (context.situation?.recentTurns ?? []).length === 0;
+/**
+ * Whether this looks like the NPC's first meeting with the player.
+ *
+ * THREE ANSWERS, NOT TWO. No recent turns means a first meeting; recent turns
+ * mean an ongoing conversation; and no LIST AT ALL means we were not planning
+ * for a conversation and cannot say. That last case is how a directive shared
+ * by every NPC is planned, and reading it as "first meeting" would tell the
+ * Teacher to plan a greeting for a player who is twenty turns into a
+ * conversation.
+ */
+function isProbableFirstMeeting(context: TeacherContext): boolean | null {
+  const recentTurns = context.situation?.recentTurns;
+  if (!recentTurns) {
+    return null;
+  }
+  return recentTurns.length === 0;
+}
+
+/**
+ * Turns elapsed in this conversation since the last comprehension probe, or
+ * null when we were not planning for a conversation and cannot say.
+ */
+function turnsSinceLastProbe(context: TeacherContext): number | null {
+  return context.situation?.turnsSinceLastProbe ?? null;
 }
 
 /**
  * 090.4: probe-pacing signals, derived rather than carried. See
  * learner/pacing-signals.ts.
+ *
+ * A plan with no conversation counts as zero turns since the last probe, which
+ * keeps the floors that COUNT TURNS from firing on it. That is deliberate:
+ * they are about one conversation's pacing and a shared plan is not about one
+ * conversation. The floor that ages pending lemmas reads the learner's cards
+ * and works either way.
  */
 function pacingSignals(context: TeacherContext) {
-  return computePacingSignals(
-    context.learner,
-    context.situation?.turnsSinceLastProbe ?? 0
-  );
+  return computePacingSignals(context.learner, turnsSinceLastProbe(context) ?? 0);
 }
 
 function isA1OrLowerConfidence(context: TeacherContext): boolean {
@@ -434,13 +459,22 @@ function formatCompetencyStandingLines(context: TeacherContext): string[] {
 
 export function formatRelationshipState(context: TeacherContext): string {
   const probableFirstMeeting = isProbableFirstMeeting(context);
+  const recentTurns = context.situation?.recentTurns;
   return [
     "RELATIONSHIP STATE:",
-    `- prior dialogue turns with this NPC in prompt context: ${(context.situation?.recentTurns ?? []).length}`,
-    `- relationship state: ${
-      probableFirstMeeting ? "probable_first_meeting" : "ongoing_conversation"
+    `- prior dialogue turns with this NPC in prompt context: ${
+      recentTurns ? recentTurns.length : UNKNOWN_SECTION
     }`,
-    `- opening turn: ${probableFirstMeeting ? "yes" : "no"}`,
+    `- relationship state: ${
+      probableFirstMeeting === null
+        ? UNKNOWN_SECTION
+        : probableFirstMeeting
+          ? "probable_first_meeting"
+          : "ongoing_conversation"
+    }`,
+    `- opening turn: ${
+      probableFirstMeeting === null ? UNKNOWN_SECTION : probableFirstMeeting ? "yes" : "no"
+    }`,
     `- calibration active: ${context.calibrationActive ? "yes" : "no"}`
   ].join("\n");
 }
@@ -578,7 +612,12 @@ export function formatProbeFloorState(context: TeacherContext): string {
     ? `HARD FLOOR - probe REQUIRED this turn (reason: ${state.hardFloorReason ?? "unspecified"})`
     : "hard floor not reached";
 
-  return `turnsSinceLastProbe=${state.turnsSinceLastProbe}; totalPendingLemmas=${state.totalPendingLemmas}; ${soft}; ${hard}`;
+  // Turns since the last probe are conversation state. A directive shared by
+  // every NPC is planned without one, and printing 0 there would state that a
+  // probe just happened. The floors that count turns simply do not fire on
+  // such a plan; the one that ages pending lemmas still does.
+  const turns = turnsSinceLastProbe(context);
+  return `turnsSinceLastProbe=${turns === null ? UNKNOWN_SECTION : turns}; totalPendingLemmas=${state.totalPendingLemmas}; ${soft}; ${hard}`;
 }
 
 export function formatGameMoment(context: TeacherContext): string {
@@ -747,7 +786,11 @@ export function formatPendingProvisional(context: TeacherContext): string {
     "",
     ...lines,
     "",
-    `Total pending: ${pendingProvisionalLemmas.length} lemmas, ${floorState.turnsSinceLastProbe} turns since last probe.`,
+    `Total pending: ${pendingProvisionalLemmas.length} lemmas, ${
+      turnsSinceLastProbe(context) === null
+        ? UNKNOWN_SECTION
+        : floorState.turnsSinceLastProbe
+    } turns since last probe.`,
     `Probe floor state: ${floorSummary || "no probe floor active"}`
   ].join("\n");
 }
@@ -755,7 +798,9 @@ export function formatPendingProvisional(context: TeacherContext): string {
 export function formatTurnShapingHints(context: TeacherContext): string {
   const hints: string[] = [];
 
-  if (isProbableFirstMeeting(context)) {
+  // Only when we actually know it is a first meeting. A shared plan cannot
+  // know, and guessing yes would ask for a greeting mid-conversation.
+  if (isProbableFirstMeeting(context) === true) {
     hints.push(
       "This appears to be the NPC's first meeting with the player. A brief greeting or tiny self-introduction is enough."
     );

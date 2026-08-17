@@ -114,8 +114,8 @@ one. This is the predicted-vs-observed calibration signal: join it against
 |---|---|
 | `teacher.invocation-started` / `-failed` | `runtime/teacher/policies/llm-teacher-policy.ts` |
 | `teacher.invocation-completed` | `runtime/teacher/sugar-lang-teacher.ts` and `llm-teacher-policy.ts` |
-| `teacher.cache-hit` / `teacher.invocation-resolved` | `runtime/teacher/sugar-lang-teacher.ts` |
-| `directive-cache.invalidated` | `runtime/teacher/directive-cache.ts` |
+| `teacher.invocation-resolved` | `runtime/teacher/sugar-lang-teacher.ts` |
+| `directive-cache.decision` | `runtime/teacher/sugar-lang-teacher.ts` |
 | `quest-essential.teacher-forced-glossing` | `runtime/teacher/schema-parser.ts` |
 | `quest-essential.teacher-targetvocab-contamination` | `runtime/teacher/schema-parser.ts` |
 
@@ -185,6 +185,34 @@ Aggregation (sessions per week, turns per session, probe pass rates) needs a
 log sink into BigQuery. That is configuration on the Cloud Run project rather
 than code here; every event already carries `sessionId`, `conversationId`,
 `turnId` and a timestamp to join on.
+
+### Is the directive cache working
+
+`directive-cache.decision` fires once per turn wherever the Teacher is
+consulted, and carries the whole decision on one row:
+
+| Field | Meaning |
+|---|---|
+| `outcome` | `hit`, `stale-served`, or `blocking-miss` |
+| `staleness` | which axis retired the entry; null on a hit |
+| `movedSegments` | segment NAMES of the situation key that moved -- `["nodes"]`, `["quest","time"]`. Never values: every segment but `time` is a uuid or a hash, and values would give this one distinct value per player |
+| `firstTurnOfConversation` | the turn the cache is measured on; later turns hit regardless |
+| `teacherMs` | what the turn actually waited -- ~0 when served, seconds when blocking |
+
+One row per decision is deliberate: a rate needs its numerator and its
+denominator on the same event.
+
+Three questions it answers:
+
+- **Working?** Share of rows with `firstTurnOfConversation = true` where
+  `outcome = hit`.
+- **Regressed?** Any sustained rate of `outcome = blocking-miss`. That is the
+  outcome the cache exists to prevent, so a non-zero rate is the alarm: it
+  catches warming having stopped, the stale-serve bound tripping because the
+  gateway is failing, the boot warm not firing, and the cache not being written.
+- **What invalidates these in the wild?** Group by `movedSegments`. `time`
+  dominating would mean the clock band is finer than the directive's useful
+  life; `hash` appearing means scenes are being rebuilt under live players.
 
 ## Gateway Ingestion Route
 

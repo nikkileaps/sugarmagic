@@ -26,10 +26,6 @@ This document records the runtime learner-state model owned by sugarlang.
   Scope: `global`
   Lifetime: `persistent`
   Writer: `sugarlang.placement`
-- `ACTIVE_DIRECTIVE_FACT`
-  Scope: `conversation`
-  Lifetime: `session`
-  Writer: `sugarlang.directive`
 - `LEMMA_OBSERVATION_FACT`
   Scope: `conversation`
   Lifetime: `frame`

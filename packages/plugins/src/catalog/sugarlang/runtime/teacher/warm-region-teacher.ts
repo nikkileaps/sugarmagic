@@ -17,19 +17,15 @@
  * ONE CALL FOR THE WHOLE REGION
  *   The situation key is scene + content hash + quest stage + objectives +
  *   time, and `sceneId` IS the region id -- there is no per-area or per-NPC
- *   axis in it. The Teacher also barely differentiates by NPC today: it
- *   receives a uuid, a display name and a lore page ID, never the page
- *   (sugarmagic-teaching-rnw). So one call, written into every present NPC's
- *   slot, is faithful to what the Teacher actually does.
+ *   axis in it. The directive store holds ONE entry keyed by that pair of
+ *   keys, so warming is one call and one write however many NPCs are standing
+ *   there, and `warmRegion` takes no ids at all.
  *
- *   THIS IS ENFORCED BY `warmConversations`, WHICH TAKES ALL THE IDS AT ONCE.
- *   An earlier version looped a per-NPC warm and claimed the later calls would
- *   hit cache. They cannot: the directive cache is scoped per conversation, so
- *   a region with N NPCs billed N full Teacher calls and repeated the set on
- *   every time-of-day and quest-stage change. Caught in review before it
- *   shipped; do not reintroduce a per-NPC loop here. If rnw lands and
- *   directives become genuinely NPC-specific, THIS MUST BECOME ONE CALL PER
- *   NPC, and the cost question it currently sidesteps comes back.
+ *   Do not reintroduce a per-NPC loop here. An earlier version looped a
+ *   per-NPC warm and claimed the later calls would hit cache; they could not,
+ *   because the cache was then scoped per conversation, so a region with N
+ *   NPCs billed N full Teacher calls and repeated the set on every
+ *   time-of-day and quest-stage change.
  *
  * WHY A WASTED FIRST WARM IS ACCEPTED
  *   Plugin init runs BEFORE the save restore, so an early warm can compute a
@@ -100,6 +96,19 @@ export interface RegionTeacherWarmer {
   /** Drive from the plugin's per-frame update, in MILLISECONDS. The runtime
    *  frame delta is in seconds -- convert at the call site. */
   tick: (deltaMs: number) => void;
+  /**
+   * Warm once and resolve when it is done, for the boot step that runs before
+   * the player can act.
+   *
+   * SAME CHECK AS THE TICK, awaited instead of fired and forgotten. Two
+   * implementations of "should this warm, and against what" would drift, and
+   * the whole value of warming at boot is that it decides against the same
+   * world state the next turn will read.
+   *
+   * Never throws: an unprepared first turn is slower, not broken, and this is
+   * awaited by the boot.
+   */
+  warmNow: () => Promise<void>;
   /** Forget what was warmed, so the next tick re-warms. For a conversation
    *  ending: it may have advanced a quest, which moves the key. */
   invalidate: () => void;
@@ -150,8 +159,22 @@ export function createRegionTeacherWarmer(deps: RegionWarmerDeps): RegionTeacher
     // meant a failed warm -- gateway down, model erroring -- was recorded as
     // done and never retried until the world moved, which on a fixed region
     // can be a long time.
-    if (outcome !== "failed") {
+    //
+    // "fresh" counts: the entry already suits this world state, which is what
+    // warming is for. "warmed" counts: this call wrote it.
+    if (outcome === "fresh" || outcome === "warmed") {
       warmedForKey = built.situationKey;
+      return;
+    }
+
+    // "in-flight" and "skipped" are not warms and are not failures. Another
+    // call owns this key -- a turn's background re-plan, or the boot warm --
+    // and it will write the entry. Do not remember the state (nothing was
+    // warmed yet) and do not spend the budget, which exists for a Teacher that
+    // cannot be reached. A ~11s call outlasts several 2s ticks, so counting
+    // these would give up on a key while the work for it is still running.
+    if (outcome === "in-flight" || outcome === "skipped") {
+      attempts -= 1;
       return;
     }
 
@@ -179,6 +202,21 @@ export function createRegionTeacherWarmer(deps: RegionWarmerDeps): RegionTeacher
         .finally(() => {
           running = false;
         });
+    },
+    async warmNow(): Promise<void> {
+      if (disposed || running) return;
+      running = true;
+      // The tick's throttle is about not re-deciding 60 times a second. This
+      // is one deliberate call, so it resets the clock rather than obeying it.
+      sinceLastCheckMs = 0;
+      try {
+        await runCheck();
+      } catch {
+        // Same trade as the tick: warming is an optimisation, and the boot
+        // that awaits this must not fail because the gateway did.
+      } finally {
+        running = false;
+      }
     },
     invalidate(): void {
       warmedForKey = null;

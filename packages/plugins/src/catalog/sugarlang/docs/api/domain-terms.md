@@ -201,10 +201,12 @@ Source of truth: `postureForBand` and `TARGET_LANGUAGE_RATIO_BY_POSTURE`
 
 ### Directive
 
-The Teacher's output for a conversation: what to introduce, reinforce and
+The Teacher's output for a situation: what to introduce, reinforce and
 avoid, plus posture, ratio, complexity cap and whether to run a comprehension
-check. Type: `PedagogicalDirective` (`runtime/contracts/pedagogy.ts`). Cached per
-conversation by `DirectiveCache`.
+check. Type: `PedagogicalDirective` (`runtime/contracts/pedagogy.ts`). Held in
+memory by `DirectiveCache` as ONE entry keyed on `situationKey` + `learnerKey`
+and shared by every NPC in the region -- neither key has an NPC axis, so a
+directive is about the situation rather than about who is speaking.
 
 ### Slate
 

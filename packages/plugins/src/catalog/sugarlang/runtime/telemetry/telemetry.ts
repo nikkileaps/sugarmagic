@@ -168,8 +168,40 @@ export type TelemetryEvent =
       }
     >
   | TelemetryEventOf<
-      "teacher.cache-hit",
+      /**
+       * What the directive cache did on this turn. ONE event, three outcomes,
+       * emitted once wherever the Teacher is consulted for a real turn.
+       *
+       * The questions it answers:
+       *   working    -- rate of `hit` where firstTurnOfConversation is true
+       *   regressed  -- any sustained rate of `blocking-miss`, the outcome the
+       *                 cache exists to prevent
+       *   what moved -- group by movedSegments when the world went stale
+       */
+      "directive-cache.decision",
       {
+        outcome: "hit" | "stale-served" | "blocking-miss";
+        /** Null on a hit. Which axis retired the entry otherwise. */
+        staleness:
+          | "situation_change"
+          | "learner_change"
+          | "max_turns_exceeded"
+          | null;
+        /**
+         * SEGMENT NAMES ONLY -- ["nodes"], ["quest","time"] -- never values.
+         * Every segment but `time` is a uuid or a hash, so values would give
+         * this field one distinct value per player and nothing could be
+         * grouped by it.
+         */
+        movedSegments: string[];
+        /**
+         * The turn the cache is measured on. Every later turn in a
+         * conversation hits anyway, so a fleet-wide hit rate that does not
+         * separate these says nothing.
+         */
+        firstTurnOfConversation: boolean;
+        /** What the turn actually waited: ~0 served, seconds when blocking. */
+        teacherMs: number;
         sceneId?: string;
         npcId?: string | null;
         npcDisplayName?: string | null;
@@ -646,18 +678,6 @@ export type TelemetryEvent =
         sourceObjectiveDisplayName: string;
         highBandLemmas: string[];
         suggestion: string;
-      }
-    >
-  | TelemetryEventOf<
-      "directive-cache.invalidated",
-      {
-        conversationId: string;
-        reason:
-          | "max_turns_exceeded"
-          | "quest_stage_change"
-          | "location_change"
-          | "player_code_switch"
-          | "manual";
       }
     >
   | TelemetryEventOf<

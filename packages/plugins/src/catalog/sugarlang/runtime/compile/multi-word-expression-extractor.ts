@@ -78,7 +78,7 @@
 
 import Ajv from "ajv";
 import type { ErrorObject } from "ajv";
-import type { SugarlangLLMClient } from "../llm/types";
+import type { SugarlangLLMClient, SugarlangLLMResult } from "../llm/types";
 import { EXTRACTION_PURPOSE } from "../llm/types";
 import type { LexicalAtlasProvider, LexicalChunk } from "../types";
 import type { TextBlob } from "./scene-traversal";
@@ -338,7 +338,10 @@ async function runExtraction(
   const now = input.now ?? (() => Date.now());
   const promptVersion = input.promptVersion ?? MWE_EXTRACTOR_PROMPT_VERSION;
   const model = input.model ?? "gateway-resolved";
-  const maxTokens = input.maxTokens ?? 900;
+  // Room to finish. The sibling scene-context pass truncated silently at its
+  // old ceiling and the failure read as invalid JSON for days; `max_tokens` is
+  // a ceiling rather than a reservation, so headroom is free.
+  const maxTokens = input.maxTokens ?? 4000;
   const prompt = buildMultiWordExpressionPrompt(
     input.sceneText,
     input.lang,
@@ -359,13 +362,17 @@ async function runExtraction(
     })
   );
 
-  let response: { text: string; requestId: string | null };
+  let response: SugarlangLLMResult;
   try {
     response = await input.llmClient.generate({
       purpose: EXTRACTION_PURPOSE,
       systemPrompt: prompt.system,
       userPrompt: prompt.user,
-      maxTokens
+      maxTokens,
+      // Same reason as the scene-context pass: the schema in the prompt asks,
+      // this constrains. Both passes failed in the same rebuild on JSON that
+      // did not parse.
+      outputSchema: MWE_SCHEMA
     });
   } catch (error) {
     const failure = {
@@ -396,6 +403,13 @@ async function runExtraction(
   }
 
   try {
+    // Truncation reads as bad syntax once it reaches the parser. Say which.
+    if (response.stopReason === "max_tokens") {
+      throw new Error(
+        `Chunk extraction did not fit in ${maxTokens} output tokens. ` +
+          `Raise maxTokens, or split the scene's authored content.`
+      );
+    }
     const payload = parseChunkPayload(response.text);
     const extractedAtMs = now();
     const chunks = payload.chunks

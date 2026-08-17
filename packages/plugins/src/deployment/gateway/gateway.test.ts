@@ -12,8 +12,79 @@ import {
   splitLoreSections,
   handleSugarAgentGenerate,
   handleSugarAgentSearch,
-  handleSugarAgentLoreStatus
+  handleSugarAgentLoreStatus,
+  toStructuredOutputSchema
 } from "./core";
+
+describe("toStructuredOutputSchema", () => {
+  it("drops the keywords the provider rejects, at every depth", () => {
+    const sanitized = toStructuredOutputSchema({
+      type: "object",
+      required: ["concepts"],
+      properties: {
+        concepts: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", minLength: 1, maxLength: 40 },
+              pos: { type: "string", enum: ["noun", "verb"] }
+            }
+          }
+        }
+      }
+    });
+
+    expect(sanitized).toEqual({
+      type: "object",
+      additionalProperties: false,
+      required: ["concepts"],
+      properties: {
+        concepts: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              label: { type: "string" },
+              // enum survives -- it is supported, and it is what keeps a
+              // hallucinated part of speech from reaching resolution.
+              pos: { type: "string", enum: ["noun", "verb"] }
+            }
+          }
+        }
+      }
+    });
+  });
+
+  it("keeps a field whose NAME collides with a dropped keyword", () => {
+    // `properties` holds field names, not keywords. Filtering them as keywords
+    // would silently delete the field.
+    const sanitized = toStructuredOutputSchema({
+      type: "object",
+      properties: { pattern: { type: "string" }, maxLength: { type: "number" } }
+    }) as { properties: Record<string, unknown> };
+
+    expect(Object.keys(sanitized.properties).sort()).toEqual(["maxLength", "pattern"]);
+  });
+
+  it("forces additionalProperties false, whatever the caller said", () => {
+    const sanitized = toStructuredOutputSchema({
+      type: "object",
+      additionalProperties: true,
+      properties: {}
+    }) as { additionalProperties: unknown };
+
+    expect(sanitized.additionalProperties).toBe(false);
+  });
+
+  it("returns null for anything that is not a schema object", () => {
+    expect(toStructuredOutputSchema(undefined)).toBeNull();
+    expect(toStructuredOutputSchema("{}")).toBeNull();
+    expect(toStructuredOutputSchema([{ type: "object" }])).toBeNull();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Minimal test doubles
@@ -277,6 +348,75 @@ describe("handleSugarAgentGenerate", () => {
     expect(requestBody.max_tokens).toBe(50);
     // Legacy string path (sugarlang): `system` stays a plain string.
     expect(requestBody.system).toBe("you are helpful");
+  });
+
+  it("constrains generation to a caller's schema, and turns thinking off", async () => {
+    // The whole point: a schema-constrained reply cannot be JSON that fails to
+    // parse. Thinking goes off because max_tokens caps thinking and reply
+    // together, and a truncated object is exactly the failure being removed.
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({ content: [{ type: "text", text: '{"prose":"x"}' }] }),
+      headers: { get: (_k: string) => "req-id-123" }
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const req = makeReq({
+      method: "POST",
+      url: "/api/sugaragent/generate",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemPrompt: "extract",
+        userPrompt: "some scene text",
+        outputSchema: {
+          type: "object",
+          required: ["prose"],
+          properties: { prose: { type: "string", minLength: 1 } }
+        }
+      })
+    });
+    await handleSugarAgentGenerate(req, makeRes());
+
+    const callArgs = mockFetch.mock.calls[0] as [string, RequestInit];
+    const requestBody = JSON.parse(callArgs[1].body as string) as {
+      output_config?: { format?: { type?: string; schema?: Record<string, unknown> } };
+      thinking?: { type?: string };
+    };
+    expect(requestBody.output_config?.format?.type).toBe("json_schema");
+    expect(requestBody.thinking?.type).toBe("disabled");
+    // Sanitized on the way through: the constraint Anthropic rejects is gone,
+    // and the object it requires is present.
+    const schema = requestBody.output_config?.format?.schema as {
+      additionalProperties?: unknown;
+      properties?: { prose?: Record<string, unknown> };
+    };
+    expect(schema.additionalProperties).toBe(false);
+    expect(schema.properties?.prose).toEqual({ type: "string" });
+  });
+
+  it("sends no output_config when the caller asked for no schema", async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ content: [{ type: "text", text: "hi" }] }),
+      headers: { get: (_k: string) => null }
+    });
+    vi.stubGlobal("fetch", mockFetch);
+
+    const req = makeReq({
+      method: "POST",
+      url: "/api/sugaragent/generate",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ systemPrompt: "s", userPrompt: "u" })
+    });
+    await handleSugarAgentGenerate(req, makeRes());
+
+    const callArgs = mockFetch.mock.calls[0] as [string, RequestInit];
+    const requestBody = JSON.parse(callArgs[1].body as string) as Record<string, unknown>;
+    expect(requestBody["output_config"]).toBeUndefined();
+    expect(requestBody["thinking"]).toBeUndefined();
   });
 
   it("logs model usage without making the turn wait for it", async () => {
