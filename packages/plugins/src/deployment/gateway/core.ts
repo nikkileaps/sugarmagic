@@ -451,6 +451,93 @@ async function requestJson(
 }
 
 // ---------------------------------------------------------------------------
+// Structured output
+// ---------------------------------------------------------------------------
+
+/**
+ * Schema keywords Anthropic's structured outputs do not accept.
+ *
+ * Sending one rejects the whole request, so they are dropped here rather than
+ * tracked by every caller. Dropping a constraint only WIDENS what the model
+ * may write; the caller still validates the reply against its full schema, so
+ * nothing that was enforced stops being enforced.
+ */
+const UNSUPPORTED_SCHEMA_KEYWORDS = new Set([
+  "minimum",
+  "maximum",
+  "exclusiveMinimum",
+  "exclusiveMaximum",
+  "multipleOf",
+  "minLength",
+  "maxLength",
+  "pattern",
+  "minItems",
+  "maxItems",
+  "uniqueItems",
+  "minProperties",
+  "maxProperties"
+]);
+
+/** Where a schema's own keys are FIELD NAMES rather than keywords. */
+const SCHEMA_NAME_MAPS = new Set(["properties", "$defs", "definitions"]);
+
+function sanitizeSchemaNode(node: unknown): unknown {
+  if (Array.isArray(node)) {
+    return node.map(sanitizeSchemaNode);
+  }
+  if (!node || typeof node !== "object") {
+    return node;
+  }
+
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (UNSUPPORTED_SCHEMA_KEYWORDS.has(key)) {
+      continue;
+    }
+    if (SCHEMA_NAME_MAPS.has(key) && value && typeof value === "object") {
+      // The keys here are what the author called their fields. Filtering them
+      // as keywords would delete a field genuinely named `pattern`.
+      const mapped: Record<string, unknown> = {};
+      for (const [name, child] of Object.entries(value as Record<string, unknown>)) {
+        mapped[name] = sanitizeSchemaNode(child);
+      }
+      result[key] = mapped;
+      continue;
+    }
+    result[key] = sanitizeSchemaNode(value);
+  }
+
+  // Anthropic requires every object to forbid extra properties, and rejects
+  // any other value for it.
+  if (result["type"] === "object" || result["properties"] !== undefined) {
+    result["additionalProperties"] = false;
+  }
+  return result;
+}
+
+/**
+ * Turns a caller's JSON Schema into one the model can be constrained by, or
+ * null when there is nothing usable to send.
+ *
+ * This is what makes malformed JSON unreachable instead of merely caught. The
+ * scene-context pass spent several scene edits failing on "Expected ',' or ']'
+ * after array element", and a scene that cannot be extracted reaches the
+ * Teacher with no concepts at all.
+ */
+export function toStructuredOutputSchema(
+  schema: unknown
+): Record<string, unknown> | null {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+    return null;
+  }
+  const sanitized = sanitizeSchemaNode(schema);
+  if (!sanitized || typeof sanitized !== "object") {
+    return null;
+  }
+  return sanitized as Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
 // Lore helpers
 // ---------------------------------------------------------------------------
 
@@ -1327,8 +1414,13 @@ export async function handleSugarAgentGenerate(
     // expressions, line intent, and scene concepts. Authoring-time and cached
     // by content hash, so it is paid once per content change rather than per
     // turn; that budget buys a stronger model than the dialogue default.
+    //
+    // MUST SUPPORT STRUCTURED OUTPUTS. Extraction sends a schema so the reply
+    // cannot be unparseable JSON, and a model without that support ignores the
+    // schema and puts the pass back to repairing whatever it gets. Sonnet 4.6,
+    // the previous default, is not on that list.
     extraction: () =>
-      resolveEnv("SUGARMAGIC_SUGARLANG_EXTRACTION_MODEL", "claude-sonnet-4-6")
+      resolveEnv("SUGARMAGIC_SUGARLANG_EXTRACTION_MODEL", "claude-sonnet-5")
   };
   const model = (PURPOSE_MODELS[purpose] ?? dialogueModel)();
   // The ground-truth record of which model each call used — grep it in
@@ -1409,6 +1501,20 @@ export async function handleSugarAgentGenerate(
       }))
     : systemPrompt;
 
+  // A schema CONSTRAINS generation, so the reply cannot be JSON that does not
+  // parse. Callers used to ask for JSON in the prompt and repair whatever came
+  // back; the scene-context pass failed that way for several edits of one
+  // scene, and the scene reached the Teacher with nothing to teach.
+  //
+  // Thinking is turned off for these calls. `max_tokens` caps thinking and
+  // reply together, so on a model that thinks by default the reasoning eats
+  // the budget the JSON needs and truncates it -- swapping one unparseable
+  // reply for another. Extraction wants the object, not the reasoning.
+  const outputSchema = toStructuredOutputSchema(body["outputSchema"]);
+  if (outputSchema) {
+    logInfo("sugaragent.generate-structured-output", { purpose: purpose || "dialogue", model });
+  }
+
   const generateStartedAt = Date.now();
   const { payload, headers } = await requestJson(
     "https://api.anthropic.com/v1/messages",
@@ -1428,7 +1534,15 @@ export async function handleSugarAgentGenerate(
             role: "user",
             content: userPrompt
           }
-        ]
+        ],
+        ...(outputSchema
+          ? {
+              output_config: {
+                format: { type: "json_schema", schema: outputSchema }
+              },
+              thinking: { type: "disabled" }
+            }
+          : {})
       })
     },
     "Anthropic request"
@@ -1479,6 +1593,16 @@ export async function handleSugarAgentGenerate(
   sendJson(res, 200, {
     text,
     requestId: headers.get("request-id"),
+    // WHY THE MODEL STOPPED. A reply cut off at `max_tokens` and a reply the
+    // model simply wrote badly are indistinguishable from the text alone: both
+    // arrive as something that will not parse. The scene-context pass failed
+    // for days reported as "invalid JSON" when every one of those replies was
+    // complete-but-truncated, and the parser error was the only clue anyone
+    // had. Callers branch on this instead of guessing from a parser message.
+    stopReason:
+      typeof (payload as { stop_reason?: unknown }).stop_reason === "string"
+        ? (payload as { stop_reason: string }).stop_reason
+        : null,
     usage: {
       inputTokens: usageNumber("input_tokens"),
       outputTokens: usageNumber("output_tokens"),

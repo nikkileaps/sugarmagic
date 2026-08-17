@@ -74,7 +74,7 @@
  */
 
 import Ajv from "ajv";
-import type { SugarlangLLMClient } from "../llm/types";
+import type { SugarlangLLMClient, SugarlangLLMResult } from "../llm/types";
 import { EXTRACTION_PURPOSE } from "../llm/types";
 import {
   CONCEPT_PARTS_OF_SPEECH,
@@ -359,13 +359,24 @@ export class SceneContextExtractor {
       })
     );
 
-    let response: { text: string; requestId: string | null };
+    let response: SugarlangLLMResult;
     try {
       response = await this.deps.llmClient.generate({
         purpose: EXTRACTION_PURPOSE,
         systemPrompt: prompt.system,
         userPrompt: prompt.user,
-        maxTokens: request.maxTokens ?? 1200
+        // ROOM TO FINISH. This was 1200, and a busy scene did not fit: the
+        // reply stopped mid-array at exactly 1200 output tokens and the caller
+        // reported it as invalid JSON, so `arrival-station` reached the Teacher
+        // with no concepts through several edits. `max_tokens` is a ceiling,
+        // not a reservation -- an unused one costs nothing, and a scene that
+        // hits even this is caught loudly below rather than silently cut.
+        maxTokens: request.maxTokens ?? 8000,
+        // CONSTRAINED, not merely requested. The schema is in the prompt too --
+        // it tells the model what the fields MEAN -- but the prompt is a
+        // request and this is a limit on what can be written. Without it a
+        // single missing comma lost a whole scene's concepts, and did.
+        outputSchema: SCENE_CONTEXT_SCHEMA
       });
     } catch (error) {
       const failure = {
@@ -386,6 +397,19 @@ export class SceneContextExtractor {
         })
       );
       return degraded(failure);
+    }
+
+    // TRUNCATION IS NOT BAD SYNTAX, and reporting it as such cost days. A reply
+    // cut off at the ceiling fails to parse in the same way a malformed one
+    // does, so say which happened while we still know.
+    if (response.stopReason === "max_tokens") {
+      return degraded({
+        code: "extractor_response_truncated",
+        message:
+          `Scene context for "${request.sceneId}" did not fit in ` +
+          `${request.maxTokens ?? 8000} output tokens. Raise maxTokens, or ` +
+          `split the scene's authored content.`
+      });
     }
 
     const candidate = extractJsonCandidate(response.text);
