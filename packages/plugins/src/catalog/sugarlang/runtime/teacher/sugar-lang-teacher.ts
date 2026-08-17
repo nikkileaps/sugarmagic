@@ -166,8 +166,7 @@ export class SugarLangTeacher {
    *
    * ONE EVENT AND NOT THREE. A rate is only readable if the numerator and the
    * denominator come from the same row: "how often does a first turn hit"
-   * cannot be asked of an event that only fires on hits, which is exactly why
-   * the event this replaces could never show a regression.
+   * cannot be asked of an event that only fires on hits.
    */
   private async reportDecision(args: {
     context: TeacherContext;
