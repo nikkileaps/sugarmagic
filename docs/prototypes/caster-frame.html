@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Caster frame prototype</title>
+<style>
+  html, body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Avenir Next", Nunito, system-ui, sans-serif;
+    /* Stand-in for the 3D scene behind the panel, so transparency and the
+       rounded outer corners are visible while iterating. */
+    background:
+      radial-gradient(1200px 600px at 30% 20%, #3d5a3f, transparent),
+      radial-gradient(900px 700px at 80% 80%, #2c3e63, transparent),
+      #1b2233;
+  }
+  .stage {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 24px;
+    padding: 32px;
+  }
+
+  /* ---- Frame assembly -------------------------------------------------- */
+  /* Every piece is a rectangle cut from the one source image via
+     background-position. All source coordinates live in the JS config;
+     JS writes inline styles. */
+  .panel {
+    position: relative;
+    overflow: hidden;
+    flex: none;
+  }
+  .piece {
+    position: absolute;
+    background-image: url("caster-frame-source.png");
+    background-repeat: no-repeat;
+  }
+  .band {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+  }
+  .band .piece {
+    position: relative;
+    flex: none;
+  }
+  .band .stretch {
+    /* Zero basis: at the natural width the fixed segments already sum to the
+       panel width and the stretch strips collapse to nothing; they only take
+       up room when the panel is wider (or segments are omitted, item mode). */
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* ---- Dynamic bars ---------------------------------------------------- */
+  .bar {
+    position: absolute;
+    overflow: hidden;
+    /* Empty trough: recessed dark purple. Covers the baked-in 100% art. */
+    background: linear-gradient(180deg, #170b26 0%, #241238 45%, #2e1847 100%);
+    box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.6);
+  }
+  .bar-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    /* Glossy purple to match the art's full state. */
+    background: linear-gradient(180deg, #d9a8ff 0%, #a44ce8 22%, #7c22d6 55%, #5c0fb0 100%);
+    box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.25), inset 0 2px 3px rgba(255, 255, 255, 0.55);
+    transition: width 200ms ease;
+  }
+  .bar-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    text-shadow: 0 2px 3px rgba(0, 0, 0, 0.55);
+    pointer-events: none;
+  }
+
+  /* ---- Medallion variant (item mode) ----------------------------------- */
+  .medallion-cover {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 38%, #46256b 0%, #331a52 55%, #22103a 100%);
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .panel.item-mode .medallion-cover { display: flex; }
+  .medallion-cover svg { width: 58%; height: 58%; }
+
+  /* ---- Content area ---------------------------------------------------- */
+  .content {
+    position: absolute;
+    overflow: auto;
+    scrollbar-width: thin;
+  }
+  .icon-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+  }
+  .slot {
+    aspect-ratio: 1;
+    border-radius: 14px;
+    border: 3px solid #b8892c;
+    background: radial-gradient(circle at 50% 35%, #4a2a70 0%, #331a52 60%, #241040 100%);
+    box-shadow: 0 2px 4px rgba(60, 30, 5, 0.35), inset 0 2px 3px rgba(255, 255, 255, 0.18);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+  }
+  .slot:hover { border-color: #e8b93f; }
+  .slot svg { width: 62%; height: 62%; }
+  .slot-name {
+    margin-top: 4px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b4a26;
+  }
+  .cell { display: flex; flex-direction: column; }
+
+  /* ---- Controls (not part of the panel) -------------------------------- */
+  .controls {
+    flex: none;
+    width: 240px;
+    background: rgba(10, 12, 20, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 16px;
+    color: #dde3f0;
+    font-size: 13px;
+  }
+  .controls h1 { font-size: 14px; margin: 0 0 12px; }
+  .controls label { display: block; margin: 10px 0 2px; }
+  .controls input[type="range"] { width: 100%; }
+  .controls .row { display: flex; gap: 8px; align-items: center; }
+  .controls output { font-variant-numeric: tabular-nums; }
+  .controls button {
+    margin-top: 12px;
+    width: 100%;
+    padding: 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: #2a3350;
+    color: inherit;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="panel" id="panel"></div>
+  <div class="controls">
+    <h1>Caster frame prototype</h1>
+    <label>Battery <output id="battery-out">80%</output></label>
+    <input type="range" id="battery" min="0" max="100" value="80" />
+    <label>Resonance <output id="resonance-out">45%</output></label>
+    <input type="range" id="resonance" min="0" max="100" value="45" />
+    <label>Panel height <output id="height-out"></output></label>
+    <input type="range" id="height" min="500" max="1600" value="968" />
+    <label>Scale <output id="scale-out"></output></label>
+    <input type="range" id="scale" min="30" max="70" value="45" />
+    <label>Icon count <output id="count-out">8</output></label>
+    <input type="range" id="count" min="0" max="24" value="8" />
+    <button id="mode">Toggle caster / item mode</button>
+  </div>
+</div>
+
+<script>
+// All rectangles are in SOURCE image pixels. The frame's content starts at
+// (6, 31) in the 1536x1024 image; ORIGIN is subtracted so panel coordinates
+// start at the wood's outer edge.
+const ORIGIN = { x: 6, y: 31 };
+const SHEET = { w: 1536, h: 1024 };
+const FRAME_W = 1522;          // natural frame width in source px
+const NATURAL_H = 968;         // natural frame height in source px
+
+const SLICES = {
+  cornerTL: [6, 31, 146, 171],
+  cornerTR: [1388, 31, 1528, 171],
+  cornerBL: [6, 859, 146, 999],
+  cornerBR: [1388, 859, 1528, 999],
+  // Top band segments (y 31..206 keeps the hardware overhang + the baked
+  // top pinstripe). Stretch strip is a plain vertical slice of the band.
+  // Contiguous at natural width: no source pixels fall between segments.
+  topBattery: [146, 31, 668, 206],
+  topMedallion: [668, 31, 868, 206],
+  topResonance: [868, 31, 1388, 206],
+  // Plain rail column between the resonance circle and the right corner
+  // cap: clean wood above, clean parchment below. Stretched (not tiled)
+  // wide in item mode, so it must be free of hardware and flourishes.
+  topStretch: [1360, 31, 1372, 206],
+  // Bottom band. Strip slice includes the baked bottom pinstripe.
+  bottomEmblem: [620, 830, 908, 999],
+  bottomStretch: [400, 860, 432, 999],
+  // Side rails: plain slice including the baked vertical pinstripe.
+  railLeft: [6, 690, 110, 722],
+  railRight: [1424, 690, 1528, 722],
+  // Fixed decorations.
+  gemLeft: [6, 356, 110, 652],
+  gemRight: [1424, 356, 1528, 652],
+  flourishTL: [70, 125, 300, 315],
+  flourishTR: [1236, 125, 1466, 315],
+  flourishBL: [60, 740, 290, 910],
+  flourishBR: [1246, 740, 1476, 910],
+  // Parchment tile for the growing middle. Sampled just below the top band,
+  // clear of the flourishes: the art vignettes darker toward the center, and
+  // the fill must match the parchment baked into the frame pieces it meets.
+  parchment: [320, 212, 600, 352]
+};
+
+// Interiors of the two pill troughs (inside the gold rim), panel coords.
+const BATTERY_BAR = { x: 286, y: 63, w: 270, h: 49 };
+const RESONANCE_BAR = { x: 962, y: 63, w: 274, h: 49 };
+// Medallion interior circle, panel coords.
+const MEDALLION = { cx: 762, cy: 81, r: 70 };
+
+const ICONS = [
+  ["Bolt", "M13 2 L5 14 L11 14 L9 22 L19 9 L12.5 9 Z"],
+  ["Star", "M12 2 L14.6 8.6 L21.5 9.2 L16.2 13.7 L17.9 20.6 L12 16.9 L6.1 20.6 L7.8 13.7 L2.5 9.2 L9.4 8.6 Z"],
+  ["Leaf", "M20 4 C10 4 4 10 4 20 C14 20 20 14 20 4 Z M4 20 C8 12 12 8 20 4"],
+  ["Flame", "M12 2 C14 7 18 8 18 14 A6 6 0 0 1 6 14 C6 11 8 9 9 6 C10 9 12 9 12 2 Z"],
+  ["Drop", "M12 2 C12 2 5 11 5 15.5 A7 7 0 0 0 19 15.5 C19 11 12 2 12 2 Z"],
+  ["Moon", "M20 13 A8 8 0 1 1 11 4 A6.5 6.5 0 0 0 20 13 Z"],
+  ["Eye", "M2 12 C5 6 19 6 22 12 C19 18 5 18 2 12 Z M12 9 A3 3 0 1 0 12 15 A3 3 0 0 0 12 9 Z"],
+  ["Swirl", "M12 3 A9 9 0 1 1 3 12 A6.5 6.5 0 1 0 9.5 5.5 A4 4 0 1 1 12 12"]
+];
+
+const state = {
+  battery: 0.8,
+  resonance: 0.45,
+  height: NATURAL_H,
+  scale: 0.45,
+  count: 8,
+  itemMode: false
+};
+
+const panel = document.getElementById("panel");
+
+function iconSvg(path, i) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="#e8b93f" stroke-width="1.8"
+    stroke-linejoin="round" stroke-linecap="round"
+    ${i % 3 === 0 ? 'fill="#a44ce8" fill-opacity="0.45"' : ""}>
+    <path d="${path}" /></svg>`;
+}
+
+// Repeating pieces need their own image file: CSS tiles a whole image, not a
+// sprite-sheet sub-region. Generated by caster-frame-slices.py.
+const SLICE_FILES = {
+  railLeft: "rail-left.png",
+  railRight: "rail-right.png",
+  topStretch: "top-stretch.png",
+  bottomStretch: "bottom-stretch.png",
+  parchment: "parchment.png"
+};
+
+// The query string is a cache-buster: bump it after regenerating slices, or
+// the browser's memory cache keeps showing the old cut.
+const SLICE_VERSION = 2;
+
+function sliceFile(name) {
+  return `caster-frame-slices/${SLICE_FILES[name]}?v=${SLICE_VERSION}`;
+}
+
+function pieceStyle(slice, s, name) {
+  const [x0, y0, x1, y1] = slice;
+  const w = (x1 - x0) * s;
+  const h = (y1 - y0) * s;
+  if (name && SLICE_FILES[name]) {
+    return `width:${w}px;height:${h}px;` +
+      `background-image:url('${sliceFile(name)}');` +
+      `background-size:${w}px ${h}px;background-position:0 0;`;
+  }
+  return `width:${w}px;height:${h}px;` +
+    `background-size:${SHEET.w * s}px ${SHEET.h * s}px;` +
+    `background-position:${-x0 * s}px ${-y0 * s}px;`;
+}
+
+function render() {
+  const s = state.scale;
+  const H = state.height;
+  const W = FRAME_W;
+  const px = (v) => `${v * s}px`;
+
+  panel.style.width = px(W);
+  panel.style.height = px(H);
+  panel.style.borderRadius = px(66);
+  panel.classList.toggle("item-mode", state.itemMode);
+
+  const abs = (slice, styles, name) =>
+    `<div class="piece" style="${pieceStyle(slice, s, name)}${styles}"></div>`;
+  const seg = (slice, cls = "", name) => {
+    // Stretch segments scale their strip to their flexed width instead of
+    // tiling it: tiling a few-pixel strip breaks the wood grain into ribs.
+    const grow = cls.includes("stretch")
+      ? "background-repeat:no-repeat;background-size:100% 100%;"
+      : "";
+    return `<div class="piece ${cls}" style="${pieceStyle(slice, s, name)}${grow}"></div>`;
+  };
+
+  const railTop = 140;                    // corner height
+  const railH = H - 280;                  // between the corners
+  const gemH = SLICES.gemLeft[3] - SLICES.gemLeft[1];
+  const gemTop = (H - gemH) / 2;
+  const flourishBLTop = H - (NATURAL_H - SLICES.flourishBL[1]);
+  const flourishBRTop = H - (NATURAL_H - SLICES.flourishBR[1]);
+  const bottomBandH = 169;
+
+  panel.innerHTML = `
+    <!-- parchment fill -->
+    <div class="piece" style="left:${px(24)};top:${px(40)};right:${px(24)};bottom:${px(40)};
+      width:auto;height:auto;border-radius:${px(60)};
+      background-image:url('${sliceFile("parchment")}');
+      background-repeat:repeat;
+      background-size:${px((SLICES.parchment[2] - SLICES.parchment[0]) * 2)} ${px((SLICES.parchment[3] - SLICES.parchment[1]) * 2)};"></div>
+
+    <!-- inner corner flourishes (carry the pinstripe corners) -->
+    ${abs(SLICES.flourishTL, `left:${px(SLICES.flourishTL[0] - ORIGIN.x)};top:${px(SLICES.flourishTL[1] - ORIGIN.y)};`)}
+    ${abs(SLICES.flourishTR, `left:${px(SLICES.flourishTR[0] - ORIGIN.x)};top:${px(SLICES.flourishTR[1] - ORIGIN.y)};`)}
+    ${abs(SLICES.flourishBL, `left:${px(SLICES.flourishBL[0] - ORIGIN.x)};top:${px(flourishBLTop)};`)}
+    ${abs(SLICES.flourishBR, `left:${px(SLICES.flourishBR[0] - ORIGIN.x)};top:${px(flourishBRTop)};`)}
+
+    <!-- side rails (repeat vertically as the panel grows) -->
+    ${abs(SLICES.railLeft, `left:0;top:${px(railTop)};height:${px(railH)};background-repeat:repeat-y;`, "railLeft")}
+    ${abs(SLICES.railRight, `right:0;top:${px(railTop)};height:${px(railH)};background-repeat:repeat-y;`, "railRight")}
+
+    <!-- side gems, vertically centered -->
+    ${abs(SLICES.gemLeft, `left:0;top:${px(gemTop)};`)}
+    ${abs(SLICES.gemRight, `right:0;top:${px(gemTop)};`)}
+
+    <!-- top band. Item mode shows no battery/resonance hardware: those pills
+         are baked into the battery/resonance art segments, so the item panel
+         replaces them with plain stretching rail. -->
+    <div class="band" style="top:0;height:${px(175)};">
+      ${seg(SLICES.cornerTL)}
+      ${seg(SLICES.topStretch, "stretch", "topStretch")}
+      ${state.itemMode ? "" : seg(SLICES.topBattery)}
+      ${state.itemMode ? "" : seg(SLICES.topStretch, "stretch", "topStretch")}
+      ${seg(SLICES.topMedallion)}
+      ${state.itemMode ? "" : seg(SLICES.topStretch, "stretch", "topStretch")}
+      ${state.itemMode ? "" : seg(SLICES.topResonance)}
+      ${seg(SLICES.topStretch, "stretch", "topStretch")}
+      ${seg(SLICES.cornerTR)}
+    </div>
+
+    <!-- bottom band -->
+    <div class="band" style="bottom:0;height:${px(bottomBandH)};align-items:flex-end;">
+      ${seg(SLICES.cornerBL)}
+      ${seg(SLICES.bottomStretch, "stretch", "bottomStretch")}
+      ${seg(SLICES.bottomEmblem)}
+      ${seg(SLICES.bottomStretch, "stretch", "bottomStretch")}
+      ${seg(SLICES.cornerBR)}
+    </div>
+
+    <!-- dynamic bars (caster mode only; the item panel has none) -->
+    ${state.itemMode ? "" : `
+    <div class="bar" style="left:${px(BATTERY_BAR.x)};top:${px(BATTERY_BAR.y)};
+      width:${px(BATTERY_BAR.w)};height:${px(BATTERY_BAR.h)};border-radius:${px(BATTERY_BAR.h / 2)};">
+      <div class="bar-fill" style="width:${state.battery * 100}%;border-radius:${px(BATTERY_BAR.h / 2)};"></div>
+      <div class="bar-label" style="font-size:${px(30)};">${Math.round(state.battery * 100)}%</div>
+    </div>
+    <div class="bar" style="left:${px(RESONANCE_BAR.x)};top:${px(RESONANCE_BAR.y)};
+      width:${px(RESONANCE_BAR.w)};height:${px(RESONANCE_BAR.h)};border-radius:${px(RESONANCE_BAR.h / 2)};">
+      <div class="bar-fill" style="width:${state.resonance * 100}%;border-radius:${px(RESONANCE_BAR.h / 2)};"></div>
+      <div class="bar-label" style="font-size:${px(30)};">${Math.round(state.resonance * 100)}%</div>
+    </div>
+    `}
+
+    <!-- item-mode medallion cover -->
+    <div class="medallion-cover" style="left:${px(MEDALLION.cx - MEDALLION.r)};top:${px(MEDALLION.cy - MEDALLION.r)};
+      width:${px(MEDALLION.r * 2)};height:${px(MEDALLION.r * 2)};">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#e8b93f" stroke-width="1.6" stroke-linejoin="round">
+        <path d="M7 8 C7 5 9 3.5 12 3.5 C15 3.5 17 5 17 8 L18.5 19 C18.6 20 17.8 21 16.8 21 L7.2 21 C6.2 21 5.4 20 5.5 19 Z" />
+        <path d="M9 8 C9 6.2 10.2 5.2 12 5.2 C13.8 5.2 15 6.2 15 8" stroke="#c9962f" />
+      </svg>
+    </div>
+
+    <!-- content area -->
+    <div class="content" style="left:${px(120)};right:${px(120)};top:${px(215)};bottom:${px(125)};">
+      <div class="icon-grid" id="grid"></div>
+    </div>
+  `;
+
+  const grid = document.getElementById("grid");
+  grid.innerHTML = Array.from({ length: state.count }, (_, i) => {
+    const [name, path] = ICONS[i % ICONS.length];
+    return `<div class="cell">
+      <button class="slot" title="${name}">${iconSvg(path, i)}</button>
+      <div class="slot-name">${name}</div>
+    </div>`;
+  }).join("");
+}
+
+function bind(id, apply) {
+  const input = document.getElementById(id);
+  const out = document.getElementById(`${id}-out`);
+  const update = () => {
+    apply(Number(input.value));
+    if (out) out.textContent = input.value + (id === "battery" || id === "resonance" ? "%" : "");
+    render();
+  };
+  input.addEventListener("input", update);
+  update();
+}
+
+bind("battery", (v) => { state.battery = v / 100; });
+bind("resonance", (v) => { state.resonance = v / 100; });
+bind("height", (v) => { state.height = v; });
+bind("scale", (v) => { state.scale = v / 100; });
+bind("count", (v) => { state.count = v; });
+document.getElementById("mode").addEventListener("click", () => {
+  state.itemMode = !state.itemMode;
+  render();
+});
+</script>
+</body>
+</html>
