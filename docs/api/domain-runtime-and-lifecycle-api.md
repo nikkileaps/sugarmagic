@@ -566,6 +566,62 @@ Developer-facing concepts include:
 
 Plugins may extend the system, but they do not silently replace domain owners.
 
+### Plugin lifecycle hooks
+
+A plugin declares two kinds of thing. **Data the host collects** —
+`contributions`, `blackboardFactDefinitions`, `saveParticipants` — is read off
+the plugin without calling it. Save participants in particular must be
+declarative, because the host registers them before the first deserialize pass;
+one that appeared during `init` would have missed the pass that restores it.
+
+**Hooks the host calls** are five, in boot order:
+
+| Hook | When it runs | Host waits? |
+| --- | --- | --- |
+| `openAccountStorage(context)` | The player's account has resolved, before the sync loop's first pass. There is no world yet; storage is all this may do. | Yes |
+| `init(context)` | During assembly construction, after the region-aware save slices are restored and the player has spawned. The plugin gets the blackboard, active region and scene, and the definition sets. | **No** — started and deliberately not awaited, so a slow plugin cannot hold up the boot. The promise is exposed as `pluginsInitialized`. |
+| `beforeFirstFrame()` | After the remaining save slices are restored and starting quests have run, before the render loop starts. Nothing has ticked: no frame drawn, no `update` fired. | Yes -- as the last unit of the single boot readiness gate, so it overlaps the asset preload behind the same loading screen, deadline, and start-anyway escape |
+| `update(delta)` | Every frame, in seconds, driven by `RuntimePluginSystem`. | n/a |
+| `dispose()` | Assembly teardown, plugins in reverse order. | Yes |
+
+Three of the five exist because *when* they run is the point. Work done in the
+wrong one is not merely early or late — it is wrong. Anything prepared before
+`beforeFirstFrame` is prepared against default state (a default time of day, no
+active quest) and is stale the moment the restore lands; anything prepared on
+the `update` tick instead races the player to whatever needed preparing.
+
+A hook that throws is logged and skipped. One plugin's failure costs that
+plugin's readiness and nothing else.
+
+### Naming a lifecycle hook
+
+Hooks are named for **their position relative to a phase the host owns**, in
+the host's own vocabulary — the same shape as Rails callbacks (`before_save`),
+Vue lifecycle hooks (`onBeforeMount`), and Django signals (`pre_save`).
+
+1. Use `before<Phase>` / `after<Phase>`, where the phase is something the host
+   performs and a reader can name without opening the code: the first frame,
+   the account sync, teardown.
+2. **Never name a hook after another hook.** If the only way to say when it
+   runs is "after that other thing," the phase has not been identified yet — and
+   the name goes stale the moment the host reorders. No framework positions
+   callbacks against other callbacks.
+3. **Never invent the phase.** Grep for what the code already calls it. The
+   game's own lifecycle is `booting | start-menu | playing | paused`, frames are
+   frames, and the blackboard already scopes facts to `{ kind: "frame" }`. A
+   hook named for a phase that appears nowhere else is a sign the moment has
+   been guessed at rather than located.
+4. `init` / `update` / `dispose` keep their names. They are the near-universal
+   engine trio and already read as phases; renaming them buys nothing.
+5. Hooks that fire on an occurrence rather than at a boot position are
+   `on<Event>`, matching Vue's split between lifecycle and event hooks.
+6. **The name says where; the doc comment says what it costs.** Whether the host
+   awaits the hook, and what a slow implementation delays, belongs in prose —
+   a name cannot carry it, and an implementer needs it before writing one.
+
+`openAccountStorage` predates this rule and does not follow it; by the
+convention it would be `beforeAccountSync`.
+
 ## Developer Mental Model
 
 A good default mental model for Sugarmagic is:

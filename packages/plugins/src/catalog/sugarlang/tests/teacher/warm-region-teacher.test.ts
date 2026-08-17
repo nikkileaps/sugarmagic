@@ -49,6 +49,39 @@ describe("the region teacher warmer", () => {
     expect(warm.mock.calls[0]![0]).toEqual(["npc-a", "npc-b"]);
   });
 
+  it("warmNow resolves only once the warm is done", async () => {
+    // What the boot step awaits. The tick fires and forgets, which is why the
+    // player could reach an NPC before it landed; this one is awaited.
+    const { warmer, warm } = setup(["k1"]);
+
+    await warmer.warmNow();
+
+    expect(warm).toHaveBeenCalledTimes(1);
+  });
+
+  it("warmNow and the tick share one decision, so the boot warm is not redone", async () => {
+    // Two implementations of "should this warm, and against what" would drift.
+    // After the boot warm, an immediate tick on the same world does nothing.
+    const { warmer, warm } = setup(["k1"]);
+
+    await warmer.warmNow();
+    warmer.tick(2000);
+    await settle();
+
+    expect(warm).toHaveBeenCalledTimes(1);
+  });
+
+  it("warmNow never throws, because the boot awaits it", async () => {
+    const warmer = createRegionTeacherWarmer({
+      listWarmableNpcIds: () => ["npc-a"],
+      buildWarmContext: async () => {
+        throw new Error("gateway down");
+      }
+    });
+
+    await expect(warmer.warmNow()).resolves.toBeUndefined();
+  });
+
   it("does not re-warm while the world is unchanged", async () => {
     const { warmer, warm } = setup(["k1"]);
     warmer.tick(2000);

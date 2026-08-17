@@ -533,6 +533,30 @@ export interface RuntimePluginInstance {
     context: PluginAccountStorageContext
   ) => Promise<void> | void;
   init?: (context: RuntimePluginContext) => Promise<void> | void;
+  /**
+   * Get ready before the first frame renders.
+   *
+   * Runs once at boot, AFTER the save has been restored and starting quests
+   * have run, and BEFORE the render loop starts. Nothing has ticked yet: no
+   * frame has drawn and no `update` has fired, so nothing in the world has
+   * moved. THE HOST WAITS FOR THIS, so whatever happens here delays the first
+   * frame -- only put work here that is worse to do late than to wait for.
+   *
+   * WHY IT IS NOT `init`. `init` runs while the save is still being restored,
+   * so anything it prepares is prepared against default state -- a default
+   * time of day, no quest -- and is wrong the moment the restore lands. This
+   * hook is the first point where the world is the world the player will
+   * actually be standing in.
+   *
+   * WHY IT IS NOT A TIMER. Preparing on a frame tick races the player: they
+   * can reach whatever needed preparing before it is ready, which is exactly
+   * the case this hook removes.
+   *
+   * A plugin that throws here is logged and skipped. Being unprepared is a
+   * worse first few seconds, not a broken game, and no plugin gets to take
+   * the boot down with it.
+   */
+  beforeFirstFrame?: () => Promise<void> | void;
   update?: (delta: number) => void;
   dispose?: () => Promise<void> | void;
 }
@@ -549,6 +573,9 @@ export interface RuntimePluginManager {
    *  after the account resolves and before the sync loop starts. */
   openAccountStorage: (context: PluginAccountStorageContext) => Promise<void>;
   init: (context?: Omit<RuntimePluginContext, "boot">) => Promise<void>;
+  /** See `RuntimePluginInstance.beforeFirstFrame`. Call once, after the
+   *  save restore and before the first frame. */
+  beforeFirstFrame: () => Promise<void>;
   update: (delta: number) => void;
   dispose: () => Promise<void>;
   getPlugins: () => readonly RuntimePluginInstance[];
@@ -607,6 +634,23 @@ export function createRuntimePluginManager(
         });
       }
       initialized = true;
+    },
+    async beforeFirstFrame() {
+      for (const plugin of plugins) {
+        // SEQUENTIAL, and one failure does not stop the rest. These run inside
+        // a wait the player is sitting through, so a plugin that throws costs
+        // its own readiness and nothing else -- the same trade as
+        // `openAccountStorage`.
+        try {
+          await plugin.beforeFirstFrame?.();
+        } catch (error) {
+          console.warn(
+            `[runtime-core] ${plugin.pluginId} could not prepare before the first ` +
+              "frame; it starts this session unprepared.",
+            error
+          );
+        }
+      }
     },
     update(delta) {
       for (const plugin of plugins) {

@@ -374,6 +374,13 @@ export function createSugarlangPlugin(
         };
       }
     },
+    // The first conversation of a session is the one the frame-tick warmer
+    // cannot help: it fires on a timer that the player can outrun. Warming here
+    // means the directive is decided against the world the save just restored,
+    // rather than against whatever had loaded when the timer happened to fire.
+    async beforeFirstFrame() {
+      await regionWarmer.warmNow();
+    },
     async dispose() {
       // Stop the warmer FIRST: a ~9s Teacher call in flight would otherwise
       // land and write a directive for a region nobody is in any more. Its own

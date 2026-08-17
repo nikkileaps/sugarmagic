@@ -2247,16 +2247,23 @@ export function createWebRuntimeHost(
     const pendingSync = firstSyncPass;
     firstSyncPass = null;
     const syncUnits = pendingSync ? 1 : 0;
+    // Plugins getting ready before the first frame are one more unit of this
+    // SAME phase. The work itself can only start after the save restore below
+    // (see the kickoff there), but it closes behind the same overlay, the same
+    // deadline, and the same stall prompt as everything else. It is a unit
+    // here so the readout never jumps backwards when it joins.
+    const pluginUnits = 1;
     let assetsLoaded = 0;
     let assetsTotal = 0;
     let syncDone = 0;
+    let pluginsReadyDone = 0;
     const publishProgress = () =>
       assetPreloadStore.set({
-        loaded: assetsLoaded + syncDone,
-        total: assetsTotal + syncUnits
+        loaded: assetsLoaded + syncDone + pluginsReadyDone,
+        total: assetsTotal + syncUnits + pluginUnits
       });
 
-    assetPreloadStore.set({ loaded: 0, total: syncUnits });
+    assetPreloadStore.set({ loaded: 0, total: syncUnits + pluginUnits });
     const readiness = Promise.all([
       preloadAssetSources(state.assetSources, {
         onProgress: (progress) => {
@@ -2273,38 +2280,33 @@ export function createWebRuntimeHost(
         : Promise.resolve()
     ]);
 
-    // NOT A SILENT TIMEOUT. Starting a game whose world or whose player data
-    // has not arrived produces missing ground, absent scenery, and a learner
-    // taught words they already know -- all of which look like the game being
-    // broken rather than the game still loading. So when readiness overruns,
-    // the player is told and decides: keep waiting, or start anyway knowing
-    // what that means. Deciding on their behalf is what produced a "working"
-    // boot with black ground.
-    let readinessSettled = false;
-    void readiness.then(() => {
-      readinessSettled = true;
-      bootStallStore.set(null);
+    // NOT AWAITED HERE. The world below is built while these downloads run --
+    // the preload is fetch-into-HTTP-cache with no in-memory handoff, so
+    // nothing in assembly construction needs it finished, and the render loop
+    // does not start until the single gate further down closes. Building the
+    // world first is also what lets the plugin-readiness unit (a ~10s Teacher
+    // call that needs the restored save) overlap the downloads instead of
+    // being serialised behind them.
+    //
+    // The stall clock starts NOW, not at the gate: the player has been looking
+    // at the loading screen since the line above, and that is the wait being
+    // bounded.
+    let bootReadySettled = false;
+    const stallPrompt = new Promise<void>((resolve) => {
+      ownerWindow.setTimeout(() => {
+        if (bootReadySettled) {
+          resolve();
+          return;
+        }
+        console.warn(
+          `[web-runtime] still loading after ${BOOT_READINESS_TIMEOUT_MS}ms; asking the player.`
+        );
+        // Resolved by the player choosing to start anyway; the boot finishing
+        // first wins the race at the gate regardless.
+        startAnyway = resolve;
+        bootStallStore.set({ waitedMs: BOOT_READINESS_TIMEOUT_MS });
+      }, BOOT_READINESS_TIMEOUT_MS);
     });
-    await Promise.race([
-      readiness,
-      new Promise<void>((resolve) => {
-        ownerWindow.setTimeout(() => {
-          if (readinessSettled) {
-            resolve();
-            return;
-          }
-          console.warn(
-            `[web-runtime] still loading after ${BOOT_READINESS_TIMEOUT_MS}ms; asking the player.`
-          );
-          // Resolved by the player choosing to start anyway; readiness
-          // finishing first wins the race above regardless.
-          startAnyway = resolve;
-          bootStallStore.set({ waitedMs: BOOT_READINESS_TIMEOUT_MS });
-        }, BOOT_READINESS_TIMEOUT_MS);
-      })
-    ]);
-    bootStallStore.set(null);
-    assetPreloadStore.set(null);
 
     scene = new THREE.Scene();
     if (ownerWindow.getComputedStyle(root).position === "static") {
@@ -3007,12 +3009,10 @@ export function createWebRuntimeHost(
       // Plan 069.9 — NPCs follow the baked navmesh once it finishes loading.
       getPathfinder: () => navMeshPathfinder,
       onSceneAction: hostHandleSceneAction,
-      // Initial track by boot lifecycle: menu theme while the
-      // start menu is up, else the in-game track (usually null).
-      backgroundMusicCueId:
-        bootLifecycle === "start-menu"
-          ? menuMusicCueIdForSession
-          : sceneMusicCueIdForSession,
+      // NO TRACK YET. The assembly is now built while the loading screen is
+      // still up, and a track handed over here starts playing under it. The
+      // real initial track starts where the loading gate closes, below.
+      backgroundMusicCueId: null,
       playerDefinition: state.playerDefinition,
       spellDefinitions: state.spellDefinitions,
       itemDefinitions: state.itemDefinitions,
@@ -3128,6 +3128,68 @@ export function createWebRuntimeHost(
     );
     saveParticipantRegistry.deserializeAll(restoredSlices, ["default"]);
     gameplayAssembly.gameplaySession.startInitialQuests();
+
+    // THE WORLD IS NOW THE WORLD THE PLAYER WILL STAND IN, and nothing has
+    // ticked. Everything a plugin needs in order to be ready has arrived: the
+    // save is restored, starting quests have run, and the render loop has not
+    // started. Anything prepared before this point is prepared against default
+    // state and thrown away; anything prepared after it races the player.
+    //
+    // KICKED OFF, NOT AWAITED: this is the last unit of the readiness phase
+    // that has been running since the downloads started, and it closes behind
+    // the same overlay at the gate just below.
+    //
+    // AWAIT `pluginsInitialized` FIRST. Plugin init is started without being
+    // awaited so a slow plugin cannot hold up the first frame, which means
+    // without this a plugin would be asked to get ready before it had finished
+    // reading its own content -- and would get ready against nothing.
+    //
+    // EVERY HOST TAKES THIS PATH, Studio preview included. Preview is where
+    // this behaviour gets verified, and a preview that skips the step is not
+    // the thing that ships.
+    const pluginsReady = (async () => {
+      try {
+        await gameplayAssembly.pluginsInitialized;
+      } catch (error) {
+        // A plugin that failed to initialize has already logged. Carry on and
+        // let it be unprepared rather than refusing to start the game.
+        console.warn(
+          "[web-runtime] a plugin failed to initialize; starting without it prepared.",
+          error
+        );
+      }
+      await pluginManager.beforeFirstFrame();
+      pluginsReadyDone = 1;
+      publishProgress();
+    })();
+
+    // ONE readiness gate for the whole boot (Plan 092.6): assets, the first
+    // sync pass, and plugin readiness end behind one overlay, one deadline,
+    // one stall prompt.
+    //
+    // NOT A SILENT TIMEOUT. Starting a game whose world or whose player data
+    // has not arrived produces missing ground, absent scenery, and a learner
+    // taught words they already know -- all of which look like the game being
+    // broken rather than the game still loading. So when readiness overruns,
+    // the player is told and decides: keep waiting, or start anyway knowing
+    // what that means. Deciding on their behalf is what produced a "working"
+    // boot with black ground.
+    const bootReady = Promise.all([readiness, pluginsReady]);
+    void bootReady.then(() => {
+      bootReadySettled = true;
+      bootStallStore.set(null);
+    });
+    await Promise.race([bootReady, stallPrompt]);
+    bootStallStore.set(null);
+    assetPreloadStore.set(null);
+
+    // The loading screen is gone; the initial track starts now. Menu theme
+    // while the start menu is up, else the in-game track (usually null).
+    gameplayAssembly.gameplaySession.setMusicTrack(
+      bootLifecycle === "start-menu"
+        ? menuMusicCueIdForSession
+        : sceneMusicCueIdForSession
+    );
     emitMenuSoundTransition(null, uiStateStore.getState().activeOverlayMenuKey);
     movementSystem.setPlayerMovementChangeHandler((isMoving) => {
       if (isMoving) {
