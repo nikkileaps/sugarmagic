@@ -18,7 +18,11 @@ import { traceTeacherDirective } from "./teacher-trace";
 import { noteTurnFact } from "@sugarmagic/runtime-core";
 import { learnerKey } from "../learner";
 import { isInPostPlacementCalibration } from "./calibration-mode";
-import { DirectiveCache, type DirectiveKeys } from "./directive-cache";
+import {
+  DirectiveCache,
+  type DirectiveKeys,
+  type InvalidationReason
+} from "./directive-cache";
 import { FallbackTeacherPolicy } from "./policies/fallback-teacher-policy";
 import type {
   TeacherContext,
@@ -32,7 +36,10 @@ import {
   type TelemetrySink
 } from "../telemetry/telemetry";
 import { EMPTY_NPC_CONTEXT } from "../situation";
-import { describeSituationKeyChange } from "../situation/situation-key";
+import {
+  describeSituationKeyChange,
+  movedSituationKeySegments
+} from "../situation/situation-key";
 import { TeacherInvocationError } from "./policies/llm-teacher-policy";
 
 /**
@@ -154,6 +161,55 @@ export class SugarLangTeacher {
     this.consecutiveReplanFailures += 1;
   }
 
+  /**
+   * What the cache did on this turn -- one event, whichever way it went.
+   *
+   * ONE EVENT AND NOT THREE. A rate is only readable if the numerator and the
+   * denominator come from the same row: "how often does a first turn hit"
+   * cannot be asked of an event that only fires on hits, which is exactly why
+   * the event this replaces could never show a regression.
+   */
+  private async reportDecision(args: {
+    context: TeacherContext;
+    outcome: "hit" | "stale-served" | "blocking-miss";
+    staleness: InvalidationReason | null;
+    plannedFor: DirectiveKeys | undefined;
+    keysNow: DirectiveKeys;
+    teacherMs: number;
+    fallback: boolean;
+  }): Promise<void> {
+    const { context, outcome, staleness, plannedFor, keysNow } = args;
+    const npc = context.situation?.npc ?? EMPTY_NPC_CONTEXT;
+    await emitTelemetry(
+      this.telemetry,
+      createTelemetryEvent("directive-cache.decision", {
+        conversationId: context.conversationId,
+        sessionId: context.telemetryContext?.sessionId,
+        turnId: context.telemetryContext?.turnId,
+        timestamp: Date.now(),
+        outcome,
+        staleness:
+          staleness === "situation_change" ||
+          staleness === "learner_change" ||
+          staleness === "max_turns_exceeded"
+            ? staleness
+            : null,
+        movedSegments: movedSituationKeySegments(
+          plannedFor?.situationKey,
+          keysNow.situationKey
+        ),
+        // No recent turns means nothing has been said yet. The turn path always
+        // supplies this list, so an absent one is also a first turn.
+        firstTurnOfConversation: (context.situation?.recentTurns ?? []).length === 0,
+        teacherMs: args.teacherMs,
+        sceneId: context.situation?.sceneId ?? "unknown-scene",
+        npcId: npc.npcDefinitionId,
+        npcDisplayName: npc.displayName,
+        fallback: args.fallback
+      })
+    );
+  }
+
   async invoke(context: TeacherContext): Promise<PedagogicalDirective> {
     const calibrationActive =
       context.calibrationActive || isInPostPlacementCalibration(context.learner);
@@ -214,6 +270,15 @@ export class SugarLangTeacher {
         directive: inspection.directive,
         source: "cache"
       });
+      await this.reportDecision({
+        context: effectiveContext,
+        outcome: "stale-served",
+        staleness: inspection.staleness,
+        plannedFor: inspection.plannedFor,
+        keysNow,
+        teacherMs: 0,
+        fallback: inspection.directive.isFallbackDirective
+      });
       return inspection.directive;
     }
     if (inspection?.staleness) {
@@ -224,19 +289,15 @@ export class SugarLangTeacher {
 
     const cached = this.cache.get(keysNow);
     if (cached) {
-      await emitTelemetry(
-        this.telemetry,
-        createTelemetryEvent("teacher.cache-hit", {
-          conversationId: effectiveContext.conversationId,
-          sessionId: effectiveContext.telemetryContext?.sessionId,
-          turnId: effectiveContext.telemetryContext?.turnId,
-          timestamp: Date.now(),
-          sceneId: sceneId,
-          npcId: npc.npcDefinitionId,
-          npcDisplayName: npc.displayName,
-          fallback: cached.isFallbackDirective
-        })
-      );
+      await this.reportDecision({
+        context: effectiveContext,
+        outcome: "hit",
+        staleness: null,
+        plannedFor: keysNow,
+        keysNow,
+        teacherMs: 0,
+        fallback: cached.isFallbackDirective
+      });
       await emitTelemetry(
         this.telemetry,
         createTelemetryEvent("teacher.invocation-completed", {
@@ -275,6 +336,10 @@ export class SugarLangTeacher {
     // directive suits this turn, instead of this path having to reason about a
     // directive planned for a slightly different context. If it does not suit,
     // fall through and make the call that was always going to be needed.
+    // FROM HERE THE TURN WAITS, whether it joins a call already running or
+    // makes its own. That wait is the thing this epic exists to remove, so it
+    // is measured from the first moment it can begin.
+    const blockedAt = Date.now();
     const inFlight = this.teacherCallsInFlight.get(
       inFlightKey(effectiveContext.situationKey)
     );
@@ -301,6 +366,18 @@ export class SugarLangTeacher {
           context: effectiveContext,
           directive: joined,
           source: "cache"
+        });
+        // A JOIN IS STILL A BLOCKING MISS. The turn waited -- less than a full
+        // call, but it waited, and `teacherMs` says how much. Counting it as a
+        // hit would hide the wait this epic is measured on.
+        await this.reportDecision({
+          context: effectiveContext,
+          outcome: "blocking-miss",
+          staleness: inspection?.staleness ?? null,
+          plannedFor: inspection?.plannedFor,
+          keysNow,
+          teacherMs: Date.now() - blockedAt,
+          fallback: joined.isFallbackDirective
         });
         return joined;
       }
@@ -352,6 +429,17 @@ export class SugarLangTeacher {
         calibrationActive
       })
     );
+    // The turn waited for a whole call. This is the outcome the epic exists to
+    // drive to zero, so it is the one worth watching in a fleet.
+    await this.reportDecision({
+      context: effectiveContext,
+      outcome: "blocking-miss",
+      staleness: inspection?.staleness ?? null,
+      plannedFor: inspection?.plannedFor,
+      keysNow,
+      teacherMs: Date.now() - blockedAt,
+      fallback: directive.isFallbackDirective
+    });
 
     return directive;
   }

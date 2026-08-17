@@ -21,7 +21,8 @@ A language-teaching layer over an ordinary adventure game. The player plays the
 game; sugarlang decides what each line of dialogue should teach them, and shapes
 the text so it teaches it.
 
-Everything below serves one decision, made once per conversation:
+Everything below serves one decision, made once per situation and re-made when
+the situation or the learner moves:
 
 > Given this situation and this learner, what should the next thing they read
 > try to teach?
@@ -271,8 +272,12 @@ The Teacher (`runtime/teacher/`) reads the two doors and returns a
 - whether to run a comprehension probe
 
 Two policies produce one: an LLM policy, and a deterministic fallback for when
-the gateway is unavailable. Results are cached per conversation by
-`DirectiveCache`, keyed on `situationKey`.
+the gateway is unavailable. The result is held in memory by `DirectiveCache` as
+one entry keyed on `situationKey` + `learnerKey`, shared by every NPC in the
+region. A turn is served whatever the cache holds -- a directive that has
+stopped applying still ships, and its replacement is planned in the background
+-- so the Teacher is not on a turn's critical path. See
+`conversation-flow.md` for the bound on how long a stale directive may serve.
 
 ### The envelope
 

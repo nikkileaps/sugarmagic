@@ -23,6 +23,7 @@ import {
 import { DirectiveCache } from "../../runtime/teacher/directive-cache";
 import { FallbackTeacherPolicy } from "../../runtime/teacher/policies/fallback-teacher-policy";
 import { SugarLangTeacher } from "../../runtime/teacher/sugar-lang-teacher";
+import { MemoryTelemetrySink } from "../../runtime/telemetry/telemetry";
 import type { TeacherContext } from "../../runtime/types";
 import { createDirectiveFixture, createTeacherContext } from "./test-helpers";
 
@@ -177,6 +178,52 @@ describe("SugarLangTeacher", () => {
     teacher.dispose();
 
     expect(cache.peek()).toBeNull();
+  });
+
+  it("reports one decision per turn, whichever way the cache went", async () => {
+    // ONE EVENT, ALL OUTCOMES. A rate needs numerator and denominator on the
+    // same event -- the event this replaced fired only on hits, so it could
+    // never show a regression.
+    const telemetry = new MemoryTelemetrySink();
+    const cache = new DirectiveCache();
+    const teacher = new SugarLangTeacher({
+      llmPolicy: { invoke: vi.fn(async () => createDirectiveFixture()) },
+      fallbackPolicy: new FallbackTeacherPolicy(),
+      cache,
+      telemetry
+    });
+    const base = createTeacherContext();
+    const here = { ...base, situationKey: "scene:dock|quest:q1|time:morning" };
+
+    // Nothing cached: the turn waits.
+    await teacher.invoke(here);
+    // Now cached for these keys: the turn hits.
+    await teacher.invoke(here);
+    // The world moved: served stale.
+    await teacher.invoke({
+      ...here,
+      situationKey: "scene:dock|quest:q2|time:evening"
+    });
+
+    const decisions = (await telemetry.query({
+      eventKinds: ["directive-cache.decision"]
+    })) as unknown as Array<{
+      outcome: string;
+      staleness: string | null;
+      movedSegments: string[];
+      teacherMs: number;
+    }>;
+
+    expect(decisions.map((entry) => entry.outcome)).toEqual([
+      "blocking-miss",
+      "hit",
+      "stale-served"
+    ]);
+    expect(decisions[2]!.staleness).toBe("situation_change");
+    // NAMES, NOT VALUES -- values are uuids and would not group across a fleet.
+    expect(decisions[2]!.movedSegments.sort()).toEqual(["quest", "time"]);
+    // A hit did not wait; the cold turn did.
+    expect(decisions[1]!.teacherMs).toBe(0);
   });
 
   it("supports an end-to-end mocked LLM policy path", async () => {
