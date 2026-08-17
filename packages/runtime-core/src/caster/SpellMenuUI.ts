@@ -1,5 +1,10 @@
 import type { SpellDefinition } from "@sugarmagic/domain";
 import type { CasterManager } from "./CasterManager";
+import {
+  createFramedPanel,
+  type FramedPanel,
+  type FramedPanelArt
+} from "../framed-panel";
 
 function escapeHtml(value: string): string {
   return value
@@ -31,85 +36,76 @@ function injectStyles() {
       display: none;
       justify-content: center;
       align-items: center;
-      background: rgba(8, 9, 14, 0.86);
+      background: rgba(8, 9, 14, 0.6);
       z-index: 340;
     }
     .sm-spell-menu-overlay.visible { display: flex; }
-    .sm-spell-menu-panel {
-      width: min(780px, calc(100vw - 48px));
-      max-height: calc(100vh - 56px);
-      overflow: auto;
-      border-radius: 18px;
-      border: 1px solid rgba(137, 180, 250, 0.18);
-      background: linear-gradient(180deg, rgba(30, 30, 46, 0.98), rgba(17, 17, 27, 0.98));
-      box-shadow: 0 24px 72px rgba(0, 0, 0, 0.45);
-      color: #f5e0dc;
-      padding: 24px;
-      font-family: Inter, system-ui, sans-serif;
-    }
-    .sm-spell-menu-header {
+    .sm-spell-menu-body {
       display: flex;
-      justify-content: space-between;
-      gap: 20px;
-      margin-bottom: 20px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid rgba(137, 180, 250, 0.12);
+      flex-direction: column;
+      gap: 14px;
+      font-family: "Avenir Next", Nunito, system-ui, sans-serif;
+      color: #4a3116;
+      padding: 2px 6px;
     }
-    .sm-spell-menu-title { font-size: 22px; font-weight: 700; }
-    .sm-spell-menu-subtitle { font-size: 12px; color: rgba(205, 214, 244, 0.72); text-transform: uppercase; letter-spacing: 0.08em; }
-    .sm-spell-menu-meters { min-width: 220px; display: flex; flex-direction: column; gap: 10px; }
-    .sm-spell-menu-meter { display: grid; grid-template-columns: 84px 1fr 48px; gap: 8px; align-items: center; }
-    .sm-spell-menu-meter-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(205, 214, 244, 0.68); }
-    .sm-spell-menu-meter-bar { height: 10px; border-radius: 999px; background: rgba(0,0,0,0.35); overflow: hidden; }
-    .sm-spell-menu-meter-fill { height: 100%; }
-    .sm-spell-menu-meter-fill.battery { background: linear-gradient(90deg, #89dceb, #74c7ec); }
-    .sm-spell-menu-meter-fill.resonance { background: linear-gradient(90deg, #cba6f7, #f5c2e7); }
-    .sm-spell-menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
-    .sm-spell-menu-card {
-      text-align: left;
-      border-radius: 14px;
-      border: 1px solid rgba(137, 180, 250, 0.12);
-      background: rgba(255,255,255,0.025);
-      padding: 14px;
-      color: inherit;
-      cursor: pointer;
+    .sm-spell-menu-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+      gap: 12px;
     }
-    .sm-spell-menu-card.selected {
-      border-color: rgba(137, 180, 250, 0.5);
-      background: rgba(137, 180, 250, 0.1);
-      box-shadow: 0 0 0 1px rgba(137, 180, 250, 0.16) inset;
-    }
-    .sm-spell-menu-card[disabled] {
-      cursor: not-allowed;
-      opacity: 0.48;
-    }
-    .sm-spell-menu-card-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
-    .sm-spell-menu-card-meta { font-size: 11px; color: rgba(205,214,244,0.68); }
-    .sm-spell-menu-description {
+    .sm-spell-menu-slot {
+      aspect-ratio: 1;
       border-radius: 12px;
-      border: 1px solid rgba(137, 180, 250, 0.08);
-      background: rgba(255,255,255,0.025);
-      padding: 16px;
+      border: 3px solid #b8892c;
+      background: radial-gradient(circle at 50% 35%, #4a2a70 0%, #331a52 60%, #241040 100%);
+      box-shadow: 0 2px 4px rgba(60, 30, 5, 0.35), inset 0 2px 3px rgba(255, 255, 255, 0.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      color: #e8b93f;
+      font-family: Georgia, ui-serif, serif;
+      font-size: 30px;
+      font-weight: 700;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
     }
-    .sm-spell-menu-description-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
-    .sm-spell-menu-description-copy { font-size: 14px; line-height: 1.6; color: rgba(239,241,245,0.82); white-space: pre-wrap; }
-    .sm-spell-menu-description-error { margin-top: 10px; color: #f38ba8; font-size: 13px; }
+    .sm-spell-menu-slot:hover { border-color: #e8b93f; }
+    .sm-spell-menu-slot.selected {
+      border-color: #f5d067;
+      box-shadow: 0 0 0 3px rgba(232, 185, 63, 0.45), 0 2px 4px rgba(60, 30, 5, 0.35);
+    }
+    .sm-spell-menu-slot[disabled] {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+    .sm-spell-menu-slot-icon {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 9px;
+    }
+    .sm-spell-menu-empty {
+      font-size: 13px;
+      line-height: 1.55;
+      color: #4a3116;
+    }
     .sm-spell-menu-footer {
-      margin-top: 14px;
-      font-size: 12px;
-      color: rgba(205,214,244,0.7);
       display: flex;
       gap: 16px;
       flex-wrap: wrap;
+      font-size: 11px;
+      color: #6b4a26;
     }
     .sm-spell-menu-key {
       display: inline-block;
-      min-width: 22px;
-      padding: 2px 6px;
-      border-radius: 6px;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.1);
+      min-width: 20px;
+      padding: 1px 5px;
+      border-radius: 5px;
+      background: rgba(122, 90, 46, 0.18);
+      border: 1px solid rgba(122, 90, 46, 0.4);
       text-align: center;
+      font-weight: 600;
     }
   `;
   document.head.appendChild(style);
@@ -124,6 +120,18 @@ export interface RuntimeSpellMenuUIOptions {
    * window listener.
    */
   actionRegistry?: import("../input-modes/registry").RuntimeActionRegistry;
+  /**
+   * Painted frame art, injected by the host target. Absent (unit
+   * tests, legacy callers) the framed panel renders its CSS
+   * fallback.
+   */
+  frameArt?: FramedPanelArt;
+  /**
+   * Resolves a spell's icon to a fetchable image URL, or undefined
+   * when the spell has none. Slots without an image show the
+   * spell's initial on the slot instead.
+   */
+  getSpellIconUrl?: (spell: SpellDefinition) => string | undefined;
 }
 
 export function createRuntimeSpellMenuUI(
@@ -137,21 +145,18 @@ export function createRuntimeSpellMenuUI(
   container.className = "sm-spell-menu-overlay";
   parentContainer.appendChild(container);
 
-  const panel = document.createElement("div");
-  panel.className = "sm-spell-menu-panel";
-  container.appendChild(panel);
+  const framedPanel: FramedPanel = createFramedPanel(container, {
+    art: options.frameArt ?? null,
+    showMeters: true
+  });
 
-  const header = document.createElement("div");
-  header.className = "sm-spell-menu-header";
-  panel.appendChild(header);
+  const body = document.createElement("div");
+  body.className = "sm-spell-menu-body";
+  framedPanel.content.appendChild(body);
 
   const grid = document.createElement("div");
   grid.className = "sm-spell-menu-grid";
-  panel.appendChild(grid);
-
-  const description = document.createElement("div");
-  description.className = "sm-spell-menu-description";
-  panel.appendChild(description);
+  body.appendChild(grid);
 
   const footer = document.createElement("div");
   footer.className = "sm-spell-menu-footer";
@@ -159,9 +164,9 @@ export function createRuntimeSpellMenuUI(
     <span><span class="sm-spell-menu-key">C</span> Close</span>
     <span><span class="sm-spell-menu-key">Esc</span> Cancel</span>
     <span><span class="sm-spell-menu-key">Enter</span> Cast</span>
-    <span><span class="sm-spell-menu-key">←↑↓→</span> Navigate</span>
+    <span><span class="sm-spell-menu-key">Arrows</span> Navigate</span>
   `;
-  panel.appendChild(footer);
+  body.appendChild(footer);
 
   let open = false;
   let selectedIndex = 0;
@@ -195,33 +200,16 @@ export function createRuntimeSpellMenuUI(
     render();
   }
 
-  function renderHeader() {
+  function renderMeters() {
     const battery = casterManager.getBattery();
     const maxBattery = Math.max(casterManager.getMaxBattery(), 1);
-    const resonance = casterManager.getResonance();
-    const batteryPercent = Math.max(
-      0,
-      Math.min(100, (battery / maxBattery) * 100)
-    );
-    const resonancePercent = Math.max(0, Math.min(100, resonance));
-    header.innerHTML = `
-      <div>
-        <div class="sm-spell-menu-subtitle">Caster</div>
-        <div class="sm-spell-menu-title">Spells</div>
-      </div>
-      <div class="sm-spell-menu-meters">
-        <div class="sm-spell-menu-meter">
-          <div class="sm-spell-menu-meter-label">Battery</div>
-          <div class="sm-spell-menu-meter-bar"><div class="sm-spell-menu-meter-fill battery" style="width:${batteryPercent}%"></div></div>
-          <div class="sm-spell-menu-meter-label">${Math.round(battery)}%</div>
-        </div>
-        <div class="sm-spell-menu-meter">
-          <div class="sm-spell-menu-meter-label">Resonance</div>
-          <div class="sm-spell-menu-meter-bar"><div class="sm-spell-menu-meter-fill resonance" style="width:${resonancePercent}%"></div></div>
-          <div class="sm-spell-menu-meter-label">${Math.round(resonancePercent)}%</div>
-        </div>
-      </div>
-    `;
+    const resonance = Math.max(0, Math.min(100, casterManager.getResonance()));
+    framedPanel.setMeters({
+      batteryRatio: battery / maxBattery,
+      resonanceRatio: resonance / 100,
+      batteryLabel: `${Math.round(battery)}%`,
+      resonanceLabel: `${Math.round(resonance)}%`
+    });
   }
 
   function renderGrid() {
@@ -233,61 +221,45 @@ export function createRuntimeSpellMenuUI(
 
     for (const [index, spell] of currentSpells.entries()) {
       const availability = casterManager.canCastSpell(spell.definitionId);
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `sm-spell-menu-card${index === selectedIndex ? " selected" : ""}`;
-      button.disabled = !availability.canCast;
-      const costLabel =
-        typeof spell.castable.args.batteryCost === "number"
-          ? `Cost ${spell.castable.args.batteryCost}`
-          : "Castable";
-      button.innerHTML = `
-        <div class="sm-spell-menu-card-title">${escapeHtml(spell.displayName)}</div>
-        <div class="sm-spell-menu-card-meta">${escapeHtml(costLabel)} · ${escapeHtml(spell.tags.join(", ") || "No tags")}</div>
-      `;
-      button.addEventListener("click", () => {
+      const slot = document.createElement("button");
+      slot.type = "button";
+      slot.className = `sm-spell-menu-slot${index === selectedIndex ? " selected" : ""}`;
+      slot.disabled = !availability.canCast;
+      // Icon-only grid; the name (and, when blocked, the reason) ride the
+      // native tooltip until the badge/hover treatment lands.
+      slot.title = availability.canCast
+        ? spell.displayName
+        : `${spell.displayName} - ${availability.reason ?? "Cannot cast right now."}`;
+      const iconUrl = options.getSpellIconUrl?.(spell);
+      if (iconUrl) {
+        slot.innerHTML = `<img class="sm-spell-menu-slot-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(spell.displayName)}" />`;
+      } else {
+        slot.textContent = (spell.displayName.trim()[0] ?? "?").toUpperCase();
+      }
+      slot.addEventListener("click", () => {
         castSpellAtIndex(index);
       });
-      grid.appendChild(button);
+      grid.appendChild(slot);
     }
 
     if (currentSpells.length === 0) {
       const empty = document.createElement("div");
-      empty.className = "sm-spell-menu-card";
-      empty.setAttribute("disabled", "true");
-      empty.innerHTML = `<div class="sm-spell-menu-card-title">No spells available</div><div class="sm-spell-menu-card-meta">Bind some spells in Design > Spells and allow them on the player caster.</div>`;
+      empty.className = "sm-spell-menu-empty";
+      empty.textContent =
+        "No spells available. Bind some spells in Design > Spells and allow them on the player caster.";
       grid.appendChild(empty);
     }
   }
 
-  function renderDescription() {
-    const spell = getSelectedSpell();
-    if (!spell) {
-      description.innerHTML = `
-        <div class="sm-spell-menu-description-title">No spell selected</div>
-        <div class="sm-spell-menu-description-copy">No castable spells are currently available.</div>
-      `;
-      return;
-    }
-
-    const availability = casterManager.canCastSpell(spell.definitionId);
-    description.innerHTML = `
-      <div class="sm-spell-menu-description-title">${escapeHtml(spell.displayName)}</div>
-      <div class="sm-spell-menu-description-copy">${escapeHtml(spell.description || "No description yet.")}</div>
-      ${
-        availability.canCast
-          ? ""
-          : `<div class="sm-spell-menu-description-error">${escapeHtml(
-              availability.reason ?? "Cannot cast right now."
-            )}</div>`
-      }
-    `;
-  }
-
   function render() {
-    renderHeader();
+    renderMeters();
     renderGrid();
-    renderDescription();
+    // Grow the frame to the content, capped to the viewport; past the cap
+    // the parchment area scrolls.
+    framedPanel.setContentHeight(
+      body.scrollHeight,
+      Math.max(320, window.innerHeight - 56)
+    );
   }
 
   function castSpellAtIndex(index: number) {
@@ -417,6 +389,7 @@ export function createRuntimeSpellMenuUI(
     },
     dispose() {
       for (const unregister of unregisterActions) unregister();
+      framedPanel.dispose();
       parentContainer.removeChild(container);
     }
   };

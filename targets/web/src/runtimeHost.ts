@@ -185,6 +185,7 @@ import {
   markSceneEntryForNextBoot
 } from "./save/sceneEntry";
 import type { EpisodesViewModel } from "./ui/EpisodesScreen";
+import { gameplayFrameArt } from "./ui/frameArt";
 import { SUGARMAGIC_VERSION } from "./version";
 import { BillboardAssetRegistry } from "./billboard/BillboardAssetRegistry";
 import { BillboardRenderer } from "./billboard/BillboardRenderer";
@@ -3038,6 +3039,8 @@ export function createWebRuntimeHost(
       // thumbnail URLs against the current map (which can change when the
       // user regenerates a thumbnail mid-session).
       getAssetUrl: (path) => currentAssetSources?.[path],
+      // Painted frame for the caster spell menu (and later the item view).
+      frameArt: gameplayFrameArt,
       onSpellCastSuccess: (feedback) => {
         spellCastFeedbackHost?.show(feedback.message);
       },

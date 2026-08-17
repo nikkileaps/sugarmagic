@@ -16,6 +16,7 @@ export * from "./dialogue";
 export * from "./document";
 export * from "./debug-hud";
 export * from "./ecs";
+export * from "./framed-panel";
 export * from "./identity";
 export * from "./input";
 export * from "./inventory";
