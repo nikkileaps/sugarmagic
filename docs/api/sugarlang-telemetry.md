@@ -207,7 +207,7 @@ Three questions it answers:
 - **Working?** Share of rows with `firstTurnOfConversation = true` where
   `outcome = hit`.
 - **Regressed?** Any sustained rate of `outcome = blocking-miss`. That is the
-  case the caching work exists to remove, so a non-zero rate is the alarm — it
+  outcome the cache exists to prevent, so a non-zero rate is the alarm: it
   catches warming having stopped, the stale-serve bound tripping because the
   gateway is failing, the boot warm not firing, and the cache not being written.
 - **What invalidates these in the wild?** Group by `movedSegments`. `time`

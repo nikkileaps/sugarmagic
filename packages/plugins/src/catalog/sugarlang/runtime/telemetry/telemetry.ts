@@ -172,13 +172,10 @@ export type TelemetryEvent =
        * What the directive cache did on this turn. ONE event, three outcomes,
        * emitted once wherever the Teacher is consulted for a real turn.
        *
-       * Replaces `teacher.cache-hit`, which only fired on the outcome that was
-       * already fine and so could never show the fleet regressing.
-       *
        * The questions it answers:
        *   working    -- rate of `hit` where firstTurnOfConversation is true
-       *   regressed  -- any sustained rate of `blocking-miss`, which is the
-       *                 case this epic exists to remove
+       *   regressed  -- any sustained rate of `blocking-miss`, the outcome the
+       *                 cache exists to prevent
        *   what moved -- group by movedSegments when the world went stale
        */
       "directive-cache.decision",
@@ -198,9 +195,9 @@ export type TelemetryEvent =
          */
         movedSegments: string[];
         /**
-         * The turn the epic is about. Every later turn in a conversation hits
-         * anyway, so a fleet-wide hit rate that does not separate these says
-         * nothing.
+         * The turn the cache is measured on. Every later turn in a
+         * conversation hits anyway, so a fleet-wide hit rate that does not
+         * separate these says nothing.
          */
         firstTurnOfConversation: boolean;
         /** What the turn actually waited: ~0 served, seconds when blocking. */
