@@ -7,6 +7,7 @@ import {
   createDocumentDefinitionFromItem,
   renderDocumentDefinitionHtml
 } from "../document";
+import { createPaperPanel } from "../dialogue/paper-panel";
 
 export * from "./inventoryPlayerSaveParticipant";
 
@@ -425,9 +426,27 @@ export function createRuntimeItemViewUI(
   container.className = "sm-item-view";
   parentContainer.appendChild(container);
 
+  // Items present on torn paper, same treatment as the dialogue box (the
+  // caster keeps the painted device frame; items are just paper). The
+  // paper SVG is the FIRST child so it sits behind the content, which the
+  // stylesheet raises above it.
+  const paperBox = document.createElement("div");
+  paperBox.className = "sm-item-view-paper-box";
+  container.appendChild(paperBox);
+
+  const paper = createPaperPanel();
   const panel = document.createElement("div");
-  panel.className = "sm-item-view-panel";
-  container.appendChild(panel);
+  panel.className = "sm-item-view-paper";
+  paperBox.append(paper.element, panel);
+
+  // The box resizes with its content; createPaperPanel short-circuits when
+  // the size has not actually changed. BORDER box, not contentRect: the
+  // paper has to cover the box's padding too.
+  const paperObserver = new ResizeObserver(() => {
+    const rect = paperBox.getBoundingClientRect();
+    paper.resize(rect.width, rect.height);
+  });
+  paperObserver.observe(paperBox);
 
   let open = false;
   let activeDefinition: ItemDefinition | null = null;
@@ -487,6 +506,7 @@ export function createRuntimeItemViewUI(
       });
       actions.appendChild(consumeButton);
     }
+
   }
 
   // Story 50.3 — item-view Escape-to-close routes through the
@@ -536,6 +556,8 @@ export function createRuntimeItemViewUI(
     },
     dispose() {
       for (const unregister of unregisterActions) unregister();
+      paperObserver.disconnect();
+      paper.dispose();
       parentContainer.removeChild(container);
     }
   };
@@ -738,6 +760,84 @@ function injectInventoryStyles() {
       font-size: 14px;
       line-height: 1.7;
       white-space: normal;
+    }
+
+    /* Item view on torn paper, same treatment as the dialogue box: the
+       paper SVG fills the box behind the content, ink is dark on light.
+       Readable-document cards keep their own dark backgrounds and sit on
+       the paper like objects. */
+    .sm-item-view-paper-box {
+      position: relative;
+      width: min(640px, calc(100vw - 48px));
+      max-height: min(80vh, 760px);
+      display: flex;
+      flex-direction: column;
+      padding: 32px 36px;
+      filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.4));
+    }
+    .sm-item-view-paper-box > .sm-dialogue-box-paper {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .sm-item-view-paper {
+      position: relative;
+      z-index: 1;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      display: flex;
+      flex-direction: column;
+      font-family: "Avenir Next", Nunito, system-ui, sans-serif;
+      color: #4a3116;
+    }
+    .sm-item-view-paper .sm-item-view-header {
+      padding: 0 0 12px;
+      border-bottom: 1px solid rgba(122, 90, 46, 0.35);
+      color: #4a3116;
+    }
+    .sm-item-view-paper .sm-item-view-kicker {
+      color: #7a4a9e;
+    }
+    .sm-item-view-paper .sm-item-view-title {
+      color: #3d2812;
+    }
+    .sm-item-view-paper .sm-item-view-quantity {
+      color: #6b4a26;
+    }
+    .sm-item-view-paper .sm-item-view-body {
+      padding: 16px 0;
+    }
+    .sm-item-view-paper .sm-item-view-body-copy {
+      color: #4a3116;
+    }
+    .sm-item-view-paper .sm-item-view-close {
+      border-radius: 10px;
+      border: 2px solid #b8892c;
+      background: rgba(184, 137, 44, 0.14);
+      color: #6b4a26;
+      font-weight: 700;
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+    .sm-item-view-paper .sm-item-view-close:hover {
+      border-color: #e8b93f;
+    }
+    .sm-item-view-paper .sm-item-view-consume {
+      border-radius: 10px;
+      border: 2px solid #b8892c;
+      background: linear-gradient(180deg, #e8b93f, #c9962f);
+      color: #3d2812;
+      font-weight: 700;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    .sm-item-view-paper .sm-item-view-consume:hover {
+      background: linear-gradient(180deg, #f5d067, #d9a63f);
     }
 
     .sm-readable {

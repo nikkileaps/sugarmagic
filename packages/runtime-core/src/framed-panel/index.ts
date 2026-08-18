@@ -1,10 +1,10 @@
 /**
  * packages/runtime-core/src/framed-panel/index.ts
  *
- * Purpose: The ornate framed panel used by gameplay overlays (caster spell
- *   menu, item view). Assembles the painted frame from sheet cuts, keeps the
- *   two resource meters live, and hands the caller a parchment content area
- *   to fill.
+ * Purpose: The ornate framed panel used by gameplay overlays (today the
+ *   caster spell menu). Assembles the painted frame from sheet cuts, keeps
+ *   the two resource meters live, and hands the caller a parchment content
+ *   area to fill.
  *
  * The frame grows vertically: bands pin to the top and bottom edges, side
  * rails repeat between the corners, gems center on the rails, flourishes pin
@@ -72,8 +72,8 @@ export interface FramedPanelOptions {
   showMeters?: boolean;
   /**
    * SVG markup drawn on a disc covering the medallion's baked star glyph.
-   * Null keeps the star (the caster panel). The item panel passes its own
-   * glyph here.
+   * Null keeps the star (the caster panel). A future framed panel (e.g. a
+   * re-skinned inventory list) passes its own glyph here.
    */
   medallionCoverSvg?: string | null;
   /** Display pixels per source pixel. Default 0.45. */
@@ -297,10 +297,18 @@ export function createFramedPanel(
     });
     element.appendChild(parchment);
 
-    // Corner flourishes: top pair pins to the top, bottom pair to the bottom.
+    // Corner flourishes: top pair pins to the top, bottom pair to the
+    // bottom. With the meters hidden the top pair uses the trimmed cuts
+    // (see the slice table) so no meter-hardware pixels ghost through.
+    const flourishTL: FrameSliceName = showMeters
+      ? "flourishTL"
+      : "flourishTLNoMeters";
+    const flourishTR: FrameSliceName = showMeters
+      ? "flourishTR"
+      : "flourishTRNoMeters";
     const flourishes: Array<[FrameSliceName, Partial<CSSStyleDeclaration>]> = [
-      ["flourishTL", { left: px(FRAME_SLICES.flourishTL.x0 - FRAME_ORIGIN.x), top: px(FRAME_SLICES.flourishTL.y0 - FRAME_ORIGIN.y) }],
-      ["flourishTR", { right: px(FRAME_WIDTH - (FRAME_SLICES.flourishTR.x1 - FRAME_ORIGIN.x)), top: px(FRAME_SLICES.flourishTR.y0 - FRAME_ORIGIN.y) }],
+      [flourishTL, { left: px(FRAME_SLICES[flourishTL].x0 - FRAME_ORIGIN.x), top: px(FRAME_SLICES[flourishTL].y0 - FRAME_ORIGIN.y) }],
+      [flourishTR, { right: px(FRAME_WIDTH - (FRAME_SLICES[flourishTR].x1 - FRAME_ORIGIN.x)), top: px(FRAME_SLICES[flourishTR].y0 - FRAME_ORIGIN.y) }],
       ["flourishBL", { left: px(FRAME_SLICES.flourishBL.x0 - FRAME_ORIGIN.x), bottom: px(FRAME_NATURAL_HEIGHT - (FRAME_SLICES.flourishBL.y1 - FRAME_ORIGIN.y)) }],
       ["flourishBR", { right: px(FRAME_WIDTH - (FRAME_SLICES.flourishBR.x1 - FRAME_ORIGIN.x)), bottom: px(FRAME_NATURAL_HEIGHT - (FRAME_SLICES.flourishBR.y1 - FRAME_ORIGIN.y)) }]
     ];
@@ -344,11 +352,30 @@ export function createFramedPanel(
       })
     );
 
+    // Without the meter hardware the stretch strips are wood-only and the
+    // baked top pinstripe only survives inside the corner flourishes and
+    // the medallion cut; this line fills the spans between them.
+    if (!showMeters) {
+      const pinstripe = document.createElement("div");
+      pinstripe.className = "sm-framed-panel-piece";
+      Object.assign(pinstripe.style, {
+        left: px(300),
+        right: px(300),
+        top: px(145),
+        height: `${Math.max(1, 1.5 * scale)}px`,
+        background: "rgba(150, 100, 160, 0.35)"
+      });
+      element.appendChild(pinstripe);
+    }
+
     // Top and bottom bands.
     const topBand = document.createElement("div");
     topBand.className = "sm-framed-panel-band";
     topBand.style.top = "0";
     topBand.style.height = px(TOP_BAND_HEIGHT);
+    // Strip pieces are shorter than the band (wood only); pin them to the
+    // band's top edge instead of letting flex stretch distort them.
+    topBand.style.alignItems = "flex-start";
     for (const segment of topBandSegments(showMeters)) {
       const piece = segment.stretch
         ? filePiece(segment.slice, frameArt.topStretchUrl)

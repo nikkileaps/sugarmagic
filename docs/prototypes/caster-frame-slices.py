@@ -20,7 +20,9 @@ os.makedirs(OUT, exist_ok=True)
 REPEATING = {
     "rail-left": (6, 690, 110, 722),
     "rail-right": (1424, 690, 1528, 722),
-    "top-stretch": (1360, 31, 1372, 206),
+    # Wood rows only: no full-height top-band column is free of hardware
+    # shadows, so the parchment fill shows beneath the strip.
+    "top-stretch": (150, 31, 162, 122),
     "bottom-stretch": (400, 860, 432, 999),
     "parchment": (320, 212, 600, 352),
 }

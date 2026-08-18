@@ -198,10 +198,11 @@ const SLICES = {
   topBattery: [146, 31, 668, 206],
   topMedallion: [668, 31, 868, 206],
   topResonance: [868, 31, 1388, 206],
-  // Plain rail column between the resonance circle and the right corner
-  // cap: clean wood above, clean parchment below. Stretched (not tiled)
-  // wide in item mode, so it must be free of hardware and flourishes.
-  topStretch: [1360, 31, 1372, 206],
+  // Plain rail column left of the battery circle, wood rows only: no
+  // full-height top-band column is free of hardware shadows, so the
+  // parchment fill shows beneath the strip. Stretched (not tiled) wide
+  // in item mode.
+  topStretch: [150, 31, 162, 122],
   // Bottom band. Strip slice includes the baked bottom pinstripe.
   bottomEmblem: [620, 830, 908, 999],
   bottomStretch: [400, 860, 432, 999],
@@ -213,6 +214,11 @@ const SLICES = {
   gemRight: [1424, 356, 1528, 652],
   flourishTL: [70, 125, 300, 315],
   flourishTR: [1236, 125, 1466, 315],
+  // Item mode: trimmed to start below the meter hardware, whose circle
+  // bottoms are baked into the full cuts (covered by the meter segments in
+  // caster mode, exposed when they are omitted).
+  flourishTLTrim: [70, 172, 300, 315],
+  flourishTRTrim: [1236, 172, 1466, 315],
   flourishBL: [60, 740, 290, 910],
   flourishBR: [1246, 740, 1476, 910],
   // Parchment tile for the growing middle. Sampled just below the top band,
@@ -268,7 +274,7 @@ const SLICE_FILES = {
 
 // The query string is a cache-buster: bump it after regenerating slices, or
 // the browser's memory cache keeps showing the old cut.
-const SLICE_VERSION = 2;
+const SLICE_VERSION = 3;
 
 function sliceFile(name) {
   return `caster-frame-slices/${SLICE_FILES[name]}?v=${SLICE_VERSION}`;
@@ -326,9 +332,14 @@ function render() {
       background-repeat:repeat;
       background-size:${px((SLICES.parchment[2] - SLICES.parchment[0]) * 2)} ${px((SLICES.parchment[3] - SLICES.parchment[1]) * 2)};"></div>
 
-    <!-- inner corner flourishes (carry the pinstripe corners) -->
-    ${abs(SLICES.flourishTL, `left:${px(SLICES.flourishTL[0] - ORIGIN.x)};top:${px(SLICES.flourishTL[1] - ORIGIN.y)};`)}
-    ${abs(SLICES.flourishTR, `left:${px(SLICES.flourishTR[0] - ORIGIN.x)};top:${px(SLICES.flourishTR[1] - ORIGIN.y)};`)}
+    <!-- inner corner flourishes (carry the pinstripe corners); item mode
+         uses the trimmed cuts so no meter hardware ghosts through -->
+    ${state.itemMode
+      ? abs(SLICES.flourishTLTrim, `left:${px(SLICES.flourishTLTrim[0] - ORIGIN.x)};top:${px(SLICES.flourishTLTrim[1] - ORIGIN.y)};`) +
+        abs(SLICES.flourishTRTrim, `left:${px(SLICES.flourishTRTrim[0] - ORIGIN.x)};top:${px(SLICES.flourishTRTrim[1] - ORIGIN.y)};`) +
+        `<div style="position:absolute;left:${px(300)};right:${px(300)};top:${px(145)};height:${Math.max(1, 1.5 * s)}px;background:rgba(150,100,160,0.35);"></div>`
+      : abs(SLICES.flourishTL, `left:${px(SLICES.flourishTL[0] - ORIGIN.x)};top:${px(SLICES.flourishTL[1] - ORIGIN.y)};`) +
+        abs(SLICES.flourishTR, `left:${px(SLICES.flourishTR[0] - ORIGIN.x)};top:${px(SLICES.flourishTR[1] - ORIGIN.y)};`)}
     ${abs(SLICES.flourishBL, `left:${px(SLICES.flourishBL[0] - ORIGIN.x)};top:${px(flourishBLTop)};`)}
     ${abs(SLICES.flourishBR, `left:${px(SLICES.flourishBR[0] - ORIGIN.x)};top:${px(flourishBRTop)};`)}
 

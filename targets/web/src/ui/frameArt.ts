@@ -1,5 +1,5 @@
 /**
- * Bundled art for the framed gameplay panels (caster spell menu, item view).
+ * Bundled art for the framed gameplay panels (the caster spell menu).
  *
  * Vite turns these imports into hashed asset URLs; runtime-core receives only
  * the URLs (it never imports image files). The sheet carries every fixed

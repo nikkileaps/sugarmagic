@@ -265,8 +265,8 @@ export interface RuntimeGameplaySessionControllerOptions {
    */
   getAssetUrl?: (relativePath: string) => string | undefined;
   /**
-   * Painted frame art for the framed gameplay panels (caster spell menu,
-   * item view). The host target bundles the images and injects the URLs;
+   * Painted frame art for the framed gameplay panels (the caster spell
+   * menu). The host target bundles the images and injects the URLs;
    * absent, the panels render their plain CSS fallback.
    */
   frameArt?: import("../framed-panel").FramedPanelArt;

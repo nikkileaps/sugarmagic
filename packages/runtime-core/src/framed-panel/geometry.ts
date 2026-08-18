@@ -1,8 +1,8 @@
 /**
  * packages/runtime-core/src/framed-panel/geometry.ts
  *
- * Purpose: Source-pixel geometry for the ornate framed panel (the caster /
- *   item UI frame). Every rectangle is a cut from one painted sheet; the DOM
+ * Purpose: Source-pixel geometry for the ornate framed panel (the caster
+ *   UI frame). Every rectangle is a cut from one painted sheet; the DOM
  *   assembler in ./index.ts positions the cuts, and tests assert the cuts
  *   stay contiguous and inside the sheet.
  *
@@ -79,12 +79,14 @@ export const FRAME_SLICES = {
   /** Flanking gems + resonance pill + circle. Contiguous with medallion/cornerTR. */
   topResonance: slice(868, 31, 1388, 206),
   /**
-   * Plain rail column between the resonance circle and the right corner cap:
-   * the only full-height top-band strip free of hardware and flourishes.
-   * STRETCHED (never tiled) to fill leftover band width - tiling a
-   * few-pixel strip shreds the wood grain into ribs.
+   * Plain rail column between the top-left corner and the battery circle,
+   * WOOD ROWS ONLY - no full-height column in the top band is free of
+   * hardware shadows below the rail, so the strip stops at the wood's
+   * underside and the parchment fill shows beneath it. STRETCHED (never
+   * tiled) to fill leftover band width - tiling a few-pixel strip shreds
+   * the wood grain into ribs.
    */
-  topStretch: slice(1360, 31, 1372, 206),
+  topStretch: slice(150, 31, 162, 122),
   /** Bottom gem emblem with its gold leaves. */
   bottomEmblem: slice(620, 830, 908, 999),
   /** Plain bottom rail column, includes the baked bottom pinstripe. */
@@ -98,6 +100,14 @@ export const FRAME_SLICES = {
   /** Parchment corner flourishes; carry the pinstripe corner rounding. */
   flourishTL: slice(70, 125, 300, 315),
   flourishTR: slice(1236, 125, 1466, 315),
+  /**
+   * Same top flourishes trimmed to start below the meter hardware: the
+   * full cuts include the bottoms of the battery/resonance circles, which
+   * the meter segments paint over in caster mode but nothing covers when
+   * the meters are hidden. The baked pinstripe (y ~176) survives the trim.
+   */
+  flourishTLNoMeters: slice(70, 172, 300, 315),
+  flourishTRNoMeters: slice(1236, 172, 1466, 315),
   flourishBL: slice(60, 740, 290, 910),
   flourishBR: slice(1246, 740, 1476, 910),
   /**
