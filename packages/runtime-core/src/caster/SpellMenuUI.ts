@@ -92,12 +92,44 @@ function injectStyles() {
       line-height: 1.55;
       color: #4a3116;
     }
-    .sm-spell-menu-footer {
-      display: flex;
-      gap: 16px;
-      flex-wrap: wrap;
+    .sm-spell-menu-help-corner {
+      position: absolute;
+      z-index: 5;
+    }
+    .sm-spell-menu-help-button {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      border: 2px solid #b8892c;
+      background: rgba(122, 90, 46, 0.14);
+      color: #6b4a26;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: "Avenir Next", Nunito, system-ui, sans-serif;
+    }
+    .sm-spell-menu-help-button:hover {
+      border-color: #e8b93f;
+    }
+    .sm-spell-menu-help-popover {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 10px);
+      right: 0;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 2px solid #b8892c;
+      background: #f7ecd2;
+      box-shadow: 0 6px 18px rgba(60, 30, 5, 0.3);
       font-size: 11px;
       color: #6b4a26;
+      white-space: nowrap;
+    }
+    .sm-spell-menu-help-corner:hover .sm-spell-menu-help-popover,
+    .sm-spell-menu-help-corner:focus-within .sm-spell-menu-help-popover {
+      display: flex;
     }
     .sm-spell-menu-key {
       display: inline-block;
@@ -160,15 +192,25 @@ export function createRuntimeSpellMenuUI(
   grid.className = "sm-spell-menu-grid";
   body.appendChild(grid);
 
-  const footer = document.createElement("div");
-  footer.className = "sm-spell-menu-footer";
-  footer.innerHTML = `
-    <span><span class="sm-spell-menu-key">C</span> Close</span>
-    <span><span class="sm-spell-menu-key">Esc</span> Cancel</span>
-    <span><span class="sm-spell-menu-key">Enter</span> Cast</span>
-    <span><span class="sm-spell-menu-key">Arrows</span> Navigate</span>
+  // Keyboard hints live behind a "?" pinned to the parchment's bottom-right
+  // corner; hover or focus reveals them. Outside the grid, so per-frame
+  // refreshes and cast re-renders never touch it.
+  const helpCorner = document.createElement("div");
+  helpCorner.className = "sm-spell-menu-help-corner";
+  helpCorner.innerHTML = `
+    <div class="sm-spell-menu-help-popover">
+      <span><span class="sm-spell-menu-key">C</span> Close</span>
+      <span><span class="sm-spell-menu-key">Esc</span> Cancel</span>
+      <span><span class="sm-spell-menu-key">Enter</span> Cast</span>
+      <span><span class="sm-spell-menu-key">Arrows</span> Navigate</span>
+    </div>
+    <button type="button" class="sm-spell-menu-help-button" aria-label="Keyboard shortcuts">?</button>
   `;
-  body.appendChild(footer);
+  // Sit in the content area's bottom-right corner: reuse the inset the
+  // framed panel computed for its content element.
+  helpCorner.style.right = framedPanel.content.style.right;
+  helpCorner.style.bottom = framedPanel.content.style.bottom;
+  framedPanel.element.appendChild(helpCorner);
 
   let open = false;
   let selectedIndex = 0;
