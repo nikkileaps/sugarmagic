@@ -108,15 +108,16 @@ describe("display text resolver", () => {
     );
   });
 
-  it("returns authored text rather than a flagged record", async () => {
-    // A flagged record failed one of the four gates. Showing it puts text in
-    // front of a learner that the verifiers already judged wrong for their
-    // band, which is worse than showing English.
+  it("shows a flagged record; the flag is a Studio review aid, not a runtime veto", async () => {
+    // Story #200: the envelope gate is calibrated for dialogue pacing and
+    // legitimately fails full item translations. The author sees the failing
+    // gates in the item variants panel and owns the call; whatever they
+    // leave baked is what the player reads.
     expect(
       await resolver({
         getVariantCache: () => cacheReturning(record({ reviewFlag: true }))
       })(request)
-    ).toBe(AUTHORED);
+    ).toBe(GRADED);
   });
 
   it("returns authored text rather than an empty graded string", async () => {
@@ -221,13 +222,13 @@ describe("beginner bands read baked variants, like dialogue", () => {
     expect(text).not.toContain("libro");
   });
 
-  it("refuses a flagged variant at A1 and falls back to authored text", async () => {
+  it("shows a flagged variant at A1; the flag never suppresses display", async () => {
     expect(
       await resolver({
         getLearnerBand: async () => "A1",
         getVariantCache: () => cacheReturning({ ...record(), reviewFlag: true })
       })(request)
-    ).toBe(AUTHORED);
+    ).toBe(GRADED);
   });
 
   it("still uses baked variants at B1", async () => {
