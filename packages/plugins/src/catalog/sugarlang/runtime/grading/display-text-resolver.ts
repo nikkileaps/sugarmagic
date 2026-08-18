@@ -176,11 +176,12 @@ export function createDisplayTextResolver(deps: DisplayTextResolverDeps) {
       });
       if (!entry) return request.text;
 
-      // A flagged record failed one of the four gates. Showing it would put
-      // text in front of a learner that the verifiers already judged wrong for
-      // their band -- worse than showing English.
-      if (entry.variant.reviewFlag) return request.text;
-
+      // Flagged records (a failed verifier gate) still show. The flag is a
+      // review aid for the author in Studio, not a runtime veto: the item
+      // variants panel names the failing gates, and whatever the author
+      // leaves baked is what the player reads. (Story #200 - the envelope
+      // gate is calibrated for dialogue pacing and legitimately fails full
+      // item translations.)
       return entry.variant.text || request.text;
     } catch {
       return request.text;

@@ -30,11 +30,23 @@ import type { ItemDefinition } from "@sugarmagic/domain";
 import type { CEFRBand } from "../../runtime/cefr";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
 import { ITEM_VARIANT_BANDS } from "../../runtime/contracts/baked-variant";
+import { VOICE_RETENTION_PASS_THRESHOLD } from "../../runtime/grading/graded-text-service";
 import { createVariantAuthoringClient } from "./editor-support";
 
-// 090.11: items keep B1+. Beginner item text is substituted at runtime, so a
-// baked A1 variant would never be read -- see ITEM_VARIANT_BANDS.
 const BANDS = ITEM_VARIANT_BANDS;
+
+/** Names of the verifier gates a flagged variant failed, for the row badges. */
+function failedGates(variant: BakedLineVariant): string[] {
+  const verdict = variant.verdict;
+  const failed: string[] = [];
+  if (!verdict.envelopePasses) failed.push("envelope");
+  if (!verdict.ratioPasses) failed.push("ratio");
+  if (verdict.voiceRetentionScore < VOICE_RETENTION_PASS_THRESHOLD) {
+    failed.push("voice");
+  }
+  if (!verdict.fidelityPasses) failed.push("fidelity");
+  return failed;
+}
 
 export interface ItemViewVariantsConnectedProps {
   item: ItemDefinition | null;
@@ -149,9 +161,16 @@ export function ItemViewVariantsConnected({
                 {band}
               </Badge>
               {variant?.reviewFlag ? (
-                <Badge size="xs" color="red" variant="light">
-                  flagged
-                </Badge>
+                <>
+                  <Badge size="xs" color="red" variant="light">
+                    flagged
+                  </Badge>
+                  {failedGates(variant).map((gate) => (
+                    <Badge key={gate} size="xs" color="red" variant="outline">
+                      {gate}
+                    </Badge>
+                  ))}
+                </>
               ) : null}
             </Group>
             <Text size="xs" c={variant ? undefined : "var(--sm-color-overlay0)"}>
@@ -162,7 +181,8 @@ export function ItemViewVariantsConnected({
       })}
 
       <Text size="xs" c="var(--sm-color-overlay0)">
-        Flagged variants are not shown to players -- the item falls back to English.
+        Players see these variants as baked. A flag names the verifier gates
+        that failed -- review the text and regenerate if it reads wrong.
       </Text>
     </Stack>
   );
