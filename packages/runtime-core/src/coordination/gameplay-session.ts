@@ -265,11 +265,12 @@ export interface RuntimeGameplaySessionControllerOptions {
    */
   getAssetUrl?: (relativePath: string) => string | undefined;
   /**
-   * Painted frame art for the framed gameplay panels (the caster spell
-   * menu). The host target bundles the images and injects the URLs;
-   * absent, the panels render their plain CSS fallback.
+   * Painted frame art for the framed gameplay panels: the caster frame
+   * (spell menu) and the plain frame (inventory list). The host target
+   * bundles the images and injects the URLs; absent, the panels render
+   * their plain CSS fallback.
    */
-  frameArt?: import("../framed-panel").FramedPanelArt;
+  frameArt?: import("../framed-panel").FramedPanelArtSet;
   /**
    * Story 50.3 — central keyboard action registry. Threaded
    * through to every UI module that wants a keyboard shortcut
@@ -603,7 +604,7 @@ export function createRuntimeGameplaySessionController(
   const casterSystem = new CasterSystem(casterManager);
   const spellMenuUi = createRuntimeSpellMenuUI(root, casterManager, {
     actionRegistry: options.actionRegistry,
-    frameArt: options.frameArt,
+    frameArt: options.frameArt?.caster,
     // A spell's icon points at a content-library asset definition. Only
     // image assets can render in the slot; anything else (a model, no
     // icon at all) falls back to the slot's initial-letter glyph.
@@ -619,7 +620,8 @@ export function createRuntimeGameplaySessionController(
   const inventoryManager = new InventoryManager();
   const inventoryUi = createRuntimeInventoryUI(root, {
     getAssetUrl: options.getAssetUrl,
-    actionRegistry: options.actionRegistry
+    actionRegistry: options.actionRegistry,
+    frameArt: options.frameArt?.plain
   });
   const itemViewUi = createRuntimeItemViewUI(root, {
     documentDefinitions,

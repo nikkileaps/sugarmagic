@@ -8,6 +8,12 @@ import {
   renderDocumentDefinitionHtml
 } from "../document";
 import { createPaperPanel } from "../dialogue/paper-panel";
+import {
+  PLAIN_FRAME_GEOMETRY,
+  createFramedPanel,
+  type FramedPanel,
+  type FramedPanelArt
+} from "../framed-panel";
 
 export * from "./inventoryPlayerSaveParticipant";
 
@@ -229,6 +235,11 @@ export interface RuntimeInventoryUI {
 export interface RuntimeInventoryUIOptions {
   getAssetUrl?: (relativePath: string) => string | undefined;
   /**
+   * Painted plain-frame art, injected by the host target. Absent, the
+   * framed panel renders its CSS fallback.
+   */
+  frameArt?: FramedPanelArt;
+  /**
    * Story 50.3 — the central keyboard action registry the
    * inventory's open/close shortcuts register against. Replaces
    * the previous per-handler `window.addEventListener("keydown")`
@@ -250,9 +261,15 @@ export function createRuntimeInventoryUI(
   container.className = "sm-inventory-ui";
   parentContainer.appendChild(container);
 
+  // The inventory list sits on the PLAIN painted frame (bare rails, no
+  // meter hardware); the caster menu owns the frame with the hardware.
+  const framedPanel: FramedPanel = createFramedPanel(container, {
+    art: options.frameArt ?? null,
+    geometry: PLAIN_FRAME_GEOMETRY
+  });
   const panel = document.createElement("div");
-  panel.className = "sm-inventory-panel";
-  container.appendChild(panel);
+  panel.className = "sm-inventory-framed";
+  framedPanel.content.appendChild(panel);
 
   const header = document.createElement("div");
   header.className = "sm-inventory-header";
@@ -313,6 +330,13 @@ export function createRuntimeInventoryUI(
       });
       body.appendChild(button);
     }
+
+    // Grow the frame to the content, capped to the viewport; past the cap
+    // the parchment area scrolls.
+    framedPanel.setContentHeight(
+      panel.scrollHeight,
+      Math.max(320, window.innerHeight - 56)
+    );
   }
 
   // Story 50.3 — register keyboard shortcuts through the central
@@ -368,6 +392,7 @@ export function createRuntimeInventoryUI(
     },
     dispose() {
       for (const unregister of unregisterActions) unregister();
+      framedPanel.dispose();
       parentContainer.removeChild(container);
     }
   };
@@ -760,6 +785,51 @@ function injectInventoryStyles() {
       font-size: 14px;
       line-height: 1.7;
       white-space: normal;
+    }
+
+    /* Inventory list on the plain painted frame: dark ink on parchment
+       instead of the dark theme. */
+    .sm-inventory-framed {
+      display: flex;
+      flex-direction: column;
+      font-family: "Avenir Next", Nunito, system-ui, sans-serif;
+      color: #4a3116;
+      padding: 2px 6px;
+    }
+    .sm-inventory-framed .sm-inventory-header {
+      padding: 0 0 12px;
+      border-bottom: 1px solid rgba(122, 90, 46, 0.35);
+      color: #3d2812;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .sm-inventory-framed .sm-inventory-header-key {
+      color: #6b4a26;
+      border: 1px solid rgba(122, 90, 46, 0.4);
+      background: rgba(122, 90, 46, 0.14);
+    }
+    .sm-inventory-framed .sm-inventory-body {
+      padding: 14px 0;
+    }
+    .sm-inventory-framed .sm-inventory-empty {
+      color: #6b4a26;
+    }
+    .sm-inventory-framed .sm-inventory-entry {
+      border: 2px solid rgba(122, 90, 46, 0.35);
+      background: rgba(122, 90, 46, 0.08);
+      color: #4a3116;
+    }
+    .sm-inventory-framed .sm-inventory-entry:hover:not(:disabled) {
+      border-color: #b8892c;
+    }
+    .sm-inventory-framed .sm-inventory-entry-title {
+      color: #3d2812;
+    }
+    .sm-inventory-framed .sm-inventory-entry-qty {
+      color: #8a6420;
+    }
+    .sm-inventory-framed .sm-inventory-entry-description {
+      color: #6b4a26;
     }
 
     /* Item view on torn paper, same treatment as the dialogue box: the

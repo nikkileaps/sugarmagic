@@ -3039,7 +3039,7 @@ export function createWebRuntimeHost(
       // thumbnail URLs against the current map (which can change when the
       // user regenerates a thumbnail mid-session).
       getAssetUrl: (path) => currentAssetSources?.[path],
-      // Painted frame for the caster spell menu.
+      // Painted frames: caster (spell menu) and plain (inventory list).
       frameArt: gameplayFrameArt,
       onSpellCastSuccess: (feedback) => {
         spellCastFeedbackHost?.show(feedback.message);

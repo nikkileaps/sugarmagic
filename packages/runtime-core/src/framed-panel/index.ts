@@ -1,60 +1,51 @@
 /**
  * packages/runtime-core/src/framed-panel/index.ts
  *
- * Purpose: The ornate framed panel used by gameplay overlays (today the
- *   caster spell menu). Assembles the painted frame from sheet cuts, keeps
- *   the two resource meters live, and hands the caller a parchment content
- *   area to fill.
+ * Purpose: The ornate framed panel used by gameplay overlays (the caster
+ *   spell menu on the caster frame, the inventory list on the plain frame).
+ *   Assembles a painted frame from sheet cuts per a FrameGeometry, keeps
+ *   resource meters live when the geometry has them, and hands the caller a
+ *   parchment content area to fill.
  *
  * The frame grows vertically: bands pin to the top and bottom edges, side
  * rails repeat between the corners, gems center on the rails, flourishes pin
- * to their corners. Width is fixed at FRAME_WIDTH * scale.
+ * to their corners. Width is fixed at geometry.frameWidth * scale.
  *
  * Art arrives by injection (FramedPanelArt of image URLs): runtime-core never
  * imports image files, the host target bundles them. With no art the panel
  * degrades to a plain painted-with-CSS box so the player can keep playing.
  *
  * Exports:
- *   - FramedPanelArt, FramedPanelOptions, FramedPanel, createFramedPanel
+ *   - FramedPanelArt, FramedPanelArtSet, FramedPanelOptions, FramedPanel,
+ *     createFramedPanel
  *   - everything from ./geometry
  *
  * Relationships:
- *   - Geometry (cut table, meter rects, band composition) lives in
+ *   - Geometry (cut tables, meter rects, band composition) lives in
  *     ./geometry, which is pure and tested.
- *   - The caster spell menu (../caster/SpellMenuUI.ts) and the item view
- *     build on this.
+ *   - The caster spell menu (../caster/SpellMenuUI.ts) and the inventory
+ *     list (../inventory) build on this.
  *
  * Status: active
  */
 
 import {
-  BOTTOM_BAND_HEIGHT,
-  CONTENT_INSETS,
-  CORNER_HEIGHT,
-  FRAME_ORIGIN,
-  FRAME_SHEET,
-  FRAME_SLICES,
-  FRAME_WIDTH,
-  FRAME_NATURAL_HEIGHT,
-  MEDALLION_CIRCLE,
-  METER_RECTS,
-  TOP_BAND_HEIGHT,
-  bottomBandSegments,
   clampRatio,
   frameHeightForContent,
-  sliceHeight,
-  sliceWidth,
-  topBandSegments,
-  type FrameSliceName
+  REPEATING_SLICE_ART,
+  type FrameGeometry,
+  type FrameSlice,
+  type MeterRect
 } from "./geometry";
 
 export * from "./geometry";
 
 /**
- * Image URLs for the frame art. The sheet carries every fixed piece; the
+ * Image URLs for one frame's art. The sheet carries every fixed piece; the
  * repeating/stretching pieces need standalone files because CSS tiles a
- * whole image, never a sheet sub-region. The parchment file is the
- * parchment cut mirrored into a 2x2 quilt (tile edges always match).
+ * whole image, never a sheet sub-region (see REPEATING_SLICE_ART). The
+ * parchment file is the parchment cut mirrored into a 2x2 quilt (tile edges
+ * always match).
  */
 export interface FramedPanelArt {
   sheetUrl: string;
@@ -65,17 +56,17 @@ export interface FramedPanelArt {
   parchmentUrl: string;
 }
 
+/** The game's frame art, one entry per frame variant. */
+export interface FramedPanelArtSet {
+  caster: FramedPanelArt;
+  plain: FramedPanelArt;
+}
+
 export interface FramedPanelOptions {
   /** Null renders the CSS fallback panel (runtime degrades, logs once). */
   art: FramedPanelArt | null;
-  /** Show the battery/resonance hardware and live fills. Default false. */
-  showMeters?: boolean;
-  /**
-   * SVG markup drawn on a disc covering the medallion's baked star glyph.
-   * Null keeps the star (the caster panel). A future framed panel (e.g. a
-   * re-skinned inventory list) passes its own glyph here.
-   */
-  medallionCoverSvg?: string | null;
+  /** Which frame to assemble; also decides whether meters exist. */
+  geometry: FrameGeometry;
   /** Display pixels per source pixel. Default 0.45. */
   scale?: number;
 }
@@ -95,7 +86,7 @@ export interface FramedPanel {
   element: HTMLElement;
   /** Parchment content area between the pinstripes. The caller fills it. */
   content: HTMLElement;
-  /** Update the meter fills and labels. No-op when showMeters is false. */
+  /** Update the meter fills and labels. No-op when the frame has no meters. */
   setMeters: (meters: FramedPanelMeters) => void;
   /**
    * Size the panel so the content area gets `contentDisplayHeight` display
@@ -136,9 +127,10 @@ function injectStyles(): void {
       flex: none;
     }
     .sm-framed-panel-band .sm-framed-panel-stretch {
-      /* Zero basis: at natural width the fixed segments already sum to the
-         panel width; stretches only take room when segments are omitted or
-         the panel is wider. The strip image scales, never tiles. */
+      /* Zero basis: when the fixed segments already sum to the panel width
+         the stretches collapse; they only take room when the panel is wider
+         or the band has few fixed segments. The strip image scales, never
+         tiles - tiling a few-pixel strip shreds the wood grain into ribs. */
       flex: 1 1 0;
       min-width: 0;
       background-size: 100% 100% !important;
@@ -170,19 +162,6 @@ function injectStyles(): void {
       text-shadow: 0 2px 3px rgba(0, 0, 0, 0.55);
       pointer-events: none;
     }
-    .sm-framed-panel-medallion-cover {
-      position: absolute;
-      border-radius: 50%;
-      background: radial-gradient(circle at 50% 38%, #46256b 0%, #331a52 55%, #22103a 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
-    }
-    .sm-framed-panel-medallion-cover svg {
-      width: 58%;
-      height: 58%;
-    }
     .sm-framed-panel-content {
       position: absolute;
       overflow-y: auto;
@@ -208,22 +187,22 @@ export function createFramedPanel(
 ): FramedPanel {
   injectStyles();
 
+  const geometry = options.geometry;
   const scale = options.scale ?? 0.45;
-  const showMeters = options.showMeters ?? false;
   const px = (sourcePx: number) => `${sourcePx * scale}px`;
 
   const element = document.createElement("div");
   element.className = "sm-framed-panel";
-  element.style.width = px(FRAME_WIDTH);
-  element.style.height = px(FRAME_NATURAL_HEIGHT);
+  element.style.width = px(geometry.frameWidth);
+  element.style.height = px(geometry.naturalHeight);
   element.style.borderRadius = px(66);
 
   const content = document.createElement("div");
   content.className = "sm-framed-panel-content";
-  content.style.top = px(CONTENT_INSETS.top);
-  content.style.right = px(CONTENT_INSETS.right);
-  content.style.bottom = px(CONTENT_INSETS.bottom);
-  content.style.left = px(CONTENT_INSETS.left);
+  content.style.top = px(geometry.contentInsets.top);
+  content.style.right = px(geometry.contentInsets.right);
+  content.style.bottom = px(geometry.contentInsets.bottom);
+  content.style.left = px(geometry.contentInsets.left);
 
   const art = options.art;
   if (!art && !warnedMissingArt) {
@@ -244,45 +223,73 @@ export function createFramedPanel(
     buildFrame();
   } else {
     element.classList.add("sm-framed-panel-fallback");
-    if (showMeters) buildFallbackMeters();
+    if (geometry.meters) buildMeters(geometry.meters, true);
   }
   element.appendChild(content);
   parent.appendChild(element);
 
-  function sheetPiece(name: FrameSliceName): HTMLElement {
-    const cut = FRAME_SLICES[name];
-    const piece = document.createElement("div");
-    piece.className = "sm-framed-panel-piece";
-    piece.style.width = px(cut.x1 - cut.x0);
-    piece.style.height = px(cut.y1 - cut.y0);
-    piece.style.backgroundImage = `url("${art!.sheetUrl}")`;
-    piece.style.backgroundSize = `${px(FRAME_SHEET.width)} ${px(FRAME_SHEET.height)}`;
-    piece.style.backgroundPosition = `${px(-cut.x0)} ${px(-cut.y0)}`;
-    return piece;
+  function cut(name: string): FrameSlice {
+    const found = geometry.slices[name];
+    if (!found) {
+      throw new Error(`[framed-panel] geometry has no slice named "${name}"`);
+    }
+    return found;
   }
 
-  function filePiece(name: FrameSliceName, url: string): HTMLElement {
-    const piece = document.createElement("div");
-    piece.className = "sm-framed-panel-piece";
-    piece.style.width = px(sliceWidth(name));
-    piece.style.height = px(sliceHeight(name));
-    piece.style.backgroundImage = `url("${url}")`;
-    piece.style.backgroundSize = `${px(sliceWidth(name))} ${px(sliceHeight(name))}`;
-    return piece;
+  function repeatingUrl(name: string): string | null {
+    const field = REPEATING_SLICE_ART[name as keyof typeof REPEATING_SLICE_ART];
+    return field ? art![field] : null;
+  }
+
+  function piece(name: string): HTMLElement {
+    const s = cut(name);
+    const el = document.createElement("div");
+    el.className = "sm-framed-panel-piece";
+    el.style.width = px(s.x1 - s.x0);
+    el.style.height = px(s.y1 - s.y0);
+    const fileUrl = repeatingUrl(name);
+    if (fileUrl) {
+      el.style.backgroundImage = `url("${fileUrl}")`;
+      el.style.backgroundSize = `${px(s.x1 - s.x0)} ${px(s.y1 - s.y0)}`;
+    } else {
+      el.style.backgroundImage = `url("${art!.sheetUrl}")`;
+      el.style.backgroundSize = `${px(geometry.sheet.width)} ${px(geometry.sheet.height)}`;
+      el.style.backgroundPosition = `${px(-s.x0)} ${px(-s.y0)}`;
+    }
+    return el;
   }
 
   function place(
-    piece: HTMLElement,
+    el: HTMLElement,
     styles: Partial<CSSStyleDeclaration>
   ): HTMLElement {
-    Object.assign(piece.style, styles);
-    return piece;
+    Object.assign(el.style, styles);
+    return el;
+  }
+
+  function buildBand(
+    segments: ReadonlyArray<{ slice: string; stretch: boolean }>,
+    styles: Partial<CSSStyleDeclaration>
+  ): HTMLElement {
+    const band = document.createElement("div");
+    band.className = "sm-framed-panel-band";
+    Object.assign(band.style, styles);
+    for (const segment of segments) {
+      const el = piece(segment.slice);
+      if (segment.stretch) el.classList.add("sm-framed-panel-stretch");
+      band.appendChild(el);
+    }
+    return band;
   }
 
   function buildFrame(): void {
     const frameArt = art!;
+    const slices = geometry.slices;
+    const originX = geometry.origin.x;
+    const originY = geometry.origin.y;
 
     // Parchment fill behind everything. The quilt file is 2x the cut.
+    const parchmentCut = cut("parchment");
     const parchment = document.createElement("div");
     parchment.className = "sm-framed-panel-piece";
     Object.assign(parchment.style, {
@@ -293,44 +300,55 @@ export function createFramedPanel(
       borderRadius: px(60),
       backgroundImage: `url("${frameArt.parchmentUrl}")`,
       backgroundRepeat: "repeat",
-      backgroundSize: `${px(sliceWidth("parchment") * 2)} ${px(sliceHeight("parchment") * 2)}`
+      backgroundSize: `${px((parchmentCut.x1 - parchmentCut.x0) * 2)} ${px((parchmentCut.y1 - parchmentCut.y0) * 2)}`
     });
     element.appendChild(parchment);
 
     // Corner flourishes: top pair pins to the top, bottom pair to the
-    // bottom. With the meters hidden the top pair uses the trimmed cuts
-    // (see the slice table) so no meter-hardware pixels ghost through.
-    const flourishTL: FrameSliceName = showMeters
-      ? "flourishTL"
-      : "flourishTLNoMeters";
-    const flourishTR: FrameSliceName = showMeters
-      ? "flourishTR"
-      : "flourishTRNoMeters";
-    const flourishes: Array<[FrameSliceName, Partial<CSSStyleDeclaration>]> = [
-      [flourishTL, { left: px(FRAME_SLICES[flourishTL].x0 - FRAME_ORIGIN.x), top: px(FRAME_SLICES[flourishTL].y0 - FRAME_ORIGIN.y) }],
-      [flourishTR, { right: px(FRAME_WIDTH - (FRAME_SLICES[flourishTR].x1 - FRAME_ORIGIN.x)), top: px(FRAME_SLICES[flourishTR].y0 - FRAME_ORIGIN.y) }],
-      ["flourishBL", { left: px(FRAME_SLICES.flourishBL.x0 - FRAME_ORIGIN.x), bottom: px(FRAME_NATURAL_HEIGHT - (FRAME_SLICES.flourishBL.y1 - FRAME_ORIGIN.y)) }],
-      ["flourishBR", { right: px(FRAME_WIDTH - (FRAME_SLICES.flourishBR.x1 - FRAME_ORIGIN.x)), bottom: px(FRAME_NATURAL_HEIGHT - (FRAME_SLICES.flourishBR.y1 - FRAME_ORIGIN.y)) }]
-    ];
-    for (const [name, styles] of flourishes) {
-      element.appendChild(place(sheetPiece(name), styles));
-    }
+    // bottom. Their band-height rows duplicate pixels the band pieces draw
+    // on top, source-aligned, so no seams appear.
+    const bottomOffset = (name: string) =>
+      px(geometry.naturalHeight - (slices[name]!.y1 - originY));
+    element.appendChild(
+      place(piece("flourishTL"), {
+        left: px(slices["flourishTL"]!.x0 - originX),
+        top: px(slices["flourishTL"]!.y0 - originY)
+      })
+    );
+    element.appendChild(
+      place(piece("flourishTR"), {
+        right: px(geometry.frameWidth - (slices["flourishTR"]!.x1 - originX)),
+        top: px(slices["flourishTR"]!.y0 - originY)
+      })
+    );
+    element.appendChild(
+      place(piece("flourishBL"), {
+        left: px(slices["flourishBL"]!.x0 - originX),
+        bottom: bottomOffset("flourishBL")
+      })
+    );
+    element.appendChild(
+      place(piece("flourishBR"), {
+        right: px(geometry.frameWidth - (slices["flourishBR"]!.x1 - originX)),
+        bottom: bottomOffset("flourishBR")
+      })
+    );
 
     // Side rails repeat between the corners at any panel height.
     element.appendChild(
-      place(filePiece("railLeft", frameArt.railLeftUrl), {
+      place(piece("railLeft"), {
         left: "0",
-        top: px(CORNER_HEIGHT),
-        bottom: px(CORNER_HEIGHT),
+        top: px(geometry.cornerHeight),
+        bottom: px(geometry.cornerHeight),
         height: "auto",
         backgroundRepeat: "repeat-y"
       })
     );
     element.appendChild(
-      place(filePiece("railRight", frameArt.railRightUrl), {
+      place(piece("railRight"), {
         right: "0",
-        top: px(CORNER_HEIGHT),
-        bottom: px(CORNER_HEIGHT),
+        top: px(geometry.cornerHeight),
+        bottom: px(geometry.cornerHeight),
         height: "auto",
         backgroundRepeat: "repeat-y"
       })
@@ -338,100 +356,51 @@ export function createFramedPanel(
 
     // Side gems stay centered on the rails.
     element.appendChild(
-      place(sheetPiece("gemLeft"), {
+      place(piece("gemLeft"), {
         left: "0",
         top: "50%",
         transform: "translateY(-50%)"
       })
     );
     element.appendChild(
-      place(sheetPiece("gemRight"), {
+      place(piece("gemRight"), {
         right: "0",
         top: "50%",
         transform: "translateY(-50%)"
       })
     );
 
-    // Without the meter hardware the stretch strips are wood-only and the
-    // baked top pinstripe only survives inside the corner flourishes and
-    // the medallion cut; this line fills the spans between them.
-    if (!showMeters) {
-      const pinstripe = document.createElement("div");
-      pinstripe.className = "sm-framed-panel-piece";
-      Object.assign(pinstripe.style, {
-        left: px(300),
-        right: px(300),
-        top: px(145),
-        height: `${Math.max(1, 1.5 * scale)}px`,
-        background: "rgba(150, 100, 160, 0.35)"
-      });
-      element.appendChild(pinstripe);
-    }
+    element.appendChild(
+      buildBand(geometry.topBand, {
+        top: "0",
+        height: px(geometry.topBandHeight),
+        // Strip pieces may be shorter than the band (wood only); pin them
+        // to the band's top edge instead of letting flex stretch distort.
+        alignItems: "flex-start"
+      })
+    );
+    element.appendChild(
+      buildBand(geometry.bottomBand, {
+        bottom: "0",
+        height: px(geometry.bottomBandHeight),
+        alignItems: "flex-end"
+      })
+    );
 
-    // Top and bottom bands.
-    const topBand = document.createElement("div");
-    topBand.className = "sm-framed-panel-band";
-    topBand.style.top = "0";
-    topBand.style.height = px(TOP_BAND_HEIGHT);
-    // Strip pieces are shorter than the band (wood only); pin them to the
-    // band's top edge instead of letting flex stretch distort them.
-    topBand.style.alignItems = "flex-start";
-    for (const segment of topBandSegments(showMeters)) {
-      const piece = segment.stretch
-        ? filePiece(segment.slice, frameArt.topStretchUrl)
-        : sheetPiece(segment.slice);
-      if (segment.stretch) piece.classList.add("sm-framed-panel-stretch");
-      topBand.appendChild(piece);
-    }
-    element.appendChild(topBand);
-
-    const bottomBand = document.createElement("div");
-    bottomBand.className = "sm-framed-panel-band";
-    bottomBand.style.bottom = "0";
-    bottomBand.style.height = px(BOTTOM_BAND_HEIGHT);
-    bottomBand.style.alignItems = "flex-end";
-    for (const segment of bottomBandSegments()) {
-      const piece = segment.stretch
-        ? filePiece(segment.slice, frameArt.bottomStretchUrl)
-        : sheetPiece(segment.slice);
-      if (segment.stretch) piece.classList.add("sm-framed-panel-stretch");
-      bottomBand.appendChild(piece);
-    }
-    element.appendChild(bottomBand);
-
-    if (showMeters) buildMeters();
-
-    if (options.medallionCoverSvg) {
-      const cover = document.createElement("div");
-      cover.className = "sm-framed-panel-medallion-cover";
-      Object.assign(cover.style, {
-        left: px(MEDALLION_CIRCLE.cx - MEDALLION_CIRCLE.r),
-        top: px(MEDALLION_CIRCLE.cy - MEDALLION_CIRCLE.r),
-        width: px(MEDALLION_CIRCLE.r * 2),
-        height: px(MEDALLION_CIRCLE.r * 2)
-      });
-      cover.innerHTML = options.medallionCoverSvg;
-      element.appendChild(cover);
-    }
+    if (geometry.meters) buildMeters(geometry.meters, false);
   }
 
-  interface MeterRect {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }
-
-  function buildMeterPair(rects: {
-    battery: MeterRect;
-    resonance: MeterRect;
-  }): void {
+  function buildMeters(
+    rects: { battery: MeterRect; resonance: MeterRect },
+    fallbackLayout: boolean
+  ): void {
     const build = (rect: MeterRect) => {
       const meter = document.createElement("div");
       meter.className = "sm-framed-panel-meter";
       Object.assign(meter.style, {
         left: px(rect.x),
-        top: px(rect.y),
+        // Fallback panels have no painted top band; park the meters at the top.
+        top: px(fallbackLayout ? 24 : rect.y),
         width: px(rect.width),
         height: px(rect.height),
         borderRadius: px(rect.height / 2)
@@ -458,18 +427,6 @@ export function createFramedPanel(
     };
   }
 
-  function buildMeters(): void {
-    buildMeterPair(METER_RECTS);
-  }
-
-  /** Fallback meters sit at the top of the plain panel. */
-  function buildFallbackMeters(): void {
-    buildMeterPair({
-      battery: { x: METER_RECTS.battery.x, y: 24, width: METER_RECTS.battery.width, height: METER_RECTS.battery.height },
-      resonance: { x: METER_RECTS.resonance.x, y: 24, width: METER_RECTS.resonance.width, height: METER_RECTS.resonance.height }
-    });
-  }
-
   return {
     element,
     content,
@@ -481,7 +438,10 @@ export function createFramedPanel(
       meterFills.resonanceLabel.textContent = meters.resonanceLabel;
     },
     setContentHeight(contentDisplayHeight, maxDisplayHeight) {
-      const desiredSource = frameHeightForContent(contentDisplayHeight / scale);
+      const desiredSource = frameHeightForContent(
+        geometry,
+        contentDisplayHeight / scale
+      );
       const display = Math.min(desiredSource * scale, maxDisplayHeight);
       element.style.height = `${display}px`;
     },

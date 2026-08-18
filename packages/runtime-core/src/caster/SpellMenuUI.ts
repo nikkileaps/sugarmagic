@@ -1,6 +1,7 @@
 import type { SpellDefinition } from "@sugarmagic/domain";
 import type { CasterManager } from "./CasterManager";
 import {
+  CASTER_FRAME_GEOMETRY,
   createFramedPanel,
   type FramedPanel,
   type FramedPanelArt
@@ -147,7 +148,7 @@ export function createRuntimeSpellMenuUI(
 
   const framedPanel: FramedPanel = createFramedPanel(container, {
     art: options.frameArt ?? null,
-    showMeters: true
+    geometry: CASTER_FRAME_GEOMETRY
   });
 
   const body = document.createElement("div");
