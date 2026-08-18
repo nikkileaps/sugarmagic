@@ -9,7 +9,41 @@ Status: active
 
 # FoilageMaker
 
-Current add-on version: `0.17.0`
+Current add-on version: `0.19.0`
+
+## 0.19.0 — shrubs: frond cards, outward bias, accent scatter, lobed shape
+
+Adds shrub authoring on top of the existing scatter pipeline. All new
+properties default to the previous behavior, with one deliberate change
+to existing trees: the procedural canopy shapes (sphere / cone /
+teardrop) previously generated inward-facing surface normals, and now
+face outward, matching the authored custom-mesh path. Rebuilding an
+existing tree with the same seed keeps its counts and overall look but
+mirrors card orientations, shifts leaf jitter slightly, and exports
+corrected NORMAL data.
+
+- **Frond textures** (`frondTexture01`, `frondTexture02` in the Leaf
+  Texture dropdown): a whole connected leaf cluster drawn per card.
+  Shrubs use few, big frond cards where the png carries the silhouette,
+  instead of many small loose-leaf cards.
+- **Outward Bias** (Leaves panel): how strongly cards align to the
+  canopy surface normal. 0 = the old full random spray tilt, 1 = cards
+  face straight outward. Big flat frond cards want a high value so they
+  are not seen edge-on.
+- **Accents** (new panel): an optional sparse second scatter pass over
+  the same canopy surface with its own texture (`flowerTexture01`) and
+  size — small blossoms sitting on top of the frond cards. Count 0
+  (default) disables the pass. Accent cards export under a third
+  material, `FoilageMaker Export Accents`, which only appears in the
+  GLB when accent cards exist.
+- **Lobed canopy shape** (Canopy Shape dropdown): a main dome plus
+  several overlapping side lobes seeded from Random Seed — irregular,
+  wild silhouette instead of a single readable ball. Works for any
+  plant, not just shrubs; Randomize Seed reshuffles the lobe layout.
+- **Presets**: `Manicured Shrub` (single sphere shell, even trim),
+  `Wild Shrub` (lobed shape, looser tilt), and `Flowering Shrub`
+  (manicured plus the accent pass) — all with a stub trunk, no
+  branches, and a squat canopy pulled to ground level.
 
 ## 0.17.0 — custom canopy collections
 

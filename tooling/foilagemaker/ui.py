@@ -151,11 +151,19 @@ class VIEW3D_PT_foilagemaker(bpy.types.Panel):
         leaves.label(text="Leaves")
         leaves.prop(props, "leaf_count")
         leaves.prop(props, "leaf_card_count")
+        leaves.prop(props, "card_outward_bias")
         leaves.prop(props, "leaf_size")
         leaves.prop(props, "leaf_width")
         leaves.prop(props, "leaf_height")
         leaves.separator()
         leaves.prop(props, "leaf_texture_variant")
+
+        accents = layout.box()
+        accents.label(text="Accents")
+        accents.prop(props, "accent_count")
+        if props.accent_count > 0:
+            accents.prop(props, "accent_texture_variant")
+            accents.prop(props, "accent_size")
 
         wind = layout.box()
         wind.label(text="Wind Metadata")

@@ -17,14 +17,19 @@ from pathlib import Path
 import bpy
 from mathutils import Quaternion, Vector
 
-ADDON_VERSION = "0.12.1"
+ADDON_VERSION = "0.19.0"
 TREE_KIND = "tree"
 OBJECT_KIND_KEY = "foilagemaker_kind"
 ASSET_KIND_KEY = "sugarmagic_asset_kind"
 VERSION_KEY = "foilagemaker_version"
 SUPPRESS_UPDATE_KEY = "_foilagemaker_suppress_update"
 LEAF_IMAGE_NAME = "FoilageMakerLeafSprite"
+ACCENT_IMAGE_NAME = "FoilageMakerAccentSprite"
 LEAF_COLOR_ATTRIBUTE = "FoilageMakerLeafColor"
+# Vertex color for accent (flower) cards: near-white so the accent texture
+# keeps its own color instead of picking up the canopy tint. Alpha is the
+# same exterior-bias gate the leaf cards carry.
+ACCENT_CARD_COLOR = (0.97, 0.95, 0.9, 0.85)
 # Custom glTF vertex attributes. The glTF 2.0 spec requires custom (user-defined)
 # attribute names to start with an underscore. Blender's glTF exporter preserves
 # attribute names exactly when they already start with "_", so these string
@@ -36,6 +41,9 @@ _TREE_PRESET_LABELS = {
     "clustered_stylized": "Clustered Stylized Canopy",
     "round_deciduous": "Round Deciduous",
     "tall_pine_ish": "Tall Pine-ish",
+    "shrub_manicured": "Manicured Shrub",
+    "shrub_wild": "Wild Shrub",
+    "shrub_flowering": "Flowering Shrub",
 }
 _PLUGIN_DIR = Path(__file__).resolve().parent
 # Bundled leaf texture library. Ships with the add-on zip under
@@ -573,6 +581,13 @@ def _scatter_leaves_on_canopy_shape(
         shape_verts, shape_tris = _build_cone_shape_mesh(
             shape_center, horizontal_radius, vertical_scale
         )
+    elif shape_kind == "lobed":
+        shape_verts, shape_tris = _build_lobed_shape_mesh(
+            shape_center,
+            horizontal_radius,
+            vertical_scale,
+            int(props.random_seed),
+        )
     elif shape_kind == "teardrop":
         shape_verts, shape_tris = _build_teardrop_shape_mesh(
             shape_center, horizontal_radius, vertical_scale
@@ -625,7 +640,39 @@ def _scatter_leaves_on_canopy_shape(
             color_hint=color,
             rng=rng,
             leaf_variant_count=leaf_variant_count,
+            outward_bias=float(getattr(props, "card_outward_bias", 0.0)),
         )
+
+    # Accent pass: sparse single cards (flowers) over the same shape
+    # surface. Runs after the leaf pass so a count of 0 leaves the rng
+    # sequence -- and therefore existing trees -- untouched.
+    accent_count = max(0, int(getattr(props, "accent_count", 0)))
+    if accent_count > 0:
+        accent_size = max(0.05, float(getattr(props, "accent_size", 0.4)))
+        accent_points = _scatter_points_on_mesh(
+            shape_verts, shape_tris, accent_count, rng
+        )
+        for point, normal in accent_points:
+            # Blossoms sit just above the leaf cards. Leaf cards lie
+            # roughly tangent to the shape surface but overlap and jitter
+            # outward, so the offset has to clear about one card's worth
+            # of stacking without visibly floating.
+            push = accent_size * 0.75 + rng.uniform(0.0, accent_size * 0.35)
+            card_normal = (
+                Quaternion(_basis_right(normal), rng.uniform(-0.25, 0.25)) @ normal
+            ).normalized()
+            _add_leaf_card(
+                buffers=buffers,
+                center=point + normal * push,
+                normal=card_normal,
+                cluster_center=shape_centroid,
+                height=accent_size * rng.uniform(0.85, 1.15),
+                width=accent_size * rng.uniform(0.85, 1.15),
+                rotation=rng.uniform(0.0, math.tau),
+                material_index=3,
+                color_hint=ACCENT_CARD_COLOR,
+                uv_rect=(0.0, 0.0, 1.0, 1.0),
+            )
 
 
 # ── Procedural canopy shape meshes ──────────────────────────────────────
@@ -693,6 +740,68 @@ def _build_cone_shape_mesh(
                 )
             )
     return verts, _shape_mesh_tris(_SHAPE_MESH_RINGS, _SHAPE_MESH_SEGMENTS)
+
+
+def _build_lobed_shape_mesh(
+    base_center: Vector,
+    horizontal_radius: float,
+    vertical_scale: float,
+    seed: int,
+) -> tuple[list[Vector], list[tuple[int, int, int]]]:
+    # Wild silhouette: a main dome plus several smaller overlapping side
+    # lobes. The scatter pass treats the concatenated buffers as one
+    # surface (area-weighted), so leaves land on every lobe and the
+    # outline is broken by distinct clumps instead of one readable ball.
+    #
+    # Uses its own rng seeded from the tree seed: the shape must be
+    # deterministic per seed but must not consume values from the shared
+    # scatter rng, which would shift leaf placement on the other shapes.
+    lobe_rng = random.Random(seed * 7919 + 101)
+    verts, tris = _build_sphere_shape_mesh(
+        base_center, horizontal_radius, vertical_scale
+    )
+
+    dome_height = horizontal_radius * vertical_scale * 2.0
+    lobe_count = lobe_rng.randint(4, 6)
+    for lobe_index in range(lobe_count):
+        angle = (
+            math.tau * lobe_index / lobe_count
+            + lobe_rng.uniform(-0.4, 0.4)
+        )
+        lobe_radius = horizontal_radius * lobe_rng.uniform(0.45, 0.65)
+        reach = horizontal_radius * lobe_rng.uniform(0.35, 0.6)
+        lobe_base = Vector(
+            (
+                base_center.x + math.cos(angle) * reach,
+                base_center.y + math.sin(angle) * reach,
+                base_center.z + dome_height * lobe_rng.uniform(0.0, 0.35),
+            )
+        )
+        lobe_verts, lobe_tris = _build_sphere_shape_mesh(
+            lobe_base, lobe_radius, lobe_rng.uniform(0.8, 1.15)
+        )
+        offset = len(verts)
+        verts.extend(lobe_verts)
+        tris.extend(
+            (a + offset, b + offset, c + offset) for a, b, c in lobe_tris
+        )
+
+    # one top lobe so the crown gets a bump too
+    top_radius = horizontal_radius * lobe_rng.uniform(0.4, 0.55)
+    top_base = Vector(
+        (
+            base_center.x + lobe_rng.uniform(-0.3, 0.3) * horizontal_radius,
+            base_center.y + lobe_rng.uniform(-0.3, 0.3) * horizontal_radius,
+            base_center.z + dome_height * lobe_rng.uniform(0.55, 0.75),
+        )
+    )
+    top_verts, top_tris = _build_sphere_shape_mesh(
+        top_base, top_radius, lobe_rng.uniform(0.8, 1.0)
+    )
+    offset = len(verts)
+    verts.extend(top_verts)
+    tris.extend((a + offset, b + offset, c + offset) for a, b, c in top_tris)
+    return verts, tris
 
 
 def _build_teardrop_shape_mesh(
@@ -849,8 +958,12 @@ def _shape_mesh_tris(
             v01 = ring * segments + next_seg
             v10 = (ring + 1) * segments + seg
             v11 = (ring + 1) * segments + next_seg
-            tris.append((v00, v10, v11))
-            tris.append((v00, v11, v01))
+            # Winding chosen so triangle normals point OUTWARD (away from
+            # the shape's axis). Scatter consumers rely on this: leaf and
+            # accent cards are pushed along the normal and oriented by it,
+            # matching the outward normals of authored custom-mesh shapes.
+            tris.append((v00, v11, v10))
+            tris.append((v00, v01, v11))
     return tris
 
 
@@ -952,12 +1065,20 @@ def _add_leaf_spray(
     color_hint: tuple[float, float, float, float],
     rng: random.Random,
     leaf_variant_count: int,
+    outward_bias: float = 0.0,
 ) -> None:
     normal = normal.normalized()
+    # outward_bias narrows the random tilt range toward zero so cards face
+    # the scatter-surface normal. At 0 the tilt is the full +/-0.35 rad
+    # spray. The tilt draw happens at every bias so changing the bias
+    # never shifts the rng sequence for the other random values.
+    tilt_range = 1.0 - _clamp01(outward_bias)
     for card_index in range(card_count):
         rotation = rng.uniform(0.0, math.tau) + (math.pi / max(1, card_count)) * card_index
         tilt_axis = _basis_right(normal)
-        card_normal = (Quaternion(tilt_axis, rng.uniform(-0.35, 0.35)) @ normal).normalized()
+        card_normal = (
+            Quaternion(tilt_axis, rng.uniform(-0.35, 0.35) * tilt_range) @ normal
+        ).normalized()
         card_center = center + normal * rng.uniform(-leaf_size * 0.05, leaf_size * 0.05)
         scale = rng.uniform(0.88, 1.14)
         variant_index = rng.randrange(max(1, leaf_variant_count))
@@ -1306,10 +1427,17 @@ def _assign_export_materials(
     source_material_indices = [
         polygon.material_index for polygon in source_obj.data.polygons
     ]
+    # Accent material is only appended when accent faces exist, so trees
+    # without an accent pass export exactly the same material list as
+    # before the accent feature existed.
+    uses_accent = any(index == 3 for index in source_material_indices)
+
     materials = obj.data.materials
     materials.clear()
     materials.append(trunk_material)
     materials.append(leaf_material)
+    if uses_accent:
+        materials.append(_ensure_export_accent_material())
 
     for polygon_index, polygon in enumerate(obj.data.polygons):
         source_index = (
@@ -1317,7 +1445,12 @@ def _assign_export_materials(
             if polygon_index < len(source_material_indices)
             else 0
         )
-        polygon.material_index = 1 if source_index == 1 else 0
+        if source_index == 1:
+            polygon.material_index = 1
+        elif source_index == 3 and uses_accent:
+            polygon.material_index = 2
+        else:
+            polygon.material_index = 0
 
 
 def _ensure_export_trunk_material():
@@ -1397,16 +1530,52 @@ def _ensure_export_leaf_material():
     return material
 
 
+def _ensure_export_accent_material():
+    """Export carrier material for accent (flower) cards: Principled with
+    the accent texture, CLIP alpha. Same alphaMode caveat as the leaf
+    export material -- Sugarmagic's ShaderRuntime overrides it."""
+    material = bpy.data.materials.get("FoilageMaker Export Accents")
+    if material is None:
+        material = bpy.data.materials.new(name="FoilageMaker Export Accents")
+
+    material.use_nodes = True
+    material.blend_method = "CLIP"
+    material.alpha_threshold = 0.5
+    if hasattr(material, "show_transparent_back"):
+        material.show_transparent_back = False
+
+    image = _ensure_accent_sprite_image()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    nodes.clear()
+
+    output = nodes.new("ShaderNodeOutputMaterial")
+    shader = nodes.new("ShaderNodeBsdfPrincipled")
+    shader.inputs["Roughness"].default_value = 0.9
+    shader.inputs["Specular IOR Level"].default_value = 0.0
+
+    texture = nodes.new("ShaderNodeTexImage")
+    texture.image = image
+    texture.interpolation = "Linear"
+
+    links.new(texture.outputs["Color"], shader.inputs["Base Color"])
+    links.new(texture.outputs["Alpha"], shader.inputs["Alpha"])
+    links.new(shader.outputs["BSDF"], output.inputs["Surface"])
+    return material
+
+
 def _assign_materials(obj: bpy.types.Object) -> None:
     trunk_material = _ensure_trunk_material()
     leaf_material = _ensure_leaf_material()
     canopy_material = _ensure_canopy_material()
+    accent_material = _ensure_accent_material()
 
     materials = obj.data.materials
     materials.clear()
     materials.append(trunk_material)
     materials.append(leaf_material)
     materials.append(canopy_material)
+    materials.append(accent_material)
 
 
 def _ensure_trunk_material():
@@ -1491,6 +1660,84 @@ def _ensure_leaf_material():
     links.new(mix_shader.outputs["Shader"], output.inputs["Surface"])
 
     return material
+
+
+def _ensure_accent_material():
+    """Viewport material for accent (flower) cards. Same shape as the leaf
+    material -- texture times vertex color with alpha cutout -- but sampling
+    the accent sprite. The near-white accent vertex color keeps blossoms
+    from picking up the canopy tint."""
+    material = bpy.data.materials.get("FoilageMaker Accents")
+    if material is None:
+        material = bpy.data.materials.new(name="FoilageMaker Accents")
+
+    material.use_nodes = True
+    material.blend_method = "HASHED"
+    if hasattr(material, "show_transparent_back"):
+        material.show_transparent_back = False
+
+    image = _ensure_accent_sprite_image()
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    nodes.clear()
+
+    output = nodes.new("ShaderNodeOutputMaterial")
+    shader = nodes.new("ShaderNodeBsdfPrincipled")
+    shader.inputs["Roughness"].default_value = 0.9
+    shader.inputs["Specular IOR Level"].default_value = 0.1
+
+    texture = nodes.new("ShaderNodeTexImage")
+    texture.image = image
+    texture.interpolation = "Linear"
+
+    attribute = nodes.new("ShaderNodeAttribute")
+    attribute.attribute_name = LEAF_COLOR_ATTRIBUTE
+
+    multiply = nodes.new("ShaderNodeMixRGB")
+    multiply.blend_type = "MULTIPLY"
+    multiply.inputs["Fac"].default_value = 1.0
+
+    transparent = nodes.new("ShaderNodeBsdfTransparent")
+    mix_shader = nodes.new("ShaderNodeMixShader")
+
+    links.new(attribute.outputs["Color"], multiply.inputs["Color1"])
+    links.new(texture.outputs["Color"], multiply.inputs["Color2"])
+    links.new(multiply.outputs["Color"], shader.inputs["Base Color"])
+    links.new(texture.outputs["Alpha"], mix_shader.inputs["Fac"])
+    links.new(texture.outputs["Alpha"], shader.inputs["Alpha"])
+    links.new(transparent.outputs["BSDF"], mix_shader.inputs[1])
+    links.new(shader.outputs["BSDF"], mix_shader.inputs[2])
+    links.new(mix_shader.outputs["Shader"], output.inputs["Surface"])
+    return material
+
+
+def _ensure_accent_sprite_image():
+    """Load the active tree's accent texture as the accent sprite image.
+
+    Falls back to the generated leaf sprite if the bundled texture is
+    missing (broken install) so authoring degrades instead of crashing."""
+    variant = _get_active_accent_texture_variant() or "flowerTexture01"
+    path = _get_single_leaf_texture_path(variant)
+    if path is None:
+        return _ensure_generated_leaf_sprite()
+    existing = bpy.data.images.get(ACCENT_IMAGE_NAME)
+    if existing is not None:
+        bpy.data.images.remove(existing)
+    image = bpy.data.images.load(str(path))
+    image.name = ACCENT_IMAGE_NAME
+    image.pack()
+    image.use_fake_user = True
+    return image
+
+
+def _get_active_accent_texture_variant() -> str | None:
+    """Accent counterpart of _get_active_leaf_texture_variant; same
+    read-from-context rationale."""
+    context = getattr(bpy, "context", None)
+    obj = getattr(context, "active_object", None) if context else None
+    if not is_foilagemaker_tree(obj):
+        return None
+    return getattr(obj.foilagemaker_tree, "accent_texture_variant", None)
 
 
 def _ensure_canopy_material():
@@ -1721,7 +1968,7 @@ def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, value))
 
 
-def _get_tree_presets() -> dict[str, dict[str, float | int | bool]]:
+def _get_tree_presets() -> dict[str, dict[str, float | int | bool | str]]:
     return {
         "clustered_stylized": {
             "random_seed": 0,
@@ -1758,6 +2005,11 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool]]:
             "leaf_size": 1.22,
             "leaf_width": 0.82,
             "leaf_height": 0.88,
+            "leaf_texture_variant": "leavesTexture01",
+            "card_outward_bias": 0.0,
+            "accent_count": 0,
+            "accent_texture_variant": "flowerTexture01",
+            "accent_size": 0.4,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
             "big_wind_multiplier": 1.0,
@@ -1798,6 +2050,11 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool]]:
             "leaf_size": 1.05,
             "leaf_width": 0.96,
             "leaf_height": 0.82,
+            "leaf_texture_variant": "leavesTexture01",
+            "card_outward_bias": 0.0,
+            "accent_count": 0,
+            "accent_texture_variant": "flowerTexture01",
+            "accent_size": 0.4,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
             "big_wind_multiplier": 1.0,
@@ -1838,9 +2095,154 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool]]:
             "leaf_size": 0.82,
             "leaf_width": 0.68,
             "leaf_height": 1.05,
+            "leaf_texture_variant": "leavesTexture01",
+            "card_outward_bias": 0.0,
+            "accent_count": 0,
+            "accent_texture_variant": "flowerTexture01",
+            "accent_size": 0.4,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
             "big_wind_multiplier": 1.0,
             "small_wind_multiplier": 1.0,
+        },
+        # Shrubs: stub trunk, no branches, squat dome pulled to ground
+        # level, few big frond cards facing outward. The frond texture
+        # carries the leaf detail; the geometry only places the cards.
+        # Manicured = single sphere shell, even trim. Wild = lobed shape,
+        # looser tilt, so the silhouette breaks into clumps.
+        "shrub_manicured": {
+            "random_seed": 0,
+            "trunk_height": 1.0,
+            "trunk_radius": 0.3,
+            "trunk_taper": 0.5,
+            "trunk_segments": 6,
+            "trunk_sides": 8,
+            "trunk_displacement_strength": 0.5,
+            "trunk_displacement_scale": 0.8,
+            "base_flare_scale": 1.5,
+            "base_flare_position": 0.3,
+            "branch_count": 0,
+            "branch_start": 0.3,
+            "branch_length": 1.0,
+            "branch_length_randomness": 0.2,
+            "branch_radius": 0.05,
+            "branch_segments": 3,
+            "branch_sides": 4,
+            "branch_angle_offset": 0.0,
+            "branch_up_bias": 0.4,
+            "secondary_branch_count": 0,
+            "secondary_branch_length": 0.5,
+            "secondary_branch_randomness": 0.2,
+            "secondary_branch_radius": 0.02,
+            "secondary_branch_segments": 3,
+            "secondary_branch_sides": 4,
+            "canopy_shape": "sphere",
+            "canopy_size": 1.7,
+            "canopy_vertical_scale": 0.6,
+            "canopy_base_offset": -0.85,
+            "leaf_count": 72,
+            "leaf_card_count": 2,
+            "leaf_size": 1.9,
+            "leaf_width": 1.0,
+            "leaf_height": 1.0,
+            "leaf_texture_variant": "frondTexture01",
+            "card_outward_bias": 0.85,
+            "accent_count": 0,
+            "accent_texture_variant": "flowerTexture01",
+            "accent_size": 0.4,
+            "wind_scale": 2.5,
+            "wind_speed": 1.0,
+            "big_wind_multiplier": 0.6,
+            "small_wind_multiplier": 1.4,
+        },
+        "shrub_wild": {
+            "random_seed": 0,
+            "trunk_height": 1.0,
+            "trunk_radius": 0.3,
+            "trunk_taper": 0.5,
+            "trunk_segments": 6,
+            "trunk_sides": 8,
+            "trunk_displacement_strength": 0.5,
+            "trunk_displacement_scale": 0.8,
+            "base_flare_scale": 1.5,
+            "base_flare_position": 0.3,
+            "branch_count": 0,
+            "branch_start": 0.3,
+            "branch_length": 1.0,
+            "branch_length_randomness": 0.2,
+            "branch_radius": 0.05,
+            "branch_segments": 3,
+            "branch_sides": 4,
+            "branch_angle_offset": 0.0,
+            "branch_up_bias": 0.4,
+            "secondary_branch_count": 0,
+            "secondary_branch_length": 0.5,
+            "secondary_branch_randomness": 0.2,
+            "secondary_branch_radius": 0.02,
+            "secondary_branch_segments": 3,
+            "secondary_branch_sides": 4,
+            "canopy_shape": "lobed",
+            "canopy_size": 1.45,
+            "canopy_vertical_scale": 0.65,
+            "canopy_base_offset": -0.85,
+            "leaf_count": 115,
+            "leaf_card_count": 2,
+            "leaf_size": 1.6,
+            "leaf_width": 1.0,
+            "leaf_height": 1.0,
+            "leaf_texture_variant": "frondTexture01",
+            "card_outward_bias": 0.7,
+            "accent_count": 0,
+            "accent_texture_variant": "flowerTexture01",
+            "accent_size": 0.5,
+            "wind_scale": 2.5,
+            "wind_speed": 1.0,
+            "big_wind_multiplier": 0.6,
+            "small_wind_multiplier": 1.4,
+        },
+        "shrub_flowering": {
+            "random_seed": 0,
+            "trunk_height": 1.0,
+            "trunk_radius": 0.3,
+            "trunk_taper": 0.5,
+            "trunk_segments": 6,
+            "trunk_sides": 8,
+            "trunk_displacement_strength": 0.5,
+            "trunk_displacement_scale": 0.8,
+            "base_flare_scale": 1.5,
+            "base_flare_position": 0.3,
+            "branch_count": 0,
+            "branch_start": 0.3,
+            "branch_length": 1.0,
+            "branch_length_randomness": 0.2,
+            "branch_radius": 0.05,
+            "branch_segments": 3,
+            "branch_sides": 4,
+            "branch_angle_offset": 0.0,
+            "branch_up_bias": 0.4,
+            "secondary_branch_count": 0,
+            "secondary_branch_length": 0.5,
+            "secondary_branch_randomness": 0.2,
+            "secondary_branch_radius": 0.02,
+            "secondary_branch_segments": 3,
+            "secondary_branch_sides": 4,
+            "canopy_shape": "sphere",
+            "canopy_size": 1.7,
+            "canopy_vertical_scale": 0.6,
+            "canopy_base_offset": -0.85,
+            "leaf_count": 72,
+            "leaf_card_count": 2,
+            "leaf_size": 1.9,
+            "leaf_width": 1.0,
+            "leaf_height": 1.0,
+            "leaf_texture_variant": "frondTexture02",
+            "card_outward_bias": 0.85,
+            "accent_count": 26,
+            "accent_texture_variant": "flowerTexture01",
+            "accent_size": 0.5,
+            "wind_scale": 2.5,
+            "wind_speed": 1.0,
+            "big_wind_multiplier": 0.6,
+            "small_wind_multiplier": 1.4,
         },
     }

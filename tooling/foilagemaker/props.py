@@ -252,6 +252,18 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
                     "GLB — only the leaves do."
                 ),
             ),
+            # New enum items go at the END of the list: Blender stores the
+            # item's positional integer in the .blend file, so inserting
+            # mid-list silently remaps every previously saved tree.
+            (
+                "lobed",
+                "Lobed",
+                (
+                    "A main dome plus several overlapping side lobes, "
+                    "seeded from Random Seed. Irregular, wild silhouette "
+                    "instead of a single readable ball."
+                ),
+            ),
         ],
         default="sphere",
         update=_update_tree,
@@ -328,6 +340,20 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
         soft_max=8,
         update=_update_tree,
     )
+    card_outward_bias: bpy.props.FloatProperty(
+        name="Outward Bias",
+        description=(
+            "How strongly leaf cards align to the canopy surface normal. "
+            "0 keeps the full random spray tilt (the tree look). 1 makes "
+            "every card face straight outward. Big frond cards want a high "
+            "value so they are not seen edge-on."
+        ),
+        default=0.0,
+        min=0.0,
+        max=1.0,
+        subtype="FACTOR",
+        update=_update_tree,
+    )
     leaf_size: bpy.props.FloatProperty(
         name="Scale",
         default=1.22,
@@ -350,10 +376,12 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
         update=_update_tree,
     )
     # Leaf texture library is bundled in `foilagemaker/textures/`. The "mixed"
-    # option atlases the first four `_transparency.png` files into a 2x2 grid
-    # so each leaf card variant samples a different one (variety). Picking a
-    # specific leavesTexture0N uses just that texture for every leaf card
-    # (uniform look). Changing this triggers a tree rebuild which re-bakes
+    # option atlases the first four leaf `_transparency.png` files into a 2x2
+    # grid so each leaf card variant samples a different one (variety). Picking
+    # a specific texture uses just that file for every card (uniform look).
+    # The frond textures draw a whole connected leaf cluster per card and are
+    # meant for shrub-style plants: fewer, bigger cards where the png carries
+    # the silhouette. Changing this triggers a tree rebuild which re-bakes
     # the Blender leaf image and re-runs the material assignment.
     leaf_texture_variant: bpy.props.EnumProperty(
         name="Leaf Texture",
@@ -372,8 +400,45 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
             ("leavesTexture10", "Leaves 10", ""),
             ("leavesTexture11", "Leaves 11", ""),
             ("leavesTexture12", "Leaves 12", ""),
+            # New enum items go at the END of the list: Blender stores the
+            # item's positional integer in the .blend file, so inserting
+            # mid-list silently remaps every previously saved tree.
+            ("frondTexture01", "Frond 01 (round)", "Whole leaf cluster per card, round outline"),
+            ("frondTexture02", "Frond 02 (wide)", "Whole leaf cluster per card, wide layered outline"),
         ],
         default="leavesTexture01",
+        update=_update_tree,
+    )
+
+    # Accent scatter: a second, sparse card pass over the same canopy
+    # surface with its own texture -- small flowers on a shrub. Off by
+    # default (count 0) so plain trees are untouched.
+    accent_count: bpy.props.IntProperty(
+        name="Count",
+        description=(
+            "Number of accent cards (flowers) scattered across the canopy "
+            "surface. 0 disables the accent pass."
+        ),
+        default=0,
+        min=0,
+        soft_max=200,
+        update=_update_tree,
+    )
+    accent_texture_variant: bpy.props.EnumProperty(
+        name="Accent Texture",
+        description="Which bundled accent texture the accent cards sample",
+        items=[
+            ("flowerTexture01", "Flower 01", "Five-petal blossom"),
+        ],
+        default="flowerTexture01",
+        update=_update_tree,
+    )
+    accent_size: bpy.props.FloatProperty(
+        name="Size",
+        description="Edge length of an accent card in Blender units.",
+        default=0.4,
+        min=0.05,
+        soft_max=1.5,
         update=_update_tree,
     )
 
