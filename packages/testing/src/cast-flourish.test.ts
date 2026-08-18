@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
 import {
   CAST_FLOURISH_TIMINGS,
   burstDirections,
-  fourPointStarPoints
+  fourPointStarPoints,
+  hash01
 } from "@sugarmagic/runtime-core";
 
 describe("four-point star polygon", () => {
@@ -72,6 +73,24 @@ describe("burst directions", () => {
         expect(isStraightUp).toBe(false);
       }
     }
+  });
+});
+
+describe("hash01", () => {
+  it("is deterministic and stays in [0, 1)", () => {
+    for (let seed = 0; seed < 200; seed++) {
+      const value = hash01(seed);
+      expect(value).toBe(hash01(seed));
+      expect(value).toBeGreaterThanOrEqual(0);
+      expect(value).toBeLessThan(1);
+    }
+  });
+
+  it("varies across seeds", () => {
+    const values = new Set(
+      Array.from({ length: 50 }, (_, seed) => hash01(seed).toFixed(6))
+    );
+    expect(values.size).toBeGreaterThan(45);
   });
 });
 

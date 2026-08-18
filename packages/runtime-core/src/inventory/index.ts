@@ -292,6 +292,15 @@ export function createRuntimeInventoryUI(
     onOpenChange?.(open);
   }
 
+  /** Grow the frame to the content, capped to the viewport; past the cap
+   *  the parchment area scrolls. */
+  function fitFrameToContent() {
+    framedPanel.setContentHeight(
+      panel.scrollHeight,
+      Math.max(320, window.innerHeight - 56)
+    );
+  }
+
   function render() {
     body.innerHTML = "";
 
@@ -300,6 +309,9 @@ export function createRuntimeInventoryUI(
       empty.className = "sm-inventory-empty";
       empty.textContent = "No items collected yet.";
       body.appendChild(empty);
+      // Shrink back to the natural frame when the last item disappears
+      // while the panel is open.
+      fitFrameToContent();
       return;
     }
 
@@ -331,12 +343,7 @@ export function createRuntimeInventoryUI(
       body.appendChild(button);
     }
 
-    // Grow the frame to the content, capped to the viewport; past the cap
-    // the parchment area scrolls.
-    framedPanel.setContentHeight(
-      panel.scrollHeight,
-      Math.max(320, window.innerHeight - 56)
-    );
+    fitFrameToContent();
   }
 
   // Story 50.3 — register keyboard shortcuts through the central
@@ -646,19 +653,6 @@ function injectInventoryStyles() {
     .sm-item-view.visible {
       opacity: 1;
       pointer-events: auto;
-    }
-
-    .sm-inventory-panel,
-    .sm-item-view-panel {
-      width: min(640px, calc(100vw - 48px));
-      max-height: min(80vh, 760px);
-      display: flex;
-      flex-direction: column;
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: linear-gradient(180deg, rgba(24,24,37,0.97), rgba(17,17,27,0.98));
-      box-shadow: 0 20px 72px rgba(0,0,0,0.4);
-      overflow: hidden;
     }
 
     .sm-inventory-header,

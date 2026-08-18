@@ -198,6 +198,9 @@ export function createRuntimeSpellMenuUI(
   }
 
   function moveSelection(delta: number) {
+    // Navigation rebuilds the grid; mid-flourish that would detach the slot
+    // the squish/pop animations run on.
+    if (casting) return;
     if (currentSpells.length === 0) return;
     selectedIndex =
       (selectedIndex + delta + currentSpells.length) % currentSpells.length;
@@ -311,14 +314,15 @@ export function createRuntimeSpellMenuUI(
     render();
     if (result.success) {
       // The spell already happened above; the flourish is pure feedback.
-      // The menu stays up while it plays, then closes.
+      // The menu STAYS OPEN afterwards - the player closes it themselves
+      // (C / Escape) or keeps casting.
       casting = true;
       const slot = grid.querySelectorAll<HTMLElement>(".sm-spell-menu-slot")[
         selectedIndex
       ];
       const finish = () => {
         casting = false;
-        setOpen(false);
+        if (open) render();
       };
       if (slot) {
         playCastFlourish({ slot, layer: container }).then(finish, finish);

@@ -12,10 +12,11 @@
  *                     soft purple ring that expands ~1.5x and fades.
  *   Grow    300-600ms a glowing four-point star grows out of the slot's
  *                     center, brightening as it swells past the slot.
- *   Burst   600-1050ms the star explodes: feathered petal rays (magenta and
+ *   Burst   600-1110ms the star explodes: feathered petal rays (magenta and
  *                     cyan), long teal streaks, dotted particle trails,
  *                     twinkling gold stars, and soft violet cloud puffs, all
- *                     scattering outward and fading.
+ *                     scattering outward and fading. The trailing dots end
+ *                     last.
  *
  * The cloud puffs are blurred CSS gradients - a stand-in until a real
  * shader-driven cloud pass replaces them; the rest is intended to ship.
@@ -324,7 +325,18 @@ export function playCastFlourish(input: CastFlourishInput): Promise<void> {
   // center and animates outward with transform-origin at its base.
   const burstAt = castAt + T.grow;
   const R = slotRect.width; // burst length unit; the whole thing spans ~3R
-  let lastBurstAnimation: Animation | null = null;
+
+  // The promise resolves on the burst element that ends LAST (delays and
+  // durations differ per element), so no tail gets clipped by the stage
+  // teardown.
+  let latestAnimation: Animation | null = null;
+  let latestEndTime = 0;
+  const track = (animation: Animation, endTime: number): void => {
+    if (endTime >= latestEndTime) {
+      latestEndTime = endTime;
+      latestAnimation = animation;
+    }
+  };
 
   /** A div pinned so its BOTTOM CENTER sits on the slot center, rotated
    *  outward; growing scaleY makes it shoot from the middle. */
@@ -397,18 +409,22 @@ export function playCastFlourish(input: CastFlourishInput): Promise<void> {
       borderRadius: "50% 50% 50% 50% / 70% 70% 30% 30%",
       filter: "blur(1.5px)"
     });
-    lastBurstAnimation = petal.animate(
-      [
-        { transform: "scaleY(0.1) scaleX(0.6)", opacity: "0" },
-        { transform: "scaleY(1) scaleX(1)", opacity: "0.95", offset: 0.3 },
-        { transform: "scaleY(1.25) scaleX(0.7)", opacity: "0" }
-      ],
-      {
-        delay: burstAt + hash01(index + 41) * 40,
-        duration: T.burst,
-        easing: "cubic-bezier(0.15, 0.7, 0.4, 1)",
-        fill: "both"
-      }
+    const petalDelay = burstAt + hash01(index + 41) * 40;
+    track(
+      petal.animate(
+        [
+          { transform: "scaleY(0.1) scaleX(0.6)", opacity: "0" },
+          { transform: "scaleY(1) scaleX(1)", opacity: "0.95", offset: 0.3 },
+          { transform: "scaleY(1.25) scaleX(0.7)", opacity: "0" }
+        ],
+        {
+          delay: petalDelay,
+          duration: T.burst,
+          easing: "cubic-bezier(0.15, 0.7, 0.4, 1)",
+          fill: "both"
+        }
+      ),
+      petalDelay + T.burst
     );
   }
 
@@ -422,18 +438,22 @@ export function playCastFlourish(input: CastFlourishInput): Promise<void> {
       borderRadius: "999px",
       boxShadow: `0 0 6px rgba(53, 224, 214, 0.6)`
     });
-    streak.animate(
-      [
-        { transform: "scaleY(0.05)", opacity: "0" },
-        { transform: "scaleY(0.9)", opacity: "1", offset: 0.45 },
-        { transform: "scaleY(1.15)", opacity: "0" }
-      ],
-      {
-        delay: burstAt + 60 + hash01(index + 71) * 60,
-        duration: T.burst - 60,
-        easing: "cubic-bezier(0.2, 0.7, 0.3, 1)",
-        fill: "both"
-      }
+    const streakDelay = burstAt + 60 + hash01(index + 71) * 60;
+    track(
+      streak.animate(
+        [
+          { transform: "scaleY(0.05)", opacity: "0" },
+          { transform: "scaleY(0.9)", opacity: "1", offset: 0.45 },
+          { transform: "scaleY(1.15)", opacity: "0" }
+        ],
+        {
+          delay: streakDelay,
+          duration: T.burst - 60,
+          easing: "cubic-bezier(0.2, 0.7, 0.3, 1)",
+          fill: "both"
+        }
+      ),
+      streakDelay + T.burst - 60
     );
   }
 
@@ -461,18 +481,22 @@ export function playCastFlourish(input: CastFlourishInput): Promise<void> {
         opacity: "0"
       });
       stage.appendChild(particle);
-      particle.animate(
-        [
-          { opacity: "0", transform: "scale(0.5)" },
-          { opacity: "0.95", offset: 0.3 },
-          { opacity: "0", transform: "scale(0.3)" }
-        ],
-        {
-          delay: burstAt + 90 + dot * 45,
-          duration: 240,
-          easing: "ease-out",
-          fill: "both"
-        }
+      const dotDelay = burstAt + 90 + dot * 45;
+      track(
+        particle.animate(
+          [
+            { opacity: "0", transform: "scale(0.5)" },
+            { opacity: "0.95", offset: 0.3 },
+            { opacity: "0", transform: "scale(0.3)" }
+          ],
+          {
+            delay: dotDelay,
+            duration: 240,
+            easing: "ease-out",
+            fill: "both"
+          }
+        ),
+        dotDelay + 240
       );
     }
   });
@@ -495,18 +519,22 @@ export function playCastFlourish(input: CastFlourishInput): Promise<void> {
       opacity: "0"
     });
     stage.appendChild(twinkle);
-    twinkle.animate(
-      [
-        { transform: "scale(0.2) rotate(0deg)", opacity: "0" },
-        { transform: "scale(1.1) rotate(18deg)", opacity: "1", offset: 0.4 },
-        { transform: "scale(0.5) rotate(30deg)", opacity: "0" }
-      ],
-      {
-        delay: burstAt + 40 + hash01(index + 121) * 160,
-        duration: 280,
-        easing: "ease-out",
-        fill: "both"
-      }
+    const twinkleDelay = burstAt + 40 + hash01(index + 121) * 160;
+    track(
+      twinkle.animate(
+        [
+          { transform: "scale(0.2) rotate(0deg)", opacity: "0" },
+          { transform: "scale(1.1) rotate(18deg)", opacity: "1", offset: 0.4 },
+          { transform: "scale(0.5) rotate(30deg)", opacity: "0" }
+        ],
+        {
+          delay: twinkleDelay,
+          duration: 280,
+          easing: "ease-out",
+          fill: "both"
+        }
+      ),
+      twinkleDelay + 280
     );
   }
 
@@ -534,8 +562,8 @@ export function playCastFlourish(input: CastFlourishInput): Promise<void> {
     { delay: burstAt, duration: 220, easing: "ease-out", fill: "both" }
   );
 
-  // Resolve when the burst ends; bound the wait in case animations never
-  // run (hidden tab, display:none ancestor).
+  // Resolve when the last-ending burst element finishes; bound the wait in
+  // case animations never run (hidden tab, display:none ancestor).
   return new Promise<void>((resolve) => {
     let settled = false;
     const finish = () => {
@@ -544,7 +572,7 @@ export function playCastFlourish(input: CastFlourishInput): Promise<void> {
       stage.remove();
       resolve();
     };
-    lastBurstAnimation?.finished.then(finish, finish);
+    latestAnimation?.finished.then(finish, finish);
     window.setTimeout(finish, T.total);
   });
 }
