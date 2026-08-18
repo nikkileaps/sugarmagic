@@ -13,9 +13,14 @@ Current add-on version: `0.19.0`
 
 ## 0.19.0 — shrubs: frond cards, outward bias, accent scatter, lobed shape
 
-Adds shrub authoring on top of the existing scatter pipeline. Nothing
-changes for existing trees: all new properties default to the previous
-behavior.
+Adds shrub authoring on top of the existing scatter pipeline. All new
+properties default to the previous behavior, with one deliberate change
+to existing trees: the procedural canopy shapes (sphere / cone /
+teardrop) previously generated inward-facing surface normals, and now
+face outward, matching the authored custom-mesh path. Rebuilding an
+existing tree with the same seed keeps its counts and overall look but
+mirrors card orientations, shifts leaf jitter slightly, and exports
+corrected NORMAL data.
 
 - **Frond textures** (`frondTexture01`, `frondTexture02` in the Leaf
   Texture dropdown): a whole connected leaf cluster drawn per card.

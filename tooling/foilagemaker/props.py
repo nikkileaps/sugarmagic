@@ -242,15 +242,6 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
                 "Rounded base, pointed top — stylized triangular deciduous",
             ),
             (
-                "lobed",
-                "Lobed",
-                (
-                    "A main dome plus several overlapping side lobes, "
-                    "seeded from Random Seed. Irregular, wild silhouette "
-                    "instead of a single readable ball."
-                ),
-            ),
-            (
                 "custom",
                 "Custom Mesh",
                 (
@@ -259,6 +250,18 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
                     "a primitive). The chosen mesh is used only as a "
                     "scatter surface; it doesn't end up in the exported "
                     "GLB — only the leaves do."
+                ),
+            ),
+            # New enum items go at the END of the list: Blender stores the
+            # item's positional integer in the .blend file, so inserting
+            # mid-list silently remaps every previously saved tree.
+            (
+                "lobed",
+                "Lobed",
+                (
+                    "A main dome plus several overlapping side lobes, "
+                    "seeded from Random Seed. Irregular, wild silhouette "
+                    "instead of a single readable ball."
                 ),
             ),
         ],
@@ -385,8 +388,6 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
         description="Which bundled leaf texture to bake into the canopy",
         items=[
             ("mixed", "Mixed Atlas (01–04)", "Atlas the first four bundled textures"),
-            ("frondTexture01", "Frond 01 (round)", "Whole leaf cluster per card, round outline"),
-            ("frondTexture02", "Frond 02 (wide)", "Whole leaf cluster per card, wide layered outline"),
             ("leavesTexture01", "Leaves 01", ""),
             ("leavesTexture02", "Leaves 02", ""),
             ("leavesTexture03", "Leaves 03", ""),
@@ -399,6 +400,11 @@ class FoliageMakerTreeProperties(bpy.types.PropertyGroup):
             ("leavesTexture10", "Leaves 10", ""),
             ("leavesTexture11", "Leaves 11", ""),
             ("leavesTexture12", "Leaves 12", ""),
+            # New enum items go at the END of the list: Blender stores the
+            # item's positional integer in the .blend file, so inserting
+            # mid-list silently remaps every previously saved tree.
+            ("frondTexture01", "Frond 01 (round)", "Whole leaf cluster per card, round outline"),
+            ("frondTexture02", "Frond 02 (wide)", "Whole leaf cluster per card, wide layered outline"),
         ],
         default="leavesTexture01",
         update=_update_tree,

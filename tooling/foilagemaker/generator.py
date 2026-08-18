@@ -1070,8 +1070,8 @@ def _add_leaf_spray(
     normal = normal.normalized()
     # outward_bias narrows the random tilt range toward zero so cards face
     # the scatter-surface normal. At 0 the tilt is the full +/-0.35 rad
-    # spray; the rng call itself is unchanged so 0 reproduces the exact
-    # pre-bias card placement for a given seed.
+    # spray. The tilt draw happens at every bias so changing the bias
+    # never shifts the rng sequence for the other random values.
     tilt_range = 1.0 - _clamp01(outward_bias)
     for card_index in range(card_count):
         rotation = rng.uniform(0.0, math.tau) + (math.pi / max(1, card_count)) * card_index
@@ -2005,8 +2005,11 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool | str]]:
             "leaf_size": 1.22,
             "leaf_width": 0.82,
             "leaf_height": 0.88,
+            "leaf_texture_variant": "leavesTexture01",
             "card_outward_bias": 0.0,
             "accent_count": 0,
+            "accent_texture_variant": "flowerTexture01",
+            "accent_size": 0.4,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
             "big_wind_multiplier": 1.0,
@@ -2047,8 +2050,11 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool | str]]:
             "leaf_size": 1.05,
             "leaf_width": 0.96,
             "leaf_height": 0.82,
+            "leaf_texture_variant": "leavesTexture01",
             "card_outward_bias": 0.0,
             "accent_count": 0,
+            "accent_texture_variant": "flowerTexture01",
+            "accent_size": 0.4,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
             "big_wind_multiplier": 1.0,
@@ -2089,8 +2095,11 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool | str]]:
             "leaf_size": 0.82,
             "leaf_width": 0.68,
             "leaf_height": 1.05,
+            "leaf_texture_variant": "leavesTexture01",
             "card_outward_bias": 0.0,
             "accent_count": 0,
+            "accent_texture_variant": "flowerTexture01",
+            "accent_size": 0.4,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
             "big_wind_multiplier": 1.0,
@@ -2139,6 +2148,7 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool | str]]:
             "leaf_texture_variant": "frondTexture01",
             "card_outward_bias": 0.85,
             "accent_count": 0,
+            "accent_texture_variant": "flowerTexture01",
             "accent_size": 0.4,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
@@ -2183,6 +2193,7 @@ def _get_tree_presets() -> dict[str, dict[str, float | int | bool | str]]:
             "leaf_texture_variant": "frondTexture01",
             "card_outward_bias": 0.7,
             "accent_count": 0,
+            "accent_texture_variant": "flowerTexture01",
             "accent_size": 0.5,
             "wind_scale": 2.5,
             "wind_speed": 1.0,
