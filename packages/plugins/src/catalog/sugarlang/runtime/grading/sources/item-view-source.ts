@@ -8,6 +8,7 @@
  *   - ITEM_VIEW_SOURCE_KIND
  *   - GRADABLE_ITEM_VIEW_KINDS
  *   - buildItemViewContentHash
+ *   - buildItemViewAdaptRequest
  *   - createItemViewSource
  *
  * Relationships:
@@ -22,6 +23,9 @@
  */
 
 import type { ItemViewKind } from "@sugarmagic/domain";
+import type { CEFRBand } from "../../cefr";
+import type { GradedTextRequest } from "../graded-text-service";
+import { TARGET_LANGUAGE_RATIO_BY_POSTURE } from "../../teacher/band-envelope";
 import type {
   GradedTextCorpus,
   GradedTextSourceStrategy,
@@ -106,4 +110,39 @@ export function createItemViewSource(): GradedTextSourceStrategy {
  */
 function registerFor(field: "title" | "body"): string {
   return field === "title" ? "item name" : "item description";
+}
+
+/**
+ * The adapt request for an item view bake (story #200).
+ *
+ * ITEM TEXT IS A FULL TRANSLATION AT EVERY BAND, not an interwoven graded
+ * line. The item is a touchstone: a familiar, stable text the player re-reads
+ * over time to feel their own progress, so it renders entirely in the target
+ * language. The band still does the leveling -- an A1 translation is
+ * radically simplified, and that loss is accepted. The guidance pitches the
+ * writing at a reader who has fully mastered the band and is about to move
+ * up. Dialogue keeps postureForBand; only items pin target-only.
+ *
+ * One function builds the request and the bake consumes it, so the test that
+ * pins this policy and the code that runs it cannot drift apart.
+ */
+export function buildItemViewAdaptRequest(input: {
+  text: string;
+  targetLang: string;
+  band: CEFRBand;
+  field: "title" | "body";
+}): GradedTextRequest {
+  return {
+    sourceText: input.text,
+    targetLang: input.targetLang,
+    band: input.band,
+    posture: "target-only",
+    directedRatio: TARGET_LANGUAGE_RATIO_BY_POSTURE["target-only"],
+    guidance: {
+      register: registerFor(input.field),
+      notes: [
+        `The reader has fully mastered ${input.band} and is about to move up a level. Write entirely in the target language, comfortably within ${input.band} - do not stretch beyond it to teach.`
+      ]
+    }
+  };
 }

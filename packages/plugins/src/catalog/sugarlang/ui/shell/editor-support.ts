@@ -58,7 +58,10 @@ import {
 } from "../../runtime/teacher/policies/llm-teacher-policy";
 import { generateVariant, VARIANT_PROMPT_VERSION } from "../../runtime/compile/generate-variant";
 import { GradedTextService } from "../../runtime/grading/graded-text-service";
-import { buildItemViewContentHash } from "../../runtime/grading/sources/item-view-source";
+import {
+  buildItemViewAdaptRequest,
+  buildItemViewContentHash
+} from "../../runtime/grading/sources/item-view-source";
 import { buildDialogueNodeContentHash } from "../../runtime/grading/sources/dialogue-node-source";
 import { getAllInventoryExponents } from "../../runtime/inventory/competency-inventory-loader";
 import type { BakedLineVariant } from "../../runtime/contracts/baked-variant";
@@ -66,10 +69,6 @@ import {
   DIALOGUE_VARIANT_BANDS,
   ITEM_VARIANT_BANDS
 } from "../../runtime/contracts/baked-variant";
-import {
-  postureForBand,
-  TARGET_LANGUAGE_RATIO_BY_POSTURE
-} from "../../runtime/teacher/band-envelope";
 import { compileSugarlangScene } from "../../runtime/compile/compile-sugarlang-scene";
 import { computeSceneContentHash } from "../../runtime/compile/content-hash";
 import {
@@ -1249,23 +1248,18 @@ export function createVariantAuthoringClient(): VariantAuthoringClient {
       await Promise.all(
         ITEM_VARIANT_BANDS.map(async (band) => {
           try {
-            // POSTURE REACHES THE GENERATOR, not just the verifier. Without it
-            // `adapt` falls to DEFAULT_POSTURE (`target-dominant`, ~85% target
-            // language), so a beginner item would be WRITTEN almost entirely in
-            // the target language and then MEASURED against the anchored
-            // envelope it was never shown. That is the failure the dialogue bake
-            // hit in play and 090.11 fixed there (generate-variant.ts:134); this
-            // is the same fix on the item path, and it is the prerequisite that
-            // makes A1/A2 bakeable -- see ITEM_VARIANT_BANDS.
-            const posture = postureForBand(band);
-            const graded = await service.adapt({
-              sourceText: text,
-              targetLang: targetLanguage,
-              band,
-              posture,
-              directedRatio: TARGET_LANGUAGE_RATIO_BY_POSTURE[posture],
-              guidance: { register: field === "title" ? "item name" : "item description" }
-            });
+            // Full translation at every band, never an interwoven graded
+            // line -- the policy and its reasons live on
+            // buildItemViewAdaptRequest, and the test pinning it consumes
+            // the same function.
+            const graded = await service.adapt(
+              buildItemViewAdaptRequest({
+                text,
+                targetLang: targetLanguage,
+                band,
+                field
+              })
+            );
             if (graded.text === null || graded.verdict === null) return;
             const variant: BakedLineVariant = {
               source: { kind: "item-view", itemDefinitionId, field },
