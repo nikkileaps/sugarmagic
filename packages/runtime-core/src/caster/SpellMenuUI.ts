@@ -6,6 +6,7 @@ import {
   type FramedPanel,
   type FramedPanelArt
 } from "../framed-panel";
+import { playCastFlourish } from "./cast-flourish";
 
 function escapeHtml(value: string): string {
   return value
@@ -174,6 +175,8 @@ export function createRuntimeSpellMenuUI(
   let currentSpells: SpellDefinition[] = [];
   let canOpenProvider: () => boolean = () => true;
   let onOpenChange: ((isOpen: boolean) => void) | null = null;
+  /** True while the cast flourish plays; casts and re-renders hold off. */
+  let casting = false;
 
   function setOpen(next: boolean) {
     if (open === next) return;
@@ -213,6 +216,21 @@ export function createRuntimeSpellMenuUI(
     });
   }
 
+  function slotAvailabilityTitle(spell: SpellDefinition): {
+    canCast: boolean;
+    title: string;
+  } {
+    const availability = casterManager.canCastSpell(spell.definitionId);
+    return {
+      canCast: availability.canCast,
+      // Icon-only grid; the name (and, when blocked, the reason) ride the
+      // native tooltip until the badge/hover treatment lands.
+      title: availability.canCast
+        ? spell.displayName
+        : `${spell.displayName} - ${availability.reason ?? "Cannot cast right now."}`
+    };
+  }
+
   function renderGrid() {
     grid.innerHTML = "";
     currentSpells = casterManager.getAvailableSpells();
@@ -221,16 +239,12 @@ export function createRuntimeSpellMenuUI(
     }
 
     for (const [index, spell] of currentSpells.entries()) {
-      const availability = casterManager.canCastSpell(spell.definitionId);
+      const availability = slotAvailabilityTitle(spell);
       const slot = document.createElement("button");
       slot.type = "button";
       slot.className = `sm-spell-menu-slot${index === selectedIndex ? " selected" : ""}`;
       slot.disabled = !availability.canCast;
-      // Icon-only grid; the name (and, when blocked, the reason) ride the
-      // native tooltip until the badge/hover treatment lands.
-      slot.title = availability.canCast
-        ? spell.displayName
-        : `${spell.displayName} - ${availability.reason ?? "Cannot cast right now."}`;
+      slot.title = availability.title;
       const iconUrl = options.getSpellIconUrl?.(spell);
       if (iconUrl) {
         slot.innerHTML = `<img class="sm-spell-menu-slot-icon" src="${escapeHtml(iconUrl)}" alt="${escapeHtml(spell.displayName)}" />`;
@@ -252,6 +266,26 @@ export function createRuntimeSpellMenuUI(
     }
   }
 
+  /**
+   * Per-frame refresh of what can change while the menu sits open: meter
+   * fills and slot enabled/disabled state, updated IN PLACE. Rebuilding the
+   * grid here would replace the button between the player's mouse-down and
+   * mouse-up, so no click could ever complete.
+   */
+  function refreshLiveState() {
+    renderMeters();
+    const slots = grid.querySelectorAll<HTMLButtonElement>(
+      ".sm-spell-menu-slot"
+    );
+    currentSpells.forEach((spell, index) => {
+      const slot = slots[index];
+      if (!slot) return;
+      const availability = slotAvailabilityTitle(spell);
+      slot.disabled = !availability.canCast;
+      slot.title = availability.title;
+    });
+  }
+
   function render() {
     renderMeters();
     renderGrid();
@@ -264,17 +298,33 @@ export function createRuntimeSpellMenuUI(
   }
 
   function castSpellAtIndex(index: number) {
+    if (casting) return;
     selectedIndex = index;
     castSelectedSpell();
   }
 
   function castSelectedSpell() {
+    if (casting) return;
     const spell = getSelectedSpell();
     if (!spell) return;
     const result = casterManager.castSpell(spell.definitionId);
     render();
     if (result.success) {
-      setOpen(false);
+      // The spell already happened above; the flourish is pure feedback.
+      // The menu stays up while it plays, then closes.
+      casting = true;
+      const slot = grid.querySelectorAll<HTMLElement>(".sm-spell-menu-slot")[
+        selectedIndex
+      ];
+      const finish = () => {
+        casting = false;
+        setOpen(false);
+      };
+      if (slot) {
+        playCastFlourish({ slot, layer: container }).then(finish, finish);
+      } else {
+        finish();
+      }
     }
   }
 
@@ -370,7 +420,13 @@ export function createRuntimeSpellMenuUI(
   return {
     update() {
       if (!open) return;
-      render();
+      // A re-render mid-flourish would replace the slot the squish/pop
+      // animations are running on; hold updates until it finishes.
+      if (casting) return;
+      // Called every frame by the gameplay session tick. Never rebuild the
+      // grid here (see refreshLiveState); the full render happens on open,
+      // navigation and cast.
+      refreshLiveState();
     },
     isOpen() {
       return open;
