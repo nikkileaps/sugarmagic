@@ -7,6 +7,13 @@ import {
   createDocumentDefinitionFromItem,
   renderDocumentDefinitionHtml
 } from "../document";
+import { createPaperPanel } from "../dialogue/paper-panel";
+import {
+  PLAIN_FRAME_GEOMETRY,
+  createFramedPanel,
+  type FramedPanel,
+  type FramedPanelArt
+} from "../framed-panel";
 
 export * from "./inventoryPlayerSaveParticipant";
 
@@ -228,6 +235,11 @@ export interface RuntimeInventoryUI {
 export interface RuntimeInventoryUIOptions {
   getAssetUrl?: (relativePath: string) => string | undefined;
   /**
+   * Painted plain-frame art, injected by the host target. Absent, the
+   * framed panel renders its CSS fallback.
+   */
+  frameArt?: FramedPanelArt;
+  /**
    * Story 50.3 — the central keyboard action registry the
    * inventory's open/close shortcuts register against. Replaces
    * the previous per-handler `window.addEventListener("keydown")`
@@ -249,9 +261,15 @@ export function createRuntimeInventoryUI(
   container.className = "sm-inventory-ui";
   parentContainer.appendChild(container);
 
+  // The inventory list sits on the PLAIN painted frame (bare rails, no
+  // meter hardware); the caster menu owns the frame with the hardware.
+  const framedPanel: FramedPanel = createFramedPanel(container, {
+    art: options.frameArt ?? null,
+    geometry: PLAIN_FRAME_GEOMETRY
+  });
   const panel = document.createElement("div");
-  panel.className = "sm-inventory-panel";
-  container.appendChild(panel);
+  panel.className = "sm-inventory-framed";
+  framedPanel.content.appendChild(panel);
 
   const header = document.createElement("div");
   header.className = "sm-inventory-header";
@@ -274,6 +292,15 @@ export function createRuntimeInventoryUI(
     onOpenChange?.(open);
   }
 
+  /** Grow the frame to the content, capped to the viewport; past the cap
+   *  the parchment area scrolls. */
+  function fitFrameToContent() {
+    framedPanel.setContentHeight(
+      panel.scrollHeight,
+      Math.max(320, window.innerHeight - 56)
+    );
+  }
+
   function render() {
     body.innerHTML = "";
 
@@ -282,6 +309,9 @@ export function createRuntimeInventoryUI(
       empty.className = "sm-inventory-empty";
       empty.textContent = "No items collected yet.";
       body.appendChild(empty);
+      // Shrink back to the natural frame when the last item disappears
+      // while the panel is open.
+      fitFrameToContent();
       return;
     }
 
@@ -312,6 +342,8 @@ export function createRuntimeInventoryUI(
       });
       body.appendChild(button);
     }
+
+    fitFrameToContent();
   }
 
   // Story 50.3 — register keyboard shortcuts through the central
@@ -367,6 +399,7 @@ export function createRuntimeInventoryUI(
     },
     dispose() {
       for (const unregister of unregisterActions) unregister();
+      framedPanel.dispose();
       parentContainer.removeChild(container);
     }
   };
@@ -425,9 +458,27 @@ export function createRuntimeItemViewUI(
   container.className = "sm-item-view";
   parentContainer.appendChild(container);
 
+  // Items present on torn paper, same treatment as the dialogue box (the
+  // caster keeps the painted device frame; items are just paper). The
+  // paper SVG is the FIRST child so it sits behind the content, which the
+  // stylesheet raises above it.
+  const paperBox = document.createElement("div");
+  paperBox.className = "sm-item-view-paper-box";
+  container.appendChild(paperBox);
+
+  const paper = createPaperPanel();
   const panel = document.createElement("div");
-  panel.className = "sm-item-view-panel";
-  container.appendChild(panel);
+  panel.className = "sm-item-view-paper";
+  paperBox.append(paper.element, panel);
+
+  // The box resizes with its content; createPaperPanel short-circuits when
+  // the size has not actually changed. BORDER box, not contentRect: the
+  // paper has to cover the box's padding too.
+  const paperObserver = new ResizeObserver(() => {
+    const rect = paperBox.getBoundingClientRect();
+    paper.resize(rect.width, rect.height);
+  });
+  paperObserver.observe(paperBox);
 
   let open = false;
   let activeDefinition: ItemDefinition | null = null;
@@ -487,6 +538,7 @@ export function createRuntimeItemViewUI(
       });
       actions.appendChild(consumeButton);
     }
+
   }
 
   // Story 50.3 — item-view Escape-to-close routes through the
@@ -536,6 +588,8 @@ export function createRuntimeItemViewUI(
     },
     dispose() {
       for (const unregister of unregisterActions) unregister();
+      paperObserver.disconnect();
+      paper.dispose();
       parentContainer.removeChild(container);
     }
   };
@@ -599,19 +653,6 @@ function injectInventoryStyles() {
     .sm-item-view.visible {
       opacity: 1;
       pointer-events: auto;
-    }
-
-    .sm-inventory-panel,
-    .sm-item-view-panel {
-      width: min(640px, calc(100vw - 48px));
-      max-height: min(80vh, 760px);
-      display: flex;
-      flex-direction: column;
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: linear-gradient(180deg, rgba(24,24,37,0.97), rgba(17,17,27,0.98));
-      box-shadow: 0 20px 72px rgba(0,0,0,0.4);
-      overflow: hidden;
     }
 
     .sm-inventory-header,
@@ -738,6 +779,129 @@ function injectInventoryStyles() {
       font-size: 14px;
       line-height: 1.7;
       white-space: normal;
+    }
+
+    /* Inventory list on the plain painted frame: dark ink on parchment
+       instead of the dark theme. */
+    .sm-inventory-framed {
+      display: flex;
+      flex-direction: column;
+      font-family: "Avenir Next", Nunito, system-ui, sans-serif;
+      color: #4a3116;
+      padding: 2px 6px;
+    }
+    .sm-inventory-framed .sm-inventory-header {
+      padding: 0 0 12px;
+      border-bottom: 1px solid rgba(122, 90, 46, 0.35);
+      color: #3d2812;
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .sm-inventory-framed .sm-inventory-header-key {
+      color: #6b4a26;
+      border: 1px solid rgba(122, 90, 46, 0.4);
+      background: rgba(122, 90, 46, 0.14);
+    }
+    .sm-inventory-framed .sm-inventory-body {
+      padding: 14px 0;
+    }
+    .sm-inventory-framed .sm-inventory-empty {
+      color: #6b4a26;
+    }
+    .sm-inventory-framed .sm-inventory-entry {
+      border: 2px solid rgba(122, 90, 46, 0.35);
+      background: rgba(122, 90, 46, 0.08);
+      color: #4a3116;
+    }
+    .sm-inventory-framed .sm-inventory-entry:hover:not(:disabled) {
+      border-color: #b8892c;
+    }
+    .sm-inventory-framed .sm-inventory-entry-title {
+      color: #3d2812;
+    }
+    .sm-inventory-framed .sm-inventory-entry-qty {
+      color: #8a6420;
+    }
+    .sm-inventory-framed .sm-inventory-entry-description {
+      color: #6b4a26;
+    }
+
+    /* Item view on torn paper, same treatment as the dialogue box: the
+       paper SVG fills the box behind the content, ink is dark on light.
+       Readable-document cards keep their own dark backgrounds and sit on
+       the paper like objects. */
+    .sm-item-view-paper-box {
+      position: relative;
+      width: min(640px, calc(100vw - 48px));
+      max-height: min(80vh, 760px);
+      display: flex;
+      flex-direction: column;
+      padding: 32px 36px;
+      filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.4));
+    }
+    .sm-item-view-paper-box > .sm-dialogue-box-paper {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      overflow: visible;
+      pointer-events: none;
+    }
+    .sm-item-view-paper {
+      position: relative;
+      z-index: 1;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      display: flex;
+      flex-direction: column;
+      font-family: "Avenir Next", Nunito, system-ui, sans-serif;
+      color: #4a3116;
+    }
+    .sm-item-view-paper .sm-item-view-header {
+      padding: 0 0 12px;
+      border-bottom: 1px solid rgba(122, 90, 46, 0.35);
+      color: #4a3116;
+    }
+    .sm-item-view-paper .sm-item-view-kicker {
+      color: #7a4a9e;
+    }
+    .sm-item-view-paper .sm-item-view-title {
+      color: #3d2812;
+    }
+    .sm-item-view-paper .sm-item-view-quantity {
+      color: #6b4a26;
+    }
+    .sm-item-view-paper .sm-item-view-body {
+      padding: 16px 0;
+    }
+    .sm-item-view-paper .sm-item-view-body-copy {
+      color: #4a3116;
+    }
+    .sm-item-view-paper .sm-item-view-close {
+      border-radius: 10px;
+      border: 2px solid #b8892c;
+      background: rgba(184, 137, 44, 0.14);
+      color: #6b4a26;
+      font-weight: 700;
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+    .sm-item-view-paper .sm-item-view-close:hover {
+      border-color: #e8b93f;
+    }
+    .sm-item-view-paper .sm-item-view-consume {
+      border-radius: 10px;
+      border: 2px solid #b8892c;
+      background: linear-gradient(180deg, #e8b93f, #c9962f);
+      color: #3d2812;
+      font-weight: 700;
+      padding: 10px 20px;
+      cursor: pointer;
+    }
+    .sm-item-view-paper .sm-item-view-consume:hover {
+      background: linear-gradient(180deg, #f5d067, #d9a63f);
     }
 
     .sm-readable {

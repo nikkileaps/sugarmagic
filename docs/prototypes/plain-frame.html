@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Plain frame prototype</title>
+<style>
+  html, body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Avenir Next", Nunito, system-ui, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 30% 20%, #3d5a3f, transparent),
+      radial-gradient(900px 700px at 80% 80%, #2c3e63, transparent),
+      #1b2233;
+  }
+  .stage { display: flex; align-items: flex-start; justify-content: center; gap: 24px; padding: 32px; }
+  .panel { position: relative; overflow: hidden; flex: none; }
+  .piece { position: absolute; background-image: url("plain-frame-source.png"); background-repeat: no-repeat; }
+  .band { position: absolute; left: 0; right: 0; display: flex; }
+  .band .piece { position: relative; flex: none; }
+  .band .stretch { flex: 1 1 0; min-width: 0; background-repeat: no-repeat; background-size: 100% 100% !important; }
+  .controls {
+    flex: none; width: 220px; background: rgba(10, 12, 20, 0.85);
+    border: 1px solid rgba(255,255,255,0.14); border-radius: 12px;
+    padding: 16px; color: #dde3f0; font-size: 13px;
+  }
+  .controls label { display: block; margin: 10px 0 2px; }
+  .controls input[type="range"] { width: 100%; }
+  .demo-entry {
+    display: flex; align-items: center; gap: 12px;
+    border: 2px solid rgba(122, 90, 46, 0.35); border-radius: 12px;
+    background: rgba(122, 90, 46, 0.08); padding: 10px 14px;
+    color: #4a3116; font-size: 14px;
+  }
+  .demo-entry b { color: #3d2812; }
+  .demo-thumb { width: 44px; height: 44px; border-radius: 8px; background: radial-gradient(circle at 50% 35%, #4a2a70, #241040); border: 2px solid #b8892c; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="panel" id="panel"></div>
+  <div class="controls">
+    <h1 style="font-size:14px;margin:0 0 12px">Plain frame prototype</h1>
+    <label>Panel height <output id="height-out"></output></label>
+    <input type="range" id="height" min="500" max="1600" value="961" />
+    <label>Scale <output id="scale-out"></output></label>
+    <input type="range" id="scale" min="30" max="70" value="45" />
+    <label>Entry count <output id="count-out">4</output></label>
+    <input type="range" id="count" min="0" max="14" value="4" />
+  </div>
+</div>
+
+<script>
+// Source coordinates for plain-frame-source.png (1536x1024). The frame's
+// outer edge starts at ORIGIN. Repeating pieces come from generated files
+// (see caster-frame-slices.py); fixed pieces use the sheet.
+const ORIGIN = { x: 6, y: 38 };
+const SHEET = { w: 1536, h: 1024 };
+const FRAME_W = 1523;
+const NATURAL_H = 961;
+const SLICE_VERSION = 1;
+
+const SLICES = {
+  cornerTL: [6, 38, 146, 178],
+  cornerTR: [1389, 38, 1529, 178],
+  cornerBL: [6, 859, 146, 999],
+  cornerBR: [1389, 859, 1529, 999],
+  topStretch: [400, 38, 412, 178],
+  bottomEmblem: [620, 855, 916, 999],
+  bottomStretch: [300, 855, 332, 999],
+  railLeft: [6, 690, 126, 722],
+  railRight: [1410, 690, 1530, 722],
+  gemLeft: [6, 350, 100, 660],
+  gemRight: [1436, 350, 1530, 660],
+  flourishTL: [80, 120, 300, 320],
+  flourishTR: [1236, 120, 1456, 320],
+  flourishBL: [70, 750, 300, 910],
+  flourishBR: [1236, 750, 1466, 910],
+  parchment: [400, 200, 680, 340]
+};
+
+const SLICE_FILES = {
+  railLeft: "plain-rail-left.png",
+  railRight: "plain-rail-right.png",
+  topStretch: "plain-top-stretch.png",
+  bottomStretch: "plain-bottom-stretch.png",
+  parchment: "plain-parchment.png"
+};
+
+const state = { height: NATURAL_H, scale: 0.45, count: 4 };
+const panel = document.getElementById("panel");
+
+function sliceFile(name) {
+  return `caster-frame-slices/${SLICE_FILES[name]}?v=${SLICE_VERSION}`;
+}
+
+function pieceStyle(slice, s, name) {
+  const [x0, y0, x1, y1] = slice;
+  const w = (x1 - x0) * s;
+  const h = (y1 - y0) * s;
+  if (name && SLICE_FILES[name]) {
+    return `width:${w}px;height:${h}px;background-image:url('${sliceFile(name)}');` +
+      `background-size:${w}px ${h}px;background-position:0 0;`;
+  }
+  return `width:${w}px;height:${h}px;` +
+    `background-size:${SHEET.w * s}px ${SHEET.h * s}px;` +
+    `background-position:${-x0 * s}px ${-y0 * s}px;`;
+}
+
+function render() {
+  const s = state.scale;
+  const H = state.height;
+  const px = (v) => `${v * s}px`;
+
+  panel.style.width = px(FRAME_W);
+  panel.style.height = px(H);
+  panel.style.borderRadius = px(66);
+
+  const abs = (slice, styles, name) =>
+    `<div class="piece" style="${pieceStyle(slice, s, name)}${styles}"></div>`;
+  const seg = (slice, cls = "", name) =>
+    `<div class="piece ${cls}" style="${pieceStyle(slice, s, name)}"></div>`;
+
+  const cornerH = 140;
+  const gemH = SLICES.gemLeft[3] - SLICES.gemLeft[1];
+  const flourishBLTop = H - (NATURAL_H - (SLICES.flourishBL[1] - ORIGIN.y));
+  const flourishBRTop = H - (NATURAL_H - (SLICES.flourishBR[1] - ORIGIN.y));
+
+  panel.innerHTML = `
+    <div class="piece" style="left:${px(24)};top:${px(40)};right:${px(24)};bottom:${px(40)};
+      width:auto;height:auto;border-radius:${px(60)};
+      background-image:url('${sliceFile("parchment")}');
+      background-repeat:repeat;
+      background-size:${px((SLICES.parchment[2] - SLICES.parchment[0]) * 2)} ${px((SLICES.parchment[3] - SLICES.parchment[1]) * 2)};"></div>
+
+    ${abs(SLICES.flourishTL, `left:${px(SLICES.flourishTL[0] - ORIGIN.x)};top:${px(SLICES.flourishTL[1] - ORIGIN.y)};`)}
+    ${abs(SLICES.flourishTR, `left:${px(SLICES.flourishTR[0] - ORIGIN.x)};top:${px(SLICES.flourishTR[1] - ORIGIN.y)};`)}
+    ${abs(SLICES.flourishBL, `left:${px(SLICES.flourishBL[0] - ORIGIN.x)};top:${px(flourishBLTop)};`)}
+    ${abs(SLICES.flourishBR, `left:${px(SLICES.flourishBR[0] - ORIGIN.x)};top:${px(flourishBRTop)};`)}
+
+    ${abs(SLICES.railLeft, `left:0;top:${px(cornerH)};height:${px(H - cornerH * 2)};background-repeat:repeat-y;`, "railLeft")}
+    ${abs(SLICES.railRight, `right:0;top:${px(cornerH)};height:${px(H - cornerH * 2)};background-repeat:repeat-y;`, "railRight")}
+
+    ${abs(SLICES.gemLeft, `left:0;top:50%;transform:translateY(-50%);`)}
+    ${abs(SLICES.gemRight, `right:0;top:50%;transform:translateY(-50%);`)}
+
+    <div class="band" style="top:0;height:${px(140)};align-items:flex-start;">
+      ${seg(SLICES.cornerTL)}
+      ${seg(SLICES.topStretch, "stretch", "topStretch")}
+      ${seg(SLICES.cornerTR)}
+    </div>
+
+    <div class="band" style="bottom:0;height:${px(144)};align-items:flex-end;">
+      ${seg(SLICES.cornerBL)}
+      ${seg(SLICES.bottomStretch, "stretch", "bottomStretch")}
+      ${seg(SLICES.bottomEmblem)}
+      ${seg(SLICES.bottomStretch, "stretch", "bottomStretch")}
+      ${seg(SLICES.cornerBR)}
+    </div>
+
+    <div style="position:absolute;left:${px(130)};right:${px(130)};top:${px(150)};bottom:${px(130)};
+      overflow-y:auto;display:flex;flex-direction:column;gap:10px;">
+      ${Array.from({ length: state.count }, (_, i) => `
+        <div class="demo-entry">
+          <div class="demo-thumb"></div>
+          <div><b>Sample Item ${i + 1}</b> x${i + 1}<br/>A small description of the item.</div>
+        </div>`).join("")}
+    </div>
+  `;
+}
+
+function bind(id, apply) {
+  const input = document.getElementById(id);
+  const out = document.getElementById(`${id}-out`);
+  const update = () => {
+    apply(Number(input.value));
+    if (out) out.textContent = input.value;
+    render();
+  };
+  input.addEventListener("input", update);
+  update();
+}
+
+bind("height", (v) => { state.height = v; });
+bind("scale", (v) => { state.scale = v / 100; });
+bind("count", (v) => { state.count = v; });
+</script>
+</body>
+</html>
