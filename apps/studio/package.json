@@ -25,6 +25,7 @@
     "@sugarmagic/target-web": "workspace:*",
     "@sugarmagic/ui": "workspace:*",
     "@sugarmagic/workspaces": "workspace:*",
+    "@xyflow/react": "^12.11.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "three": "^0.183.2",

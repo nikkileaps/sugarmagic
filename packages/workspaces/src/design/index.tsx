@@ -433,3 +433,17 @@ export {
   WeightWorkbench,
   type WeightWorkbenchProps
 } from "./weight-workbench/WeightWorkbench";
+export {
+  QUEST_NODE_KIND,
+  applyNodeMoves,
+  canDeleteNodes,
+  connectNodes,
+  deleteNodes,
+  disconnectEdges,
+  failEdgeId,
+  findNode,
+  parseEdgeId,
+  prerequisiteEdgeId,
+  questStageToEditorEdges,
+  questStageToEditorNodes
+} from "./quest-graph";

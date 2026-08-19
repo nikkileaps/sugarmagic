@@ -111,6 +111,10 @@ import { LoginModal } from "@sugarmagic/plugins";
 
 import "@mantine/core/styles.css";
 import "@sugarmagic/ui/shell-variables.css";
+// See main.tsx: node-editor styles live at the Studio entries, never in the
+// @sugarmagic/ui barrel, so they cannot reach the shipped game bundle.
+import "@xyflow/react/dist/style.css";
+import "@sugarmagic/ui/node-editor.css";
 
 interface PreviewBootMessage {
   type: "PREVIEW_BOOT";

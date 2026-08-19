@@ -1,0 +1,42 @@
+/**
+ * packages/ui/src/graphs/node-editor.css
+ *
+ * Purpose: styling for the shared node editor. Imported at the Studio entries,
+ * never from the @sugarmagic/ui barrel, so it cannot reach the shipped game.
+ *
+ * Selection is teal because the quest node behaviours already use blue, mauve,
+ * yellow and peach; a highlight in any of those is invisible on the node type
+ * that shares it.
+ *
+ * Status: active
+ */
+
+.react-flow {
+  /* React Flow paints selected edges from this variable. Setting it here means
+     selection is themed through the library's own mechanism rather than by
+     overriding each edge. */
+  --xy-edge-stroke-selected: var(--sm-accent-teal, #94e2d5);
+}
+
+/* The authored colour of an edge, set per edge as --sm-edge-color. This rule is
+   deliberately less specific than React Flow's own `.react-flow__edge.selected`
+   rule, so a selected edge takes the selection colour instead. */
+.react-flow__edge .react-flow__edge-path {
+  stroke: var(--sm-edge-color, var(--xy-edge-stroke-default));
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3;
+}
+
+.sm-node-editor-node {
+  border-radius: 10px;
+}
+
+/* Custom node types get no selection styling from React Flow -- its rules only
+   target the built-in ones -- so the ring is drawn here, once, for every editor. */
+.sm-node-editor-node[data-selected="true"] {
+  box-shadow:
+    0 0 0 3px var(--sm-accent-teal, #94e2d5),
+    0 0 14px 2px rgba(148, 226, 213, 0.45);
+}
