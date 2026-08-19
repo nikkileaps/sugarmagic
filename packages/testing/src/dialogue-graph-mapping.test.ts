@@ -1,0 +1,146 @@
+import { describe, expect, it } from "vitest";
+import type { DialogueDefinition } from "@sugarmagic/domain";
+import {
+  applyDialogueNodeMoves,
+  canDeleteDialogueNodes,
+  connectDialogueNodes,
+  deleteDialogueNodes,
+  dialogueEdgeId,
+  dialogueToEditorEdges,
+  dialogueToEditorNodes,
+  disconnectDialogueEdges,
+  parseDialogueEdgeId
+} from "@sugarmagic/workspaces";
+
+function dialogue(): DialogueDefinition {
+  return {
+    definitionId: "dlg-1",
+    displayName: "Guard chat",
+    startNodeId: "n1",
+    interactionBinding: { npcDefinitionId: "npc:guard" },
+    nodes: [
+      {
+        nodeId: "n1",
+        text: "Halt.",
+        next: [
+          { targetNodeId: "n2", choiceText: "Who goes there?" },
+          {
+            targetNodeId: "n3",
+            choiceText: "Let me pass",
+            condition: { type: "flag", key: "has-pass" }
+          }
+        ],
+        graphPosition: { x: 10, y: 20 }
+      },
+      { nodeId: "n2", text: "State your business.", next: [], graphPosition: { x: 300, y: 0 } },
+      { nodeId: "n3", text: "Go on through.", next: [], graphPosition: { x: 300, y: 120 } }
+    ]
+  };
+}
+
+describe("dialogue graph mapping", () => {
+  it("maps nodes and marks the start node", () => {
+    const nodes = dialogueToEditorNodes(dialogue(), null);
+    expect(nodes.map((node) => node.id)).toEqual(["n1", "n2", "n3"]);
+    expect(nodes[0]!.payload).toMatchObject({ isStart: true, isPlaytestActive: false });
+    expect(nodes[1]!.payload).toMatchObject({ isStart: false });
+  });
+
+  it("marks the playtest node without touching the others", () => {
+    const nodes = dialogueToEditorNodes(dialogue(), "n2");
+    expect(nodes[1]!.payload).toMatchObject({ isPlaytestActive: true });
+    expect(nodes[0]!.payload).toMatchObject({ isPlaytestActive: false });
+  });
+
+  it("gives a node one port per choice, and none when there is a single continuation", () => {
+    const nodes = dialogueToEditorNodes(dialogue(), null);
+    expect(nodes[0]!.outputs?.map((port) => port.name)).toEqual(["choice-0", "choice-1"]);
+    expect(nodes[1]!.outputs).toBeUndefined();
+  });
+
+  it("draws a conditional connection dashed", () => {
+    const edges = dialogueToEditorEdges(dialogue());
+    const conditional = edges.find((edge) => edge.toId === "n3");
+    expect(conditional?.dashed).toBe(true);
+    const plain = edges.find((edge) => edge.toId === "n2");
+    expect(plain?.dashed).toBe(false);
+  });
+
+  it("round-trips connection ids, which carry the position in the list", () => {
+    expect(parseDialogueEdgeId(dialogueEdgeId("n1", 1))).toEqual({
+      fromNodeId: "n1",
+      index: 1
+    });
+    expect(parseDialogueEdgeId("nonsense")).toBeNull();
+  });
+
+  it("moves several nodes in one pass", () => {
+    const moved = applyDialogueNodeMoves(dialogue(), [
+      { id: "n1", position: { x: -400, y: -200 } }
+    ]);
+    expect(moved.nodes[0]!.graphPosition).toEqual({ x: -400, y: -200 });
+    expect(moved.nodes[1]!.graphPosition).toEqual({ x: 300, y: 0 });
+  });
+
+  it("connecting from a choice port adds choice text; a plain connection does not", () => {
+    const fromChoice = connectDialogueNodes(dialogue(), {
+      fromId: "n2",
+      toId: "n3",
+      fromPort: "choice-0"
+    });
+    expect(fromChoice.nodes[1]!.next[0]).toMatchObject({
+      targetNodeId: "n3",
+      choiceText: "Choice 1"
+    });
+
+    const plain = connectDialogueNodes(dialogue(), { fromId: "n2", toId: "n3" });
+    expect(plain.nodes[1]!.next[0]).toEqual({ targetNodeId: "n3" });
+  });
+
+  it("ignores duplicate and unknown connections", () => {
+    const base = dialogue();
+    expect(connectDialogueNodes(base, { fromId: "n1", toId: "n2" })).toBe(base);
+    expect(connectDialogueNodes(base, { fromId: "ghost", toId: "n2" })).toBe(base);
+    expect(connectDialogueNodes(base, { fromId: "n1", toId: "ghost" })).toBe(base);
+  });
+
+  it("removes a connection by position, keeping the others in order", () => {
+    const after = disconnectDialogueEdges(dialogue(), [dialogueEdgeId("n1", 0)]);
+    expect(after.nodes[0]!.next).toHaveLength(1);
+    expect(after.nodes[0]!.next[0]).toMatchObject({ targetNodeId: "n3" });
+  });
+
+  it("removes several connections from one node without index drift", () => {
+    const after = disconnectDialogueEdges(dialogue(), [
+      dialogueEdgeId("n1", 0),
+      dialogueEdgeId("n1", 1)
+    ]);
+    expect(after.nodes[0]!.next).toEqual([]);
+  });
+
+  it("deleting a node also removes connections pointing at it", () => {
+    const after = deleteDialogueNodes(dialogue(), ["n2"]);
+    expect(after.nodes.map((node) => node.nodeId)).toEqual(["n1", "n3"]);
+    expect(after.nodes[0]!.next.map((edge) => edge.targetNodeId)).toEqual(["n3"]);
+  });
+
+  it("refuses to delete the start node, and says why", () => {
+    const refusal = canDeleteDialogueNodes(dialogue(), ["n1"]);
+    expect(refusal.allowed).toBe(false);
+    expect(refusal.reason).toMatch(/start node/i);
+  });
+
+  it("refuses to delete the last remaining node, and says why", () => {
+    const single: DialogueDefinition = {
+      ...dialogue(),
+      startNodeId: "only",
+      nodes: [{ nodeId: "only", text: "Hi.", next: [], graphPosition: { x: 0, y: 0 } }]
+    };
+    const refusal = canDeleteDialogueNodes(single, ["only"]);
+    expect(refusal.allowed).toBe(false);
+  });
+
+  it("allows deleting an ordinary node", () => {
+    expect(canDeleteDialogueNodes(dialogue(), ["n2"])).toEqual({ allowed: true });
+  });
+});

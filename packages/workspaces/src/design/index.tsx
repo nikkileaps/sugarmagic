@@ -433,6 +433,22 @@ export {
   WeightWorkbench,
   type WeightWorkbenchProps
 } from "./weight-workbench/WeightWorkbench";
+export { DialogueNodeCard } from "./DialogueNodeCard";
+export {
+  DIALOGUE_NODE_KIND,
+  applyDialogueNodeMoves,
+  canDeleteDialogueNodes,
+  choiceColor,
+  choicePortName,
+  connectDialogueNodes,
+  deleteDialogueNodes,
+  dialogueEdgeId,
+  dialogueToEditorEdges,
+  dialogueToEditorNodes,
+  disconnectDialogueEdges,
+  parseDialogueEdgeId,
+  type DialogueNodePayload
+} from "./dialogue-graph";
 export {
   QUEST_NODE_KIND,
   applyNodeMoves,

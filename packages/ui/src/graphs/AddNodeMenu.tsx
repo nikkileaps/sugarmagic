@@ -31,6 +31,27 @@ export function AddNodeMenu({
   disabled = false,
   label = "Add Node"
 }: AddNodeMenuProps) {
+  // With a single kind to add there is nothing to choose, so the trigger does
+  // the thing instead of opening a menu with one entry in it.
+  const only = items.length === 1 ? items[0] : null;
+  if (only) {
+    return (
+      <Tooltip label={label} position="right">
+        <ActionIcon
+          size="lg"
+          radius="md"
+          variant="filled"
+          color="blue"
+          disabled={disabled}
+          aria-label={label}
+          onClick={() => onSelect(only.id)}
+        >
+          +
+        </ActionIcon>
+      </Tooltip>
+    );
+  }
+
   return (
     <Menu withinPortal position="bottom-start" shadow="md" width={240}>
       <Menu.Target>
