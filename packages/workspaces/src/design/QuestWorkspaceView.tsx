@@ -67,7 +67,7 @@ import {
   createDefaultQuestStageDefinition,
   createQuestNodeId
 } from "@sugarmagic/domain";
-import { Inspector } from "@sugarmagic/ui";
+import { AddNodeMenu, Inspector } from "@sugarmagic/ui";
 import {
   NodeEditor,
   type GraphEditorConnection,
@@ -291,6 +291,26 @@ function QuestNodeCard({ node }: GraphEditorNodeRendererProps) {
 }
 
 const QUEST_NODE_RENDERERS = { [QUEST_NODE_KIND]: QuestNodeCard };
+
+/** What the Add Node Menu offers, and the starting text for each kind. */
+const QUEST_NODE_MENU_ITEMS: {
+  id: QuestNodeBehavior;
+  label: string;
+  description: string;
+}[] = [
+  { id: "objective", label: "Objective", description: "Talk to someone" },
+  {
+    id: "narrative",
+    label: "Narrative",
+    description: "Trigger narrative content"
+  },
+  {
+    id: "condition",
+    label: "Condition",
+    description: "Wait until a condition is true"
+  },
+  { id: "branch", label: "Branch", description: "Route to pass or fail" }
+];
 
 function createNextNodePosition(stage: QuestStageDefinition) {
   const maxY = stage.nodeDefinitions.reduce(
@@ -1173,6 +1193,38 @@ export function useQuestWorkspaceView({
   );
 
   // A stage must keep at least one node, so the last one cannot be deleted.
+  const [graphSelection, setGraphSelection] = useState<{
+    nodeIds: string[];
+    edgeIds: string[];
+  }>({ nodeIds: [], edgeIds: [] });
+
+  const addNode = useCallback(
+    (behavior: string) => {
+      if (!selectedStage) return;
+      const item = QUEST_NODE_MENU_ITEMS.find(
+        (candidate) => candidate.id === behavior
+      );
+      if (!item) return;
+      const node = createDefaultQuestNodeDefinition({
+        nodeId: createQuestNodeId(),
+        nodeBehavior: item.id,
+        displayName: item.label,
+        description: item.description,
+        graphPosition: createNextNodePosition(selectedStage)
+      });
+      updateStage(selectedStage.stageId, (stage) => ({
+        ...stage,
+        nodeDefinitions: [...stage.nodeDefinitions, node],
+        entryNodeIds:
+          node.prerequisiteNodeIds.length === 0
+            ? [...stage.entryNodeIds, node.nodeId]
+            : stage.entryNodeIds
+      }));
+      setSelectedNodeId(node.nodeId);
+    },
+    [selectedStage, updateStage]
+  );
+
   const handleBeforeDelete = useCallback(
     ({ nodeIds }: { nodeIds: string[]; edgeIds: string[] }) => {
       if (nodeIds.length === 0) return true;
@@ -1183,6 +1235,24 @@ export function useQuestWorkspaceView({
       return canDeleteNodes(stage, nodeIds);
     },
     [graphStageId]
+  );
+
+  const hasGraphSelection =
+    graphSelection.nodeIds.length + graphSelection.edgeIds.length > 0;
+
+  const questGraphChrome = (
+    <Group gap={6} align="center">
+      <AddNodeMenu items={QUEST_NODE_MENU_ITEMS} onSelect={addNode} />
+      <Button
+        size="xs"
+        variant="light"
+        color="red"
+        disabled={!hasGraphSelection}
+        onClick={() => graphEditorRef.current?.deleteSelection()}
+      >
+        Delete
+      </Button>
+    </Group>
   );
 
   const leftPanel = (
@@ -1326,69 +1396,6 @@ export function useQuestWorkspaceView({
               {selectedQuest.displayName} / {selectedStage.displayName}
             </Text>
           </Group>
-          <Group gap="xs">
-            <Menu withinPortal>
-              <Menu.Target>
-                <Button size="xs" variant="light">
-                  + Add Node
-                </Button>
-              </Menu.Target>
-              <Menu.Dropdown>
-                {[
-                  { behavior: "objective", label: "Objective" },
-                  { behavior: "narrative", label: "Narrative" },
-                  { behavior: "condition", label: "Condition" },
-                  { behavior: "branch", label: "Branch" }
-                ].map((item) => (
-                  <Menu.Item
-                    key={item.behavior}
-                    onClick={() => {
-                      const position = createNextNodePosition(selectedStage);
-                      const node = createDefaultQuestNodeDefinition({
-                        nodeId: createQuestNodeId(),
-                        nodeBehavior: item.behavior as QuestNodeBehavior,
-                        displayName:
-                          item.behavior === "objective"
-                            ? "Objective"
-                            : item.behavior === "narrative"
-                              ? "Narrative"
-                              : item.behavior === "condition"
-                                ? "Condition"
-                                : "Branch",
-                        description:
-                          item.behavior === "objective"
-                            ? "Talk to someone"
-                            : item.behavior === "narrative"
-                              ? "Trigger narrative content"
-                              : item.behavior === "condition"
-                                ? "Wait until a condition is true"
-                                : "Route to pass or fail",
-                        graphPosition: position
-                      });
-                      updateStage(selectedStage.stageId, (stage) => ({
-                        ...stage,
-                        nodeDefinitions: [...stage.nodeDefinitions, node],
-                        entryNodeIds:
-                          node.prerequisiteNodeIds.length === 0
-                            ? [...stage.entryNodeIds, node.nodeId]
-                            : stage.entryNodeIds
-                      }));
-                      setSelectedNodeId(node.nodeId);
-                    }}
-                  >
-                    {item.label}
-                  </Menu.Item>
-                ))}
-              </Menu.Dropdown>
-            </Menu>
-            <Button
-              size="xs"
-              variant="subtle"
-              onClick={() => graphEditorRef.current?.fitToContent()}
-            >
-              Fit View
-            </Button>
-          </Group>
         </Group>
         <Box style={{ flex: 1, minHeight: 0, position: "relative" }}>
           {/* Only mounted while this workspace is the active one, matching what
@@ -1407,6 +1414,8 @@ export function useQuestWorkspaceView({
               onNodesDeleted={handleNodesDeleted}
               onEdgesDeleted={handleEdgesDeleted}
               onBeforeDelete={handleBeforeDelete}
+              onSelectionChange={setGraphSelection}
+              chrome={questGraphChrome}
             />
           ) : null}
         </Box>
@@ -2201,36 +2210,6 @@ export function useQuestWorkspaceView({
                 updateNode({ ...selectedNode, onCompleteActions })
               }
             />
-
-            <Button
-              color="red"
-              variant="light"
-              disabled={selectedStage.nodeDefinitions.length <= 1}
-              onClick={() => {
-                updateStage(selectedStage.stageId, (stage) => ({
-                  ...stage,
-                  nodeDefinitions: stage.nodeDefinitions
-                    .filter(
-                      (candidate) => candidate.nodeId !== selectedNode.nodeId
-                    )
-                    .map((candidate) => ({
-                      ...candidate,
-                      prerequisiteNodeIds: candidate.prerequisiteNodeIds.filter(
-                        (nodeId) => nodeId !== selectedNode.nodeId
-                      ),
-                      failTargetNodeIds: candidate.failTargetNodeIds.filter(
-                        (nodeId) => nodeId !== selectedNode.nodeId
-                      )
-                    })),
-                  entryNodeIds: stage.entryNodeIds.filter(
-                    (nodeId) => nodeId !== selectedNode.nodeId
-                  )
-                }));
-                setSelectedNodeId(null);
-              }}
-            >
-              Delete Node
-            </Button>
           </Stack>
         )}
 

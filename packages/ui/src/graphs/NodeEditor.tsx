@@ -95,6 +95,9 @@ export interface GraphEditorHandle {
   fitToContent: () => void;
   centerOnNode: (nodeId: string) => void;
   selectNode: (nodeId: string | null) => void;
+  /** Remove whatever is selected. Runs through onBeforeDelete like any other
+   *  deletion, so guards apply wherever the request came from. */
+  deleteSelection: () => void;
 }
 
 export interface NodeEditorProps {
@@ -106,6 +109,11 @@ export interface NodeEditorProps {
   primarySelectionId?: string | null;
   /** Fires when the selected node changes, including when selection is cleared. */
   onPrimarySelectionChange?: (nodeId: string | null) => void;
+  /** Everything currently selected, so chrome can enable or disable its actions. */
+  onSelectionChange?: (selection: {
+    nodeIds: string[];
+    edgeIds: string[];
+  }) => void;
   /** Fires once when a drag finishes, carrying every node that moved. */
   onNodesMoved?: (moves: GraphEditorNodeMove[]) => void;
   onConnect?: (connection: GraphEditorConnection) => void;
@@ -214,6 +222,7 @@ function NodeEditorInner(
     edges,
     primarySelectionId = null,
     onPrimarySelectionChange,
+    onSelectionChange,
     onNodesMoved,
     onConnect,
     onNodesDeleted,
@@ -297,10 +306,34 @@ function NodeEditorInner(
       },
       selectNode: (nodeId: string | null) => {
         onPrimarySelectionChange?.(nodeId);
+      },
+      deleteSelection: () => {
+        void reactFlow.deleteElements({
+          nodes: reactFlow.getNodes().filter((node) => node.selected),
+          edges: reactFlow.getEdges().filter((edge) => edge.selected)
+        });
       }
     }),
     [onPrimarySelectionChange, reactFlow]
   );
+
+  // Reads through the React Flow store rather than local state, because local
+  // state updates are queued and would report the selection one step behind.
+  const reportSelection = useCallback(() => {
+    if (!onSelectionChange) return;
+    queueMicrotask(() => {
+      onSelectionChange({
+        nodeIds: reactFlow
+          .getNodes()
+          .filter((node) => node.selected)
+          .map((node) => node.id),
+        edgeIds: reactFlow
+          .getEdges()
+          .filter((edge) => edge.selected)
+          .map((edge) => edge.id)
+      });
+    });
+  }, [onSelectionChange, reactFlow]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<FlowNode<ShellData>>[]) => {
@@ -341,14 +374,21 @@ function NodeEditorInner(
         } else if (selection.every((change) => !change.selected)) {
           onPrimarySelectionChange?.(null);
         }
+        reportSelection();
       }
     },
-    [onNodesMoved, onPrimarySelectionChange]
+    [onNodesMoved, onPrimarySelectionChange, reportSelection]
   );
 
-  const handleEdgesChange = useCallback((changes: EdgeChange<FlowEdge>[]) => {
-    setFlowEdges((current) => applyEdgeChanges(changes, current));
-  }, []);
+  const handleEdgesChange = useCallback(
+    (changes: EdgeChange<FlowEdge>[]) => {
+      setFlowEdges((current) => applyEdgeChanges(changes, current));
+      if (changes.some((change) => change.type === "select")) {
+        reportSelection();
+      }
+    },
+    [reportSelection]
+  );
 
   const handleConnect = useCallback(
     (connection: Connection) => {
@@ -417,7 +457,13 @@ function NodeEditorInner(
       <Background variant={"dots" as never} gap={20} size={1} />
       <Controls showInteractive={false} />
       {showMiniMap ? <MiniMap pannable zoomable /> : null}
-      {chrome ? <Panel position="top-left">{chrome}</Panel> : null}
+      {chrome ? (
+        // 12px matches the shader editor's existing graph chrome, which is the
+        // in-repo precedent for controls over a graph viewport.
+        <Panel position="top-left" style={{ margin: 12 }}>
+          {chrome}
+        </Panel>
+      ) : null}
     </ReactFlow>
   );
 }
