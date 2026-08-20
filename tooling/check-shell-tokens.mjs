@@ -77,6 +77,11 @@ async function collectTsFiles(directory) {
   return files;
 }
 
+// This names ONE subdirectory of packages/ui/src, not the package. Four others --
+// graphs, inspectors, panels, trees -- are outside the rule; three of them are
+// clean by luck rather than by enforcement, and packages/ui/src/graphs is not.
+// Widen this to packages/ui/src when issue #209 moves the node editor out of
+// packages/ui, and convert the raw palette values it then reports.
 const checkDirs = [
   path.join(repoRoot, "apps/studio/src"),
   path.join(repoRoot, "packages/ui/src/components"),

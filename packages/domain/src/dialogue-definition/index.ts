@@ -1,4 +1,5 @@
 import { createUuid } from "../shared/identity";
+import { normalizeNodeGroups, type NodeGroup } from "../graph-layout/index";
 
 export type DialogueBuiltInSpeakerKind =
   | "player"
@@ -160,8 +161,16 @@ export interface DialogueInteractionBinding {
 export interface DialogueDefinition {
   definitionId: string;
   displayName: string;
-  startNodeId: string;
+  /** Null when the dialogue has no nodes, so there is nowhere to start. */
+  startNodeId: string | null;
   nodes: DialogueNodeDefinition[];
+  /**
+   * Labelled boxes drawn around nodes. Layout only, and optional: a document
+   * saved before groups existed has no value here, and there is no migration
+   * step to add one. The normalizer fills it with an empty list on load, so
+   * anything that has been through the load path always has it.
+   */
+  groups?: NodeGroup[];
   interactionBinding: DialogueInteractionBinding;
 }
 
@@ -214,6 +223,7 @@ export function createDefaultDialogueDefinition(
     displayName: options.displayName ?? "New Dialogue",
     startNodeId: startNode.nodeId,
     nodes: [startNode],
+    groups: [],
     interactionBinding: {
       npcDefinitionId: options.npcDefinitionId ?? null
     }
@@ -287,18 +297,25 @@ export function normalizeDialogueDefinition(
     .map((node) => normalizeDialogueNodeDefinition(node))
     .filter((node) => Boolean(node.nodeId));
 
-  const normalizedNodes = nodes.length > 0 ? nodes : defaultDefinition.nodes;
+  // An emptied dialogue stays empty. Substituting a starter node here would
+  // undo the author's deletion on the next load rather than on screen, which
+  // is the confusing place to find out about it.
+  const normalizedNodes = nodes;
   const startNodeId =
     definition.startNodeId &&
     normalizedNodes.some((node) => node.nodeId === definition.startNodeId)
       ? definition.startNodeId
-      : normalizedNodes[0]!.nodeId;
+      : (normalizedNodes[0]?.nodeId ?? null);
 
   return {
     definitionId: definition.definitionId ?? defaultDefinition.definitionId,
     displayName: definition.displayName ?? defaultDefinition.displayName,
     startNodeId,
     nodes: normalizedNodes,
+    groups: normalizeNodeGroups(
+      definition.groups,
+      new Set(normalizedNodes.map((node) => node.nodeId))
+    ),
     interactionBinding: {
       npcDefinitionId: definition.interactionBinding?.npcDefinitionId ?? null
     }

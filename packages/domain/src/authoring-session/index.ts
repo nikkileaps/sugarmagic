@@ -19,6 +19,7 @@ import {
   normalizeMusicBindings,
   normalizeGameProject
 } from "../game-project";
+import { normalizeNodeGroups } from "../graph-layout";
 import type { CreditsDefinition } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
 import type { PlacedAssetInstance, RegionDocument } from "../region-authoring";
@@ -64,6 +65,7 @@ import type {
   CreateShaderGraphCommand,
   RenameShaderGraphCommand,
   DeleteShaderGraphCommand,
+  SetShaderGraphNodeGroupsCommand,
   UpdateShaderNodeCommand,
   RemoveShaderNodeCommand,
   AddShaderEdgeCommand,
@@ -833,6 +835,22 @@ function applyDeleteShaderGraphCommand(
   };
 }
 
+function applySetShaderGraphNodeGroupsCommand(
+  session: AuthoringSession,
+  command: SetShaderGraphNodeGroupsCommand
+): AuthoringSession {
+  return applyShaderGraphMutation(
+    session,
+    command.payload.shaderDefinitionId,
+    (definition) => ({
+      ...definition,
+      groups: command.payload.groups,
+      revision: definition.revision + 1
+    }),
+    command
+  );
+}
+
 function applyUpdateShaderNodeCommand(
   session: AuthoringSession,
   command: UpdateShaderNodeCommand
@@ -877,6 +895,14 @@ function applyRemoveShaderNodeCommand(
         (edge) =>
           edge.sourceNodeId !== command.payload.nodeId &&
           edge.targetNodeId !== command.payload.nodeId
+      ),
+      groups: normalizeNodeGroups(
+        definition.groups,
+        new Set(
+          definition.nodes
+            .filter((node) => node.nodeId !== command.payload.nodeId)
+            .map((node) => node.nodeId)
+        )
       ),
       revision: definition.revision + 1
     }),
@@ -2213,6 +2239,10 @@ export function applyCommand(
 
   if (command.kind === "DeleteShaderGraph") {
     return applyDeleteShaderGraphCommand(session, command);
+  }
+
+  if (command.kind === "SetShaderGraphNodeGroups") {
+    return applySetShaderGraphNodeGroupsCommand(session, command);
   }
 
   if (command.kind === "UpdateShaderNode") {

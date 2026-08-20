@@ -17,6 +17,7 @@ import type {
   ShaderParameterOverride,
   ShaderSlotKind
 } from "../shader-graph";
+import type { NodeGroup } from "../graph-layout";
 import type { DialogueDefinition } from "../dialogue-definition";
 import type { ItemDefinition } from "../item-definition";
 import type { NPCDefinition } from "../npc-definition";
@@ -407,6 +408,19 @@ export type DeleteShaderGraphCommand = SemanticCommandBase<
   "DeleteShaderGraph",
   {
     shaderDefinitionId: string;
+  }
+>;
+
+/**
+ * Replaces the whole list of node groups on a shader graph. Groups are layout,
+ * so creating, renaming, moving and deleting one are all the same write; a
+ * command per operation would carry no extra meaning.
+ */
+export type SetShaderGraphNodeGroupsCommand = SemanticCommandBase<
+  "SetShaderGraphNodeGroups",
+  {
+    shaderDefinitionId: string;
+    groups: NodeGroup[];
   }
 >;
 
@@ -1097,6 +1111,7 @@ export type SemanticCommand =
   | CreateShaderGraphCommand
   | RenameShaderGraphCommand
   | DeleteShaderGraphCommand
+  | SetShaderGraphNodeGroupsCommand
   | UpdateShaderNodeCommand
   | RemoveShaderNodeCommand
   | AddShaderEdgeCommand

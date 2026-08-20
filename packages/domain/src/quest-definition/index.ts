@@ -1,4 +1,5 @@
 import { createUuid } from "../shared/identity";
+import { normalizeNodeGroups, type NodeGroup } from "../graph-layout/index";
 
 // Plan 074 §074.1' -- canonical location; runtime-core re-exports from here.
 export type TimeOfDayBand =
@@ -106,6 +107,13 @@ export interface QuestStageDefinition {
   nextStageId: string | null;
   nodeDefinitions: QuestNodeDefinition[];
   entryNodeIds: string[];
+  /**
+   * Labelled boxes drawn around nodes. Layout only, and optional: a document
+   * saved before groups existed has no value here, and there is no migration
+   * step to add one. The normalizer fills it with an empty list on load, so
+   * anything that has been through the load path always has it.
+   */
+  groups?: NodeGroup[];
   /**
    * The time of day this stage takes place at. Set when the stage becomes
    * active. `null` means the stage leaves the clock alone.
@@ -219,7 +227,13 @@ export function createDefaultQuestStageDefinition(
     displayName: options.displayName ?? "Start",
     nextStageId: null,
     nodeDefinitions,
-    entryNodeIds: entryNodeIds.length > 0 ? entryNodeIds : [nodeDefinitions[0]!.nodeId],
+    groups: [],
+    entryNodeIds:
+      entryNodeIds.length > 0
+        ? entryNodeIds
+        : nodeDefinitions[0]
+          ? [nodeDefinitions[0].nodeId]
+          : [],
     timeOfDay: options.timeOfDay ?? null
   };
 }
@@ -327,7 +341,10 @@ export function normalizeQuestStageDefinition(
   const nodeDefinitions = (stage.nodeDefinitions ?? []).map((node) =>
     normalizeQuestNodeDefinition(node)
   );
-  const normalizedNodes = nodeDefinitions.length > 0 ? nodeDefinitions : defaultStage.nodeDefinitions;
+  // An emptied stage stays empty. Substituting a starter node here would undo
+  // the author's deletion on the next load rather than on screen, which is the
+  // confusing place to find out about it.
+  const normalizedNodes = nodeDefinitions;
   const validNodeIds = new Set(normalizedNodes.map((node) => node.nodeId));
   const entryNodeIds = (stage.entryNodeIds ?? [])
     .filter((nodeId): nodeId is string => validNodeIds.has(nodeId));
@@ -338,6 +355,9 @@ export function normalizeQuestStageDefinition(
     nextStageId: stage.nextStageId ?? null,
     timeOfDay: stage.timeOfDay ?? null,
     nodeDefinitions: normalizedNodes,
+    // Membership is filtered against the nodes that survived, so a group never
+    // points at a node that has been deleted.
+    groups: normalizeNodeGroups(stage.groups, validNodeIds),
     entryNodeIds:
       entryNodeIds.length > 0
         ? entryNodeIds

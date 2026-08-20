@@ -433,3 +433,43 @@ export {
   WeightWorkbench,
   type WeightWorkbenchProps
 } from "./weight-workbench/WeightWorkbench";
+export { DialogueNodeCard } from "./DialogueNodeCard";
+export {
+  addGroup,
+  frameAround,
+  groupOfNode,
+  membershipChanged,
+  placeNodeInGroup,
+  resolveMembership,
+  shiftGroupMembers,
+  toAbsolutePosition,
+  toEditorGroups
+} from "./node-group-layout";
+export {
+  DIALOGUE_NODE_KIND,
+  applyDialogueNodeMoves,
+  canDeleteDialogueNodes,
+  choiceColor,
+  choicePortName,
+  connectDialogueNodes,
+  deleteDialogueNodes,
+  dialogueEdgeId,
+  dialogueToEditorEdges,
+  dialogueToEditorNodes,
+  disconnectDialogueEdges,
+  parseDialogueEdgeId,
+  type DialogueNodePayload
+} from "./dialogue-graph";
+export {
+  QUEST_NODE_KIND,
+  applyNodeMoves,
+  connectNodes,
+  deleteNodes,
+  disconnectEdges,
+  failEdgeId,
+  findNode,
+  parseEdgeId,
+  prerequisiteEdgeId,
+  questStageToEditorEdges,
+  questStageToEditorNodes
+} from "./quest-graph";

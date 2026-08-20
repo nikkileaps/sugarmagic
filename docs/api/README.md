@@ -23,6 +23,7 @@ They are architecture-facing developer API documents that explain how the system
 ## Documents
 
 - [Overview](/Users/nikki/projects/sugarmagic/docs/api/overview.md)
+- [Domain Model](/Users/nikki/projects/sugarmagic/docs/api/domain-model.md) — how the core entities fit together (ER diagram + prose): project/library/region/scene, gameplay definitions, quest runtime, the two world-state stores, saves
 - [System and Package API](/Users/nikki/projects/sugarmagic/docs/api/system-and-package-api.md)
 - [Domain, Runtime, and Lifecycle API](/Users/nikki/projects/sugarmagic/docs/api/domain-runtime-and-lifecycle-api.md)
 - [SugarDeploy Game Deployment](/Users/nikki/projects/sugarmagic/docs/api/sugardeploy-game-deployment.md) — onboarding a new game (Provision / Release / Deploy lifecycle, developer + player auth models, where the moving pieces live)

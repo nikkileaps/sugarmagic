@@ -21,8 +21,8 @@ import {
   UnstyledButton
 } from "@mantine/core";
 import type {
+  NodeGroup,
   SemanticCommand,
-  ShaderDataType,
   ShaderGraphDocument,
   ShaderNodeDefinition,
   ShaderNodeInstance,
@@ -33,11 +33,44 @@ import type {
 } from "@sugarmagic/domain";
 import {
   createDefaultShaderGraphDocument,
+  createNodeGroup,
   duplicateShaderGraphDocument,
   getShaderNodeDefinition,
   listShaderNodeDefinitions
 } from "@sugarmagic/domain";
-import { BuildSubNav, GraphCanvas, Inspector, PanelSection, type GraphCanvasEdge, type GraphCanvasNode } from "@sugarmagic/ui";
+import {
+  AddNodeMenu,
+  BuildSubNav,
+  Inspector,
+  PanelSection,
+  WarnToast
+} from "@sugarmagic/ui";
+import {
+  NodeEditor,
+  type GraphEditorConnection,
+  type GraphEditorHandle,
+  type GraphEditorNodeMove
+} from "@sugarmagic/ui/node-editor";
+import {
+  SHADER_NODE_KIND,
+  applyShaderNodeMoves,
+  checkShaderConnection,
+  shaderToEditorEdges,
+  shaderToEditorNodes
+} from "./shader-graph-mapping";
+import { ShaderNodeCard } from "./ShaderNodeCard";
+import {
+  addGroup,
+  frameAround,
+  membershipChanged,
+  placeNodeInGroup,
+  resolveMembership,
+  shiftGroupMembers,
+  toAbsolutePosition,
+  toEditorGroups
+} from "../design/node-group-layout";
+
+const SHADER_NODE_RENDERERS = { [SHADER_NODE_KIND]: ShaderNodeCard };
 import type { RenderWorkspaceKind } from "@sugarmagic/shell";
 import type { WorkspaceNavigationTarget } from "../workspace-navigation";
 
@@ -50,7 +83,9 @@ function shouldDebugRenderWorkspace(): boolean {
   }
 
   try {
-    return window.localStorage.getItem(RENDER_WORKSPACE_DEBUG_STORAGE_KEY) === "true";
+    return (
+      window.localStorage.getItem(RENDER_WORKSPACE_DEBUG_STORAGE_KEY) === "true"
+    );
   } catch {
     return false;
   }
@@ -78,13 +113,18 @@ function createParameterId(): string {
   return `shader-parameter:${crypto.randomUUID()}`;
 }
 
-function createDefaultNode(definition: ShaderNodeDefinition): ShaderNodeInstance {
+function createDefaultNode(
+  definition: ShaderNodeDefinition
+): ShaderNodeInstance {
   return {
     nodeId: createNodeId(),
     nodeType: definition.nodeType,
     position: { x: 96, y: 96 },
     settings: Object.fromEntries(
-      definition.settings.map((setting) => [setting.settingId, setting.defaultValue])
+      definition.settings.map((setting) => [
+        setting.settingId,
+        setting.defaultValue
+      ])
     )
   };
 }
@@ -96,86 +136,6 @@ function createDefaultParameter(): ShaderParameter {
     dataType: "float",
     defaultValue: 0
   };
-}
-
-function portColor(dataType: ShaderDataType): string {
-  switch (dataType) {
-    case "float":
-      return "#f9e2af";
-    case "vec2":
-      return "#89dceb";
-    case "vec3":
-    case "color":
-      return "#a6e3a1";
-    case "vec4":
-      return "#cba6f7";
-    case "texture2d":
-      return "#f38ba8";
-    case "bool":
-      return "#fab387";
-    default:
-      return "#94a3b8";
-  }
-}
-
-function toGraphNodes(definition: ShaderGraphDocument): GraphCanvasNode[] {
-  return definition.nodes.map((node) => {
-    const nodeDefinition = getShaderNodeDefinition(node.nodeType);
-    return {
-      id: node.nodeId,
-      position: node.position,
-      outputs:
-        nodeDefinition?.outputPorts.map((port, index, ports) => ({
-          name: port.portId,
-          color: portColor(port.dataType),
-          hoverColor: portColor(port.dataType),
-          yPercent: ports.length === 1 ? 0.5 : (index + 1) / (ports.length + 1)
-        })) ?? []
-    };
-  });
-}
-
-function toGraphEdges(definition: ShaderGraphDocument): GraphCanvasEdge[] {
-  return definition.edges.map((edge) => ({
-    fromId: edge.sourceNodeId,
-    toId: edge.targetNodeId,
-    fromPort: edge.sourcePortId,
-    color: "#89b4fa"
-  }));
-}
-
-function compatibleInputPort(
-  shader: ShaderGraphDocument,
-  sourceNodeId: string,
-  targetNodeId: string,
-  sourcePortId: string
-): string | null {
-  const targetNode = shader.nodes.find((node) => node.nodeId === targetNodeId) ?? null;
-  if (!targetNode) {
-    return null;
-  }
-
-  const targetDefinition = getShaderNodeDefinition(targetNode.nodeType);
-  const sourceNode =
-    shader.nodes.find((node) => node.nodeId === sourceNodeId) ?? null;
-  const sourceDefinition = sourceNode ? getShaderNodeDefinition(sourceNode.nodeType) : null;
-  const sourcePort =
-    sourceDefinition?.outputPorts.find((port) => port.portId === sourcePortId) ?? null;
-  const sourceType = sourcePort?.dataType ?? null;
-
-  for (const port of targetDefinition?.inputPorts ?? []) {
-    const existing = shader.edges.some(
-      (edge) => edge.targetNodeId === targetNodeId && edge.targetPortId === port.portId
-    );
-    if (existing) {
-      continue;
-    }
-    if (!sourceType || sourceType === port.dataType) {
-      return port.portId;
-    }
-  }
-
-  return targetDefinition?.inputPorts[0]?.portId ?? null;
 }
 
 export interface RenderProductModeViewProps {
@@ -219,10 +179,15 @@ export function useRenderProductModeView(
     y: number;
     shaderDefinitionId: string;
   } | null>(null);
-  const [nodePaletteOpen, setNodePaletteOpen] = useState(false);
-  const [graphContainerElement, setGraphContainerElement] =
-    useState<HTMLDivElement | null>(null);
-  const graphCanvasRef = useRef<GraphCanvas | null>(null);
+  const graphEditorRef = useRef<GraphEditorHandle | null>(null);
+  const [graphSelection, setGraphSelection] = useState<{
+    nodeIds: string[];
+    groupIds: string[];
+    edgeIds: string[];
+  }>({ nodeIds: [], groupIds: [], edgeIds: [] });
+  const [connectionRefusal, setConnectionRefusal] = useState<string | null>(
+    null
+  );
   const selectedShaderRef = useRef<ShaderGraphDocument | null>(null);
   const selectedNodeIdRef = useRef<string | null>(null);
 
@@ -230,7 +195,9 @@ export function useRenderProductModeView(
     () =>
       shaderDefinitions.find(
         (definition) => definition.shaderDefinitionId === selectedShaderId
-      ) ?? shaderDefinitions[0] ?? null,
+      ) ??
+      shaderDefinitions[0] ??
+      null,
     [selectedShaderId, shaderDefinitions]
   );
 
@@ -244,14 +211,17 @@ export function useRenderProductModeView(
 
   const selectedNode = useMemo(
     () =>
-      selectedShader?.nodes.find((node) => node.nodeId === selectedNodeId) ?? null,
+      selectedShader?.nodes.find((node) => node.nodeId === selectedNodeId) ??
+      null,
     [selectedNodeId, selectedShader]
   );
 
   const availableNodeDefinitions = useMemo(
     () =>
       listShaderNodeDefinitions().filter((definition) =>
-        selectedShader ? definition.validTargetKinds.includes(selectedShader.targetKind) : true
+        selectedShader
+          ? definition.validTargetKinds.includes(selectedShader.targetKind)
+          : true
       ),
     [selectedShader]
   );
@@ -282,7 +252,11 @@ export function useRenderProductModeView(
   }, [navigationTarget, onConsumeNavigationTarget]);
 
   useEffect(() => {
-    if (shaderDefinitions.length === 0 && selectedShaderId === null && !selectedShader) {
+    if (
+      shaderDefinitions.length === 0 &&
+      selectedShaderId === null &&
+      !selectedShader
+    ) {
       return;
     }
     debugRenderWorkspace("selected-shader-changed", {
@@ -293,213 +267,16 @@ export function useRenderProductModeView(
     });
   }, [selectedShader, selectedShaderId]);
 
-  const updateGraphCanvas = useCallback(() => {
-    const graphCanvas = graphCanvasRef.current;
-    const shader = selectedShaderRef.current;
-    if (!graphCanvas) {
-      debugRenderWorkspace("graph-populate-skipped", {
-        reason: "graph-canvas-missing"
-      });
-      return;
-    }
-
-    if (!shader) {
-      debugRenderWorkspace("graph-populate-empty", {
-        reason: "shader-missing"
-      });
-      graphCanvas.setNodes([]);
-      graphCanvas.setEdges([]);
-      return;
-    }
-
-    debugRenderWorkspace("graph-populate", {
-      shaderDefinitionId: shader.shaderDefinitionId,
-      displayName: shader.displayName,
-      targetKind: shader.targetKind,
-      nodeCount: shader.nodes.length,
-      edgeCount: shader.edges.length
-    });
-    graphCanvas.setNodes(toGraphNodes(shader));
-    graphCanvas.setEdges(toGraphEdges(shader));
-  }, []);
-
-  useEffect(() => {
-    debugRenderWorkspace("graph-setup-effect", {
-      activeRenderKind,
-      hasContainer: graphContainerElement !== null,
-      resolvedShaderId: selectedShaderRef.current?.shaderDefinitionId ?? null,
-      resolvedNodeCount: selectedShaderRef.current?.nodes.length ?? 0
-    });
-    if (!graphContainerElement || activeRenderKind !== "shaders") {
-      debugRenderWorkspace("graph-setup-skipped", {
-        reason: !graphContainerElement ? "container-missing" : "inactive-render-kind",
-        activeRenderKind
-      });
-      return;
-    }
-
-    const graphCanvas = new GraphCanvas({
-      showMinimap: true,
-      onNodeSelect: (nodeId) => setSelectedNodeId(nodeId),
-      onCanvasClick: () => setSelectedNodeId(null),
-      onNodeMove: (nodeId, position) => {
-        const shader = selectedShaderRef.current;
-        const node = shader?.nodes.find((candidate) => candidate.nodeId === nodeId);
-        if (!shader || !node) {
-          return;
-        }
-
-        onCommand({
-          kind: "UpdateShaderNode",
-          target: {
-            aggregateKind: "content-definition",
-            aggregateId: shader.shaderDefinitionId
-          },
-          subject: {
-            subjectKind: "shader-definition",
-            subjectId: shader.shaderDefinitionId
-          },
-          payload: {
-            shaderDefinitionId: shader.shaderDefinitionId,
-            node: {
-              ...node,
-              position
-            }
-          }
-        });
-      },
-      onConnect: (fromNodeId, toNodeId, fromPortId) => {
-        const shader = selectedShaderRef.current;
-        if (!shader || fromNodeId === toNodeId) {
-          return;
-        }
-
-        const sourceNode = shader.nodes.find((node) => node.nodeId === fromNodeId) ?? null;
-        const sourceDefinition = sourceNode ? getShaderNodeDefinition(sourceNode.nodeType) : null;
-        const effectiveFromPortId =
-          fromPortId ?? sourceDefinition?.outputPorts[0]?.portId ?? "value";
-        const targetPortId = compatibleInputPort(
-          shader,
-          fromNodeId,
-          toNodeId,
-          effectiveFromPortId
-        );
-        if (!targetPortId) {
-          return;
-        }
-
-        onCommand({
-          kind: "AddShaderEdge",
-          target: {
-            aggregateKind: "content-definition",
-            aggregateId: shader.shaderDefinitionId
-          },
-          subject: {
-            subjectKind: "shader-definition",
-            subjectId: shader.shaderDefinitionId
-          },
-          payload: {
-            shaderDefinitionId: shader.shaderDefinitionId,
-            edge: {
-              edgeId: createEdgeId(),
-              sourceNodeId: fromNodeId,
-              sourcePortId: effectiveFromPortId,
-              targetNodeId: toNodeId,
-              targetPortId
-            }
-          }
-        });
-      },
-      renderNode: (canvasNode, element) => {
-        const shader = selectedShaderRef.current;
-        const node = shader?.nodes.find((candidate) => candidate.nodeId === canvasNode.id);
-        const nodeDefinition = node ? getShaderNodeDefinition(node.nodeType) : null;
-        if (!node || !nodeDefinition) {
-          element.innerHTML = '<div style="padding:12px;color:#f38ba8;">Node not found</div>';
-          return;
-        }
-
-        const isSelected = node.nodeId === selectedNodeIdRef.current;
-        const borderColor = isSelected ? "#89b4fa" : "#45475a";
-        element.style.minWidth = "220px";
-        element.style.maxWidth = "280px";
-        element.style.background = "#181825";
-        element.style.border = `2px solid ${borderColor}`;
-        element.style.borderRadius = "8px";
-        element.style.overflow = "hidden";
-
-        const header = document.createElement("div");
-        header.style.cssText =
-          "padding:8px 12px;background:#1e1e2e;border-bottom:1px solid #313244;display:flex;flex-direction:column;gap:4px;";
-        const name = document.createElement("span");
-        name.textContent = nodeDefinition.displayName;
-        name.style.cssText = "font-size:12px;color:#cdd6f4;font-weight:600;";
-        header.appendChild(name);
-        const subtype = document.createElement("span");
-        subtype.textContent = node.nodeType;
-        subtype.style.cssText = "font-size:10px;color:#94a3b8;";
-        header.appendChild(subtype);
-        element.appendChild(header);
-
-        const content = document.createElement("div");
-        content.style.cssText = "padding:12px;font-size:11px;color:#a6adc8;display:flex;flex-direction:column;gap:6px;";
-        const inputs = document.createElement("div");
-        inputs.textContent = `Inputs: ${nodeDefinition.inputPorts.map((port) => port.displayName).join(", ") || "None"}`;
-        content.appendChild(inputs);
-        const outputs = document.createElement("div");
-        outputs.textContent = `Outputs: ${nodeDefinition.outputPorts.map((port) => port.displayName).join(", ") || "None"}`;
-        content.appendChild(outputs);
-        element.appendChild(content);
-      }
-    });
-
-    graphContainerElement.innerHTML = "";
-    graphContainerElement.appendChild(graphCanvas.getElement());
-    graphCanvasRef.current = graphCanvas;
-    debugRenderWorkspace("graph-canvas-mounted", {
-      containerWidth: graphContainerElement.clientWidth,
-      containerHeight: graphContainerElement.clientHeight,
-      childCount: graphContainerElement.childElementCount
-    });
-    updateGraphCanvas();
-    window.setTimeout(() => {
-      debugRenderWorkspace("graph-fit", {
-        shaderDefinitionId: selectedShaderRef.current?.shaderDefinitionId ?? null
-      });
-      graphCanvas.fitToContent();
-    }, 100);
-
-    return () => {
-      graphCanvas.dispose();
-      graphCanvasRef.current = null;
-    };
-  }, [activeRenderKind, graphContainerElement, onCommand, updateGraphCanvas]);
-
-  useEffect(() => {
-    if (!graphCanvasRef.current) {
-      return;
-    }
-
-    updateGraphCanvas();
-    window.setTimeout(() => {
-      debugRenderWorkspace("graph-refit-on-selection", {
-        shaderDefinitionId: selectedShader?.shaderDefinitionId ?? null
-      });
-      graphCanvasRef.current?.fitToContent();
-    }, 100);
-  }, [selectedShader, updateGraphCanvas]);
-
-  useEffect(() => {
-    graphCanvasRef.current?.setSelectedNode(selectedNodeId);
-  }, [selectedNodeId]);
-
   const createShader = useCallback(
     (targetKind: ShaderTargetKind) => {
       if (!gameProjectId) {
         return;
       }
       const definition = createDefaultShaderGraphDocument(gameProjectId, {
-        displayName: targetKind === "post-process" ? "Post Process Shader" : "Shader Graph",
+        displayName:
+          targetKind === "post-process"
+            ? "Post Process Shader"
+            : "Shader Graph",
         targetKind
       });
       onCommand({
@@ -607,9 +384,313 @@ export function useRenderProductModeView(
         }
       });
       setSelectedNodeId(node.nodeId);
-      setNodePaletteOpen(false);
     },
     [onCommand, selectedShader]
+  );
+
+  const editorNodes = useMemo(
+    () =>
+      selectedShader
+        ? shaderToEditorNodes(selectedShader).map((node) =>
+            placeNodeInGroup(node, selectedShader.groups)
+          )
+        : [],
+    [selectedShader]
+  );
+  const editorGroups = useMemo(
+    () => toEditorGroups(selectedShader?.groups),
+    [selectedShader]
+  );
+  const editorEdges = useMemo(
+    () => (selectedShader ? shaderToEditorEdges(selectedShader) : []),
+    [selectedShader]
+  );
+
+  const commandTarget = useCallback(
+    (shaderDefinitionId: string) => ({
+      target: {
+        aggregateKind: "content-definition" as const,
+        aggregateId: shaderDefinitionId
+      },
+      subject: {
+        subjectKind: "shader-definition" as const,
+        subjectId: shaderDefinitionId
+      }
+    }),
+    []
+  );
+
+  const setGroups = useCallback(
+    (shader: ShaderGraphDocument, groups: NodeGroup[]) => {
+      onCommand({
+        kind: "SetShaderGraphNodeGroups",
+        ...commandTarget(shader.shaderDefinitionId),
+        payload: {
+          shaderDefinitionId: shader.shaderDefinitionId,
+          groups
+        }
+      });
+    },
+    [commandTarget, onCommand]
+  );
+
+  const handleGroupRenamed = useCallback(
+    (groupId: string, label: string) => {
+      if (!selectedShader) return;
+      setGroups(
+        selectedShader,
+        (selectedShader.groups ?? []).map((group) =>
+          group.groupId === groupId ? { ...group, label } : group
+        )
+      );
+    },
+    [selectedShader, setGroups]
+  );
+
+  // Removing a frame leaves its members exactly where they are.
+  const handleGroupsDeleted = useCallback(
+    (groupIds: string[]) => {
+      if (!selectedShader) return;
+      setGroups(
+        selectedShader,
+        (selectedShader.groups ?? []).filter(
+          (group) => !groupIds.includes(group.groupId)
+        )
+      );
+    },
+    [selectedShader, setGroups]
+  );
+
+  const groupSelection = useCallback(() => {
+    if (!selectedShader) return;
+    const memberNodeIds = graphSelection.nodeIds;
+    if (memberNodeIds.length < 2) return;
+    const frame = frameAround(
+      selectedShader.nodes
+        .filter((node) => memberNodeIds.includes(node.nodeId))
+        .map((node) => node.position)
+    );
+    setGroups(
+      selectedShader,
+      addGroup(
+        selectedShader.groups,
+        createNodeGroup({
+          label: "Group",
+          memberNodeIds,
+          position: frame.position,
+          size: frame.size
+        })
+      )
+    );
+  }, [graphSelection.nodeIds, selectedShader, setGroups]);
+
+  // One drag, one pass. Shader edits are per-node commands, so this issues one
+  // UpdateShaderNode each plus at most one groups write, rather than splitting a
+  // single drag across two independent handlers.
+  const handleMoved = useCallback(
+    (moved: {
+      nodes: GraphEditorNodeMove[];
+      groups: GraphEditorNodeMove[];
+    }) => {
+      if (!selectedShader) return;
+      const existingGroups = selectedShader.groups ?? [];
+
+      // A node inside a frame reports a position relative to it; the document
+      // stores absolute positions.
+      const absolute = moved.nodes.map((move) => ({
+        id: move.id,
+        position: toAbsolutePosition(
+          move.position,
+          move.parentId,
+          selectedShader.groups
+        )
+      }));
+
+      // Where a node was dropped decides which frame it belongs to.
+      let nextGroups = existingGroups;
+      for (const move of absolute) {
+        nextGroups = resolveMembership(nextGroups, move.id, move.position);
+      }
+
+      // A frame takes its members with it, so its new position and each
+      // member's shifted position go out together.
+      const movedNodes = new Map(
+        applyShaderNodeMoves(selectedShader, absolute).map((node) => [
+          node.nodeId,
+          node
+        ])
+      );
+      for (const move of moved.groups) {
+        const group = existingGroups.find(
+          (candidate) => candidate.groupId === move.id
+        );
+        if (!group) continue;
+        const { dx, dy } = shiftGroupMembers(group, move.position);
+        nextGroups = nextGroups.map((candidate) =>
+          candidate.groupId === move.id
+            ? { ...candidate, position: { ...move.position } }
+            : candidate
+        );
+        for (const node of selectedShader.nodes) {
+          if (!group.memberNodeIds.includes(node.nodeId)) continue;
+          movedNodes.set(node.nodeId, {
+            ...node,
+            position: { x: node.position.x + dx, y: node.position.y + dy }
+          });
+        }
+      }
+
+      if (
+        moved.groups.length > 0 ||
+        membershipChanged(selectedShader.groups, nextGroups)
+      ) {
+        setGroups(selectedShader, nextGroups);
+      }
+
+      for (const node of movedNodes.values()) {
+        onCommand({
+          kind: "UpdateShaderNode",
+          ...commandTarget(selectedShader.shaderDefinitionId),
+          payload: {
+            shaderDefinitionId: selectedShader.shaderDefinitionId,
+            node
+          }
+        });
+      }
+    },
+    [commandTarget, onCommand, selectedShader, setGroups]
+  );
+
+  // Pure predicate: React Flow asks on every pointer move during a drag, so
+  // saying anything here would raise a message for ports the author only swept
+  // past. The message comes from onConnectRefused, at the drop.
+  const handleIsValidConnection = useCallback(
+    (connection: GraphEditorConnection) => {
+      if (!selectedShader) return false;
+      return checkShaderConnection(selectedShader, connection).allowed;
+    },
+    [selectedShader]
+  );
+
+  // A refusal has to say why. A connection that silently springs back reads as
+  // the editor being broken.
+  const handleConnectRefused = useCallback(
+    (connection: GraphEditorConnection) => {
+      if (!selectedShader) return;
+      const check = checkShaderConnection(selectedShader, connection);
+      if (!check.allowed && check.reason) {
+        setConnectionRefusal(check.reason);
+      }
+    },
+    [selectedShader]
+  );
+
+  const handleGraphConnect = useCallback(
+    (connection: GraphEditorConnection) => {
+      if (!selectedShader) return;
+      if (!connection.fromPort || !connection.toPort) return;
+      // A connection landed, so an earlier refusal is answered and its message
+      // should not sit on screen alongside the result.
+      setConnectionRefusal(null);
+      onCommand({
+        kind: "AddShaderEdge",
+        ...commandTarget(selectedShader.shaderDefinitionId),
+        payload: {
+          shaderDefinitionId: selectedShader.shaderDefinitionId,
+          edge: {
+            edgeId: createEdgeId(),
+            sourceNodeId: connection.fromId,
+            sourcePortId: connection.fromPort,
+            targetNodeId: connection.toId,
+            targetPortId: connection.toPort
+          }
+        }
+      });
+    },
+    [commandTarget, onCommand, selectedShader]
+  );
+
+  const handleEdgesDeleted = useCallback(
+    (edgeIds: string[]) => {
+      if (!selectedShader) return;
+      for (const edgeId of edgeIds) {
+        onCommand({
+          kind: "RemoveShaderEdge",
+          ...commandTarget(selectedShader.shaderDefinitionId),
+          payload: {
+            shaderDefinitionId: selectedShader.shaderDefinitionId,
+            edgeId
+          }
+        });
+      }
+    },
+    [commandTarget, onCommand, selectedShader]
+  );
+
+  // Removing a node leaves its connections dangling, so they go first.
+  const handleNodesDeleted = useCallback(
+    (nodeIds: string[]) => {
+      if (!selectedShader) return;
+      // No edge sweep here: RemoveShaderNode already drops every edge touching
+      // the node. Removing them first cost one undo step per edge, so a single
+      // undo brought the node back without its connections.
+      for (const nodeId of nodeIds) {
+        onCommand({
+          kind: "RemoveShaderNode",
+          ...commandTarget(selectedShader.shaderDefinitionId),
+          payload: {
+            shaderDefinitionId: selectedShader.shaderDefinitionId,
+            nodeId
+          }
+        });
+      }
+      if (selectedNodeId && nodeIds.includes(selectedNodeId)) {
+        setSelectedNodeId(null);
+      }
+    },
+    [commandTarget, onCommand, selectedNodeId, selectedShader]
+  );
+
+  const hasGraphSelection =
+    graphSelection.nodeIds.length +
+      graphSelection.groupIds.length +
+      graphSelection.edgeIds.length >
+    0;
+
+  const shaderGraphChrome = (
+    <Group gap={6} align="center">
+      <AddNodeMenu
+        items={availableNodeDefinitions.map((definition) => ({
+          id: definition.nodeType,
+          label: definition.displayName,
+          description: definition.category
+        }))}
+        disabled={!selectedShader}
+        onSelect={(nodeType) => {
+          const definition = availableNodeDefinitions.find(
+            (candidate) => candidate.nodeType === nodeType
+          );
+          if (definition) addNodeDefinition(definition);
+        }}
+      />
+      <Button
+        size="xs"
+        variant="light"
+        disabled={graphSelection.nodeIds.length < 2}
+        onClick={groupSelection}
+      >
+        Group
+      </Button>
+      <Button
+        size="xs"
+        variant="light"
+        color="red"
+        disabled={!hasGraphSelection}
+        onClick={() => graphEditorRef.current?.deleteSelection()}
+      >
+        Delete
+      </Button>
+    </Group>
   );
 
   return {
@@ -652,7 +733,9 @@ export function useRenderProductModeView(
           <ScrollArea h="calc(100vh - 220px)" type="auto">
             <Stack gap={4}>
               {shaderDefinitions.map((definition) => {
-                const isSelected = definition.shaderDefinitionId === selectedShader?.shaderDefinitionId;
+                const isSelected =
+                  definition.shaderDefinitionId ===
+                  selectedShader?.shaderDefinitionId;
                 return (
                   <UnstyledButton
                     key={definition.shaderDefinitionId}
@@ -684,15 +767,24 @@ export function useRenderProductModeView(
                         gap: 2,
                         padding: "8px 10px",
                         borderRadius: "var(--sm-radius-sm)",
-                        background: isSelected ? "var(--sm-active-bg)" : "transparent",
-                        color: isSelected ? "var(--sm-accent-blue)" : "var(--sm-color-text)",
+                        background: isSelected
+                          ? "var(--sm-active-bg)"
+                          : "transparent",
+                        color: isSelected
+                          ? "var(--sm-accent-blue)"
+                          : "var(--sm-color-text)",
                         border: isSelected
                           ? "1px solid var(--sm-accent-blue)"
                           : "1px solid transparent"
                       }
                     }}
                   >
-                    <Group justify="space-between" align="center" wrap="nowrap" w="100%">
+                    <Group
+                      justify="space-between"
+                      align="center"
+                      wrap="nowrap"
+                      w="100%"
+                    >
                       <Text size="xs" fw={isSelected ? 700 : 500}>
                         {definition.displayName}
                       </Text>
@@ -757,7 +849,10 @@ export function useRenderProductModeView(
       </>
     ),
     rightPanel: (
-      <Inspector selectionLabel={selectedShader?.displayName ?? null} selectionIcon="🎨">
+      <Inspector
+        selectionLabel={selectedShader?.displayName ?? null}
+        selectionIcon="🎨"
+      >
         {selectedShader ? (
           <ShaderInspector
             shader={selectedShader}
@@ -801,90 +896,31 @@ export function useRenderProductModeView(
           minHeight: 0
         }}
       >
-        <div
-          ref={(element) => {
-            setGraphContainerElement(element);
-            debugRenderWorkspace("graph-container-ref", {
-              attached: element !== null,
-              width: element?.clientWidth ?? 0,
-              height: element?.clientHeight ?? 0
-            });
-          }}
-          style={{
-            height: "100%",
-            minHeight: 0,
-            borderRadius: "var(--sm-radius-md)",
-            overflow: "hidden",
-            border: "1px solid var(--sm-panel-border)"
-          }}
+        <NodeEditor
+          ref={graphEditorRef}
+          nodes={editorNodes}
+          edges={editorEdges}
+          renderers={SHADER_NODE_RENDERERS}
+          primarySelectionId={selectedNodeId}
+          onPrimarySelectionChange={setSelectedNodeId}
+          groups={editorGroups}
+          onSelectionChange={setGraphSelection}
+          onMoved={handleMoved}
+          onGroupRenamed={handleGroupRenamed}
+          onGroupsDeleted={handleGroupsDeleted}
+          onConnect={handleGraphConnect}
+          isValidConnection={handleIsValidConnection}
+          onConnectRefused={handleConnectRefused}
+          onNodesDeleted={handleNodesDeleted}
+          onEdgesDeleted={handleEdgesDeleted}
+          chrome={shaderGraphChrome}
         />
-        <div
-          style={{
-            position: "absolute",
-            top: 12,
-            left: 12,
-            zIndex: 20,
-            display: "flex",
-            flexDirection: "column",
-            gap: 8
-          }}
-        >
-          <ActionIcon
-            size="lg"
-            radius="xl"
-            variant="filled"
-            color="blue"
-            onClick={() => setNodePaletteOpen((open) => !open)}
-            aria-label="Add node"
-            style={{
-              boxShadow: "var(--sm-shadow-md)"
-            }}
-          >
-            +
-          </ActionIcon>
-          {nodePaletteOpen ? (
-            <div
-              style={{
-                width: 280,
-                maxHeight: 420,
-                background: "var(--sm-color-surface1)",
-                border: "1px solid var(--sm-panel-border)",
-                borderRadius: "var(--sm-radius-md)",
-                boxShadow: "var(--sm-shadow-lg)",
-                overflow: "hidden"
-              }}
-            >
-              <div
-                style={{
-                  padding: "10px 12px",
-                  borderBottom: "1px solid var(--sm-panel-border)"
-                }}
-              >
-                <Text size="xs" fw={700} tt="uppercase" c="var(--sm-color-subtext)">
-                  Add Node
-                </Text>
-                <Text size="xs" c="var(--sm-color-overlay0)">
-                  {selectedShader ? `${selectedShader.nodes.length} nodes in graph` : "No shader selected"}
-                </Text>
-              </div>
-              <ScrollArea h={360}>
-                <Stack gap={4} p="xs">
-                  {availableNodeDefinitions.map((definition) => (
-                    <Button
-                      key={definition.nodeType}
-                      size="xs"
-                      variant="subtle"
-                      justify="flex-start"
-                      onClick={() => addNodeDefinition(definition)}
-                    >
-                      {definition.displayName}
-                    </Button>
-                  ))}
-                </Stack>
-              </ScrollArea>
-            </div>
-          ) : null}
-        </div>
+        {connectionRefusal ? (
+          <WarnToast
+            message={connectionRefusal}
+            onDismiss={() => setConnectionRefusal(null)}
+          />
+        ) : null}
       </div>
     ),
     viewportOverlay: null
@@ -898,7 +934,13 @@ function ShaderInspector(props: {
   onCommand: (command: SemanticCommand) => void;
   onDeleteSelectedNode: () => void;
 }) {
-  const { shader, selectedNode, textureDefinitions, onCommand, onDeleteSelectedNode } = props;
+  const {
+    shader,
+    selectedNode,
+    textureDefinitions,
+    onCommand,
+    onDeleteSelectedNode
+  } = props;
   const [draftName, setDraftName] = useState(shader.displayName);
 
   useEffect(() => {
@@ -1033,11 +1075,17 @@ function ShaderParameterEditor(props: {
         onChange={(event) =>
           onCommand({
             kind: "UpdateShaderParameter",
-            target: { aggregateKind: "content-definition", aggregateId: shaderId },
+            target: {
+              aggregateKind: "content-definition",
+              aggregateId: shaderId
+            },
             subject: { subjectKind: "shader-definition", subjectId: shaderId },
             payload: {
               shaderDefinitionId: shaderId,
-              parameter: { ...parameter, displayName: event.currentTarget.value }
+              parameter: {
+                ...parameter,
+                displayName: event.currentTarget.value
+              }
             }
           })
         }
@@ -1059,14 +1107,19 @@ function ShaderParameterEditor(props: {
           if (!value) return;
           onCommand({
             kind: "UpdateShaderParameter",
-            target: { aggregateKind: "content-definition", aggregateId: shaderId },
+            target: {
+              aggregateKind: "content-definition",
+              aggregateId: shaderId
+            },
             subject: { subjectKind: "shader-definition", subjectId: shaderId },
             payload: {
               shaderDefinitionId: shaderId,
               parameter: {
                 ...parameter,
                 dataType: value as ShaderParameter["dataType"],
-                defaultValue: defaultValueForDataType(value as ShaderParameter["dataType"])
+                defaultValue: defaultValueForDataType(
+                  value as ShaderParameter["dataType"]
+                )
               }
             }
           });
@@ -1085,16 +1138,24 @@ function ShaderParameterEditor(props: {
             }))
           ]}
           value={
-            typeof parameter.defaultValue === "string" && parameter.defaultValue.length > 0
+            typeof parameter.defaultValue === "string" &&
+            parameter.defaultValue.length > 0
               ? parameter.defaultValue
               : "__none__"
           }
           onChange={(value) => {
-            const nextValue = value === null || value === "__none__" ? null : value;
+            const nextValue =
+              value === null || value === "__none__" ? null : value;
             onCommand({
               kind: "UpdateShaderParameter",
-              target: { aggregateKind: "content-definition", aggregateId: shaderId },
-              subject: { subjectKind: "shader-definition", subjectId: shaderId },
+              target: {
+                aggregateKind: "content-definition",
+                aggregateId: shaderId
+              },
+              subject: {
+                subjectKind: "shader-definition",
+                subjectId: shaderId
+              },
               payload: {
                 shaderDefinitionId: shaderId,
                 parameter: { ...parameter, defaultValue: nextValue }
@@ -1109,14 +1170,23 @@ function ShaderParameterEditor(props: {
           size="xs"
           value={formatParameterValue(parameter.defaultValue)}
           onChange={(event) => {
-            const nextValue = parseParameterValue(parameter.dataType, event.currentTarget.value);
+            const nextValue = parseParameterValue(
+              parameter.dataType,
+              event.currentTarget.value
+            );
             if (nextValue === null) {
               return;
             }
             onCommand({
               kind: "UpdateShaderParameter",
-              target: { aggregateKind: "content-definition", aggregateId: shaderId },
-              subject: { subjectKind: "shader-definition", subjectId: shaderId },
+              target: {
+                aggregateKind: "content-definition",
+                aggregateId: shaderId
+              },
+              subject: {
+                subjectKind: "shader-definition",
+                subjectId: shaderId
+              },
               payload: {
                 shaderDefinitionId: shaderId,
                 parameter: { ...parameter, defaultValue: nextValue }
@@ -1132,8 +1202,14 @@ function ShaderParameterEditor(props: {
           onChange={(nextValue) =>
             onCommand({
               kind: "UpdateShaderParameter",
-              target: { aggregateKind: "content-definition", aggregateId: shaderId },
-              subject: { subjectKind: "shader-definition", subjectId: shaderId },
+              target: {
+                aggregateKind: "content-definition",
+                aggregateId: shaderId
+              },
+              subject: {
+                subjectKind: "shader-definition",
+                subjectId: shaderId
+              },
               payload: {
                 shaderDefinitionId: shaderId,
                 parameter: { ...parameter, defaultValue: nextValue }
@@ -1149,7 +1225,10 @@ function ShaderParameterEditor(props: {
         onClick={() =>
           onCommand({
             kind: "RemoveShaderParameter",
-            target: { aggregateKind: "content-definition", aggregateId: shaderId },
+            target: {
+              aggregateKind: "content-definition",
+              aggregateId: shaderId
+            },
             subject: { subjectKind: "shader-definition", subjectId: shaderId },
             payload: {
               shaderDefinitionId: shaderId,
@@ -1185,7 +1264,7 @@ function ShaderNodeEditor(props: {
       <Text size="xs" fw={600}>
         {nodeDefinition.displayName}
       </Text>
-      {nodeDefinition.settings.map((setting) => (
+      {nodeDefinition.settings.map((setting) =>
         setting.dataType === "color" ? (
           <ColorSettingInput
             key={setting.settingId}
@@ -1194,8 +1273,14 @@ function ShaderNodeEditor(props: {
             onChange={(nextValue) =>
               onCommand({
                 kind: "UpdateShaderNode",
-                target: { aggregateKind: "content-definition", aggregateId: shaderId },
-                subject: { subjectKind: "shader-definition", subjectId: shaderId },
+                target: {
+                  aggregateKind: "content-definition",
+                  aggregateId: shaderId
+                },
+                subject: {
+                  subjectKind: "shader-definition",
+                  subjectId: shaderId
+                },
                 payload: {
                   shaderDefinitionId: shaderId,
                   node: {
@@ -1214,12 +1299,20 @@ function ShaderNodeEditor(props: {
             key={setting.settingId}
             label={setting.displayName}
             size="xs"
-            value={String(node.settings[setting.settingId] ?? setting.defaultValue)}
+            value={String(
+              node.settings[setting.settingId] ?? setting.defaultValue
+            )}
             onChange={(event) =>
               onCommand({
                 kind: "UpdateShaderNode",
-                target: { aggregateKind: "content-definition", aggregateId: shaderId },
-                subject: { subjectKind: "shader-definition", subjectId: shaderId },
+                target: {
+                  aggregateKind: "content-definition",
+                  aggregateId: shaderId
+                },
+                subject: {
+                  subjectKind: "shader-definition",
+                  subjectId: shaderId
+                },
                 payload: {
                   shaderDefinitionId: shaderId,
                   node: {
@@ -1237,7 +1330,7 @@ function ShaderNodeEditor(props: {
             }
           />
         )
-      ))}
+      )}
       <Button size="xs" color="red" variant="subtle" onClick={onDelete}>
         Delete Node
       </Button>
@@ -1262,7 +1355,9 @@ function ColorSettingInput(props: {
           aria-label={label}
           type="color"
           value={rgbArrayToHex(normalizedValue)}
-          onChange={(event) => onChange(hexToRgbArray(event.currentTarget.value))}
+          onChange={(event) =>
+            onChange(hexToRgbArray(event.currentTarget.value))
+          }
           style={{
             width: 36,
             height: 28,
@@ -1277,8 +1372,15 @@ function ColorSettingInput(props: {
           size="xs"
           value={formatParameterValue(normalizedValue)}
           onChange={(event) => {
-            const nextValue = parseParameterValue("color", event.currentTarget.value);
-            if (nextValue && Array.isArray(nextValue) && nextValue.length === 3) {
+            const nextValue = parseParameterValue(
+              "color",
+              event.currentTarget.value
+            );
+            if (
+              nextValue &&
+              Array.isArray(nextValue) &&
+              nextValue.length === 3
+            ) {
               onChange(nextValue as [number, number, number]);
             }
           }}
@@ -1288,7 +1390,10 @@ function ColorSettingInput(props: {
   );
 }
 
-function parseSettingValue(dataType: string, raw: string): ShaderParameterValue | string | boolean {
+function parseSettingValue(
+  dataType: string,
+  raw: string
+): ShaderParameterValue | string | boolean {
   if (dataType === "bool") {
     return raw === "true";
   }
@@ -1298,7 +1403,9 @@ function parseSettingValue(dataType: string, raw: string): ShaderParameterValue 
   return raw;
 }
 
-function defaultValueForDataType(dataType: ShaderParameter["dataType"]): ShaderParameterValue {
+function defaultValueForDataType(
+  dataType: ShaderParameter["dataType"]
+): ShaderParameterValue {
   switch (dataType) {
     case "float":
       return 0;
@@ -1343,7 +1450,11 @@ function clampUnit(value: number): number {
 
 function rgbArrayToHex(value: [number, number, number]): string {
   return `#${value
-    .map((channel) => Math.round(clampUnit(channel) * 255).toString(16).padStart(2, "0"))
+    .map((channel) =>
+      Math.round(clampUnit(channel) * 255)
+        .toString(16)
+        .padStart(2, "0")
+    )
     .join("")}`;
 }
 
@@ -1369,7 +1480,12 @@ function parseParameterValue(
   if (dataType === "float") {
     return Number(raw || 0);
   }
-  if (dataType === "vec2" || dataType === "vec3" || dataType === "vec4" || dataType === "color") {
+  if (
+    dataType === "vec2" ||
+    dataType === "vec3" ||
+    dataType === "vec4" ||
+    dataType === "color"
+  ) {
     const values = raw
       .split(",")
       .map((entry) => Number(entry.trim()))

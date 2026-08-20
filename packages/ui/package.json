@@ -5,11 +5,14 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./node-editor": "./src/graphs/NodeEditor.tsx",
+    "./node-editor.css": "./src/graphs/node-editor.css",
     "./shell-variables.css": "./src/theme/shell-variables.css"
   },
   "dependencies": {
     "@mantine/core": "^9.0.0",
-    "@mantine/hooks": "^9.0.0"
+    "@mantine/hooks": "^9.0.0",
+    "@xyflow/react": "^12.11.3"
   },
   "peerDependencies": {
     "react": ">=18",

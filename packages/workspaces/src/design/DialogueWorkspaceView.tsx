@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ActionIcon,
   Badge,
@@ -29,9 +29,37 @@ import {
   BUILT_IN_DIALOGUE_SPEAKERS,
   EXCERPT_SPEAKER,
   createDefaultDialogueDefinition,
-  createDialogueNodeId
+  createDialogueNodeId,
+  createNodeGroup
 } from "@sugarmagic/domain";
-import { Inspector, GraphCanvas, type GraphCanvasNode, type GraphCanvasEdge } from "@sugarmagic/ui";
+import { AddNodeMenu, Inspector, WarnToast } from "@sugarmagic/ui";
+import {
+  NodeEditor,
+  type GraphEditorConnection,
+  type GraphEditorHandle,
+  type GraphEditorNodeMove
+} from "@sugarmagic/ui/node-editor";
+import {
+  DIALOGUE_NODE_KIND,
+  applyDialogueNodeMoves,
+  canDeleteDialogueNodes,
+  connectDialogueNodes,
+  deleteDialogueNodes,
+  dialogueToEditorEdges,
+  dialogueToEditorNodes,
+  disconnectDialogueEdges
+} from "./dialogue-graph";
+import { DialogueNodeCard } from "./DialogueNodeCard";
+import {
+  addGroup,
+  frameAround,
+  membershipChanged,
+  placeNodeInGroup,
+  resolveMembership,
+  shiftGroupMembers,
+  toAbsolutePosition,
+  toEditorGroups
+} from "./node-group-layout";
 import type { WorkspaceViewContribution } from "../workspace-view";
 
 const NODE_SPACING_Y = 150;
@@ -51,11 +79,6 @@ export interface DialogueWorkspaceViewProps {
   }) => ReactNode;
 }
 
-function getChoiceColor(index: number): string {
-  const colors = ["#89b4fa", "#a6e3a1", "#f9e2af", "#f38ba8", "#cba6f7"];
-  return colors[index % colors.length] ?? "#89b4fa";
-}
-
 function createNextNodePosition(dialogue: DialogueDefinition) {
   const maxY = dialogue.nodes.reduce(
     (current, node) => Math.max(current, node.graphPosition.y),
@@ -67,44 +90,7 @@ function createNextNodePosition(dialogue: DialogueDefinition) {
   };
 }
 
-function toGraphNodes(dialogue: DialogueDefinition): GraphCanvasNode[] {
-  return dialogue.nodes.map((node) => ({
-    id: node.nodeId,
-    position: { ...node.graphPosition },
-    outputs:
-      node.next.length > 1
-        ? node.next.map((_, index) => ({
-            name: `choice-${index}`,
-            color: getChoiceColor(index),
-            yPercent: node.next.length === 1 ? 0.5 : (index + 1) / (node.next.length + 1)
-          }))
-        : undefined
-  }));
-}
-
-function toGraphEdges(dialogue: DialogueDefinition): GraphCanvasEdge[] {
-  const edges: GraphCanvasEdge[] = [];
-
-  for (const node of dialogue.nodes) {
-    if (node.next.length === 0) continue;
-    const isChoice = node.next.length > 1;
-    node.next.forEach((edge, index) => {
-      edges.push({
-        fromId: node.nodeId,
-        toId: edge.targetNodeId,
-        fromPort: isChoice ? `choice-${index}` : undefined,
-        color: edge.condition
-          ? "#f9e2af"
-          : isChoice
-            ? getChoiceColor(index)
-            : "#45475a",
-        dashed: Boolean(edge.condition)
-      });
-    });
-  }
-
-  return edges;
-}
+const DIALOGUE_NODE_RENDERERS = { [DIALOGUE_NODE_KIND]: DialogueNodeCard };
 
 function speakerOptions(npcs: NPCDefinition[]) {
   return [
@@ -140,12 +126,16 @@ function PlaytestPanel({
   onAdvance,
   onClose
 }: PlaytestPanelProps) {
-  const node = dialogue.nodes.find((candidate) => candidate.nodeId === currentNodeId);
+  const node = dialogue.nodes.find(
+    (candidate) => candidate.nodeId === currentNodeId
+  );
   if (!node) return null;
 
   const hasChoices = node.next.length > 1;
   const hasNext = node.next.length === 1 && Boolean(node.next[0]?.targetNodeId);
-  const isEnd = node.next.length === 0 || (node.next.length === 1 && !node.next[0]?.targetNodeId);
+  const isEnd =
+    node.next.length === 0 ||
+    (node.next.length === 1 && !node.next[0]?.targetNodeId);
 
   return (
     <Paper
@@ -219,7 +209,10 @@ function PlaytestPanel({
               variant="light"
               color="green"
               fullWidth
-              onClick={() => onAdvance(dialogue.startNodeId)}
+              disabled={!dialogue.startNodeId}
+              onClick={() =>
+                dialogue.startNodeId && onAdvance(dialogue.startNodeId)
+              }
             >
               Restart
             </Button>
@@ -264,7 +257,12 @@ function DialogueConditionEditor({
         onChange({ type: "questCompleted", questId: "" });
         break;
       case "questStage":
-        onChange({ type: "questStage", questId: "", stageId: "", state: "active" });
+        onChange({
+          type: "questStage",
+          questId: "",
+          stageId: "",
+          state: "active"
+        });
         break;
       case "not":
         onChange({ type: "not", condition: { type: "flag", key: "" } });
@@ -276,13 +274,20 @@ function DialogueConditionEditor({
 
   if (condition.type === "not") {
     return (
-      <Paper p="xs" style={{ background: "#f38ba822", borderLeft: "2px solid #f38ba8" }}>
+      <Paper
+        p="xs"
+        style={{ background: "#f38ba822", borderLeft: "2px solid #f38ba8" }}
+      >
         <Stack gap="xs">
           <Group justify="space-between">
             <Text size="xs" c="#f38ba8" fw={600}>
               NOT (negate)
             </Text>
-            <Button size="xs" variant="subtle" onClick={() => onChange(condition.condition)}>
+            <Button
+              size="xs"
+              variant="subtle"
+              onClick={() => onChange(condition.condition)}
+            >
               Remove NOT
             </Button>
           </Group>
@@ -298,7 +303,10 @@ function DialogueConditionEditor({
   }
 
   return (
-    <Paper p="xs" style={{ background: "#f9e2af11", borderLeft: "2px solid #f9e2af" }}>
+    <Paper
+      p="xs"
+      style={{ background: "#f9e2af11", borderLeft: "2px solid #f9e2af" }}
+    >
       <Stack gap="xs">
         <Group justify="space-between">
           <Text size="xs" c="#f9e2af" fw={600}>
@@ -366,7 +374,9 @@ function DialogueConditionEditor({
                 label: item.displayName
               }))}
               value={condition.itemId}
-              onChange={(value) => onChange({ ...condition, itemId: value ?? "" })}
+              onChange={(value) =>
+                onChange({ ...condition, itemId: value ?? "" })
+              }
             />
             <TextInput
               size="xs"
@@ -393,7 +403,9 @@ function DialogueConditionEditor({
               label: spell.displayName
             }))}
             value={condition.spellId}
-            onChange={(value) => onChange({ ...condition, spellId: value ?? "" })}
+            onChange={(value) =>
+              onChange({ ...condition, spellId: value ?? "" })
+            }
           />
         )}
 
@@ -406,7 +418,9 @@ function DialogueConditionEditor({
               label: spell.displayName
             }))}
             value={condition.spellId}
-            onChange={(value) => onChange({ ...condition, spellId: value ?? "" })}
+            onChange={(value) =>
+              onChange({ ...condition, spellId: value ?? "" })
+            }
           />
         )}
 
@@ -497,12 +511,13 @@ export function useDialogueWorkspaceView(
   } | null>(null);
   const [isPlaytesting, setIsPlaytesting] = useState(false);
   const [playtestNodeId, setPlaytestNodeId] = useState<string | null>(null);
-  const [graphContainerElement, setGraphContainerElement] =
-    useState<HTMLDivElement | null>(null);
-  const graphCanvasRef = useRef<GraphCanvas | null>(null);
-  const selectedDialogueRef = useRef<DialogueDefinition | null>(null);
-  const selectedNodeIdRef = useRef<string | null>(null);
-  const playtestNodeIdRef = useRef<string | null>(null);
+  const graphEditorRef = useRef<GraphEditorHandle | null>(null);
+  const [graphSelection, setGraphSelection] = useState<{
+    nodeIds: string[];
+    groupIds: string[];
+    edgeIds: string[];
+  }>({ nodeIds: [], groupIds: [], edgeIds: [] });
+  const [deleteRefusal, setDeleteRefusal] = useState<string | null>(null);
 
   const effectiveSelectedDialogueId = useMemo(() => {
     if (dialogueDefinitions.length === 0) return null;
@@ -527,7 +542,8 @@ export function useDialogueWorkspaceView(
 
   const selectedNode = useMemo(
     () =>
-      selectedDialogue?.nodes.find((node) => node.nodeId === selectedNodeId) ?? null,
+      selectedDialogue?.nodes.find((node) => node.nodeId === selectedNodeId) ??
+      null,
     [selectedDialogue, selectedNodeId]
   );
 
@@ -548,23 +564,26 @@ export function useDialogueWorkspaceView(
     [onCommand]
   );
 
-  const updateDialogue = useCallback((nextDefinition: DialogueDefinition) => {
-    if (!gameProjectId) return;
-    dispatch({
-      kind: "UpdateDialogueDefinition",
-      target: {
-        aggregateKind: "game-project",
-        aggregateId: gameProjectId
-      },
-      subject: {
-        subjectKind: "dialogue-definition",
-        subjectId: nextDefinition.definitionId
-      },
-      payload: {
-        definition: nextDefinition
-      }
-    });
-  }, [dispatch, gameProjectId]);
+  const updateDialogue = useCallback(
+    (nextDefinition: DialogueDefinition) => {
+      if (!gameProjectId) return;
+      dispatch({
+        kind: "UpdateDialogueDefinition",
+        target: {
+          aggregateKind: "game-project",
+          aggregateId: gameProjectId
+        },
+        subject: {
+          subjectKind: "dialogue-definition",
+          subjectId: nextDefinition.definitionId
+        },
+        payload: {
+          definition: nextDefinition
+        }
+      });
+    },
+    [dispatch, gameProjectId]
+  );
 
   function createDialogue() {
     if (!gameProjectId) return;
@@ -615,15 +634,18 @@ export function useDialogueWorkspaceView(
     }
   }
 
-  const updateNode = useCallback((nextNode: DialogueNodeDefinition) => {
-    if (!selectedDialogue) return;
-    updateDialogue({
-      ...selectedDialogue,
-      nodes: selectedDialogue.nodes.map((node) =>
-        node.nodeId === nextNode.nodeId ? nextNode : node
-      )
-    });
-  }, [selectedDialogue, updateDialogue]);
+  const updateNode = useCallback(
+    (nextNode: DialogueNodeDefinition) => {
+      if (!selectedDialogue) return;
+      updateDialogue({
+        ...selectedDialogue,
+        nodes: selectedDialogue.nodes.map((node) =>
+          node.nodeId === nextNode.nodeId ? nextNode : node
+        )
+      });
+    },
+    [selectedDialogue, updateDialogue]
+  );
 
   function addNode() {
     if (!selectedDialogue) return;
@@ -643,28 +665,18 @@ export function useDialogueWorkspaceView(
     setSelectedNodeId(newNodeId);
   }
 
+  // The inspector's delete goes through the same rule and the same removal as
+  // the canvas. Two copies of "may this node go?" gave different answers
+  // depending on which button the author pressed.
   function deleteNode(nodeId: string) {
     if (!selectedDialogue) return;
-    if (selectedDialogue.nodes.length <= 1) {
-      window.alert("Cannot delete the last node.");
-      return;
-    }
-    if (nodeId === selectedDialogue.startNodeId) {
-      window.alert("Cannot delete the start node.");
+    const refusal = canDeleteDialogueNodes(selectedDialogue, [nodeId]);
+    if (!refusal.allowed) {
+      setDeleteRefusal(refusal.reason ?? "That node cannot be deleted.");
       return;
     }
 
-    const nextNodes = selectedDialogue.nodes
-      .filter((node) => node.nodeId !== nodeId)
-      .map((node) => ({
-        ...node,
-        next: node.next.filter((edge) => edge.targetNodeId !== nodeId)
-      }));
-
-    updateDialogue({
-      ...selectedDialogue,
-      nodes: nextNodes
-    });
+    updateDialogue(deleteDialogueNodes(selectedDialogue, [nodeId]));
     if (selectedNodeId === nodeId) {
       setSelectedNodeId(null);
     }
@@ -683,254 +695,242 @@ export function useDialogueWorkspaceView(
     updateNode({ ...node, next });
   }
 
-  const resolveSpeakerName = useCallback((speakerId: string | undefined): string => {
-    if (!speakerId) return "";
-    const builtIn = BUILT_IN_DIALOGUE_SPEAKERS.find(
-      (speaker) => speaker.speakerId === speakerId
-    );
-    if (builtIn) return builtIn.displayName;
-    return (
-      npcDefinitions.find((npc) => npc.definitionId === speakerId)?.displayName ??
-      speakerId
-    );
-  }, [npcDefinitions]);
+  const resolveSpeakerName = useCallback(
+    (speakerId: string | undefined): string => {
+      if (!speakerId) return "";
+      const builtIn = BUILT_IN_DIALOGUE_SPEAKERS.find(
+        (speaker) => speaker.speakerId === speakerId
+      );
+      if (builtIn) return builtIn.displayName;
+      return (
+        npcDefinitions.find((npc) => npc.definitionId === speakerId)
+          ?.displayName ?? speakerId
+      );
+    },
+    [npcDefinitions]
+  );
 
-  const updateGraphCanvas = useCallback(() => {
-    const graphCanvas = graphCanvasRef.current;
-    const dialogue = selectedDialogueRef.current;
-    if (!graphCanvas || !dialogue) return;
-    graphCanvas.setNodes(toGraphNodes(dialogue));
-    graphCanvas.setEdges(toGraphEdges(dialogue));
-  }, []);
+  const editorNodes = useMemo(
+    () =>
+      selectedDialogue
+        ? dialogueToEditorNodes(selectedDialogue, playtestNodeId).map((node) =>
+            placeNodeInGroup(node, selectedDialogue.groups)
+          )
+        : [],
+    [selectedDialogue, playtestNodeId]
+  );
+  const editorGroups = useMemo(
+    () => toEditorGroups(selectedDialogue?.groups),
+    [selectedDialogue]
+  );
+  const editorEdges = useMemo(
+    () => (selectedDialogue ? dialogueToEditorEdges(selectedDialogue) : []),
+    [selectedDialogue]
+  );
 
-  useEffect(() => {
-    selectedDialogueRef.current = selectedDialogue;
-  }, [selectedDialogue]);
+  // One drag, one write. Nodes and frames used to be recorded by two separate
+  // calls built from the same starting dialogue, so whichever landed second
+  // threw away the other's half. A node whose frame is also being dragged is
+  // never reported as moved itself, so the two lists never overlap.
+  const handleMoved = useCallback(
+    (moved: {
+      nodes: GraphEditorNodeMove[];
+      groups: GraphEditorNodeMove[];
+    }) => {
+      if (!selectedDialogue) return;
+      // A node inside a frame reports a position relative to it; the document
+      // stores absolute positions.
+      const absolute = moved.nodes.map((move) => ({
+        id: move.id,
+        position: toAbsolutePosition(
+          move.position,
+          move.parentId,
+          selectedDialogue.groups
+        )
+      }));
 
-  useEffect(() => {
-    selectedNodeIdRef.current = selectedNodeId;
-  }, [selectedNodeId]);
-
-  useEffect(() => {
-    playtestNodeIdRef.current = playtestNodeId;
-  }, [playtestNodeId]);
-
-  useEffect(() => {
-    if (!isActive || !graphContainerElement || !selectedDialogueRef.current) return;
-
-    const graphCanvas = new GraphCanvas({
-      onNodeSelect: (nodeId) => setSelectedNodeId(nodeId),
-      onNodeMove: (nodeId, position) => {
-        const dialogue = selectedDialogueRef.current;
-        if (!dialogue) return;
-        updateDialogue({
-          ...dialogue,
-          nodes: dialogue.nodes.map((node) =>
-            node.nodeId === nodeId
+      // A frame takes its members with it: the editor reports only the frame's
+      // own new position, so the members are shifted by the same delta here or
+      // they would spring back on the next load.
+      let next = selectedDialogue;
+      for (const move of moved.groups) {
+        const group = (next.groups ?? []).find(
+          (candidate) => candidate.groupId === move.id
+        );
+        if (!group) continue;
+        const { dx, dy } = shiftGroupMembers(group, move.position);
+        next = {
+          ...next,
+          groups: (next.groups ?? []).map((candidate) =>
+            candidate.groupId === move.id
+              ? { ...candidate, position: { ...move.position } }
+              : candidate
+          ),
+          nodes: next.nodes.map((node) =>
+            group.memberNodeIds.includes(node.nodeId)
               ? {
                   ...node,
-                  graphPosition: position
+                  graphPosition: {
+                    x: node.graphPosition.x + dx,
+                    y: node.graphPosition.y + dy
+                  }
                 }
               : node
           )
-        });
-      },
-      onCanvasClick: () => setSelectedNodeId(null),
-      onConnect: (fromNodeId, toNodeId, fromPort) => {
-        const dialogue = selectedDialogueRef.current;
-        if (!dialogue) return;
-        const fromNode = dialogue.nodes.find((node) => node.nodeId === fromNodeId);
-        if (!fromNode) return;
-        if (fromNode.next.some((edge) => edge.targetNodeId === toNodeId)) {
-          return;
-        }
-
-        const next = [...fromNode.next];
-        if (fromPort?.startsWith("choice-")) {
-          next.push({
-            targetNodeId: toNodeId,
-            choiceText: `Choice ${next.length + 1}`
-          });
-        } else {
-          next.push({ targetNodeId: toNodeId });
-        }
-
-        updateNode({
-          ...fromNode,
-          next
-        });
-      },
-      renderNode: (canvasNode, element) => {
-        const dialogue = selectedDialogueRef.current;
-        const node = dialogue?.nodes.find((candidate) => candidate.nodeId === canvasNode.id);
-        if (!dialogue || !node) {
-          element.innerHTML =
-            '<div style="padding: 12px; color: #f38ba8;">Node not found</div>';
-          return;
-        }
-
-        const isStart = node.nodeId === dialogue.startNodeId;
-        const isSelected = node.nodeId === selectedNodeIdRef.current;
-        const isPlaytestActive = node.nodeId === playtestNodeIdRef.current;
-
-        let borderColor = "#313244";
-        if (isPlaytestActive) borderColor = "#f9e2af";
-        else if (isSelected) borderColor = "#89b4fa";
-        else if (isStart) borderColor = "#a6e3a1";
-
-        element.style.minWidth = "220px";
-        element.style.maxWidth = "300px";
-        element.style.background = "#181825";
-        element.style.border = `2px solid ${borderColor}`;
-        element.style.borderRadius = "8px";
-        element.style.overflow = "hidden";
-        if (isPlaytestActive) {
-          element.style.boxShadow = "0 0 20px #f9e2af44";
-        }
-
-        const header = document.createElement("div");
-        header.style.cssText = `
-          padding: 8px 12px;
-          background: ${isPlaytestActive ? "#f9e2af22" : isStart ? "#a6e3a122" : "#313244"};
-          border-bottom: 1px solid #313244;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        `;
-
-        if (isStart) {
-          const icon = document.createElement("span");
-          icon.textContent = "▶";
-          icon.style.cssText = "color: #a6e3a1; font-size: 10px;";
-          header.appendChild(icon);
-        }
-
-        const nameSpan = document.createElement("span");
-        nameSpan.textContent = node.displayName || node.nodeId;
-        nameSpan.style.cssText = `font-size: 12px; color: ${isStart ? "#a6e3a1" : "#cdd6f4"}; flex: 1;`;
-        header.appendChild(nameSpan);
-
-        if (node.speakerId) {
-          const speaker = document.createElement("span");
-          speaker.textContent = resolveSpeakerName(node.speakerId);
-          speaker.style.cssText = `
-            font-size: 10px;
-            padding: 2px 6px;
-            background: #89b4fa22;
-            color: #89b4fa;
-            border-radius: 3px;
-          `;
-          header.appendChild(speaker);
-        }
-
-        element.appendChild(header);
-
-        const content = document.createElement("div");
-        content.style.cssText =
-          "padding: 12px; font-size: 12px; color: #a6adc8; line-height: 1.4;";
-        content.textContent =
-          node.text.length > 120 ? `${node.text.slice(0, 120)}...` : node.text;
-        element.appendChild(content);
-
-        if (node.next.length > 0) {
-          const footer = document.createElement("div");
-          footer.style.cssText =
-            "padding: 8px 12px; border-top: 1px solid #313244; background: #1e1e2e;";
-
-          if (node.next.length > 1) {
-            node.next.forEach((next, index) => {
-              const choice = document.createElement("div");
-              const color = next.condition ? "#f9e2af" : getChoiceColor(index);
-              choice.style.cssText = `
-                font-size: 11px;
-                padding: 4px 8px;
-                margin: 2px 0;
-                background: ${color}22;
-                color: ${color};
-                border-radius: 4px;
-                display: flex;
-                align-items: center;
-                gap: 4px;
-              `;
-              if (next.condition) {
-                const badge = document.createElement("span");
-                badge.textContent = "?";
-                badge.style.cssText = `
-                  display: inline-block;
-                  width: 14px; height: 14px;
-                  line-height: 14px;
-                  text-align: center;
-                  background: #f9e2af33;
-                  border-radius: 3px;
-                  font-size: 10px;
-                  font-weight: 700;
-                  flex-shrink: 0;
-                `;
-                choice.appendChild(badge);
-              }
-              const text = document.createElement("span");
-              text.textContent = next.choiceText || `Choice ${index + 1}`;
-              choice.appendChild(text);
-              footer.appendChild(choice);
-            });
-          } else {
-            const next = node.next[0]!;
-            const nextNode = dialogue.nodes.find((candidate) => candidate.nodeId === next.targetNodeId);
-            const nextLabel = document.createElement("div");
-            nextLabel.style.cssText =
-              "font-size: 10px; color: #6c7086; display: flex; align-items: center; gap: 4px;";
-            if (next.condition) {
-              const badge = document.createElement("span");
-              badge.textContent = "?";
-              badge.style.cssText = "color: #f9e2af; font-weight: 700;";
-              nextLabel.appendChild(badge);
-            }
-            const text = document.createElement("span");
-            text.textContent = `→ ${nextNode?.displayName || next.targetNodeId}`;
-            nextLabel.appendChild(text);
-            footer.appendChild(nextLabel);
-          }
-
-          element.appendChild(footer);
-        }
+        };
       }
+
+      if (absolute.length > 0) {
+        // Where a node was dropped decides which frame it belongs to.
+        let groups = next.groups ?? [];
+        for (const move of absolute) {
+          groups = resolveMembership(groups, move.id, move.position);
+        }
+        const withNodes = applyDialogueNodeMoves(next, absolute);
+        next = membershipChanged(next.groups, groups)
+          ? { ...withNodes, groups }
+          : withNodes;
+      }
+
+      updateDialogue(next);
+    },
+    [selectedDialogue, updateDialogue]
+  );
+
+  const handleGroupRenamed = useCallback(
+    (groupId: string, label: string) => {
+      if (!selectedDialogue) return;
+      updateDialogue({
+        ...selectedDialogue,
+        groups: (selectedDialogue.groups ?? []).map((group) =>
+          group.groupId === groupId ? { ...group, label } : group
+        )
+      });
+    },
+    [selectedDialogue, updateDialogue]
+  );
+
+  // Removing a frame leaves its members exactly where they are.
+  const handleGroupsDeleted = useCallback(
+    (groupIds: string[]) => {
+      if (!selectedDialogue) return;
+      updateDialogue({
+        ...selectedDialogue,
+        groups: (selectedDialogue.groups ?? []).filter(
+          (group) => !groupIds.includes(group.groupId)
+        )
+      });
+    },
+    [selectedDialogue, updateDialogue]
+  );
+
+  const groupSelection = useCallback(() => {
+    if (!selectedDialogue) return;
+    const memberNodeIds = graphSelection.nodeIds;
+    if (memberNodeIds.length < 2) return;
+    const frame = frameAround(
+      selectedDialogue.nodes
+        .filter((node) => memberNodeIds.includes(node.nodeId))
+        .map((node) => node.graphPosition)
+    );
+    updateDialogue({
+      ...selectedDialogue,
+      groups: addGroup(
+        selectedDialogue.groups,
+        createNodeGroup({
+          label: "Group",
+          memberNodeIds,
+          position: frame.position,
+          size: frame.size
+        })
+      )
     });
+  }, [graphSelection.nodeIds, selectedDialogue, updateDialogue]);
 
-    graphContainerElement.innerHTML = "";
-    graphContainerElement.appendChild(graphCanvas.getElement());
-    graphCanvasRef.current = graphCanvas;
-    updateGraphCanvas();
-    window.setTimeout(() => graphCanvas.fitToContent(), 100);
+  const handleGraphConnect = useCallback(
+    (connection: GraphEditorConnection) => {
+      if (!selectedDialogue) return;
+      updateDialogue(connectDialogueNodes(selectedDialogue, connection));
+    },
+    [selectedDialogue, updateDialogue]
+  );
 
-    return () => {
-      graphCanvas.dispose();
-      graphCanvasRef.current = null;
-    };
-  }, [
-    graphContainerElement,
-    isActive,
-    resolveSpeakerName,
-    selectedDialogue?.definitionId,
-    updateDialogue,
-    updateGraphCanvas,
-    updateNode
-  ]);
+  const handleEdgesDeleted = useCallback(
+    (edgeIds: string[]) => {
+      if (!selectedDialogue) return;
+      updateDialogue(disconnectDialogueEdges(selectedDialogue, edgeIds));
+    },
+    [selectedDialogue, updateDialogue]
+  );
 
-  useEffect(() => {
-    if (!isActive || !selectedDialogue) return;
-    updateGraphCanvas();
-  }, [isActive, selectedDialogue, updateGraphCanvas]);
+  const handleNodesDeleted = useCallback(
+    (nodeIds: string[]) => {
+      if (!selectedDialogue) return;
+      updateDialogue(deleteDialogueNodes(selectedDialogue, nodeIds));
+      if (selectedNodeId && nodeIds.includes(selectedNodeId)) {
+        setSelectedNodeId(null);
+      }
+    },
+    [selectedDialogue, selectedNodeId, updateDialogue]
+  );
 
-  useEffect(() => {
-    graphCanvasRef.current?.setSelectedNode(selectedNodeId);
-  }, [selectedNodeId]);
+  // Refusing a deletion is silent on its own, so the reason is surfaced.
+  const handleBeforeDelete = useCallback(
+    ({ nodeIds }: { nodeIds: string[]; edgeIds: string[] }) => {
+      if (nodeIds.length === 0) return true;
+      const dialogue = selectedDialogue;
+      if (!dialogue) return false;
+      const refusal = canDeleteDialogueNodes(dialogue, nodeIds);
+      if (!refusal.allowed) {
+        setDeleteRefusal(refusal.reason ?? "That node cannot be deleted.");
+        return false;
+      }
+      return true;
+    },
+    [selectedDialogue]
+  );
 
-  useEffect(() => {
-    updateGraphCanvas();
-  }, [playtestNodeId, updateGraphCanvas]);
+  const hasGraphSelection =
+    graphSelection.nodeIds.length +
+      graphSelection.groupIds.length +
+      graphSelection.edgeIds.length >
+    0;
+
+  const dialogueGraphChrome = (
+    <Group gap={6} align="center">
+      <AddNodeMenu
+        items={[
+          { id: "node", label: "Node", description: "A line of dialogue" }
+        ]}
+        onSelect={addNode}
+      />
+      <Button
+        size="xs"
+        variant="light"
+        disabled={graphSelection.nodeIds.length < 2}
+        onClick={groupSelection}
+      >
+        Group
+      </Button>
+      <Button
+        size="xs"
+        variant="light"
+        color="red"
+        disabled={!hasGraphSelection}
+        onClick={() => graphEditorRef.current?.deleteSelection()}
+      >
+        Delete
+      </Button>
+    </Group>
+  );
 
   const leftPanel = (
-    <Stack gap={0} h="100%" style={{ minHeight: 0 }} onClick={() => setContextMenu(null)}>
+    <Stack
+      gap={0}
+      h="100%"
+      style={{ minHeight: 0 }}
+      onClick={() => setContextMenu(null)}
+    >
       <Group
         justify="space-between"
         px="md"
@@ -944,7 +944,12 @@ export function useDialogueWorkspaceView(
           Dialogues
         </Text>
         <Tooltip label="Add Dialogue">
-          <ActionIcon variant="subtle" size="sm" onClick={createDialogue} aria-label="Add Dialogue">
+          <ActionIcon
+            variant="subtle"
+            size="sm"
+            onClick={createDialogue}
+            aria-label="Add Dialogue"
+          >
             +
           </ActionIcon>
         </Tooltip>
@@ -960,7 +965,8 @@ export function useDialogueWorkspaceView(
       <ScrollArea style={{ flex: 1, minHeight: 0 }}>
         <Stack gap={4} p="xs">
           {filteredDialogues.map((definition) => {
-            const isSelected = effectiveSelectedDialogueId === definition.definitionId;
+            const isSelected =
+              effectiveSelectedDialogueId === definition.definitionId;
             return (
               <Box
                 key={definition.definitionId}
@@ -969,7 +975,9 @@ export function useDialogueWorkspaceView(
                 style={{
                   borderRadius: 8,
                   cursor: "pointer",
-                  background: isSelected ? "var(--sm-active-bg)" : "transparent",
+                  background: isSelected
+                    ? "var(--sm-active-bg)"
+                    : "transparent",
                   color: isSelected
                     ? "var(--sm-accent-blue)"
                     : "var(--sm-color-text)"
@@ -992,7 +1000,8 @@ export function useDialogueWorkspaceView(
                   {definition.displayName}
                 </Text>
                 <Text size="xs" c="var(--sm-color-overlay0)">
-                  {definition.nodes.length} nodes · {definition.definitionId.slice(0, 8)}
+                  {definition.nodes.length} nodes ·{" "}
+                  {definition.definitionId.slice(0, 8)}
                 </Text>
               </Box>
             );
@@ -1047,7 +1056,7 @@ export function useDialogueWorkspaceView(
       selectionLabel={
         selectedNode
           ? selectedNode.displayName || "Node"
-          : selectedDialogue?.displayName ?? "Dialogue"
+          : (selectedDialogue?.displayName ?? "Dialogue")
       }
       selectionIcon="💬"
     >
@@ -1055,7 +1064,12 @@ export function useDialogueWorkspaceView(
         selectedNode ? (
           <Stack gap="lg">
             <Group gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              <Text
+                size="xs"
+                fw={600}
+                tt="uppercase"
+                c="var(--sm-color-subtext)"
+              >
                 Node Properties
               </Text>
               {selectedNode.nodeId === selectedDialogue.startNodeId && (
@@ -1157,14 +1171,27 @@ export function useDialogueWorkspaceView(
               </Group>
 
               {selectedNode.next.map((next, index) => (
-                <Paper key={`${selectedNode.nodeId}:${index}`} p="xs" withBorder style={{ background: "#181825" }}>
+                <Paper
+                  key={`${selectedNode.nodeId}:${index}`}
+                  p="xs"
+                  withBorder
+                  style={{ background: "#181825" }}
+                >
                   <Stack gap="xs">
                     <Group justify="space-between">
                       <Text size="xs" c="dimmed">
-                        {selectedNode.next.length > 1 ? `Choice ${index + 1}` : "Next Node"}
+                        {selectedNode.next.length > 1
+                          ? `Choice ${index + 1}`
+                          : "Next Node"}
                       </Text>
                       <Group gap={4}>
-                        <Tooltip label={next.condition ? "Remove condition" : "Add condition"}>
+                        <Tooltip
+                          label={
+                            next.condition
+                              ? "Remove condition"
+                              : "Add condition"
+                          }
+                        >
                           <ActionIcon
                             size="xs"
                             variant={next.condition ? "filled" : "subtle"}
@@ -1180,20 +1207,6 @@ export function useDialogueWorkspaceView(
                             ?
                           </ActionIcon>
                         </Tooltip>
-                        <Button
-                          size="xs"
-                          variant="subtle"
-                          color="red"
-                          onClick={() =>
-                            updateNode({
-                              ...selectedNode,
-                              next: selectedNode.next.filter((_, nextIndex) => nextIndex !== index)
-                            })
-                          }
-                          styles={{ root: { padding: "2px 6px" } }}
-                        >
-                          ✕
-                        </Button>
                       </Group>
                     </Group>
 
@@ -1244,16 +1257,17 @@ export function useDialogueWorkspaceView(
               )}
             </Stack>
 
-            {selectedNode.nodeId !== selectedDialogue.startNodeId && (
-              <Button
-                color="red"
-                variant="subtle"
-                onClick={() => deleteNode(selectedNode.nodeId)}
-                fullWidth
-              >
-                Delete Node
-              </Button>
-            )}
+            {/* Always shown: whether this node may go is `canDeleteDialogueNodes`'s
+                call, and hiding the button here would be a second copy of that
+                rule. Deleting the start node is allowed once it is the last one. */}
+            <Button
+              color="red"
+              variant="subtle"
+              onClick={() => deleteNode(selectedNode.nodeId)}
+              fullWidth
+            >
+              Delete Node
+            </Button>
 
             {renderDialogueInspectorSections?.({
               selectedDialogue,
@@ -1264,7 +1278,12 @@ export function useDialogueWorkspaceView(
         ) : (
           <Stack gap="lg">
             <Stack gap="xs">
-              <Text size="xs" fw={600} tt="uppercase" c="var(--sm-color-subtext)">
+              <Text
+                size="xs"
+                fw={600}
+                tt="uppercase"
+                c="var(--sm-color-subtext)"
+              >
                 Dialogue
               </Text>
               <TextInput
@@ -1309,9 +1328,13 @@ export function useDialogueWorkspaceView(
   );
 
   const centerPanel = (
-    <Box style={{ position: "relative", height: "100%", background: "#1e1e2e" }}>
+    <Box
+      style={{ position: "relative", height: "100%", background: "#1e1e2e" }}
+    >
       {selectedDialogue ? (
-        <Box style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <Box
+          style={{ display: "flex", flexDirection: "column", height: "100%" }}
+        >
           <Group
             p="xs"
             style={{
@@ -1336,39 +1359,46 @@ export function useDialogueWorkspaceView(
                 variant="subtle"
                 color="green"
                 onClick={() => {
+                  if (!selectedDialogue.startNodeId) return;
                   setIsPlaytesting(true);
                   setPlaytestNodeId(selectedDialogue.startNodeId);
-                  graphCanvasRef.current?.centerOnNode(selectedDialogue.startNodeId);
+                  graphEditorRef.current?.centerOnNode(
+                    selectedDialogue.startNodeId
+                  );
                 }}
               >
                 ▶ Playtest
-              </Button>
-              <Button size="xs" variant="subtle" onClick={addNode}>
-                + Add Node
-              </Button>
-              <Button
-                size="xs"
-                variant="subtle"
-                onClick={() => graphCanvasRef.current?.fitToContent()}
-              >
-                Fit View
-              </Button>
-              <Button
-                size="xs"
-                variant="subtle"
-                color="red"
-                onClick={() => deleteDialogue(selectedDialogue.definitionId)}
-              >
-                Delete
               </Button>
             </Group>
           </Group>
 
           <Box style={{ flex: 1, minHeight: 0, position: "relative" }}>
-            <div
-              ref={setGraphContainerElement}
-              style={{ position: "absolute", inset: 0, overflow: "hidden" }}
-            />
+            {isActive ? (
+              <NodeEditor
+                ref={graphEditorRef}
+                nodes={editorNodes}
+                edges={editorEdges}
+                renderers={DIALOGUE_NODE_RENDERERS}
+                primarySelectionId={selectedNodeId}
+                onPrimarySelectionChange={setSelectedNodeId}
+                groups={editorGroups}
+                onMoved={handleMoved}
+                onGroupRenamed={handleGroupRenamed}
+                onGroupsDeleted={handleGroupsDeleted}
+                onConnect={handleGraphConnect}
+                onNodesDeleted={handleNodesDeleted}
+                onEdgesDeleted={handleEdgesDeleted}
+                onBeforeDelete={handleBeforeDelete}
+                onSelectionChange={setGraphSelection}
+                chrome={dialogueGraphChrome}
+              />
+            ) : null}
+            {deleteRefusal ? (
+              <WarnToast
+                message={deleteRefusal}
+                onDismiss={() => setDeleteRefusal(null)}
+              />
+            ) : null}
             {isPlaytesting && playtestNodeId && (
               <PlaytestPanel
                 dialogue={selectedDialogue}
@@ -1376,8 +1406,8 @@ export function useDialogueWorkspaceView(
                 resolveSpeakerName={resolveSpeakerName}
                 onAdvance={(nextNodeId) => {
                   setPlaytestNodeId(nextNodeId);
-                  graphCanvasRef.current?.centerOnNode(nextNodeId);
-                  graphCanvasRef.current?.setSelectedNode(nextNodeId);
+                  graphEditorRef.current?.centerOnNode(nextNodeId);
+                  graphEditorRef.current?.selectNode(nextNodeId);
                 }}
                 onClose={() => {
                   setIsPlaytesting(false);
@@ -1392,7 +1422,8 @@ export function useDialogueWorkspaceView(
           <Text size="xl">💬</Text>
           <Text c="dimmed">Select a dialogue to edit</Text>
           <Text size="sm" c="dimmed" ta="center" maw={300}>
-            Choose a dialogue from the list on the left, or create a new one with the + button.
+            Choose a dialogue from the list on the left, or create a new one
+            with the + button.
           </Text>
         </Stack>
       )}
