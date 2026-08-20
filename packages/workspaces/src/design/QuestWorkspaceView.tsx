@@ -61,6 +61,7 @@ import type {
   SemanticCommand
 } from "@sugarmagic/domain";
 import {
+  QUEST_ACTION_TYPE_OPTIONS,
   createDefaultDialogueDefinition,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
@@ -675,30 +676,14 @@ function QuestActionsEditor({
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
-            {[
-              "setFlag",
-              "emitEvent",
-              "giveItem",
-              "removeItem",
-              "unlockScene",
-              "advanceToNextScene",
-              "playSound",
-              "spawnVfx",
-              "teleportNpc",
-              "moveNpc",
-              "setNpcState",
-              "custom"
-            ].map((type) => (
+            {QUEST_ACTION_TYPE_OPTIONS.map((option) => (
               <Menu.Item
-                key={type}
+                key={option.value}
                 onClick={() =>
-                  onChange([
-                    ...actions,
-                    { type: type as QuestActionDefinition["type"] }
-                  ])
+                  onChange([...actions, { type: option.value }])
                 }
               >
-                {type}
+                {option.label}
               </Menu.Item>
             ))}
           </Menu.Dropdown>
@@ -720,20 +705,7 @@ function QuestActionsEditor({
                 <Select
                   size="xs"
                   value={action.type}
-                  data={[
-                    "setFlag",
-                    "emitEvent",
-                    "giveItem",
-                    "removeItem",
-                    "unlockScene",
-                    "advanceToNextScene",
-                    "playSound",
-                    "spawnVfx",
-                    "teleportNpc",
-                    "moveNpc",
-                    "setNpcState",
-                    "custom"
-                  ].map((value) => ({ value, label: value }))}
+                  data={QUEST_ACTION_TYPE_OPTIONS}
                   onChange={(value) => {
                     if (!value) return;
                     const next = [...actions];

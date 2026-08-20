@@ -65,6 +65,43 @@ export type QuestActionType =
   | "learn-fact"
   | "custom";
 
+/**
+ * What an author reads in the action picker, one label per action type.
+ * The Record is exhaustive over QuestActionType, so adding a member to the
+ * union without a label here fails the typecheck. Key order is picker order.
+ */
+const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
+  setFlag: "Set Flag",
+  emitEvent: "Emit Event",
+  giveItem: "Give Item",
+  removeItem: "Remove Item",
+  unlockScene: "Unlock Scene",
+  advanceToNextScene: "Advance to Next Scene",
+  "set-time-of-day": "Set Time of Day",
+  "advance-day": "Advance Day",
+  "learn-fact": "Learn Fact",
+  playSound: "Play Sound",
+  spawnVfx: "Spawn VFX",
+  teleportNpc: "Teleport NPC",
+  moveNpc: "Move NPC",
+  setNpcState: "Set NPC State",
+  custom: "Custom"
+};
+
+/**
+ * The one list every quest action picker in Studio renders. It is built from
+ * the label Record, so it covers every action type the runtime can be handed.
+ */
+export const QUEST_ACTION_TYPE_OPTIONS: Array<{
+  value: QuestActionType;
+  label: string;
+}> = Object.entries(QUEST_ACTION_TYPE_LABELS).map(([value, label]) => ({
+  // Object.entries widens the key to string. The Record is keyed by
+  // QuestActionType, so every key is one.
+  value: value as QuestActionType,
+  label
+}));
+
 export interface QuestActionDefinition {
   type: QuestActionType;
   targetId?: string;
