@@ -38,7 +38,14 @@ QuestStageDefinition
   entryNodeIds: string[]        -- nodes activated when stage starts
   timeOfDay: TimeOfDayBand|null -- set on the world clock when the stage
                                    becomes active; null leaves it alone
+  groups: NodeGroup[]?          -- editor layout only, never read at runtime;
+                                   see domain-model.md
 ```
+
+A stage may legitimately have no nodes. It is then complete the moment it
+starts, and the quest moves straight on to `nextStageId`. A next-stage loop made
+only of empty stages would never settle, so the runtime stops advancing on
+re-entering a stage and the quest editor reports the loop as a warning.
 
 A stage is usually a scene at a time -- "the dock, late afternoon" -- so the
 time rides the stage rather than an action on whichever node happens to run

@@ -77,6 +77,7 @@ import {
   type GraphEditorNodeRendererProps
 } from "@sugarmagic/ui/node-editor";
 import {
+  addGroup,
   frameAround,
   membershipChanged,
   placeNodeInGroup,
@@ -1386,15 +1387,15 @@ export function useQuestWorkspaceView({
     const frame = frameAround(positions);
     updateStage(selectedStage.stageId, (stage) => ({
       ...stage,
-      groups: [
-        ...(stage.groups ?? []),
+      groups: addGroup(
+        stage.groups,
         createNodeGroup({
           label: "Group",
           memberNodeIds,
           position: frame.position,
           size: frame.size
         })
-      ]
+      )
     }));
   }, [graphSelection.nodeIds, selectedStage, updateStage]);
 

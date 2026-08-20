@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createNodeGroup } from "@sugarmagic/domain";
 import {
+  addGroup,
   frameAround,
   groupOfNode,
   placeNodeInGroup,
@@ -115,14 +116,8 @@ describe("node group layout", () => {
 describe("splitDeletedNodes", () => {
   it("drops member nodes when their frame is being deleted", () => {
     const split = splitDeletedNodes([
-      { id: "g1", type: "sugarGroup", position: { x: 0, y: 0 }, data: {} },
-      {
-        id: "n1",
-        type: "sugarNode",
-        parentId: "g1",
-        position: { x: 0, y: 0 },
-        data: {}
-      }
+      { id: "g1", type: "sugarGroup" },
+      { id: "n1", type: "sugarNode", parentId: "g1" }
     ]);
     expect(split.groupIds).toEqual(["g1"]);
     expect(split.nodeIds).toEqual([]);
@@ -130,16 +125,43 @@ describe("splitDeletedNodes", () => {
 
   it("keeps a node deleted on its own, even one inside a frame", () => {
     const split = splitDeletedNodes([
-      {
-        id: "n1",
-        type: "sugarNode",
-        parentId: "g1",
-        position: { x: 0, y: 0 },
-        data: {}
-      }
+      { id: "n1", type: "sugarNode", parentId: "g1" }
     ]);
     expect(split.groupIds).toEqual([]);
     expect(split.nodeIds).toEqual(["n1"]);
+  });
+
+  // A rubber band over a frame's members picks up the frame too. The members
+  // were chosen deliberately, so they go; without this they were silently kept
+  // and only the frame was removed.
+  it("keeps member nodes that were selected in their own right", () => {
+    const split = splitDeletedNodes([
+      { id: "g1", type: "sugarGroup", selected: true },
+      { id: "n1", type: "sugarNode", parentId: "g1", selected: true },
+      { id: "n2", type: "sugarNode", parentId: "g1" }
+    ]);
+    expect(split.groupIds).toEqual(["g1"]);
+    expect(split.nodeIds).toEqual(["n1"]);
+  });
+});
+
+describe("addGroup", () => {
+  it("moves nodes out of the group they were in", () => {
+    const first = createNodeGroup({
+      groupId: "g1",
+      label: "First",
+      memberNodeIds: ["a", "b", "c"]
+    });
+    const second = createNodeGroup({
+      groupId: "g2",
+      label: "Second",
+      memberNodeIds: ["b", "c"]
+    });
+
+    const groups = addGroup([first], second);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]!.memberNodeIds).toEqual(["a"]);
+    expect(groups[1]!.memberNodeIds).toEqual(["b", "c"]);
   });
 });
 
@@ -169,6 +191,18 @@ describe("resolveMembership", () => {
   it("leaves membership alone when a node is dragged within its own frame", () => {
     const next = resolveMembership([group], "inside", { x: 150, y: 150 });
     expect(membershipChanged([group], next)).toBe(false);
+  });
+
+  it("does not list a node twice in the group it is already in", () => {
+    const overlapping = createNodeGroup({
+      groupId: "g2",
+      label: "Later",
+      memberNodeIds: ["inside"],
+      position: { x: 100, y: 100 },
+      size: { width: 400, height: 300 }
+    });
+    const next = resolveMembership([overlapping], "inside", { x: 200, y: 200 });
+    expect(next[0]!.memberNodeIds).toEqual(["inside"]);
   });
 
   it("moves a node between overlapping frames, the topmost frame winning", () => {

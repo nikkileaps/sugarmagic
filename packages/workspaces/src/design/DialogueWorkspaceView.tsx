@@ -51,6 +51,7 @@ import {
 } from "./dialogue-graph";
 import { DialogueNodeCard } from "./DialogueNodeCard";
 import {
+  addGroup,
   frameAround,
   membershipChanged,
   placeNodeInGroup,
@@ -834,15 +835,15 @@ export function useDialogueWorkspaceView(
     );
     updateDialogue({
       ...selectedDialogue,
-      groups: [
-        ...(selectedDialogue.groups ?? []),
+      groups: addGroup(
+        selectedDialogue.groups,
         createNodeGroup({
           label: "Group",
           memberNodeIds,
           position: frame.position,
           size: frame.size
         })
-      ]
+      )
     });
   }, [graphSelection.nodeIds, selectedDialogue, updateDialogue]);
 

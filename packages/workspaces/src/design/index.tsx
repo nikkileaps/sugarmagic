@@ -435,6 +435,7 @@ export {
 } from "./weight-workbench/WeightWorkbench";
 export { DialogueNodeCard } from "./DialogueNodeCard";
 export {
+  addGroup,
   frameAround,
   groupOfNode,
   membershipChanged,

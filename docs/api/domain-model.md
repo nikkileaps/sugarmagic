@@ -125,6 +125,11 @@ graph: nodes hold speaker + line (+ optional line intent), edges branch and
 may carry a `DialogueCondition` (flag / item / spell / quest state). An
 `interactionBinding` names the NPC this dialogue default-binds to.
 
+`startNodeId` is the node a conversation opens from, and is `string | null`: a
+dialogue may be emptied completely, which is a legitimate way to start over, and
+then there is nowhere to start. Deleting the start node repoints it at whatever
+remains, so it never names a node that is gone.
+
 `ItemDefinition` and `SpellDefinition` are catalog entries consumed by the
 runtime inventory and caster.
 

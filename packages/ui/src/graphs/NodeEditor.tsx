@@ -15,6 +15,7 @@ import {
   useContext,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
   type ReactNode
 } from "react";
@@ -157,8 +158,17 @@ export interface NodeEditorProps {
   }) => void;
   onConnect?: (connection: GraphEditorConnection) => void;
   /** Return false to refuse a connection while it is being dragged, so an
-   *  invalid one never lands. */
+   *  invalid one never lands. Called on every pointer move over a candidate
+   *  port, so keep it a pure predicate -- to say something about a refusal, use
+   *  `onConnectRefused`. */
   isValidConnection?: (connection: GraphEditorConnection) => boolean;
+  /**
+   * Fires once, when a connection drag is released on a port that
+   * `isValidConnection` refused. This is the moment the author actually tried
+   * something, as opposed to sweeping the cursor past a port on the way
+   * somewhere else.
+   */
+  onConnectRefused?: (connection: GraphEditorConnection) => void;
   onNodesDeleted?: (nodeIds: string[]) => void;
   onEdgesDeleted?: (edgeIds: string[]) => void;
   /** Return false to refuse a deletion. Runs before anything is removed. */
@@ -305,23 +315,34 @@ function toFlowGroup(
     id: group.id,
     type: "sugarGroup",
     position: { ...group.position },
-    // Behind its members, and not selectable by rubber-band so selecting a set
-    // of nodes does not also pick up the frame around them.
+    // Drawn behind its members. Selectable, so it can be renamed and deleted --
+    // which means a rubber band over its members picks the frame up too; see
+    // splitDeletedNodes for how a deletion tells those two cases apart.
     zIndex: -1,
     selectable: true,
     data: { group, onRename }
   };
 }
 
+/** What `splitDeletedNodes` needs off a node. Structural on purpose, so callers
+ *  do not need the graph library's node type to use it. */
+export interface DeletedGraphNode {
+  id: string;
+  type?: string;
+  parentId?: string;
+  selected?: boolean;
+}
+
 /**
  * Splits a deletion into the graph's own nodes and the frames around them.
  *
- * React Flow deletes a parent's children along with it, so deleting a frame
+ * React Flow removes a parent's children along with it, so deleting a frame
  * arrives here as the frame PLUS every node inside it. Deleting a frame is meant
- * to remove only the frame, so a node whose frame is also being deleted is
- * dropped from the node list.
+ * to remove only the frame -- but a member the author selected themselves should
+ * still go. `selected` tells the two apart: a member that was picked up only
+ * because its frame is being deleted is not selected, and is kept.
  */
-export function splitDeletedNodes(deleted: FlowNode[]): {
+export function splitDeletedNodes(deleted: DeletedGraphNode[]): {
   nodeIds: string[];
   groupIds: string[];
 } {
@@ -333,7 +354,9 @@ export function splitDeletedNodes(deleted: FlowNode[]): {
     .filter(
       (node) =>
         node.type !== "sugarGroup" &&
-        !(node.parentId && deletedGroupIds.has(node.parentId))
+        (node.selected === true ||
+          !node.parentId ||
+          !deletedGroupIds.has(node.parentId))
     )
     .map((node) => node.id);
   return { nodeIds, groupIds };
@@ -373,6 +396,7 @@ function NodeEditorInner(
     onMoved,
     onConnect,
     isValidConnection,
+    onConnectRefused,
     onNodesDeleted,
     onEdgesDeleted,
     onBeforeDelete,
@@ -601,19 +625,37 @@ function NodeEditorInner(
     [onConnect]
   );
 
+  // The last connection the predicate refused during the current drag. React
+  // Flow asks on every pointer move, so a refusal is only worth reporting if the
+  // author releases on it.
+  const refusedConnectionRef = useRef<GraphEditorConnection | null>(null);
+
   const handleIsValidConnection = useCallback(
     (connection: Connection | FlowEdge) => {
       if (!isValidConnection) return true;
       if (!connection.source || !connection.target) return false;
-      return isValidConnection({
+      const candidate: GraphEditorConnection = {
         fromId: connection.source,
         toId: connection.target,
         fromPort: connection.sourceHandle ?? undefined,
         toPort: connection.targetHandle ?? undefined
-      });
+      };
+      const allowed = isValidConnection(candidate);
+      refusedConnectionRef.current = allowed ? null : candidate;
+      return allowed;
     },
     [isValidConnection]
   );
+
+  const handleConnectStart = useCallback(() => {
+    refusedConnectionRef.current = null;
+  }, []);
+
+  const handleConnectEnd = useCallback(() => {
+    const refused = refusedConnectionRef.current;
+    refusedConnectionRef.current = null;
+    if (refused) onConnectRefused?.(refused);
+  }, [onConnectRefused]);
 
   const handleBeforeDelete = useCallback(
     async ({
@@ -660,6 +702,8 @@ function NodeEditorInner(
       onEdgesChange={handleEdgesChange}
       onConnect={handleConnect}
       isValidConnection={handleIsValidConnection}
+      onConnectStart={handleConnectStart}
+      onConnectEnd={handleConnectEnd}
       onBeforeDelete={handleBeforeDelete}
       onNodesDelete={handleNodesDelete}
       onEdgesDelete={handleEdgesDelete}

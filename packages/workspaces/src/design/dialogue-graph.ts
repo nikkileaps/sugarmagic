@@ -144,6 +144,8 @@ export function connectDialogueNodes(
   connection: { fromId: string; toId: string; fromPort?: string }
 ): DialogueDefinition {
   const { fromId, toId, fromPort } = connection;
+  // A node continuing to itself repeats the same line forever at runtime.
+  if (fromId === toId) return dialogue;
   const fromNode = dialogue.nodes.find((node) => node.nodeId === fromId);
   if (!fromNode) return dialogue;
   if (!dialogue.nodes.some((node) => node.nodeId === toId)) return dialogue;

@@ -131,7 +131,9 @@ export function resolveMembership(
 
   return current.map((group) => {
     if (group.groupId === target?.groupId) {
-      return { ...group, memberNodeIds: [...group.memberNodeIds, nodeId] };
+      return group.memberNodeIds.includes(nodeId)
+        ? group
+        : { ...group, memberNodeIds: [...group.memberNodeIds, nodeId] };
     }
     if (group.memberNodeIds.includes(nodeId)) {
       return {
@@ -143,6 +145,29 @@ export function resolveMembership(
     }
     return group;
   });
+}
+
+/**
+ * Adds a group, taking its members out of any group they were already in.
+ *
+ * A node in two groups has no sensible rendering -- it is drawn inside the first
+ * and leaves the second as an empty frame around nothing -- so grouping a
+ * selection moves those nodes rather than copying them.
+ */
+export function addGroup(
+  groups: readonly NodeGroup[] | undefined,
+  group: NodeGroup
+): NodeGroup[] {
+  const claimed = new Set(group.memberNodeIds);
+  return [
+    ...(groups ?? []).map((existing) => ({
+      ...existing,
+      memberNodeIds: existing.memberNodeIds.filter(
+        (nodeId) => !claimed.has(nodeId)
+      )
+    })),
+    group
+  ];
 }
 
 /** Whether `resolveMembership` would change anything, for skipping a write. */

@@ -60,6 +60,7 @@ import {
 } from "./shader-graph-mapping";
 import { ShaderNodeCard } from "./ShaderNodeCard";
 import {
+  addGroup,
   frameAround,
   membershipChanged,
   placeNodeInGroup,
@@ -469,15 +470,18 @@ export function useRenderProductModeView(
         .filter((node) => memberNodeIds.includes(node.nodeId))
         .map((node) => node.position)
     );
-    setGroups(selectedShader, [
-      ...(selectedShader.groups ?? []),
-      createNodeGroup({
-        label: "Group",
-        memberNodeIds,
-        position: frame.position,
-        size: frame.size
-      })
-    ]);
+    setGroups(
+      selectedShader,
+      addGroup(
+        selectedShader.groups,
+        createNodeGroup({
+          label: "Group",
+          memberNodeIds,
+          position: frame.position,
+          size: frame.size
+        })
+      )
+    );
   }, [graphSelection.nodeIds, selectedShader, setGroups]);
 
   // One drag, one pass. Shader edits are per-node commands, so this issues one
@@ -557,16 +561,26 @@ export function useRenderProductModeView(
     [commandTarget, onCommand, selectedShader, setGroups]
   );
 
-  // A refusal has to say why. A connection that silently springs back reads as
-  // the editor being broken.
+  // Pure predicate: React Flow asks on every pointer move during a drag, so
+  // saying anything here would raise a message for ports the author only swept
+  // past. The message comes from onConnectRefused, at the drop.
   const handleIsValidConnection = useCallback(
     (connection: GraphEditorConnection) => {
       if (!selectedShader) return false;
+      return checkShaderConnection(selectedShader, connection).allowed;
+    },
+    [selectedShader]
+  );
+
+  // A refusal has to say why. A connection that silently springs back reads as
+  // the editor being broken.
+  const handleConnectRefused = useCallback(
+    (connection: GraphEditorConnection) => {
+      if (!selectedShader) return;
       const check = checkShaderConnection(selectedShader, connection);
       if (!check.allowed && check.reason) {
         setConnectionRefusal(check.reason);
       }
-      return check.allowed;
     },
     [selectedShader]
   );
@@ -575,6 +589,9 @@ export function useRenderProductModeView(
     (connection: GraphEditorConnection) => {
       if (!selectedShader) return;
       if (!connection.fromPort || !connection.toPort) return;
+      // A connection landed, so an earlier refusal is answered and its message
+      // should not sit on screen alongside the result.
+      setConnectionRefusal(null);
       onCommand({
         kind: "AddShaderEdge",
         ...commandTarget(selectedShader.shaderDefinitionId),
@@ -893,6 +910,7 @@ export function useRenderProductModeView(
           onGroupsDeleted={handleGroupsDeleted}
           onConnect={handleGraphConnect}
           isValidConnection={handleIsValidConnection}
+          onConnectRefused={handleConnectRefused}
           onNodesDeleted={handleNodesDeleted}
           onEdgesDeleted={handleEdgesDeleted}
           chrome={shaderGraphChrome}
