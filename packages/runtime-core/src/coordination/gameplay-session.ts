@@ -1964,67 +1964,76 @@ export function createRuntimeGameplaySessionController(
   });
   questManager.setStageTimeOfDayHandler((band) => worldTimeStore.setTimeBand(band));
   questManager.setActionHandler(({ action, questDefinitionId, stageId, nodeId }) => {
-    const numericValue =
-      typeof action.value === "number"
-        ? action.value
-        : typeof action.value === "string" && action.value.trim().length > 0
-          ? Number(action.value)
-          : NaN;
-    const count = Number.isFinite(numericValue)
-      ? Math.max(1, Math.floor(numericValue))
-      : 1;
+    switch (action.type) {
+      case "giveItem":
+        if (action.itemDefinitionId) {
+          inventoryManager.addItem(action.itemDefinitionId, action.count);
+        }
+        return;
 
-    if (action.type === "giveItem" && action.targetId) {
-      inventoryManager.addItem(action.targetId, count);
-      return;
-    }
+      case "removeItem":
+        if (action.itemDefinitionId) {
+          inventoryManager.removeItem(action.itemDefinitionId, action.count);
+        }
+        return;
 
-    if (action.type === "removeItem" && action.targetId) {
-      inventoryManager.removeItem(action.targetId, count);
-      return;
-    }
+      // The instance key names the node, so two nodes playing the same cue are
+      // separate instances -- a cue set to restart or ignore-while-playing
+      // applies per node, not across the quest.
+      case "playCue":
+        audioController.playCue({
+          cueDefinitionId: action.cueDefinitionId,
+          instanceKey: `quest:${questDefinitionId}:${stageId}:${nodeId}:${action.cueDefinitionId ?? ""}`,
+          source: `quest "${questDefinitionId}" node "${nodeId}"`
+        });
+        return;
 
-    // The instance key names the node, so two nodes playing the same cue are
-    // separate instances -- a cue set to restart or ignore-while-playing
-    // applies per node, not across the quest.
-    if (action.type === "playCue") {
-      audioController.playCue({
-        cueDefinitionId: action.targetId ?? null,
-        instanceKey: `quest:${questDefinitionId}:${stageId}:${nodeId}:${action.targetId ?? ""}`,
-        source: `quest "${questDefinitionId}" node "${nodeId}"`
-      });
-      return;
-    }
+      // Plan 058 §058.5 — Scene progression actions belong to the
+      // host (campaign.progression lives there), not the assembly.
+      case "unlockScene":
+      case "advanceToNextScene":
+        options.onSceneAction?.({
+          type: action.type,
+          sceneId: action.sceneId
+        });
+        return;
 
-    // Plan 058 §058.5 — Scene progression actions belong to the
-    // host (campaign.progression lives there), not the assembly.
-    if (
-      action.type === "unlockScene" ||
-      action.type === "advanceToNextScene"
-    ) {
-      options.onSceneAction?.({
-        type: action.type,
-        sceneId: action.targetId ?? null
-      });
-    }
+      case "set-time-of-day":
+        worldTimeStore.setTimeBand(action.band);
+        return;
 
-    if (action.type === "set-time-of-day" && action.targetId) {
-      worldTimeStore.setTimeBand(action.targetId as TimeOfDayBand);
-      return;
-    }
+      case "advance-day":
+        worldTimeStore.advanceDay();
+        return;
 
-    if (action.type === "advance-day") {
-      worldTimeStore.advanceDay();
-      return;
-    }
+      case "learn-fact":
+        if (action.factId && action.displayText) {
+          playerKnownFactsStore.learnFact(action.factId, action.displayText);
+        }
+        return;
 
-    if (
-      action.type === "learn-fact" &&
-      action.targetId &&
-      typeof action.value === "string"
-    ) {
-      playerKnownFactsStore.learnFact(action.targetId, action.value);
-      return;
+      // QuestManager handles these before the handler is called.
+      case "setFlag":
+      case "emitEvent":
+        return;
+
+      // Offered in the editor, no runtime behavior. Listed so an action nobody
+      // handles cannot pass as one that is handled.
+      case "spawnVfx":
+      case "teleportNpc":
+      case "moveNpc":
+      case "setNpcState":
+      case "custom":
+        return;
+
+      default: {
+        const exhaustive: never = action;
+        console.warn(
+          "[runtime-core] unhandled quest action",
+          exhaustive,
+          { questDefinitionId, nodeId }
+        );
+      }
     }
   });
   questManager.setStateChangeHandler(() => {

@@ -63,6 +63,8 @@ import type {
 } from "@sugarmagic/domain";
 import {
   QUEST_ACTION_TYPE_OPTIONS,
+  REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS,
+  createQuestAction,
   createDefaultDialogueDefinition,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
@@ -653,6 +655,192 @@ const STAGE_TIME_OF_DAY_OPTIONS: Array<{
   { value: "night", label: "Night" }
 ];
 
+/**
+ * The parameters one action takes. Each action type declares its own fields, so
+ * this renders those and nothing else -- an action with no parameters shows no
+ * inputs rather than an empty box the author has to ignore.
+ */
+function QuestActionFields({
+  action,
+  itemDefinitions,
+  scenes,
+  soundCueDefinitions,
+  onChange
+}: {
+  action: QuestActionDefinition;
+  itemDefinitions: ItemDefinition[];
+  scenes: Scene[];
+  soundCueDefinitions: SoundCueDefinition[];
+  onChange: (action: QuestActionDefinition) => void;
+}) {
+  switch (action.type) {
+    case "setFlag":
+      return (
+        <>
+          <TextInput
+            size="xs"
+            label="Flag Key"
+            value={action.key}
+            onChange={(event) =>
+              onChange({ ...action, key: event.currentTarget.value })
+            }
+          />
+          <TextInput
+            size="xs"
+            label="Value"
+            placeholder="(true)"
+            value={action.value == null ? "" : String(action.value)}
+            onChange={(event) =>
+              onChange({
+                ...action,
+                value: event.currentTarget.value || undefined
+              })
+            }
+          />
+        </>
+      );
+
+    case "emitEvent":
+      return (
+        <TextInput
+          size="xs"
+          label="Event Name"
+          value={action.eventName}
+          onChange={(event) =>
+            onChange({ ...action, eventName: event.currentTarget.value })
+          }
+        />
+      );
+
+    case "giveItem":
+    case "removeItem":
+      return (
+        <>
+          <Select
+            size="xs"
+            label="Item"
+            clearable
+            searchable
+            placeholder="Pick an item"
+            data={itemDefinitions.map((item) => ({
+              value: item.definitionId,
+              label: item.displayName
+            }))}
+            value={action.itemDefinitionId}
+            onChange={(value) =>
+              onChange({ ...action, itemDefinitionId: value })
+            }
+          />
+          <NumberInput
+            size="xs"
+            label="Count"
+            min={1}
+            value={action.count}
+            onChange={(value) =>
+              onChange({
+                ...action,
+                count: typeof value === "number" ? Math.max(1, value) : 1
+              })
+            }
+          />
+        </>
+      );
+
+    case "unlockScene":
+    case "advanceToNextScene":
+      return (
+        <Select
+          size="xs"
+          label="Scene"
+          clearable
+          placeholder={
+            action.type === "advanceToNextScene"
+              ? "(next by order)"
+              : "Pick a Scene"
+          }
+          data={scenes.map((scene) => ({
+            value: scene.sceneId,
+            label: scene.displayName
+          }))}
+          value={action.sceneId}
+          onChange={(value) => onChange({ ...action, sceneId: value })}
+        />
+      );
+
+    case "playCue":
+      return (
+        <Select
+          size="xs"
+          label="Sound Cue"
+          clearable
+          searchable
+          placeholder="Pick a cue"
+          data={soundCueDefinitions.map((cue) => ({
+            value: cue.definitionId,
+            label: cue.displayName
+          }))}
+          value={action.cueDefinitionId}
+          onChange={(value) => onChange({ ...action, cueDefinitionId: value })}
+        />
+      );
+
+    case "set-time-of-day":
+      return (
+        <Select
+          size="xs"
+          label="Time of Day"
+          data={REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS}
+          value={action.band}
+          onChange={(value) => {
+            if (!value) return;
+            onChange({ ...action, band: value as TimeOfDayBand });
+          }}
+        />
+      );
+
+    case "learn-fact":
+      return (
+        <>
+          <TextInput
+            size="xs"
+            label="Fact ID"
+            value={action.factId ?? ""}
+            onChange={(event) =>
+              onChange({
+                ...action,
+                factId: event.currentTarget.value || null
+              })
+            }
+          />
+          <TextInput
+            size="xs"
+            label="Display Text"
+            value={action.displayText}
+            onChange={(event) =>
+              onChange({ ...action, displayText: event.currentTarget.value })
+            }
+          />
+        </>
+      );
+
+    // No parameters an author can set. `teleportNpc` has fields but no editor
+    // until the story that wires it; the rest do nothing at runtime.
+    case "advance-day":
+    case "teleportNpc":
+    case "spawnVfx":
+    case "moveNpc":
+    case "setNpcState":
+    case "custom":
+      return null;
+
+    default: {
+      const exhaustive: never = action;
+      void exhaustive;
+      return null;
+    }
+  }
+}
+
 function QuestActionsEditor({
   actions,
   itemDefinitions,
@@ -685,7 +873,7 @@ function QuestActionsEditor({
               <Menu.Item
                 key={option.value}
                 onClick={() =>
-                  onChange([...actions, { type: option.value }])
+                  onChange([...actions, createQuestAction(option.value)])
                 }
               >
                 {option.label}
@@ -714,9 +902,11 @@ function QuestActionsEditor({
                   onChange={(value) => {
                     if (!value) return;
                     const next = [...actions];
-                    next[index] = {
-                      type: value as QuestActionDefinition["type"]
-                    };
+                    // Changing the type replaces the parameters: the old
+                    // action's fields do not exist on the new one.
+                    next[index] = createQuestAction(
+                      value as QuestActionDefinition["type"]
+                    );
                     onChange(next);
                   }}
                 />
@@ -733,87 +923,14 @@ function QuestActionsEditor({
                   ×
                 </ActionIcon>
               </Group>
-              {action.type === "giveItem" || action.type === "removeItem" ? (
-                <Select
-                  size="xs"
-                  label="Item"
-                  clearable
-                  data={itemDefinitions.map((item) => ({
-                    value: item.definitionId,
-                    label: item.displayName
-                  }))}
-                  value={action.targetId ?? null}
-                  onChange={(value) => {
-                    const next = [...actions];
-                    next[index] = { ...action, targetId: value ?? undefined };
-                    onChange(next);
-                  }}
-                />
-              ) : action.type === "playCue" ? (
-                <Select
-                  size="xs"
-                  label="Sound Cue"
-                  clearable
-                  searchable
-                  placeholder="Pick a cue"
-                  data={soundCueDefinitions.map((cue) => ({
-                    value: cue.definitionId,
-                    label: cue.displayName
-                  }))}
-                  value={action.targetId ?? null}
-                  onChange={(value) => {
-                    const next = [...actions];
-                    next[index] = { ...action, targetId: value ?? undefined };
-                    onChange(next);
-                  }}
-                />
-              ) : action.type === "unlockScene" ||
-                action.type === "advanceToNextScene" ? (
-                <Select
-                  size="xs"
-                  label="Scene"
-                  clearable
-                  placeholder={
-                    action.type === "advanceToNextScene"
-                      ? "(next by order)"
-                      : "Pick a Scene"
-                  }
-                  data={scenes.map((scene) => ({
-                    value: scene.sceneId,
-                    label: scene.displayName
-                  }))}
-                  value={action.targetId ?? null}
-                  onChange={(value) => {
-                    const next = [...actions];
-                    next[index] = { ...action, targetId: value ?? undefined };
-                    onChange(next);
-                  }}
-                />
-              ) : (
-                <TextInput
-                  size="xs"
-                  label="Target ID"
-                  value={action.targetId ?? ""}
-                  onChange={(event) => {
-                    const next = [...actions];
-                    next[index] = {
-                      ...action,
-                      targetId: event.currentTarget.value || undefined
-                    };
-                    onChange(next);
-                  }}
-                />
-              )}
-              <TextInput
-                size="xs"
-                label="Value"
-                value={action.value == null ? "" : String(action.value)}
-                onChange={(event) => {
+              <QuestActionFields
+                action={action}
+                itemDefinitions={itemDefinitions}
+                scenes={scenes}
+                soundCueDefinitions={soundCueDefinitions}
+                onChange={(updated) => {
                   const next = [...actions];
-                  next[index] = {
-                    ...action,
-                    value: event.currentTarget.value || undefined
-                  };
+                  next[index] = updated;
                   onChange(next);
                 }}
               />

@@ -830,13 +830,13 @@ export class QuestManager {
     source: { questDefinitionId: string; stageId: string; nodeId: string }
   ): void {
     for (const action of actions) {
-      if (action.type === "setFlag" && action.targetId) {
-        this.runtimeFlags.set(action.targetId, action.value ?? true);
+      if (action.type === "setFlag" && action.key) {
+        this.runtimeFlags.set(action.key, action.value ?? true);
         continue;
       }
 
-      if (action.type === "emitEvent" && action.targetId) {
-        this.notifyEvent(action.targetId);
+      if (action.type === "emitEvent" && action.eventName) {
+        this.notifyEvent(action.eventName);
         continue;
       }
 

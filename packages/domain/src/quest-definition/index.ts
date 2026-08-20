@@ -37,33 +37,47 @@ export type QuestConditionDefinition =
     }
   | { type: "not"; condition: QuestConditionDefinition };
 
-export type QuestActionType =
-  | "setFlag"
-  | "giveItem"
-  | "removeItem"
-  | "playCue"
-  | "spawnVfx"
-  | "teleportNpc"
-  | "moveNpc"
-  | "setNpcState"
-  | "emitEvent"
-  // Plan 058 §058.5 — Scene progression. `unlockScene` adds
-  // targetId to campaign.progression's manual unlocks;
-  // `advanceToNextScene` completes the current Scene and moves
-  // the player into targetId (or the next Scene by order when
-  // targetId is omitted).
-  | "unlockScene"
-  | "advanceToNextScene"
-  // Plan 074 §074.1' — Beat-driven world clock. `set-time-of-day`
-  // uses targetId as the TimeOfDayBand value; `advance-day` needs
-  // no value. Both dispatch through the existing quest action chain.
-  | "set-time-of-day"
-  | "advance-day"
-  // Plan 074 §074.5 -- Player-known-facts. `learn-fact` uses targetId
-  // as the fact id (dedup key) and value (string) as the display text.
-  // QUEST ACTIONS ONLY -- no dialogue node surface.
-  | "learn-fact"
-  | "custom";
+/**
+ * What a quest node does when it activates or completes. Each action names its
+ * own parameters, so the type says what an action takes and the editor and the
+ * runtime read the same named fields. Same shape as QuestConditionDefinition
+ * above.
+ *
+ * A reference an author has not chosen yet is null. The runtime skips an action
+ * whose reference is missing rather than guessing.
+ */
+export type QuestActionDefinition =
+  // Sets a runtime flag. Mirrors the `hasFlag` condition.
+  | { type: "setFlag"; key: string; value?: unknown }
+  // Fires a quest event, completing any active node waiting on that name.
+  | { type: "emitEvent"; eventName: string }
+  | { type: "giveItem"; itemDefinitionId: string | null; count: number }
+  | { type: "removeItem"; itemDefinitionId: string | null; count: number }
+  // Plan 058 §058.5 -- Scene progression. `unlockScene` adds the Scene to
+  // campaign.progression's manual unlocks; `advanceToNextScene` completes the
+  // current Scene and moves the player into `sceneId`, or into the next Scene
+  // by order when it is null.
+  | { type: "unlockScene"; sceneId: string | null }
+  | { type: "advanceToNextScene"; sceneId: string | null }
+  | { type: "playCue"; cueDefinitionId: string | null }
+  // Plan 074 §074.1' -- Beat-driven world clock.
+  | { type: "set-time-of-day"; band: TimeOfDayBand }
+  | { type: "advance-day" }
+  // Plan 074 §074.5 -- Player-known-facts. `factId` is the dedup key and
+  // `displayText` is what the player reads. Quest actions only, no dialogue
+  // node surface.
+  | { type: "learn-fact"; factId: string | null; displayText: string }
+  // Moves an NPC to an area and lets normal task selection continue from there.
+  | { type: "teleportNpc"; npcDefinitionId: string | null; targetAreaId: string | null }
+  // No parameters because nothing consumes them. They are offered in the picker
+  // and do nothing at runtime; the runtime handler lists them as explicit
+  // no-ops so an unhandled action cannot hide among them.
+  | { type: "spawnVfx" }
+  | { type: "moveNpc" }
+  | { type: "setNpcState" }
+  | { type: "custom" };
+
+export type QuestActionType = QuestActionDefinition["type"];
 
 /**
  * What an author reads in the action picker, one label per action type.
@@ -102,11 +116,44 @@ export const QUEST_ACTION_TYPE_OPTIONS: Array<{
   label
 }));
 
-export interface QuestActionDefinition {
-  type: QuestActionType;
-  targetId?: string;
-  value?: unknown;
-  position?: [number, number, number];
+/**
+ * An action of the given type with nothing chosen yet. The editor uses this
+ * when an author adds an action, and the normalizer when it reads one whose
+ * fields are missing.
+ */
+export function createQuestAction(type: QuestActionType): QuestActionDefinition {
+  switch (type) {
+    case "setFlag":
+      return { type, key: "" };
+    case "emitEvent":
+      return { type, eventName: "" };
+    case "giveItem":
+    case "removeItem":
+      return { type, itemDefinitionId: null, count: 1 };
+    case "unlockScene":
+    case "advanceToNextScene":
+      return { type, sceneId: null };
+    case "playCue":
+      return { type, cueDefinitionId: null };
+    case "set-time-of-day":
+      return { type, band: "morning" };
+    case "learn-fact":
+      return { type, factId: null, displayText: "" };
+    case "teleportNpc":
+      return { type, npcDefinitionId: null, targetAreaId: null };
+    case "advance-day":
+    case "spawnVfx":
+    case "moveNpc":
+    case "setNpcState":
+    case "custom":
+      return { type };
+    default: {
+      const exhaustive: never = type;
+      throw new Error(
+        `[quest-definition] createQuestAction has no shape for action type "${String(exhaustive)}". Add one beside the variant.`
+      );
+    }
+  }
 }
 
 export interface QuestNodeGraphPosition {
@@ -305,18 +352,129 @@ function normalizeQuestCondition(
   return condition;
 }
 
-function normalizeQuestAction(
-  action: Partial<QuestActionDefinition> | null | undefined
-): QuestActionDefinition | null {
-  if (!action?.type) return null;
-  return {
-    type: action.type,
-    targetId: action.targetId ?? undefined,
-    value: action.value,
-    position: action.position
-      ? [action.position[0], action.position[1], action.position[2]]
-      : undefined
-  };
+const QUEST_ACTION_TYPES = new Set<string>(
+  Object.keys(QUEST_ACTION_TYPE_LABELS)
+);
+
+const TIME_OF_DAY_BANDS: TimeOfDayBand[] = [
+  "dawn",
+  "morning",
+  "midday",
+  "afternoon",
+  "dusk",
+  "evening",
+  "night"
+];
+
+function isTimeOfDayBand(value: unknown): value is TimeOfDayBand {
+  return (
+    typeof value === "string" &&
+    (TIME_OF_DAY_BANDS as string[]).includes(value)
+  );
+}
+
+/** A count of at least 1, from a number, a numeric string, or nothing. */
+function normalizeActionCount(value: unknown): number {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim().length > 0
+        ? Number(value)
+        : NaN;
+  return Number.isFinite(numeric) ? Math.max(1, Math.floor(numeric)) : 1;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * Reads an action from a project file into its variant.
+ *
+ * Actions written before each type declared its own parameters carry a single
+ * `targetId` that meant something different per type, plus a `value` that meant
+ * a count, a flag value, or display text. Each case below reads its named field
+ * and falls back to those, so an older project keeps working.
+ */
+function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
+  if (!action || typeof action !== "object") return null;
+  const source = action as Record<string, unknown>;
+  const rawType = source.type;
+  if (typeof rawType !== "string" || !QUEST_ACTION_TYPES.has(rawType)) {
+    return null;
+  }
+  // QUEST_ACTION_TYPES is built from the label Record's keys, so a string it
+  // contains is a QuestActionType.
+  const type = rawType as QuestActionType;
+
+  // `targetId` was the one reference field every action shared.
+  const legacyTargetId = readString(source.targetId);
+
+  switch (type) {
+    case "setFlag":
+      return {
+        type: "setFlag",
+        key: readString(source.key) ?? legacyTargetId ?? "",
+        value: source.value
+      };
+    case "emitEvent":
+      return {
+        type: "emitEvent",
+        eventName: readString(source.eventName) ?? legacyTargetId ?? ""
+      };
+    case "giveItem":
+    case "removeItem":
+      return {
+        type,
+        itemDefinitionId: readString(source.itemDefinitionId) ?? legacyTargetId,
+        count: normalizeActionCount(
+          source.count !== undefined ? source.count : source.value
+        )
+      };
+    case "unlockScene":
+    case "advanceToNextScene":
+      return {
+        type,
+        sceneId: readString(source.sceneId) ?? legacyTargetId
+      };
+    case "playCue":
+      return {
+        type: "playCue",
+        cueDefinitionId: readString(source.cueDefinitionId) ?? legacyTargetId
+      };
+    case "set-time-of-day": {
+      const band = readString(source.band) ?? legacyTargetId;
+      return {
+        type: "set-time-of-day",
+        band: isTimeOfDayBand(band) ? band : "morning"
+      };
+    }
+    case "learn-fact":
+      return {
+        type: "learn-fact",
+        factId: readString(source.factId) ?? legacyTargetId,
+        displayText:
+          readString(source.displayText) ??
+          (typeof source.value === "string" ? source.value : "")
+      };
+    case "teleportNpc":
+      return {
+        type: "teleportNpc",
+        npcDefinitionId: readString(source.npcDefinitionId) ?? legacyTargetId,
+        targetAreaId: readString(source.targetAreaId)
+      };
+    case "advance-day":
+    case "spawnVfx":
+    case "moveNpc":
+    case "setNpcState":
+    case "custom":
+      return { type };
+    default: {
+      const exhaustive: never = type;
+      void exhaustive;
+      return null;
+    }
+  }
 }
 
 export function normalizeQuestNodeDefinition(

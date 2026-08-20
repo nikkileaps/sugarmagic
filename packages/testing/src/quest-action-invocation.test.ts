@@ -57,7 +57,7 @@ describe("quest action invocation", () => {
     const definition = questWithNodeActions({
       questDefinitionId: "quest:bell",
       nodeId,
-      onEnterActions: [{ type: "playCue", targetId: "cue:bell" }]
+      onEnterActions: [{ type: "playCue", cueDefinitionId: "cue:bell" }]
     });
 
     const invocations: QuestActionInvocation[] = [];
@@ -69,7 +69,7 @@ describe("quest action invocation", () => {
 
     expect(invocations).toEqual([
       {
-        action: { type: "playCue", targetId: "cue:bell" },
+        action: { type: "playCue", cueDefinitionId: "cue:bell" },
         questDefinitionId: "quest:bell",
         stageId: definition.stageId,
         nodeId
@@ -83,7 +83,7 @@ describe("quest action invocation", () => {
       questDefinitionId: "quest:bell",
       nodeId,
       eventName: "bell-rung",
-      onCompleteActions: [{ type: "playCue", targetId: "cue:bell" }]
+      onCompleteActions: [{ type: "playCue", cueDefinitionId: "cue:bell" }]
     });
 
     const invocations: QuestActionInvocation[] = [];
@@ -114,7 +114,7 @@ describe("quest action invocation", () => {
             objectiveSubtype: "custom"
           }),
           eventName: "bell-rung",
-          onCompleteActions: [{ type: "playCue", targetId: "cue:answer" }]
+          onCompleteActions: [{ type: "playCue", cueDefinitionId: "cue:answer" }]
         },
         {
           ...createDefaultQuestNodeDefinition({
@@ -125,8 +125,8 @@ describe("quest action invocation", () => {
           }),
           eventName: "ring",
           onCompleteActions: [
-            { type: "emitEvent", targetId: "bell-rung" },
-            { type: "playCue", targetId: "cue:ring" }
+            { type: "emitEvent", eventName: "bell-rung" },
+            { type: "playCue", cueDefinitionId: "cue:ring" }
           ]
         }
       ]
@@ -149,7 +149,9 @@ describe("quest action invocation", () => {
     // action -- each reporting its own node.
     expect(
       invocations.map((invocation) => [
-        invocation.action.targetId,
+        invocation.action.type === "playCue"
+          ? invocation.action.cueDefinitionId
+          : null,
         invocation.nodeId
       ])
     ).toEqual([
