@@ -8,6 +8,7 @@
  * Status: active
  */
 
+import { normalizeNodeGroups } from "@sugarmagic/domain";
 import type {
   DialogueDefinition,
   DialogueNodeDefinition
@@ -206,14 +207,26 @@ export function deleteDialogueNodes(
 ): DialogueDefinition {
   if (nodeIds.length === 0) return dialogue;
   const removed = new Set(nodeIds);
+  const nodes = dialogue.nodes
+    .filter((node) => !removed.has(node.nodeId))
+    .map((node) => ({
+      ...node,
+      next: node.next.filter((edge) => !removed.has(edge.targetNodeId))
+    }));
+
   return {
     ...dialogue,
-    nodes: dialogue.nodes
-      .filter((node) => !removed.has(node.nodeId))
-      .map((node) => ({
-        ...node,
-        next: node.next.filter((edge) => !removed.has(edge.targetNodeId))
-      }))
+    nodes,
+    // Deleting the start node repoints the start, the same way the load path
+    // does. Leaving it naming a deleted node makes Playtest start from nothing
+    // and gives no sign why, until the project is reloaded.
+    startNodeId: nodes.some((node) => node.nodeId === dialogue.startNodeId)
+      ? dialogue.startNodeId
+      : (nodes[0]?.nodeId ?? null),
+    groups: normalizeNodeGroups(
+      dialogue.groups,
+      new Set(nodes.map((node) => node.nodeId))
+    )
   };
 }
 

@@ -19,6 +19,7 @@ import {
   normalizeMusicBindings,
   normalizeGameProject
 } from "../game-project";
+import { normalizeNodeGroups } from "../graph-layout";
 import type { CreditsDefinition } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
 import type { PlacedAssetInstance, RegionDocument } from "../region-authoring";
@@ -894,6 +895,14 @@ function applyRemoveShaderNodeCommand(
         (edge) =>
           edge.sourceNodeId !== command.payload.nodeId &&
           edge.targetNodeId !== command.payload.nodeId
+      ),
+      groups: normalizeNodeGroups(
+        definition.groups,
+        new Set(
+          definition.nodes
+            .filter((node) => node.nodeId !== command.payload.nodeId)
+            .map((node) => node.nodeId)
+        )
       ),
       revision: definition.revision + 1
     }),

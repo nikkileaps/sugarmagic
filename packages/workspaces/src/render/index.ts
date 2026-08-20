@@ -11,7 +11,6 @@ export {
   shaderPortDataType,
   shaderPortExists,
   portColor,
-  shaderEdgeIdsFor,
   shaderToEditorEdges,
   shaderToEditorNodes,
   type ShaderNodePayload

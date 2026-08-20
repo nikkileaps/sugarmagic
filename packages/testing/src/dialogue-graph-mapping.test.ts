@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DialogueDefinition } from "@sugarmagic/domain";
+import { createNodeGroup } from "@sugarmagic/domain";
 import {
   applyDialogueNodeMoves,
   canDeleteDialogueNodes,
@@ -38,6 +39,50 @@ function dialogue(): DialogueDefinition {
     ]
   };
 }
+
+describe("dialogue node deletion", () => {
+  it("repoints the start when the start node is deleted", () => {
+    const definition = dialogue();
+    const start = definition.startNodeId!;
+    const survivor = definition.nodes.find((node) => node.nodeId !== start)!;
+
+    // Deleting the start while others remain is refused, so clear the rest
+    // first -- which is exactly what the refusal message tells the author.
+    const others = definition.nodes
+      .filter((node) => node.nodeId !== start)
+      .map((node) => node.nodeId);
+    const cleared = deleteDialogueNodes(definition, others);
+    expect(cleared.startNodeId).toBe(start);
+
+    const emptied = deleteDialogueNodes(cleared, [start]);
+    expect(emptied.nodes).toEqual([]);
+    expect(emptied.startNodeId).toBeNull();
+
+    // And when a non-start node goes, the start is untouched.
+    const withoutSurvivor = deleteDialogueNodes(definition, [survivor.nodeId]);
+    expect(withoutSurvivor.startNodeId).toBe(start);
+  });
+
+  it("drops deleted nodes from any group they were in", () => {
+    const definition = dialogue();
+    const doomed = definition.nodes.find(
+      (node) => node.nodeId !== definition.startNodeId
+    )!;
+    const grouped = {
+      ...definition,
+      groups: [
+        createNodeGroup({
+          groupId: "g1",
+          label: "Opening",
+          memberNodeIds: definition.nodes.map((node) => node.nodeId)
+        })
+      ]
+    };
+
+    const after = deleteDialogueNodes(grouped, [doomed.nodeId]);
+    expect(after.groups?.[0]!.memberNodeIds).not.toContain(doomed.nodeId);
+  });
+});
 
 describe("dialogue graph mapping", () => {
   it("only emits edges whose ports exist on the nodes they attach to", () => {

@@ -5,7 +5,6 @@ import {
   checkShaderConnection,
   shaderPortDataType,
   isValidShaderConnection,
-  shaderEdgeIdsFor,
   shaderToEditorEdges,
   shaderToEditorNodes
 } from "@sugarmagic/workspaces";
@@ -211,6 +210,41 @@ describe("parameter node types", () => {
     ).toBe(false);
   });
 
+  // The editor must refuse exactly what the shader compiler refuses. It used to
+  // demand identical types, which blocked wiring that compiles fine.
+  it("allows the widening and aliasing the compiler allows", () => {
+    const withSurface = shader();
+    withSurface.nodes = [
+      ...withSurface.nodes,
+      {
+        nodeId: "surface",
+        nodeType: "output.surface",
+        position: { x: 600, y: 0 },
+        settings: {}
+      }
+    ] as typeof withSurface.nodes;
+
+    // world-position "value" is vec3; the surface "color" input is color.
+    expect(
+      isValidShaderConnection(withSurface, {
+        fromId: "pos",
+        toId: "surface",
+        fromPort: "value",
+        toPort: "color"
+      })
+    ).toBe(true);
+
+    // math.add "value" is float, which spreads across a color.
+    expect(
+      isValidShaderConnection(withSurface, {
+        fromId: "add",
+        toId: "surface",
+        fromPort: "value",
+        toPort: "color"
+      })
+    ).toBe(true);
+  });
+
   it("refuses a port that does not exist on the node", () => {
     expect(
       isValidShaderConnection(shader(), {
@@ -271,25 +305,4 @@ describe("parameter node types", () => {
     expect(moved[0]).toMatchObject({ nodeId: "mul", position: { x: -50, y: -80 } });
   });
 
-  it("finds every connection touching a node being removed", () => {
-    const withEdges = shader();
-    withEdges.edges = [
-      {
-        edgeId: "e1",
-        sourceNodeId: "add",
-        sourcePortId: "value",
-        targetNodeId: "mul",
-        targetPortId: "a"
-      },
-      {
-        edgeId: "e2",
-        sourceNodeId: "pos",
-        sourcePortId: "value",
-        targetNodeId: "add",
-        targetPortId: "a"
-      }
-    ];
-    expect(shaderEdgeIdsFor(withEdges, ["add"]).sort()).toEqual(["e1", "e2"]);
-    expect(shaderEdgeIdsFor(withEdges, ["pos"])).toEqual(["e2"]);
-  });
 });

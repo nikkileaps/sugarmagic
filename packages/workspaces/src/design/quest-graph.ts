@@ -8,6 +8,7 @@
  * Status: active
  */
 
+import { normalizeNodeGroups } from "@sugarmagic/domain";
 import type {
   QuestNodeDefinition,
   QuestStageDefinition
@@ -236,7 +237,15 @@ export function deleteNodes(
           (nodeId) => !removed.has(nodeId)
         )
       })),
-    entryNodeIds: stage.entryNodeIds.filter((nodeId) => !removed.has(nodeId))
+    entryNodeIds: stage.entryNodeIds.filter((nodeId) => !removed.has(nodeId)),
+    groups: normalizeNodeGroups(
+      stage.groups,
+      new Set(
+        stage.nodeDefinitions
+          .filter((node) => !removed.has(node.nodeId))
+          .map((node) => node.nodeId)
+      )
+    )
   };
 }
 

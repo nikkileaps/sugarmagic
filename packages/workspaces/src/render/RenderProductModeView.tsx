@@ -55,7 +55,6 @@ import {
   SHADER_NODE_KIND,
   applyShaderNodeMoves,
   checkShaderConnection,
-  shaderEdgeIdsFor,
   shaderToEditorEdges,
   shaderToEditorNodes
 } from "./shader-graph-mapping";
@@ -613,7 +612,9 @@ export function useRenderProductModeView(
   const handleNodesDeleted = useCallback(
     (nodeIds: string[]) => {
       if (!selectedShader) return;
-      handleEdgesDeleted(shaderEdgeIdsFor(selectedShader, nodeIds));
+      // No edge sweep here: RemoveShaderNode already drops every edge touching
+      // the node. Removing them first cost one undo step per edge, so a single
+      // undo brought the node back without its connections.
       for (const nodeId of nodeIds) {
         onCommand({
           kind: "RemoveShaderNode",
@@ -628,13 +629,7 @@ export function useRenderProductModeView(
         setSelectedNodeId(null);
       }
     },
-    [
-      commandTarget,
-      handleEdgesDeleted,
-      onCommand,
-      selectedNodeId,
-      selectedShader
-    ]
+    [commandTarget, onCommand, selectedNodeId, selectedShader]
   );
 
   const hasGraphSelection =

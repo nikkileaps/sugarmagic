@@ -282,3 +282,71 @@ describe("SetShaderGraphNodeGroups", () => {
     expect(updated?.groups).toEqual([group]);
   });
 });
+
+/**
+ * Removing a shader node is one command, and it owns every consequence: the
+ * edges that touched the node, and its place in any group. The editor used to
+ * remove the edges itself first, which cost one undo step per edge.
+ */
+describe("RemoveShaderNode", () => {
+  it("drops the node's edges and its group membership in one step", () => {
+    const project = createDefaultGameProject("Little World", "little-world");
+    const session = createAuthoringSession(project, []);
+    const shader = getAllShaderDefinitions(session)[0]!;
+    const doomed = shader.nodes[0]!;
+
+    const withGroup = applyCommand(session, {
+      kind: "SetShaderGraphNodeGroups",
+      target: {
+        aggregateKind: "content-definition",
+        aggregateId: shader.shaderDefinitionId
+      },
+      subject: {
+        subjectKind: "shader-definition",
+        subjectId: shader.shaderDefinitionId
+      },
+      payload: {
+        shaderDefinitionId: shader.shaderDefinitionId,
+        groups: [
+          createNodeGroup({
+            groupId: "g5",
+            label: "Doomed",
+            memberNodeIds: shader.nodes.map((node) => node.nodeId)
+          })
+        ]
+      }
+    });
+
+    const after = applyCommand(withGroup, {
+      kind: "RemoveShaderNode",
+      target: {
+        aggregateKind: "content-definition",
+        aggregateId: shader.shaderDefinitionId
+      },
+      subject: {
+        subjectKind: "shader-definition",
+        subjectId: shader.shaderDefinitionId
+      },
+      payload: {
+        shaderDefinitionId: shader.shaderDefinitionId,
+        nodeId: doomed.nodeId
+      }
+    });
+
+    const updated = getAllShaderDefinitions(after).find(
+      (definition) =>
+        definition.shaderDefinitionId === shader.shaderDefinitionId
+    )!;
+    expect(updated.nodes.some((node) => node.nodeId === doomed.nodeId)).toBe(
+      false
+    );
+    expect(
+      updated.edges.some(
+        (edge) =>
+          edge.sourceNodeId === doomed.nodeId ||
+          edge.targetNodeId === doomed.nodeId
+      )
+    ).toBe(false);
+    expect(updated.groups?.[0]!.memberNodeIds).not.toContain(doomed.nodeId);
+  });
+});

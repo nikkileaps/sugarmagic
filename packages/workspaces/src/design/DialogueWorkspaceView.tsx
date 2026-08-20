@@ -664,28 +664,18 @@ export function useDialogueWorkspaceView(
     setSelectedNodeId(newNodeId);
   }
 
+  // The inspector's delete goes through the same rule and the same removal as
+  // the canvas. Two copies of "may this node go?" gave different answers
+  // depending on which button the author pressed.
   function deleteNode(nodeId: string) {
     if (!selectedDialogue) return;
-    if (selectedDialogue.nodes.length <= 1) {
-      window.alert("Cannot delete the last node.");
-      return;
-    }
-    if (nodeId === selectedDialogue.startNodeId) {
-      window.alert("Cannot delete the start node.");
+    const refusal = canDeleteDialogueNodes(selectedDialogue, [nodeId]);
+    if (!refusal.allowed) {
+      setDeleteRefusal(refusal.reason ?? "That node cannot be deleted.");
       return;
     }
 
-    const nextNodes = selectedDialogue.nodes
-      .filter((node) => node.nodeId !== nodeId)
-      .map((node) => ({
-        ...node,
-        next: node.next.filter((edge) => edge.targetNodeId !== nodeId)
-      }));
-
-    updateDialogue({
-      ...selectedDialogue,
-      nodes: nextNodes
-    });
+    updateDialogue(deleteDialogueNodes(selectedDialogue, [nodeId]));
     if (selectedNodeId === nodeId) {
       setSelectedNodeId(null);
     }
@@ -1261,16 +1251,17 @@ export function useDialogueWorkspaceView(
               )}
             </Stack>
 
-            {selectedNode.nodeId !== selectedDialogue.startNodeId && (
-              <Button
-                color="red"
-                variant="subtle"
-                onClick={() => deleteNode(selectedNode.nodeId)}
-                fullWidth
-              >
-                Delete Node
-              </Button>
-            )}
+            {/* Always shown: whether this node may go is `canDeleteDialogueNodes`'s
+                call, and hiding the button here would be a second copy of that
+                rule. Deleting the start node is allowed once it is the last one. */}
+            <Button
+              color="red"
+              variant="subtle"
+              onClick={() => deleteNode(selectedNode.nodeId)}
+              fullWidth
+            >
+              Delete Node
+            </Button>
 
             {renderDialogueInspectorSections?.({
               selectedDialogue,

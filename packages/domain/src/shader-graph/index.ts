@@ -5027,7 +5027,64 @@ function isParameterValueCompatible(
   }
 }
 
-function areShaderPortTypesCompatible(
+/**
+ * The data type a node's output port actually carries.
+ *
+ * Two node types do not simply report their declared port type: a Parameter node
+ * takes the type of the parameter bound to it, and a Material Texture node's type
+ * depends on which channel is being read. Anything deciding whether a connection
+ * is legal has to resolve this first, which is why it is exported rather than
+ * being worked out again at each call site.
+ */
+export function shaderOutputPortDataType(
+  document: ShaderGraphDocument,
+  nodeId: string,
+  portId: string
+): ShaderDataType | undefined {
+  const node = document.nodes.find((candidate) => candidate.nodeId === nodeId);
+  if (!node) return undefined;
+  const definition = SHADER_NODE_DEFINITIONS_BY_TYPE.get(node.nodeType);
+  const port = definition?.outputPorts.find(
+    (candidate) => candidate.portId === portId
+  );
+  if (!port) return undefined;
+
+  if (node.nodeType === "input.parameter") {
+    const parameterId = String(node.settings.parameterId ?? "").trim();
+    return (
+      document.parameters.find(
+        (parameter) => parameter.parameterId === parameterId
+      )?.dataType ?? port.dataType
+    );
+  }
+  if (node.nodeType === "input.material-texture") {
+    return requestedMaterialTextureOutputType(portId);
+  }
+  return port.dataType;
+}
+
+/** The data type a node's input port accepts. */
+export function shaderInputPortDataType(
+  document: ShaderGraphDocument,
+  nodeId: string,
+  portId: string
+): ShaderDataType | undefined {
+  const node = document.nodes.find((candidate) => candidate.nodeId === nodeId);
+  if (!node) return undefined;
+  return SHADER_NODE_DEFINITIONS_BY_TYPE.get(node.nodeType)
+    ?.inputPorts.find((candidate) => candidate.portId === portId)
+    ?.dataType;
+}
+
+/**
+ * Whether a value of `source` may flow into a `target` port. Deliberately wider
+ * than equality: vec3 and color are the same three numbers, a float spreads
+ * across a vector, and vectors truncate and widen.
+ *
+ * Exported so the editor refuses exactly what the compiler would refuse. A second
+ * copy of this rule in the editor once refused connections the compiler accepts.
+ */
+export function areShaderPortTypesCompatible(
   source: ShaderDataType,
   target: ShaderDataType
 ): boolean {
@@ -5214,12 +5271,8 @@ export function validateShaderGraphDocument(
     }
 
     const effectiveSourceDataType =
-      source.nodeType === "input.parameter"
-        ? parameterMap.get(String(source.settings.parameterId ?? "").trim())?.dataType ??
-          sourcePort.dataType
-        : source.nodeType === "input.material-texture"
-          ? requestedMaterialTextureOutputType(edge.sourcePortId)
-          : sourcePort.dataType;
+      shaderOutputPortDataType(document, edge.sourceNodeId, edge.sourcePortId) ??
+      sourcePort.dataType;
 
     if (!areShaderPortTypesCompatible(effectiveSourceDataType, targetPort.dataType)) {
       issues.push({

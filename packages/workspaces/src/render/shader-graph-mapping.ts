@@ -9,7 +9,10 @@
  */
 
 import {
+  areShaderPortTypesCompatible,
   getShaderNodeDefinition,
+  shaderInputPortDataType,
+  shaderOutputPortDataType,
   type ShaderDataType,
   type ShaderGraphDocument,
   type ShaderNodeInstance
@@ -159,14 +162,6 @@ export function applyShaderNodeMoves(
 }
 
 /**
- * A Parameter node stands for one of the shader's own parameters, so its real
- * data type is whatever that parameter declares. The node type's `outputPorts`
- * say `float`, which is a placeholder: reading the registry alone calls a colour
- * parameter a float and refuses every connection it should allow.
- */
-const PARAMETER_NODE_TYPE = "input.parameter";
-
-/**
  * Whether the node declares this port at all. Separate from its data type: a
  * Parameter node's port exists even while its type is still unknown.
  */
@@ -186,6 +181,12 @@ export function shaderPortExists(
   return ports.some((port) => port.portId === portId);
 }
 
+/**
+ * The data type at one end of a connection. The resolution lives in the domain,
+ * which knows that a Parameter node takes its bound parameter's type and a
+ * Material Texture node's type depends on the channel; this only handles the
+ * editor's case of a drag that has not named a port yet.
+ */
 export function shaderPortDataType(
   shader: ShaderGraphDocument,
   nodeId: string,
@@ -195,24 +196,16 @@ export function shaderPortDataType(
   const node = shader.nodes.find((candidate) => candidate.nodeId === nodeId);
   if (!node) return undefined;
 
-  if (side === "output" && node.nodeType === PARAMETER_NODE_TYPE) {
-    const parameterId = node.settings["parameterId"];
-    const parameter =
-      typeof parameterId === "string"
-        ? shader.parameters.find(
-            (candidate) => candidate.parameterId === parameterId
-          )
-        : undefined;
-    // An unbound Parameter node has no type yet. Returning undefined leaves it
-    // compatible with anything rather than unusable until a parameter is picked.
-    return parameter?.dataType;
+  if (!portId) {
+    const definition = getShaderNodeDefinition(node.nodeType);
+    const ports =
+      side === "input" ? definition?.inputPorts : definition?.outputPorts;
+    return ports?.[0]?.dataType;
   }
 
-  const definition = getShaderNodeDefinition(node.nodeType);
-  const ports =
-    side === "input" ? definition?.inputPorts : definition?.outputPorts;
-  if (!portId) return ports?.[0]?.dataType;
-  return ports?.find((port) => port.portId === portId)?.dataType;
+  return side === "output"
+    ? shaderOutputPortDataType(shader, nodeId, portId)
+    : shaderInputPortDataType(shader, nodeId, portId);
 }
 
 /**
@@ -268,7 +261,15 @@ export function checkShaderConnection(
   // node. Allow it rather than making the node unusable until a parameter is
   // chosen; a port that does not exist at all was already refused above.
   if (!sourceType || !targetType) return { allowed: true };
-  if (sourceType !== targetType) {
+  // The same rule the shader compiler applies, so the editor never refuses
+  // wiring that would have compiled. It is wider than equality on purpose:
+  // vec3 and color are interchangeable, a float spreads across a vector, and
+  // vectors truncate and widen. NOTE: a widened or truncated connection is
+  // silently reinterpreted rather than reported, so a wrong-looking shader can
+  // come from a legal connection. If that becomes a real source of bugs, the
+  // place to change it is `areShaderPortTypesCompatible` in
+  // packages/domain/src/shader-graph, which both this and the compiler use.
+  if (!areShaderPortTypesCompatible(sourceType, targetType)) {
     return {
       allowed: false,
       reason: `A ${sourceType} output cannot connect to a ${targetType} input.`
@@ -282,16 +283,4 @@ export function isValidShaderConnection(
   connection: GraphEditorConnection
 ): boolean {
   return checkShaderConnection(shader, connection).allowed;
-}
-
-export function shaderEdgeIdsFor(
-  shader: ShaderGraphDocument,
-  nodeIds: string[]
-): string[] {
-  const removed = new Set(nodeIds);
-  return shader.edges
-    .filter(
-      (edge) => removed.has(edge.sourceNodeId) || removed.has(edge.targetNodeId)
-    )
-    .map((edge) => edge.edgeId);
 }
