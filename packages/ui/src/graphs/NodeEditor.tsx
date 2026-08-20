@@ -58,6 +58,8 @@ export interface GraphEditorNode {
   position: GraphEditorPosition;
   /** Handed back to the renderer untouched. The editor never reads it. */
   payload: unknown;
+  /** Named input ports. Omit for a single unnamed input on the left edge. */
+  inputs?: GraphEditorPort[];
   outputs?: GraphEditorPort[];
 }
 
@@ -66,6 +68,7 @@ export interface GraphEditorEdge {
   fromId: string;
   toId: string;
   fromPort?: string;
+  toPort?: string;
   color?: string;
   dashed?: boolean;
 }
@@ -79,6 +82,8 @@ export interface GraphEditorConnection {
   fromId: string;
   toId: string;
   fromPort?: string;
+  /** Which input port it lands on, when the target declares named inputs. */
+  toPort?: string;
 }
 
 export interface GraphEditorNodeRendererProps {
@@ -117,6 +122,9 @@ export interface NodeEditorProps {
   /** Fires once when a drag finishes, carrying every node that moved. */
   onNodesMoved?: (moves: GraphEditorNodeMove[]) => void;
   onConnect?: (connection: GraphEditorConnection) => void;
+  /** Return false to refuse a connection while it is being dragged, so an
+   *  invalid one never lands. */
+  isValidConnection?: (connection: GraphEditorConnection) => boolean;
   onNodesDeleted?: (nodeIds: string[]) => void;
   onEdgesDeleted?: (edgeIds: string[]) => void;
   /** Return false to refuse a deletion. Runs before anything is removed. */
@@ -152,13 +160,27 @@ function NodeShell({
   const node = data.node;
   const renderer = renderers[node.kind];
   const outputs = node.outputs ?? [{ name: "out" }];
+  const inputs = node.inputs ?? [{ name: "in" }];
 
   return (
     <div
       className="sm-node-editor-node"
       data-selected={selected ? "true" : "false"}
     >
-      <Handle type="target" position={Position.Left} id="in" />
+      {inputs.map((port) => (
+        <Handle
+          key={port.name}
+          type="target"
+          position={Position.Left}
+          id={port.name}
+          style={{
+            top: `${(port.yPercent ?? 0.5) * 100}%`,
+            ...(port.color
+              ? { background: port.color, borderColor: port.color }
+              : {})
+          }}
+        />
+      ))}
       {renderer ? (
         renderer({ node, selected: Boolean(selected) })
       ) : (
@@ -201,7 +223,7 @@ function toFlowEdge(edge: GraphEditorEdge): FlowEdge {
     source: edge.fromId,
     target: edge.toId,
     sourceHandle: edge.fromPort ?? "out",
-    targetHandle: "in",
+    targetHandle: edge.toPort ?? "in",
     animated: false,
     style: {
       // The authored colour rides as a custom property rather than a `stroke`
@@ -225,6 +247,7 @@ function NodeEditorInner(
     onSelectionChange,
     onNodesMoved,
     onConnect,
+    isValidConnection,
     onNodesDeleted,
     onEdgesDeleted,
     onBeforeDelete,
@@ -396,10 +419,25 @@ function NodeEditorInner(
       onConnect?.({
         fromId: connection.source,
         toId: connection.target,
-        fromPort: connection.sourceHandle ?? undefined
+        fromPort: connection.sourceHandle ?? undefined,
+        toPort: connection.targetHandle ?? undefined
       });
     },
     [onConnect]
+  );
+
+  const handleIsValidConnection = useCallback(
+    (connection: Connection | FlowEdge) => {
+      if (!isValidConnection) return true;
+      if (!connection.source || !connection.target) return false;
+      return isValidConnection({
+        fromId: connection.source,
+        toId: connection.target,
+        fromPort: connection.sourceHandle ?? undefined,
+        toPort: connection.targetHandle ?? undefined
+      });
+    },
+    [isValidConnection]
   );
 
   const handleBeforeDelete = useCallback(
@@ -443,6 +481,7 @@ function NodeEditorInner(
       onNodesChange={handleNodesChange}
       onEdgesChange={handleEdgesChange}
       onConnect={handleConnect}
+      isValidConnection={handleIsValidConnection}
       onBeforeDelete={handleBeforeDelete}
       onNodesDelete={handleNodesDelete}
       onEdgesDelete={handleEdgesDelete}

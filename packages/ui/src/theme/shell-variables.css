@@ -27,6 +27,8 @@
   --sm-accent-mauve: #cba6f7;
   --sm-accent-teal: #94e2d5;
   --sm-accent-peach: #fab387;
+  /* Shader port colours need one accent per data type; sky is vec2's. */
+  --sm-accent-sky: #89dceb;
 
   /* Interactive state surfaces */
   --sm-active-bg: color-mix(in srgb, var(--sm-accent-blue) 10%, transparent);
