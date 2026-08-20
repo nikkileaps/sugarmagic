@@ -2,6 +2,5 @@
 // barrel is reachable from the shipped game through `@sugarmagic/ui`, which would
 // pull the whole library into the game bundle. Import it from
 // `@sugarmagic/ui/node-editor` instead.
-export * from "./GraphCanvas";
 // Safe for this barrel: it composes Mantine only, and never imports React Flow.
 export * from "./AddNodeMenu";
