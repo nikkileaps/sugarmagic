@@ -433,44 +433,6 @@ export function useRenderProductModeView(
     [commandTarget, onCommand]
   );
 
-  // Moving a frame moves its members with it, so the frame's new position and
-  // each member's shifted position go out together.
-  const handleGroupsMoved = useCallback(
-    (moves: GraphEditorNodeMove[]) => {
-      if (!selectedShader) return;
-      const groups = selectedShader.groups ?? [];
-      const nextGroups = groups.map((group) => {
-        const move = moves.find((candidate) => candidate.id === group.groupId);
-        return move ? { ...group, position: { ...move.position } } : group;
-      });
-      setGroups(selectedShader, nextGroups);
-
-      for (const move of moves) {
-        const group = groups.find((candidate) => candidate.groupId === move.id);
-        if (!group) continue;
-        const { dx, dy } = shiftGroupMembers(group, move.position);
-        for (const node of selectedShader.nodes) {
-          if (!group.memberNodeIds.includes(node.nodeId)) continue;
-          onCommand({
-            kind: "UpdateShaderNode",
-            ...commandTarget(selectedShader.shaderDefinitionId),
-            payload: {
-              shaderDefinitionId: selectedShader.shaderDefinitionId,
-              node: {
-                ...node,
-                position: {
-                  x: node.position.x + dx,
-                  y: node.position.y + dy
-                }
-              }
-            }
-          });
-        }
-      }
-    },
-    [commandTarget, onCommand, selectedShader, setGroups]
-  );
-
   const handleGroupRenamed = useCallback(
     (groupId: string, label: string) => {
       if (!selectedShader) return;
@@ -518,13 +480,20 @@ export function useRenderProductModeView(
     ]);
   }, [graphSelection.nodeIds, selectedShader, setGroups]);
 
-  // Shader commands are per node, so a multi-node drag sends one command each.
-  const handleNodesMoved = useCallback(
-    (moves: GraphEditorNodeMove[]) => {
+  // One drag, one pass. Shader edits are per-node commands, so this issues one
+  // UpdateShaderNode each plus at most one groups write, rather than splitting a
+  // single drag across two independent handlers.
+  const handleMoved = useCallback(
+    (moved: {
+      nodes: GraphEditorNodeMove[];
+      groups: GraphEditorNodeMove[];
+    }) => {
       if (!selectedShader) return;
+      const existingGroups = selectedShader.groups ?? [];
+
       // A node inside a frame reports a position relative to it; the document
       // stores absolute positions.
-      const absolute = moves.map((move) => ({
+      const absolute = moved.nodes.map((move) => ({
         id: move.id,
         position: toAbsolutePosition(
           move.position,
@@ -532,16 +501,49 @@ export function useRenderProductModeView(
           selectedShader.groups
         )
       }));
+
       // Where a node was dropped decides which frame it belongs to.
-      let groups = selectedShader.groups ?? [];
+      let nextGroups = existingGroups;
       for (const move of absolute) {
-        groups = resolveMembership(groups, move.id, move.position);
-      }
-      if (membershipChanged(selectedShader.groups, groups)) {
-        setGroups(selectedShader, groups);
+        nextGroups = resolveMembership(nextGroups, move.id, move.position);
       }
 
-      for (const node of applyShaderNodeMoves(selectedShader, absolute)) {
+      // A frame takes its members with it, so its new position and each
+      // member's shifted position go out together.
+      const movedNodes = new Map(
+        applyShaderNodeMoves(selectedShader, absolute).map((node) => [
+          node.nodeId,
+          node
+        ])
+      );
+      for (const move of moved.groups) {
+        const group = existingGroups.find(
+          (candidate) => candidate.groupId === move.id
+        );
+        if (!group) continue;
+        const { dx, dy } = shiftGroupMembers(group, move.position);
+        nextGroups = nextGroups.map((candidate) =>
+          candidate.groupId === move.id
+            ? { ...candidate, position: { ...move.position } }
+            : candidate
+        );
+        for (const node of selectedShader.nodes) {
+          if (!group.memberNodeIds.includes(node.nodeId)) continue;
+          movedNodes.set(node.nodeId, {
+            ...node,
+            position: { x: node.position.x + dx, y: node.position.y + dy }
+          });
+        }
+      }
+
+      if (
+        moved.groups.length > 0 ||
+        membershipChanged(selectedShader.groups, nextGroups)
+      ) {
+        setGroups(selectedShader, nextGroups);
+      }
+
+      for (const node of movedNodes.values()) {
         onCommand({
           kind: "UpdateShaderNode",
           ...commandTarget(selectedShader.shaderDefinitionId),
@@ -886,8 +888,7 @@ export function useRenderProductModeView(
           onPrimarySelectionChange={setSelectedNodeId}
           groups={editorGroups}
           onSelectionChange={setGraphSelection}
-          onNodesMoved={handleNodesMoved}
-          onGroupsMoved={handleGroupsMoved}
+          onMoved={handleMoved}
           onGroupRenamed={handleGroupRenamed}
           onGroupsDeleted={handleGroupsDeleted}
           onConnect={handleGraphConnect}

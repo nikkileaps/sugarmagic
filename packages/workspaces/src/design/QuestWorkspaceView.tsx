@@ -1209,12 +1209,19 @@ export function useQuestWorkspaceView({
     [selectedStage]
   );
 
-  const handleNodesMoved = useCallback(
-    (moves: GraphEditorNodeMove[]) => {
+  // One drag, one write. Nodes and frames used to be recorded by two separate
+  // calls built from the same starting stage, so whichever landed second threw
+  // away the other's half. A node whose frame is also being dragged is never
+  // reported as moved itself, so the two lists never overlap.
+  const handleMoved = useCallback(
+    (moved: {
+      nodes: GraphEditorNodeMove[];
+      groups: GraphEditorNodeMove[];
+    }) => {
       if (!selectedStage) return;
       // A node inside a frame reports a position relative to it; the document
       // stores absolute positions.
-      const absolute = moves.map((move) => ({
+      const absolute = moved.nodes.map((move) => ({
         id: move.id,
         position: toAbsolutePosition(
           move.position,
@@ -1222,30 +1229,13 @@ export function useQuestWorkspaceView({
           selectedStage.groups
         )
       }));
-      updateStage(selectedStage.stageId, (stage) => {
-        // Where a node was dropped decides which frame it belongs to.
-        let groups = stage.groups ?? [];
-        for (const move of absolute) {
-          groups = resolveMembership(groups, move.id, move.position);
-        }
-        const moved = applyNodeMoves(stage, absolute);
-        return membershipChanged(stage.groups, groups)
-          ? { ...moved, groups }
-          : moved;
-      });
-    },
-    [selectedStage, updateStage]
-  );
 
-  // Moving a frame moves its members with it. The editor reports only the
-  // frame's new position, so the members are shifted by the same delta here or
-  // they would spring back on the next load.
-  const handleGroupsMoved = useCallback(
-    (moves: GraphEditorNodeMove[]) => {
-      if (!selectedStage) return;
       updateStage(selectedStage.stageId, (stage) => {
+        // A frame takes its members with it: the editor reports only the frame's
+        // own new position, so the members are shifted by the same delta here or
+        // they would spring back on the next load.
         let next = stage;
-        for (const move of moves) {
+        for (const move of moved.groups) {
           const group = (next.groups ?? []).find(
             (candidate) => candidate.groupId === move.id
           );
@@ -1271,7 +1261,18 @@ export function useQuestWorkspaceView({
             )
           };
         }
-        return next;
+
+        if (absolute.length === 0) return next;
+
+        // Where a node was dropped decides which frame it belongs to.
+        let groups = next.groups ?? [];
+        for (const move of absolute) {
+          groups = resolveMembership(groups, move.id, move.position);
+        }
+        const withNodes = applyNodeMoves(next, absolute);
+        return membershipChanged(next.groups, groups)
+          ? { ...withNodes, groups }
+          : withNodes;
       });
     },
     [selectedStage, updateStage]
@@ -1581,8 +1582,7 @@ export function useQuestWorkspaceView({
               primarySelectionId={selectedNodeId}
               onPrimarySelectionChange={setSelectedNodeId}
               groups={editorGroups}
-              onNodesMoved={handleNodesMoved}
-              onGroupsMoved={handleGroupsMoved}
+              onMoved={handleMoved}
               onGroupRenamed={handleGroupRenamed}
               onGroupsDeleted={handleGroupsDeleted}
               onConnect={handleGraphConnect}

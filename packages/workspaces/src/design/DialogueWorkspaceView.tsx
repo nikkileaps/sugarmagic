@@ -727,12 +727,19 @@ export function useDialogueWorkspaceView(
     [selectedDialogue]
   );
 
-  const handleNodesMoved = useCallback(
-    (moves: GraphEditorNodeMove[]) => {
+  // One drag, one write. Nodes and frames used to be recorded by two separate
+  // calls built from the same starting dialogue, so whichever landed second
+  // threw away the other's half. A node whose frame is also being dragged is
+  // never reported as moved itself, so the two lists never overlap.
+  const handleMoved = useCallback(
+    (moved: {
+      nodes: GraphEditorNodeMove[];
+      groups: GraphEditorNodeMove[];
+    }) => {
       if (!selectedDialogue) return;
       // A node inside a frame reports a position relative to it; the document
       // stores absolute positions.
-      const absolute = moves.map((move) => ({
+      const absolute = moved.nodes.map((move) => ({
         id: move.id,
         position: toAbsolutePosition(
           move.position,
@@ -740,27 +747,12 @@ export function useDialogueWorkspaceView(
           selectedDialogue.groups
         )
       }));
-      // Where a node was dropped decides which frame it belongs to.
-      let groups = selectedDialogue.groups ?? [];
-      for (const move of absolute) {
-        groups = resolveMembership(groups, move.id, move.position);
-      }
-      const moved = applyDialogueNodeMoves(selectedDialogue, absolute);
-      updateDialogue(
-        membershipChanged(selectedDialogue.groups, groups)
-          ? { ...moved, groups }
-          : moved
-      );
-    },
-    [selectedDialogue, updateDialogue]
-  );
 
-  // Moving a frame moves its members with it.
-  const handleGroupsMoved = useCallback(
-    (moves: GraphEditorNodeMove[]) => {
-      if (!selectedDialogue) return;
+      // A frame takes its members with it: the editor reports only the frame's
+      // own new position, so the members are shifted by the same delta here or
+      // they would spring back on the next load.
       let next = selectedDialogue;
-      for (const move of moves) {
+      for (const move of moved.groups) {
         const group = (next.groups ?? []).find(
           (candidate) => candidate.groupId === move.id
         );
@@ -786,6 +778,19 @@ export function useDialogueWorkspaceView(
           )
         };
       }
+
+      if (absolute.length > 0) {
+        // Where a node was dropped decides which frame it belongs to.
+        let groups = next.groups ?? [];
+        for (const move of absolute) {
+          groups = resolveMembership(groups, move.id, move.position);
+        }
+        const withNodes = applyDialogueNodeMoves(next, absolute);
+        next = membershipChanged(next.groups, groups)
+          ? { ...withNodes, groups }
+          : withNodes;
+      }
+
       updateDialogue(next);
     },
     [selectedDialogue, updateDialogue]
@@ -1376,8 +1381,7 @@ export function useDialogueWorkspaceView(
                 primarySelectionId={selectedNodeId}
                 onPrimarySelectionChange={setSelectedNodeId}
                 groups={editorGroups}
-                onNodesMoved={handleNodesMoved}
-                onGroupsMoved={handleGroupsMoved}
+                onMoved={handleMoved}
                 onGroupRenamed={handleGroupRenamed}
                 onGroupsDeleted={handleGroupsDeleted}
                 onConnect={handleGraphConnect}

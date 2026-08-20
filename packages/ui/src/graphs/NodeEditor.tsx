@@ -130,7 +130,6 @@ export interface NodeEditorProps {
   nodes: GraphEditorNode[];
   edges: GraphEditorEdge[];
   groups?: GraphEditorGroup[];
-  onGroupsMoved?: (moves: GraphEditorNodeMove[]) => void;
   onGroupRenamed?: (groupId: string, label: string) => void;
   onGroupsDeleted?: (groupIds: string[]) => void;
   /** One renderer per node kind. */
@@ -146,8 +145,16 @@ export interface NodeEditorProps {
     groupIds: string[];
     edgeIds: string[];
   }) => void;
-  /** Fires once when a drag finishes, carrying every node that moved. */
-  onNodesMoved?: (moves: GraphEditorNodeMove[]) => void;
+  /**
+   * Fires once when a drag finishes, carrying everything that moved. Nodes and
+   * frames arrive together because one drag can move both, and the caller has to
+   * record them in a single write -- two writes built from the same starting
+   * state would each discard the other's half.
+   */
+  onMoved?: (moved: {
+    nodes: GraphEditorNodeMove[];
+    groups: GraphEditorNodeMove[];
+  }) => void;
   onConnect?: (connection: GraphEditorConnection) => void;
   /** Return false to refuse a connection while it is being dragged, so an
    *  invalid one never lands. */
@@ -358,13 +365,12 @@ function NodeEditorInner(
     nodes,
     edges,
     groups,
-    onGroupsMoved,
     onGroupRenamed,
     onGroupsDeleted,
     primarySelectionId = null,
     onPrimarySelectionChange,
     onSelectionChange,
-    onNodesMoved,
+    onMoved,
     onConnect,
     isValidConnection,
     onNodesDeleted,
@@ -461,9 +467,15 @@ function NodeEditorInner(
       centerOnNode: (nodeId: string) => {
         const node = reactFlow.getNode(nodeId);
         if (!node) return;
+        // A node inside a frame reports a position relative to that frame, but
+        // setCenter wants canvas coordinates. The library tracks the absolute
+        // one; reading `position` here centred on the wrong place.
+        const position =
+          reactFlow.getInternalNode(nodeId)?.internals.positionAbsolute ??
+          node.position;
         void reactFlow.setCenter(
-          node.position.x + (node.measured?.width ?? 0) / 2,
-          node.position.y + (node.measured?.height ?? 0) / 2,
+          position.x + (node.measured?.width ?? 0) / 2,
+          position.y + (node.measured?.height ?? 0) / 2,
           { duration: 200 }
         );
       },
@@ -548,8 +560,9 @@ function NodeEditorInner(
             id: change.id,
             position: { x: change.position!.x, y: change.position!.y }
           }));
-        if (nodeMoves.length > 0) onNodesMoved?.(nodeMoves);
-        if (groupMoves.length > 0) onGroupsMoved?.(groupMoves);
+        if (nodeMoves.length > 0 || groupMoves.length > 0) {
+          onMoved?.({ nodes: nodeMoves, groups: groupMoves });
+        }
       }
 
       const selection = changes.filter(
@@ -568,7 +581,7 @@ function NodeEditorInner(
         }
       }
     },
-    [groups, onGroupsMoved, onNodesMoved, onPrimarySelectionChange, reactFlow]
+    [groups, onMoved, onPrimarySelectionChange, reactFlow]
   );
 
   const handleEdgesChange = useCallback((changes: EdgeChange<FlowEdge>[]) => {
