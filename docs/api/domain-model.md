@@ -155,6 +155,26 @@ runtime inventory and caster.
   `optional`, `eventName` (named completion event), and for talk/dialogue
   nodes a `dialogueDefinitionId` + `completeOn`.
 
+### Graph layout
+
+The three documents edited as node graphs -- `QuestStageDefinition`,
+`DialogueDefinition` and `ShaderGraphDocument` -- each carry an optional
+`groups: NodeGroup[]` (`packages/domain/src/graph-layout`). A `NodeGroup` is a
+labelled box drawn around a set of nodes: `groupId`, `label`, `memberNodeIds`,
+`position` and its own `size`.
+
+Groups are layout, not meaning. The runtime never reads them, and grouping nodes
+changes nothing about how a quest, dialogue or shader behaves.
+
+Membership lives only on the group, in `memberNodeIds`; a node does not name its
+group. Node positions stay absolute in the document -- the editor converts to and
+from box-relative coordinates, because the graph library positions a member
+relative to the box it sits in.
+
+The field is optional so a document written before groups existed loads without
+migration; the normalizers default it to an empty list and drop members whose
+nodes no longer exist.
+
 ### Authoring change path
 
 All authored mutation flows through semantic commands

@@ -355,6 +355,10 @@ It must not pull in:
 - `shell`
 - editor-only workspace implementation modules
 - editor gizmos, editor overlays, or ProductMode-specific authoring logic
+- the node-graph editor or React Flow (`@xyflow/react`), which is Studio-only and
+  reached through the `@sugarmagic/ui/node-editor` subpath;
+  `tooling/check-editor-bundle-isolation.mjs` fails if any package the game is built
+  from names either
 
 ## `/packages/shell` API
 
@@ -681,13 +685,30 @@ Reusable components and view-layer building blocks for Sugarmagic-owned shell an
 - Mantine-backed reusable shell and layout components
 - reusable components
 - inspector components
-- graph and tree view components
+- tree view components
+- the node-graph editor, on a separate entry point (see below)
 - shell-usable panels
 - design tokens and styling primitives
 - shared icon wrappers and icon usage contracts
 - shared theme integration for Sugarengine-derived shell palette tokens
 
 For the current foundation, this package should be understood primarily as the home for editor and shell-facing UI primitives.
+
+### The node editor is behind a separate entry point
+
+`NodeEditor` is the shared node-graph editor used by the quest, dialogue and shader
+workspaces. It builds on React Flow (`@xyflow/react`), which the shipped game must not
+carry.
+
+It is therefore reached through the `@sugarmagic/ui/node-editor` subpath export and is
+deliberately absent from this package's barrel. The game reaches the barrel both
+directly and through `@sugarmagic/plugins`, so a re-export from `packages/ui/src/index.ts` or
+`packages/ui/src/graphs/index.ts` puts the whole library in the game bundle. Its
+stylesheet is a separate subpath, `@sugarmagic/ui/node-editor.css`, imported at the two
+Studio entries rather than from any module here; a CSS side effect is not tree-shaken
+the way an unused import is.
+
+`tooling/check-editor-bundle-isolation.mjs` enforces this.
 
 ### State guidance
 
