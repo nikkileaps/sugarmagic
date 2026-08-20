@@ -435,6 +435,26 @@ export class QuestManager {
     );
   }
 
+  /**
+   * Every quest in progress, with the stage it is on.
+   *
+   * This is what region quest bindings evaluate against -- which NPCs stand
+   * where, which doors are passable. `getTrackedQuest()` below is the player's
+   * journal selection and answers a different question.
+   *
+   * A quest whose current stage cannot be resolved still appears, with a null
+   * stage, so a binding naming only the quest still matches it.
+   */
+  getActiveQuestStates(): Array<{
+    questDefinitionId: string;
+    stageId: string | null;
+  }> {
+    return Array.from(this.activeQuests.entries()).map(([questDefinitionId, state]) => ({
+      questDefinitionId,
+      stageId: this.getCurrentStageDefinition(state)?.stageId ?? null
+    }));
+  }
+
   getTrackedQuest(): QuestTrackerView | null {
     const questDefinitionId =
       this.trackedQuestDefinitionId ?? Array.from(this.activeQuests.keys())[0] ?? null;

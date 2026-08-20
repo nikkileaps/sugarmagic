@@ -106,7 +106,7 @@ export interface RuntimeNpcMotion {
 export interface RuntimeNpcBehaviorSystem {
   sync: (input: {
     deltaSeconds: number;
-    activeQuest: RuntimeBehaviorQuestState | null;
+    activeQuests: RuntimeBehaviorQuestState[];
   }) => RuntimeNpcBehaviorSyncResult;
   getCurrentTask: (npcDefinitionId: string) => RuntimeNpcCurrentTask | null;
   getMotion: (npcDefinitionId: string) => RuntimeNpcMotion | null;
@@ -227,7 +227,7 @@ function resolveTaskTargetPoint(
 
 function taskMatchesActivation(
   task: RegionNPCBehaviorTask,
-  activeQuest: RuntimeBehaviorQuestState | null,
+  activeQuests: RuntimeBehaviorQuestState[],
   hasWorldFlag?: (key: string, value?: unknown) => boolean,
   currentTimeBand?: string | null
 ): boolean {
@@ -242,14 +242,14 @@ function taskMatchesActivation(
   }
   // Plan 069.5 — one grammar evaluator, shared with the containment gate.
   return evaluateRegionQuestBinding(task.activation, {
-    activeQuest,
+    activeQuests,
     hasWorldFlag
   });
 }
 
 function resolveBehaviorTask(
   behavior: RegionNPCBehaviorDefinition | null,
-  activeQuest: RuntimeBehaviorQuestState | null,
+  activeQuests: RuntimeBehaviorQuestState[],
   hasWorldFlag?: (key: string, value?: unknown) => boolean,
   currentTimeBand?: string | null
 ): RegionNPCBehaviorTask | null {
@@ -259,7 +259,7 @@ function resolveBehaviorTask(
 
   const questMatchedTask =
     behavior.tasks.find((task) =>
-      taskMatchesActivation(task, activeQuest, hasWorldFlag, currentTimeBand)
+      taskMatchesActivation(task, activeQuests, hasWorldFlag, currentTimeBand)
     ) ?? null;
   return questMatchedTask;
 }
@@ -564,7 +564,7 @@ export function createRuntimeNpcBehaviorSystem(
   function syncNpc(
     npc: RuntimeBehaviorNpcEntityRef,
     deltaSeconds: number,
-    activeQuest: RuntimeBehaviorQuestState | null
+    activeQuests: RuntimeBehaviorQuestState[]
   ) {
     const position = world.getComponent(npc.entity, Position);
     if (!position) {
@@ -574,7 +574,7 @@ export function createRuntimeNpcBehaviorSystem(
     const behavior = behaviorByNpcId.get(npc.npcDefinitionId) ?? null;
     const task = resolveBehaviorTask(
       behavior,
-      activeQuest,
+      activeQuests,
       hasWorldFlag,
       getTimeOfDayBand(blackboard)
     );
@@ -815,7 +815,7 @@ export function createRuntimeNpcBehaviorSystem(
       }
 
       const snapshots = currentNpcEntities
-        .map((npc) => syncNpc(npc, input.deltaSeconds, input.activeQuest))
+        .map((npc) => syncNpc(npc, input.deltaSeconds, input.activeQuests))
         .filter((snapshot): snapshot is NonNullable<typeof snapshot> => snapshot !== null);
 
       return { snapshots };

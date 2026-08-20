@@ -104,7 +104,11 @@ import {
   type CollisionWorld
 } from "../collision";
 import type { NavMeshPathfinder } from "../navmesh";
-import { resolveWorldFlagWriteValue, evaluateRegionQuestBinding } from "../region-conditions";
+import {
+  resolveWorldFlagWriteValue,
+  evaluateRegionQuestBinding,
+  type RegionConditionContext
+} from "../region-conditions";
 import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
@@ -1405,13 +1409,11 @@ export function createRuntimeGameplaySessionController(
     debugBillboardBindings.delete(entry.entity);
   }
 
-  function buildPresenceQuestContext() {
-    const trackedQuest = questManager.getTrackedQuest();
+  function buildPresenceQuestContext(): RegionConditionContext {
     return {
-      activeQuest: trackedQuest
-        ? { questDefinitionId: trackedQuest.questDefinitionId, stageId: trackedQuest.stageId }
-        : null,
-      hasWorldFlag: (key: string, value: boolean) => questManager.hasFlag(key, value)
+      activeQuests: questManager.getActiveQuestStates(),
+      hasWorldFlag: (key: string, value?: unknown) =>
+        questManager.hasFlag(key, value)
     };
   }
 
@@ -2498,32 +2500,21 @@ export function createRuntimeGameplaySessionController(
     startInitialQuests: () => questDialogueCoordinator.startInitialQuests(),
     update(deltaSeconds = 1 / 60) {
       blackboard.advanceFrame();
-      const trackedQuest = questManager.getTrackedQuest();
+      // Which NPCs are where and which doors are passable follow EVERY quest
+      // in progress, not the one the player has selected in their journal.
+      const activeQuests = questManager.getActiveQuestStates();
       // Plan 069.5 — re-evaluate conditional containment gates against the
       // current quest/flag state BEFORE any move resolves this frame (NPC
       // sync here; the player CollisionSystem reads the same world next tick).
       if (sharedCollisionWorld.gates.length > 0) {
         applyVolumeColliderGates(sharedCollisionWorld, {
-          activeQuest: trackedQuest
-            ? {
-                questDefinitionId: trackedQuest.questDefinitionId,
-                stageId: trackedQuest.stageId
-              }
-            : null,
+          activeQuests,
           hasWorldFlag: (key, value) => questManager.hasFlag(key, value)
         });
       }
       // Plan 079.2 -- reconcile conditional NPC presences each frame.
       reconcileNpcPresences();
-      npcBehaviorSystem?.sync({
-        deltaSeconds,
-        activeQuest: trackedQuest
-          ? {
-              questDefinitionId: trackedQuest.questDefinitionId,
-              stageId: trackedQuest.stageId
-            }
-          : null
-      });
+      npcBehaviorSystem?.sync({ deltaSeconds, activeQuests });
       syncBlackboardSpatialFacts();
       syncBlackboardQuestFacts();
       spellMenuUi.update();

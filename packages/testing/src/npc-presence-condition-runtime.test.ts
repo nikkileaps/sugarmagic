@@ -29,7 +29,10 @@ import {
   QuestManager,
   World
 } from "@sugarmagic/runtime-core";
-import type { Entity } from "@sugarmagic/runtime-core";
+import type {
+  Entity,
+  RegionConditionContext
+} from "@sugarmagic/runtime-core";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -76,16 +79,10 @@ const PRESENCES = [GATED_PRESENCE, ALWAYS_PRESENCE];
 
 type EntityEntry = { entity: Entity; npcDefinitionId: string };
 
-function buildQuestCtx(questManager: QuestManager) {
-  const trackedQuest = questManager.getTrackedQuest();
+function buildQuestCtx(questManager: QuestManager): RegionConditionContext {
   return {
-    activeQuest: trackedQuest
-      ? {
-          questDefinitionId: trackedQuest.questDefinitionId,
-          stageId: trackedQuest.stageId
-        }
-      : null,
-    hasWorldFlag: (key: string, value: boolean) =>
+    activeQuests: questManager.getActiveQuestStates(),
+    hasWorldFlag: (key: string, value?: unknown) =>
       questManager.hasFlag(key, value)
   };
 }

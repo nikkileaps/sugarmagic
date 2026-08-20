@@ -170,13 +170,13 @@ describe("069.5 — conditional containment gate", () => {
     expect(world.gates).toHaveLength(1);
 
     // Flag unset -> gate blocking: can't leave.
-    applyVolumeColliderGates(world, { activeQuest: null, hasWorldFlag: () => false });
+    applyVolumeColliderGates(world, { activeQuests: [], hasWorldFlag: () => false });
     const trapped = resolveMove({ x: 0, z: 0, radius: R }, { x: 5, z: 0 }, world);
     expect(0 + trapped.x).toBeCloseTo(1.5, 5);
 
     // Flag set -> gate open: walk straight out.
     applyVolumeColliderGates(world, {
-      activeQuest: null,
+      activeQuests: [],
       hasWorldFlag: (key, value) => key === "freed" && value === true
     });
     const freed = resolveMove({ x: 0, z: 0, radius: R }, { x: 5, z: 0 }, world);
@@ -189,7 +189,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     expect(
       evaluateRegionQuestBinding(
         { questDefinitionId: null, questStageId: null, worldFlagEquals: null },
-        { activeQuest: null }
+        { activeQuests: [] }
       )
     ).toBe(true);
   });
@@ -200,10 +200,10 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
       questStageId: null,
       worldFlagEquals: { key: "k", valueType: "boolean" as const, value: "true" }
     };
-    expect(evaluateRegionQuestBinding(binding, { activeQuest: null })).toBe(false);
+    expect(evaluateRegionQuestBinding(binding, { activeQuests: [] })).toBe(false);
     expect(
       evaluateRegionQuestBinding(binding, {
-        activeQuest: null,
+        activeQuests: [],
         hasWorldFlag: (key, value) => key === "k" && value === true
       })
     ).toBe(true);
@@ -217,12 +217,12 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     };
     expect(
       evaluateRegionQuestBinding(binding, {
-        activeQuest: { questDefinitionId: "q1", stageId: "s2" }
+        activeQuests: [{ questDefinitionId: "q1", stageId: "s2" }]
       })
     ).toBe(true);
     expect(
       evaluateRegionQuestBinding(binding, {
-        activeQuest: { questDefinitionId: "q1", stageId: "other" }
+        activeQuests: [{ questDefinitionId: "q1", stageId: "other" }]
       })
     ).toBe(false);
   });
@@ -263,7 +263,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
       worldFlagEquals: { key: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
     };
     const ctx = (stageId: string, hasFlag: boolean) => ({
-      activeQuest: { questDefinitionId: "quest.find-the-luggage", stageId },
+      activeQuests: [{ questDefinitionId: "quest.find-the-luggage", stageId }],
       hasWorldFlag: (k: string, v: unknown) => k === "talkedToDockWorker" && v === hasFlag
     });
 
@@ -291,7 +291,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
 
     expect(
       evaluateRegionQuestBinding(binding, {
-        activeQuest: { questDefinitionId: "quest.find-the-luggage", stageId: "stage.find-suitcase" },
+        activeQuests: [{ questDefinitionId: "quest.find-the-luggage", stageId: "stage.find-suitcase" }],
         hasWorldFlag: flagAlwaysSet
       })
     ).toBe(true);
@@ -299,8 +299,45 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     // Stage advances; flag is still set but the binding should retire
     expect(
       evaluateRegionQuestBinding(binding, {
-        activeQuest: { questDefinitionId: "quest.find-the-luggage", stageId: "stage.return-to-counter" },
+        activeQuests: [{ questDefinitionId: "quest.find-the-luggage", stageId: "stage.return-to-counter" }],
         hasWorldFlag: flagAlwaysSet
+      })
+    ).toBe(false);
+  });
+
+  it("a binding matches any quest in progress, not just the first", () => {
+    // Which quest the player follows in their journal is a display choice and
+    // must not decide whether a door is passable.
+    const binding = {
+      questDefinitionId: "quest.find-the-luggage",
+      questStageId: "stage.find-suitcase",
+      worldFlagEquals: null
+    };
+    expect(
+      evaluateRegionQuestBinding(binding, {
+        activeQuests: [
+          { questDefinitionId: "quest.other", stageId: "stage.one" },
+          { questDefinitionId: "quest.find-the-luggage", stageId: "stage.find-suitcase" }
+        ]
+      })
+    ).toBe(true);
+  });
+
+  it("does not satisfy a binding from two different quests", () => {
+    // The quest clause and the stage clause are checked against the SAME
+    // quest. One active quest supplies the id, another the stage, and neither
+    // satisfies the binding on its own.
+    const binding = {
+      questDefinitionId: "quest.find-the-luggage",
+      questStageId: "stage.find-suitcase",
+      worldFlagEquals: null
+    };
+    expect(
+      evaluateRegionQuestBinding(binding, {
+        activeQuests: [
+          { questDefinitionId: "quest.find-the-luggage", stageId: "stage.elsewhere" },
+          { questDefinitionId: "quest.other", stageId: "stage.find-suitcase" }
+        ]
       })
     ).toBe(false);
   });
