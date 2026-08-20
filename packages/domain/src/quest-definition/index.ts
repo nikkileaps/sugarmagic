@@ -79,13 +79,23 @@ export type QuestActionDefinition =
   | { type: "learn-fact"; factId: string | null; displayText: string }
   // Moves an NPC to an area and lets normal task selection continue from there.
   | { type: "teleportNpc"; npcDefinitionId: string | null; targetAreaId: string | null }
-  // No parameters because nothing consumes them. They are offered in the picker
-  // and do nothing at runtime; the runtime handler lists them as explicit
-  // no-ops so an unhandled action cannot hide among them.
-  | { type: "spawnVfx" }
-  | { type: "moveNpc" }
-  | { type: "setNpcState" }
+  // No parameters because nothing consumes it.
   | { type: "custom" };
+
+/**
+ * Three actions this list deliberately does not have, and what to do instead.
+ *
+ * - Playing a world-space effect. There is no effect system to route one to.
+ *   Add the action back alongside one, when a story beat needs an authored
+ *   effect at a place -- sparkles over the shrine as an offering node
+ *   completes, say -- and it can answer whether the effect anchors to a world
+ *   position or to an NPC or asset. Unrelated and staying: the `vfx-spawn`
+ *   gameplay placement kind and the content library's `vfx` definition kind.
+ * - Walking an NPC somewhere. That is the behavior system's: author the NPC a
+ *   task with a target area and an activation.
+ * - Flipping an NPC between scripted and agentified. #207 gives that a
+ *   purpose-named action with defined semantics.
+ */
 
 export type QuestActionType = QuestActionDefinition["type"];
 
@@ -106,10 +116,7 @@ const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
   "learn-fact": "Learn Fact",
   playCue: "Play Cue",
   playAnimation: "Play Animation",
-  spawnVfx: "Spawn VFX",
   teleportNpc: "Teleport NPC",
-  moveNpc: "Move NPC",
-  setNpcState: "Set NPC State",
   custom: "Custom"
 };
 
@@ -155,9 +162,6 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
     case "teleportNpc":
       return { type, npcDefinitionId: null, targetAreaId: null };
     case "advance-day":
-    case "spawnVfx":
-    case "moveNpc":
-    case "setNpcState":
     case "custom":
       return { type };
     default: {
@@ -490,9 +494,6 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
         targetAreaId: readString(source.targetAreaId)
       };
     case "advance-day":
-    case "spawnVfx":
-    case "moveNpc":
-    case "setNpcState":
     case "custom":
       return { type };
     default: {

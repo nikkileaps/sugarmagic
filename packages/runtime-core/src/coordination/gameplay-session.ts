@@ -2040,10 +2040,7 @@ export function createRuntimeGameplaySessionController(
 
       // Offered in the editor, no runtime behavior. Listed so an action nobody
       // handles cannot pass as one that is handled.
-      case "spawnVfx":
       case "teleportNpc":
-      case "moveNpc":
-      case "setNpcState":
       case "custom":
         return;
 
