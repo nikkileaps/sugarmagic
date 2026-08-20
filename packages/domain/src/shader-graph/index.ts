@@ -8,6 +8,7 @@
  */
 
 import { createScopedId } from "../shared/identity";
+import type { NodeGroup } from "../graph-layout/index";
 
 export type ShaderTargetKind =
   | "mesh-surface"
@@ -147,6 +148,13 @@ export interface ShaderGraphDocument {
   nodes: ShaderNodeInstance[];
   edges: ShaderEdge[];
   parameters: ShaderParameter[];
+  /**
+   * Labelled boxes drawn around nodes. Layout only, and optional: a document
+   * saved before groups existed has no value here, and there is no migration
+   * step to add one. The normalizer fills it with an empty list on load, so
+   * anything that has been through the load path always has it.
+   */
+  groups?: NodeGroup[];
   metadata: Record<string, unknown>;
 }
 

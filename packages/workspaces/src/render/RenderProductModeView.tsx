@@ -21,6 +21,7 @@ import {
   UnstyledButton
 } from "@mantine/core";
 import type {
+  NodeGroup,
   SemanticCommand,
   ShaderGraphDocument,
   ShaderNodeDefinition,
@@ -32,6 +33,7 @@ import type {
 } from "@sugarmagic/domain";
 import {
   createDefaultShaderGraphDocument,
+  createNodeGroup,
   duplicateShaderGraphDocument,
   getShaderNodeDefinition,
   listShaderNodeDefinitions
@@ -58,6 +60,15 @@ import {
   shaderToEditorNodes
 } from "./shader-graph-mapping";
 import { ShaderNodeCard } from "./ShaderNodeCard";
+import {
+  frameAround,
+  membershipChanged,
+  placeNodeInGroup,
+  resolveMembership,
+  shiftGroupMembers,
+  toAbsolutePosition,
+  toEditorGroups
+} from "../design/node-group-layout";
 
 const SHADER_NODE_RENDERERS = { [SHADER_NODE_KIND]: ShaderNodeCard };
 import type { RenderWorkspaceKind } from "@sugarmagic/shell";
@@ -171,8 +182,9 @@ export function useRenderProductModeView(
   const graphEditorRef = useRef<GraphEditorHandle | null>(null);
   const [graphSelection, setGraphSelection] = useState<{
     nodeIds: string[];
+    groupIds: string[];
     edgeIds: string[];
-  }>({ nodeIds: [], edgeIds: [] });
+  }>({ nodeIds: [], groupIds: [], edgeIds: [] });
   const [connectionRefusal, setConnectionRefusal] = useState<string | null>(
     null
   );
@@ -377,7 +389,16 @@ export function useRenderProductModeView(
   );
 
   const editorNodes = useMemo(
-    () => (selectedShader ? shaderToEditorNodes(selectedShader) : []),
+    () =>
+      selectedShader
+        ? shaderToEditorNodes(selectedShader).map((node) =>
+            placeNodeInGroup(node, selectedShader.groups)
+          )
+        : [],
+    [selectedShader]
+  );
+  const editorGroups = useMemo(
+    () => toEditorGroups(selectedShader?.groups),
     [selectedShader]
   );
   const editorEdges = useMemo(
@@ -399,11 +420,129 @@ export function useRenderProductModeView(
     []
   );
 
+  const setGroups = useCallback(
+    (shader: ShaderGraphDocument, groups: NodeGroup[]) => {
+      onCommand({
+        kind: "SetShaderGraphNodeGroups",
+        ...commandTarget(shader.shaderDefinitionId),
+        payload: {
+          shaderDefinitionId: shader.shaderDefinitionId,
+          groups
+        }
+      });
+    },
+    [commandTarget, onCommand]
+  );
+
+  // Moving a frame moves its members with it, so the frame's new position and
+  // each member's shifted position go out together.
+  const handleGroupsMoved = useCallback(
+    (moves: GraphEditorNodeMove[]) => {
+      if (!selectedShader) return;
+      const groups = selectedShader.groups ?? [];
+      const nextGroups = groups.map((group) => {
+        const move = moves.find((candidate) => candidate.id === group.groupId);
+        return move ? { ...group, position: { ...move.position } } : group;
+      });
+      setGroups(selectedShader, nextGroups);
+
+      for (const move of moves) {
+        const group = groups.find((candidate) => candidate.groupId === move.id);
+        if (!group) continue;
+        const { dx, dy } = shiftGroupMembers(group, move.position);
+        for (const node of selectedShader.nodes) {
+          if (!group.memberNodeIds.includes(node.nodeId)) continue;
+          onCommand({
+            kind: "UpdateShaderNode",
+            ...commandTarget(selectedShader.shaderDefinitionId),
+            payload: {
+              shaderDefinitionId: selectedShader.shaderDefinitionId,
+              node: {
+                ...node,
+                position: {
+                  x: node.position.x + dx,
+                  y: node.position.y + dy
+                }
+              }
+            }
+          });
+        }
+      }
+    },
+    [commandTarget, onCommand, selectedShader, setGroups]
+  );
+
+  const handleGroupRenamed = useCallback(
+    (groupId: string, label: string) => {
+      if (!selectedShader) return;
+      setGroups(
+        selectedShader,
+        (selectedShader.groups ?? []).map((group) =>
+          group.groupId === groupId ? { ...group, label } : group
+        )
+      );
+    },
+    [selectedShader, setGroups]
+  );
+
+  // Removing a frame leaves its members exactly where they are.
+  const handleGroupsDeleted = useCallback(
+    (groupIds: string[]) => {
+      if (!selectedShader) return;
+      setGroups(
+        selectedShader,
+        (selectedShader.groups ?? []).filter(
+          (group) => !groupIds.includes(group.groupId)
+        )
+      );
+    },
+    [selectedShader, setGroups]
+  );
+
+  const groupSelection = useCallback(() => {
+    if (!selectedShader) return;
+    const memberNodeIds = graphSelection.nodeIds;
+    if (memberNodeIds.length < 2) return;
+    const frame = frameAround(
+      selectedShader.nodes
+        .filter((node) => memberNodeIds.includes(node.nodeId))
+        .map((node) => node.position)
+    );
+    setGroups(selectedShader, [
+      ...(selectedShader.groups ?? []),
+      createNodeGroup({
+        label: "Group",
+        memberNodeIds,
+        position: frame.position,
+        size: frame.size
+      })
+    ]);
+  }, [graphSelection.nodeIds, selectedShader, setGroups]);
+
   // Shader commands are per node, so a multi-node drag sends one command each.
   const handleNodesMoved = useCallback(
     (moves: GraphEditorNodeMove[]) => {
       if (!selectedShader) return;
-      for (const node of applyShaderNodeMoves(selectedShader, moves)) {
+      // A node inside a frame reports a position relative to it; the document
+      // stores absolute positions.
+      const absolute = moves.map((move) => ({
+        id: move.id,
+        position: toAbsolutePosition(
+          move.position,
+          move.parentId,
+          selectedShader.groups
+        )
+      }));
+      // Where a node was dropped decides which frame it belongs to.
+      let groups = selectedShader.groups ?? [];
+      for (const move of absolute) {
+        groups = resolveMembership(groups, move.id, move.position);
+      }
+      if (membershipChanged(selectedShader.groups, groups)) {
+        setGroups(selectedShader, groups);
+      }
+
+      for (const node of applyShaderNodeMoves(selectedShader, absolute)) {
         onCommand({
           kind: "UpdateShaderNode",
           ...commandTarget(selectedShader.shaderDefinitionId),
@@ -414,7 +553,7 @@ export function useRenderProductModeView(
         });
       }
     },
-    [commandTarget, onCommand, selectedShader]
+    [commandTarget, onCommand, selectedShader, setGroups]
   );
 
   // A refusal has to say why. A connection that silently springs back reads as
@@ -499,7 +638,10 @@ export function useRenderProductModeView(
   );
 
   const hasGraphSelection =
-    graphSelection.nodeIds.length + graphSelection.edgeIds.length > 0;
+    graphSelection.nodeIds.length +
+      graphSelection.groupIds.length +
+      graphSelection.edgeIds.length >
+    0;
 
   const shaderGraphChrome = (
     <Group gap={6} align="center">
@@ -517,6 +659,14 @@ export function useRenderProductModeView(
           if (definition) addNodeDefinition(definition);
         }}
       />
+      <Button
+        size="xs"
+        variant="light"
+        disabled={graphSelection.nodeIds.length < 2}
+        onClick={groupSelection}
+      >
+        Group
+      </Button>
       <Button
         size="xs"
         variant="light"
@@ -739,8 +889,12 @@ export function useRenderProductModeView(
           renderers={SHADER_NODE_RENDERERS}
           primarySelectionId={selectedNodeId}
           onPrimarySelectionChange={setSelectedNodeId}
+          groups={editorGroups}
           onSelectionChange={setGraphSelection}
           onNodesMoved={handleNodesMoved}
+          onGroupsMoved={handleGroupsMoved}
+          onGroupRenamed={handleGroupRenamed}
+          onGroupsDeleted={handleGroupsDeleted}
           onConnect={handleGraphConnect}
           isValidConnection={handleIsValidConnection}
           onNodesDeleted={handleNodesDeleted}

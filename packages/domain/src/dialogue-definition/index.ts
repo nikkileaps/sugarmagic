@@ -1,4 +1,5 @@
 import { createUuid } from "../shared/identity";
+import { normalizeNodeGroups, type NodeGroup } from "../graph-layout/index";
 
 export type DialogueBuiltInSpeakerKind =
   | "player"
@@ -163,6 +164,13 @@ export interface DialogueDefinition {
   /** Null when the dialogue has no nodes, so there is nowhere to start. */
   startNodeId: string | null;
   nodes: DialogueNodeDefinition[];
+  /**
+   * Labelled boxes drawn around nodes. Layout only, and optional: a document
+   * saved before groups existed has no value here, and there is no migration
+   * step to add one. The normalizer fills it with an empty list on load, so
+   * anything that has been through the load path always has it.
+   */
+  groups?: NodeGroup[];
   interactionBinding: DialogueInteractionBinding;
 }
 
@@ -215,6 +223,7 @@ export function createDefaultDialogueDefinition(
     displayName: options.displayName ?? "New Dialogue",
     startNodeId: startNode.nodeId,
     nodes: [startNode],
+    groups: [],
     interactionBinding: {
       npcDefinitionId: options.npcDefinitionId ?? null
     }
@@ -303,6 +312,10 @@ export function normalizeDialogueDefinition(
     displayName: definition.displayName ?? defaultDefinition.displayName,
     startNodeId,
     nodes: normalizedNodes,
+    groups: normalizeNodeGroups(
+      definition.groups,
+      new Set(normalizedNodes.map((node) => node.nodeId))
+    ),
     interactionBinding: {
       npcDefinitionId: definition.interactionBinding?.npcDefinitionId ?? null
     }

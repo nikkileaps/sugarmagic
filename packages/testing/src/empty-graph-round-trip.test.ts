@@ -4,7 +4,15 @@ import {
   createDefaultQuestStageDefinition,
   createDefaultDialogueDefinition,
   normalizeDialogueDefinition,
-  normalizeQuestStageDefinition
+  normalizeQuestStageDefinition,
+  createNodeGroup,
+  createAuthoringSession,
+  createDefaultGameProject,
+  createDefaultShaderGraphDocument,
+  createEmptyContentLibrarySnapshot,
+  getAllShaderDefinitions,
+  normalizeContentLibrarySnapshot,
+  applyCommand
 } from "@sugarmagic/domain";
 import { QuestManager } from "@sugarmagic/runtime-core";
 
@@ -35,7 +43,9 @@ describe("empty graphs survive normalization", () => {
       nodeDefinitions: [node],
       entryNodeIds: ["n1"]
     });
-    expect(stage.nodeDefinitions.map((candidate) => candidate.nodeId)).toEqual(["n1"]);
+    expect(stage.nodeDefinitions.map((candidate) => candidate.nodeId)).toEqual([
+      "n1"
+    ]);
     expect(stage.entryNodeIds).toEqual(["n1"]);
   });
 
@@ -92,10 +102,7 @@ describe("an empty quest stage at runtime", () => {
         displayName: "Test quest",
         description: "",
         startStageId: "empty",
-        stageDefinitions: [
-          { ...emptyStage, nextStageId: "final" },
-          finalStage
-        ],
+        stageDefinitions: [{ ...emptyStage, nextStageId: "final" }, finalStage],
         rewardDefinitions: [],
         repeatable: false
       }
@@ -105,5 +112,142 @@ describe("an empty quest stage at runtime", () => {
     // The empty stage has nothing to do, so the quest is already past it.
     expect(manager.getQuestStageState("q1", "empty")).toBe("completed");
     expect(manager.getTrackedQuest()?.stageId).toBe("final");
+  });
+});
+
+/**
+ * Groups are layout, but they still have to survive the load path -- a `groups`
+ * field the normalizer does not carry is silently dropped on reload, which is
+ * the same trap that made an emptied graph refill itself.
+ */
+describe("node groups survive normalization", () => {
+  it("keeps a quest stage's groups, and drops membership for deleted nodes", () => {
+    const node = createDefaultQuestNodeDefinition({ nodeId: "kept" });
+    const stage = normalizeQuestStageDefinition({
+      stageId: "s1",
+      displayName: "Start",
+      nodeDefinitions: [node],
+      entryNodeIds: ["kept"],
+      groups: [
+        createNodeGroup({
+          groupId: "g1",
+          label: "Opening beat",
+          memberNodeIds: ["kept", "deleted-node"],
+          position: { x: 40, y: 60 },
+          size: { width: 400, height: 300 }
+        })
+      ]
+    });
+    expect(stage.groups).toHaveLength(1);
+    expect(stage.groups![0]).toMatchObject({
+      groupId: "g1",
+      label: "Opening beat",
+      position: { x: 40, y: 60 },
+      size: { width: 400, height: 300 }
+    });
+    expect(stage.groups![0]!.memberNodeIds).toEqual(["kept"]);
+  });
+
+  it("gives a stage with no groups an empty list rather than nothing", () => {
+    const stage = normalizeQuestStageDefinition({
+      stageId: "s2",
+      displayName: "Start",
+      nodeDefinitions: [],
+      entryNodeIds: []
+    });
+    expect(stage.groups).toEqual([]);
+  });
+
+  it("keeps a dialogue's groups", () => {
+    const existing = createDefaultDialogueDefinition({ definitionId: "d1" });
+    const normalized = normalizeDialogueDefinition({
+      ...existing,
+      groups: [
+        createNodeGroup({
+          groupId: "g2",
+          label: "Greeting",
+          memberNodeIds: [existing.nodes[0]!.nodeId]
+        })
+      ]
+    });
+    expect(normalized.groups).toHaveLength(1);
+    expect(normalized.groups![0]!.label).toBe("Greeting");
+    expect(normalized.groups![0]!.memberNodeIds).toEqual([
+      existing.nodes[0]!.nodeId
+    ]);
+  });
+
+  it("keeps a shader graph's groups through the content library", () => {
+    const snapshot = createEmptyContentLibrarySnapshot("little-world");
+    const shader = createDefaultShaderGraphDocument("little-world", {
+      shaderDefinitionId: "little-world:shader:test"
+    });
+    const normalized = normalizeContentLibrarySnapshot(
+      {
+        ...snapshot,
+        shaderDefinitions: [
+          {
+            ...shader,
+            groups: [
+              createNodeGroup({
+                groupId: "g3",
+                label: "Colour mixing",
+                memberNodeIds: [shader.nodes[0]!.nodeId, "deleted-node"]
+              })
+            ]
+          }
+        ]
+      },
+      "little-world"
+    );
+
+    const stored = normalized.shaderDefinitions.find(
+      (definition) =>
+        definition.shaderDefinitionId === "little-world:shader:test"
+    );
+    expect(stored?.groups).toHaveLength(1);
+    expect(stored?.groups![0]!.label).toBe("Colour mixing");
+    expect(stored?.groups![0]!.memberNodeIds).toEqual([
+      shader.nodes[0]!.nodeId
+    ]);
+  });
+});
+
+/**
+ * Groups on a shader graph are written through a command, so the command has to
+ * land on the document the editor reads back.
+ */
+describe("SetShaderGraphNodeGroups", () => {
+  it("replaces the groups on the addressed shader graph", () => {
+    const project = createDefaultGameProject("Little World", "little-world");
+    const session = createAuthoringSession(project, []);
+    const shader = getAllShaderDefinitions(session)[0]!;
+
+    const group = createNodeGroup({
+      groupId: "g4",
+      label: "Inputs",
+      memberNodeIds: [shader.nodes[0]!.nodeId]
+    });
+    const next = applyCommand(session, {
+      kind: "SetShaderGraphNodeGroups",
+      target: {
+        aggregateKind: "content-definition",
+        aggregateId: shader.shaderDefinitionId
+      },
+      subject: {
+        subjectKind: "shader-definition",
+        subjectId: shader.shaderDefinitionId
+      },
+      payload: {
+        shaderDefinitionId: shader.shaderDefinitionId,
+        groups: [group]
+      }
+    });
+
+    const updated = getAllShaderDefinitions(next).find(
+      (definition) =>
+        definition.shaderDefinitionId === shader.shaderDefinitionId
+    );
+    expect(updated?.groups).toEqual([group]);
   });
 });

@@ -18,6 +18,7 @@ export * from "./mechanics/schema";
 export * from "./npc-definition/index";
 export * from "./plugins/index";
 export * from "./player-definition/index";
+export * from "./graph-layout/index";
 export * from "./quest-definition/index";
 export * from "./region-authoring/index";
 export * from "./save/index";

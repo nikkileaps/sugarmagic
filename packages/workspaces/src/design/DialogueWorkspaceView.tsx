@@ -29,7 +29,8 @@ import {
   BUILT_IN_DIALOGUE_SPEAKERS,
   EXCERPT_SPEAKER,
   createDefaultDialogueDefinition,
-  createDialogueNodeId
+  createDialogueNodeId,
+  createNodeGroup
 } from "@sugarmagic/domain";
 import { AddNodeMenu, Inspector, WarnToast } from "@sugarmagic/ui";
 import {
@@ -49,6 +50,15 @@ import {
   disconnectDialogueEdges
 } from "./dialogue-graph";
 import { DialogueNodeCard } from "./DialogueNodeCard";
+import {
+  frameAround,
+  membershipChanged,
+  placeNodeInGroup,
+  resolveMembership,
+  shiftGroupMembers,
+  toAbsolutePosition,
+  toEditorGroups
+} from "./node-group-layout";
 import type { WorkspaceViewContribution } from "../workspace-view";
 
 const NODE_SPACING_Y = 150;
@@ -503,8 +513,9 @@ export function useDialogueWorkspaceView(
   const graphEditorRef = useRef<GraphEditorHandle | null>(null);
   const [graphSelection, setGraphSelection] = useState<{
     nodeIds: string[];
+    groupIds: string[];
     edgeIds: string[];
-  }>({ nodeIds: [], edgeIds: [] });
+  }>({ nodeIds: [], groupIds: [], edgeIds: [] });
   const [deleteRefusal, setDeleteRefusal] = useState<string | null>(null);
 
   const effectiveSelectedDialogueId = useMemo(() => {
@@ -711,9 +722,15 @@ export function useDialogueWorkspaceView(
   const editorNodes = useMemo(
     () =>
       selectedDialogue
-        ? dialogueToEditorNodes(selectedDialogue, playtestNodeId)
+        ? dialogueToEditorNodes(selectedDialogue, playtestNodeId).map((node) =>
+            placeNodeInGroup(node, selectedDialogue.groups)
+          )
         : [],
     [selectedDialogue, playtestNodeId]
+  );
+  const editorGroups = useMemo(
+    () => toEditorGroups(selectedDialogue?.groups),
+    [selectedDialogue]
   );
   const editorEdges = useMemo(
     () => (selectedDialogue ? dialogueToEditorEdges(selectedDialogue) : []),
@@ -723,10 +740,116 @@ export function useDialogueWorkspaceView(
   const handleNodesMoved = useCallback(
     (moves: GraphEditorNodeMove[]) => {
       if (!selectedDialogue) return;
-      updateDialogue(applyDialogueNodeMoves(selectedDialogue, moves));
+      // A node inside a frame reports a position relative to it; the document
+      // stores absolute positions.
+      const absolute = moves.map((move) => ({
+        id: move.id,
+        position: toAbsolutePosition(
+          move.position,
+          move.parentId,
+          selectedDialogue.groups
+        )
+      }));
+      // Where a node was dropped decides which frame it belongs to.
+      let groups = selectedDialogue.groups ?? [];
+      for (const move of absolute) {
+        groups = resolveMembership(groups, move.id, move.position);
+      }
+      const moved = applyDialogueNodeMoves(selectedDialogue, absolute);
+      updateDialogue(
+        membershipChanged(selectedDialogue.groups, groups)
+          ? { ...moved, groups }
+          : moved
+      );
     },
     [selectedDialogue, updateDialogue]
   );
+
+  // Moving a frame moves its members with it.
+  const handleGroupsMoved = useCallback(
+    (moves: GraphEditorNodeMove[]) => {
+      if (!selectedDialogue) return;
+      let next = selectedDialogue;
+      for (const move of moves) {
+        const group = (next.groups ?? []).find(
+          (candidate) => candidate.groupId === move.id
+        );
+        if (!group) continue;
+        const { dx, dy } = shiftGroupMembers(group, move.position);
+        next = {
+          ...next,
+          groups: (next.groups ?? []).map((candidate) =>
+            candidate.groupId === move.id
+              ? { ...candidate, position: { ...move.position } }
+              : candidate
+          ),
+          nodes: next.nodes.map((node) =>
+            group.memberNodeIds.includes(node.nodeId)
+              ? {
+                  ...node,
+                  graphPosition: {
+                    x: node.graphPosition.x + dx,
+                    y: node.graphPosition.y + dy
+                  }
+                }
+              : node
+          )
+        };
+      }
+      updateDialogue(next);
+    },
+    [selectedDialogue, updateDialogue]
+  );
+
+  const handleGroupRenamed = useCallback(
+    (groupId: string, label: string) => {
+      if (!selectedDialogue) return;
+      updateDialogue({
+        ...selectedDialogue,
+        groups: (selectedDialogue.groups ?? []).map((group) =>
+          group.groupId === groupId ? { ...group, label } : group
+        )
+      });
+    },
+    [selectedDialogue, updateDialogue]
+  );
+
+  // Removing a frame leaves its members exactly where they are.
+  const handleGroupsDeleted = useCallback(
+    (groupIds: string[]) => {
+      if (!selectedDialogue) return;
+      updateDialogue({
+        ...selectedDialogue,
+        groups: (selectedDialogue.groups ?? []).filter(
+          (group) => !groupIds.includes(group.groupId)
+        )
+      });
+    },
+    [selectedDialogue, updateDialogue]
+  );
+
+  const groupSelection = useCallback(() => {
+    if (!selectedDialogue) return;
+    const memberNodeIds = graphSelection.nodeIds;
+    if (memberNodeIds.length < 2) return;
+    const frame = frameAround(
+      selectedDialogue.nodes
+        .filter((node) => memberNodeIds.includes(node.nodeId))
+        .map((node) => node.graphPosition)
+    );
+    updateDialogue({
+      ...selectedDialogue,
+      groups: [
+        ...(selectedDialogue.groups ?? []),
+        createNodeGroup({
+          label: "Group",
+          memberNodeIds,
+          position: frame.position,
+          size: frame.size
+        })
+      ]
+    });
+  }, [graphSelection.nodeIds, selectedDialogue, updateDialogue]);
 
   const handleGraphConnect = useCallback(
     (connection: GraphEditorConnection) => {
@@ -772,7 +895,10 @@ export function useDialogueWorkspaceView(
   );
 
   const hasGraphSelection =
-    graphSelection.nodeIds.length + graphSelection.edgeIds.length > 0;
+    graphSelection.nodeIds.length +
+      graphSelection.groupIds.length +
+      graphSelection.edgeIds.length >
+    0;
 
   const dialogueGraphChrome = (
     <Group gap={6} align="center">
@@ -782,6 +908,14 @@ export function useDialogueWorkspaceView(
         ]}
         onSelect={addNode}
       />
+      <Button
+        size="xs"
+        variant="light"
+        disabled={graphSelection.nodeIds.length < 2}
+        onClick={groupSelection}
+      >
+        Group
+      </Button>
       <Button
         size="xs"
         variant="light"
@@ -1250,7 +1384,11 @@ export function useDialogueWorkspaceView(
                 renderers={DIALOGUE_NODE_RENDERERS}
                 primarySelectionId={selectedNodeId}
                 onPrimarySelectionChange={setSelectedNodeId}
+                groups={editorGroups}
                 onNodesMoved={handleNodesMoved}
+                onGroupsMoved={handleGroupsMoved}
+                onGroupRenamed={handleGroupRenamed}
+                onGroupsDeleted={handleGroupsDeleted}
                 onConnect={handleGraphConnect}
                 onNodesDeleted={handleNodesDeleted}
                 onEdgesDeleted={handleEdgesDeleted}

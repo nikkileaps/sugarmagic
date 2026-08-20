@@ -435,6 +435,16 @@ export {
 } from "./weight-workbench/WeightWorkbench";
 export { DialogueNodeCard } from "./DialogueNodeCard";
 export {
+  frameAround,
+  groupOfNode,
+  membershipChanged,
+  placeNodeInGroup,
+  resolveMembership,
+  shiftGroupMembers,
+  toAbsolutePosition,
+  toEditorGroups
+} from "./node-group-layout";
+export {
   DIALOGUE_NODE_KIND,
   applyDialogueNodeMoves,
   canDeleteDialogueNodes,

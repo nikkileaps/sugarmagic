@@ -65,6 +65,7 @@ import {
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
   createDefaultQuestStageDefinition,
+  createNodeGroup,
   createQuestNodeId
 } from "@sugarmagic/domain";
 import { AddNodeMenu, Inspector } from "@sugarmagic/ui";
@@ -75,6 +76,15 @@ import {
   type GraphEditorNodeMove,
   type GraphEditorNodeRendererProps
 } from "@sugarmagic/ui/node-editor";
+import {
+  frameAround,
+  membershipChanged,
+  placeNodeInGroup,
+  resolveMembership,
+  shiftGroupMembers,
+  toAbsolutePosition,
+  toEditorGroups
+} from "./node-group-layout";
 import {
   QUEST_NODE_KIND,
   applyNodeMoves,
@@ -1140,7 +1150,16 @@ export function useQuestWorkspaceView({
   ]);
 
   const editorNodes = useMemo(
-    () => (selectedStage ? questStageToEditorNodes(selectedStage) : []),
+    () =>
+      selectedStage
+        ? questStageToEditorNodes(selectedStage).map((node) =>
+            placeNodeInGroup(node, selectedStage.groups)
+          )
+        : [],
+    [selectedStage]
+  );
+  const editorGroups = useMemo(
+    () => toEditorGroups(selectedStage?.groups),
     [selectedStage]
   );
   const editorEdges = useMemo(
@@ -1151,9 +1170,94 @@ export function useQuestWorkspaceView({
   const handleNodesMoved = useCallback(
     (moves: GraphEditorNodeMove[]) => {
       if (!selectedStage) return;
-      updateStage(selectedStage.stageId, (stage) =>
-        applyNodeMoves(stage, moves)
-      );
+      // A node inside a frame reports a position relative to it; the document
+      // stores absolute positions.
+      const absolute = moves.map((move) => ({
+        id: move.id,
+        position: toAbsolutePosition(
+          move.position,
+          move.parentId,
+          selectedStage.groups
+        )
+      }));
+      updateStage(selectedStage.stageId, (stage) => {
+        // Where a node was dropped decides which frame it belongs to.
+        let groups = stage.groups ?? [];
+        for (const move of absolute) {
+          groups = resolveMembership(groups, move.id, move.position);
+        }
+        const moved = applyNodeMoves(stage, absolute);
+        return membershipChanged(stage.groups, groups)
+          ? { ...moved, groups }
+          : moved;
+      });
+    },
+    [selectedStage, updateStage]
+  );
+
+  // Moving a frame moves its members with it. The editor reports only the
+  // frame's new position, so the members are shifted by the same delta here or
+  // they would spring back on the next load.
+  const handleGroupsMoved = useCallback(
+    (moves: GraphEditorNodeMove[]) => {
+      if (!selectedStage) return;
+      updateStage(selectedStage.stageId, (stage) => {
+        let next = stage;
+        for (const move of moves) {
+          const group = (next.groups ?? []).find(
+            (candidate) => candidate.groupId === move.id
+          );
+          if (!group) continue;
+          const { dx, dy } = shiftGroupMembers(group, move.position);
+          next = {
+            ...next,
+            groups: (next.groups ?? []).map((candidate) =>
+              candidate.groupId === move.id
+                ? { ...candidate, position: { ...move.position } }
+                : candidate
+            ),
+            nodeDefinitions: next.nodeDefinitions.map((node) =>
+              group.memberNodeIds.includes(node.nodeId)
+                ? {
+                    ...node,
+                    graphPosition: {
+                      x: node.graphPosition.x + dx,
+                      y: node.graphPosition.y + dy
+                    }
+                  }
+                : node
+            )
+          };
+        }
+        return next;
+      });
+    },
+    [selectedStage, updateStage]
+  );
+
+  const handleGroupRenamed = useCallback(
+    (groupId: string, label: string) => {
+      if (!selectedStage) return;
+      updateStage(selectedStage.stageId, (stage) => ({
+        ...stage,
+        groups: (stage.groups ?? []).map((group) =>
+          group.groupId === groupId ? { ...group, label } : group
+        )
+      }));
+    },
+    [selectedStage, updateStage]
+  );
+
+  // Removing a frame leaves its members exactly where they are.
+  const handleGroupsDeleted = useCallback(
+    (groupIds: string[]) => {
+      if (!selectedStage) return;
+      updateStage(selectedStage.stageId, (stage) => ({
+        ...stage,
+        groups: (stage.groups ?? []).filter(
+          (group) => !groupIds.includes(group.groupId)
+        )
+      }));
     },
     [selectedStage, updateStage]
   );
@@ -1193,8 +1297,9 @@ export function useQuestWorkspaceView({
 
   const [graphSelection, setGraphSelection] = useState<{
     nodeIds: string[];
+    groupIds: string[];
     edgeIds: string[];
-  }>({ nodeIds: [], edgeIds: [] });
+  }>({ nodeIds: [], groupIds: [], edgeIds: [] });
 
   const addNode = useCallback(
     (behavior: string) => {
@@ -1228,12 +1333,45 @@ export function useQuestWorkspaceView({
   // stage that still means something. The quest inspector's validation panel
   // reports an empty stage as a warning.
 
+  const groupSelection = useCallback(() => {
+    if (!selectedStage) return;
+    const memberNodeIds = graphSelection.nodeIds;
+    if (memberNodeIds.length < 2) return;
+    const positions = selectedStage.nodeDefinitions
+      .filter((node) => memberNodeIds.includes(node.nodeId))
+      .map((node) => node.graphPosition);
+    const frame = frameAround(positions);
+    updateStage(selectedStage.stageId, (stage) => ({
+      ...stage,
+      groups: [
+        ...(stage.groups ?? []),
+        createNodeGroup({
+          label: "Group",
+          memberNodeIds,
+          position: frame.position,
+          size: frame.size
+        })
+      ]
+    }));
+  }, [graphSelection.nodeIds, selectedStage, updateStage]);
+
   const hasGraphSelection =
-    graphSelection.nodeIds.length + graphSelection.edgeIds.length > 0;
+    graphSelection.nodeIds.length +
+      graphSelection.groupIds.length +
+      graphSelection.edgeIds.length >
+    0;
 
   const questGraphChrome = (
     <Group gap={6} align="center">
       <AddNodeMenu items={QUEST_NODE_MENU_ITEMS} onSelect={addNode} />
+      <Button
+        size="xs"
+        variant="light"
+        disabled={graphSelection.nodeIds.length < 2}
+        onClick={groupSelection}
+      >
+        Group
+      </Button>
       <Button
         size="xs"
         variant="light"
@@ -1400,7 +1538,11 @@ export function useQuestWorkspaceView({
               renderers={QUEST_NODE_RENDERERS}
               primarySelectionId={selectedNodeId}
               onPrimarySelectionChange={setSelectedNodeId}
+              groups={editorGroups}
               onNodesMoved={handleNodesMoved}
+              onGroupsMoved={handleGroupsMoved}
+              onGroupRenamed={handleGroupRenamed}
+              onGroupsDeleted={handleGroupsDeleted}
               onConnect={handleGraphConnect}
               onNodesDeleted={handleNodesDeleted}
               onEdgesDeleted={handleEdgesDeleted}

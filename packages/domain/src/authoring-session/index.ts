@@ -64,6 +64,7 @@ import type {
   CreateShaderGraphCommand,
   RenameShaderGraphCommand,
   DeleteShaderGraphCommand,
+  SetShaderGraphNodeGroupsCommand,
   UpdateShaderNodeCommand,
   RemoveShaderNodeCommand,
   AddShaderEdgeCommand,
@@ -831,6 +832,22 @@ function applyDeleteShaderGraphCommand(
     history: pushTransaction(session.history, transaction),
     isDirty: true
   };
+}
+
+function applySetShaderGraphNodeGroupsCommand(
+  session: AuthoringSession,
+  command: SetShaderGraphNodeGroupsCommand
+): AuthoringSession {
+  return applyShaderGraphMutation(
+    session,
+    command.payload.shaderDefinitionId,
+    (definition) => ({
+      ...definition,
+      groups: command.payload.groups,
+      revision: definition.revision + 1
+    }),
+    command
+  );
 }
 
 function applyUpdateShaderNodeCommand(
@@ -2213,6 +2230,10 @@ export function applyCommand(
 
   if (command.kind === "DeleteShaderGraph") {
     return applyDeleteShaderGraphCommand(session, command);
+  }
+
+  if (command.kind === "SetShaderGraphNodeGroups") {
+    return applySetShaderGraphNodeGroupsCommand(session, command);
   }
 
   if (command.kind === "UpdateShaderNode") {

@@ -30,6 +30,7 @@ import {
   type GrassTypeDefinition,
   type SurfaceContext
 } from "../surface";
+import { normalizeNodeGroups } from "../graph-layout";
 import type { SurfaceDefinition } from "../surface";
 import type {
   PostProcessShaderBinding,
@@ -194,8 +195,13 @@ export const VALID_COLLIDER_SHAPES: ReadonlySet<AssetColliderShape> = new Set([
   "none"
 ]);
 
-export function isValidColliderShape(shape: unknown): shape is AssetColliderShape {
-  return typeof shape === "string" && VALID_COLLIDER_SHAPES.has(shape as AssetColliderShape);
+export function isValidColliderShape(
+  shape: unknown
+): shape is AssetColliderShape {
+  return (
+    typeof shape === "string" &&
+    VALID_COLLIDER_SHAPES.has(shape as AssetColliderShape)
+  );
 }
 
 /** Normalize (backfill) an asset's collider on load — absent gets the
@@ -1263,7 +1269,8 @@ function skyGradientForPreset(preset: LightingPreset): {
     topColor: colors.topColor,
     bottomColor: colors.bottomColor,
     gradientMidEnabled: colors.gradientMidEnabled ?? false,
-    gradientMidColor: colors.gradientMidColor ?? DEFAULT_SKY_SETTINGS.gradientMidColor,
+    gradientMidColor:
+      colors.gradientMidColor ?? DEFAULT_SKY_SETTINGS.gradientMidColor,
     gradientMidPosition:
       colors.gradientMidPosition ?? DEFAULT_SKY_SETTINGS.gradientMidPosition
   };
@@ -2092,6 +2099,10 @@ export function normalizeContentLibrarySnapshot(
           })),
           edges: [...definition.edges],
           parameters: [...definition.parameters],
+          groups: normalizeNodeGroups(
+            definition.groups,
+            new Set(definition.nodes.map((node) => node.nodeId))
+          ),
           metadata: { ...definition.metadata }
         }))
       : [];
@@ -2126,7 +2137,10 @@ export function normalizeContentLibrarySnapshot(
       effect: normalizeShaderReference(definition.effect, projectId),
       // Plan 069.1 — backfill the collider SHAPE (kind-aware) on load;
       // localBounds needs the GLB and is filled studio-side.
-      collider: normalizeAssetCollider(definition.collider, definition.assetKind)
+      collider: normalizeAssetCollider(
+        definition.collider,
+        definition.assetKind
+      )
     })),
     audioClipDefinitions: normalizeAudioClipDefinitions(
       contentLibrary.audioClipDefinitions
@@ -2137,7 +2151,8 @@ export function normalizeContentLibrarySnapshot(
     characterAnimationDefinitions: normalizeCharacterAnimationDefinitions(
       contentLibrary.characterAnimationDefinitions
     ),
-    animationLibraryDefinitions: contentLibrary.animationLibraryDefinitions ?? [],
+    animationLibraryDefinitions:
+      contentLibrary.animationLibraryDefinitions ?? [],
     materialDefinitions: mergedMaterialDefinitions,
     soundCueDefinitions: normalizeSoundCueDefinitions(
       contentLibrary.soundCueDefinitions

@@ -1,4 +1,5 @@
 import { createUuid } from "../shared/identity";
+import { normalizeNodeGroups, type NodeGroup } from "../graph-layout/index";
 
 // Plan 074 §074.1' -- canonical location; runtime-core re-exports from here.
 export type TimeOfDayBand =
@@ -106,6 +107,13 @@ export interface QuestStageDefinition {
   nextStageId: string | null;
   nodeDefinitions: QuestNodeDefinition[];
   entryNodeIds: string[];
+  /**
+   * Labelled boxes drawn around nodes. Layout only, and optional: a document
+   * saved before groups existed has no value here, and there is no migration
+   * step to add one. The normalizer fills it with an empty list on load, so
+   * anything that has been through the load path always has it.
+   */
+  groups?: NodeGroup[];
   /**
    * The time of day this stage takes place at. Set when the stage becomes
    * active. `null` means the stage leaves the clock alone.
@@ -219,6 +227,7 @@ export function createDefaultQuestStageDefinition(
     displayName: options.displayName ?? "Start",
     nextStageId: null,
     nodeDefinitions,
+    groups: [],
     entryNodeIds:
       entryNodeIds.length > 0
         ? entryNodeIds
@@ -346,6 +355,9 @@ export function normalizeQuestStageDefinition(
     nextStageId: stage.nextStageId ?? null,
     timeOfDay: stage.timeOfDay ?? null,
     nodeDefinitions: normalizedNodes,
+    // Membership is filtered against the nodes that survived, so a group never
+    // points at a node that has been deleted.
+    groups: normalizeNodeGroups(stage.groups, validNodeIds),
     entryNodeIds:
       entryNodeIds.length > 0
         ? entryNodeIds
