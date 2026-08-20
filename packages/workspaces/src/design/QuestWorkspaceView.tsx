@@ -57,6 +57,7 @@ import type {
   QuestStageDefinition,
   RegionDocument,
   Scene,
+  SoundCueDefinition,
   SpellDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
@@ -127,6 +128,8 @@ export interface QuestWorkspaceViewProps {
   /** Plan 058 §058.5 — Scene picker source for the
    *  unlockScene / advanceToNextScene action editors. */
   scenes: Scene[];
+  /** Cue picker source for the playCue action editor. */
+  soundCueDefinitions: SoundCueDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
@@ -654,12 +657,14 @@ function QuestActionsEditor({
   actions,
   itemDefinitions,
   scenes,
+  soundCueDefinitions,
   onChange,
   label
 }: {
   actions: QuestActionDefinition[];
   itemDefinitions: ItemDefinition[];
   scenes: Scene[];
+  soundCueDefinitions: SoundCueDefinition[];
   onChange: (actions: QuestActionDefinition[]) => void;
   label: string;
 }) {
@@ -744,6 +749,24 @@ function QuestActionsEditor({
                     onChange(next);
                   }}
                 />
+              ) : action.type === "playCue" ? (
+                <Select
+                  size="xs"
+                  label="Sound Cue"
+                  clearable
+                  searchable
+                  placeholder="Pick a cue"
+                  data={soundCueDefinitions.map((cue) => ({
+                    value: cue.definitionId,
+                    label: cue.displayName
+                  }))}
+                  value={action.targetId ?? null}
+                  onChange={(value) => {
+                    const next = [...actions];
+                    next[index] = { ...action, targetId: value ?? undefined };
+                    onChange(next);
+                  }}
+                />
               ) : action.type === "unlockScene" ||
                 action.type === "advanceToNextScene" ? (
                 <Select
@@ -808,6 +831,7 @@ export function useQuestWorkspaceView({
   questDefinitions,
   regions,
   scenes,
+  soundCueDefinitions,
   dialogueDefinitions,
   itemDefinitions,
   npcDefinitions,
@@ -2344,6 +2368,7 @@ export function useQuestWorkspaceView({
               actions={selectedNode.onEnterActions}
               itemDefinitions={itemDefinitions}
               scenes={scenes}
+              soundCueDefinitions={soundCueDefinitions}
               onChange={(onEnterActions) =>
                 updateNode({ ...selectedNode, onEnterActions })
               }
@@ -2353,6 +2378,7 @@ export function useQuestWorkspaceView({
               actions={selectedNode.onCompleteActions}
               itemDefinitions={itemDefinitions}
               scenes={scenes}
+              soundCueDefinitions={soundCueDefinitions}
               onChange={(onCompleteActions) =>
                 updateNode({ ...selectedNode, onCompleteActions })
               }

@@ -3094,6 +3094,7 @@ export function App() {
     gameProjectId: session?.gameProject.identity.id ?? null,
     regions: regionDocuments,
     scenes: session?.gameProject.scenes ?? [],
+    soundCueDefinitions,
     creditsDefinition:
       session?.gameProject.creditsDefinition ?? { sections: [] },
     onUpdateCredits: (credits) => {

@@ -9,8 +9,24 @@ import type {
   SaveSlice
 } from "@sugarmagic/domain";
 
+/**
+ * An action together with the node that fired it. Handlers need the source to
+ * name what they act on -- an audio instance key, a warning that tells the
+ * author which node holds the bad reference.
+ *
+ * The ids are passed rather than read back from the manager because the only
+ * quest state readable from outside is the tracked quest, which is not
+ * necessarily the quest whose node is running.
+ */
+export interface QuestActionInvocation {
+  action: QuestActionDefinition;
+  questDefinitionId: string;
+  stageId: string;
+  nodeId: string;
+}
+
 export interface QuestRuntimeActionHandler {
-  (action: QuestActionDefinition): void;
+  (invocation: QuestActionInvocation): void;
 }
 
 export interface QuestRuntimeNarrativeHandler {
@@ -636,7 +652,11 @@ export class QuestManager {
 
     stageProgress.forcedNodeIds.delete(node.nodeId);
     progress.status = "active";
-    this.executeActions(node.onEnterActions);
+    this.executeActions(node.onEnterActions, {
+      questDefinitionId: state.questDefinitionId,
+      stageId: stage.stageId,
+      nodeId: node.nodeId
+    });
 
     if (node.nodeBehavior === "narrative") {
       if (isDialogueNarrative(node) && node.dialogueDefinitionId) {
@@ -664,7 +684,11 @@ export class QuestManager {
 
     progress.status = "completed";
     progress.branchResult = branchResult;
-    this.executeActions(node.onCompleteActions);
+    this.executeActions(node.onCompleteActions, {
+      questDefinitionId: state.questDefinitionId,
+      stageId: stage.stageId,
+      nodeId: node.nodeId
+    });
 
     const definition = this.definitions.get(state.questDefinitionId);
     if (definition) {
@@ -796,7 +820,15 @@ export class QuestManager {
     this.onStageTimeOfDay?.(stage.timeOfDay);
   }
 
-  private executeActions(actions: QuestActionDefinition[]): void {
+  /**
+   * `source` is taken as an argument, not held on the manager, because this
+   * runs reentrantly: an `emitEvent` action calls `notifyEvent`, which can
+   * complete another node, which runs its own actions before this loop ends.
+   */
+  private executeActions(
+    actions: QuestActionDefinition[],
+    source: { questDefinitionId: string; stageId: string; nodeId: string }
+  ): void {
     for (const action of actions) {
       if (action.type === "setFlag" && action.targetId) {
         this.runtimeFlags.set(action.targetId, action.value ?? true);
@@ -808,7 +840,7 @@ export class QuestManager {
         continue;
       }
 
-      this.onAction?.(action);
+      this.onAction?.({ action, ...source });
     }
   }
 

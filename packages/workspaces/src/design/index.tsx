@@ -38,6 +38,7 @@ import type {
   QuestNodeDefinition,
   RegionDocument,
   Scene,
+  SoundCueDefinition,
   SpellDefinition,
   UITheme,
   SemanticCommand
@@ -78,6 +79,8 @@ export interface DesignProductModeViewProps {
   /** Plan 058 §058.5 — Scene picker source for quest Scene
    *  actions (unlockScene / advanceToNextScene). */
   scenes: Scene[];
+  /** Cue picker source for the quest playCue action. */
+  soundCueDefinitions: SoundCueDefinition[];
   playerDefinition: PlayerDefinition | null;
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
@@ -163,6 +166,7 @@ export function useDesignProductModeView(
     gameProjectId,
     regions,
     scenes,
+    soundCueDefinitions,
     playerDefinition,
     spellDefinitions,
     itemDefinitions,
@@ -282,6 +286,7 @@ export function useDesignProductModeView(
     questDefinitions,
     regions,
     scenes,
+    soundCueDefinitions,
     dialogueDefinitions,
     itemDefinitions,
     npcDefinitions,

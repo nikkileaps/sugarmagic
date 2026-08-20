@@ -738,7 +738,8 @@ export function createRuntimeGameplaySessionController(
       audioController.playCue({
         cueDefinitionId: trigger.action.audioCueId,
         instanceKey,
-        position: volume.bounds.center
+        position: volume.bounds.center,
+        source: `trigger volume "${volume.volumeId}"`
       });
     }
     const flag = trigger.action.setWorldFlag;
@@ -1962,7 +1963,7 @@ export function createRuntimeGameplaySessionController(
     }
   });
   questManager.setStageTimeOfDayHandler((band) => worldTimeStore.setTimeBand(band));
-  questManager.setActionHandler((action) => {
+  questManager.setActionHandler(({ action, questDefinitionId, stageId, nodeId }) => {
     const numericValue =
       typeof action.value === "number"
         ? action.value
@@ -1980,6 +1981,18 @@ export function createRuntimeGameplaySessionController(
 
     if (action.type === "removeItem" && action.targetId) {
       inventoryManager.removeItem(action.targetId, count);
+      return;
+    }
+
+    // The instance key names the node, so two nodes playing the same cue are
+    // separate instances -- a cue set to restart or ignore-while-playing
+    // applies per node, not across the quest.
+    if (action.type === "playCue") {
+      audioController.playCue({
+        cueDefinitionId: action.targetId ?? null,
+        instanceKey: `quest:${questDefinitionId}:${stageId}:${nodeId}:${action.targetId ?? ""}`,
+        source: `quest "${questDefinitionId}" node "${nodeId}"`
+      });
       return;
     }
 

@@ -69,6 +69,11 @@ export interface RuntimeAudioController {
     cueDefinitionId: string | null | undefined;
     instanceKey: string;
     position?: [number, number, number] | null;
+    /**
+     * Where the cue id came from, named in the unknown-cue warning so an
+     * author can find the reference. Free text, warning only.
+     */
+    source?: string;
   }) => void;
   stopInstance: (instanceKey: string, fadeOutMs?: number) => void;
   /**
@@ -136,6 +141,7 @@ export function createRuntimeAudioController(
   ];
   const activeRegionInstances = new Set<string>();
   const activeCueDefinitionByInstance = new Map<string, string>();
+  const warnedMissingCueIds = new Set<string>();
 
   function enqueue(command: RuntimeSoundCommand) {
     commands.push(command);
@@ -145,16 +151,36 @@ export function createRuntimeAudioController(
     cueDefinitionId: string | null | undefined;
     instanceKey: string;
     position?: [number, number, number] | null;
+    /**
+     * Where the cue id came from, named in the unknown-cue warning so an
+     * author can find the reference. Free text, warning only.
+     */
+    source?: string;
   }) {
     const cueDefinitionId = input.cueDefinitionId;
-    if (!cueExists(options.contentLibrary, cueDefinitionId ?? "")) {
+    // No cue id is the normal case for an unbound sound event, and those
+    // fire constantly. Only a named cue that is missing is worth a warning.
+    if (!cueDefinitionId) {
       return;
     }
-    activeCueDefinitionByInstance.set(input.instanceKey, cueDefinitionId!);
+    if (!cueExists(options.contentLibrary, cueDefinitionId)) {
+      // Once per cue id per session. A missing cue on a footstep event would
+      // otherwise warn every step.
+      if (!warnedMissingCueIds.has(cueDefinitionId)) {
+        warnedMissingCueIds.add(cueDefinitionId);
+        console.warn(
+          `[audio] Sound cue "${cueDefinitionId}" is not in the content library${
+            input.source ? ` (named by ${input.source})` : ""
+          }. Nothing plays. Point it at an existing cue in the Audio workspace, or clear the reference.`
+        );
+      }
+      return;
+    }
+    activeCueDefinitionByInstance.set(input.instanceKey, cueDefinitionId);
     enqueue({
       commandId: nextCommandId(),
       kind: "play-cue",
-      cueDefinitionId: cueDefinitionId!,
+      cueDefinitionId,
       instanceKey: input.instanceKey,
       position: input.position ?? null
     });
@@ -209,12 +235,18 @@ export function createRuntimeAudioController(
       if (!cueDefinitionId) {
         return;
       }
-      if (!cueExists(options.contentLibrary, cueDefinitionId)) {
-        return;
-      }
       const instanceKey = `music:${cueDefinitionId}`;
-      currentMusicTrack = { cueDefinitionId, instanceKey };
-      playCue({ cueDefinitionId, instanceKey, position: null });
+      // Only record a track that is going to sound. playCue re-checks and
+      // warns about a missing cue, so the report stays in one place.
+      if (cueExists(options.contentLibrary, cueDefinitionId)) {
+        currentMusicTrack = { cueDefinitionId, instanceKey };
+      }
+      playCue({
+        cueDefinitionId,
+        instanceKey,
+        position: null,
+        source: "background music"
+      });
     },
     setListenerPose(listener) {
       enqueue({

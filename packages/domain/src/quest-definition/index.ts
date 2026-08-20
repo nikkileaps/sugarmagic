@@ -41,7 +41,7 @@ export type QuestActionType =
   | "setFlag"
   | "giveItem"
   | "removeItem"
-  | "playSound"
+  | "playCue"
   | "spawnVfx"
   | "teleportNpc"
   | "moveNpc"
@@ -80,7 +80,7 @@ const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
   "set-time-of-day": "Set Time of Day",
   "advance-day": "Advance Day",
   "learn-fact": "Learn Fact",
-  playSound: "Play Sound",
+  playCue: "Play Cue",
   spawnVfx: "Spawn VFX",
   teleportNpc: "Teleport NPC",
   moveNpc: "Move NPC",
