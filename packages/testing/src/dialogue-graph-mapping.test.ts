@@ -124,20 +124,25 @@ describe("dialogue graph mapping", () => {
     expect(after.nodes[0]!.next.map((edge) => edge.targetNodeId)).toEqual(["n3"]);
   });
 
-  it("refuses to delete the start node, and says why", () => {
+  it("refuses to delete the start node while other nodes remain, and says why", () => {
     const refusal = canDeleteDialogueNodes(dialogue(), ["n1"]);
     expect(refusal.allowed).toBe(false);
     expect(refusal.reason).toMatch(/start node/i);
   });
 
-  it("refuses to delete the last remaining node, and says why", () => {
+  it("allows the last remaining node to be deleted, clearing the dialogue", () => {
     const single: DialogueDefinition = {
       ...dialogue(),
       startNodeId: "only",
       nodes: [{ nodeId: "only", text: "Hi.", next: [], graphPosition: { x: 0, y: 0 } }]
     };
-    const refusal = canDeleteDialogueNodes(single, ["only"]);
-    expect(refusal.allowed).toBe(false);
+    expect(canDeleteDialogueNodes(single, ["only"]).allowed).toBe(true);
+    expect(deleteDialogueNodes(single, ["only"]).nodes).toEqual([]);
+  });
+
+  it("allows clearing every node at once", () => {
+    const all = dialogue().nodes.map((node) => node.nodeId);
+    expect(canDeleteDialogueNodes(dialogue(), all).allowed).toBe(true);
   });
 
   it("allows deleting an ordinary node", () => {

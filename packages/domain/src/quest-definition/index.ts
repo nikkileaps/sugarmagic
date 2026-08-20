@@ -219,7 +219,12 @@ export function createDefaultQuestStageDefinition(
     displayName: options.displayName ?? "Start",
     nextStageId: null,
     nodeDefinitions,
-    entryNodeIds: entryNodeIds.length > 0 ? entryNodeIds : [nodeDefinitions[0]!.nodeId],
+    entryNodeIds:
+      entryNodeIds.length > 0
+        ? entryNodeIds
+        : nodeDefinitions[0]
+          ? [nodeDefinitions[0].nodeId]
+          : [],
     timeOfDay: options.timeOfDay ?? null
   };
 }
@@ -327,7 +332,10 @@ export function normalizeQuestStageDefinition(
   const nodeDefinitions = (stage.nodeDefinitions ?? []).map((node) =>
     normalizeQuestNodeDefinition(node)
   );
-  const normalizedNodes = nodeDefinitions.length > 0 ? nodeDefinitions : defaultStage.nodeDefinitions;
+  // An emptied stage stays empty. Substituting a starter node here would undo
+  // the author's deletion on the next load rather than on screen, which is the
+  // confusing place to find out about it.
+  const normalizedNodes = nodeDefinitions;
   const validNodeIds = new Set(normalizedNodes.map((node) => node.nodeId));
   const entryNodeIds = (stage.entryNodeIds ?? [])
     .filter((nodeId): nodeId is string => validNodeIds.has(nodeId));

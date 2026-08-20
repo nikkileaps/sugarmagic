@@ -198,7 +198,10 @@ function PlaytestPanel({
               variant="light"
               color="green"
               fullWidth
-              onClick={() => onAdvance(dialogue.startNodeId)}
+              disabled={!dialogue.startNodeId}
+              onClick={() =>
+                dialogue.startNodeId && onAdvance(dialogue.startNodeId)
+              }
             >
               Restart
             </Button>
@@ -1225,6 +1228,7 @@ export function useDialogueWorkspaceView(
                 variant="subtle"
                 color="green"
                 onClick={() => {
+                  if (!selectedDialogue.startNodeId) return;
                   setIsPlaytesting(true);
                   setPlaytestNodeId(selectedDialogue.startNodeId);
                   graphEditorRef.current?.centerOnNode(

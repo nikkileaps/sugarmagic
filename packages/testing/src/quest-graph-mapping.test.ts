@@ -6,7 +6,6 @@ import {
 } from "@sugarmagic/domain";
 import {
   applyNodeMoves,
-  canDeleteNodes,
   connectNodes,
   deleteNodes,
   disconnectEdges,
@@ -174,9 +173,9 @@ describe("quest graph mapping", () => {
     expect(afterDelete.entryNodeIds).toEqual([]);
   });
 
-  it("refuses to delete the last node in a stage", () => {
-    const stage = stageWith();
-    expect(canDeleteNodes(stage, ["node-a"])).toBe(true);
-    expect(canDeleteNodes(stage, ["node-a", "node-b", "node-c"])).toBe(false);
+  it("allows a stage to be emptied completely", () => {
+    const cleared = deleteNodes(stageWith(), ["node-a", "node-b", "node-c"]);
+    expect(cleared.nodeDefinitions).toEqual([]);
+    expect(cleared.entryNodeIds).toEqual([]);
   });
 });

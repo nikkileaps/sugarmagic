@@ -78,7 +78,6 @@ import {
 import {
   QUEST_NODE_KIND,
   applyNodeMoves,
-  canDeleteNodes,
   connectNodes,
   deleteNodes,
   disconnectEdges,
@@ -1192,7 +1191,6 @@ export function useQuestWorkspaceView({
     [selectedNodeId, selectedStage, updateStage]
   );
 
-  // A stage must keep at least one node, so the last one cannot be deleted.
   const [graphSelection, setGraphSelection] = useState<{
     nodeIds: string[];
     edgeIds: string[];
@@ -1225,17 +1223,10 @@ export function useQuestWorkspaceView({
     [selectedStage, updateStage]
   );
 
-  const handleBeforeDelete = useCallback(
-    ({ nodeIds }: { nodeIds: string[]; edgeIds: string[] }) => {
-      if (nodeIds.length === 0) return true;
-      const stage = selectedQuestRef.current?.stageDefinitions.find(
-        (candidate) => candidate.stageId === graphStageId
-      );
-      if (!stage) return false;
-      return canDeleteNodes(stage, nodeIds);
-    },
-    [graphStageId]
-  );
+  // No delete guard here: a stage can be emptied completely. Entry nodes are
+  // derived from whatever has no prerequisites, so removing any node leaves a
+  // stage that still means something. The quest inspector's validation panel
+  // reports an empty stage as a warning.
 
   const hasGraphSelection =
     graphSelection.nodeIds.length + graphSelection.edgeIds.length > 0;
@@ -1413,7 +1404,6 @@ export function useQuestWorkspaceView({
               onConnect={handleGraphConnect}
               onNodesDeleted={handleNodesDeleted}
               onEdgesDeleted={handleEdgesDeleted}
-              onBeforeDelete={handleBeforeDelete}
               onSelectionChange={setGraphSelection}
               chrome={questGraphChrome}
             />

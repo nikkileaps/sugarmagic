@@ -231,18 +231,6 @@ export function deleteNodes(
   };
 }
 
-/** A stage must keep at least one node, so the last one cannot be deleted. */
-export function canDeleteNodes(
-  stage: QuestStageDefinition,
-  nodeIds: string[]
-): boolean {
-  const removed = new Set(nodeIds);
-  const remaining = stage.nodeDefinitions.filter(
-    (node) => !removed.has(node.nodeId)
-  );
-  return remaining.length >= 1;
-}
-
 export function findNode(
   stage: QuestStageDefinition,
   nodeId: string

@@ -452,7 +452,6 @@ export {
 export {
   QUEST_NODE_KIND,
   applyNodeMoves,
-  canDeleteNodes,
   connectNodes,
   deleteNodes,
   disconnectEdges,

@@ -160,7 +160,8 @@ export interface DialogueInteractionBinding {
 export interface DialogueDefinition {
   definitionId: string;
   displayName: string;
-  startNodeId: string;
+  /** Null when the dialogue has no nodes, so there is nowhere to start. */
+  startNodeId: string | null;
   nodes: DialogueNodeDefinition[];
   interactionBinding: DialogueInteractionBinding;
 }
@@ -287,12 +288,15 @@ export function normalizeDialogueDefinition(
     .map((node) => normalizeDialogueNodeDefinition(node))
     .filter((node) => Boolean(node.nodeId));
 
-  const normalizedNodes = nodes.length > 0 ? nodes : defaultDefinition.nodes;
+  // An emptied dialogue stays empty. Substituting a starter node here would
+  // undo the author's deletion on the next load rather than on screen, which
+  // is the confusing place to find out about it.
+  const normalizedNodes = nodes;
   const startNodeId =
     definition.startNodeId &&
     normalizedNodes.some((node) => node.nodeId === definition.startNodeId)
       ? definition.startNodeId
-      : normalizedNodes[0]!.nodeId;
+      : (normalizedNodes[0]?.nodeId ?? null);
 
   return {
     definitionId: definition.definitionId ?? defaultDefinition.definitionId,

@@ -224,21 +224,31 @@ export interface DialogueDeleteRefusal {
 }
 
 /**
- * A dialogue must keep at least one node, and must keep the node it starts from
- * -- without it there is nothing to open the conversation with.
+ * A dialogue may be emptied completely -- that is a legitimate way to start
+ * over. The one thing it may not become is a set of nodes with no way in.
  */
 export function canDeleteDialogueNodes(
   dialogue: DialogueDefinition,
   nodeIds: string[]
 ): DialogueDeleteRefusal {
   if (nodeIds.length === 0) return { allowed: true };
-  if (nodeIds.includes(dialogue.startNodeId)) {
-    return { allowed: false, reason: "The start node cannot be deleted." };
-  }
   const removed = new Set(nodeIds);
   const remaining = dialogue.nodes.filter((node) => !removed.has(node.nodeId));
-  if (remaining.length < 1) {
-    return { allowed: false, reason: "A dialogue must keep at least one node." };
+
+  // Clearing a dialogue out entirely is allowed -- an empty dialogue is a
+  // legitimate starting point. What is not allowed is removing the node the
+  // conversation opens from while other nodes remain, which would strand them
+  // with no way in.
+  if (
+    dialogue.startNodeId &&
+    nodeIds.includes(dialogue.startNodeId) &&
+    remaining.length > 0
+  ) {
+    return {
+      allowed: false,
+      reason:
+        "The start node cannot be deleted while other nodes remain. Delete those first, or pick a different start node."
+    };
   }
   return { allowed: true };
 }
