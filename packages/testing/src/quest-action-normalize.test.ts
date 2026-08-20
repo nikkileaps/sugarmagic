@@ -82,6 +82,33 @@ describe("quest action load path", () => {
     ]);
   });
 
+  it("keeps a playAnimation slot only when it is a real slot", () => {
+    expect(
+      loadActions([
+        {
+          type: "playAnimation",
+          npcDefinitionId: "npc:guard",
+          slot: "walk",
+          repeatCount: 2
+        },
+        { type: "playAnimation", npcDefinitionId: "npc:guard", slot: "cheer" }
+      ])
+    ).toEqual([
+      {
+        type: "playAnimation",
+        npcDefinitionId: "npc:guard",
+        slot: "walk",
+        repeatCount: 2
+      },
+      {
+        type: "playAnimation",
+        npcDefinitionId: "npc:guard",
+        slot: null,
+        repeatCount: 1
+      }
+    ]);
+  });
+
   it("drops an action with no recognizable type", () => {
     expect(loadActions([{ type: "notAnAction" }, {}, null])).toEqual([]);
   });

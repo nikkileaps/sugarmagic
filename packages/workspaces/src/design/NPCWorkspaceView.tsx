@@ -45,6 +45,7 @@ import type {
   DesignPreviewStore
 } from "@sugarmagic/shell";
 import {
+  NPC_ANIMATION_SLOT_LABELS,
   createDefaultNPCDefinition,
   resolveCharacterAnimationBinding
 } from "@sugarmagic/domain";
@@ -91,12 +92,6 @@ export interface NPCWorkspaceViewProps {
     updateNPC: (definition: NPCDefinition) => void;
   }) => ReactNode;
 }
-
-const NPC_ANIMATION_SLOT_LABELS: Record<NPCAnimationSlot, string> = {
-  idle: "Idle",
-  walk: "Walk",
-  run: "Run"
-};
 
 export function useNPCWorkspaceView(
   props: NPCWorkspaceViewProps

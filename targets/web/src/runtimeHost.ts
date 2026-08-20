@@ -179,6 +179,12 @@ import {
   writePreNewGameStepAnswers
 } from "./preNewGameSteps";
 import {
+  npcOneShotIsPlaying,
+  playNpcOneShot,
+  releaseNpcOneShot,
+  type NpcAnimationState
+} from "./npcOneShotAnimation";
+import {
   consumeOpenEpisodesFlag,
   consumeSceneEntryFlag,
   markOpenEpisodesForNextBoot,
@@ -610,13 +616,7 @@ const gltfLoader = createGltfLoader();
 
 /** Plan 070.2 — NPCs stash their idle AnimationMixer in the reconciler
  *  entry's `host` slot (driven each frame from the runtime loop). */
-interface HostEntryData {
-  mixer?: THREE.AnimationMixer;
-  /** Every clip bound to this NPC, by slot. One mixer plays one of them. */
-  animationClips?: Map<NPCAnimationSlot, THREE.AnimationClip>;
-  activeAnimationSlot?: NPCAnimationSlot;
-  activeAnimationAction?: THREE.AnimationAction;
-}
+type HostEntryData = NpcAnimationState;
 
 /** Plan 068.13a -- a placed asset is instanceable if it is a static model
  *  with no per-instance scatter / surface-ref surface (those realize
@@ -1612,6 +1612,11 @@ export function createWebRuntimeHost(
     slot: NPCAnimationSlot
   ): void {
     const host = entry.host as HostEntryData;
+    // A one-shot holds the NPC until it ends. Without this the per-frame
+    // locomotion drive would stop the clip on the very next frame.
+    if (npcOneShotIsPlaying(host)) {
+      return;
+    }
     const clip = host.animationClips?.get(slot);
     if (!host.mixer || !clip || host.activeAnimationSlot === slot) {
       return;
@@ -1622,6 +1627,48 @@ export function createWebRuntimeHost(
     action.play();
     host.activeAnimationAction = action;
     host.activeAnimationSlot = slot;
+  }
+
+  /**
+   * Plays one of an NPC's bound slots on every presence of that NPC. The hold
+   * and its release live in npcOneShotAnimation; this resolves the action's
+   * definitionId to the presences the reconciler keys entries by.
+   */
+  function playNpcAnimation(request: {
+    npcDefinitionId: string;
+    slot: NPCAnimationSlot;
+    repeatCount: number;
+  }): void {
+    const presenceIds = (gameplaySession?.getNpcRuntimeSnapshots() ?? [])
+      .filter((snapshot) => snapshot.npcDefinitionId === request.npcDefinitionId)
+      .map((snapshot) => snapshot.presenceId);
+
+    if (presenceIds.length === 0) {
+      console.warn("[web-runtime] play-npc-animation-no-presence", {
+        npcDefinitionId: request.npcDefinitionId,
+        slot: request.slot
+      });
+      return;
+    }
+
+    for (const presenceId of presenceIds) {
+      const entry = renderableReconciler?.get(presenceId);
+      if (!entry) {
+        continue;
+      }
+      const played = playNpcOneShot(
+        entry.host as HostEntryData,
+        request.slot,
+        request.repeatCount
+      );
+      if (!played) {
+        console.warn("[web-runtime] play-npc-animation-no-clip", {
+          npcDefinitionId: request.npcDefinitionId,
+          presenceId,
+          slot: request.slot
+        });
+      }
+    }
   }
 
   function disposeRuntime() {
@@ -1848,6 +1895,15 @@ export function createWebRuntimeHost(
           entry.root.visible = gameplaySession.isPresenceActive(
             entry.object.instanceId
           );
+          // A hidden NPC's mixer stops ticking below, so a one-shot on it would
+          // never reach `finished` and would hold the NPC out of locomotion for
+          // good. End it here instead.
+          if (
+            !entry.root.visible &&
+            npcOneShotIsPlaying(entry.host as HostEntryData)
+          ) {
+            releaseNpcOneShot(entry.host as HostEntryData);
+          }
         }
       }
     }
@@ -2665,6 +2721,10 @@ export function createWebRuntimeHost(
           warn: (message, payload) =>
             console.warn(`[web-runtime] ${message}`, payload)
         },
+        // The mixer goes away with the entry, so a one-shot listener on it must
+        // come off first. This is the hook's first consumer.
+        onEntryWillRemove: (entry) =>
+          releaseNpcOneShot(entry.host as HostEntryData),
         onEntryLoaded: (entry, renderable) => {
           // An NPC gets one AnimationMixer plus every clip bound to it, kept
           // in the entry's host slot. The frame loop ticks the mixer via
@@ -3010,6 +3070,7 @@ export function createWebRuntimeHost(
       // Plan 069.9 — NPCs follow the baked navmesh once it finishes loading.
       getPathfinder: () => navMeshPathfinder,
       onSceneAction: hostHandleSceneAction,
+      onPlayNpcAnimation: playNpcAnimation,
       // NO TRACK YET. The assembly is now built while the loading screen is
       // still up, and a track handed over here starts playing under it. The
       // real initial track starts where the loading gate closes, below.

@@ -18,6 +18,7 @@ describe("quest action type options", () => {
       "giveItem",
       "removeItem",
       "playCue",
+      "playAnimation",
       "spawnVfx",
       "teleportNpc",
       "moveNpc",

@@ -1,5 +1,6 @@
 import { createUuid } from "../shared/identity";
 import { normalizeNodeGroups, type NodeGroup } from "../graph-layout/index";
+import type { NPCAnimationSlot } from "../npc-definition/index";
 
 // Plan 074 §074.1' -- canonical location; runtime-core re-exports from here.
 export type TimeOfDayBand =
@@ -60,6 +61,15 @@ export type QuestActionDefinition =
   | { type: "unlockScene"; sceneId: string | null }
   | { type: "advanceToNextScene"; sceneId: string | null }
   | { type: "playCue"; cueDefinitionId: string | null }
+  // Plays one of the NPC's bound animation slots `repeatCount` times through,
+  // then hands the NPC back to its normal locomotion animation. Every presence
+  // of that NPC in the scene plays.
+  | {
+      type: "playAnimation";
+      npcDefinitionId: string | null;
+      slot: NPCAnimationSlot | null;
+      repeatCount: number;
+    }
   // Plan 074 §074.1' -- Beat-driven world clock.
   | { type: "set-time-of-day"; band: TimeOfDayBand }
   | { type: "advance-day" }
@@ -95,6 +105,7 @@ const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
   "advance-day": "Advance Day",
   "learn-fact": "Learn Fact",
   playCue: "Play Cue",
+  playAnimation: "Play Animation",
   spawnVfx: "Spawn VFX",
   teleportNpc: "Teleport NPC",
   moveNpc: "Move NPC",
@@ -135,6 +146,8 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
       return { type, sceneId: null };
     case "playCue":
       return { type, cueDefinitionId: null };
+    case "playAnimation":
+      return { type, npcDefinitionId: null, slot: null, repeatCount: 1 };
     case "set-time-of-day":
       return { type, band: "morning" };
     case "learn-fact":
@@ -366,6 +379,10 @@ const TIME_OF_DAY_BANDS: TimeOfDayBand[] = [
   "night"
 ];
 
+function isNpcAnimationSlot(value: unknown): value is NPCAnimationSlot {
+  return value === "idle" || value === "walk" || value === "run";
+}
+
 function isTimeOfDayBand(value: unknown): value is TimeOfDayBand {
   return (
     typeof value === "string" &&
@@ -442,6 +459,15 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
         type: "playCue",
         cueDefinitionId: readString(source.cueDefinitionId) ?? legacyTargetId
       };
+    case "playAnimation": {
+      const slot = readString(source.slot);
+      return {
+        type: "playAnimation",
+        npcDefinitionId: readString(source.npcDefinitionId) ?? legacyTargetId,
+        slot: isNpcAnimationSlot(slot) ? slot : null,
+        repeatCount: normalizeActionCount(source.repeatCount)
+      };
+    }
     case "set-time-of-day": {
       const band = readString(source.band) ?? legacyTargetId;
       return {

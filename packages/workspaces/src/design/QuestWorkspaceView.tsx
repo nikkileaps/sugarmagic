@@ -47,6 +47,7 @@ import {
 import type {
   DialogueDefinition,
   ItemDefinition,
+  NPCAnimationSlot,
   NPCDefinition,
   QuestActionDefinition,
   TimeOfDayBand,
@@ -62,6 +63,7 @@ import type {
   SemanticCommand
 } from "@sugarmagic/domain";
 import {
+  NPC_ANIMATION_SLOT_LABELS,
   QUEST_ACTION_TYPE_OPTIONS,
   REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS,
   createQuestAction,
@@ -663,12 +665,14 @@ const STAGE_TIME_OF_DAY_OPTIONS: Array<{
 function QuestActionFields({
   action,
   itemDefinitions,
+  npcDefinitions,
   scenes,
   soundCueDefinitions,
   onChange
 }: {
   action: QuestActionDefinition;
   itemDefinitions: ItemDefinition[];
+  npcDefinitions: NPCDefinition[];
   scenes: Scene[];
   soundCueDefinitions: SoundCueDefinition[];
   onChange: (action: QuestActionDefinition) => void;
@@ -784,6 +788,79 @@ function QuestActionFields({
         />
       );
 
+    case "playAnimation": {
+      // Only the slots this NPC has a clip bound to. A slot with no clip would
+      // play nothing, so it is not offered.
+      const npc = npcDefinitions.find(
+        (candidate) => candidate.definitionId === action.npcDefinitionId
+      );
+      const boundSlots = npc
+        ? (
+            Object.entries(npc.presentation.animationAssetBindings) as Array<
+              [NPCAnimationSlot, string | null]
+            >
+          )
+            .filter(([, bindingId]) => Boolean(bindingId))
+            .map(([slot]) => slot)
+        : [];
+      return (
+        <>
+          <Select
+            size="xs"
+            label="NPC"
+            clearable
+            searchable
+            placeholder="Pick an NPC"
+            data={npcDefinitions.map((definition) => ({
+              value: definition.definitionId,
+              label: definition.displayName
+            }))}
+            value={action.npcDefinitionId}
+            onChange={(value) =>
+              // The slot list belongs to the NPC, so changing the NPC clears it.
+              onChange({ ...action, npcDefinitionId: value, slot: null })
+            }
+          />
+          <Select
+            size="xs"
+            label="Animation"
+            clearable
+            disabled={!npc}
+            placeholder={
+              !npc
+                ? "Pick an NPC first"
+                : boundSlots.length === 0
+                  ? "This NPC has no animations bound"
+                  : "Pick an animation"
+            }
+            data={boundSlots.map((slot) => ({
+              value: slot,
+              label: NPC_ANIMATION_SLOT_LABELS[slot]
+            }))}
+            value={action.slot}
+            onChange={(value) =>
+              onChange({
+                ...action,
+                slot: (value as NPCAnimationSlot | null) ?? null
+              })
+            }
+          />
+          <NumberInput
+            size="xs"
+            label="Times to Play"
+            min={1}
+            value={action.repeatCount}
+            onChange={(value) =>
+              onChange({
+                ...action,
+                repeatCount: typeof value === "number" ? Math.max(1, value) : 1
+              })
+            }
+          />
+        </>
+      );
+    }
+
     case "set-time-of-day":
       return (
         <Select
@@ -844,6 +921,7 @@ function QuestActionFields({
 function QuestActionsEditor({
   actions,
   itemDefinitions,
+  npcDefinitions,
   scenes,
   soundCueDefinitions,
   onChange,
@@ -851,6 +929,7 @@ function QuestActionsEditor({
 }: {
   actions: QuestActionDefinition[];
   itemDefinitions: ItemDefinition[];
+  npcDefinitions: NPCDefinition[];
   scenes: Scene[];
   soundCueDefinitions: SoundCueDefinition[];
   onChange: (actions: QuestActionDefinition[]) => void;
@@ -926,6 +1005,7 @@ function QuestActionsEditor({
               <QuestActionFields
                 action={action}
                 itemDefinitions={itemDefinitions}
+                npcDefinitions={npcDefinitions}
                 scenes={scenes}
                 soundCueDefinitions={soundCueDefinitions}
                 onChange={(updated) => {
@@ -2484,6 +2564,7 @@ export function useQuestWorkspaceView({
               label="On Enter"
               actions={selectedNode.onEnterActions}
               itemDefinitions={itemDefinitions}
+              npcDefinitions={npcDefinitions}
               scenes={scenes}
               soundCueDefinitions={soundCueDefinitions}
               onChange={(onEnterActions) =>
@@ -2494,6 +2575,7 @@ export function useQuestWorkspaceView({
               label="On Complete"
               actions={selectedNode.onCompleteActions}
               itemDefinitions={itemDefinitions}
+              npcDefinitions={npcDefinitions}
               scenes={scenes}
               soundCueDefinitions={soundCueDefinitions}
               onChange={(onCompleteActions) =>

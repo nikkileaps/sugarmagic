@@ -29,6 +29,7 @@ import {
   type ContentLibrarySnapshot,
   type ItemDefinition,
   type MechanicsDefinition,
+  type NPCAnimationSlot,
   type NPCDefinition,
   type PlayerDefinition,
   type QuestDefinition,
@@ -215,6 +216,16 @@ export interface RuntimeGameplaySessionControllerOptions {
   onSceneAction?: (action: {
     type: "unlockScene" | "advanceToNextScene";
     sceneId: string | null;
+  }) => void;
+  /**
+   * Plays one of an NPC's bound animation slots as a one-shot, on every
+   * presence of that NPC. The mixer lives in the host, so the quest action
+   * handler forwards here rather than reaching for it.
+   */
+  onPlayNpcAnimation?: (request: {
+    npcDefinitionId: string;
+    slot: NPCAnimationSlot;
+    repeatCount: number;
   }) => void;
   /**
    * Plan 059 §059.1 — the background-music sound cue to start at
@@ -1996,6 +2007,16 @@ export function createRuntimeGameplaySessionController(
           type: action.type,
           sceneId: action.sceneId
         });
+        return;
+
+      case "playAnimation":
+        if (action.npcDefinitionId && action.slot) {
+          options.onPlayNpcAnimation?.({
+            npcDefinitionId: action.npcDefinitionId,
+            slot: action.slot,
+            repeatCount: action.repeatCount
+          });
+        }
         return;
 
       case "set-time-of-day":
