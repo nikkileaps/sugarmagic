@@ -1086,4 +1086,102 @@ describe("time-window task gating (074.4)", () => {
     system.sync({ deltaSeconds: 1, activeQuests: [other] });
     expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:idle");
   });
+
+  it("holds a task active after the quest that completed its node finishes", () => {
+    // The point of node-completed activation: an NPC staged by a story beat
+    // stays staged once the quest is over. Node progress itself is deleted
+    // with the quest, which is why completion is recorded separately.
+    const region = makeRegion();
+    region.behaviors[0]!.tasks.unshift({
+      taskId: "task:after-node",
+      displayName: "Hold At Dock",
+      description: "Waits at the dock once the suitcase node is done.",
+      targetAreaId: "dock",
+      currentActivity: "waiting",
+      currentGoal: "wait_for_delivery",
+      activation: {
+        questDefinitionId: null,
+        questStageId: null,
+        worldFlagEquals: null
+      },
+      nodeCompleted: {
+        questDefinitionId: "quest:find-suitcase",
+        nodeId: "node:found-it"
+      }
+    });
+
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    let nodeDone = false;
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      isNodeCompleted: (questDefinitionId, nodeId) =>
+        nodeDone &&
+        questDefinitionId === "quest:find-suitcase" &&
+        nodeId === "node:found-it",
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    // Node not done: the clause fails and the task is skipped.
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:idle");
+
+    // Node done: the task takes over, with no quest active at all.
+    nodeDone = true;
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:after-node");
+
+    // Still held once the quest is long finished and another is being followed.
+    system.sync({
+      deltaSeconds: 1,
+      activeQuests: [{ questDefinitionId: "quest:other", stageId: "stage:one" }]
+    });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:after-node");
+  });
+
+  it("fails closed when nothing can answer the node-completed clause", () => {
+    const region = makeRegion();
+    region.behaviors[0]!.tasks.unshift({
+      taskId: "task:after-node",
+      displayName: "Hold At Dock",
+      description: null,
+      targetAreaId: "dock",
+      currentActivity: "waiting",
+      currentGoal: "wait_for_delivery",
+      activation: {
+        questDefinitionId: null,
+        questStageId: null,
+        worldFlagEquals: null
+      },
+      nodeCompleted: {
+        questDefinitionId: "quest:find-suitcase",
+        nodeId: "node:found-it"
+      }
+    });
+
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    // No isNodeCompleted supplied at all.
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:idle");
+  });
 });

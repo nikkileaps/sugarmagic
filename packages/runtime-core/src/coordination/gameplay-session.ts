@@ -2404,6 +2404,8 @@ export function createRuntimeGameplaySessionController(
           })
         ),
       hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+      isNodeCompleted: (questDefinitionId, nodeId) =>
+        questManager.isNodeCompleted(questDefinitionId, nodeId),
       // Plan 069.9 — NPCs follow the baked navmesh (host loads it async).
       // DEFERRED (079): if an NPC that was pathfinding toward a conditional
       // containment gate becomes absent (condition clears), its in-flight

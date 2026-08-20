@@ -144,6 +144,15 @@ export class QuestManager {
   private definitions = new Map<string, QuestDefinition>();
   private activeQuests = new Map<string, ActiveQuestRuntimeState>();
   private completedQuestIds = new Set<string>();
+  /**
+   * Which nodes have been completed, per quest. Recorded at completion time
+   * and kept outside `activeQuests`, which is deleted when a quest finishes --
+   * so "this node was completed" outlives the quest that produced it.
+   *
+   * Never cleared. Nothing restarts a quest, so a completed node stays
+   * completed for the rest of the playthrough.
+   */
+  private completedNodeIdsByQuest = new Map<string, Set<string>>();
   private trackedQuestDefinitionId: string | null = null;
   private runtimeFlags = new Map<string, unknown>();
   private onEvent: QuestRuntimeEventHandler | null = null;
@@ -445,6 +454,23 @@ export class QuestManager {
    * A quest whose current stage cannot be resolved still appears, with a null
    * stage, so a binding naming only the quest still matches it.
    */
+  private recordCompletedNode(questDefinitionId: string, nodeId: string): void {
+    let completed = this.completedNodeIdsByQuest.get(questDefinitionId);
+    if (!completed) {
+      completed = new Set<string>();
+      this.completedNodeIdsByQuest.set(questDefinitionId, completed);
+    }
+    completed.add(nodeId);
+  }
+
+  /**
+   * True when this node has been completed at any point in this playthrough,
+   * including after its quest finished.
+   */
+  isNodeCompleted(questDefinitionId: string, nodeId: string): boolean {
+    return this.completedNodeIdsByQuest.get(questDefinitionId)?.has(nodeId) ?? false;
+  }
+
   getActiveQuestStates(): Array<{
     questDefinitionId: string;
     stageId: string | null;
@@ -704,6 +730,7 @@ export class QuestManager {
 
     progress.status = "completed";
     progress.branchResult = branchResult;
+    this.recordCompletedNode(state.questDefinitionId, node.nodeId);
     this.executeActions(node.onCompleteActions, {
       questDefinitionId: state.questDefinitionId,
       stageId: stage.stageId,
@@ -929,9 +956,14 @@ export class QuestManager {
     for (const [key, value] of this.runtimeFlags) {
       runtimeFlags[key] = value;
     }
+    const completedNodeIds: Record<string, string[]> = {};
+    for (const [questId, nodeIds] of this.completedNodeIdsByQuest) {
+      completedNodeIds[questId] = Array.from(nodeIds);
+    }
     return {
       activeQuests,
       completedQuestIds: Array.from(this.completedQuestIds),
+      completedNodeIds,
       trackedQuestDefinitionId: this.trackedQuestDefinitionId,
       runtimeFlags
     };
@@ -957,9 +989,13 @@ export class QuestManager {
    * console.warn (usually authoring renamed the id after the save
    * was written).
    *
-   * `completedQuestIds`, `trackedQuestDefinitionId`, and
-   * `runtimeFlags` fully replace whatever's currently there —
-   * they're single-value stores, not composed.
+   * `completedQuestIds`, `completedNodeIds`,
+   * `trackedQuestDefinitionId`, and `runtimeFlags` fully replace
+   * whatever's currently there — they're single-value stores, not
+   * composed. Replacing is safe for `completedNodeIds` because
+   * this runs before `startInitialQuests`, so nothing has
+   * recorded a completion yet. A save written before the field
+   * existed has none, and restores as empty.
    *
    * `null` slice = fresh player. Nothing to restore.
    */
@@ -1001,6 +1037,12 @@ export class QuestManager {
     }
 
     this.completedQuestIds = new Set(data.completedQuestIds ?? []);
+    this.completedNodeIdsByQuest = new Map(
+      Object.entries(data.completedNodeIds ?? {}).map(([questId, nodeIds]) => [
+        questId,
+        new Set(nodeIds)
+      ])
+    );
     if (data.trackedQuestDefinitionId !== undefined) {
       this.trackedQuestDefinitionId = data.trackedQuestDefinitionId;
     }
@@ -1077,6 +1119,8 @@ export interface SerializedActiveQuest {
 export interface QuestManagerSlice {
   activeQuests: Record<string, SerializedActiveQuest>;
   completedQuestIds: string[];
+  /** Completed node ids per quest. Absent in saves written before it existed. */
+  completedNodeIds?: Record<string, string[]>;
   trackedQuestDefinitionId: string | null;
   runtimeFlags: Record<string, unknown>;
 }

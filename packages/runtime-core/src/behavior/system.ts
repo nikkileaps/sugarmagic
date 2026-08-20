@@ -58,6 +58,12 @@ export interface RuntimeNpcBehaviorSystemOptions {
   npcEntities?: RuntimeBehaviorNpcEntityRef[];
   getNpcEntities?: () => RuntimeBehaviorNpcEntityRef[];
   hasWorldFlag?: (key: string, value?: unknown) => boolean;
+  /**
+   * Whether a quest node has ever been completed. Injected the same way as
+   * hasWorldFlag rather than read off the blackboard, which carries no
+   * completed-node fact and which this system does not read.
+   */
+  isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean;
   movementSpeedMetersPerSecond?: number;
   stuckTimeoutMs?: number;
   arrivalThresholdMeters?: number;
@@ -229,7 +235,8 @@ function taskMatchesActivation(
   task: RegionNPCBehaviorTask,
   activeQuests: RuntimeBehaviorQuestState[],
   hasWorldFlag?: (key: string, value?: unknown) => boolean,
-  currentTimeBand?: string | null
+  currentTimeBand?: string | null,
+  isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean
 ): boolean {
   // Plan 074 §074.4 -- time-window gating: skip tasks outside the active band.
   if (
@@ -239,6 +246,20 @@ function taskMatchesActivation(
     !(task.timeWindow.bands as string[]).includes(currentTimeBand)
   ) {
     return false;
+  }
+  // A node-completed clause is answered here rather than by the shared
+  // evaluator: the evaluator's other callers cannot answer it. Missing
+  // predicate fails closed, the same way a missing flag predicate does.
+  if (task.nodeCompleted) {
+    if (
+      !isNodeCompleted ||
+      !isNodeCompleted(
+        task.nodeCompleted.questDefinitionId,
+        task.nodeCompleted.nodeId
+      )
+    ) {
+      return false;
+    }
   }
   // Plan 069.5 — one grammar evaluator, shared with the containment gate.
   return evaluateRegionQuestBinding(task.activation, {
@@ -251,7 +272,8 @@ function resolveBehaviorTask(
   behavior: RegionNPCBehaviorDefinition | null,
   activeQuests: RuntimeBehaviorQuestState[],
   hasWorldFlag?: (key: string, value?: unknown) => boolean,
-  currentTimeBand?: string | null
+  currentTimeBand?: string | null,
+  isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean
 ): RegionNPCBehaviorTask | null {
   if (!behavior || behavior.tasks.length === 0) {
     return null;
@@ -259,7 +281,13 @@ function resolveBehaviorTask(
 
   const questMatchedTask =
     behavior.tasks.find((task) =>
-      taskMatchesActivation(task, activeQuests, hasWorldFlag, currentTimeBand)
+      taskMatchesActivation(
+        task,
+        activeQuests,
+        hasWorldFlag,
+        currentTimeBand,
+        isNodeCompleted
+      )
     ) ?? null;
   return questMatchedTask;
 }
@@ -403,6 +431,7 @@ export function createRuntimeNpcBehaviorSystem(
     npcEntities,
     getNpcEntities,
     hasWorldFlag,
+    isNodeCompleted,
     movementSpeedMetersPerSecond = DEFAULT_MOVEMENT_SPEED_METERS_PER_SECOND,
     stuckTimeoutMs = DEFAULT_STUCK_TIMEOUT_MS,
     arrivalThresholdMeters = DEFAULT_ARRIVAL_THRESHOLD_METERS,
@@ -576,7 +605,8 @@ export function createRuntimeNpcBehaviorSystem(
       behavior,
       activeQuests,
       hasWorldFlag,
-      getTimeOfDayBand(blackboard)
+      getTimeOfDayBand(blackboard),
+      isNodeCompleted
     );
     const targetArea = task ? findRegionAreaById(region, task.targetAreaId) : null;
     const directiveTargetPoint = targetArea
