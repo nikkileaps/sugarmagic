@@ -140,6 +140,47 @@ export interface QuestWorkspaceViewProps {
   }) => ReactNode;
 }
 
+/**
+ * A stage with no nodes completes the moment it starts, so a next-stage loop made
+ * only of empty stages never settles on anything. The runtime parks the quest
+ * rather than hanging; this is where the author finds out.
+ */
+function emptyStageLoop(quest: QuestDefinition): string[] {
+  const stagesById = new Map(
+    quest.stageDefinitions.map((stage) => [stage.stageId, stage])
+  );
+  const reported = new Set<string>();
+  const warnings: string[] = [];
+
+  for (const start of quest.stageDefinitions) {
+    if (reported.has(start.stageId)) continue;
+    const path: string[] = [];
+    const seen = new Set<string>();
+    let stage: QuestStageDefinition | undefined = start;
+
+    while (stage && stage.nodeDefinitions.length === 0) {
+      if (seen.has(stage.stageId)) {
+        for (const stageId of path) reported.add(stageId);
+        warnings.push(
+          `Stages ${path
+            .map(
+              (stageId) =>
+                `"${stagesById.get(stageId)?.displayName ?? stageId}"`
+            )
+            .join(
+              " -> "
+            )} have no nodes and loop back on each other, so the quest can never move past them.`
+        );
+        break;
+      }
+      seen.add(stage.stageId);
+      path.push(stage.stageId);
+      stage = stage.nextStageId ? stagesById.get(stage.nextStageId) : undefined;
+    }
+  }
+  return warnings;
+}
+
 function validateQuest(quest: QuestDefinition): string[] {
   const warnings: string[] = [];
   const stageIds = new Set(
@@ -148,6 +189,7 @@ function validateQuest(quest: QuestDefinition): string[] {
   if (!stageIds.has(quest.startStageId)) {
     warnings.push("Start stage is missing.");
   }
+  warnings.push(...emptyStageLoop(quest));
 
   for (const stage of quest.stageDefinitions) {
     if (stage.nextStageId && !stageIds.has(stage.nextStageId)) {

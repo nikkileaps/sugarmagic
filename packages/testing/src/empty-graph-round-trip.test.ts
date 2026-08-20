@@ -113,6 +113,37 @@ describe("an empty quest stage at runtime", () => {
     expect(manager.getQuestStageState("q1", "empty")).toBe("completed");
     expect(manager.getTrackedQuest()?.stageId).toBe("final");
   });
+
+  // An empty stage completes the moment it starts, so two of them naming each
+  // other as the next stage would advance back and forth forever.
+  it("parks a quest whose empty stages point at each other instead of hanging", () => {
+    const first = createDefaultQuestStageDefinition({
+      stageId: "a",
+      nodeDefinitions: []
+    });
+    const second = createDefaultQuestStageDefinition({
+      stageId: "b",
+      nodeDefinitions: []
+    });
+
+    const manager = new QuestManager();
+    manager.registerDefinitions([
+      {
+        definitionId: "q-loop",
+        displayName: "Looping quest",
+        description: "",
+        startStageId: "a",
+        stageDefinitions: [
+          { ...first, nextStageId: "b" },
+          { ...second, nextStageId: "a" }
+        ],
+        rewardDefinitions: [],
+        repeatable: false
+      }
+    ]);
+
+    expect(() => manager.startQuest("q-loop")).not.toThrow();
+  });
 });
 
 /**

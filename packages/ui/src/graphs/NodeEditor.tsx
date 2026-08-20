@@ -164,6 +164,14 @@ export interface NodeEditorProps {
   showMiniMap?: boolean;
 }
 
+/**
+ * The port a node has when it declares none. An edge that names a port its node
+ * does not have is not drawn -- the graph library resolves handles by exact id --
+ * so a mapping that omits `fromPort`/`toPort` is promising the node has these.
+ */
+export const DEFAULT_OUTPUT_PORT = "out";
+export const DEFAULT_INPUT_PORT = "in";
+
 const RendererContext = createContext<Record<string, GraphEditorNodeRenderer>>(
   {}
 );
@@ -186,8 +194,8 @@ function NodeShell({
   const renderers = useContext(RendererContext);
   const node = data.node;
   const renderer = renderers[node.kind];
-  const outputs = node.outputs ?? [{ name: "out" }];
-  const inputs = node.inputs ?? [{ name: "in" }];
+  const outputs = node.outputs ?? [{ name: DEFAULT_OUTPUT_PORT }];
+  const inputs = node.inputs ?? [{ name: DEFAULT_INPUT_PORT }];
 
   return (
     <div
@@ -329,8 +337,8 @@ function toFlowEdge(edge: GraphEditorEdge): FlowEdge {
     id: edge.id,
     source: edge.fromId,
     target: edge.toId,
-    sourceHandle: edge.fromPort ?? "out",
-    targetHandle: edge.toPort ?? "in",
+    sourceHandle: edge.fromPort ?? DEFAULT_OUTPUT_PORT,
+    targetHandle: edge.toPort ?? DEFAULT_INPUT_PORT,
     animated: false,
     style: {
       // The authored colour rides as a custom property rather than a `stroke`

@@ -15,6 +15,7 @@ import {
   questStageToEditorEdges,
   questStageToEditorNodes
 } from "@sugarmagic/workspaces";
+import { expectEdgePortsExist } from "./graph-edge-ports";
 
 function stageWith(): QuestStageDefinition {
   const first = createDefaultQuestNodeDefinition({
@@ -45,6 +46,14 @@ function stageWith(): QuestStageDefinition {
 }
 
 describe("quest graph mapping", () => {
+  it("only emits edges whose ports exist on the nodes they attach to", () => {
+    const stage = stageWith();
+    expectEdgePortsExist(
+      questStageToEditorNodes(stage),
+      questStageToEditorEdges(stage)
+    );
+  });
+
   it("maps every quest node to an editor node, keeping authored positions", () => {
     const nodes = questStageToEditorNodes(stageWith());
     expect(nodes.map((node) => node.id)).toEqual(["node-a", "node-b", "node-c"]);

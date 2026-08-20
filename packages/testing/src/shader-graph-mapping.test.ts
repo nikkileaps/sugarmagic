@@ -9,6 +9,7 @@ import {
   shaderToEditorEdges,
   shaderToEditorNodes
 } from "@sugarmagic/workspaces";
+import { expectEdgePortsExist } from "./graph-edge-ports";
 
 /**
  * `math.add` and `math.multiply` each declare two float inputs (a, b) and one
@@ -37,6 +38,23 @@ function shader(): ShaderGraphDocument {
 }
 
 describe("shader graph mapping", () => {
+  it("only emits edges whose ports exist on the nodes they attach to", () => {
+    const withEdge = shader();
+    withEdge.edges = [
+      {
+        edgeId: "e1",
+        sourceNodeId: "add",
+        sourcePortId: "value",
+        targetNodeId: "mul",
+        targetPortId: "a"
+      }
+    ];
+    expectEdgePortsExist(
+      shaderToEditorNodes(withEdge),
+      shaderToEditorEdges(withEdge)
+    );
+  });
+
   it("gives a node one editor port per declared port", () => {
     const nodes = shaderToEditorNodes(shader());
     const add = nodes.find((node) => node.id === "add")!;

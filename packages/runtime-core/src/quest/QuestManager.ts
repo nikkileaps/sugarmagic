@@ -539,7 +539,17 @@ export class QuestManager {
       }));
   }
 
-  private refreshQuest(state: ActiveQuestRuntimeState): boolean {
+  /**
+   * `visitedStageIds` carries the stages this pass has already advanced through,
+   * because a stage with no nodes is complete the moment it starts: two such
+   * stages naming each other as `nextStageId` would advance back and forth until
+   * the stack ran out. Advancing through several finished stages in one pass is
+   * legitimate, so the stop condition is re-entering a stage, not a step count.
+   */
+  private refreshQuest(
+    state: ActiveQuestRuntimeState,
+    visitedStageIds: Set<string> = new Set()
+  ): boolean {
     const stage = this.getCurrentStageDefinition(state);
     const stageProgress = this.getCurrentStageProgress(state);
     if (!stage || !stageProgress) {
@@ -599,7 +609,16 @@ export class QuestManager {
     }
 
     if (this.isStageComplete(stage, stageProgress)) {
-      this.advanceQuestStage(state, stage);
+      if (visitedStageIds.has(stage.stageId)) {
+        // The stages loop. Park the quest here rather than advancing forever;
+        // the author sees it as a warning in the quest editor.
+        console.warn(
+          `[quest] Quest "${state.questDefinitionId}" advanced back into stage "${stage.stageId}" without progressing. Stopping here; check the stage's Next Stage for a loop.`
+        );
+        return changed;
+      }
+      visitedStageIds.add(stage.stageId);
+      this.advanceQuestStage(state, stage, visitedStageIds);
       return true;
     }
 
@@ -720,7 +739,8 @@ export class QuestManager {
 
   private advanceQuestStage(
     state: ActiveQuestRuntimeState,
-    stage: QuestStageDefinition
+    stage: QuestStageDefinition,
+    visitedStageIds: Set<string> = new Set()
   ): void {
     const definition = this.definitions.get(state.questDefinitionId);
     if (!definition) return;
@@ -760,7 +780,7 @@ export class QuestManager {
       displayName: definition.displayName,
       stageDisplayName: nextStage.displayName
     });
-    this.refreshQuest(state);
+    this.refreshQuest(state, visitedStageIds);
   }
 
   /**

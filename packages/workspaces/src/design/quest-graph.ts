@@ -83,6 +83,9 @@ export function questStageToEditorNodes(
 export function questStageToEditorEdges(
   stage: QuestStageDefinition
 ): GraphEditorEdge[] {
+  const behaviorByNodeId = new Map(
+    stage.nodeDefinitions.map((node) => [node.nodeId, node.nodeBehavior])
+  );
   const edges: GraphEditorEdge[] = [];
   for (const node of stage.nodeDefinitions) {
     for (const prerequisiteNodeId of node.prerequisiteNodeIds) {
@@ -90,6 +93,12 @@ export function questStageToEditorEdges(
         id: prerequisiteEdgeId(prerequisiteNodeId, node.nodeId),
         fromId: prerequisiteNodeId,
         toId: node.nodeId,
+        // A branch node's two outputs are named; every other node has a single
+        // output the editor calls "out". An edge has to name a port the source
+        // node actually has, or it is not drawn at all.
+        ...(behaviorByNodeId.get(prerequisiteNodeId) === "branch"
+          ? { fromPort: BRANCH_PASS_PORT }
+          : {}),
         color: "var(--sm-accent-blue)"
       });
     }

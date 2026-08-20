@@ -11,6 +11,7 @@ import {
   disconnectDialogueEdges,
   parseDialogueEdgeId
 } from "@sugarmagic/workspaces";
+import { expectEdgePortsExist } from "./graph-edge-ports";
 
 function dialogue(): DialogueDefinition {
   return {
@@ -39,6 +40,14 @@ function dialogue(): DialogueDefinition {
 }
 
 describe("dialogue graph mapping", () => {
+  it("only emits edges whose ports exist on the nodes they attach to", () => {
+    const definition = dialogue();
+    expectEdgePortsExist(
+      dialogueToEditorNodes(definition, null),
+      dialogueToEditorEdges(definition)
+    );
+  });
+
   it("maps nodes and marks the start node", () => {
     const nodes = dialogueToEditorNodes(dialogue(), null);
     expect(nodes.map((node) => node.id)).toEqual(["n1", "n2", "n3"]);
