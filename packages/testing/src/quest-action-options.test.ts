@@ -19,7 +19,6 @@ describe("quest action type options", () => {
       "removeItem",
       "playCue",
       "playAnimation",
-      "teleportNpc",
       "emitEvent",
       "unlockScene",
       "advanceToNextScene",

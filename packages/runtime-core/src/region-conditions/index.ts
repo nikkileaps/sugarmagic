@@ -34,6 +34,8 @@ export interface RegionConditionContext {
   activeQuests: RegionConditionQuestState[];
   /** Truthy when the world flag `key` holds `value` (value omitted => any). */
   hasWorldFlag?: (key: string, value?: unknown) => boolean;
+  /** Truthy when that quest node has been completed at any point. */
+  isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean;
 }
 
 /**
@@ -102,6 +104,17 @@ export function evaluateRegionQuestBinding(
         (!binding.questStageId || quest.stageId === binding.questStageId)
     );
     if (!matched) {
+      return false;
+    }
+  }
+  if (binding.nodeCompleted) {
+    if (
+      !context.isNodeCompleted ||
+      !context.isNodeCompleted(
+        binding.nodeCompleted.questDefinitionId,
+        binding.nodeCompleted.nodeId
+      )
+    ) {
       return false;
     }
   }

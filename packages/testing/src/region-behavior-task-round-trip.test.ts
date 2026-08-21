@@ -63,16 +63,21 @@ function loadedTask(region: RegionDocument) {
 }
 
 describe("behavior task round-trip", () => {
-  it("keeps a node-completed clause", () => {
+  it("keeps a node-completed clause on the activation", () => {
     const task = loadedTask(
       regionWithTask({
-        nodeCompleted: {
-          questDefinitionId: "quest:offering",
-          nodeId: "node:offered"
+        activation: {
+          questDefinitionId: null,
+          questStageId: null,
+          worldFlagEquals: null,
+          nodeCompleted: {
+            questDefinitionId: "quest:offering",
+            nodeId: "node:offered"
+          }
         }
       })
     );
-    expect(task.nodeCompleted).toEqual({
+    expect(task.activation.nodeCompleted).toEqual({
       questDefinitionId: "quest:offering",
       nodeId: "node:offered"
     });
@@ -87,7 +92,7 @@ describe("behavior task round-trip", () => {
 
   it("reads a task written before either field existed", () => {
     const task = loadedTask(regionWithTask({}));
-    expect(task.nodeCompleted).toBeNull();
+    expect(task.activation.nodeCompleted).toBeNull();
     expect(task.timeWindow).toBeNull();
     expect(task.taskId).toBe("task:hold");
   });

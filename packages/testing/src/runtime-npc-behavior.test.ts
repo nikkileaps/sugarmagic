@@ -1102,11 +1102,11 @@ describe("time-window task gating (074.4)", () => {
       activation: {
         questDefinitionId: null,
         questStageId: null,
-        worldFlagEquals: null
-      },
-      nodeCompleted: {
-        questDefinitionId: "quest:find-suitcase",
-        nodeId: "node:found-it"
+        worldFlagEquals: null,
+        nodeCompleted: {
+          questDefinitionId: "quest:find-suitcase",
+          nodeId: "node:found-it"
+        }
       }
     });
 
@@ -1158,11 +1158,11 @@ describe("time-window task gating (074.4)", () => {
       activation: {
         questDefinitionId: null,
         questStageId: null,
-        worldFlagEquals: null
-      },
-      nodeCompleted: {
-        questDefinitionId: "quest:find-suitcase",
-        nodeId: "node:found-it"
+        worldFlagEquals: null,
+        nodeCompleted: {
+          questDefinitionId: "quest:find-suitcase",
+          nodeId: "node:found-it"
+        }
       }
     });
 

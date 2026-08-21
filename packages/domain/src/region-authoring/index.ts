@@ -213,6 +213,20 @@ export interface RegionBehaviorQuestBinding {
   questDefinitionId: string | null;
   questStageId: string | null;
   worldFlagEquals: RegionBehaviorWorldFlagCondition | null;
+  /**
+   * Satisfied once that quest node has been completed, and stays satisfied
+   * after the quest itself finishes. Evaluated wherever this grammar is:
+   * behavior tasks, NPC placements, containment volumes.
+   *
+   * Optional so a hand-written binding need not carry it; the factory always
+   * normalizes it to a value.
+   */
+  nodeCompleted?: RegionBehaviorNodeCompletedCondition | null;
+}
+
+export interface RegionBehaviorNodeCompletedCondition {
+  questDefinitionId: string;
+  nodeId: string;
 }
 
 export interface RegionBehaviorWorldFlagCondition {
@@ -299,19 +313,6 @@ export interface RegionNPCBehaviorTask {
   // Plan 074 §074.4 -- time-window gating. When set, this task is only active
   // if the current world.time-of-day band is in the array. Null/absent = any time.
   timeWindow?: { bands: TimeOfDayBand[] } | null;
-  /**
-   * When set, this task is only active once that quest node has been
-   * completed, and stays active after the quest itself finishes.
-   *
-   * Task-level rather than part of `activation` on purpose. `activation` is
-   * evaluated in four places -- behavior tasks, two NPC presence checks, and
-   * containment gates -- and only the behavior system can answer a question
-   * about node completion. The other three would fail closed, which for a
-   * presence check means the NPC disappears. Same reason `timeWindow` sits
-   * here. Promote it into `activation` if a presence condition or a
-   * containment gate ever genuinely needs it, and give all four the predicate.
-   */
-  nodeCompleted?: { questDefinitionId: string; nodeId: string } | null;
 }
 
 export const REGION_NPC_BEHAVIOR_ACTIVITY_OPTIONS = [
@@ -808,6 +809,16 @@ export function createRegionBehaviorQuestBinding(
       overrides.questStageId.trim().length > 0
         ? overrides.questStageId.trim()
         : null,
+    nodeCompleted:
+      typeof overrides.nodeCompleted?.questDefinitionId === "string" &&
+      overrides.nodeCompleted.questDefinitionId.trim().length > 0 &&
+      typeof overrides.nodeCompleted?.nodeId === "string" &&
+      overrides.nodeCompleted.nodeId.trim().length > 0
+        ? {
+            questDefinitionId: overrides.nodeCompleted.questDefinitionId.trim(),
+            nodeId: overrides.nodeCompleted.nodeId.trim()
+          }
+        : null,
     worldFlagEquals:
       typeof overrides.worldFlagEquals?.key === "string" &&
       overrides.worldFlagEquals.key.trim().length > 0
@@ -851,10 +862,7 @@ export function createRegionNPCBehaviorTask(
         ? overrides.currentGoal.trim()
         : "idle",
     activation: createRegionBehaviorQuestBinding(overrides.activation),
-    timeWindow: overrides.timeWindow ?? null,
-    // Named explicitly: this factory rebuilds the task field by field, so a
-    // field it does not name is dropped on load however it arrived.
-    nodeCompleted: overrides.nodeCompleted ?? null
+    timeWindow: overrides.timeWindow ?? null
   };
 }
 

@@ -1413,7 +1413,9 @@ export function createRuntimeGameplaySessionController(
     return {
       activeQuests: questManager.getActiveQuestStates(),
       hasWorldFlag: (key: string, value?: unknown) =>
-        questManager.hasFlag(key, value)
+        questManager.hasFlag(key, value),
+      isNodeCompleted: (questDefinitionId: string, nodeId: string) =>
+        questManager.isNodeCompleted(questDefinitionId, nodeId)
     };
   }
 
@@ -2058,11 +2060,6 @@ export function createRuntimeGameplaySessionController(
       case "emitEvent":
         return;
 
-      // Offered in the editor, no runtime behavior. Listed so an action nobody
-      // handles cannot pass as one that is handled.
-      case "teleportNpc":
-        return;
-
       default: {
         const exhaustive: never = action;
         console.warn(
@@ -2528,7 +2525,9 @@ export function createRuntimeGameplaySessionController(
       if (sharedCollisionWorld.gates.length > 0) {
         applyVolumeColliderGates(sharedCollisionWorld, {
           activeQuests,
-          hasWorldFlag: (key, value) => questManager.hasFlag(key, value)
+          hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+          isNodeCompleted: (questDefinitionId, nodeId) =>
+            questManager.isNodeCompleted(questDefinitionId, nodeId)
         });
       }
       // Plan 079.2 -- reconcile conditional NPC presences each frame.

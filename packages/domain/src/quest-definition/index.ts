@@ -81,9 +81,7 @@ export type QuestActionDefinition =
   // Plan 074 §074.5 -- Player-known-facts. `factId` is the dedup key and
   // `displayText` is what the player reads. Quest actions only, no dialogue
   // node surface.
-  | { type: "learn-fact"; factId: string | null; displayText: string }
-  // Moves an NPC to an area and lets normal task selection continue from there.
-  | { type: "teleportNpc"; npcDefinitionId: string | null; targetAreaId: string | null };
+  | { type: "learn-fact"; factId: string | null; displayText: string };
 
 /**
  * Three actions this list deliberately does not have, and what to do instead.
@@ -98,6 +96,11 @@ export type QuestActionDefinition =
  *   task with a target area and an activation.
  * - Flipping an NPC between scripted and agentified. #207 gives that a
  *   purpose-named action with defined semantics.
+ * - Putting an NPC somewhere. Place the NPC twice and condition each placement
+ *   on the quest state that should reveal it -- including "after node Z", which
+ *   the activation grammar evaluates. The placement that matches is the one in
+ *   the world, so the NPC is simply where the story says, with no instant move
+ *   to author and no walking route to unwind.
  * - A `custom` escape hatch. There is nothing to escape to: no plugin
  *   contribution kind is a quest action handler, and `setActionHandler` has one
  *   implementer, owned by the host. `emitEvent` already covers "fire a named
@@ -125,8 +128,7 @@ const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
   "advance-day": "Advance Day",
   "learn-fact": "Learn Fact",
   playCue: "Play Cue",
-  playAnimation: "Play Animation",
-  teleportNpc: "Teleport NPC"
+  playAnimation: "Play Animation"
 };
 
 /**
@@ -168,8 +170,6 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
       return { type, band: "morning" };
     case "learn-fact":
       return { type, factId: null, displayText: "" };
-    case "teleportNpc":
-      return { type, npcDefinitionId: null, targetAreaId: null };
     case "advance-day":
       return { type };
     default: {
@@ -502,12 +502,6 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
         displayText:
           readString(source.displayText) ??
           (typeof source.value === "string" ? source.value : "")
-      };
-    case "teleportNpc":
-      return {
-        type: "teleportNpc",
-        npcDefinitionId: readString(source.npcDefinitionId) ?? legacyTargetId,
-        targetAreaId: readString(source.targetAreaId)
       };
     case "advance-day":
       return { type };

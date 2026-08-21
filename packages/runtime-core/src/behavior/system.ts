@@ -247,24 +247,11 @@ function taskMatchesActivation(
   ) {
     return false;
   }
-  // A node-completed clause is answered here rather than by the shared
-  // evaluator: the evaluator's other callers cannot answer it. Missing
-  // predicate fails closed, the same way a missing flag predicate does.
-  if (task.nodeCompleted) {
-    if (
-      !isNodeCompleted ||
-      !isNodeCompleted(
-        task.nodeCompleted.questDefinitionId,
-        task.nodeCompleted.nodeId
-      )
-    ) {
-      return false;
-    }
-  }
   // Plan 069.5 — one grammar evaluator, shared with the containment gate.
   return evaluateRegionQuestBinding(task.activation, {
     activeQuests,
-    hasWorldFlag
+    hasWorldFlag,
+    isNodeCompleted
   });
 }
 

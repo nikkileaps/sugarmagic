@@ -909,10 +909,8 @@ function QuestActionFields({
         </>
       );
 
-    // No parameters an author can set. `teleportNpc` has fields but no editor
-    // until the story that wires it; the rest do nothing at runtime.
+    // Takes no parameters.
     case "advance-day":
-    case "teleportNpc":
       return null;
 
     default: {

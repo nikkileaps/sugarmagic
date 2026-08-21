@@ -27,8 +27,8 @@ export function TaskActivationFields(props: TaskActivationFieldsProps) {
       }))
     )
   }));
-  const selectedNodeKey = task.nodeCompleted
-    ? `${task.nodeCompleted.questDefinitionId}${NODE_KEY_SEPARATOR}${task.nodeCompleted.nodeId}`
+  const selectedNodeKey = task.activation.nodeCompleted
+    ? `${task.activation.nodeCompleted.questDefinitionId}${NODE_KEY_SEPARATOR}${task.activation.nodeCompleted.nodeId}`
     : "";
 
   return (
@@ -79,10 +79,13 @@ export function TaskActivationFields(props: TaskActivationFieldsProps) {
           );
           onUpdateTask({
             ...task,
-            nodeCompleted:
-              questDefinitionId && nodeId
-                ? { questDefinitionId, nodeId }
-                : null
+            activation: {
+              ...task.activation,
+              nodeCompleted:
+                questDefinitionId && nodeId
+                  ? { questDefinitionId, nodeId }
+                  : null
+            }
           });
         }}
       />
