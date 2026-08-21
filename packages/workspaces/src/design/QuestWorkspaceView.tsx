@@ -67,6 +67,7 @@ import {
   QUEST_ACTION_TYPE_OPTIONS,
   TIME_OF_DAY_BAND_OPTIONS,
   createQuestAction,
+  isBlankFlagValue,
   createDefaultDialogueDefinition,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
@@ -189,6 +190,25 @@ function emptyStageLoop(quest: QuestDefinition): string[] {
   return warnings;
 }
 
+/**
+ * A new flag condition. The value is spelled out rather than left blank so the
+ * author sees what is being compared -- `createQuestAction` does the same for
+ * the `setFlag` action, and the two have to agree for the condition to match.
+ */
+function createFlagCondition(): QuestConditionDefinition {
+  return { type: "hasFlag", key: "", value: "true" };
+}
+
+/** Every flag condition inside a condition tree, including under `not`. */
+function flagConditions(
+  condition: QuestConditionDefinition | undefined
+): Extract<QuestConditionDefinition, { type: "hasFlag" }>[] {
+  if (!condition) return [];
+  if (condition.type === "hasFlag") return [condition];
+  if (condition.type === "not") return flagConditions(condition.condition);
+  return [];
+}
+
 function validateQuest(quest: QuestDefinition): string[] {
   const warnings: string[] = [];
   const stageIds = new Set(
@@ -229,6 +249,24 @@ function validateQuest(quest: QuestDefinition): string[] {
       if (node.nodeBehavior === "condition" || node.nodeBehavior === "branch") {
         if (!node.condition) {
           warnings.push(`Node "${node.displayName}" is missing a condition.`);
+        }
+      }
+      for (const flagCondition of flagConditions(node.condition)) {
+        if (!flagCondition.key) {
+          warnings.push(
+            `Node "${node.displayName}" has a flag condition with no key.`
+          );
+        } else if (isBlankFlagValue(flagCondition.value)) {
+          warnings.push(
+            `Node "${node.displayName}" checks flag "${flagCondition.key}" with no value, so it never matches.`
+          );
+        }
+      }
+      for (const action of [...node.onEnterActions, ...node.onCompleteActions]) {
+        if (action.type === "setFlag" && isBlankFlagValue(action.value)) {
+          warnings.push(
+            `Node "${node.displayName}" sets flag "${action.key}" with no value.`
+          );
         }
       }
       if (
@@ -468,7 +506,7 @@ function QuestConditionEditor({
   function handleTypeChange(type: string) {
     switch (type) {
       case "hasFlag":
-        onChange({ type: "hasFlag", key: "" });
+        onChange(createFlagCondition());
         break;
       case "hasSpell":
         onChange({ type: "hasSpell", spellDefinitionId: "" });
@@ -491,7 +529,7 @@ function QuestConditionEditor({
         });
         break;
       case "not":
-        onChange({ type: "not", condition: { type: "hasFlag", key: "" } });
+        onChange({ type: "not", condition: createFlagCondition() });
         break;
       default:
         break;
@@ -547,6 +585,11 @@ function QuestConditionEditor({
             size="xs"
             label="Expected Value"
             value={condition.value == null ? "" : String(condition.value)}
+            error={
+              isBlankFlagValue(condition.value)
+                ? "Required. A condition with no value never matches."
+                : undefined
+            }
             onChange={(event) =>
               onChange({ ...condition, value: event.currentTarget.value })
             }
@@ -692,13 +735,14 @@ function QuestActionFields({
           <TextInput
             size="xs"
             label="Value"
-            placeholder="(true)"
             value={action.value == null ? "" : String(action.value)}
+            error={
+              isBlankFlagValue(action.value)
+                ? "Required. Conditions compare against this value."
+                : undefined
+            }
             onChange={(event) =>
-              onChange({
-                ...action,
-                value: event.currentTarget.value || undefined
-              })
+              onChange({ ...action, value: event.currentTarget.value })
             }
           />
         </>
@@ -2334,7 +2378,7 @@ export function useQuestWorkspaceView({
                       : undefined,
                   condition:
                     value === "condition" || value === "branch"
-                      ? (selectedNode.condition ?? { type: "hasFlag", key: "" })
+                      ? (selectedNode.condition ?? createFlagCondition())
                       : undefined,
                   failTargetNodeIds:
                     value === "branch" ? selectedNode.failTargetNodeIds : []
@@ -2560,7 +2604,7 @@ export function useQuestWorkspaceView({
               selectedNode.nodeBehavior === "branch") && (
               <QuestConditionEditor
                 condition={
-                  selectedNode.condition ?? { type: "hasFlag", key: "" }
+                  selectedNode.condition ?? createFlagCondition()
                 }
                 spellDefinitions={spellDefinitions}
                 onChange={(condition) =>

@@ -1,6 +1,7 @@
 import type { DialogueDefinition, QuestDefinition } from "@sugarmagic/domain";
 import type { DialogueManager } from "../dialogue";
 import type { QuestManager } from "../quest";
+import { coerceAuthoredFlagValue } from "../quest";
 
 export interface RuntimeQuestDialogueCoordinator {
   loadDefinitions: (dialogueDefinitions: DialogueDefinition[], questDefinitions: QuestDefinition[]) => void;
@@ -39,7 +40,10 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
     if (!dialogueManager || !questManager) return;
 
         dialogueManager.setConditionContext({
-          hasFlag: (key, value) => questManager?.hasFlag(key, value) ?? false,
+          // Dialogue flag conditions are authored as text in the same way quest
+          // ones are, so they get the same coercion before the comparison.
+          hasFlag: (key, value) =>
+            questManager?.hasFlag(key, coerceAuthoredFlagValue(value ?? true)) ?? false,
           hasItem: (itemDefinitionId, count) => hasItem?.(itemDefinitionId, count) ?? false,
           hasSpell: (spellDefinitionId) => hasSpell?.(spellDefinitionId) ?? false,
           canCastSpell: (spellDefinitionId) => canCastSpell?.(spellDefinitionId) ?? false,

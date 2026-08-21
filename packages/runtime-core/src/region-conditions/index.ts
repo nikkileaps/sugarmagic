@@ -39,13 +39,19 @@ export interface RegionConditionContext {
 }
 
 /**
- * Coerce an authored string flag value into the comparison type the flag
- * store holds. `null` boolean => `true` (a bare "flag is set" check);
- * `null`/unparseable number => `undefined` (no constraint).
+ * Coerce an authored flag value into the type the flag store holds, for both
+ * reading and writing. One function so the two sides cannot disagree: a
+ * condition compares with `===`, so a value written one way and read another
+ * never matches, which is a silent miss with nothing to see at authoring time.
+ *
+ * A valueless declaration falls back to the declared type's zero (`0` / `""` /
+ * `true`) rather than to "no constraint". Authoring a condition with no value
+ * is refused in the editor, so this fallback only catches content authored
+ * before that check existed.
  */
 export function coerceWorldFlagValue(
   condition: RegionBehaviorWorldFlagCondition
-): string | boolean | number | undefined {
+): string | boolean | number {
   if (condition.valueType === "boolean") {
     if (condition.value === null) {
       return true;
@@ -53,34 +59,21 @@ export function coerceWorldFlagValue(
     return condition.value.toLowerCase() === "true";
   }
   if (condition.valueType === "number") {
-    if (condition.value === null) {
-      return undefined;
-    }
     const parsed = Number(condition.value);
-    return Number.isFinite(parsed) ? parsed : undefined;
+    return condition.value !== null && Number.isFinite(parsed) ? parsed : 0;
   }
-  return condition.value ?? undefined;
+  return condition.value ?? "";
 }
 
 /**
- * The value to WRITE when SETTING a world flag (Plan 069.5 trigger action).
- * Unlike `coerceWorldFlagValue` (a read-side coercion that returns `undefined`
- * for a valueless number/string), this always yields a value of the declared
- * type — so a number flag never gets stored as boolean `true`. A valueless
- * declaration falls back to the type's zero (`0` / `""` / `true`).
+ * The value to write when setting a world flag. Same rule as reading -- see
+ * `coerceWorldFlagValue`. Kept as its own name because #216 removes the
+ * region-side flag writer and this is the seam it deletes.
  */
 export function resolveWorldFlagWriteValue(
   condition: RegionBehaviorWorldFlagCondition
 ): string | number | boolean {
-  const coerced = coerceWorldFlagValue(condition);
-  if (coerced !== undefined) {
-    return coerced;
-  }
-  return condition.valueType === "number"
-    ? 0
-    : condition.valueType === "string"
-      ? ""
-      : true;
+  return coerceWorldFlagValue(condition);
 }
 
 /**

@@ -10,6 +10,32 @@ import type {
 } from "@sugarmagic/domain";
 
 /**
+ * Turn a flag value typed into the quest editor into the value the flag store
+ * holds. Both the `setFlag` action and the `hasFlag` condition run their
+ * authored text through this, so the two sides always land on the same type
+ * and `===` can decide the comparison.
+ *
+ * Without it, an author who leaves a `setFlag` action's value box empty stores
+ * boolean `true`, then types `true` into a condition and stores the string
+ * `"true"`, and the condition never matches.
+ *
+ * Anything that is not a string is already typed -- a save restored from JSON,
+ * a flag set from code -- and passes through untouched.
+ */
+export function coerceAuthoredFlagValue(value: unknown): unknown {
+  if (typeof value !== "string") {
+    return value;
+  }
+  if (value === "true") return true;
+  if (value === "false") return false;
+  const asNumber = Number(value);
+  if (value.trim() !== "" && Number.isFinite(asNumber)) {
+    return asNumber;
+  }
+  return value;
+}
+
+/**
  * An action together with the node that fired it. Handlers need the source to
  * name what they act on -- an audio instance key, a warning that tells the
  * author which node holds the bad reference.
@@ -306,12 +332,18 @@ export class QuestManager {
     return null;
   }
 
-  hasFlag(key: string, value?: unknown): boolean {
+  /**
+   * True when the flag holds `value`. An unset flag is false, so a condition
+   * reads the same whether the flag was never written or holds something else.
+   *
+   * `value` defaults to `true` because that is what `setFlag` writes by
+   * default, so `hasFlag(key)` asks the question it looks like it asks.
+   * Authored values are coerced by the caller before they get here; this is
+   * only the comparison.
+   */
+  hasFlag(key: string, value: unknown = true): boolean {
     if (!this.runtimeFlags.has(key)) {
       return false;
-    }
-    if (arguments.length === 1) {
-      return true;
     }
     return this.runtimeFlags.get(key) === value;
   }
@@ -903,7 +935,10 @@ export class QuestManager {
   ): void {
     for (const action of actions) {
       if (action.type === "setFlag" && action.key) {
-        this.runtimeFlags.set(action.key, action.value ?? true);
+        this.runtimeFlags.set(
+          action.key,
+          coerceAuthoredFlagValue(action.value ?? true)
+        );
         continue;
       }
 
@@ -919,7 +954,10 @@ export class QuestManager {
   private evaluateCondition(condition: QuestConditionDefinition): boolean {
     switch (condition.type) {
       case "hasFlag":
-        return this.hasFlag(condition.key, condition.value);
+        return this.hasFlag(
+          condition.key,
+          coerceAuthoredFlagValue(condition.value ?? true)
+        );
       case "hasSpell":
         return this.hasSpellProvider(condition.spellDefinitionId);
       case "canCastSpell":

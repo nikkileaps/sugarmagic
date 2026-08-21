@@ -151,6 +151,19 @@ runtime inventory and caster.
   `failTargetNodeIds`).
 - **Conditions:** hasFlag / hasSpell / canCastSpell / questActive /
   questCompleted / questStage / not. No and/or combinators.
+- **A flag condition always names a value, and the comparison is `===`.**
+  There is no "is this flag set at all" form: an unset flag fails every
+  comparison, so presence needs no separate rule. A blank value is refused in
+  the quest editor, which flags the field and lists the node in the Validation
+  panel; `isBlankFlagValue` is the shared check.
+- **Authored flag values are coerced on both sides.** `coerceAuthoredFlagValue`
+  runs on the `setFlag` action's value and on the `hasFlag` condition's value,
+  so `"true"` becomes `true` and `"5"` becomes `5` at both ends and equality
+  holds. Without it the action stores boolean `true` while the condition stores
+  the string `"true"`, and the condition never matches. Region flag conditions
+  (`RegionBehaviorWorldFlagCondition`) carry a declared `valueType` and reach
+  the same guarantee through `coerceWorldFlagValue`, which is now the single
+  read-and-write coercion.
 - **Actions:** `onEnterActions` / `onCompleteActions` lists of
   `QuestActionDefinition`, a discriminated union on `type` where each
   variant declares its own named fields: setFlag, emitEvent, giveItem,

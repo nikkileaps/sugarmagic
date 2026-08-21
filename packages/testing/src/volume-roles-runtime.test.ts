@@ -20,6 +20,7 @@ import {
   coerceWorldFlagValue,
   createSpatialAreaTracker,
   evaluateRegionQuestBinding,
+  QuestManager,
   resolveMove,
   resolveWorldFlagWriteValue
 } from "@sugarmagic/runtime-core";
@@ -234,6 +235,69 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     expect(
       coerceWorldFlagValue({ key: "k", valueType: "number", value: "3" })
     ).toBe(3);
+  });
+
+  // Reading and writing share one coercion, so a flag written from an authored
+  // declaration always matches a condition read from the same declaration --
+  // including the valueless case, which lands on the declared type's zero at
+  // both ends instead of `undefined` at one and `0` at the other. Wired through
+  // a real QuestManager because the bug lived in the seam, not in either side.
+  describe("a valueless flag condition matches a flag written the same way", () => {
+    function gateOn(valueType: "boolean" | "number" | "string") {
+      return {
+        questDefinitionId: null,
+        questStageId: null,
+        worldFlagEquals: { key: "gate", valueType, value: null }
+      };
+    }
+
+    function contextFrom(manager: QuestManager) {
+      return {
+        activeQuests: [],
+        hasWorldFlag: (key: string, value?: unknown) =>
+          manager.hasFlag(key, value)
+      };
+    }
+
+    function withFlag(value: unknown) {
+      const manager = new QuestManager();
+      manager.setFlag("gate", value);
+      return contextFrom(manager);
+    }
+
+    const withoutFlag = () => contextFrom(new QuestManager());
+
+    // The write side is what a valueless declaration stores; the read side has
+    // to land on the same value. Anything else is a silent miss.
+    it.each([
+      ["number" as const, 0],
+      ["string" as const, ""],
+      ["boolean" as const, true]
+    ])("%s: write and read agree on the valueless case", (valueType, stored) => {
+      const declaration = { key: "gate", valueType, value: null };
+      expect(resolveWorldFlagWriteValue(declaration)).toBe(stored);
+      expect(coerceWorldFlagValue(declaration)).toBe(stored);
+      expect(
+        evaluateRegionQuestBinding(gateOn(valueType), withFlag(stored))
+      ).toBe(true);
+      expect(
+        evaluateRegionQuestBinding(gateOn(valueType), withoutFlag())
+      ).toBe(false);
+    });
+
+    it("a declared value still has to match what the flag holds", () => {
+      const binding = {
+        questDefinitionId: null,
+        questStageId: null,
+        worldFlagEquals: {
+          key: "gate",
+          valueType: "number" as const,
+          value: "3"
+        }
+      };
+      expect(evaluateRegionQuestBinding(binding, withFlag(3))).toBe(true);
+      expect(evaluateRegionQuestBinding(binding, withFlag(4))).toBe(false);
+    });
   });
 
   it("write value is always the declared type (never boolean into a number slot)", () => {
