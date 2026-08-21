@@ -7,7 +7,7 @@
  *   - QuestNodeEventHint
  *
  * Relationships:
- *   - Depends on the placement completion event constant from Epic 11.
+ *   - Depends on SUGARLANG_PLACEMENT_COMPLETED_EVENT from quest-integration.
  *   - Is registered by contributions.ts as an Epic 12 design.section contribution.
  *
  * Implements: Proposal 001 §Placement Interaction Contract

@@ -7,7 +7,8 @@
  *   - loadPlacementQuestionnaire
  *
  * Relationships:
- *   - Will read data/languages/<lang>/placement-questionnaire.json once Epic 4 and Epic 11 land.
+ *   - Reads data/languages/<lang>/placement-questionnaire.json. Consumed by
+ *     runtime-services and editor support.
  *   - Will be consumed by the placement flow orchestrator.
  *
  * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract

@@ -22,10 +22,12 @@ QuestDefinition
   repeatable: boolean
 ```
 
-Quests are a directed graph of **stages**, each containing a graph of
-**nodes**. The runtime works through nodes bottom-up; when all non-optional
-nodes in a stage are complete the stage completes and the runtime advances to
-`nextStageId`.
+A quest is a **linear chain of stages**, each containing a graph of **nodes**.
+`nextStageId` is a single nullable pointer, so a stage has exactly one
+successor -- branching happens between nodes inside a stage, not between
+stages. When every non-optional node in a stage is complete the stage
+completes and the runtime advances to `nextStageId`; a null pointer completes
+the quest.
 
 ### Stage
 
@@ -62,9 +64,10 @@ QuestNodeDefinition
   displayName: string
   description: string
   nodeBehavior: "objective" | "narrative" | "condition" | "branch"
-  objectiveSubtype?: "talk" | "location" | "collect" | "trigger" | "castSpell" | "custom"
-  narrativeSubtype?: "voiceover" | "dialogue" | "cutscene" | "event"
-  targetId?: string             -- NPC id for talk; area id for location; item id for collect
+  objectiveSubtype?: "talk" | "location" | "collect" | "castSpell" | "assessment" | "custom"
+  narrativeSubtype?: "voiceover" | "dialogue" | "cutscene"
+  targetId?: string             -- NPC id for talk; item id for collect; spell id for castSpell
+  targetAreaId?: string         -- the area a location objective completes on
   count?: number                -- collect count
   optional?: boolean
   dialogueDefinitionId?: string -- for talk / dialogue nodes
@@ -83,32 +86,71 @@ when the node completes (player finished the dialogue, reached the location,
 etc.). Both accept any `QuestActionType` list -- this is the primary authoring
 surface for all scripted world changes.
 
+### Objective subtypes
+
+| subtype | completes when | needs |
+|---|---|---|
+| `talk` | the player finishes that NPC's dialogue | `targetId` (NPC), `dialogueDefinitionId` |
+| `location` | the player enters the target area, or any area nested inside it | `targetAreaId` |
+| `collect` | the player holds `count` of the item | `targetId` (item), `count` |
+| `castSpell` | the player casts that spell | `targetId` (spell) |
+| `assessment` | the player completes the assessment form | plugin-supplied |
+| `custom` | a matching `emitEvent` action fires its `eventName` | `eventName` |
+
+`custom` is the subtype with no built-in completion path: it waits for a named
+event, which any node's `emitEvent` action can fire.
+
+### Narrative subtypes
+
+| subtype | what happens |
+|---|---|
+| `dialogue` | the dialogue starts on its own the moment the node activates, then the node completes when it ends |
+| `voiceover` | **nothing yet.** Activates and completes in the same tick |
+| `cutscene` | **nothing yet.** Activates and completes in the same tick |
+
+A `dialogue` narrative differs from a `talk` objective in who starts it: a talk
+objective waits for the player to walk up to an NPC and interact, while a
+dialogue narrative opens the conversation with nobody nearby and no press.
+
 ---
 
 ## Quest Actions
 
-`QuestActionDefinition` has three fields: `type`, optional `targetId`, optional `value`.
+`QuestActionDefinition` is a discriminated union on `type`. Each action declares
+its own named fields -- there is no shared `targetId` or `value` carrying a
+different meaning per type.
 
-| type | targetId | value | what it does |
-|---|---|---|---|
-| `setFlag` | flag key | flag value (any JSON) | writes a world flag via QuestManager |
-| `giveItem` | item definition id | -- | adds item to player inventory |
-| `removeItem` | item definition id | -- | removes from inventory |
-| `playSound` | audio cue id | -- | plays a sound |
-| `spawnVfx` | vfx definition id | -- | spawns a VFX |
-| `teleportNpc` | NPC definition id | -- | teleports NPC (stub) |
-| `moveNpc` | NPC definition id | -- | moves NPC (stub) |
-| `setNpcState` | NPC definition id | -- | NPC state change (stub) |
-| `emitEvent` | event name | -- | emits a named event |
-| `unlockScene` | scene id | -- | adds scene to campaign progression |
-| `advanceToNextScene` | scene id or omit | -- | advances to named scene or next by order |
-| `set-time-of-day` | `TimeOfDayBand` value | -- | sets world clock band (persisted) |
-| `advance-day` | -- | -- | increments world day counter (persisted) |
-| `learn-fact` | fact id (dedup key) | display string | writes a player-known fact (see below) |
-| `custom` | any | any | no-op in runtime; use for future or plugin extensions |
+**Every action in this table does something.** An action that cannot be routed
+to a real system is not offered.
 
-**Stubs:** `teleportNpc`, `moveNpc`, `setNpcState` are authored but not yet
-implemented in the runtime; they are no-ops. See task #374.
+| type | fields | what it does |
+|---|---|---|
+| `setFlag` | `key`, `value?` | writes a world flag via QuestManager |
+| `emitEvent` | `eventName` | fires a named event; completes any active node waiting on it |
+| `giveItem` | `itemDefinitionId`, `count` | adds items to the player inventory |
+| `removeItem` | `itemDefinitionId`, `count` | removes items from the inventory |
+| `unlockScene` | `sceneId` | adds the Scene to campaign progression |
+| `advanceToNextScene` | `sceneId` (null = next by order) | completes the Scene and moves the player |
+| `set-time-of-day` | `band` | sets the world clock band (persisted) |
+| `advance-day` | -- | increments the world day counter (persisted) |
+| `learn-fact` | `factId`, `displayText` | writes a player-known fact (see below) |
+| `playCue` | `cueDefinitionId` | plays a sound cue, keyed per node |
+| `playAnimation` | `npcDefinitionId`, `slot`, `repeatCount` | plays one of the NPC's bound animation slots, on every presence of that NPC, then returns it to locomotion |
+
+An unknown cue is reported once per cue id with the quest and node that named
+it. A missing reference on any action is skipped rather than guessed at.
+
+### Actions this list deliberately does not have
+
+- **Playing a world-space effect.** There is no effect system to route one to.
+- **Moving or teleporting an NPC.** Staging is the behavior system's: give the
+  NPC a task with a target area and an activation. To put an NPC somewhere with
+  no journey, place it twice and condition each placement.
+- **Flipping an NPC between scripted and agentified.** #207 gives that a
+  purpose-named action.
+- **A `custom` escape hatch.** No plugin contribution kind is a quest action
+  handler, so there is nothing to escape to; `emitEvent` covers firing a named
+  thing for something else to react to.
 
 ---
 
@@ -126,31 +168,60 @@ persist across sessions (serialized in the quest save slice).
 3. An agentified NPC turn: PlanStage can emit `{ kind: "set-conversation-flag",
    key, value }` -> `handleConversationActionProposal` -> `questManager.setFlag`.
 4. A trigger volume: `RegionVolumeTriggerAction.setWorldFlag` fires when the
-   player enters the volume (see API 006).
+   player enters the volume (see API 006). Being replaced by volume enter/exit
+   action lists -- #216.
 5. Dev console: `__smsetflag("myFlag", true)` (see Dev Handles below).
 
 **How they gate behavior:**
 
-`RegionBehaviorQuestBinding` is the compound AND condition used by behavior
-tasks and (in future) NPC presence:
+`RegionBehaviorQuestBinding` is the compound AND condition, and it is the one
+grammar shared by everything that gates on quest state: behavior tasks
+(`activation`), NPC placements (`condition`), and containment volumes
+(`condition`). One evaluator serves all of them --
+`evaluateRegionQuestBinding` in `runtime-core/src/region-conditions`.
 
 ```typescript
 interface RegionBehaviorQuestBinding {
   questDefinitionId: string | null
   questStageId: string | null
   worldFlagEquals: { key: string | null; valueType: "boolean"|"number"|"string"; value: string | null } | null
+  nodeCompleted?: { questDefinitionId: string; nodeId: string } | null
 }
 ```
 
-All three fields are ANDed together. Any field left null is not checked.
-Examples:
-- Quest active on stage X only: set `questDefinitionId` + `questStageId`, leave flag null.
+All populated clauses are ANDed. Any field left null is not checked.
+- Quest active on stage X only: set `questDefinitionId` + `questStageId`, leave the rest null.
 - Flag set regardless of quest: set `worldFlagEquals`, leave quest fields null.
-- Compound (quest stage AND flag): set all three.
+- After a story beat: set `nodeCompleted`. It stays satisfied once that node has
+  completed, including after its quest finishes and across save and load.
+
+**Two things worth knowing.** The quest and stage clauses are checked against
+the SAME quest -- one active quest supplying the id and a different one
+supplying the stage does not satisfy a binding neither satisfies. And bindings
+evaluate against EVERY quest in progress, not the one the player has selected in
+their journal; which NPCs stand where is not a display choice.
+
+An unanswerable clause fails closed. A populated clause whose predicate is
+absent evaluates false rather than being skipped.
 
 ---
 
 ## NPC Behavior Tasks
+
+### Staging an NPC after a story beat
+
+NPC staging is authored as a quest-bound behavior task, not as a quest action.
+Two grains:
+
+- **Stage grain** -- set `questDefinitionId` and `questStageId` on the task's
+  activation. The NPC takes that task while the quest sits on that stage.
+- **Node grain** -- set `nodeCompleted`. The NPC takes that task once that
+  specific node completes, and keeps it afterwards, including once the quest
+  has finished.
+
+To place an NPC somewhere with no journey at all, place it twice in the region
+and condition each placement instead. That is presence rather than movement:
+the placement whose condition fails is not spawned.
 
 **Domain:** `RegionNPCBehaviorTask` in `packages/domain/src/region-authoring/index.ts`
 **Runtime:** `packages/runtime-core/src/behavior/system.ts`

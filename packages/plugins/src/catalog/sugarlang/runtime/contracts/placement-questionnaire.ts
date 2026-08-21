@@ -17,7 +17,7 @@
  *
  * Relationships:
  *   - Depends on learner-profile and lexical-prescription contract types.
- *   - Is consumed by placement runtime systems, placement UI, and Epic 11 quest integration.
+ *   - Consumed by placement runtime systems, placement UI, and quest integration.
  *
  * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
  *
