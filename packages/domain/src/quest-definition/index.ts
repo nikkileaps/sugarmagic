@@ -186,6 +186,14 @@ export interface QuestNodeDefinition {
   objectiveSubtype?: QuestObjectiveSubtype;
   narrativeSubtype?: QuestNarrativeSubtype;
   targetId?: string;
+  /**
+   * The area a `location` objective completes on. The player entering it, or
+   * any area nested inside it, completes the node.
+   *
+   * Named rather than folded into `targetId`, which already means an item id,
+   * an NPC id or a spell id depending on the subtype.
+   */
+  targetAreaId?: string;
   count?: number;
   optional?: boolean;
   dialogueDefinitionId?: string;
@@ -528,6 +536,7 @@ export function normalizeQuestNodeDefinition(
         ? node.narrativeSubtype ?? "dialogue"
         : undefined,
     targetId: node.targetId ?? undefined,
+    targetAreaId: node.targetAreaId ?? undefined,
     count: node.count ?? defaultNode.count,
     optional: node.optional ?? defaultNode.optional,
     dialogueDefinitionId: node.dialogueDefinitionId ?? undefined,

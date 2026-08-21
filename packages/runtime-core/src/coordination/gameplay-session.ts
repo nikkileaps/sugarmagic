@@ -161,7 +161,7 @@ import {
   type RuntimeBlackboard
 } from "../state";
 import { PlayerControlled } from "../ecs";
-import { buildLocationReference } from "../spatial";
+import { buildLocationReference, isRegionAreaDescendant } from "../spatial";
 import { createRuntimeSpatialResolverSystem } from "../spatial/system";
 import {
   createWorldTimeStore,
@@ -1966,6 +1966,26 @@ export function createRuntimeGameplaySessionController(
   questManager.setCanCastSpellProvider(
     (spellDefinitionId) => casterManager.canCastSpell(spellDefinitionId).canCast
   );
+  // A location objective completes on the target area or anything nested
+  // inside it, so standing in the Fruit Stall satisfies an objective on the
+  // Market that contains it, however deep the nesting goes.
+  questManager.setPlayerAreaProvider((areaId) => {
+    if (!activeRegion) {
+      return false;
+    }
+    const playerArea = getEntityCurrentArea(
+      blackboard,
+      playerDefinition.definitionId
+    );
+    const currentAreaId = playerArea?.area?.areaId ?? null;
+    if (!currentAreaId) {
+      return false;
+    }
+    return (
+      currentAreaId === areaId ||
+      isRegionAreaDescendant(activeRegion, currentAreaId, areaId)
+    );
+  });
   questManager.setNarrativeHandler((node) => {
     if (node.narrativeSubtype === "dialogue" && node.dialogueDefinitionId) {
       void dialogueManager.start(node.dialogueDefinitionId);

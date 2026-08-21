@@ -35,6 +35,12 @@ export interface QuestRuntimeNarrativeHandler {
 
 export type QuestInventoryCountProvider = (itemDefinitionId: string) => number;
 export type QuestSpellStateProvider = (spellDefinitionId: string) => boolean;
+/**
+ * Whether the player is standing in that area, or in any area nested inside
+ * it. Injected rather than read here: the player's position lives in the
+ * blackboard, which `quest/` must not reach into.
+ */
+export type QuestPlayerAreaProvider = (areaId: string) => boolean;
 
 export interface QuestActiveObjectiveView {
   questDefinitionId: string;
@@ -163,6 +169,7 @@ export class QuestManager {
   private getInventoryCount: QuestInventoryCountProvider = () => 0;
   private hasSpellProvider: QuestSpellStateProvider = () => false;
   private canCastSpellProvider: QuestSpellStateProvider = () => false;
+  private isPlayerInAreaProvider: QuestPlayerAreaProvider = () => false;
 
   registerDefinitions(definitions: QuestDefinition[]): void {
     this.definitions.clear();
@@ -202,6 +209,10 @@ export class QuestManager {
 
   setCanCastSpellProvider(provider: QuestSpellStateProvider): void {
     this.canCastSpellProvider = provider;
+  }
+
+  setPlayerAreaProvider(provider: QuestPlayerAreaProvider): void {
+    this.isPlayerInAreaProvider = provider;
   }
 
   update(): void {
@@ -650,6 +661,22 @@ export class QuestManager {
         ) {
           const targetCount = Math.max(1, node.count ?? 1);
           if (this.getInventoryCount(node.targetId) >= targetCount) {
+            this.completeNode(state, stage, stageProgress, node);
+            changed = true;
+            loop = true;
+          }
+        }
+
+        if (
+          progress.status === "active" &&
+          node.nodeBehavior === "objective" &&
+          node.objectiveSubtype === "location" &&
+          node.targetAreaId
+        ) {
+          // Read inside the tick: the player's area is a frame-lifecycle fact,
+          // so it is only meaningful while the frame it was written for is the
+          // current one.
+          if (this.isPlayerInAreaProvider(node.targetAreaId)) {
             this.completeNode(state, stage, stageProgress, node);
             changed = true;
             loop = true;

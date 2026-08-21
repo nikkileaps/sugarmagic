@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { RegionDocument } from "@sugarmagic/domain";
 import {
+  createDefaultQuestDefinition,
+  createDefaultQuestNodeDefinition,
+  createDefaultQuestStageDefinition
+} from "@sugarmagic/domain";
+import {
+  QuestManager,
+  isRegionAreaDescendant,
   buildEntityCurrentAreaFact,
   buildEntityPlayerSpatialRelationFact,
   buildLocationReference,
@@ -236,5 +243,115 @@ describe("runtime spatial resolution", () => {
     expect(second.rawArea?.areaId).toBe("station-exterior");
     expect(second.area?.areaId).toBe("station-exterior");
     expect(second.changed).toBe(true);
+  });
+});
+
+describe("location objectives", () => {
+  /**
+   * A location objective completes when the player is inside its target area,
+   * or inside anything nested in it. QuestManager cannot read the player's
+   * position -- it takes a predicate, and this drives the real one's rule.
+   */
+  function buildLocationQuest(targetAreaId: string) {
+    const node = {
+      ...createDefaultQuestNodeDefinition({
+        displayName: "Reach the Kiosk",
+        description: "Go there",
+        objectiveSubtype: "location"
+      }),
+      targetAreaId
+    };
+    const stage = createDefaultQuestStageDefinition({ nodeDefinitions: [node] });
+    const quest = createDefaultQuestDefinition({
+      definitionId: "quest:go-there",
+      displayName: "Go There"
+    });
+    return {
+      ...quest,
+      startStageId: stage.stageId,
+      stageDefinitions: [stage]
+    };
+  }
+
+  function managerInArea(targetAreaId: string, playerAreaId: string | null) {
+    const region = makeRegion();
+    const manager = new QuestManager();
+    manager.registerDefinitions([buildLocationQuest(targetAreaId)]);
+    manager.setPlayerAreaProvider((areaId) => {
+      if (!playerAreaId) return false;
+      return (
+        playerAreaId === areaId ||
+        isRegionAreaDescendant(region, playerAreaId, areaId)
+      );
+    });
+    manager.startQuest("quest:go-there");
+    return manager;
+  }
+
+  it("completes when the player is in the target area", () => {
+    const manager = managerInArea("cheese-kiosk", "cheese-kiosk");
+    manager.update();
+    expect(manager.isQuestCompleted("quest:go-there")).toBe(true);
+  });
+
+  it("completes from an area nested inside the target", () => {
+    // The kiosk sits inside the station exterior.
+    const manager = managerInArea("station-exterior", "cheese-kiosk");
+    manager.update();
+    expect(manager.isQuestCompleted("quest:go-there")).toBe(true);
+  });
+
+  it("does not complete from somewhere else", () => {
+    const manager = managerInArea("cheese-kiosk", "ticket-office");
+    manager.update();
+    expect(manager.isQuestCompleted("quest:go-there")).toBe(false);
+  });
+
+  it("does not complete when the player is in no area at all", () => {
+    const manager = managerInArea("cheese-kiosk", null);
+    manager.update();
+    expect(manager.isQuestCompleted("quest:go-there")).toBe(false);
+  });
+
+  it("does not complete a node that has not activated yet", () => {
+    // Standing in the area before the objective is reachable must not tick it
+    // off the moment it activates later.
+    const region = makeRegion();
+    const first = createDefaultQuestNodeDefinition({
+      displayName: "Talk First",
+      description: "Do this first",
+      objectiveSubtype: "custom"
+    });
+    const second = {
+      ...createDefaultQuestNodeDefinition({
+        displayName: "Reach the Kiosk",
+        description: "Then go there",
+        objectiveSubtype: "location"
+      }),
+      targetAreaId: "cheese-kiosk",
+      prerequisiteNodeIds: [first.nodeId]
+    };
+    const stage = createDefaultQuestStageDefinition({
+      nodeDefinitions: [first, second],
+      entryNodeIds: [first.nodeId]
+    });
+    const quest = createDefaultQuestDefinition({
+      definitionId: "quest:ordered",
+      displayName: "Ordered"
+    });
+    const manager = new QuestManager();
+    manager.registerDefinitions([
+      { ...quest, startStageId: stage.stageId, stageDefinitions: [stage] }
+    ]);
+    manager.setPlayerAreaProvider((areaId) =>
+      areaId === "cheese-kiosk" ||
+      isRegionAreaDescendant(region, "cheese-kiosk", areaId)
+    );
+    manager.startQuest("quest:ordered");
+    manager.update();
+
+    // The location node is behind a prerequisite, so it is not active yet.
+    expect(manager.isNodeCompleted("quest:ordered", second.nodeId)).toBe(false);
+    expect(manager.isQuestCompleted("quest:ordered")).toBe(false);
   });
 });

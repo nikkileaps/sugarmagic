@@ -234,6 +234,15 @@ function validateQuest(quest: QuestDefinition): string[] {
       }
       if (
         node.nodeBehavior === "objective" &&
+        node.objectiveSubtype === "location" &&
+        !node.targetAreaId
+      ) {
+        warnings.push(
+          `Location node "${node.displayName}" has no target area, so nothing completes it.`
+        );
+      }
+      if (
+        node.nodeBehavior === "objective" &&
         node.objectiveSubtype === "talk" &&
         !node.targetId
       ) {
@@ -1136,6 +1145,22 @@ export function useQuestWorkspaceView({
 
     return links;
   }, [effectiveSelectedQuestId, npcDefinitions, regions]);
+
+  // Areas across every region, grouped by region, for a location objective's
+  // target. A quest is not scoped to one region, so the picker is not either.
+  const areaOptionGroups = useMemo(
+    () =>
+      regions
+        .map((region) => ({
+          group: region.displayName,
+          items: region.areas.map((area) => ({
+            value: area.areaId,
+            label: area.displayName
+          }))
+        }))
+        .filter((entry) => entry.items.length > 0),
+    [regions]
+  );
 
   // Plan 079.7 -- all NPC presences across all scenes/regions, for the stage picker.
   // Deduped by presenceId (first scene overlay wins); tracks which region owns each
@@ -2362,6 +2387,22 @@ export function useQuestWorkspaceView({
                     })
                   }
                 />
+                {selectedNode.objectiveSubtype === "location" ? (
+                  <Select
+                    label="Target Area"
+                    clearable
+                    searchable
+                    placeholder="Pick an area"
+                    data={areaOptionGroups}
+                    value={selectedNode.targetAreaId ?? null}
+                    onChange={(value) =>
+                      updateNode({
+                        ...selectedNode,
+                        targetAreaId: value ?? undefined
+                      })
+                    }
+                  />
+                ) : (
                 <Select
                   label={
                     selectedNode.objectiveSubtype === "collect"
@@ -2395,6 +2436,7 @@ export function useQuestWorkspaceView({
                     })
                   }
                 />
+                )}
                 {selectedNode.objectiveSubtype === "talk" && (
                   <>
                     <Select
