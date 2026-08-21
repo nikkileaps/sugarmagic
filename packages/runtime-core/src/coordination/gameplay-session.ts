@@ -1986,13 +1986,11 @@ export function createRuntimeGameplaySessionController(
       isRegionAreaDescendant(activeRegion, currentAreaId, areaId)
     );
   });
+  // Only ever called for a dialogue narrative that has a dialogue attached --
+  // activateNode guards on exactly that before calling out.
   questManager.setNarrativeHandler((node) => {
-    if (node.narrativeSubtype === "dialogue" && node.dialogueDefinitionId) {
+    if (node.dialogueDefinitionId) {
       void dialogueManager.start(node.dialogueDefinitionId);
-      return;
-    }
-    if (node.eventName) {
-      questManager.notifyEvent(node.eventName);
     }
   });
   questManager.setStageTimeOfDayHandler((band) => worldTimeStore.setTimeBand(band));

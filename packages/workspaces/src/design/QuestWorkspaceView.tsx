@@ -2520,7 +2520,6 @@ export function useQuestWorkspaceView({
                   data={[
                     { value: "dialogue", label: "Dialogue" },
                     { value: "voiceover", label: "Voiceover" },
-                    { value: "event", label: "Event" },
                     { value: "cutscene", label: "Cutscene" }
                   ]}
                   onChange={(value) =>
@@ -2545,18 +2544,6 @@ export function useQuestWorkspaceView({
                       updateNode({
                         ...selectedNode,
                         dialogueDefinitionId: value ?? undefined
-                      })
-                    }
-                  />
-                )}
-                {selectedNode.narrativeSubtype === "event" && (
-                  <TextInput
-                    label="Event Name"
-                    value={selectedNode.eventName ?? ""}
-                    onChange={(event) =>
-                      updateNode({
-                        ...selectedNode,
-                        eventName: event.currentTarget.value || undefined
                       })
                     }
                   />

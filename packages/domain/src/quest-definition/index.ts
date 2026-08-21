@@ -23,7 +23,10 @@ export type QuestObjectiveSubtype =
   | "castSpell"
   | "assessment"
   | "custom";
-export type QuestNarrativeSubtype = "voiceover" | "dialogue" | "cutscene" | "event";
+// `voiceover` and `cutscene` activate and complete in the same tick -- nothing
+// plays them yet. They are kept because both are wanted: a cutscene at a point
+// in a quest, and a way to author narration.
+export type QuestNarrativeSubtype = "voiceover" | "dialogue" | "cutscene";
 export type QuestStageState = "active" | "completed";
 
 export type QuestConditionDefinition =
