@@ -25,8 +25,7 @@ describe("quest action type options", () => {
       "advanceToNextScene",
       "set-time-of-day",
       "advance-day",
-      "learn-fact",
-      "custom"
+      "learn-fact"
     ];
     const offered = QUEST_ACTION_TYPE_OPTIONS.map((option) => option.value);
     expect([...offered].sort()).toEqual([...expected].sort());

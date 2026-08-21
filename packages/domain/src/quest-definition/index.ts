@@ -83,9 +83,7 @@ export type QuestActionDefinition =
   // node surface.
   | { type: "learn-fact"; factId: string | null; displayText: string }
   // Moves an NPC to an area and lets normal task selection continue from there.
-  | { type: "teleportNpc"; npcDefinitionId: string | null; targetAreaId: string | null }
-  // No parameters because nothing consumes it.
-  | { type: "custom" };
+  | { type: "teleportNpc"; npcDefinitionId: string | null; targetAreaId: string | null };
 
 /**
  * Three actions this list deliberately does not have, and what to do instead.
@@ -100,6 +98,13 @@ export type QuestActionDefinition =
  *   task with a target area and an activation.
  * - Flipping an NPC between scripted and agentified. #207 gives that a
  *   purpose-named action with defined semantics.
+ * - A `custom` escape hatch. There is nothing to escape to: no plugin
+ *   contribution kind is a quest action handler, and `setActionHandler` has one
+ *   implementer, owned by the host. `emitEvent` already covers "fire a named
+ *   thing and let whatever is listening react". Plugin-authored actions would
+ *   be a real feature -- a contribution kind, a registry keyed by action name,
+ *   and an editor that asks the plugin what parameters it takes -- and a
+ *   purpose-named member added then beats one kept warm now.
  */
 
 export type QuestActionType = QuestActionDefinition["type"];
@@ -121,8 +126,7 @@ const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
   "learn-fact": "Learn Fact",
   playCue: "Play Cue",
   playAnimation: "Play Animation",
-  teleportNpc: "Teleport NPC",
-  custom: "Custom"
+  teleportNpc: "Teleport NPC"
 };
 
 /**
@@ -167,7 +171,6 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
     case "teleportNpc":
       return { type, npcDefinitionId: null, targetAreaId: null };
     case "advance-day":
-    case "custom":
       return { type };
     default: {
       const exhaustive: never = type;
@@ -507,7 +510,6 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
         targetAreaId: readString(source.targetAreaId)
       };
     case "advance-day":
-    case "custom":
       return { type };
     default: {
       const exhaustive: never = type;

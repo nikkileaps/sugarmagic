@@ -913,7 +913,6 @@ function QuestActionFields({
     // until the story that wires it; the rest do nothing at runtime.
     case "advance-day":
     case "teleportNpc":
-    case "custom":
       return null;
 
     default: {
