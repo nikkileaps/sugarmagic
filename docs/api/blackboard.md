@@ -1,0 +1,47 @@
+# API: The Blackboard
+
+**Domain:** `packages/runtime-core/src/state/blackboard.ts`
+**Charter:** [ADR 031](/Users/nikki/projects/sugarmagic/docs/adr/031-blackboard-is-a-projection-surface.md)
+
+The blackboard answers one question for narrative systems: what is true in
+the world right now? Sugaragent reads it for conversation context, the
+teacher reads it when scanning for opportunities, the debug HUD renders it.
+
+## The charter
+
+1. The blackboard is the current-state read surface for narrative systems.
+   O(1), typed, queryable.
+2. It holds projections only. Every fact has an owning system that can
+   republish it; the blackboard is never persisted and never the only copy of
+   anything.
+3. Facts about the past are welcome as current facts ("the offering was
+   made"); records of the past live with their owners, in save slices.
+4. Nothing goes on it without a `BlackboardFactDefinition` -- owner, scope,
+   lifecycle. That is the junk-drawer guard: how a fact got there is its
+   owner; how it leaves is its lifecycle.
+
+## What this means in practice
+
+**Deciding where new state lives.** If losing it loses the truth, it is not
+blackboard state -- it belongs to an owning system and its save slice (a
+`SaveParticipant`). If narrative consumers should be able to look it up, the
+owner additionally projects it onto the blackboard. Both can be true at once;
+that is the normal case, not a smell.
+
+**Projections are event-driven.** Project when the owned state changes and on
+save restore, never on a per-frame sync. Quest flags follow this rule (see
+the quest-system doc); so should anything new.
+
+**Who reads it and who does not.** Narrative consumers read the blackboard.
+Engine internals -- behavior task selection, collision gates, NPC presence --
+take injected predicates instead, because per-frame systems want a function
+call, not a store query. Adding a blackboard read inside a per-frame loop is
+wrong on both sides of the boundary.
+
+**Facts have shapes, not just values.** A `BlackboardFactDefinition` declares
+the key, the owning system (non-owner writes throw), the allowed scope kinds
+(`global | region | entity | quest | conversation`), and the lifecycle
+(`persistent | session | frame | ephemeral`). Frame facts clear every frame;
+ephemeral facts expire on a timer; session facts die with the session.
+"Persistent" means "lives until cleared" -- it does NOT mean saved to disk.
+Nothing on the blackboard is saved to disk.
