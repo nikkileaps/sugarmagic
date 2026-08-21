@@ -2373,7 +2373,6 @@ export function useQuestWorkspaceView({
                     { value: "talk", label: "Talk" },
                     { value: "location", label: "Location" },
                     { value: "collect", label: "Collect" },
-                    { value: "trigger", label: "Trigger" },
                     { value: "castSpell", label: "Cast Spell" },
                     { value: "assessment", label: "Assessment" },
                     { value: "custom", label: "Custom" }

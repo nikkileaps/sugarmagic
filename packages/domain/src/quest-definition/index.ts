@@ -15,9 +15,11 @@ export type TimeOfDayBand =
 export type QuestNodeBehavior = "objective" | "narrative" | "condition" | "branch";
 export type QuestObjectiveSubtype =
   | "talk"
+  // Arrival is authored here: pick the area the player has to reach. Areas are
+  // the label-role view of region volumes, so a box the player can be "in" is
+  // already an area -- there is no second arrival subtype.
   | "location"
   | "collect"
-  | "trigger"
   | "castSpell"
   | "assessment"
   | "custom";
