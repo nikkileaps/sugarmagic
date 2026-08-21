@@ -15,8 +15,9 @@ between them had never been written down:
   the teacher, the debug HUD.
 - `QuestManager.runtimeFlags` plus the rest of the quest save slice
   (`activeQuests`, `completedQuestIds`, `completedNodeIds`): authored,
-  persisted, written by quest actions, volume triggers, mechanics effects and
-  conversation proposals.
+  persisted, written by quest actions, volume triggers, **spell** `world-flag`
+  effects (`world-flag` is a `SpellEffectType`; the mechanics subsystem writes
+  no flags) and agent conversation proposals.
 
 Epic #206 (flag registry) forced the question: do registered flags move into
 the blackboard, or stay in `QuestManager`? Answering it required saying what
@@ -58,16 +59,32 @@ and the blackboard copy is rebuilt from that record on boot.
   home) **and are projected onto the blackboard as a quest-system-owned fact
   family, unconditionally.** The projection is the point, not a nicety: the
   blackboard is the one surface every narrative consumer queries, and the
-  flag registry makes the projection typed.
-- **Projection is event-driven, never per-frame.** Flags change a few times a
-  minute; the projection hooks the flag write path and save restore. A
-  per-frame re-sync of N flags would be N map writes and N listener
+  flag registry makes the projection **enumerable and validated** -- not
+  typed. Registry entries are data, so a projected flag's value is `unknown`
+  at compile time whichever projection shape is chosen; what the registry buys
+  is a closed set of keys and a place to reject unregistered ones.
+- **Project on change, at the rate the source actually changes.** Flags change
+  a few times a minute, so their projection hooks the write path and save
+  restore; a per-frame re-sync of N flags would be N map writes and N listener
   notifications per frame for data that almost never changes.
-- **Engine internals do not read the blackboard.** Behavior task selection,
-  collision gates and NPC presence take injected predicates
-  (`hasWorldFlag`, `isNodeCompleted`, `isPlayerInArea`) -- per-frame systems
-  want a function call, not a store query. The blackboard serves conversation,
-  teaching, dialogue selection and debugging.
+  This is not an absolute ban on per-frame projection: the spatial family
+  writes every frame, deliberately, because those facts genuinely change every
+  frame: `syncBlackboardSpatialFacts` (`gameplay-session.ts:933-960`, called at
+  `:2479` and `:2536`) writes position, current-area, location and
+  player-relation, and the behavior system writes the movement fact per NPC per
+  frame (`behavior/system.ts:790`) -- a second owner on the same cadence. The rule is that the projection rate matches the source, not
+  that projection is always lazy. `syncBlackboardQuestFacts` violates it in the
+  other direction -- quest facts change rarely and are rewritten per frame.
+- **Engine internals take injected predicates for authored state**
+  (`hasWorldFlag`, `isNodeCompleted`, `isPlayerInArea`) rather than querying
+  the blackboard -- per-frame systems want a function call, and authored state
+  has an owner that can hand one over. They DO read the blackboard for
+  globally-scoped derived world facts: behavior task selection calls
+  `getTimeOfDayBand(blackboard)` once per NPC per frame
+  (`behavior/system.ts:595`), and the blackboard is a required option of that
+  system (`:57`). The rule is about which store owns a fact, not a ban on
+  reading. The blackboard additionally serves conversation, teaching, dialogue
+  selection and debugging.
 - Two pre-existing per-frame costs are noted for #206's debugging work, since
   a bigger fact population will magnify them: `advanceFrame()` sweeps the
   whole store per frame-lifecycle definition (`blackboard.ts:433-446`) instead

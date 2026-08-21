@@ -28,15 +28,21 @@ blackboard state -- it belongs to an owning system and its save slice (a
 owner additionally projects it onto the blackboard. Both can be true at once;
 that is the normal case, not a smell.
 
-**Projections are event-driven.** Project when the owned state changes and on
-save restore, never on a per-frame sync. Quest flags follow this rule (see
-the quest-system doc); so should anything new.
+**Project at the rate the source changes.** Slow-changing and authored state
+projects on change and on save restore -- quest flags work this way. Genuinely
+per-frame state projects per frame: the spatial family writes player and NPC
+position, area and movement facts every frame, which is correct. What is wrong
+is a mismatch in either direction, and there is one in the codebase today --
+`syncBlackboardQuestFacts` rewrites rarely-changing quest facts every frame.
 
-**Who reads it and who does not.** Narrative consumers read the blackboard.
-Engine internals -- behavior task selection, collision gates, NPC presence --
-take injected predicates instead, because per-frame systems want a function
-call, not a store query. Adding a blackboard read inside a per-frame loop is
-wrong on both sides of the boundary.
+**Who reads it, and for what.** Narrative consumers read it freely. Engine
+internals -- behavior task selection, collision gates, NPC presence -- take
+injected predicates for **authored** state (`hasWorldFlag`, `isNodeCompleted`,
+`isPlayerInArea`), because that state has an owner who can hand over a function
+and a per-frame system wants a call rather than a store query. They do read the
+blackboard for globally-scoped derived world facts: behavior task selection
+reads the time band from it every frame (`behavior/system.ts:595`). The rule is
+about which store owns a fact, not a ban on reading in a loop.
 
 **Facts have shapes, not just values.** A `BlackboardFactDefinition` declares
 the key, the owning system (non-owner writes throw), the allowed scope kinds
