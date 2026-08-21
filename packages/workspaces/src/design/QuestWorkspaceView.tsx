@@ -65,7 +65,7 @@ import type {
 import {
   NPC_ANIMATION_SLOT_LABELS,
   QUEST_ACTION_TYPE_OPTIONS,
-  REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS,
+  TIME_OF_DAY_BAND_OPTIONS,
   createQuestAction,
   createDefaultDialogueDefinition,
   createDefaultQuestDefinition,
@@ -119,9 +119,8 @@ const OBJECTIVE_TYPE_ICONS: Record<string, string> = {
   talk: "💬",
   location: "📍",
   collect: "📦",
-  trigger: "⚡",
   castSpell: "🔮",
-  custom: "⭐"
+  awaitEvent: "⭐"
 };
 
 export interface QuestWorkspaceViewProps {
@@ -394,7 +393,7 @@ function createNextNodePosition(stage: QuestStageDefinition) {
 
 function nodeLabel(node: QuestNodeDefinition): string {
   if (node.nodeBehavior === "objective") {
-    return `${OBJECTIVE_TYPE_ICONS[node.objectiveSubtype ?? "custom"] ?? "⭐"} ${node.displayName}`;
+    return `${OBJECTIVE_TYPE_ICONS[node.objectiveSubtype ?? "awaitEvent"] ?? "⭐"} ${node.displayName}`;
   }
   if (node.nodeBehavior === "narrative") {
     return `🎬 ${node.displayName}`;
@@ -649,22 +648,14 @@ function QuestConditionEditor({
 }
 
 /**
- * Times a stage can be set at. Labels are what the author reads; the value is
- * the band id that reaches the world clock -- "Noon" stores `midday`.
- *
- * The domain also defines `dawn` and `dusk`. They are deliberately not offered
- * here, and stay reachable through the set-time-of-day quest action.
+ * Times a stage can be set at: every band except dawn and dusk, which are
+ * deliberately not offered here and stay reachable through the set-time-of-day
+ * quest action. Derived from the one band list rather than restating it.
  */
-const STAGE_TIME_OF_DAY_OPTIONS: Array<{
-  value: TimeOfDayBand;
-  label: string;
-}> = [
-  { value: "morning", label: "Morning" },
-  { value: "midday", label: "Noon" },
-  { value: "afternoon", label: "Afternoon" },
-  { value: "evening", label: "Evening" },
-  { value: "night", label: "Night" }
-];
+const STAGE_EXCLUDED_TIME_BANDS: TimeOfDayBand[] = ["dawn", "dusk"];
+const STAGE_TIME_OF_DAY_OPTIONS = TIME_OF_DAY_BAND_OPTIONS.filter(
+  (option) => !STAGE_EXCLUDED_TIME_BANDS.includes(option.value)
+);
 
 /**
  * The parameters one action takes. Each action type declares its own fields, so
@@ -875,7 +866,7 @@ function QuestActionFields({
         <Select
           size="xs"
           label="Time of Day"
-          data={REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS}
+          data={TIME_OF_DAY_BAND_OPTIONS}
           value={action.band}
           onChange={(value) => {
             if (!value) return;
@@ -2062,16 +2053,6 @@ export function useQuestWorkspaceView({
                 })
               }
             />
-            <Switch
-              label="Repeatable"
-              checked={selectedQuest.repeatable}
-              onChange={(event) =>
-                commitQuest({
-                  ...selectedQuest,
-                  repeatable: event.currentTarget.checked
-                })
-              }
-            />
             <Stack gap="xs">
               <Text
                 size="xs"
@@ -2372,7 +2353,7 @@ export function useQuestWorkspaceView({
                     { value: "collect", label: "Collect" },
                     { value: "castSpell", label: "Cast Spell" },
                     { value: "assessment", label: "Assessment" },
-                    { value: "custom", label: "Custom" }
+                    { value: "awaitEvent", label: "Await Event" }
                   ]}
                   onChange={(value) =>
                     value &&
@@ -2432,6 +2413,19 @@ export function useQuestWorkspaceView({
                     })
                   }
                 />
+                )}
+                {selectedNode.objectiveSubtype === "awaitEvent" && (
+                  <TextInput
+                    label="Completes On Event"
+                    description="An emitEvent action firing this name completes the objective."
+                    value={selectedNode.eventName ?? ""}
+                    onChange={(event) =>
+                      updateNode({
+                        ...selectedNode,
+                        eventName: event.currentTarget.value || undefined
+                      })
+                    }
+                  />
                 )}
                 {selectedNode.objectiveSubtype === "talk" && (
                   <>

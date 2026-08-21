@@ -68,7 +68,6 @@ export interface QuestJournalQuestView {
   description: string;
   stageDisplayName: string;
   objectives: QuestActiveObjectiveView[];
-  repeatable: boolean;
   completed: boolean;
 }
 
@@ -235,7 +234,8 @@ export class QuestManager {
       return false;
     }
 
-    if (this.completedQuestIds.has(questDefinitionId) && !definition.repeatable) {
+    // A finished quest stays finished. Nothing restarts one.
+    if (this.completedQuestIds.has(questDefinitionId)) {
       return false;
     }
 
@@ -455,16 +455,6 @@ export class QuestManager {
     );
   }
 
-  /**
-   * Every quest in progress, with the stage it is on.
-   *
-   * This is what region quest bindings evaluate against -- which NPCs stand
-   * where, which doors are passable. `getTrackedQuest()` below is the player's
-   * journal selection and answers a different question.
-   *
-   * A quest whose current stage cannot be resolved still appears, with a null
-   * stage, so a binding naming only the quest still matches it.
-   */
   private recordCompletedNode(questDefinitionId: string, nodeId: string): void {
     let completed = this.completedNodeIdsByQuest.get(questDefinitionId);
     if (!completed) {
@@ -482,6 +472,16 @@ export class QuestManager {
     return this.completedNodeIdsByQuest.get(questDefinitionId)?.has(nodeId) ?? false;
   }
 
+  /**
+   * Every quest in progress, with the stage it is on.
+   *
+   * This is what region quest bindings evaluate against -- which NPCs stand
+   * where, which doors are passable. `getTrackedQuest()` below is the player's
+   * journal selection and answers a different question.
+   *
+   * A quest whose current stage cannot be resolved still appears, with a null
+   * stage, so a binding naming only the quest still matches it.
+   */
   getActiveQuestStates(): Array<{
     questDefinitionId: string;
     stageId: string | null;
@@ -536,7 +536,6 @@ export class QuestManager {
           description: definition.description,
           stageDisplayName: stage.displayName,
           objectives: [] as QuestActiveObjectiveView[],
-          repeatable: definition.repeatable,
           completed: true
         };
       })
@@ -568,7 +567,6 @@ export class QuestManager {
         stage,
         this.getCurrentStageProgress(state)
       ),
-      repeatable: definition.repeatable,
       completed
     };
   }

@@ -35,14 +35,14 @@ function buildSingleStageQuest(id: string, displayName: string) {
         ...createDefaultQuestNodeDefinition({
           displayName: "Objective A",
           description: "Do the thing",
-          objectiveSubtype: "custom"
+          objectiveSubtype: "awaitEvent"
         })
       },
       {
         ...createDefaultQuestNodeDefinition({
           displayName: "Objective B",
           description: "Do the other thing",
-          objectiveSubtype: "custom"
+          objectiveSubtype: "awaitEvent"
         })
       }
     ]

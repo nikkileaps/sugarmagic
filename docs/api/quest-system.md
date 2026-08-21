@@ -95,10 +95,13 @@ surface for all scripted world changes.
 | `collect` | the player holds `count` of the item | `targetId` (item), `count` |
 | `castSpell` | the player casts that spell | `targetId` (spell) |
 | `assessment` | the player completes the assessment form | plugin-supplied |
-| `custom` | a matching `emitEvent` action fires its `eventName` | `eventName` |
+| `awaitEvent` | a matching `emitEvent` action fires the node's `eventName` | `eventName` |
 
-`custom` is the subtype with no built-in completion path: it waits for a named
-event, which any node's `emitEvent` action can fire.
+`awaitEvent` is the subtype with no built-in completion path: it waits for a
+named quest event, set on the node as `eventName` and fired by any node's
+`emitEvent` action. Plugins use the same channel -- sugarlang stamps
+`SUGARLANG_PLACEMENT_COMPLETED_EVENT` onto an assessment objective and fires it
+when placement finishes.
 
 ### Narrative subtypes
 
@@ -282,7 +285,7 @@ The world clock has two values: a `TimeOfDayBand` and an integer day counter
 **Setting the clock via quest actions:**
 
 ```json
-{ "type": "set-time-of-day", "targetId": "morning" }
+{ "type": "set-time-of-day", "band": "morning" }
 { "type": "advance-day" }
 ```
 
@@ -321,10 +324,10 @@ be aware they already know. They persist across sessions.
 **Authoring: `learn-fact` quest action**
 
 ```json
-{ "type": "learn-fact", "targetId": "luggage:went-to-claim", "value": "The harbourmaster confirmed unclaimed baggage goes to the claim office after 24 hours." }
+{ "type": "learn-fact", "factId": "luggage:went-to-claim", "displayText": "The harbourmaster confirmed unclaimed baggage goes to the claim office after 24 hours." }
 ```
 
-- `targetId` is the dedup key. Learning the same id again replaces the old
+- `factId` is the dedup key. Learning the same id again replaces the old
   text and moves it to the end of the list (most-recently-learned order).
 - `value` is the display string injected into NPC prompts.
 - Cap: 20 facts (oldest dropped first).
@@ -381,7 +384,7 @@ without requiring the author to script specific dialogue responses.
 ### Pattern A: NPC B reacts only after player talked to NPC A
 
 1. NPC A has a scripted Talk node bound to a quest Talk objective.
-2. On that node's `onCompleteActions`: `{ type: "setFlag", targetId: "talkedToNpcA", value: true }`.
+2. On that node's `onCompleteActions`: `{ type: "setFlag", key: "talkedToNpcA", value: true }`.
 3. NPC B (agentified). In their task list, add a task with:
    - `activation.worldFlagEquals = { key: "talkedToNpcA", valueType: "boolean", value: "true" }`
 4. When the compound holds, NPC B's task drives their behavior; otherwise they
@@ -398,7 +401,7 @@ without requiring the author to script specific dialogue responses.
 ### Pattern C: Player learns a clue, future NPCs build on it
 
 1. On the quest node where the player gets the clue (dialogue complete, item
-   found, etc.): `{ type: "learn-fact", targetId: "clue:dock-manifest", value: "The dock manifest shows a trunk shipped to warehouse 4." }`.
+   found, etc.): `{ type: "learn-fact", factId: "clue:dock-manifest", displayText: "The dock manifest shows a trunk shipped to warehouse 4." }`.
 2. Every subsequent NPC conversation gets the player-known-facts block.
 3. NPCs can reference the clue, ask about it, confirm it -- without you
    scripting each response. The NPC knows the player already has this
@@ -409,7 +412,7 @@ without requiring the author to script specific dialogue responses.
 ```json
 [
   { "type": "advance-day" },
-  { "type": "set-time-of-day", "targetId": "morning" }
+  { "type": "set-time-of-day", "band": "morning" }
 ]
 ```
 

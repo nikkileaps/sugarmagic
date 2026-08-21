@@ -12,6 +12,42 @@ export type TimeOfDayBand =
   | "evening"
   | "night";
 
+/**
+ * What an author reads for each band. Exhaustive over TimeOfDayBand, so adding
+ * a band without a label fails the typecheck. Key order is clock order, and
+ * picker order everywhere.
+ */
+const TIME_OF_DAY_BAND_LABELS: Record<TimeOfDayBand, string> = {
+  dawn: "Dawn",
+  morning: "Morning",
+  midday: "Midday",
+  afternoon: "Afternoon",
+  dusk: "Dusk",
+  evening: "Evening",
+  night: "Night"
+};
+
+/** Every band, in clock order. The one list; nothing else spells them out. */
+export const TIME_OF_DAY_BANDS = Object.keys(
+  TIME_OF_DAY_BAND_LABELS
+  // Object.keys widens to string; the Record is keyed by TimeOfDayBand.
+) as TimeOfDayBand[];
+
+/** Every band as a picker option. */
+export const TIME_OF_DAY_BAND_OPTIONS: Array<{
+  value: TimeOfDayBand;
+  label: string;
+}> = TIME_OF_DAY_BANDS.map((value) => ({
+  value,
+  label: TIME_OF_DAY_BAND_LABELS[value]
+}));
+
+export function isTimeOfDayBand(value: unknown): value is TimeOfDayBand {
+  return (
+    typeof value === "string" && (TIME_OF_DAY_BANDS as string[]).includes(value)
+  );
+}
+
 export type QuestNodeBehavior = "objective" | "narrative" | "condition" | "branch";
 export type QuestObjectiveSubtype =
   | "talk"
@@ -22,7 +58,10 @@ export type QuestObjectiveSubtype =
   | "collect"
   | "castSpell"
   | "assessment"
-  | "custom";
+  // Completes when a named quest event fires -- `eventName` on the node,
+  // emitted by an `emitEvent` action or by a plugin. The only subtype whose
+  // completion the quest system does not detect for itself.
+  | "awaitEvent";
 // `voiceover` and `cutscene` activate and complete in the same tick -- nothing
 // plays them yet. They are kept because both are wanted: a cutscene at a point
 // in a quest, and a way to author narration.
@@ -259,7 +298,6 @@ export interface QuestDefinition {
   startStageId: string;
   stageDefinitions: QuestStageDefinition[];
   rewardDefinitions: QuestRewardDefinition[];
-  repeatable: boolean;
 }
 
 export const DEFAULT_QUEST_NODE_POSITION: QuestNodeGraphPosition = {
@@ -370,7 +408,6 @@ export function createDefaultQuestDefinition(
     startStageId: defaultStage.stageId,
     stageDefinitions: [defaultStage],
     rewardDefinitions: [],
-    repeatable: false
   };
 }
 
@@ -389,25 +426,8 @@ const QUEST_ACTION_TYPES = new Set<string>(
   Object.keys(QUEST_ACTION_TYPE_LABELS)
 );
 
-const TIME_OF_DAY_BANDS: TimeOfDayBand[] = [
-  "dawn",
-  "morning",
-  "midday",
-  "afternoon",
-  "dusk",
-  "evening",
-  "night"
-];
-
 function isNpcAnimationSlot(value: unknown): value is NPCAnimationSlot {
   return value === "idle" || value === "walk" || value === "run";
-}
-
-function isTimeOfDayBand(value: unknown): value is TimeOfDayBand {
-  return (
-    typeof value === "string" &&
-    (TIME_OF_DAY_BANDS as string[]).includes(value)
-  );
 }
 
 /** A count of at least 1, from a number, a numeric string, or nothing. */
@@ -513,6 +533,19 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
   }
 }
 
+/**
+ * `custom` was this subtype's name before it said what it does. An objective
+ * authored under the old name is an awaitEvent objective.
+ */
+function normalizeObjectiveSubtype(
+  value: unknown
+): QuestObjectiveSubtype | undefined {
+  if (value === "custom") return "awaitEvent";
+  return typeof value === "string"
+    ? (value as QuestObjectiveSubtype)
+    : undefined;
+}
+
 export function normalizeQuestNodeDefinition(
   node: Partial<QuestNodeDefinition> | null | undefined
 ): QuestNodeDefinition {
@@ -530,7 +563,8 @@ export function normalizeQuestNodeDefinition(
     nodeBehavior,
     objectiveSubtype:
       nodeBehavior === "objective"
-        ? node.objectiveSubtype ?? defaultNode.objectiveSubtype
+        ? normalizeObjectiveSubtype(node.objectiveSubtype) ??
+          defaultNode.objectiveSubtype
         : undefined,
     narrativeSubtype:
       nodeBehavior === "narrative"
@@ -637,6 +671,5 @@ export function normalizeQuestDefinition(
     rewardDefinitions: (definition.rewardDefinitions ?? [])
       .map((reward) => normalizeQuestRewardDefinition(reward))
       .filter((reward): reward is QuestRewardDefinition => reward !== null),
-    repeatable: definition.repeatable ?? defaultDefinition.repeatable
   };
 }

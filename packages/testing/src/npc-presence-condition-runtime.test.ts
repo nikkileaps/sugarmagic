@@ -83,7 +83,9 @@ function buildQuestCtx(questManager: QuestManager): RegionConditionContext {
   return {
     activeQuests: questManager.getActiveQuestStates(),
     hasWorldFlag: (key: string, value?: unknown) =>
-      questManager.hasFlag(key, value)
+      questManager.hasFlag(key, value),
+    isNodeCompleted: (questDefinitionId: string, nodeId: string) =>
+      questManager.isNodeCompleted(questDefinitionId, nodeId)
   };
 }
 
@@ -250,5 +252,56 @@ describe("079.2 -- NPC presence reconciler", () => {
 
     expect(entityMap.size).toBe(2);
     expect(world.query(Interactable)).toHaveLength(2);
+  });
+});
+
+describe("presence conditions and node completion", () => {
+  /**
+   * The node-completed clause lives in the shared activation grammar, so a
+   * placement gets it as well as a behavior task. This drives the same
+   * evaluator the presence path calls, through the same context builder.
+   */
+  it("keeps an NPC out until its node completes, then spawns it", () => {
+    const questManager = new QuestManager();
+    const condition = {
+      questDefinitionId: null,
+      questStageId: null,
+      worldFlagEquals: null,
+      nodeCompleted: {
+        questDefinitionId: "quest:offering",
+        nodeId: "node:offered"
+      }
+    };
+
+    let done = false;
+    const ctx: RegionConditionContext = {
+      activeQuests: questManager.getActiveQuestStates(),
+      hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+      isNodeCompleted: (questDefinitionId, nodeId) =>
+        done &&
+        questDefinitionId === "quest:offering" &&
+        nodeId === "node:offered"
+    };
+
+    expect(evaluateRegionQuestBinding(condition, ctx)).toBe(false);
+    done = true;
+    expect(evaluateRegionQuestBinding(condition, ctx)).toBe(true);
+  });
+
+  it("fails closed when nothing can answer the clause", () => {
+    // A presence whose condition cannot be evaluated must not spawn. Failing
+    // open would put an NPC in the world the story has not introduced.
+    const condition = {
+      questDefinitionId: null,
+      questStageId: null,
+      worldFlagEquals: null,
+      nodeCompleted: {
+        questDefinitionId: "quest:offering",
+        nodeId: "node:offered"
+      }
+    };
+    expect(
+      evaluateRegionQuestBinding(condition, { activeQuests: [] })
+    ).toBe(false);
   });
 });

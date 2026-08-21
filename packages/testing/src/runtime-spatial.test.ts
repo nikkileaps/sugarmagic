@@ -320,7 +320,7 @@ describe("location objectives", () => {
     const first = createDefaultQuestNodeDefinition({
       displayName: "Talk First",
       description: "Do this first",
-      objectiveSubtype: "custom"
+      objectiveSubtype: "awaitEvent"
     });
     const second = {
       ...createDefaultQuestNodeDefinition({

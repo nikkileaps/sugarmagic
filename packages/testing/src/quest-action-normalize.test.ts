@@ -109,6 +109,30 @@ describe("quest action load path", () => {
     ]);
   });
 
+  it("reads an objective authored under the old custom name", () => {
+    // `custom` said nothing about how the objective completes. It waits for a
+    // named quest event, so it is an awaitEvent objective.
+    const node = {
+      ...createDefaultQuestNodeDefinition({ displayName: "Wait" }),
+      nodeBehavior: "objective" as const,
+      objectiveSubtype: "custom",
+      eventName: "bell-rung"
+    };
+    const stage = createDefaultQuestStageDefinition({
+      nodeDefinitions: [node as never]
+    });
+    const quest = {
+      ...createDefaultQuestDefinition({ definitionId: "quest:legacy" }),
+      startStageId: stage.stageId,
+      stageDefinitions: [stage]
+    };
+    const loaded = normalizeQuestDefinition(quest).stageDefinitions[0]!
+      .nodeDefinitions[0]!;
+
+    expect(loaded.objectiveSubtype).toBe("awaitEvent");
+    expect(loaded.eventName).toBe("bell-rung");
+  });
+
   it("drops an action with no recognizable type", () => {
     expect(loadActions([{ type: "notAnAction" }, {}, null])).toEqual([]);
   });

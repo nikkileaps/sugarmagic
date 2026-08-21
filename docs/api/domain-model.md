@@ -144,7 +144,7 @@ runtime inventory and caster.
   the node (plus stage `entryNodeIds` and branch `failTargetNodeIds`);
   there is no separate edge entity.
 - **Node behaviors:** `objective` (subtypes talk / location / collect /
-  castSpell / assessment / custom), `narrative` (subtypes voiceover /
+  castSpell / assessment / awaitEvent), `narrative` (subtypes voiceover /
   dialogue / cutscene, of which only dialogue does anything yet),
   `condition` (completes when its `QuestConditionDefinition` becomes true),
   `branch` (evaluates its condition immediately; fail activates

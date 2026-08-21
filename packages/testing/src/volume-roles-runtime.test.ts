@@ -443,3 +443,49 @@ describe("069.5 — on-enter trigger tracker (extends the area tracker)", () => 
     );
   });
 });
+
+describe("containment gates and node completion", () => {
+  it("stays shut until the node completes, then opens", () => {
+    const gate = {
+      questDefinitionId: null,
+      questStageId: null,
+      worldFlagEquals: null,
+      nodeCompleted: { questDefinitionId: "quest:gate", nodeId: "node:key" }
+    };
+    let done = false;
+    const ctx = {
+      activeQuests: [],
+      isNodeCompleted: (questDefinitionId: string, nodeId: string) =>
+        done && questDefinitionId === "quest:gate" && nodeId === "node:key"
+    };
+
+    expect(evaluateRegionQuestBinding(gate, ctx)).toBe(false);
+    done = true;
+    expect(evaluateRegionQuestBinding(gate, ctx)).toBe(true);
+  });
+
+  it("ANDs the node clause with the others rather than replacing them", () => {
+    const gate = {
+      questDefinitionId: "quest:gate",
+      questStageId: null,
+      worldFlagEquals: null,
+      nodeCompleted: { questDefinitionId: "quest:gate", nodeId: "node:key" }
+    };
+    const nodeDone = () => true;
+
+    // Node done but the quest is not in progress -> still shut.
+    expect(
+      evaluateRegionQuestBinding(gate, {
+        activeQuests: [],
+        isNodeCompleted: nodeDone
+      })
+    ).toBe(false);
+
+    expect(
+      evaluateRegionQuestBinding(gate, {
+        activeQuests: [{ questDefinitionId: "quest:gate", stageId: "s1" }],
+        isNodeCompleted: nodeDone
+      })
+    ).toBe(true);
+  });
+});

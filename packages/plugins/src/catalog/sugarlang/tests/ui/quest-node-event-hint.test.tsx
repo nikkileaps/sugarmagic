@@ -80,7 +80,6 @@ const QUEST: QuestDefinition = {
   description: "Check in at the station.",
   startStageId: "stage-1",
   rewardDefinitions: [],
-  repeatable: false,
   stageDefinitions: [
     {
       stageId: "stage-1",

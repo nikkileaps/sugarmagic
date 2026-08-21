@@ -31,7 +31,7 @@ function questWithNodeActions(options: {
           nodeId: options.nodeId,
           displayName: "Ring the Bell",
           description: "Ring it",
-          objectiveSubtype: "custom"
+          objectiveSubtype: "awaitEvent"
         }),
         eventName: options.eventName,
         onEnterActions: options.onEnterActions ?? [],
@@ -111,7 +111,7 @@ describe("quest action invocation", () => {
             nodeId: secondNodeId,
             displayName: "Answer the Bell",
             description: "Answer it",
-            objectiveSubtype: "custom"
+            objectiveSubtype: "awaitEvent"
           }),
           eventName: "bell-rung",
           onCompleteActions: [{ type: "playCue", cueDefinitionId: "cue:answer" }]
@@ -121,7 +121,7 @@ describe("quest action invocation", () => {
             nodeId: firstNodeId,
             displayName: "Ring the Bell",
             description: "Ring it",
-            objectiveSubtype: "custom"
+            objectiveSubtype: "awaitEvent"
           }),
           eventName: "ring",
           onCompleteActions: [
