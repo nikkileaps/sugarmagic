@@ -77,7 +77,7 @@ describe("QuestManager", () => {
             nodeId: failNodeId,
             displayName: "Find Another Way",
             description: "The gate is shut",
-            objectiveSubtype: "custom"
+            objectiveSubtype: "awaitEvent"
           })
         }
       ],

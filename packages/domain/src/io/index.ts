@@ -339,34 +339,7 @@ export function normalizeRegionDocumentForLoad(
               typeof task.targetAreaId === "string" &&
               task.targetAreaId.trim().length > 0
                 ? task.targetAreaId.trim()
-                : null,
-            activation: {
-              questDefinitionId:
-                typeof task.activation?.questDefinitionId === "string" &&
-                task.activation.questDefinitionId.trim().length > 0
-                  ? task.activation.questDefinitionId.trim()
-                  : null,
-              questStageId:
-                typeof task.activation?.questStageId === "string" &&
-                task.activation.questStageId.trim().length > 0
-                  ? task.activation.questStageId.trim()
-                  : null,
-              worldFlagEquals:
-                typeof task.activation?.worldFlagEquals?.key === "string" &&
-                task.activation.worldFlagEquals.key.trim().length > 0
-                  ? {
-                      key: task.activation.worldFlagEquals.key.trim(),
-                      valueType:
-                        task.activation.worldFlagEquals.valueType ?? "boolean",
-                      value:
-                        typeof task.activation.worldFlagEquals.value ===
-                          "string" &&
-                        task.activation.worldFlagEquals.value.trim().length > 0
-                          ? task.activation.worldFlagEquals.value.trim()
-                          : null
-                    }
-                  : null
-            }
+                : null
           })
         )
       })

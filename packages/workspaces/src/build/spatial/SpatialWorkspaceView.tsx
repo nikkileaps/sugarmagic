@@ -35,6 +35,7 @@ import type {
   SemanticCommand
 } from "@sugarmagic/domain";
 import {
+  createRegionBehaviorQuestBinding,
   createRegionVolumeDefinition,
   createRegionVolumeId,
   resolveRegionVolumes
@@ -673,12 +674,12 @@ export function useSpatialWorkspaceView(
                       }
                       onChange={(event) =>
                         updateVolume({
+                          // Spread the existing condition so a clause this
+                          // control does not show is not erased by editing the
+                          // one it does.
                           condition: {
-                            questDefinitionId:
-                              selectedVolume.condition?.questDefinitionId ??
-                              null,
-                            questStageId:
-                              selectedVolume.condition?.questStageId ?? null,
+                            ...(selectedVolume.condition ??
+                              createRegionBehaviorQuestBinding()),
                             worldFlagEquals: event.currentTarget.value
                               ? {
                                   key: event.currentTarget.value,

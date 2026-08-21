@@ -1,5 +1,6 @@
 import { createUuid } from "../shared/identity";
 import { normalizeNodeGroups, type NodeGroup } from "../graph-layout/index";
+import type { NPCAnimationSlot } from "../npc-definition/index";
 
 // Plan 074 §074.1' -- canonical location; runtime-core re-exports from here.
 export type TimeOfDayBand =
@@ -11,16 +12,60 @@ export type TimeOfDayBand =
   | "evening"
   | "night";
 
+/**
+ * What an author reads for each band. Exhaustive over TimeOfDayBand, so adding
+ * a band without a label fails the typecheck. Key order is clock order, and
+ * picker order everywhere.
+ */
+const TIME_OF_DAY_BAND_LABELS: Record<TimeOfDayBand, string> = {
+  dawn: "Dawn",
+  morning: "Morning",
+  midday: "Midday",
+  afternoon: "Afternoon",
+  dusk: "Dusk",
+  evening: "Evening",
+  night: "Night"
+};
+
+/** Every band, in clock order. The one list; nothing else spells them out. */
+export const TIME_OF_DAY_BANDS = Object.keys(
+  TIME_OF_DAY_BAND_LABELS
+  // Object.keys widens to string; the Record is keyed by TimeOfDayBand.
+) as TimeOfDayBand[];
+
+/** Every band as a picker option. */
+export const TIME_OF_DAY_BAND_OPTIONS: Array<{
+  value: TimeOfDayBand;
+  label: string;
+}> = TIME_OF_DAY_BANDS.map((value) => ({
+  value,
+  label: TIME_OF_DAY_BAND_LABELS[value]
+}));
+
+export function isTimeOfDayBand(value: unknown): value is TimeOfDayBand {
+  return (
+    typeof value === "string" && (TIME_OF_DAY_BANDS as string[]).includes(value)
+  );
+}
+
 export type QuestNodeBehavior = "objective" | "narrative" | "condition" | "branch";
 export type QuestObjectiveSubtype =
   | "talk"
+  // Arrival is authored here: pick the area the player has to reach. Areas are
+  // the label-role view of region volumes, so a box the player can be "in" is
+  // already an area -- there is no second arrival subtype.
   | "location"
   | "collect"
-  | "trigger"
   | "castSpell"
   | "assessment"
-  | "custom";
-export type QuestNarrativeSubtype = "voiceover" | "dialogue" | "cutscene" | "event";
+  // Completes when a named quest event fires -- `eventName` on the node,
+  // emitted by an `emitEvent` action or by a plugin. The only subtype whose
+  // completion the quest system does not detect for itself.
+  | "awaitEvent";
+// `voiceover` and `cutscene` activate and complete in the same tick -- nothing
+// plays them yet. They are kept because both are wanted: a cutscene at a point
+// in a quest, and a way to author narration.
+export type QuestNarrativeSubtype = "voiceover" | "dialogue" | "cutscene";
 export type QuestStageState = "active" | "completed";
 
 export type QuestConditionDefinition =
@@ -37,39 +82,142 @@ export type QuestConditionDefinition =
     }
   | { type: "not"; condition: QuestConditionDefinition };
 
-export type QuestActionType =
-  | "setFlag"
-  | "giveItem"
-  | "removeItem"
-  | "playSound"
-  | "spawnVfx"
-  | "teleportNpc"
-  | "moveNpc"
-  | "setNpcState"
-  | "emitEvent"
-  // Plan 058 §058.5 — Scene progression. `unlockScene` adds
-  // targetId to campaign.progression's manual unlocks;
-  // `advanceToNextScene` completes the current Scene and moves
-  // the player into targetId (or the next Scene by order when
-  // targetId is omitted).
-  | "unlockScene"
-  | "advanceToNextScene"
-  // Plan 074 §074.1' — Beat-driven world clock. `set-time-of-day`
-  // uses targetId as the TimeOfDayBand value; `advance-day` needs
-  // no value. Both dispatch through the existing quest action chain.
-  | "set-time-of-day"
-  | "advance-day"
-  // Plan 074 §074.5 -- Player-known-facts. `learn-fact` uses targetId
-  // as the fact id (dedup key) and value (string) as the display text.
-  // QUEST ACTIONS ONLY -- no dialogue node surface.
-  | "learn-fact"
-  | "custom";
+/**
+ * What a quest node does when it activates or completes. Each action names its
+ * own parameters, so the type says what an action takes and the editor and the
+ * runtime read the same named fields. Same shape as QuestConditionDefinition
+ * above.
+ *
+ * A reference an author has not chosen yet is null. The runtime skips an action
+ * whose reference is missing rather than guessing.
+ */
+export type QuestActionDefinition =
+  // Sets a runtime flag. Mirrors the `hasFlag` condition.
+  | { type: "setFlag"; key: string; value?: unknown }
+  // Fires a quest event, completing any active node waiting on that name.
+  | { type: "emitEvent"; eventName: string }
+  | { type: "giveItem"; itemDefinitionId: string | null; count: number }
+  | { type: "removeItem"; itemDefinitionId: string | null; count: number }
+  // Plan 058 §058.5 -- Scene progression. `unlockScene` adds the Scene to
+  // campaign.progression's manual unlocks; `advanceToNextScene` completes the
+  // current Scene and moves the player into `sceneId`, or into the next Scene
+  // by order when it is null.
+  | { type: "unlockScene"; sceneId: string | null }
+  | { type: "advanceToNextScene"; sceneId: string | null }
+  | { type: "playCue"; cueDefinitionId: string | null }
+  // Plays one of the NPC's bound animation slots `repeatCount` times through,
+  // then hands the NPC back to its normal locomotion animation. Every presence
+  // of that NPC in the scene plays.
+  | {
+      type: "playAnimation";
+      npcDefinitionId: string | null;
+      slot: NPCAnimationSlot | null;
+      repeatCount: number;
+    }
+  // Plan 074 §074.1' -- Beat-driven world clock.
+  | { type: "set-time-of-day"; band: TimeOfDayBand }
+  | { type: "advance-day" }
+  // Plan 074 §074.5 -- Player-known-facts. `factId` is the dedup key and
+  // `displayText` is what the player reads. Quest actions only, no dialogue
+  // node surface.
+  | { type: "learn-fact"; factId: string | null; displayText: string };
 
-export interface QuestActionDefinition {
-  type: QuestActionType;
-  targetId?: string;
-  value?: unknown;
-  position?: [number, number, number];
+/**
+ * Three actions this list deliberately does not have, and what to do instead.
+ *
+ * - Playing a world-space effect. There is no effect system to route one to.
+ *   Add the action back alongside one, when a story beat needs an authored
+ *   effect at a place -- sparkles over the shrine as an offering node
+ *   completes, say -- and it can answer whether the effect anchors to a world
+ *   position or to an NPC or asset. Unrelated and staying: the `vfx-spawn`
+ *   gameplay placement kind and the content library's `vfx` definition kind.
+ * - Walking an NPC somewhere. That is the behavior system's: author the NPC a
+ *   task with a target area and an activation.
+ * - Flipping an NPC between scripted and agentified. #207 gives that a
+ *   purpose-named action with defined semantics.
+ * - Putting an NPC somewhere. Place the NPC twice and condition each placement
+ *   on the quest state that should reveal it -- including "after node Z", which
+ *   the activation grammar evaluates. The placement that matches is the one in
+ *   the world, so the NPC is simply where the story says, with no instant move
+ *   to author and no walking route to unwind.
+ * - A `custom` escape hatch. There is nothing to escape to: no plugin
+ *   contribution kind is a quest action handler, and `setActionHandler` has one
+ *   implementer, owned by the host. `emitEvent` already covers "fire a named
+ *   thing and let whatever is listening react". Plugin-authored actions would
+ *   be a real feature -- a contribution kind, a registry keyed by action name,
+ *   and an editor that asks the plugin what parameters it takes -- and a
+ *   purpose-named member added then beats one kept warm now.
+ */
+
+export type QuestActionType = QuestActionDefinition["type"];
+
+/**
+ * What an author reads in the action picker, one label per action type.
+ * The Record is exhaustive over QuestActionType, so adding a member to the
+ * union without a label here fails the typecheck. Key order is picker order.
+ */
+const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
+  setFlag: "Set Flag",
+  emitEvent: "Emit Event",
+  giveItem: "Give Item",
+  removeItem: "Remove Item",
+  unlockScene: "Unlock Scene",
+  advanceToNextScene: "Advance to Next Scene",
+  "set-time-of-day": "Set Time of Day",
+  "advance-day": "Advance Day",
+  "learn-fact": "Learn Fact",
+  playCue: "Play Cue",
+  playAnimation: "Play Animation"
+};
+
+/**
+ * The one list every quest action picker in Studio renders. It is built from
+ * the label Record, so it covers every action type the runtime can be handed.
+ */
+export const QUEST_ACTION_TYPE_OPTIONS: Array<{
+  value: QuestActionType;
+  label: string;
+}> = Object.entries(QUEST_ACTION_TYPE_LABELS).map(([value, label]) => ({
+  // Object.entries widens the key to string. The Record is keyed by
+  // QuestActionType, so every key is one.
+  value: value as QuestActionType,
+  label
+}));
+
+/**
+ * An action of the given type with nothing chosen yet. The editor uses this
+ * when an author adds an action, and the normalizer when it reads one whose
+ * fields are missing.
+ */
+export function createQuestAction(type: QuestActionType): QuestActionDefinition {
+  switch (type) {
+    case "setFlag":
+      return { type, key: "" };
+    case "emitEvent":
+      return { type, eventName: "" };
+    case "giveItem":
+    case "removeItem":
+      return { type, itemDefinitionId: null, count: 1 };
+    case "unlockScene":
+    case "advanceToNextScene":
+      return { type, sceneId: null };
+    case "playCue":
+      return { type, cueDefinitionId: null };
+    case "playAnimation":
+      return { type, npcDefinitionId: null, slot: null, repeatCount: 1 };
+    case "set-time-of-day":
+      return { type, band: "morning" };
+    case "learn-fact":
+      return { type, factId: null, displayText: "" };
+    case "advance-day":
+      return { type };
+    default: {
+      const exhaustive: never = type;
+      throw new Error(
+        `[quest-definition] createQuestAction has no shape for action type "${String(exhaustive)}". Add one beside the variant.`
+      );
+    }
+  }
 }
 
 export interface QuestNodeGraphPosition {
@@ -85,6 +233,14 @@ export interface QuestNodeDefinition {
   objectiveSubtype?: QuestObjectiveSubtype;
   narrativeSubtype?: QuestNarrativeSubtype;
   targetId?: string;
+  /**
+   * The area a `location` objective completes on. The player entering it, or
+   * any area nested inside it, completes the node.
+   *
+   * Named rather than folded into `targetId`, which already means an item id,
+   * an NPC id or a spell id depending on the subtype.
+   */
+  targetAreaId?: string;
   count?: number;
   optional?: boolean;
   dialogueDefinitionId?: string;
@@ -142,7 +298,6 @@ export interface QuestDefinition {
   startStageId: string;
   stageDefinitions: QuestStageDefinition[];
   rewardDefinitions: QuestRewardDefinition[];
-  repeatable: boolean;
 }
 
 export const DEFAULT_QUEST_NODE_POSITION: QuestNodeGraphPosition = {
@@ -253,7 +408,6 @@ export function createDefaultQuestDefinition(
     startStageId: defaultStage.stageId,
     stageDefinitions: [defaultStage],
     rewardDefinitions: [],
-    repeatable: false
   };
 }
 
@@ -268,18 +422,128 @@ function normalizeQuestCondition(
   return condition;
 }
 
-function normalizeQuestAction(
-  action: Partial<QuestActionDefinition> | null | undefined
-): QuestActionDefinition | null {
-  if (!action?.type) return null;
-  return {
-    type: action.type,
-    targetId: action.targetId ?? undefined,
-    value: action.value,
-    position: action.position
-      ? [action.position[0], action.position[1], action.position[2]]
-      : undefined
-  };
+const QUEST_ACTION_TYPES = new Set<string>(
+  Object.keys(QUEST_ACTION_TYPE_LABELS)
+);
+
+function isNpcAnimationSlot(value: unknown): value is NPCAnimationSlot {
+  return value === "idle" || value === "walk" || value === "run";
+}
+
+/** A count of at least 1, from a number, a numeric string, or nothing. */
+function normalizeActionCount(value: unknown): number {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim().length > 0
+        ? Number(value)
+        : NaN;
+  return Number.isFinite(numeric) ? Math.max(1, Math.floor(numeric)) : 1;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+/**
+ * Reads an action from a project file into its variant.
+ *
+ * Actions written before each type declared its own parameters carry a single
+ * `targetId` that meant something different per type, plus a `value` that meant
+ * a count, a flag value, or display text. Each case below reads its named field
+ * and falls back to those, so an older project keeps working.
+ */
+function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
+  if (!action || typeof action !== "object") return null;
+  const source = action as Record<string, unknown>;
+  const rawType = source.type;
+  if (typeof rawType !== "string" || !QUEST_ACTION_TYPES.has(rawType)) {
+    return null;
+  }
+  // QUEST_ACTION_TYPES is built from the label Record's keys, so a string it
+  // contains is a QuestActionType.
+  const type = rawType as QuestActionType;
+
+  // `targetId` was the one reference field every action shared.
+  const legacyTargetId = readString(source.targetId);
+
+  switch (type) {
+    case "setFlag":
+      return {
+        type: "setFlag",
+        key: readString(source.key) ?? legacyTargetId ?? "",
+        value: source.value
+      };
+    case "emitEvent":
+      return {
+        type: "emitEvent",
+        eventName: readString(source.eventName) ?? legacyTargetId ?? ""
+      };
+    case "giveItem":
+    case "removeItem":
+      return {
+        type,
+        itemDefinitionId: readString(source.itemDefinitionId) ?? legacyTargetId,
+        count: normalizeActionCount(
+          source.count !== undefined ? source.count : source.value
+        )
+      };
+    case "unlockScene":
+    case "advanceToNextScene":
+      return {
+        type,
+        sceneId: readString(source.sceneId) ?? legacyTargetId
+      };
+    case "playCue":
+      return {
+        type: "playCue",
+        cueDefinitionId: readString(source.cueDefinitionId) ?? legacyTargetId
+      };
+    case "playAnimation": {
+      const slot = readString(source.slot);
+      return {
+        type: "playAnimation",
+        npcDefinitionId: readString(source.npcDefinitionId) ?? legacyTargetId,
+        slot: isNpcAnimationSlot(slot) ? slot : null,
+        repeatCount: normalizeActionCount(source.repeatCount)
+      };
+    }
+    case "set-time-of-day": {
+      const band = readString(source.band) ?? legacyTargetId;
+      return {
+        type: "set-time-of-day",
+        band: isTimeOfDayBand(band) ? band : "morning"
+      };
+    }
+    case "learn-fact":
+      return {
+        type: "learn-fact",
+        factId: readString(source.factId) ?? legacyTargetId,
+        displayText:
+          readString(source.displayText) ??
+          (typeof source.value === "string" ? source.value : "")
+      };
+    case "advance-day":
+      return { type };
+    default: {
+      const exhaustive: never = type;
+      void exhaustive;
+      return null;
+    }
+  }
+}
+
+/**
+ * `custom` was this subtype's name before it said what it does. An objective
+ * authored under the old name is an awaitEvent objective.
+ */
+function normalizeObjectiveSubtype(
+  value: unknown
+): QuestObjectiveSubtype | undefined {
+  if (value === "custom") return "awaitEvent";
+  return typeof value === "string"
+    ? (value as QuestObjectiveSubtype)
+    : undefined;
 }
 
 export function normalizeQuestNodeDefinition(
@@ -299,13 +563,15 @@ export function normalizeQuestNodeDefinition(
     nodeBehavior,
     objectiveSubtype:
       nodeBehavior === "objective"
-        ? node.objectiveSubtype ?? defaultNode.objectiveSubtype
+        ? normalizeObjectiveSubtype(node.objectiveSubtype) ??
+          defaultNode.objectiveSubtype
         : undefined,
     narrativeSubtype:
       nodeBehavior === "narrative"
         ? node.narrativeSubtype ?? "dialogue"
         : undefined,
     targetId: node.targetId ?? undefined,
+    targetAreaId: node.targetAreaId ?? undefined,
     count: node.count ?? defaultNode.count,
     optional: node.optional ?? defaultNode.optional,
     dialogueDefinitionId: node.dialogueDefinitionId ?? undefined,
@@ -405,6 +671,5 @@ export function normalizeQuestDefinition(
     rewardDefinitions: (definition.rewardDefinitions ?? [])
       .map((reward) => normalizeQuestRewardDefinition(reward))
       .filter((reward): reward is QuestRewardDefinition => reward !== null),
-    repeatable: definition.repeatable ?? defaultDefinition.repeatable
   };
 }

@@ -7,7 +7,8 @@
  *   - emitPlacementCompleted
  *
  * Relationships:
- *   - Will be consumed by the placement flow orchestrator and quest adapter once Epic 11 lands.
+ *   - Consumed by runtime-services (emitPlacementCompleted), the quest node
+ *     event hint, and editor support.
  *   - Feeds Blackboard fact updates and quest completion signals.
  *
  * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract

@@ -25,9 +25,17 @@ export interface RegionConditionQuestState {
 }
 
 export interface RegionConditionContext {
-  activeQuest: RegionConditionQuestState | null;
+  /**
+   * Every quest in progress, with the stage it is on. A binding is satisfied
+   * when ANY of them matches -- not the one the player has selected in their
+   * journal, which is a display choice and must not decide where NPCs stand or
+   * which doors open.
+   */
+  activeQuests: RegionConditionQuestState[];
   /** Truthy when the world flag `key` holds `value` (value omitted => any). */
   hasWorldFlag?: (key: string, value?: unknown) => boolean;
+  /** Truthy when that quest node has been completed at any point. */
+  isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean;
 }
 
 /**
@@ -85,17 +93,30 @@ export function evaluateRegionQuestBinding(
   binding: RegionBehaviorQuestBinding,
   context: RegionConditionContext
 ): boolean {
-  if (
-    binding.questDefinitionId &&
-    context.activeQuest?.questDefinitionId !== binding.questDefinitionId
-  ) {
-    return false;
+  // Both quest clauses are checked against the SAME quest. Checking them
+  // separately would let quest X from one active quest and a stage from
+  // another jointly satisfy a binding that neither satisfies.
+  if (binding.questDefinitionId || binding.questStageId) {
+    const matched = context.activeQuests.some(
+      (quest) =>
+        (!binding.questDefinitionId ||
+          quest.questDefinitionId === binding.questDefinitionId) &&
+        (!binding.questStageId || quest.stageId === binding.questStageId)
+    );
+    if (!matched) {
+      return false;
+    }
   }
-  if (
-    binding.questStageId &&
-    context.activeQuest?.stageId !== binding.questStageId
-  ) {
-    return false;
+  if (binding.nodeCompleted) {
+    if (
+      !context.isNodeCompleted ||
+      !context.isNodeCompleted(
+        binding.nodeCompleted.questDefinitionId,
+        binding.nodeCompleted.nodeId
+      )
+    ) {
+      return false;
+    }
   }
   if (binding.worldFlagEquals?.key) {
     if (!context.hasWorldFlag) {

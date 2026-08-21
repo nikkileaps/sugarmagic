@@ -298,7 +298,6 @@ export function createTestSceneAuthoringContext(
         displayName: "Investigate the Ethereal Altar",
         description: "Find the strange altar in the station.",
         startStageId: "stage-1",
-        repeatable: false,
         rewardDefinitions: [],
         stageDefinitions: [
           {

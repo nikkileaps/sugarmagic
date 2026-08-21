@@ -21,6 +21,16 @@
 import { createUuid } from "../shared/identity";
 
 export type NPCAnimationSlot = "idle" | "walk" | "run";
+
+/**
+ * What an author reads for each animation slot. Exhaustive over
+ * NPCAnimationSlot, so adding a slot without a label fails the typecheck.
+ */
+export const NPC_ANIMATION_SLOT_LABELS: Record<NPCAnimationSlot, string> = {
+  idle: "Idle",
+  walk: "Walk",
+  run: "Run"
+};
 export type NPCInteractionMode = "scripted" | "agent";
 
 export interface NPCAnimationBindings {

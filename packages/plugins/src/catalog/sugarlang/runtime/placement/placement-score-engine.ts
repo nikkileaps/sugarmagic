@@ -9,7 +9,7 @@
  *
  * Relationships:
  *   - Depends on the plugin-owned placement questionnaire assets.
- *   - Will be consumed by the placement flow orchestrator in Epic 11.
+ *   - Consumed by runtime-services.
  *
  * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
  *

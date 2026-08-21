@@ -8,7 +8,7 @@
  *   - notifySugarlangQuestEvent
  *
  * Relationships:
- *   - Will be consumed by the placement completion path once Epic 11 lands.
+ *   - Consumed by the placement completion path.
  *   - Keeps quest integration isolated from the rest of the plugin runtime.
  *
  * Implements: Proposal 001 §Placement Interaction Contract

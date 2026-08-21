@@ -144,18 +144,19 @@ runtime inventory and caster.
   the node (plus stage `entryNodeIds` and branch `failTargetNodeIds`);
   there is no separate edge entity.
 - **Node behaviors:** `objective` (subtypes talk / location / collect /
-  trigger / castSpell / assessment / custom), `narrative` (subtypes
-  voiceover / dialogue / cutscene / event), `condition` (completes when its
-  `QuestConditionDefinition` becomes true), `branch` (evaluates its
-  condition immediately; fail activates `failTargetNodeIds`).
+  castSpell / assessment / awaitEvent), `narrative` (subtypes voiceover /
+  dialogue / cutscene, of which only dialogue does anything yet),
+  `condition` (completes when its `QuestConditionDefinition` becomes true),
+  `branch` (evaluates its condition immediately; fail activates
+  `failTargetNodeIds`).
 - **Conditions:** hasFlag / hasSpell / canCastSpell / questActive /
   questCompleted / questStage / not. No and/or combinators.
 - **Actions:** `onEnterActions` / `onCompleteActions` lists of
-  `QuestActionDefinition` (setFlag, giveItem, removeItem, emitEvent,
-  unlockScene, advanceToNextScene, set-time-of-day, advance-day,
-  learn-fact are consumed at runtime; playSound, spawnVfx, teleportNpc,
-  moveNpc, setNpcState are authorable but currently have no runtime
-  consumer).
+  `QuestActionDefinition`, a discriminated union on `type` where each
+  variant declares its own named fields: setFlag, emitEvent, giveItem,
+  removeItem, unlockScene, advanceToNextScene, set-time-of-day,
+  advance-day, learn-fact, playCue, playAnimation. Every one is consumed
+  at runtime.
 - Nodes carry `graphPosition` for the quest graph editor, `showInHud`,
   `optional`, `eventName` (named completion event), and for talk/dialogue
   nodes a `dialogueDefinitionId` + `completeOn`.

@@ -29,6 +29,7 @@ import {
   type ContentLibrarySnapshot,
   type ItemDefinition,
   type MechanicsDefinition,
+  type NPCAnimationSlot,
   type NPCDefinition,
   type PlayerDefinition,
   type QuestDefinition,
@@ -103,7 +104,11 @@ import {
   type CollisionWorld
 } from "../collision";
 import type { NavMeshPathfinder } from "../navmesh";
-import { resolveWorldFlagWriteValue, evaluateRegionQuestBinding } from "../region-conditions";
+import {
+  resolveWorldFlagWriteValue,
+  evaluateRegionQuestBinding,
+  type RegionConditionContext
+} from "../region-conditions";
 import {
   createRuntimeQuestJournal,
   createRuntimeQuestNotificationCenter,
@@ -156,7 +161,7 @@ import {
   type RuntimeBlackboard
 } from "../state";
 import { PlayerControlled } from "../ecs";
-import { buildLocationReference } from "../spatial";
+import { buildLocationReference, isRegionAreaDescendant } from "../spatial";
 import { createRuntimeSpatialResolverSystem } from "../spatial/system";
 import {
   createWorldTimeStore,
@@ -215,6 +220,16 @@ export interface RuntimeGameplaySessionControllerOptions {
   onSceneAction?: (action: {
     type: "unlockScene" | "advanceToNextScene";
     sceneId: string | null;
+  }) => void;
+  /**
+   * Plays one of an NPC's bound animation slots as a one-shot, on every
+   * presence of that NPC. The mixer lives in the host, so the quest action
+   * handler forwards here rather than reaching for it.
+   */
+  onPlayNpcAnimation?: (request: {
+    npcDefinitionId: string;
+    slot: NPCAnimationSlot;
+    repeatCount: number;
   }) => void;
   /**
    * Plan 059 §059.1 — the background-music sound cue to start at
@@ -738,7 +753,8 @@ export function createRuntimeGameplaySessionController(
       audioController.playCue({
         cueDefinitionId: trigger.action.audioCueId,
         instanceKey,
-        position: volume.bounds.center
+        position: volume.bounds.center,
+        source: `trigger volume "${volume.volumeId}"`
       });
     }
     const flag = trigger.action.setWorldFlag;
@@ -1393,13 +1409,13 @@ export function createRuntimeGameplaySessionController(
     debugBillboardBindings.delete(entry.entity);
   }
 
-  function buildPresenceQuestContext() {
-    const trackedQuest = questManager.getTrackedQuest();
+  function buildPresenceQuestContext(): RegionConditionContext {
     return {
-      activeQuest: trackedQuest
-        ? { questDefinitionId: trackedQuest.questDefinitionId, stageId: trackedQuest.stageId }
-        : null,
-      hasWorldFlag: (key: string, value: boolean) => questManager.hasFlag(key, value)
+      activeQuests: questManager.getActiveQuestStates(),
+      hasWorldFlag: (key: string, value?: unknown) =>
+        questManager.hasFlag(key, value),
+      isNodeCompleted: (questDefinitionId: string, nodeId: string) =>
+        questManager.isNodeCompleted(questDefinitionId, nodeId)
     };
   }
 
@@ -1952,66 +1968,106 @@ export function createRuntimeGameplaySessionController(
   questManager.setCanCastSpellProvider(
     (spellDefinitionId) => casterManager.canCastSpell(spellDefinitionId).canCast
   );
-  questManager.setNarrativeHandler((node) => {
-    if (node.narrativeSubtype === "dialogue" && node.dialogueDefinitionId) {
-      void dialogueManager.start(node.dialogueDefinitionId);
-      return;
+  // A location objective completes on the target area or anything nested
+  // inside it, so standing in the Fruit Stall satisfies an objective on the
+  // Market that contains it, however deep the nesting goes.
+  questManager.setPlayerAreaProvider((areaId) => {
+    if (!activeRegion) {
+      return false;
     }
-    if (node.eventName) {
-      questManager.notifyEvent(node.eventName);
+    const playerArea = getEntityCurrentArea(
+      blackboard,
+      playerDefinition.definitionId
+    );
+    const currentAreaId = playerArea?.area?.areaId ?? null;
+    if (!currentAreaId) {
+      return false;
+    }
+    return (
+      currentAreaId === areaId ||
+      isRegionAreaDescendant(activeRegion, currentAreaId, areaId)
+    );
+  });
+  // Only ever called for a dialogue narrative that has a dialogue attached --
+  // activateNode guards on exactly that before calling out.
+  questManager.setNarrativeHandler((node) => {
+    if (node.dialogueDefinitionId) {
+      void dialogueManager.start(node.dialogueDefinitionId);
     }
   });
   questManager.setStageTimeOfDayHandler((band) => worldTimeStore.setTimeBand(band));
-  questManager.setActionHandler((action) => {
-    const numericValue =
-      typeof action.value === "number"
-        ? action.value
-        : typeof action.value === "string" && action.value.trim().length > 0
-          ? Number(action.value)
-          : NaN;
-    const count = Number.isFinite(numericValue)
-      ? Math.max(1, Math.floor(numericValue))
-      : 1;
+  questManager.setActionHandler(({ action, questDefinitionId, stageId, nodeId }) => {
+    switch (action.type) {
+      case "giveItem":
+        if (action.itemDefinitionId) {
+          inventoryManager.addItem(action.itemDefinitionId, action.count);
+        }
+        return;
 
-    if (action.type === "giveItem" && action.targetId) {
-      inventoryManager.addItem(action.targetId, count);
-      return;
-    }
+      case "removeItem":
+        if (action.itemDefinitionId) {
+          inventoryManager.removeItem(action.itemDefinitionId, action.count);
+        }
+        return;
 
-    if (action.type === "removeItem" && action.targetId) {
-      inventoryManager.removeItem(action.targetId, count);
-      return;
-    }
+      // The instance key names the node, so two nodes playing the same cue are
+      // separate instances -- a cue set to restart or ignore-while-playing
+      // applies per node, not across the quest.
+      case "playCue":
+        audioController.playCue({
+          cueDefinitionId: action.cueDefinitionId,
+          instanceKey: `quest:${questDefinitionId}:${stageId}:${nodeId}:${action.cueDefinitionId ?? ""}`,
+          source: `quest "${questDefinitionId}" node "${nodeId}"`
+        });
+        return;
 
-    // Plan 058 §058.5 — Scene progression actions belong to the
-    // host (campaign.progression lives there), not the assembly.
-    if (
-      action.type === "unlockScene" ||
-      action.type === "advanceToNextScene"
-    ) {
-      options.onSceneAction?.({
-        type: action.type,
-        sceneId: action.targetId ?? null
-      });
-    }
+      // Plan 058 §058.5 — Scene progression actions belong to the
+      // host (campaign.progression lives there), not the assembly.
+      case "unlockScene":
+      case "advanceToNextScene":
+        options.onSceneAction?.({
+          type: action.type,
+          sceneId: action.sceneId
+        });
+        return;
 
-    if (action.type === "set-time-of-day" && action.targetId) {
-      worldTimeStore.setTimeBand(action.targetId as TimeOfDayBand);
-      return;
-    }
+      case "playAnimation":
+        if (action.npcDefinitionId && action.slot) {
+          options.onPlayNpcAnimation?.({
+            npcDefinitionId: action.npcDefinitionId,
+            slot: action.slot,
+            repeatCount: action.repeatCount
+          });
+        }
+        return;
 
-    if (action.type === "advance-day") {
-      worldTimeStore.advanceDay();
-      return;
-    }
+      case "set-time-of-day":
+        worldTimeStore.setTimeBand(action.band);
+        return;
 
-    if (
-      action.type === "learn-fact" &&
-      action.targetId &&
-      typeof action.value === "string"
-    ) {
-      playerKnownFactsStore.learnFact(action.targetId, action.value);
-      return;
+      case "advance-day":
+        worldTimeStore.advanceDay();
+        return;
+
+      case "learn-fact":
+        if (action.factId && action.displayText) {
+          playerKnownFactsStore.learnFact(action.factId, action.displayText);
+        }
+        return;
+
+      // QuestManager handles these before the handler is called.
+      case "setFlag":
+      case "emitEvent":
+        return;
+
+      default: {
+        const exhaustive: never = action;
+        console.warn(
+          "[runtime-core] unhandled quest action",
+          exhaustive,
+          { questDefinitionId, nodeId }
+        );
+      }
     }
   });
   questManager.setStateChangeHandler(() => {
@@ -2362,6 +2418,8 @@ export function createRuntimeGameplaySessionController(
           })
         ),
       hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+      isNodeCompleted: (questDefinitionId, nodeId) =>
+        questManager.isNodeCompleted(questDefinitionId, nodeId),
       // Plan 069.9 — NPCs follow the baked navmesh (host loads it async).
       // DEFERRED (079): if an NPC that was pathfinding toward a conditional
       // containment gate becomes absent (condition clears), its in-flight
@@ -2458,32 +2516,23 @@ export function createRuntimeGameplaySessionController(
     startInitialQuests: () => questDialogueCoordinator.startInitialQuests(),
     update(deltaSeconds = 1 / 60) {
       blackboard.advanceFrame();
-      const trackedQuest = questManager.getTrackedQuest();
+      // Which NPCs are where and which doors are passable follow EVERY quest
+      // in progress, not the one the player has selected in their journal.
+      const activeQuests = questManager.getActiveQuestStates();
       // Plan 069.5 — re-evaluate conditional containment gates against the
       // current quest/flag state BEFORE any move resolves this frame (NPC
       // sync here; the player CollisionSystem reads the same world next tick).
       if (sharedCollisionWorld.gates.length > 0) {
         applyVolumeColliderGates(sharedCollisionWorld, {
-          activeQuest: trackedQuest
-            ? {
-                questDefinitionId: trackedQuest.questDefinitionId,
-                stageId: trackedQuest.stageId
-              }
-            : null,
-          hasWorldFlag: (key, value) => questManager.hasFlag(key, value)
+          activeQuests,
+          hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+          isNodeCompleted: (questDefinitionId, nodeId) =>
+            questManager.isNodeCompleted(questDefinitionId, nodeId)
         });
       }
       // Plan 079.2 -- reconcile conditional NPC presences each frame.
       reconcileNpcPresences();
-      npcBehaviorSystem?.sync({
-        deltaSeconds,
-        activeQuest: trackedQuest
-          ? {
-              questDefinitionId: trackedQuest.questDefinitionId,
-              stageId: trackedQuest.stageId
-            }
-          : null
-      });
+      npcBehaviorSystem?.sync({ deltaSeconds, activeQuests });
       syncBlackboardSpatialFacts();
       syncBlackboardQuestFacts();
       spellMenuUi.update();

@@ -104,7 +104,6 @@ describe("an empty quest stage at runtime", () => {
         startStageId: "empty",
         stageDefinitions: [{ ...emptyStage, nextStageId: "final" }, finalStage],
         rewardDefinitions: [],
-        repeatable: false
       }
     ]);
 
@@ -138,7 +137,6 @@ describe("an empty quest stage at runtime", () => {
           { ...second, nextStageId: "a" }
         ],
         rewardDefinitions: [],
-        repeatable: false
       }
     ]);
 

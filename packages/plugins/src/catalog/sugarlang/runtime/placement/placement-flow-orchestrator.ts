@@ -9,7 +9,8 @@
  *
  * Relationships:
  *   - Depends on the placement score engine and questionnaire loader.
- *   - Will be consumed by the context middleware and placement UI in Epic 11.
+ *   - Consumed by runtime-services (buildPlacementCompletionEvent) and the
+ *     context middleware (getPlacementQuestionnaireVersion).
  *
  * Implements: Proposal 001 §Cold Start Sequence / §Placement Interaction Contract
  *

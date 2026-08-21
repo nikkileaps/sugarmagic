@@ -221,7 +221,6 @@ describe("compileSugarlangScene", () => {
           displayName: "Find Another Altar",
           description: "",
           startStageId: "stage-2",
-          repeatable: false,
           rewardDefinitions: [],
           stageDefinitions: [
             {

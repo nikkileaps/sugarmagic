@@ -162,10 +162,10 @@ describe("runtime NPC behavior system", () => {
 
     system.sync({
       deltaSeconds: 1,
-      activeQuest: {
+      activeQuests: [{
         questDefinitionId: "quest:find-suitcase",
         stageId: "stage:arrival"
-      }
+      }]
     });
 
     expect(getEntityCurrentActivity(blackboard, "npc:rick-roll")?.activity).toBe(
@@ -209,7 +209,7 @@ describe("runtime NPC behavior system", () => {
       questDefinitionId: "quest:find-suitcase",
       stageId: "stage:arrival"
     };
-    system.sync({ deltaSeconds: 1, activeQuest });
+    system.sync({ deltaSeconds: 1, activeQuests: [activeQuest] });
 
     // The dock is at +x from the origin, and the default walk is 2.5 m/s.
     // The exact angle depends on where inside the area the target point was
@@ -221,7 +221,7 @@ describe("runtime NPC behavior system", () => {
 
     // Walk until it gets there. The dock is 10m away at 2.5 m/s.
     for (let tick = 0; tick < 20; tick += 1) {
-      system.sync({ deltaSeconds: 1, activeQuest });
+      system.sync({ deltaSeconds: 1, activeQuests: [activeQuest] });
     }
     expect(getEntityMovement(blackboard, "npc:rick-roll")?.status).toBe("at_target");
 
@@ -259,7 +259,7 @@ describe("runtime NPC behavior system", () => {
       stageId: "stage:arrival"
     };
     for (let tick = 0; tick < 30; tick += 1) {
-      system.sync({ deltaSeconds: 1, activeQuest });
+      system.sync({ deltaSeconds: 1, activeQuests: [activeQuest] });
     }
     expect(getEntityMovement(blackboard, "npc:rick-roll")?.status).toBe("at_target");
     const parked = system.getMotion("npc:rick-roll")!;
@@ -279,7 +279,7 @@ describe("runtime NPC behavior system", () => {
     for (let tick = 0; tick < 5; tick += 1) {
       player.x = position.x - 0.3 + tick * 0.05;
       player.z = position.z;
-      system.sync({ deltaSeconds: 1 / 60, activeQuest });
+      system.sync({ deltaSeconds: 1 / 60, activeQuests: [activeQuest] });
       const shoved = system.getMotion("npc:rick-roll")!;
       expect(shoved.speedMetersPerSecond).toBeLessThanOrEqual(2.5);
       if (getEntityMovement(blackboard, "npc:rick-roll")?.status === "at_target") {
@@ -314,10 +314,10 @@ describe("runtime NPC behavior system", () => {
     for (let tick = 0; tick < 400; tick += 1) {
       system.sync({
         deltaSeconds: 1 / 60,
-        activeQuest: {
+        activeQuests: [{
           questDefinitionId: "quest:find-suitcase",
           stageId: "stage:arrival"
-        }
+        }]
       });
       expect(system.getMotion("npc:rick-roll")!.speedMetersPerSecond).toBeLessThanOrEqual(
         2.5
@@ -345,7 +345,7 @@ describe("runtime NPC behavior system", () => {
 
     // No quest active, so the fixture falls through to `task:idle`, which has
     // no target area.
-    system.sync({ deltaSeconds: 1, activeQuest: null });
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
 
     expect(system.getMotion("npc:rick-roll")).toEqual({
       speedMetersPerSecond: 0,
@@ -377,10 +377,10 @@ describe("runtime NPC behavior system", () => {
     for (let index = 0; index < 10; index += 1) {
       system.sync({
         deltaSeconds: 1,
-        activeQuest: {
+        activeQuests: [{
           questDefinitionId: "quest:find-suitcase",
           stageId: "stage:arrival"
-        }
+        }]
       });
     }
 
@@ -390,10 +390,10 @@ describe("runtime NPC behavior system", () => {
     for (let index = 0; index < 10; index += 1) {
       system.sync({
         deltaSeconds: 1,
-        activeQuest: {
+        activeQuests: [{
           questDefinitionId: "quest:find-suitcase",
           stageId: "stage:search"
-        }
+        }]
       });
     }
 
@@ -433,10 +433,10 @@ describe("runtime NPC behavior system", () => {
 
     system.sync({
       deltaSeconds: 1,
-      activeQuest: {
+      activeQuests: [{
         questDefinitionId: "quest:find-suitcase",
         stageId: "stage:arrival"
-      }
+      }]
     });
 
     expect(getEntityCurrentActivity(blackboard, "npc:rick-roll")?.activity).toBe("waiting");
@@ -470,19 +470,19 @@ describe("runtime NPC behavior system", () => {
 
     system.sync({
       deltaSeconds: 0,
-      activeQuest: {
+      activeQuests: [{
         questDefinitionId: "quest:find-suitcase",
         stageId: "stage:arrival"
-      }
+      }]
     });
 
     currentTimeMs = 3000;
     system.sync({
       deltaSeconds: 0,
-      activeQuest: {
+      activeQuests: [{
         questDefinitionId: "quest:find-suitcase",
         stageId: "stage:arrival"
-      }
+      }]
     });
 
     expect(getEntityMovement(blackboard, "npc:rick-roll")?.status).toBe("blocked");
@@ -490,10 +490,10 @@ describe("runtime NPC behavior system", () => {
     currentTimeMs = 6000;
     system.sync({
       deltaSeconds: 1,
-      activeQuest: {
+      activeQuests: [{
         questDefinitionId: "quest:find-suitcase",
         stageId: "stage:arrival"
-      }
+      }]
     });
 
     expect(getEntityMovement(blackboard, "npc:rick-roll")?.status).toBe("en_route");
@@ -555,10 +555,10 @@ describe("runtime NPC behavior system", () => {
     for (let index = 0; index < 10; index += 1) {
       system.sync({
         deltaSeconds: 1,
-        activeQuest: {
+        activeQuests: [{
           questDefinitionId: "quest:find-suitcase",
           stageId: "stage:a"
-        }
+        }]
       });
     }
 
@@ -570,10 +570,10 @@ describe("runtime NPC behavior system", () => {
     for (let index = 0; index < 10; index += 1) {
       system.sync({
         deltaSeconds: 1,
-        activeQuest: {
+        activeQuests: [{
           questDefinitionId: "quest:find-suitcase",
           stageId: "stage:b"
-        }
+        }]
       });
     }
 
@@ -608,10 +608,10 @@ describe("runtime NPC behavior system", () => {
 
     system.sync({
       deltaSeconds: 1,
-      activeQuest: {
+      activeQuests: [{
         questDefinitionId: "quest:find-suitcase",
         stageId: "stage:arrival"
-      }
+      }]
     });
 
     const secondEntity = world.createEntity();
@@ -624,10 +624,10 @@ describe("runtime NPC behavior system", () => {
 
     const result = system.sync({
       deltaSeconds: 1,
-      activeQuest: {
+      activeQuests: [{
         questDefinitionId: "quest:find-suitcase",
         stageId: "stage:arrival"
-      }
+      }]
     });
 
     expect(result.snapshots).toHaveLength(2);
@@ -663,7 +663,7 @@ describe("runtime NPC behavior system", () => {
 
     system.sync({
       deltaSeconds: 1,
-      activeQuest: { questDefinitionId: "quest:find-suitcase", stageId: "stage:arrival" }
+      activeQuests: [{ questDefinitionId: "quest:find-suitcase", stageId: "stage:arrival" }]
     });
 
     const position = world.getComponent(entity, Position);
@@ -692,7 +692,7 @@ describe("runtime NPC behavior system", () => {
 
     system.sync({
       deltaSeconds: 1,
-      activeQuest: { questDefinitionId: "quest:find-suitcase", stageId: "stage:arrival" }
+      activeQuests: [{ questDefinitionId: "quest:find-suitcase", stageId: "stage:arrival" }]
     });
 
     const position = world.getComponent(entity, Position);
@@ -751,7 +751,7 @@ describe("069.3 — NPC collision-context adapter (commitNpcMove)", () => {
       agents: []
     });
     for (let i = 0; i < 20; i += 1) {
-      system.sync({ deltaSeconds: 0.1, activeQuest: arrival });
+      system.sync({ deltaSeconds: 0.1, activeQuests: [arrival] });
     }
     const pos = world.getComponent(entity, Position)!;
     expect(pos.x).toBeLessThan(2); // pinned at the wall face, never crossed
@@ -768,8 +768,8 @@ describe("069.3 — NPC collision-context adapter (commitNpcMove)", () => {
       agents: [{ id: "p:rick", x: 0, z: 0, radius: 0.35 }] // itself only
     });
     const control = makeCollisionSystem(null);
-    withSelf.system.sync({ deltaSeconds: 1, activeQuest: arrival });
-    control.system.sync({ deltaSeconds: 1, activeQuest: arrival });
+    withSelf.system.sync({ deltaSeconds: 1, activeQuests: [arrival] });
+    control.system.sync({ deltaSeconds: 1, activeQuests: [arrival] });
     const a = withSelf.world.getComponent(withSelf.entity, Position)!;
     const b = control.world.getComponent(control.entity, Position)!;
     expect(a.x).toBeCloseTo(b.x, 6);
@@ -783,7 +783,7 @@ describe("069.3 — NPC collision-context adapter (commitNpcMove)", () => {
       world: createEmptyCollisionWorld(),
       agents: [other]
     });
-    system.sync({ deltaSeconds: 1, activeQuest: arrival });
+    system.sync({ deltaSeconds: 1, activeQuests: [arrival] });
     const pos = world.getComponent(entity, Position)!;
     // Separated by at least combined radii (0.4 + DEFAULT 0.35).
     expect(Math.hypot(pos.x - other.x, pos.z - other.z)).toBeGreaterThanOrEqual(
@@ -839,7 +839,7 @@ describe("069.9 — path-following state machine across frames", () => {
     const { pf, calls } = detourPathfinder();
     const { system, blackboard } = makeSystem(pf);
     for (let i = 0; i < 30; i += 1) {
-      system.sync({ deltaSeconds: 1, activeQuest: arrival });
+      system.sync({ deltaSeconds: 1, activeQuests: [arrival] });
     }
     // Reached the authored area via the mesh, and the route was computed ONCE
     // (followed, not re-pathed every frame).
@@ -852,24 +852,24 @@ describe("069.9 — path-following state machine across frames", () => {
   it("re-paths when collision shoves the NPC off its route (drift)", () => {
     const { pf, calls } = detourPathfinder();
     const { system, world, entity } = makeSystem(pf);
-    system.sync({ deltaSeconds: 0.1, activeQuest: arrival });
+    system.sync({ deltaSeconds: 0.1, activeQuests: [arrival] });
     expect(calls()).toBe(1);
     // Teleport far off the current waypoint (> REPATH_DRIFT_METERS).
     const pos = world.getComponent(entity, Position)!;
     pos.z = 60;
-    system.sync({ deltaSeconds: 0.1, activeQuest: arrival });
+    system.sync({ deltaSeconds: 0.1, activeQuests: [arrival] });
     expect(calls()).toBeGreaterThanOrEqual(2);
   });
 
   it("re-paths when the task target moves (arrival stage -> search stage)", () => {
     const { pf, calls } = detourPathfinder();
     const { system, blackboard } = makeSystem(pf);
-    system.sync({ deltaSeconds: 0.1, activeQuest: arrival }); // -> dock
+    system.sync({ deltaSeconds: 0.1, activeQuests: [arrival] }); // -> dock
     expect(calls()).toBe(1);
     // stage:search activates task:shop -> target area changes to "shop".
     system.sync({
       deltaSeconds: 0.1,
-      activeQuest: { questDefinitionId: "quest:find-suitcase", stageId: "stage:search" }
+      activeQuests: [{ questDefinitionId: "quest:find-suitcase", stageId: "stage:search" }]
     });
     expect(calls()).toBeGreaterThanOrEqual(2);
     expect(getEntityMovement(blackboard, "npc:rick-roll")?.targetAreaId).toBe(
@@ -964,7 +964,7 @@ describe("time-window task gating (074.4)", () => {
       npcEntities: [{ presenceId: "p1", npcDefinitionId: "npc:dawn-dweller", entity }]
     });
 
-    system.sync({ deltaSeconds: 1, activeQuest: null });
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
 
     expect(system.getCurrentTask("npc:dawn-dweller")?.taskId).toBe("task:morning-work");
     expect(getEntityCurrentActivity(blackboard, "npc:dawn-dweller")?.activity).toBe("working");
@@ -985,7 +985,7 @@ describe("time-window task gating (074.4)", () => {
       npcEntities: [{ presenceId: "p1", npcDefinitionId: "npc:dawn-dweller", entity }]
     });
 
-    system.sync({ deltaSeconds: 1, activeQuest: null });
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
 
     expect(system.getCurrentTask("npc:dawn-dweller")?.taskId).toBe("task:evening-rest");
     expect(getEntityCurrentActivity(blackboard, "npc:dawn-dweller")?.activity).toBe("idle");
@@ -1007,7 +1007,7 @@ describe("time-window task gating (074.4)", () => {
       npcEntities: [{ presenceId: "p1", npcDefinitionId: "npc:dawn-dweller", entity }]
     });
 
-    system.sync({ deltaSeconds: 1, activeQuest: null });
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
 
     // No task matches: taskId is null; NPC falls to idle.
     expect(system.getCurrentTask("npc:dawn-dweller")?.taskId).toBeNull();
@@ -1043,8 +1043,145 @@ describe("time-window task gating (074.4)", () => {
       npcEntities: [{ presenceId: "p1", npcDefinitionId: "npc:dawn-dweller", entity }]
     });
 
-    system.sync({ deltaSeconds: 1, activeQuest: null });
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
 
     expect(system.getCurrentTask("npc:dawn-dweller")?.taskId).toBe("task:always");
+  });
+
+  it("keeps a task active while the player follows a different quest", () => {
+    // Which quest the player has selected in their journal is a display
+    // choice. A task bound to quest X must not switch off because the player
+    // started following quest Y.
+    const region = makeRegion();
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      hasWorldFlag: (key, value) => key === "airship_arrived" && value === true,
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    const suitcase = {
+      questDefinitionId: "quest:find-suitcase",
+      stageId: "stage:arrival"
+    };
+    const other = { questDefinitionId: "quest:something-else", stageId: "stage:one" };
+
+    system.sync({ deltaSeconds: 1, activeQuests: [suitcase] });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:delivery");
+
+    // Both in progress. The order is the journal's, not the binding's -- the
+    // task stays on whichever active quest satisfies it.
+    system.sync({ deltaSeconds: 1, activeQuests: [other, suitcase] });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:delivery");
+
+    // Only when its own quest stops being in progress does it fall back.
+    system.sync({ deltaSeconds: 1, activeQuests: [other] });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:idle");
+  });
+
+  it("holds a task active after the quest that completed its node finishes", () => {
+    // The point of node-completed activation: an NPC staged by a story beat
+    // stays staged once the quest is over. Node progress itself is deleted
+    // with the quest, which is why completion is recorded separately.
+    const region = makeRegion();
+    region.behaviors[0]!.tasks.unshift({
+      taskId: "task:after-node",
+      displayName: "Hold At Dock",
+      description: "Waits at the dock once the suitcase node is done.",
+      targetAreaId: "dock",
+      currentActivity: "waiting",
+      currentGoal: "wait_for_delivery",
+      activation: {
+        questDefinitionId: null,
+        questStageId: null,
+        worldFlagEquals: null,
+        nodeCompleted: {
+          questDefinitionId: "quest:find-suitcase",
+          nodeId: "node:found-it"
+        }
+      }
+    });
+
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    let nodeDone = false;
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      isNodeCompleted: (questDefinitionId, nodeId) =>
+        nodeDone &&
+        questDefinitionId === "quest:find-suitcase" &&
+        nodeId === "node:found-it",
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    // Node not done: the clause fails and the task is skipped.
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:idle");
+
+    // Node done: the task takes over, with no quest active at all.
+    nodeDone = true;
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:after-node");
+
+    // Still held once the quest is long finished and another is being followed.
+    system.sync({
+      deltaSeconds: 1,
+      activeQuests: [{ questDefinitionId: "quest:other", stageId: "stage:one" }]
+    });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:after-node");
+  });
+
+  it("fails closed when nothing can answer the node-completed clause", () => {
+    const region = makeRegion();
+    region.behaviors[0]!.tasks.unshift({
+      taskId: "task:after-node",
+      displayName: "Hold At Dock",
+      description: null,
+      targetAreaId: "dock",
+      currentActivity: "waiting",
+      currentGoal: "wait_for_delivery",
+      activation: {
+        questDefinitionId: null,
+        questStageId: null,
+        worldFlagEquals: null,
+        nodeCompleted: {
+          questDefinitionId: "quest:find-suitcase",
+          nodeId: "node:found-it"
+        }
+      }
+    });
+
+    const world = new World();
+    const blackboard = createRuntimeBlackboard();
+    const entity = world.createEntity();
+    world.addComponent(entity, new Position(0, 0, 0));
+
+    // No isNodeCompleted supplied at all.
+    const system = createRuntimeNpcBehaviorSystem({
+      region,
+      world,
+      blackboard,
+      npcEntities: [
+        { presenceId: "presence:rick-roll", npcDefinitionId: "npc:rick-roll", entity }
+      ]
+    });
+
+    system.sync({ deltaSeconds: 1, activeQuests: [] });
+    expect(system.getCurrentTask("npc:rick-roll")?.taskId).toBe("task:idle");
   });
 });

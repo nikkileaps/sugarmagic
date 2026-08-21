@@ -35,14 +35,14 @@ function buildSingleStageQuest(id: string, displayName: string) {
         ...createDefaultQuestNodeDefinition({
           displayName: "Objective A",
           description: "Do the thing",
-          objectiveSubtype: "custom"
+          objectiveSubtype: "awaitEvent"
         })
       },
       {
         ...createDefaultQuestNodeDefinition({
           displayName: "Objective B",
           description: "Do the other thing",
-          objectiveSubtype: "custom"
+          objectiveSubtype: "awaitEvent"
         })
       }
     ]
@@ -59,6 +59,95 @@ function buildSingleStageQuest(id: string, displayName: string) {
 }
 
 describe("QuestManager save slice", () => {
+  describe("completed nodes outlive their quest", () => {
+    /**
+     * A behavior task can be bound to "quest X node Z was completed", and that
+     * has to stay true after the quest finishes -- node progress itself lives
+     * inside activeQuests, which is deleted the moment a quest completes.
+     */
+    /** A quest whose two nodes each complete on their own named event. */
+    function eventDrivenQuest(id: string) {
+      const quest = buildSingleStageQuest(id, "Durable");
+      const stage = quest.stageDefinitions[0]!;
+      return {
+        quest: {
+          ...quest,
+          stageDefinitions: [
+            {
+              ...stage,
+              nodeDefinitions: stage.nodeDefinitions.map((node, index) => ({
+                ...node,
+                eventName: `done-${index}`
+              }))
+            }
+          ]
+        },
+        nodeIds: stage.nodeDefinitions.map((node) => node.nodeId),
+        finish(manager: QuestManager) {
+          manager.notifyEvent("done-0");
+          manager.notifyEvent("done-1");
+        }
+      };
+    }
+
+    it("remembers a completed node after the quest that produced it finishes", () => {
+      const { quest, nodeIds, finish } = eventDrivenQuest("quest:durable");
+      const manager = new QuestManager();
+      manager.registerDefinitions([quest]);
+      manager.startQuest("quest:durable");
+
+      finish(manager);
+
+      // The quest is over and its active state is gone...
+      expect(manager.isQuestCompleted("quest:durable")).toBe(true);
+      expect(manager.getTrackedQuest()).toBeNull();
+      // ...but what was completed is still known.
+      for (const nodeId of nodeIds) {
+        expect(manager.isNodeCompleted("quest:durable", nodeId)).toBe(true);
+      }
+    });
+
+    it("survives a save and load after the quest finished", () => {
+      const { quest, nodeIds, finish } = eventDrivenQuest("quest:durable");
+      const source = new QuestManager();
+      source.registerDefinitions([quest]);
+      source.startQuest("quest:durable");
+      finish(source);
+
+      const restored = new QuestManager();
+      restored.registerDefinitions([quest]);
+      restored.deserializeSaveSlice({
+        schemaVersion: 1,
+        data: source.serializeSaveSlice()
+      } as SaveSlice<QuestManagerSlice>);
+
+      for (const nodeId of nodeIds) {
+        expect(restored.isNodeCompleted("quest:durable", nodeId)).toBe(true);
+      }
+      expect(restored.isNodeCompleted("quest:durable", "node:never")).toBe(false);
+      expect(restored.isNodeCompleted("quest:other", nodeIds[0]!)).toBe(false);
+    });
+
+    it("restores nothing from a save written before the field existed", () => {
+      const quest = buildSingleStageQuest("quest:legacy", "Legacy");
+      const manager = new QuestManager();
+      manager.registerDefinitions([quest]);
+      manager.deserializeSaveSlice({
+        schemaVersion: 1,
+        data: {
+          activeQuests: {},
+          completedQuestIds: ["quest:legacy"],
+          trackedQuestDefinitionId: null,
+          runtimeFlags: {}
+        }
+      } as SaveSlice<QuestManagerSlice>);
+
+      expect(
+        manager.isNodeCompleted("quest:legacy", "any-node")
+      ).toBe(false);
+    });
+  });
+
   describe("serialize / deserialize round-trip", () => {
     it("preserves active quest progress across a round-trip", () => {
       const quest = buildSingleStageQuest(
@@ -119,6 +208,7 @@ describe("QuestManager save slice", () => {
       expect(manager.serializeSaveSlice()).toEqual({
         activeQuests: {},
         completedQuestIds: [],
+        completedNodeIds: {},
         trackedQuestDefinitionId: null,
         runtimeFlags: {}
       });
@@ -237,6 +327,7 @@ describe("QuestManager save slice", () => {
       expect(manager.serializeSaveSlice()).toEqual({
         activeQuests: {},
         completedQuestIds: [],
+        completedNodeIds: {},
         trackedQuestDefinitionId: null,
         runtimeFlags: {}
       });

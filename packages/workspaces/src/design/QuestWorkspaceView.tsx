@@ -47,6 +47,7 @@ import {
 import type {
   DialogueDefinition,
   ItemDefinition,
+  NPCAnimationSlot,
   NPCDefinition,
   QuestActionDefinition,
   TimeOfDayBand,
@@ -57,10 +58,15 @@ import type {
   QuestStageDefinition,
   RegionDocument,
   Scene,
+  SoundCueDefinition,
   SpellDefinition,
   SemanticCommand
 } from "@sugarmagic/domain";
 import {
+  NPC_ANIMATION_SLOT_LABELS,
+  QUEST_ACTION_TYPE_OPTIONS,
+  TIME_OF_DAY_BAND_OPTIONS,
+  createQuestAction,
   createDefaultDialogueDefinition,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
@@ -113,9 +119,8 @@ const OBJECTIVE_TYPE_ICONS: Record<string, string> = {
   talk: "💬",
   location: "📍",
   collect: "📦",
-  trigger: "⚡",
   castSpell: "🔮",
-  custom: "⭐"
+  awaitEvent: "⭐"
 };
 
 export interface QuestWorkspaceViewProps {
@@ -126,6 +131,8 @@ export interface QuestWorkspaceViewProps {
   /** Plan 058 §058.5 — Scene picker source for the
    *  unlockScene / advanceToNextScene action editors. */
   scenes: Scene[];
+  /** Cue picker source for the playCue action editor. */
+  soundCueDefinitions: SoundCueDefinition[];
   dialogueDefinitions: DialogueDefinition[];
   itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
@@ -223,6 +230,15 @@ function validateQuest(quest: QuestDefinition): string[] {
         if (!node.condition) {
           warnings.push(`Node "${node.displayName}" is missing a condition.`);
         }
+      }
+      if (
+        node.nodeBehavior === "objective" &&
+        node.objectiveSubtype === "location" &&
+        !node.targetAreaId
+      ) {
+        warnings.push(
+          `Location node "${node.displayName}" has no target area, so nothing completes it.`
+        );
       }
       if (
         node.nodeBehavior === "objective" &&
@@ -377,7 +393,7 @@ function createNextNodePosition(stage: QuestStageDefinition) {
 
 function nodeLabel(node: QuestNodeDefinition): string {
   if (node.nodeBehavior === "objective") {
-    return `${OBJECTIVE_TYPE_ICONS[node.objectiveSubtype ?? "custom"] ?? "⭐"} ${node.displayName}`;
+    return `${OBJECTIVE_TYPE_ICONS[node.objectiveSubtype ?? "awaitEvent"] ?? "⭐"} ${node.displayName}`;
   }
   if (node.nodeBehavior === "narrative") {
     return `🎬 ${node.displayName}`;
@@ -632,33 +648,284 @@ function QuestConditionEditor({
 }
 
 /**
- * Times a stage can be set at. Labels are what the author reads; the value is
- * the band id that reaches the world clock -- "Noon" stores `midday`.
- *
- * The domain also defines `dawn` and `dusk`. They are deliberately not offered
- * here, and stay reachable through the set-time-of-day quest action.
+ * Times a stage can be set at: every band except dawn and dusk, which are
+ * deliberately not offered here and stay reachable through the set-time-of-day
+ * quest action. Derived from the one band list rather than restating it.
  */
-const STAGE_TIME_OF_DAY_OPTIONS: Array<{
-  value: TimeOfDayBand;
-  label: string;
-}> = [
-  { value: "morning", label: "Morning" },
-  { value: "midday", label: "Noon" },
-  { value: "afternoon", label: "Afternoon" },
-  { value: "evening", label: "Evening" },
-  { value: "night", label: "Night" }
-];
+const STAGE_EXCLUDED_TIME_BANDS: TimeOfDayBand[] = ["dawn", "dusk"];
+const STAGE_TIME_OF_DAY_OPTIONS = TIME_OF_DAY_BAND_OPTIONS.filter(
+  (option) => !STAGE_EXCLUDED_TIME_BANDS.includes(option.value)
+);
+
+/**
+ * The parameters one action takes. Each action type declares its own fields, so
+ * this renders those and nothing else -- an action with no parameters shows no
+ * inputs rather than an empty box the author has to ignore.
+ */
+function QuestActionFields({
+  action,
+  itemDefinitions,
+  npcDefinitions,
+  scenes,
+  soundCueDefinitions,
+  onChange
+}: {
+  action: QuestActionDefinition;
+  itemDefinitions: ItemDefinition[];
+  npcDefinitions: NPCDefinition[];
+  scenes: Scene[];
+  soundCueDefinitions: SoundCueDefinition[];
+  onChange: (action: QuestActionDefinition) => void;
+}) {
+  switch (action.type) {
+    case "setFlag":
+      return (
+        <>
+          <TextInput
+            size="xs"
+            label="Flag Key"
+            value={action.key}
+            onChange={(event) =>
+              onChange({ ...action, key: event.currentTarget.value })
+            }
+          />
+          <TextInput
+            size="xs"
+            label="Value"
+            placeholder="(true)"
+            value={action.value == null ? "" : String(action.value)}
+            onChange={(event) =>
+              onChange({
+                ...action,
+                value: event.currentTarget.value || undefined
+              })
+            }
+          />
+        </>
+      );
+
+    case "emitEvent":
+      return (
+        <TextInput
+          size="xs"
+          label="Event Name"
+          value={action.eventName}
+          onChange={(event) =>
+            onChange({ ...action, eventName: event.currentTarget.value })
+          }
+        />
+      );
+
+    case "giveItem":
+    case "removeItem":
+      return (
+        <>
+          <Select
+            size="xs"
+            label="Item"
+            clearable
+            searchable
+            placeholder="Pick an item"
+            data={itemDefinitions.map((item) => ({
+              value: item.definitionId,
+              label: item.displayName
+            }))}
+            value={action.itemDefinitionId}
+            onChange={(value) =>
+              onChange({ ...action, itemDefinitionId: value })
+            }
+          />
+          <NumberInput
+            size="xs"
+            label="Count"
+            min={1}
+            value={action.count}
+            onChange={(value) =>
+              onChange({
+                ...action,
+                count: typeof value === "number" ? Math.max(1, value) : 1
+              })
+            }
+          />
+        </>
+      );
+
+    case "unlockScene":
+    case "advanceToNextScene":
+      return (
+        <Select
+          size="xs"
+          label="Scene"
+          clearable
+          placeholder={
+            action.type === "advanceToNextScene"
+              ? "(next by order)"
+              : "Pick a Scene"
+          }
+          data={scenes.map((scene) => ({
+            value: scene.sceneId,
+            label: scene.displayName
+          }))}
+          value={action.sceneId}
+          onChange={(value) => onChange({ ...action, sceneId: value })}
+        />
+      );
+
+    case "playCue":
+      return (
+        <Select
+          size="xs"
+          label="Sound Cue"
+          clearable
+          searchable
+          placeholder="Pick a cue"
+          data={soundCueDefinitions.map((cue) => ({
+            value: cue.definitionId,
+            label: cue.displayName
+          }))}
+          value={action.cueDefinitionId}
+          onChange={(value) => onChange({ ...action, cueDefinitionId: value })}
+        />
+      );
+
+    case "playAnimation": {
+      // Only the slots this NPC has a clip bound to. A slot with no clip would
+      // play nothing, so it is not offered.
+      const npc = npcDefinitions.find(
+        (candidate) => candidate.definitionId === action.npcDefinitionId
+      );
+      const boundSlots = npc
+        ? (
+            Object.entries(npc.presentation.animationAssetBindings) as Array<
+              [NPCAnimationSlot, string | null]
+            >
+          )
+            .filter(([, bindingId]) => Boolean(bindingId))
+            .map(([slot]) => slot)
+        : [];
+      return (
+        <>
+          <Select
+            size="xs"
+            label="NPC"
+            clearable
+            searchable
+            placeholder="Pick an NPC"
+            data={npcDefinitions.map((definition) => ({
+              value: definition.definitionId,
+              label: definition.displayName
+            }))}
+            value={action.npcDefinitionId}
+            onChange={(value) =>
+              // The slot list belongs to the NPC, so changing the NPC clears it.
+              onChange({ ...action, npcDefinitionId: value, slot: null })
+            }
+          />
+          <Select
+            size="xs"
+            label="Animation"
+            clearable
+            disabled={!npc}
+            placeholder={
+              !npc
+                ? "Pick an NPC first"
+                : boundSlots.length === 0
+                  ? "This NPC has no animations bound"
+                  : "Pick an animation"
+            }
+            data={boundSlots.map((slot) => ({
+              value: slot,
+              label: NPC_ANIMATION_SLOT_LABELS[slot]
+            }))}
+            value={action.slot}
+            onChange={(value) =>
+              onChange({
+                ...action,
+                slot: (value as NPCAnimationSlot | null) ?? null
+              })
+            }
+          />
+          <NumberInput
+            size="xs"
+            label="Times to Play"
+            min={1}
+            value={action.repeatCount}
+            onChange={(value) =>
+              onChange({
+                ...action,
+                repeatCount: typeof value === "number" ? Math.max(1, value) : 1
+              })
+            }
+          />
+        </>
+      );
+    }
+
+    case "set-time-of-day":
+      return (
+        <Select
+          size="xs"
+          label="Time of Day"
+          data={TIME_OF_DAY_BAND_OPTIONS}
+          value={action.band}
+          onChange={(value) => {
+            if (!value) return;
+            onChange({ ...action, band: value as TimeOfDayBand });
+          }}
+        />
+      );
+
+    case "learn-fact":
+      return (
+        <>
+          <TextInput
+            size="xs"
+            label="Fact ID"
+            value={action.factId ?? ""}
+            onChange={(event) =>
+              onChange({
+                ...action,
+                factId: event.currentTarget.value || null
+              })
+            }
+          />
+          <TextInput
+            size="xs"
+            label="Display Text"
+            value={action.displayText}
+            onChange={(event) =>
+              onChange({ ...action, displayText: event.currentTarget.value })
+            }
+          />
+        </>
+      );
+
+    // Takes no parameters.
+    case "advance-day":
+      return null;
+
+    default: {
+      const exhaustive: never = action;
+      void exhaustive;
+      return null;
+    }
+  }
+}
 
 function QuestActionsEditor({
   actions,
   itemDefinitions,
+  npcDefinitions,
   scenes,
+  soundCueDefinitions,
   onChange,
   label
 }: {
   actions: QuestActionDefinition[];
   itemDefinitions: ItemDefinition[];
+  npcDefinitions: NPCDefinition[];
   scenes: Scene[];
+  soundCueDefinitions: SoundCueDefinition[];
   onChange: (actions: QuestActionDefinition[]) => void;
   label: string;
 }) {
@@ -675,30 +942,14 @@ function QuestActionsEditor({
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
-            {[
-              "setFlag",
-              "emitEvent",
-              "giveItem",
-              "removeItem",
-              "unlockScene",
-              "advanceToNextScene",
-              "playSound",
-              "spawnVfx",
-              "teleportNpc",
-              "moveNpc",
-              "setNpcState",
-              "custom"
-            ].map((type) => (
+            {QUEST_ACTION_TYPE_OPTIONS.map((option) => (
               <Menu.Item
-                key={type}
+                key={option.value}
                 onClick={() =>
-                  onChange([
-                    ...actions,
-                    { type: type as QuestActionDefinition["type"] }
-                  ])
+                  onChange([...actions, createQuestAction(option.value)])
                 }
               >
-                {type}
+                {option.label}
               </Menu.Item>
             ))}
           </Menu.Dropdown>
@@ -720,26 +971,15 @@ function QuestActionsEditor({
                 <Select
                   size="xs"
                   value={action.type}
-                  data={[
-                    "setFlag",
-                    "emitEvent",
-                    "giveItem",
-                    "removeItem",
-                    "unlockScene",
-                    "advanceToNextScene",
-                    "playSound",
-                    "spawnVfx",
-                    "teleportNpc",
-                    "moveNpc",
-                    "setNpcState",
-                    "custom"
-                  ].map((value) => ({ value, label: value }))}
+                  data={QUEST_ACTION_TYPE_OPTIONS}
                   onChange={(value) => {
                     if (!value) return;
                     const next = [...actions];
-                    next[index] = {
-                      type: value as QuestActionDefinition["type"]
-                    };
+                    // Changing the type replaces the parameters: the old
+                    // action's fields do not exist on the new one.
+                    next[index] = createQuestAction(
+                      value as QuestActionDefinition["type"]
+                    );
                     onChange(next);
                   }}
                 />
@@ -756,69 +996,15 @@ function QuestActionsEditor({
                   ×
                 </ActionIcon>
               </Group>
-              {action.type === "giveItem" || action.type === "removeItem" ? (
-                <Select
-                  size="xs"
-                  label="Item"
-                  clearable
-                  data={itemDefinitions.map((item) => ({
-                    value: item.definitionId,
-                    label: item.displayName
-                  }))}
-                  value={action.targetId ?? null}
-                  onChange={(value) => {
-                    const next = [...actions];
-                    next[index] = { ...action, targetId: value ?? undefined };
-                    onChange(next);
-                  }}
-                />
-              ) : action.type === "unlockScene" ||
-                action.type === "advanceToNextScene" ? (
-                <Select
-                  size="xs"
-                  label="Scene"
-                  clearable
-                  placeholder={
-                    action.type === "advanceToNextScene"
-                      ? "(next by order)"
-                      : "Pick a Scene"
-                  }
-                  data={scenes.map((scene) => ({
-                    value: scene.sceneId,
-                    label: scene.displayName
-                  }))}
-                  value={action.targetId ?? null}
-                  onChange={(value) => {
-                    const next = [...actions];
-                    next[index] = { ...action, targetId: value ?? undefined };
-                    onChange(next);
-                  }}
-                />
-              ) : (
-                <TextInput
-                  size="xs"
-                  label="Target ID"
-                  value={action.targetId ?? ""}
-                  onChange={(event) => {
-                    const next = [...actions];
-                    next[index] = {
-                      ...action,
-                      targetId: event.currentTarget.value || undefined
-                    };
-                    onChange(next);
-                  }}
-                />
-              )}
-              <TextInput
-                size="xs"
-                label="Value"
-                value={action.value == null ? "" : String(action.value)}
-                onChange={(event) => {
+              <QuestActionFields
+                action={action}
+                itemDefinitions={itemDefinitions}
+                npcDefinitions={npcDefinitions}
+                scenes={scenes}
+                soundCueDefinitions={soundCueDefinitions}
+                onChange={(updated) => {
                   const next = [...actions];
-                  next[index] = {
-                    ...action,
-                    value: event.currentTarget.value || undefined
-                  };
+                  next[index] = updated;
                   onChange(next);
                 }}
               />
@@ -836,6 +1022,7 @@ export function useQuestWorkspaceView({
   questDefinitions,
   regions,
   scenes,
+  soundCueDefinitions,
   dialogueDefinitions,
   itemDefinitions,
   npcDefinitions,
@@ -946,6 +1133,22 @@ export function useQuestWorkspaceView({
 
     return links;
   }, [effectiveSelectedQuestId, npcDefinitions, regions]);
+
+  // Areas across every region, grouped by region, for a location objective's
+  // target. A quest is not scoped to one region, so the picker is not either.
+  const areaOptionGroups = useMemo(
+    () =>
+      regions
+        .map((region) => ({
+          group: region.displayName,
+          items: region.areas.map((area) => ({
+            value: area.areaId,
+            label: area.displayName
+          }))
+        }))
+        .filter((entry) => entry.items.length > 0),
+    [regions]
+  );
 
   // Plan 079.7 -- all NPC presences across all scenes/regions, for the stage picker.
   // Deduped by presenceId (first scene overlay wins); tracks which region owns each
@@ -1850,16 +2053,6 @@ export function useQuestWorkspaceView({
                 })
               }
             />
-            <Switch
-              label="Repeatable"
-              checked={selectedQuest.repeatable}
-              onChange={(event) =>
-                commitQuest({
-                  ...selectedQuest,
-                  repeatable: event.currentTarget.checked
-                })
-              }
-            />
             <Stack gap="xs">
               <Text
                 size="xs"
@@ -2158,10 +2351,9 @@ export function useQuestWorkspaceView({
                     { value: "talk", label: "Talk" },
                     { value: "location", label: "Location" },
                     { value: "collect", label: "Collect" },
-                    { value: "trigger", label: "Trigger" },
                     { value: "castSpell", label: "Cast Spell" },
                     { value: "assessment", label: "Assessment" },
-                    { value: "custom", label: "Custom" }
+                    { value: "awaitEvent", label: "Await Event" }
                   ]}
                   onChange={(value) =>
                     value &&
@@ -2172,6 +2364,22 @@ export function useQuestWorkspaceView({
                     })
                   }
                 />
+                {selectedNode.objectiveSubtype === "location" ? (
+                  <Select
+                    label="Target Area"
+                    clearable
+                    searchable
+                    placeholder="Pick an area"
+                    data={areaOptionGroups}
+                    value={selectedNode.targetAreaId ?? null}
+                    onChange={(value) =>
+                      updateNode({
+                        ...selectedNode,
+                        targetAreaId: value ?? undefined
+                      })
+                    }
+                  />
+                ) : (
                 <Select
                   label={
                     selectedNode.objectiveSubtype === "collect"
@@ -2205,6 +2413,20 @@ export function useQuestWorkspaceView({
                     })
                   }
                 />
+                )}
+                {selectedNode.objectiveSubtype === "awaitEvent" && (
+                  <TextInput
+                    label="Completes On Event"
+                    description="An emitEvent action firing this name completes the objective."
+                    value={selectedNode.eventName ?? ""}
+                    onChange={(event) =>
+                      updateNode({
+                        ...selectedNode,
+                        eventName: event.currentTarget.value || undefined
+                      })
+                    }
+                  />
+                )}
                 {selectedNode.objectiveSubtype === "talk" && (
                   <>
                     <Select
@@ -2289,7 +2511,6 @@ export function useQuestWorkspaceView({
                   data={[
                     { value: "dialogue", label: "Dialogue" },
                     { value: "voiceover", label: "Voiceover" },
-                    { value: "event", label: "Event" },
                     { value: "cutscene", label: "Cutscene" }
                   ]}
                   onChange={(value) =>
@@ -2314,18 +2535,6 @@ export function useQuestWorkspaceView({
                       updateNode({
                         ...selectedNode,
                         dialogueDefinitionId: value ?? undefined
-                      })
-                    }
-                  />
-                )}
-                {selectedNode.narrativeSubtype === "event" && (
-                  <TextInput
-                    label="Event Name"
-                    value={selectedNode.eventName ?? ""}
-                    onChange={(event) =>
-                      updateNode({
-                        ...selectedNode,
-                        eventName: event.currentTarget.value || undefined
                       })
                     }
                   />
@@ -2371,7 +2580,9 @@ export function useQuestWorkspaceView({
               label="On Enter"
               actions={selectedNode.onEnterActions}
               itemDefinitions={itemDefinitions}
+              npcDefinitions={npcDefinitions}
               scenes={scenes}
+              soundCueDefinitions={soundCueDefinitions}
               onChange={(onEnterActions) =>
                 updateNode({ ...selectedNode, onEnterActions })
               }
@@ -2380,7 +2591,9 @@ export function useQuestWorkspaceView({
               label="On Complete"
               actions={selectedNode.onCompleteActions}
               itemDefinitions={itemDefinitions}
+              npcDefinitions={npcDefinitions}
               scenes={scenes}
+              soundCueDefinitions={soundCueDefinitions}
               onChange={(onCompleteActions) =>
                 updateNode({ ...selectedNode, onCompleteActions })
               }

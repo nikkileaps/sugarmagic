@@ -226,7 +226,10 @@ function BehaviorInspectorComponent(props: BehaviorInspectorProps) {
                 label="Active Time Window"
                 description="Only active during these times. Empty = any time."
                 size="xs"
-                data={REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS.map((option) => ({
+                data={REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS.map((option: {
+                  value: string;
+                  label: string;
+                }) => ({
                   value: option.value,
                   label: option.label
                 }))}

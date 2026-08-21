@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./buildConfig": "./src/buildConfig.ts"
+    "./buildConfig": "./src/buildConfig.ts",
+    "./npcOneShotAnimation": "./src/npcOneShotAnimation.ts"
   },
   "scripts": {
     "build": "vite build",

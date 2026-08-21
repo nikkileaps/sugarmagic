@@ -9,8 +9,24 @@ import type {
   SaveSlice
 } from "@sugarmagic/domain";
 
+/**
+ * An action together with the node that fired it. Handlers need the source to
+ * name what they act on -- an audio instance key, a warning that tells the
+ * author which node holds the bad reference.
+ *
+ * The ids are passed rather than read back from the manager because the only
+ * quest state readable from outside is the tracked quest, which is not
+ * necessarily the quest whose node is running.
+ */
+export interface QuestActionInvocation {
+  action: QuestActionDefinition;
+  questDefinitionId: string;
+  stageId: string;
+  nodeId: string;
+}
+
 export interface QuestRuntimeActionHandler {
-  (action: QuestActionDefinition): void;
+  (invocation: QuestActionInvocation): void;
 }
 
 export interface QuestRuntimeNarrativeHandler {
@@ -19,6 +35,12 @@ export interface QuestRuntimeNarrativeHandler {
 
 export type QuestInventoryCountProvider = (itemDefinitionId: string) => number;
 export type QuestSpellStateProvider = (spellDefinitionId: string) => boolean;
+/**
+ * Whether the player is standing in that area, or in any area nested inside
+ * it. Injected rather than read here: the player's position lives in the
+ * blackboard, which `quest/` must not reach into.
+ */
+export type QuestPlayerAreaProvider = (areaId: string) => boolean;
 
 export interface QuestActiveObjectiveView {
   questDefinitionId: string;
@@ -46,7 +68,6 @@ export interface QuestJournalQuestView {
   description: string;
   stageDisplayName: string;
   objectives: QuestActiveObjectiveView[];
-  repeatable: boolean;
   completed: boolean;
 }
 
@@ -128,6 +149,15 @@ export class QuestManager {
   private definitions = new Map<string, QuestDefinition>();
   private activeQuests = new Map<string, ActiveQuestRuntimeState>();
   private completedQuestIds = new Set<string>();
+  /**
+   * Which nodes have been completed, per quest. Recorded at completion time
+   * and kept outside `activeQuests`, which is deleted when a quest finishes --
+   * so "this node was completed" outlives the quest that produced it.
+   *
+   * Never cleared. Nothing restarts a quest, so a completed node stays
+   * completed for the rest of the playthrough.
+   */
+  private completedNodeIdsByQuest = new Map<string, Set<string>>();
   private trackedQuestDefinitionId: string | null = null;
   private runtimeFlags = new Map<string, unknown>();
   private onEvent: QuestRuntimeEventHandler | null = null;
@@ -138,6 +168,7 @@ export class QuestManager {
   private getInventoryCount: QuestInventoryCountProvider = () => 0;
   private hasSpellProvider: QuestSpellStateProvider = () => false;
   private canCastSpellProvider: QuestSpellStateProvider = () => false;
+  private isPlayerInAreaProvider: QuestPlayerAreaProvider = () => false;
 
   registerDefinitions(definitions: QuestDefinition[]): void {
     this.definitions.clear();
@@ -179,6 +210,10 @@ export class QuestManager {
     this.canCastSpellProvider = provider;
   }
 
+  setPlayerAreaProvider(provider: QuestPlayerAreaProvider): void {
+    this.isPlayerInAreaProvider = provider;
+  }
+
   update(): void {
     let changed = false;
     for (const state of this.activeQuests.values()) {
@@ -199,7 +234,8 @@ export class QuestManager {
       return false;
     }
 
-    if (this.completedQuestIds.has(questDefinitionId) && !definition.repeatable) {
+    // A finished quest stays finished. Nothing restarts one.
+    if (this.completedQuestIds.has(questDefinitionId)) {
       return false;
     }
 
@@ -419,6 +455,43 @@ export class QuestManager {
     );
   }
 
+  private recordCompletedNode(questDefinitionId: string, nodeId: string): void {
+    let completed = this.completedNodeIdsByQuest.get(questDefinitionId);
+    if (!completed) {
+      completed = new Set<string>();
+      this.completedNodeIdsByQuest.set(questDefinitionId, completed);
+    }
+    completed.add(nodeId);
+  }
+
+  /**
+   * True when this node has been completed at any point in this playthrough,
+   * including after its quest finished.
+   */
+  isNodeCompleted(questDefinitionId: string, nodeId: string): boolean {
+    return this.completedNodeIdsByQuest.get(questDefinitionId)?.has(nodeId) ?? false;
+  }
+
+  /**
+   * Every quest in progress, with the stage it is on.
+   *
+   * This is what region quest bindings evaluate against -- which NPCs stand
+   * where, which doors are passable. `getTrackedQuest()` below is the player's
+   * journal selection and answers a different question.
+   *
+   * A quest whose current stage cannot be resolved still appears, with a null
+   * stage, so a binding naming only the quest still matches it.
+   */
+  getActiveQuestStates(): Array<{
+    questDefinitionId: string;
+    stageId: string | null;
+  }> {
+    return Array.from(this.activeQuests.entries()).map(([questDefinitionId, state]) => ({
+      questDefinitionId,
+      stageId: this.getCurrentStageDefinition(state)?.stageId ?? null
+    }));
+  }
+
   getTrackedQuest(): QuestTrackerView | null {
     const questDefinitionId =
       this.trackedQuestDefinitionId ?? Array.from(this.activeQuests.keys())[0] ?? null;
@@ -463,7 +536,6 @@ export class QuestManager {
           description: definition.description,
           stageDisplayName: stage.displayName,
           objectives: [] as QuestActiveObjectiveView[],
-          repeatable: definition.repeatable,
           completed: true
         };
       })
@@ -495,7 +567,6 @@ export class QuestManager {
         stage,
         this.getCurrentStageProgress(state)
       ),
-      repeatable: definition.repeatable,
       completed
     };
   }
@@ -594,6 +665,22 @@ export class QuestManager {
           }
         }
 
+        if (
+          progress.status === "active" &&
+          node.nodeBehavior === "objective" &&
+          node.objectiveSubtype === "location" &&
+          node.targetAreaId
+        ) {
+          // Read inside the tick: the player's area is a frame-lifecycle fact,
+          // so it is only meaningful while the frame it was written for is the
+          // current one.
+          if (this.isPlayerInAreaProvider(node.targetAreaId)) {
+            this.completeNode(state, stage, stageProgress, node);
+            changed = true;
+            loop = true;
+          }
+        }
+
         if (progress.status === "active" && node.nodeBehavior === "branch") {
           const passed = node.condition ? this.evaluateCondition(node.condition) : false;
           this.completeNode(state, stage, stageProgress, node, passed ? "pass" : "fail");
@@ -636,7 +723,11 @@ export class QuestManager {
 
     stageProgress.forcedNodeIds.delete(node.nodeId);
     progress.status = "active";
-    this.executeActions(node.onEnterActions);
+    this.executeActions(node.onEnterActions, {
+      questDefinitionId: state.questDefinitionId,
+      stageId: stage.stageId,
+      nodeId: node.nodeId
+    });
 
     if (node.nodeBehavior === "narrative") {
       if (isDialogueNarrative(node) && node.dialogueDefinitionId) {
@@ -664,7 +755,12 @@ export class QuestManager {
 
     progress.status = "completed";
     progress.branchResult = branchResult;
-    this.executeActions(node.onCompleteActions);
+    this.recordCompletedNode(state.questDefinitionId, node.nodeId);
+    this.executeActions(node.onCompleteActions, {
+      questDefinitionId: state.questDefinitionId,
+      stageId: stage.stageId,
+      nodeId: node.nodeId
+    });
 
     const definition = this.definitions.get(state.questDefinitionId);
     if (definition) {
@@ -796,19 +892,27 @@ export class QuestManager {
     this.onStageTimeOfDay?.(stage.timeOfDay);
   }
 
-  private executeActions(actions: QuestActionDefinition[]): void {
+  /**
+   * `source` is taken as an argument, not held on the manager, because this
+   * runs reentrantly: an `emitEvent` action calls `notifyEvent`, which can
+   * complete another node, which runs its own actions before this loop ends.
+   */
+  private executeActions(
+    actions: QuestActionDefinition[],
+    source: { questDefinitionId: string; stageId: string; nodeId: string }
+  ): void {
     for (const action of actions) {
-      if (action.type === "setFlag" && action.targetId) {
-        this.runtimeFlags.set(action.targetId, action.value ?? true);
+      if (action.type === "setFlag" && action.key) {
+        this.runtimeFlags.set(action.key, action.value ?? true);
         continue;
       }
 
-      if (action.type === "emitEvent" && action.targetId) {
-        this.notifyEvent(action.targetId);
+      if (action.type === "emitEvent" && action.eventName) {
+        this.notifyEvent(action.eventName);
         continue;
       }
 
-      this.onAction?.(action);
+      this.onAction?.({ action, ...source });
     }
   }
 
@@ -877,9 +981,14 @@ export class QuestManager {
     for (const [key, value] of this.runtimeFlags) {
       runtimeFlags[key] = value;
     }
+    const completedNodeIds: Record<string, string[]> = {};
+    for (const [questId, nodeIds] of this.completedNodeIdsByQuest) {
+      completedNodeIds[questId] = Array.from(nodeIds);
+    }
     return {
       activeQuests,
       completedQuestIds: Array.from(this.completedQuestIds),
+      completedNodeIds,
       trackedQuestDefinitionId: this.trackedQuestDefinitionId,
       runtimeFlags
     };
@@ -905,9 +1014,13 @@ export class QuestManager {
    * console.warn (usually authoring renamed the id after the save
    * was written).
    *
-   * `completedQuestIds`, `trackedQuestDefinitionId`, and
-   * `runtimeFlags` fully replace whatever's currently there —
-   * they're single-value stores, not composed.
+   * `completedQuestIds`, `completedNodeIds`,
+   * `trackedQuestDefinitionId`, and `runtimeFlags` fully replace
+   * whatever's currently there — they're single-value stores, not
+   * composed. Replacing is safe for `completedNodeIds` because
+   * this runs before `startInitialQuests`, so nothing has
+   * recorded a completion yet. A save written before the field
+   * existed has none, and restores as empty.
    *
    * `null` slice = fresh player. Nothing to restore.
    */
@@ -949,6 +1062,12 @@ export class QuestManager {
     }
 
     this.completedQuestIds = new Set(data.completedQuestIds ?? []);
+    this.completedNodeIdsByQuest = new Map(
+      Object.entries(data.completedNodeIds ?? {}).map(([questId, nodeIds]) => [
+        questId,
+        new Set(nodeIds)
+      ])
+    );
     if (data.trackedQuestDefinitionId !== undefined) {
       this.trackedQuestDefinitionId = data.trackedQuestDefinitionId;
     }
@@ -1025,6 +1144,8 @@ export interface SerializedActiveQuest {
 export interface QuestManagerSlice {
   activeQuests: Record<string, SerializedActiveQuest>;
   completedQuestIds: string[];
+  /** Completed node ids per quest. Absent in saves written before it existed. */
+  completedNodeIds?: Record<string, string[]>;
   trackedQuestDefinitionId: string | null;
   runtimeFlags: Record<string, unknown>;
 }

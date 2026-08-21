@@ -1,4 +1,5 @@
 import type { TimeOfDayBand } from "../quest-definition";
+import { TIME_OF_DAY_BAND_OPTIONS } from "../quest-definition";
 import type { DocumentIdentity } from "../shared/identity";
 import { createScopedId, createUuid } from "../shared/identity";
 import type {
@@ -213,6 +214,20 @@ export interface RegionBehaviorQuestBinding {
   questDefinitionId: string | null;
   questStageId: string | null;
   worldFlagEquals: RegionBehaviorWorldFlagCondition | null;
+  /**
+   * Satisfied once that quest node has been completed, and stays satisfied
+   * after the quest itself finishes. Evaluated wherever this grammar is:
+   * behavior tasks, NPC placements, containment volumes.
+   *
+   * Optional so a hand-written binding need not carry it; the factory always
+   * normalizes it to a value.
+   */
+  nodeCompleted?: RegionBehaviorNodeCompletedCondition | null;
+}
+
+export interface RegionBehaviorNodeCompletedCondition {
+  questDefinitionId: string;
+  nodeId: string;
 }
 
 export interface RegionBehaviorWorldFlagCondition {
@@ -326,19 +341,10 @@ export const REGION_NPC_BEHAVIOR_GOAL_OPTIONS = [
   { value: "observe_situation", label: "Observe Situation" }
 ] as const;
 
-// Plan 074 §074.4 -- time-of-day bands for task time-window authoring.
-export const REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS: Array<{
-  value: TimeOfDayBand;
-  label: string;
-}> = [
-  { value: "dawn", label: "Dawn" },
-  { value: "morning", label: "Morning" },
-  { value: "midday", label: "Midday" },
-  { value: "afternoon", label: "Afternoon" },
-  { value: "dusk", label: "Dusk" },
-  { value: "evening", label: "Evening" },
-  { value: "night", label: "Night" }
-];
+// Plan 074 §074.4 -- time-of-day bands for task time-window authoring. The
+// bands and their labels live beside the TimeOfDayBand type; this alias stays
+// because the behavior editors import it by this name.
+export const REGION_NPC_BEHAVIOR_TIME_BAND_OPTIONS = TIME_OF_DAY_BAND_OPTIONS;
 
 export interface RegionNPCBehaviorDefinition {
   behaviorId: string;
@@ -794,6 +800,16 @@ export function createRegionBehaviorQuestBinding(
       typeof overrides.questStageId === "string" &&
       overrides.questStageId.trim().length > 0
         ? overrides.questStageId.trim()
+        : null,
+    nodeCompleted:
+      typeof overrides.nodeCompleted?.questDefinitionId === "string" &&
+      overrides.nodeCompleted.questDefinitionId.trim().length > 0 &&
+      typeof overrides.nodeCompleted?.nodeId === "string" &&
+      overrides.nodeCompleted.nodeId.trim().length > 0
+        ? {
+            questDefinitionId: overrides.nodeCompleted.questDefinitionId.trim(),
+            nodeId: overrides.nodeCompleted.nodeId.trim()
+          }
         : null,
     worldFlagEquals:
       typeof overrides.worldFlagEquals?.key === "string" &&

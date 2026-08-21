@@ -22,10 +22,12 @@ QuestDefinition
   repeatable: boolean
 ```
 
-Quests are a directed graph of **stages**, each containing a graph of
-**nodes**. The runtime works through nodes bottom-up; when all non-optional
-nodes in a stage are complete the stage completes and the runtime advances to
-`nextStageId`.
+A quest is a **linear chain of stages**, each containing a graph of **nodes**.
+`nextStageId` is a single nullable pointer, so a stage has exactly one
+successor -- branching happens between nodes inside a stage, not between
+stages. When every non-optional node in a stage is complete the stage
+completes and the runtime advances to `nextStageId`; a null pointer completes
+the quest.
 
 ### Stage
 
@@ -62,9 +64,10 @@ QuestNodeDefinition
   displayName: string
   description: string
   nodeBehavior: "objective" | "narrative" | "condition" | "branch"
-  objectiveSubtype?: "talk" | "location" | "collect" | "trigger" | "castSpell" | "custom"
-  narrativeSubtype?: "voiceover" | "dialogue" | "cutscene" | "event"
-  targetId?: string             -- NPC id for talk; area id for location; item id for collect
+  objectiveSubtype?: "talk" | "location" | "collect" | "castSpell" | "assessment" | "custom"
+  narrativeSubtype?: "voiceover" | "dialogue" | "cutscene"
+  targetId?: string             -- NPC id for talk; item id for collect; spell id for castSpell
+  targetAreaId?: string         -- the area a location objective completes on
   count?: number                -- collect count
   optional?: boolean
   dialogueDefinitionId?: string -- for talk / dialogue nodes
@@ -83,32 +86,111 @@ when the node completes (player finished the dialogue, reached the location,
 etc.). Both accept any `QuestActionType` list -- this is the primary authoring
 surface for all scripted world changes.
 
+### Objective subtypes
+
+| subtype | completes when | needs |
+|---|---|---|
+| `talk` | the player finishes that NPC's dialogue | `targetId` (NPC), `dialogueDefinitionId` |
+| `location` | the player enters the target area, or any area nested inside it | `targetAreaId` |
+| `collect` | the player holds `count` of the item | `targetId` (item), `count` |
+| `castSpell` | the player casts that spell | `targetId` (spell) |
+| `assessment` | the player completes the assessment form | plugin-supplied |
+| `awaitEvent` | a matching `emitEvent` action fires the node's `eventName` | `eventName` |
+
+`awaitEvent` is the subtype with no built-in completion path: it waits for a
+named quest event, set on the node as `eventName` and fired by any node's
+`emitEvent` action. Plugins use the same channel -- sugarlang stamps
+`SUGARLANG_PLACEMENT_COMPLETED_EVENT` onto an assessment objective and fires it
+when placement finishes.
+
+### Narrative subtypes
+
+| subtype | what happens |
+|---|---|
+| `dialogue` | the dialogue starts on its own the moment the node activates, then the node completes when it ends |
+| `voiceover` | **nothing yet.** Activates and completes in the same tick |
+| `cutscene` | **nothing yet.** Activates and completes in the same tick |
+
+A `dialogue` narrative differs from a `talk` objective in who starts it: a talk
+objective waits for the player to walk up to an NPC and interact, while a
+dialogue narrative opens the conversation with nobody nearby and no press.
+
+---
+
+## Actions or behavior tasks: which one
+
+Two systems can make the world change when a quest moves, and picking the wrong
+one is the most common way to author something that half works. The difference
+is **momentary versus continuous**.
+
+**An action fires once, at a moment.** `executeActions` runs a node's list when
+the node activates or completes, and that is the whole life of it. Nothing
+remembers it happened.
+
+**A behavior task is re-decided every frame.** `resolveBehaviorTask` walks an
+NPC's task list every sync and picks the first whose activation matches. It is
+not an instruction that was issued; it is the answer to "what is this NPC doing
+right now", asked again continuously.
+
+So the test is: **does this need to still be true in ten minutes?**
+
+| | |
+|---|---|
+| A sound plays, an item is given, the day advances, a one-shot animation runs | Moments. **Actions.** |
+| An NPC stands at the well, walks to the dock, keeps a post | Ongoing. **Behavior tasks.** |
+| An NPC is in the scene at all | Ongoing. **Presence conditions** on the placement. |
+
+This is why there is no `moveNpc` action. As an action it would fire once and be
+forgotten: the NPC would start walking with nothing holding the intent, and a
+reload would lose it. The task selector already answers "where should this NPC
+be" every frame, and it survives saving, blocking and leaving the region,
+because it re-derives the answer rather than remembering an instruction.
+
+**How the two halves meet.** Node completion is a moment, but behavior tasks
+need continuous truths. So the moment is recorded permanently -- see
+`completedNodeIds` under Save and Persistence -- and the continuous system reads
+it as a standing fact. That is what lets a task bound to "after quest X node Z"
+keep holding after the quest has finished.
+
 ---
 
 ## Quest Actions
 
-`QuestActionDefinition` has three fields: `type`, optional `targetId`, optional `value`.
+`QuestActionDefinition` is a discriminated union on `type`. Each action declares
+its own named fields -- there is no shared `targetId` or `value` carrying a
+different meaning per type.
 
-| type | targetId | value | what it does |
-|---|---|---|---|
-| `setFlag` | flag key | flag value (any JSON) | writes a world flag via QuestManager |
-| `giveItem` | item definition id | -- | adds item to player inventory |
-| `removeItem` | item definition id | -- | removes from inventory |
-| `playSound` | audio cue id | -- | plays a sound |
-| `spawnVfx` | vfx definition id | -- | spawns a VFX |
-| `teleportNpc` | NPC definition id | -- | teleports NPC (stub) |
-| `moveNpc` | NPC definition id | -- | moves NPC (stub) |
-| `setNpcState` | NPC definition id | -- | NPC state change (stub) |
-| `emitEvent` | event name | -- | emits a named event |
-| `unlockScene` | scene id | -- | adds scene to campaign progression |
-| `advanceToNextScene` | scene id or omit | -- | advances to named scene or next by order |
-| `set-time-of-day` | `TimeOfDayBand` value | -- | sets world clock band (persisted) |
-| `advance-day` | -- | -- | increments world day counter (persisted) |
-| `learn-fact` | fact id (dedup key) | display string | writes a player-known fact (see below) |
-| `custom` | any | any | no-op in runtime; use for future or plugin extensions |
+**Every action in this table does something.** An action that cannot be routed
+to a real system is not offered.
 
-**Stubs:** `teleportNpc`, `moveNpc`, `setNpcState` are authored but not yet
-implemented in the runtime; they are no-ops. See task #374.
+| type | fields | what it does |
+|---|---|---|
+| `setFlag` | `key`, `value?` | writes a world flag via QuestManager |
+| `emitEvent` | `eventName` | fires a named event; completes any active node waiting on it |
+| `giveItem` | `itemDefinitionId`, `count` | adds items to the player inventory |
+| `removeItem` | `itemDefinitionId`, `count` | removes items from the inventory |
+| `unlockScene` | `sceneId` | adds the Scene to campaign progression |
+| `advanceToNextScene` | `sceneId` (null = next by order) | completes the Scene and moves the player |
+| `set-time-of-day` | `band` | sets the world clock band (persisted) |
+| `advance-day` | -- | increments the world day counter (persisted) |
+| `learn-fact` | `factId`, `displayText` | writes a player-known fact (see below) |
+| `playCue` | `cueDefinitionId` | plays a sound cue, keyed per node |
+| `playAnimation` | `npcDefinitionId`, `slot`, `repeatCount` | plays one of the NPC's bound animation slots, on every presence of that NPC, then returns it to locomotion |
+
+An unknown cue is reported once per cue id with the quest and node that named
+it. A missing reference on any action is skipped rather than guessed at.
+
+### Actions this list deliberately does not have
+
+- **Playing a world-space effect.** There is no effect system to route one to.
+- **Moving or teleporting an NPC.** Staging is the behavior system's: give the
+  NPC a task with a target area and an activation. To put an NPC somewhere with
+  no journey, place it twice and condition each placement.
+- **Flipping an NPC between scripted and agentified.** #207 gives that a
+  purpose-named action.
+- **A `custom` escape hatch.** No plugin contribution kind is a quest action
+  handler, so there is nothing to escape to; `emitEvent` covers firing a named
+  thing for something else to react to.
 
 ---
 
@@ -126,31 +208,60 @@ persist across sessions (serialized in the quest save slice).
 3. An agentified NPC turn: PlanStage can emit `{ kind: "set-conversation-flag",
    key, value }` -> `handleConversationActionProposal` -> `questManager.setFlag`.
 4. A trigger volume: `RegionVolumeTriggerAction.setWorldFlag` fires when the
-   player enters the volume (see API 006).
+   player enters the volume (see API 006). Being replaced by volume enter/exit
+   action lists -- #216.
 5. Dev console: `__smsetflag("myFlag", true)` (see Dev Handles below).
 
 **How they gate behavior:**
 
-`RegionBehaviorQuestBinding` is the compound AND condition used by behavior
-tasks and (in future) NPC presence:
+`RegionBehaviorQuestBinding` is the compound AND condition, and it is the one
+grammar shared by everything that gates on quest state: behavior tasks
+(`activation`), NPC placements (`condition`), and containment volumes
+(`condition`). One evaluator serves all of them --
+`evaluateRegionQuestBinding` in `runtime-core/src/region-conditions`.
 
 ```typescript
 interface RegionBehaviorQuestBinding {
   questDefinitionId: string | null
   questStageId: string | null
   worldFlagEquals: { key: string | null; valueType: "boolean"|"number"|"string"; value: string | null } | null
+  nodeCompleted?: { questDefinitionId: string; nodeId: string } | null
 }
 ```
 
-All three fields are ANDed together. Any field left null is not checked.
-Examples:
-- Quest active on stage X only: set `questDefinitionId` + `questStageId`, leave flag null.
+All populated clauses are ANDed. Any field left null is not checked.
+- Quest active on stage X only: set `questDefinitionId` + `questStageId`, leave the rest null.
 - Flag set regardless of quest: set `worldFlagEquals`, leave quest fields null.
-- Compound (quest stage AND flag): set all three.
+- After a story beat: set `nodeCompleted`. It stays satisfied once that node has
+  completed, including after its quest finishes and across save and load.
+
+**Two things worth knowing.** The quest and stage clauses are checked against
+the SAME quest -- one active quest supplying the id and a different one
+supplying the stage does not satisfy a binding neither satisfies. And bindings
+evaluate against EVERY quest in progress, not the one the player has selected in
+their journal; which NPCs stand where is not a display choice.
+
+An unanswerable clause fails closed. A populated clause whose predicate is
+absent evaluates false rather than being skipped.
 
 ---
 
 ## NPC Behavior Tasks
+
+### Staging an NPC after a story beat
+
+NPC staging is authored as a quest-bound behavior task, not as a quest action.
+Two grains:
+
+- **Stage grain** -- set `questDefinitionId` and `questStageId` on the task's
+  activation. The NPC takes that task while the quest sits on that stage.
+- **Node grain** -- set `nodeCompleted`. The NPC takes that task once that
+  specific node completes, and keeps it afterwards, including once the quest
+  has finished.
+
+To place an NPC somewhere with no journey at all, place it twice in the region
+and condition each placement instead. That is presence rather than movement:
+the placement whose condition fails is not spawned.
 
 **Domain:** `RegionNPCBehaviorTask` in `packages/domain/src/region-authoring/index.ts`
 **Runtime:** `packages/runtime-core/src/behavior/system.ts`
@@ -211,7 +322,7 @@ The world clock has two values: a `TimeOfDayBand` and an integer day counter
 **Setting the clock via quest actions:**
 
 ```json
-{ "type": "set-time-of-day", "targetId": "morning" }
+{ "type": "set-time-of-day", "band": "morning" }
 { "type": "advance-day" }
 ```
 
@@ -250,10 +361,10 @@ be aware they already know. They persist across sessions.
 **Authoring: `learn-fact` quest action**
 
 ```json
-{ "type": "learn-fact", "targetId": "luggage:went-to-claim", "value": "The harbourmaster confirmed unclaimed baggage goes to the claim office after 24 hours." }
+{ "type": "learn-fact", "factId": "luggage:went-to-claim", "displayText": "The harbourmaster confirmed unclaimed baggage goes to the claim office after 24 hours." }
 ```
 
-- `targetId` is the dedup key. Learning the same id again replaces the old
+- `factId` is the dedup key. Learning the same id again replaces the old
   text and moves it to the end of the list (most-recently-learned order).
 - `value` is the display string injected into NPC prompts.
 - Cap: 20 facts (oldest dropped first).
@@ -310,7 +421,7 @@ without requiring the author to script specific dialogue responses.
 ### Pattern A: NPC B reacts only after player talked to NPC A
 
 1. NPC A has a scripted Talk node bound to a quest Talk objective.
-2. On that node's `onCompleteActions`: `{ type: "setFlag", targetId: "talkedToNpcA", value: true }`.
+2. On that node's `onCompleteActions`: `{ type: "setFlag", key: "talkedToNpcA", value: true }`.
 3. NPC B (agentified). In their task list, add a task with:
    - `activation.worldFlagEquals = { key: "talkedToNpcA", valueType: "boolean", value: "true" }`
 4. When the compound holds, NPC B's task drives their behavior; otherwise they
@@ -327,7 +438,7 @@ without requiring the author to script specific dialogue responses.
 ### Pattern C: Player learns a clue, future NPCs build on it
 
 1. On the quest node where the player gets the clue (dialogue complete, item
-   found, etc.): `{ type: "learn-fact", targetId: "clue:dock-manifest", value: "The dock manifest shows a trunk shipped to warehouse 4." }`.
+   found, etc.): `{ type: "learn-fact", factId: "clue:dock-manifest", displayText: "The dock manifest shows a trunk shipped to warehouse 4." }`.
 2. Every subsequent NPC conversation gets the player-known-facts block.
 3. NPCs can reference the clue, ask about it, confirm it -- without you
    scripting each response. The NPC knows the player already has this
@@ -338,7 +449,7 @@ without requiring the author to script specific dialogue responses.
 ```json
 [
   { "type": "advance-day" },
-  { "type": "set-time-of-day", "targetId": "morning" }
+  { "type": "set-time-of-day", "band": "morning" }
 ]
 ```
 
@@ -378,12 +489,28 @@ __sugaragentQuestContext.dump("npc:definition-id")
 
 | what | participant id | persists |
 |---|---|---|
-| Quest manager state (flags, active quests, completed) | `quest.manager` | yes |
+| Quest manager state (flags, active quests, completed quests, completed nodes) | `quest.manager` | yes |
 | World clock (band + day) | `world.time` | yes |
 | Player known facts | `player.known-facts` | yes |
 | Recent world events | -- | no (session-only) |
 
 All save participants restore before `startInitialQuests()` is called.
+
+### completedNodeIds
+
+Node progress lives inside `activeQuests`, which is deleted the moment a quest
+finishes. So "node Z was completed" is recorded separately, per quest, at the
+moment it completes -- outside the state that gets torn down. That is what makes
+a `nodeCompleted` activation still true after its quest is over.
+
+It is never cleared. Nothing restarts a quest: `startQuest` refuses any quest
+already in `completedQuestIds`. On restore it replaces rather than merges, which
+is safe because deserialize runs before `startInitialQuests`, so nothing has
+recorded a completion yet. A save written before the field existed restores as
+empty.
+
+It holds ids only, no timestamps -- there is nothing in it that looks stale
+after a reload.
 
 ---
 
