@@ -117,6 +117,43 @@ dialogue narrative opens the conversation with nobody nearby and no press.
 
 ---
 
+## Actions or behavior tasks: which one
+
+Two systems can make the world change when a quest moves, and picking the wrong
+one is the most common way to author something that half works. The difference
+is **momentary versus continuous**.
+
+**An action fires once, at a moment.** `executeActions` runs a node's list when
+the node activates or completes, and that is the whole life of it. Nothing
+remembers it happened.
+
+**A behavior task is re-decided every frame.** `resolveBehaviorTask` walks an
+NPC's task list every sync and picks the first whose activation matches. It is
+not an instruction that was issued; it is the answer to "what is this NPC doing
+right now", asked again continuously.
+
+So the test is: **does this need to still be true in ten minutes?**
+
+| | |
+|---|---|
+| A sound plays, an item is given, the day advances, a one-shot animation runs | Moments. **Actions.** |
+| An NPC stands at the well, walks to the dock, keeps a post | Ongoing. **Behavior tasks.** |
+| An NPC is in the scene at all | Ongoing. **Presence conditions** on the placement. |
+
+This is why there is no `moveNpc` action. As an action it would fire once and be
+forgotten: the NPC would start walking with nothing holding the intent, and a
+reload would lose it. The task selector already answers "where should this NPC
+be" every frame, and it survives saving, blocking and leaving the region,
+because it re-derives the answer rather than remembering an instruction.
+
+**How the two halves meet.** Node completion is a moment, but behavior tasks
+need continuous truths. So the moment is recorded permanently -- see
+`completedNodeIds` under Save and Persistence -- and the continuous system reads
+it as a standing fact. That is what lets a task bound to "after quest X node Z"
+keep holding after the quest has finished.
+
+---
+
 ## Quest Actions
 
 `QuestActionDefinition` is a discriminated union on `type`. Each action declares
@@ -452,12 +489,28 @@ __sugaragentQuestContext.dump("npc:definition-id")
 
 | what | participant id | persists |
 |---|---|---|
-| Quest manager state (flags, active quests, completed) | `quest.manager` | yes |
+| Quest manager state (flags, active quests, completed quests, completed nodes) | `quest.manager` | yes |
 | World clock (band + day) | `world.time` | yes |
 | Player known facts | `player.known-facts` | yes |
 | Recent world events | -- | no (session-only) |
 
 All save participants restore before `startInitialQuests()` is called.
+
+### completedNodeIds
+
+Node progress lives inside `activeQuests`, which is deleted the moment a quest
+finishes. So "node Z was completed" is recorded separately, per quest, at the
+moment it completes -- outside the state that gets torn down. That is what makes
+a `nodeCompleted` activation still true after its quest is over.
+
+It is never cleared. Nothing restarts a quest: `startQuest` refuses any quest
+already in `completedQuestIds`. On restore it replaces rather than merges, which
+is safe because deserialize runs before `startInitialQuests`, so nothing has
+recorded a completion yet. A save written before the field existed restores as
+empty.
+
+It holds ids only, no timestamps -- there is nothing in it that looks stale
+after a reload.
 
 ---
 
