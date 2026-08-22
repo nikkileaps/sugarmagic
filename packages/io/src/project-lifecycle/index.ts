@@ -19,7 +19,7 @@ import {
   createDefaultRegion,
   createEmptyContentLibrarySnapshot,
   normalizeGameProject,
-  migrateFlagReferences
+  migrateWorldFlagReferences
 } from "@sugarmagic/domain";
 import {
   deleteFile,
@@ -303,7 +303,7 @@ export async function loadProjectFromHandle(
   // that now holds a reference. This runs over the project and its regions
   // together -- a flag a quest writes can be read by a region condition, and
   // they live in different files. Idempotent, so it is safe every load.
-  const migrated = migrateFlagReferences(project, regions);
+  const migrated = migrateWorldFlagReferences(project, regions);
 
   await storeProjectHandle(project.identity.id, handle);
 

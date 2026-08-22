@@ -1,6 +1,6 @@
 export * from "./build";
 export * from "./design";
-export * from "./flags";
+export * from "./world-flags";
 export * from "./interaction";
 export * from "./publish";
 export * from "./render";

@@ -1,5 +1,5 @@
 /**
- * FlagSelect
+ * WorldFlagSelect
  *
  * The one control for pointing authored content at a flag. Every surface that
  * used to take a typed flag key uses this instead, so a flag reference can
@@ -17,6 +17,7 @@
 
 import { useState } from "react";
 import {
+  CloseButton,
   Combobox,
   Group,
   Input,
@@ -24,35 +25,36 @@ import {
   Text,
   useCombobox
 } from "@mantine/core";
-import { useFlagRegistry } from "./FlagRegistryContext";
+import { useWorldFlagRegistry } from "./WorldFlagRegistryContext";
 
 const CREATE_OPTION_VALUE = "__create__";
 
-export interface FlagSelectProps {
+export interface WorldFlagSelectProps {
   label: string;
   /** The referenced flag's definitionId, or null when nothing is picked. */
   value: string | null;
-  onChange: (flagId: string | null) => void;
+  onChange: (worldFlagId: string | null) => void;
   description?: string;
   disabled?: boolean;
   error?: string;
 }
 
-export function FlagSelect(props: FlagSelectProps) {
-  const { flagDefinitions, createFlag } = useFlagRegistry();
+export function WorldFlagSelect(props: WorldFlagSelectProps) {
+  const { worldFlagDefinitions, createWorldFlag } = useWorldFlagRegistry();
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption()
   });
   const [search, setSearch] = useState("");
 
   const selected =
-    flagDefinitions.find(
+    worldFlagDefinitions.find(
       (definition) => definition.definitionId === props.value
     ) ?? null;
-  const dangling = props.value !== null && props.value !== "" && !selected;
+  const hasReference = props.value !== null && props.value !== "";
+  const dangling = hasReference && !selected;
 
   const query = search.trim();
-  const matches = flagDefinitions.filter((definition) => {
+  const matches = worldFlagDefinitions.filter((definition) => {
     if (query.length === 0) return true;
     const needle = query.toLowerCase();
     return (
@@ -64,11 +66,11 @@ export function FlagSelect(props: FlagSelectProps) {
   // with one name would share a slot in the runtime store.
   const canCreate =
     query.length > 0 &&
-    !flagDefinitions.some((definition) => definition.name === query);
+    !worldFlagDefinitions.some((definition) => definition.name === query);
 
   function handleSubmit(optionValue: string) {
     if (optionValue === CREATE_OPTION_VALUE) {
-      props.onChange(createFlag(query));
+      props.onChange(createWorldFlag(query));
     } else {
       props.onChange(optionValue);
     }
@@ -91,8 +93,30 @@ export function FlagSelect(props: FlagSelectProps) {
             props.error ??
             (dangling ? "This flag is not in the registry. Pick another." : undefined)
           }
-          rightSection={<Combobox.Chevron />}
-          rightSectionPointerEvents="none"
+          rightSection={
+            // Clearing is only offered once there is something to clear. A
+            // dangling reference counts -- being able to drop a broken one
+            // is the whole point of showing it.
+            hasReference && !props.disabled ? (
+              <CloseButton
+                size="sm"
+                variant="transparent"
+                aria-label="Clear flag"
+                // The dropdown opens on mousedown, so without this the click
+                // both clears the field and reopens the list.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  props.onChange(null);
+                  combobox.closeDropdown();
+                }}
+              />
+            ) : (
+              <Combobox.Chevron />
+            )
+          }
+          rightSectionPointerEvents={
+            hasReference && !props.disabled ? "all" : "none"
+          }
           onClick={() => combobox.toggleDropdown()}
         >
           {selected ? (

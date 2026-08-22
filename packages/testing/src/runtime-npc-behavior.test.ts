@@ -73,7 +73,7 @@ function makeRegion(): RegionDocument {
               questDefinitionId: "quest:find-suitcase",
               questStageId: "stage:arrival",
               worldFlagEquals: {
-                flagId: "airship_arrived",
+                worldFlagId: "airship_arrived",
                 valueType: "boolean",
                 value: "true"
               }

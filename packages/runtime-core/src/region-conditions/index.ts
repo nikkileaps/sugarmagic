@@ -33,11 +33,11 @@ export interface RegionConditionContext {
    */
   activeQuests: RegionConditionQuestState[];
   /**
-   * Truthy when the flag that `flagId` references holds `value`. Takes a
+   * Truthy when the flag that `worldFlagId` references holds `value`. Takes a
    * reference, not a store key -- the caller supplies a predicate that
    * resolves, so this module never needs the flag registry.
    */
-  hasWorldFlag?: (flagId: string, value?: unknown) => boolean;
+  hasWorldFlag?: (worldFlagId: string, value?: unknown) => boolean;
   /** Truthy when that quest node has been completed at any point. */
   isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean;
 }
@@ -125,12 +125,12 @@ export function evaluateRegionQuestBinding(
       return false;
     }
   }
-  if (binding.worldFlagEquals?.flagId) {
+  if (binding.worldFlagEquals?.worldFlagId) {
     if (!context.hasWorldFlag) {
       return false;
     }
     const expectedValue = coerceWorldFlagValue(binding.worldFlagEquals);
-    if (!context.hasWorldFlag(binding.worldFlagEquals.flagId, expectedValue)) {
+    if (!context.hasWorldFlag(binding.worldFlagEquals.worldFlagId, expectedValue)) {
       return false;
     }
   }

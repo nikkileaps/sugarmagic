@@ -25,7 +25,7 @@ import {
   createDefaultSpellEffectDefinition,
 } from "@sugarmagic/domain";
 import { Inspector } from "@sugarmagic/ui";
-import { FlagSelect } from "../flags";
+import { WorldFlagSelect } from "../world-flags";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import {
   CastableInvocationEditor,
@@ -293,14 +293,14 @@ export function useSpellWorkspaceView(
                     same picker every other flag surface uses; the other types
                     still name their target as free text. */}
                 {effect.type === "world-flag" ? (
-                  <FlagSelect
+                  <WorldFlagSelect
                     label="Flag"
                     value={effect.targetId ?? null}
-                    onChange={(flagId) =>
+                    onChange={(worldFlagId) =>
                       updateEffectList(definition, key, (current) =>
                         current.map((candidate) =>
                           candidate.effectId === effect.effectId
-                            ? { ...candidate, targetId: flagId ?? undefined }
+                            ? { ...candidate, targetId: worldFlagId ?? undefined }
                             : candidate
                         )
                       )

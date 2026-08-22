@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  createFlagDefinition,
-  createFlagNameResolver,
+  createWorldFlagDefinition,
+  createWorldFlagNameResolver,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
   createDefaultQuestStageDefinition,
   createQuestNodeId,
   type QuestConditionDefinition
 } from "@sugarmagic/domain";
-import { coerceAuthoredFlagValue, QuestManager } from "@sugarmagic/runtime-core";
+import { coerceAuthoredWorldFlagValue, QuestManager } from "@sugarmagic/runtime-core";
 
 describe("QuestManager", () => {
   it("routes NPC talk objectives through dialogue and completes them on dialogue end", () => {
@@ -60,7 +60,7 @@ describe("QuestManager", () => {
   function createGateBranchManager(
     condition: QuestConditionDefinition = {
       type: "hasFlag",
-      flagId: GATE_FLAG_ID,
+      worldFlagId: GATE_FLAG_ID,
       value: "true"
     }
   ): QuestManager {
@@ -113,9 +113,9 @@ describe("QuestManager", () => {
         stageDefinitions: [stage]
       }
     ]);
-    manager.setFlagNameResolver(
-      createFlagNameResolver([
-        createFlagDefinition({ definitionId: GATE_FLAG_ID, name: "gate-open" })
+    manager.setWorldFlagNameResolver(
+      createWorldFlagNameResolver([
+        createWorldFlagDefinition({ definitionId: GATE_FLAG_ID, name: "gate-open" })
       ])
     );
     return manager;
@@ -143,10 +143,10 @@ describe("QuestManager", () => {
 
   // The trap this story exists to close: the action writes boolean `true`, the
   // author types the string "true" into the condition, and `===` says no. Both
-  // sides run through `coerceAuthoredFlagValue`, so they agree.
+  // sides run through `coerceAuthoredWorldFlagValue`, so they agree.
   it("matches an authored 'true' condition against a flag a setFlag action wrote", () => {
     const manager = createGateBranchManager();
-    manager.setFlag("gate-open", coerceAuthoredFlagValue("true"));
+    manager.setFlag("gate-open", coerceAuthoredWorldFlagValue("true"));
 
     manager.startQuest("quest:branch-test");
     manager.update();
@@ -157,7 +157,7 @@ describe("QuestManager", () => {
   it("matches an authored value against the same authored value", () => {
     const manager = createGateBranchManager({
       type: "hasFlag",
-      flagId: GATE_FLAG_ID,
+      worldFlagId: GATE_FLAG_ID,
       value: "unlatched"
     });
     manager.setFlag("gate-open", "unlatched");
@@ -171,7 +171,7 @@ describe("QuestManager", () => {
   it("leaves the pass path locked when the values differ", () => {
     const manager = createGateBranchManager({
       type: "hasFlag",
-      flagId: GATE_FLAG_ID,
+      worldFlagId: GATE_FLAG_ID,
       value: "unlatched"
     });
     manager.setFlag("gate-open", "jammed");
@@ -183,13 +183,13 @@ describe("QuestManager", () => {
   });
 
   it("coerces authored text to the type the flag store holds", () => {
-    expect(coerceAuthoredFlagValue("true")).toBe(true);
-    expect(coerceAuthoredFlagValue("false")).toBe(false);
-    expect(coerceAuthoredFlagValue("5")).toBe(5);
-    expect(coerceAuthoredFlagValue("blah")).toBe("blah");
+    expect(coerceAuthoredWorldFlagValue("true")).toBe(true);
+    expect(coerceAuthoredWorldFlagValue("false")).toBe(false);
+    expect(coerceAuthoredWorldFlagValue("5")).toBe(5);
+    expect(coerceAuthoredWorldFlagValue("blah")).toBe("blah");
     // Already typed -- a restored save, or a flag set from code.
-    expect(coerceAuthoredFlagValue(true)).toBe(true);
-    expect(coerceAuthoredFlagValue(7)).toBe(7);
+    expect(coerceAuthoredWorldFlagValue(true)).toBe(true);
+    expect(coerceAuthoredWorldFlagValue(7)).toBe(7);
   });
 
   // `runtimeHost.ts` reports flags into the quest debug dump this way.

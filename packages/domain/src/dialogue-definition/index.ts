@@ -111,8 +111,8 @@ export function isPlayerSpeaker(speaker: DialogueSpeakerRef | null): boolean {
 }
 
 export type DialogueCondition =
-  // `flagId` references a FlagDefinition; the runtime resolves it to a name.
-  | { type: "flag"; flagId: string; value?: unknown }
+  // `worldFlagId` references a WorldFlagDefinition; the runtime resolves it to a name.
+  | { type: "flag"; worldFlagId: string; value?: unknown }
   | { type: "hasItem"; itemId: string; count?: number }
   | { type: "hasSpell"; spellId: string }
   | { type: "canCastSpell"; spellId: string }
@@ -249,8 +249,8 @@ function normalizeDialogueCondition(
     const legacyKey = (condition as unknown as Record<string, unknown>).key;
     return {
       ...condition,
-      flagId:
-        condition.flagId ?? (typeof legacyKey === "string" ? legacyKey : "")
+      worldFlagId:
+        condition.worldFlagId ?? (typeof legacyKey === "string" ? legacyKey : "")
     };
   }
 

@@ -13,38 +13,38 @@
  */
 
 import { createContext, useContext, type ReactNode } from "react";
-import type { FlagDefinition } from "@sugarmagic/domain";
+import type { WorldFlagDefinition } from "@sugarmagic/domain";
 
-export interface FlagRegistry {
-  flagDefinitions: FlagDefinition[];
+export interface WorldFlagRegistry {
+  worldFlagDefinitions: WorldFlagDefinition[];
   /**
    * Declares a flag with that name and returns its definitionId, so the
    * control that asked can point its content at the new flag in one step.
    */
-  createFlag: (name: string) => string;
+  createWorldFlag: (name: string) => string;
 }
 
-const FlagRegistryContext = createContext<FlagRegistry | null>(null);
+const WorldFlagRegistryContext = createContext<WorldFlagRegistry | null>(null);
 
-export function FlagRegistryProvider({
+export function WorldFlagRegistryProvider({
   registry,
   children
 }: {
-  registry: FlagRegistry;
+  registry: WorldFlagRegistry;
   children: ReactNode;
 }) {
   return (
-    <FlagRegistryContext.Provider value={registry}>
+    <WorldFlagRegistryContext.Provider value={registry}>
       {children}
-    </FlagRegistryContext.Provider>
+    </WorldFlagRegistryContext.Provider>
   );
 }
 
-export function useFlagRegistry(): FlagRegistry {
-  const registry = useContext(FlagRegistryContext);
+export function useWorldFlagRegistry(): WorldFlagRegistry {
+  const registry = useContext(WorldFlagRegistryContext);
   if (!registry) {
     throw new Error(
-      "useFlagRegistry: no FlagRegistryProvider above this component. " +
+      "useWorldFlagRegistry: no WorldFlagRegistryProvider above this component. " +
         "Flag pickers must render inside the provider (mounted in Studio's App)."
     );
   }

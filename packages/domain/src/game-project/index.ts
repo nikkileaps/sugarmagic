@@ -13,9 +13,9 @@ import {
 } from "../quest-definition";
 import { normalizeNPCDefinition, type NPCDefinition } from "../npc-definition";
 import {
-  normalizeFlagDefinition,
-  type FlagDefinition
-} from "../flag-definition";
+  normalizeWorldFlagDefinition,
+  type WorldFlagDefinition
+} from "../world-flag";
 import { type GameSavePayload } from "../save";
 import {
   createDefaultScene,
@@ -235,9 +235,9 @@ export interface GameProject {
   playerDefinition: PlayerDefinition;
   /**
    * Every flag the project declares. Authored content references these by
-   * `definitionId`; the runtime store is keyed by `name`. See FlagDefinition.
+   * `definitionId`; the runtime store is keyed by `name`. See WorldFlagDefinition.
    */
-  flagDefinitions: FlagDefinition[];
+  worldFlagDefinitions: WorldFlagDefinition[];
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -408,7 +408,7 @@ export function normalizeGameProject(
         | "majorVersion"
         | "pluginConfigurations"
         | "playerDefinition"
-        | "flagDefinitions"
+        | "worldFlagDefinitions"
         | "spellDefinitions"
         | "itemDefinitions"
         | "documentDefinitions"
@@ -440,7 +440,7 @@ export function normalizeGameProject(
         playerDefinition?: Partial<PlayerDefinition> | null;
         // Epic 206 story 1 — pre-206 project files lack this key. The flag
         // migration below populates it from the names content already uses.
-        flagDefinitions?: Array<Partial<FlagDefinition>> | null;
+        worldFlagDefinitions?: Array<Partial<WorldFlagDefinition>> | null;
         spellDefinitions?: Array<Partial<SpellDefinition>> | null;
         itemDefinitions?: Array<Partial<ItemDefinition>> | null;
         documentDefinitions?: Array<Partial<DocumentDefinition>> | null;
@@ -506,8 +506,8 @@ export function normalizeGameProject(
       gameProject.playerDefinition,
       gameProject.identity.id
     ),
-    flagDefinitions: (gameProject.flagDefinitions ?? []).map((definition) =>
-      normalizeFlagDefinition(definition)
+    worldFlagDefinitions: (gameProject.worldFlagDefinitions ?? []).map((definition) =>
+      normalizeWorldFlagDefinition(definition)
     ),
     spellDefinitions: (gameProject.spellDefinitions ?? []).map((definition) =>
       normalizeSpellDefinition(definition)
@@ -585,7 +585,7 @@ export function createDefaultGameProject(
     pluginConfigurations: [],
     contentLibraryId: `${slug}:content-library`,
     playerDefinition: createDefaultPlayerDefinition(slug),
-    flagDefinitions: [],
+    worldFlagDefinitions: [],
     spellDefinitions: [],
     itemDefinitions: [],
     documentDefinitions: [],

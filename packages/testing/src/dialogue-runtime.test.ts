@@ -67,7 +67,7 @@ function createConditionalDialogue(): DialogueDefinition {
           {
             targetNodeId: gatedNodeId,
             choiceText: "Open gate",
-            condition: { type: "flag", flagId: "gate-open" }
+            condition: { type: "flag", worldFlagId: "gate-open" }
           },
           {
             targetNodeId: fallbackNodeId,

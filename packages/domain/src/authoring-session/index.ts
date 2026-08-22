@@ -22,7 +22,7 @@ import {
 import { normalizeNodeGroups } from "../graph-layout";
 import type { CreditsDefinition } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
-import type { FlagDefinition } from "../flag-definition";
+import type { WorldFlagDefinition } from "../world-flag";
 import type { PlacedAssetInstance, RegionDocument } from "../region-authoring";
 import {
   createItemPresenceId,
@@ -48,9 +48,9 @@ import type {
   CreateNPCDefinitionCommand,
   CreateQuestDefinitionCommand,
   CreateSpellDefinitionCommand,
-  CreateFlagDefinitionCommand,
-  UpdateFlagDefinitionCommand,
-  DeleteFlagDefinitionCommand,
+  CreateWorldFlagDefinitionCommand,
+  UpdateWorldFlagDefinitionCommand,
+  DeleteWorldFlagDefinitionCommand,
   DeleteItemDefinitionCommand,
   DeleteNPCDefinitionCommand,
   DeleteDialogueDefinitionCommand,
@@ -407,10 +407,10 @@ export function getAllSpellDefinitions(
   return session.gameProject.spellDefinitions;
 }
 
-export function getAllFlagDefinitions(
+export function getAllWorldFlagDefinitions(
   session: AuthoringSession
-): FlagDefinition[] {
-  return session.gameProject.flagDefinitions;
+): WorldFlagDefinition[] {
+  return session.gameProject.worldFlagDefinitions;
 }
 
 export function getAllDocumentDefinitions(
@@ -1557,9 +1557,9 @@ function applyCreateSpellDefinitionCommand(
   };
 }
 
-function applyCreateFlagDefinitionCommand(
+function applyCreateWorldFlagDefinitionCommand(
   session: AuthoringSession,
-  command: CreateFlagDefinitionCommand
+  command: CreateWorldFlagDefinitionCommand
 ): AuthoringSession {
   const transaction = createTransactionForCommand(command, [
     command.payload.definition.definitionId
@@ -1569,8 +1569,8 @@ function applyCreateFlagDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      flagDefinitions: [
-        ...session.gameProject.flagDefinitions,
+      worldFlagDefinitions: [
+        ...session.gameProject.worldFlagDefinitions,
         command.payload.definition
       ]
     },
@@ -1581,9 +1581,9 @@ function applyCreateFlagDefinitionCommand(
   };
 }
 
-function applyUpdateFlagDefinitionCommand(
+function applyUpdateWorldFlagDefinitionCommand(
   session: AuthoringSession,
-  command: UpdateFlagDefinitionCommand
+  command: UpdateWorldFlagDefinitionCommand
 ): AuthoringSession {
   const transaction = createTransactionForCommand(command, [
     command.payload.definitionId
@@ -1593,7 +1593,7 @@ function applyUpdateFlagDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      flagDefinitions: session.gameProject.flagDefinitions.map((definition) =>
+      worldFlagDefinitions: session.gameProject.worldFlagDefinitions.map((definition) =>
         definition.definitionId === command.payload.definitionId
           ? { ...definition, ...command.payload.changes }
           : definition
@@ -1612,9 +1612,9 @@ function applyUpdateFlagDefinitionCommand(
  * validator reports -- deleting a flag out from under an author's content
  * should be visible, not silently rewritten.
  */
-function applyDeleteFlagDefinitionCommand(
+function applyDeleteWorldFlagDefinitionCommand(
   session: AuthoringSession,
-  command: DeleteFlagDefinitionCommand
+  command: DeleteWorldFlagDefinitionCommand
 ): AuthoringSession {
   const transaction = createTransactionForCommand(command, [
     command.payload.definitionId
@@ -1624,7 +1624,7 @@ function applyDeleteFlagDefinitionCommand(
     ...session,
     gameProject: {
       ...session.gameProject,
-      flagDefinitions: session.gameProject.flagDefinitions.filter(
+      worldFlagDefinitions: session.gameProject.worldFlagDefinitions.filter(
         (definition) => definition.definitionId !== command.payload.definitionId
       )
     },
@@ -2462,16 +2462,16 @@ export function applyCommand(
     return applyCreateItemDefinitionCommand(session, command);
   }
 
-  if (command.kind === "CreateFlagDefinition") {
-    return applyCreateFlagDefinitionCommand(session, command);
+  if (command.kind === "CreateWorldFlagDefinition") {
+    return applyCreateWorldFlagDefinitionCommand(session, command);
   }
 
-  if (command.kind === "UpdateFlagDefinition") {
-    return applyUpdateFlagDefinitionCommand(session, command);
+  if (command.kind === "UpdateWorldFlagDefinition") {
+    return applyUpdateWorldFlagDefinitionCommand(session, command);
   }
 
-  if (command.kind === "DeleteFlagDefinition") {
-    return applyDeleteFlagDefinitionCommand(session, command);
+  if (command.kind === "DeleteWorldFlagDefinition") {
+    return applyDeleteWorldFlagDefinitionCommand(session, command);
   }
 
   if (command.kind === "CreateSpellDefinition") {

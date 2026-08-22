@@ -12,7 +12,7 @@ import { createUuid } from "../shared/identity";
  * can still name a flag in a string, which they have to: an agent proposing a
  * flag has no way to produce an id.
  */
-export interface FlagDefinition {
+export interface WorldFlagDefinition {
   definitionId: string;
   /**
    * The flag's key in the runtime store. Unique across the project -- two
@@ -22,13 +22,13 @@ export interface FlagDefinition {
   displayName: string;
   description: string;
   /** What the flag holds. Conditions compare against a value of this type. */
-  valueType: FlagValueType;
+  valueType: WorldFlagValueType;
 }
 
-export type FlagValueType = "boolean" | "number" | "string";
+export type WorldFlagValueType = "boolean" | "number" | "string";
 
-export const FLAG_VALUE_TYPE_OPTIONS: Array<{
-  value: FlagValueType;
+export const WORLD_FLAG_VALUE_TYPE_OPTIONS: Array<{
+  value: WorldFlagValueType;
   label: string;
 }> = [
   { value: "boolean", label: "Boolean" },
@@ -36,19 +36,19 @@ export const FLAG_VALUE_TYPE_OPTIONS: Array<{
   { value: "string", label: "String" }
 ];
 
-export function isFlagValueType(value: unknown): value is FlagValueType {
+export function isWorldFlagValueType(value: unknown): value is WorldFlagValueType {
   return value === "boolean" || value === "number" || value === "string";
 }
 
-export function createFlagDefinition(
+export function createWorldFlagDefinition(
   options: {
     definitionId?: string;
     name?: string;
     displayName?: string;
     description?: string;
-    valueType?: FlagValueType;
+    valueType?: WorldFlagValueType;
   } = {}
-): FlagDefinition {
+): WorldFlagDefinition {
   const name = options.name ?? "newFlag";
   return {
     definitionId: options.definitionId ?? createUuid(),
@@ -59,16 +59,16 @@ export function createFlagDefinition(
   };
 }
 
-export function normalizeFlagDefinition(
-  definition: Partial<FlagDefinition> | null | undefined
-): FlagDefinition {
+export function normalizeWorldFlagDefinition(
+  definition: Partial<WorldFlagDefinition> | null | undefined
+): WorldFlagDefinition {
   const name = typeof definition?.name === "string" ? definition.name : "";
   return {
     definitionId: definition?.definitionId ?? createUuid(),
     name,
     displayName: definition?.displayName ?? name,
     description: definition?.description ?? "",
-    valueType: isFlagValueType(definition?.valueType)
+    valueType: isWorldFlagValueType(definition?.valueType)
       ? definition.valueType
       : "boolean"
   };
@@ -79,15 +79,15 @@ export function normalizeFlagDefinition(
  * A caller that gets `null` is holding a dangling reference -- the condition
  * cannot be evaluated, so it fails rather than guessing a key.
  */
-export type FlagNameResolver = (flagId: string) => string | null;
+export type WorldFlagNameResolver = (worldFlagId: string) => string | null;
 
-export function createFlagNameResolver(
-  definitions: readonly FlagDefinition[]
-): FlagNameResolver {
+export function createWorldFlagNameResolver(
+  definitions: readonly WorldFlagDefinition[]
+): WorldFlagNameResolver {
   const namesById = new Map(
     definitions.map((definition) => [definition.definitionId, definition.name])
   );
-  return (flagId) => namesById.get(flagId) ?? null;
+  return (worldFlagId) => namesById.get(worldFlagId) ?? null;
 }
 
 /**
@@ -95,8 +95,8 @@ export function createFlagNameResolver(
  * one slot in the runtime store, so two flags an author sees as separate would
  * read and write each other's value.
  */
-export function findDuplicateFlagNames(
-  definitions: readonly FlagDefinition[]
+export function findDuplicateWorldFlagNames(
+  definitions: readonly WorldFlagDefinition[]
 ): string[] {
   const seen = new Set<string>();
   const duplicates = new Set<string>();

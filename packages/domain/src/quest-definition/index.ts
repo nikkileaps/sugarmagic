@@ -69,9 +69,9 @@ export type QuestNarrativeSubtype = "voiceover" | "dialogue" | "cutscene";
 export type QuestStageState = "active" | "completed";
 
 export type QuestConditionDefinition =
-  // `flagId` references a FlagDefinition, not the runtime store's key. The
+  // `worldFlagId` references a WorldFlagDefinition, not the runtime store's key. The
   // runtime resolves it to that flag's name before comparing.
-  | { type: "hasFlag"; flagId: string; value?: unknown }
+  | { type: "hasFlag"; worldFlagId: string; value?: unknown }
   | { type: "hasSpell"; spellDefinitionId: string }
   | { type: "canCastSpell"; spellDefinitionId: string }
   | { type: "questActive"; questDefinitionId: string }
@@ -95,7 +95,7 @@ export type QuestConditionDefinition =
  */
 export type QuestActionDefinition =
   // Sets a runtime flag. Mirrors the `hasFlag` condition.
-  | { type: "setFlag"; flagId: string; value?: unknown }
+  | { type: "setFlag"; worldFlagId: string; value?: unknown }
   // Fires a quest event, completing any active node waiting on that name.
   | { type: "emitEvent"; eventName: string }
   | { type: "giveItem"; itemDefinitionId: string | null; count: number }
@@ -197,7 +197,7 @@ export const QUEST_ACTION_TYPE_OPTIONS: Array<{
  * than given a meaning, so there is one rule: a flag holds a value, and a
  * condition names the value it wants.
  */
-export function isBlankFlagValue(value: unknown): boolean {
+export function isBlankWorldFlagValue(value: unknown): boolean {
   return value === undefined || value === null || value === "";
 }
 
@@ -206,7 +206,7 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
     case "setFlag":
       // The value is spelled out rather than left blank: a condition compares
       // against it with `===`, so an author has to see what they are setting.
-      return { type, flagId: "", value: "true" };
+      return { type, worldFlagId: "", value: "true" };
     case "emitEvent":
       return { type, eventName: "" };
     case "giveItem":
@@ -439,7 +439,7 @@ function normalizeQuestCondition(
     const legacyKey = readString(
       (condition as unknown as Record<string, unknown>).key
     );
-    return { ...condition, flagId: condition.flagId ?? legacyKey ?? "" };
+    return { ...condition, worldFlagId: condition.worldFlagId ?? legacyKey ?? "" };
   }
   return condition;
 }
@@ -496,8 +496,8 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
       // reference once it can see the whole project.
       return {
         type: "setFlag",
-        flagId:
-          readString(source.flagId) ??
+        worldFlagId:
+          readString(source.worldFlagId) ??
           readString(source.key) ??
           legacyTargetId ??
           "",

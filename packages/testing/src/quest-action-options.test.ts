@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createQuestAction,
-  isBlankFlagValue,
+  isBlankWorldFlagValue,
   QUEST_ACTION_TYPE_OPTIONS,
   type QuestActionType
 } from "@sugarmagic/domain";
@@ -44,7 +44,7 @@ describe("quest action type options", () => {
   it("starts a setFlag action with a value the author can see", () => {
     const action = createQuestAction("setFlag");
     expect(action.type).toBe("setFlag");
-    expect(isBlankFlagValue("value" in action ? action.value : undefined)).toBe(
+    expect(isBlankWorldFlagValue("value" in action ? action.value : undefined)).toBe(
       false
     );
   });
@@ -52,15 +52,15 @@ describe("quest action type options", () => {
 
 describe("blank flag values", () => {
   it("treats missing, null and empty string as blank", () => {
-    expect(isBlankFlagValue(undefined)).toBe(true);
-    expect(isBlankFlagValue(null)).toBe(true);
-    expect(isBlankFlagValue("")).toBe(true);
+    expect(isBlankWorldFlagValue(undefined)).toBe(true);
+    expect(isBlankWorldFlagValue(null)).toBe(true);
+    expect(isBlankWorldFlagValue("")).toBe(true);
   });
 
   it("treats a written value as present, including false and zero", () => {
-    expect(isBlankFlagValue("true")).toBe(false);
-    expect(isBlankFlagValue("blah")).toBe(false);
-    expect(isBlankFlagValue(false)).toBe(false);
-    expect(isBlankFlagValue(0)).toBe(false);
+    expect(isBlankWorldFlagValue("true")).toBe(false);
+    expect(isBlankWorldFlagValue("blah")).toBe(false);
+    expect(isBlankWorldFlagValue(false)).toBe(false);
+    expect(isBlankWorldFlagValue(0)).toBe(false);
   });
 });

@@ -231,8 +231,8 @@ export interface RegionBehaviorNodeCompletedCondition {
 }
 
 export interface RegionBehaviorWorldFlagCondition {
-  /** References a FlagDefinition; the runtime resolves it to that flag's name. */
-  flagId: string | null;
+  /** References a WorldFlagDefinition; the runtime resolves it to that flag's name. */
+  worldFlagId: string | null;
   valueType: "boolean" | "number" | "string";
   value: string | null;
 }
@@ -797,7 +797,7 @@ function readWorldFlagReference(
   condition: Partial<RegionBehaviorWorldFlagCondition> | null | undefined
 ): string | null {
   const raw =
-    condition?.flagId ??
+    condition?.worldFlagId ??
     (condition as Record<string, unknown> | null | undefined)?.key;
   return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
 }
@@ -805,7 +805,7 @@ function readWorldFlagReference(
 export function createRegionBehaviorQuestBinding(
   overrides: Partial<RegionBehaviorQuestBinding> = {}
 ): RegionBehaviorQuestBinding {
-  const flagId = readWorldFlagReference(overrides.worldFlagEquals);
+  const worldFlagId = readWorldFlagReference(overrides.worldFlagEquals);
   return {
     questDefinitionId:
       typeof overrides.questDefinitionId === "string" &&
@@ -827,9 +827,9 @@ export function createRegionBehaviorQuestBinding(
             nodeId: overrides.nodeCompleted.nodeId.trim()
           }
         : null,
-    worldFlagEquals: flagId
+    worldFlagEquals: worldFlagId
       ? {
-          flagId,
+          worldFlagId,
           valueType: overrides.worldFlagEquals?.valueType ?? "boolean",
           value:
             typeof overrides.worldFlagEquals?.value === "string" &&

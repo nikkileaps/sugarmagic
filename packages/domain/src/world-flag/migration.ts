@@ -10,7 +10,7 @@ import type {
   RegionDocument
 } from "../region-authoring";
 import type { SpellDefinition } from "../spell-definition";
-import { createFlagDefinition, type FlagDefinition } from "./index";
+import { createWorldFlagDefinition, type WorldFlagDefinition } from "./index";
 
 /**
  * Turns flag references written before the registry existed into real ones.
@@ -27,11 +27,11 @@ import { createFlagDefinition, type FlagDefinition } from "./index";
  * Idempotent: a second run finds every reference already resolves and changes
  * nothing.
  */
-export function migrateFlagReferences(
+export function migrateWorldFlagReferences(
   gameProject: GameProject,
   regions: readonly RegionDocument[]
 ): { gameProject: GameProject; regions: RegionDocument[]; changed: boolean } {
-  const definitions = [...gameProject.flagDefinitions];
+  const definitions = [...gameProject.worldFlagDefinitions];
   const idsInRegistry = new Set(
     definitions.map((definition) => definition.definitionId)
   );
@@ -45,7 +45,7 @@ export function migrateFlagReferences(
    * time that name is seen. Returns the input untouched when it already names
    * an entry -- that is what makes a second run a no-op.
    */
-  function resolve(reference: string, valueType?: FlagDefinition["valueType"]) {
+  function resolve(reference: string, valueType?: WorldFlagDefinition["valueType"]) {
     if (!reference || idsInRegistry.has(reference)) {
       return reference;
     }
@@ -54,7 +54,7 @@ export function migrateFlagReferences(
       changed = true;
       return existing;
     }
-    const definition = createFlagDefinition({
+    const definition = createWorldFlagDefinition({
       name: reference,
       displayName: reference,
       valueType: valueType ?? "boolean"
@@ -71,7 +71,7 @@ export function migrateFlagReferences(
   ): QuestConditionDefinition | undefined {
     if (!condition) return condition;
     if (condition.type === "hasFlag") {
-      return { ...condition, flagId: resolve(condition.flagId) };
+      return { ...condition, worldFlagId: resolve(condition.worldFlagId) };
     }
     if (condition.type === "not") {
       const inner = migrateQuestCondition(condition.condition);
@@ -84,7 +84,7 @@ export function migrateFlagReferences(
     action: QuestActionDefinition
   ): QuestActionDefinition {
     return action.type === "setFlag"
-      ? { ...action, flagId: resolve(action.flagId) }
+      ? { ...action, worldFlagId: resolve(action.worldFlagId) }
       : action;
   }
 
@@ -93,7 +93,7 @@ export function migrateFlagReferences(
   ): DialogueCondition | undefined {
     if (!condition) return condition;
     if (condition.type === "flag") {
-      return { ...condition, flagId: resolve(condition.flagId) };
+      return { ...condition, worldFlagId: resolve(condition.worldFlagId) };
     }
     if (condition.type === "not") {
       const inner = migrateDialogueCondition(condition.condition);
@@ -105,13 +105,13 @@ export function migrateFlagReferences(
   function migrateBinding(
     binding: RegionBehaviorQuestBinding
   ): RegionBehaviorQuestBinding {
-    if (!binding.worldFlagEquals?.flagId) return binding;
+    if (!binding.worldFlagEquals?.worldFlagId) return binding;
     return {
       ...binding,
       worldFlagEquals: {
         ...binding.worldFlagEquals,
-        flagId: resolve(
-          binding.worldFlagEquals.flagId,
+        worldFlagId: resolve(
+          binding.worldFlagEquals.worldFlagId,
           binding.worldFlagEquals.valueType
         )
       }
@@ -199,7 +199,7 @@ export function migrateFlagReferences(
   return {
     gameProject: {
       ...gameProject,
-      flagDefinitions: definitions,
+      worldFlagDefinitions: definitions,
       questDefinitions,
       dialogueDefinitions,
       spellDefinitions,

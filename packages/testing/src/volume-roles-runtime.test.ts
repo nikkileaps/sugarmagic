@@ -162,7 +162,7 @@ describe("069.5 — conditional containment gate", () => {
     condition: {
       questDefinitionId: null,
       questStageId: null,
-      worldFlagEquals: { flagId: "freed", valueType: "boolean", value: "true" }
+      worldFlagEquals: { worldFlagId: "freed", valueType: "boolean", value: "true" }
     }
   });
 
@@ -199,7 +199,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     const binding = {
       questDefinitionId: null,
       questStageId: null,
-      worldFlagEquals: { flagId: "k", valueType: "boolean" as const, value: "true" }
+      worldFlagEquals: { worldFlagId: "k", valueType: "boolean" as const, value: "true" }
     };
     expect(evaluateRegionQuestBinding(binding, { activeQuests: [] })).toBe(false);
     expect(
@@ -247,7 +247,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
       return {
         questDefinitionId: null,
         questStageId: null,
-        worldFlagEquals: { flagId: "gate", valueType, value: null }
+        worldFlagEquals: { worldFlagId: "gate", valueType, value: null }
       };
     }
 
@@ -290,7 +290,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
         questDefinitionId: null,
         questStageId: null,
         worldFlagEquals: {
-          flagId: "gate",
+          worldFlagId: "gate",
           valueType: "number" as const,
           value: "3"
         }
@@ -324,7 +324,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     const binding = {
       questDefinitionId: "quest.find-the-luggage",
       questStageId: "stage.find-suitcase",
-      worldFlagEquals: { flagId: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
+      worldFlagEquals: { worldFlagId: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
     };
     const ctx = (stageId: string, hasFlag: boolean) => ({
       activeQuests: [{ questDefinitionId: "quest.find-the-luggage", stageId }],
@@ -348,7 +348,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     const binding = {
       questDefinitionId: "quest.find-the-luggage",
       questStageId: "stage.find-suitcase",
-      worldFlagEquals: { flagId: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
+      worldFlagEquals: { worldFlagId: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
     };
     const flagAlwaysSet = (k: string, v: unknown) =>
       k === "talkedToDockWorker" && v === true;

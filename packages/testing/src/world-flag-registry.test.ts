@@ -4,10 +4,10 @@ import {
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
   createDefaultQuestStageDefinition,
-  createFlagDefinition,
-  createFlagNameResolver,
-  findDuplicateFlagNames,
-  migrateFlagReferences,
+  createWorldFlagDefinition,
+  createWorldFlagNameResolver,
+  findDuplicateWorldFlagNames,
+  migrateWorldFlagReferences,
   normalizeGameProject,
   type GameProject
 } from "@sugarmagic/domain";
@@ -21,28 +21,28 @@ import { buildPublishedWebManagedFiles } from "@sugarmagic/plugins";
 describe("flag registry on GameProject", () => {
   it("defaults to an empty list for a project file saved before it existed", () => {
     const project = createDefaultGameProject("Test", "test");
-    const { flagDefinitions: _dropped, ...withoutFlags } = project;
+    const { worldFlagDefinitions: _dropped, ...withoutFlags } = project;
 
     const normalized = normalizeGameProject(withoutFlags as GameProject);
 
-    expect(normalized.flagDefinitions).toEqual([]);
+    expect(normalized.worldFlagDefinitions).toEqual([]);
   });
 
   it("survives a normalize round trip", () => {
     const project = createDefaultGameProject("Test", "test");
-    const flag = createFlagDefinition({ name: "gate-open" });
+    const flag = createWorldFlagDefinition({ name: "gate-open" });
 
     const normalized = normalizeGameProject({
       ...project,
-      flagDefinitions: [flag]
+      worldFlagDefinitions: [flag]
     });
 
-    expect(normalized.flagDefinitions).toEqual([flag]);
+    expect(normalized.worldFlagDefinitions).toEqual([flag]);
   });
 
   it("resolves a reference to the flag's store key, and a stranger to null", () => {
-    const flag = createFlagDefinition({ name: "gate-open" });
-    const resolve = createFlagNameResolver([flag]);
+    const flag = createWorldFlagDefinition({ name: "gate-open" });
+    const resolve = createWorldFlagNameResolver([flag]);
 
     expect(resolve(flag.definitionId)).toBe("gate-open");
     expect(resolve("flag:not-here")).toBeNull();
@@ -52,14 +52,14 @@ describe("flag registry on GameProject", () => {
   // the author sees as separate would read and write each other's value.
   it("reports duplicate names", () => {
     expect(
-      findDuplicateFlagNames([
-        createFlagDefinition({ name: "gate-open" }),
-        createFlagDefinition({ name: "gate-open" }),
-        createFlagDefinition({ name: "other" })
+      findDuplicateWorldFlagNames([
+        createWorldFlagDefinition({ name: "gate-open" }),
+        createWorldFlagDefinition({ name: "gate-open" }),
+        createWorldFlagDefinition({ name: "other" })
       ])
     ).toEqual(["gate-open"]);
     expect(
-      findDuplicateFlagNames([createFlagDefinition({ name: "gate-open" })])
+      findDuplicateWorldFlagNames([createWorldFlagDefinition({ name: "gate-open" })])
     ).toEqual([]);
   });
 });
@@ -70,10 +70,10 @@ describe("flag registry on GameProject", () => {
 // silently has no flags.
 describe("the deployed boot payload", () => {
   it("carries the flag registry", () => {
-    const flag = createFlagDefinition({ name: "gate-open" });
+    const flag = createWorldFlagDefinition({ name: "gate-open" });
     const files = buildPublishedWebManagedFiles({
       ...createDefaultGameProject("Test", "test"),
-      flagDefinitions: [flag]
+      worldFlagDefinitions: [flag]
     });
 
     const bootFile = files.find((file) =>
@@ -82,7 +82,7 @@ describe("the deployed boot payload", () => {
     expect(bootFile).toBeDefined();
 
     const boot = JSON.parse(bootFile?.content ?? "{}");
-    expect(boot.flagDefinitions).toEqual([flag]);
+    expect(boot.worldFlagDefinitions).toEqual([flag]);
   });
 });
 
@@ -96,8 +96,8 @@ describe("migrating flag references written before the registry", () => {
             description: "Check the flag",
             nodeBehavior: "branch"
           }),
-          condition: { type: "hasFlag", flagId: name, value: "true" },
-          onCompleteActions: [{ type: "setFlag", flagId: name, value: "true" }]
+          condition: { type: "hasFlag", worldFlagId: name, value: "true" },
+          onCompleteActions: [{ type: "setFlag", worldFlagId: name, value: "true" }]
         }
       ]
     });
@@ -118,18 +118,18 @@ describe("migrating flag references written before the registry", () => {
   }
 
   it("creates one entry per name and rewrites the references to its id", () => {
-    const result = migrateFlagReferences(projectNamingFlag("gate-open"), []);
+    const result = migrateWorldFlagReferences(projectNamingFlag("gate-open"), []);
 
     expect(result.changed).toBe(true);
-    expect(result.gameProject.flagDefinitions).toHaveLength(1);
+    expect(result.gameProject.worldFlagDefinitions).toHaveLength(1);
 
-    const [flag] = result.gameProject.flagDefinitions;
+    const [flag] = result.gameProject.worldFlagDefinitions;
     expect(flag.name).toBe("gate-open");
 
     const node = firstNodeOf(result.gameProject);
-    expect(node.condition).toMatchObject({ flagId: flag.definitionId });
+    expect(node.condition).toMatchObject({ worldFlagId: flag.definitionId });
     expect(node.onCompleteActions[0]).toMatchObject({
-      flagId: flag.definitionId
+      worldFlagId: flag.definitionId
     });
   });
 
@@ -137,17 +137,17 @@ describe("migrating flag references written before the registry", () => {
   // two would put the writer and the reader in different store slots, which is
   // the silent miss this epic exists to remove.
   it("gives one name one entry however many places reference it", () => {
-    const result = migrateFlagReferences(projectNamingFlag("gate-open"), []);
-    expect(result.gameProject.flagDefinitions).toHaveLength(1);
+    const result = migrateWorldFlagReferences(projectNamingFlag("gate-open"), []);
+    expect(result.gameProject.worldFlagDefinitions).toHaveLength(1);
   });
 
   it("changes nothing on a second run", () => {
-    const once = migrateFlagReferences(projectNamingFlag("gate-open"), []);
-    const twice = migrateFlagReferences(once.gameProject, once.regions);
+    const once = migrateWorldFlagReferences(projectNamingFlag("gate-open"), []);
+    const twice = migrateWorldFlagReferences(once.gameProject, once.regions);
 
     expect(twice.changed).toBe(false);
-    expect(twice.gameProject.flagDefinitions).toEqual(
-      once.gameProject.flagDefinitions
+    expect(twice.gameProject.worldFlagDefinitions).toEqual(
+      once.gameProject.worldFlagDefinitions
     );
     expect(firstNodeOf(twice.gameProject).condition).toEqual(
       firstNodeOf(once.gameProject).condition
@@ -155,12 +155,12 @@ describe("migrating flag references written before the registry", () => {
   });
 
   it("leaves a project with no flag references alone", () => {
-    const result = migrateFlagReferences(
+    const result = migrateWorldFlagReferences(
       createDefaultGameProject("Test", "test"),
       []
     );
 
     expect(result.changed).toBe(false);
-    expect(result.gameProject.flagDefinitions).toEqual([]);
+    expect(result.gameProject.worldFlagDefinitions).toEqual([]);
   });
 });

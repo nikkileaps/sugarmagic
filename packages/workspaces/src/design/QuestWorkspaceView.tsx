@@ -67,7 +67,7 @@ import {
   QUEST_ACTION_TYPE_OPTIONS,
   TIME_OF_DAY_BAND_OPTIONS,
   createQuestAction,
-  isBlankFlagValue,
+  isBlankWorldFlagValue,
   createDefaultDialogueDefinition,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
@@ -76,7 +76,7 @@ import {
   createQuestNodeId
 } from "@sugarmagic/domain";
 import { AddNodeMenu, Inspector } from "@sugarmagic/ui";
-import { FlagSelect } from "../flags";
+import { WorldFlagSelect } from "../world-flags";
 import {
   NodeEditor,
   type GraphEditorConnection,
@@ -196,17 +196,17 @@ function emptyStageLoop(quest: QuestDefinition): string[] {
  * author sees what is being compared -- `createQuestAction` does the same for
  * the `setFlag` action, and the two have to agree for the condition to match.
  */
-function createFlagCondition(): QuestConditionDefinition {
-  return { type: "hasFlag", flagId: "", value: "true" };
+function createWorldFlagCondition(): QuestConditionDefinition {
+  return { type: "hasFlag", worldFlagId: "", value: "true" };
 }
 
 /** Every flag condition inside a condition tree, including under `not`. */
-function flagConditions(
+function worldFlagConditions(
   condition: QuestConditionDefinition | undefined
 ): Extract<QuestConditionDefinition, { type: "hasFlag" }>[] {
   if (!condition) return [];
   if (condition.type === "hasFlag") return [condition];
-  if (condition.type === "not") return flagConditions(condition.condition);
+  if (condition.type === "not") return worldFlagConditions(condition.condition);
   return [];
 }
 
@@ -252,19 +252,19 @@ function validateQuest(quest: QuestDefinition): string[] {
           warnings.push(`Node "${node.displayName}" is missing a condition.`);
         }
       }
-      for (const flagCondition of flagConditions(node.condition)) {
-        if (!flagCondition.flagId) {
+      for (const flagCondition of worldFlagConditions(node.condition)) {
+        if (!flagCondition.worldFlagId) {
           warnings.push(
             `Node "${node.displayName}" has a flag condition with no flag picked.`
           );
-        } else if (isBlankFlagValue(flagCondition.value)) {
+        } else if (isBlankWorldFlagValue(flagCondition.value)) {
           warnings.push(
             `Node "${node.displayName}" checks a flag with no value, so it never matches.`
           );
         }
       }
       for (const action of [...node.onEnterActions, ...node.onCompleteActions]) {
-        if (action.type === "setFlag" && isBlankFlagValue(action.value)) {
+        if (action.type === "setFlag" && isBlankWorldFlagValue(action.value)) {
           warnings.push(
             `Node "${node.displayName}" sets a flag with no value.`
           );
@@ -507,7 +507,7 @@ function QuestConditionEditor({
   function handleTypeChange(type: string) {
     switch (type) {
       case "hasFlag":
-        onChange(createFlagCondition());
+        onChange(createWorldFlagCondition());
         break;
       case "hasSpell":
         onChange({ type: "hasSpell", spellDefinitionId: "" });
@@ -530,7 +530,7 @@ function QuestConditionEditor({
         });
         break;
       case "not":
-        onChange({ type: "not", condition: createFlagCondition() });
+        onChange({ type: "not", condition: createWorldFlagCondition() });
         break;
       default:
         break;
@@ -574,17 +574,17 @@ function QuestConditionEditor({
       />
       {condition.type === "hasFlag" && (
         <>
-          <FlagSelect
+          <WorldFlagSelect
             label="Flag"
-            value={condition.flagId || null}
-            onChange={(flagId) => onChange({ ...condition, flagId: flagId ?? "" })}
+            value={condition.worldFlagId || null}
+            onChange={(worldFlagId) => onChange({ ...condition, worldFlagId: worldFlagId ?? "" })}
           />
           <TextInput
             size="xs"
             label="Expected Value"
             value={condition.value == null ? "" : String(condition.value)}
             error={
-              isBlankFlagValue(condition.value)
+              isBlankWorldFlagValue(condition.value)
                 ? "Required. A condition with no value never matches."
                 : undefined
             }
@@ -722,17 +722,17 @@ function QuestActionFields({
     case "setFlag":
       return (
         <>
-          <FlagSelect
+          <WorldFlagSelect
             label="Flag"
-            value={action.flagId || null}
-            onChange={(flagId) => onChange({ ...action, flagId: flagId ?? "" })}
+            value={action.worldFlagId || null}
+            onChange={(worldFlagId) => onChange({ ...action, worldFlagId: worldFlagId ?? "" })}
           />
           <TextInput
             size="xs"
             label="Value"
             value={action.value == null ? "" : String(action.value)}
             error={
-              isBlankFlagValue(action.value)
+              isBlankWorldFlagValue(action.value)
                 ? "Required. Conditions compare against this value."
                 : undefined
             }
@@ -2373,7 +2373,7 @@ export function useQuestWorkspaceView({
                       : undefined,
                   condition:
                     value === "condition" || value === "branch"
-                      ? (selectedNode.condition ?? createFlagCondition())
+                      ? (selectedNode.condition ?? createWorldFlagCondition())
                       : undefined,
                   failTargetNodeIds:
                     value === "branch" ? selectedNode.failTargetNodeIds : []
@@ -2599,7 +2599,7 @@ export function useQuestWorkspaceView({
               selectedNode.nodeBehavior === "branch") && (
               <QuestConditionEditor
                 condition={
-                  selectedNode.condition ?? createFlagCondition()
+                  selectedNode.condition ?? createWorldFlagCondition()
                 }
                 spellDefinitions={spellDefinitions}
                 onChange={(condition) =>

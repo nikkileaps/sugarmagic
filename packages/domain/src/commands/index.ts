@@ -26,7 +26,7 @@ import type { MechanicsDefinition } from "../mechanics";
 import type { QuestDefinition } from "../quest-definition";
 import type { PluginConfigurationRecord } from "../plugins";
 import type { SpellDefinition } from "../spell-definition";
-import type { FlagDefinition } from "../flag-definition";
+import type { WorldFlagDefinition } from "../world-flag";
 import type { DeploymentSettings } from "../deployment";
 import type { DocumentId, SubjectReference } from "../shared/identity";
 import type {
@@ -721,23 +721,23 @@ export type CreateSpellDefinitionCommand = SemanticCommandBase<
   }
 >;
 
-export type CreateFlagDefinitionCommand = SemanticCommandBase<
-  "CreateFlagDefinition",
+export type CreateWorldFlagDefinitionCommand = SemanticCommandBase<
+  "CreateWorldFlagDefinition",
   {
-    definition: FlagDefinition;
+    definition: WorldFlagDefinition;
   }
 >;
 
-export type UpdateFlagDefinitionCommand = SemanticCommandBase<
-  "UpdateFlagDefinition",
+export type UpdateWorldFlagDefinitionCommand = SemanticCommandBase<
+  "UpdateWorldFlagDefinition",
   {
     definitionId: string;
-    changes: Partial<Omit<FlagDefinition, "definitionId">>;
+    changes: Partial<Omit<WorldFlagDefinition, "definitionId">>;
   }
 >;
 
-export type DeleteFlagDefinitionCommand = SemanticCommandBase<
-  "DeleteFlagDefinition",
+export type DeleteWorldFlagDefinitionCommand = SemanticCommandBase<
+  "DeleteWorldFlagDefinition",
   {
     definitionId: string;
   }
@@ -1167,9 +1167,9 @@ export type SemanticCommand =
   | RemovePlayerPresenceCommand
   | CreateNPCDefinitionCommand
   | CreateSpellDefinitionCommand
-  | CreateFlagDefinitionCommand
-  | UpdateFlagDefinitionCommand
-  | DeleteFlagDefinitionCommand
+  | CreateWorldFlagDefinitionCommand
+  | UpdateWorldFlagDefinitionCommand
+  | DeleteWorldFlagDefinitionCommand
   | CreateItemDefinitionCommand
   | CreateDocumentDefinitionCommand
   | CreateDialogueDefinitionCommand
