@@ -76,6 +76,7 @@ import {
   createQuestNodeId
 } from "@sugarmagic/domain";
 import { AddNodeMenu, Inspector } from "@sugarmagic/ui";
+import { FlagSelect } from "../flags";
 import {
   NodeEditor,
   type GraphEditorConnection,
@@ -196,7 +197,7 @@ function emptyStageLoop(quest: QuestDefinition): string[] {
  * the `setFlag` action, and the two have to agree for the condition to match.
  */
 function createFlagCondition(): QuestConditionDefinition {
-  return { type: "hasFlag", key: "", value: "true" };
+  return { type: "hasFlag", flagId: "", value: "true" };
 }
 
 /** Every flag condition inside a condition tree, including under `not`. */
@@ -252,20 +253,20 @@ function validateQuest(quest: QuestDefinition): string[] {
         }
       }
       for (const flagCondition of flagConditions(node.condition)) {
-        if (!flagCondition.key) {
+        if (!flagCondition.flagId) {
           warnings.push(
-            `Node "${node.displayName}" has a flag condition with no key.`
+            `Node "${node.displayName}" has a flag condition with no flag picked.`
           );
         } else if (isBlankFlagValue(flagCondition.value)) {
           warnings.push(
-            `Node "${node.displayName}" checks flag "${flagCondition.key}" with no value, so it never matches.`
+            `Node "${node.displayName}" checks a flag with no value, so it never matches.`
           );
         }
       }
       for (const action of [...node.onEnterActions, ...node.onCompleteActions]) {
         if (action.type === "setFlag" && isBlankFlagValue(action.value)) {
           warnings.push(
-            `Node "${node.displayName}" sets flag "${action.key}" with no value.`
+            `Node "${node.displayName}" sets a flag with no value.`
           );
         }
       }
@@ -573,13 +574,10 @@ function QuestConditionEditor({
       />
       {condition.type === "hasFlag" && (
         <>
-          <TextInput
-            size="xs"
-            label="Flag Key"
-            value={condition.key}
-            onChange={(event) =>
-              onChange({ ...condition, key: event.currentTarget.value })
-            }
+          <FlagSelect
+            label="Flag"
+            value={condition.flagId || null}
+            onChange={(flagId) => onChange({ ...condition, flagId: flagId ?? "" })}
           />
           <TextInput
             size="xs"
@@ -724,13 +722,10 @@ function QuestActionFields({
     case "setFlag":
       return (
         <>
-          <TextInput
-            size="xs"
-            label="Flag Key"
-            value={action.key}
-            onChange={(event) =>
-              onChange({ ...action, key: event.currentTarget.value })
-            }
+          <FlagSelect
+            label="Flag"
+            value={action.flagId || null}
+            onChange={(flagId) => onChange({ ...action, flagId: flagId ?? "" })}
           />
           <TextInput
             size="xs"

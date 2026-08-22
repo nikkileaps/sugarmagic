@@ -1,4 +1,5 @@
 import type {
+  FlagNameResolver,
   QuestActionDefinition,
   QuestConditionDefinition,
   QuestDefinition,
@@ -195,6 +196,13 @@ export class QuestManager {
   private hasSpellProvider: QuestSpellStateProvider = () => false;
   private canCastSpellProvider: QuestSpellStateProvider = () => false;
   private isPlayerInAreaProvider: QuestPlayerAreaProvider = () => false;
+  /**
+   * Resolves a flag reference to the flag's name. Injected rather than read
+   * from a registry here: the registry lives on GameProject, which runtime-core
+   * does not depend on. Default resolves nothing, so a manager with no registry
+   * wired treats every reference as dangling.
+   */
+  private resolveFlagName: FlagNameResolver = () => null;
 
   registerDefinitions(definitions: QuestDefinition[]): void {
     this.definitions.clear();
@@ -238,6 +246,10 @@ export class QuestManager {
 
   setPlayerAreaProvider(provider: QuestPlayerAreaProvider): void {
     this.isPlayerInAreaProvider = provider;
+  }
+
+  setFlagNameResolver(resolver: FlagNameResolver): void {
+    this.resolveFlagName = resolver;
   }
 
   update(): void {
@@ -351,6 +363,31 @@ export class QuestManager {
   setFlag(key: string, value: unknown = true): void {
     this.runtimeFlags.set(key, value);
     this.update();
+  }
+
+  /**
+   * The same question as `hasFlag`, asked the way authored content asks it:
+   * by flag reference rather than by store key. Resolves, then hands off --
+   * the comparison itself stays in one place.
+   *
+   * A reference that names no flag fails closed. The condition cannot be
+   * evaluated, so guessing a key would be worse than answering no.
+   */
+  hasFlagById(flagId: string, value: unknown = true): boolean {
+    const name = this.resolveFlagName(flagId);
+    return name === null ? false : this.hasFlag(name, value);
+  }
+
+  /** Writes by flag reference. An unresolved reference writes nothing. */
+  setFlagById(flagId: string, value: unknown = true): void {
+    const name = this.resolveFlagName(flagId);
+    if (name === null) {
+      console.warn(
+        `[quest] Flag reference "${flagId}" is not in the project's flag registry. Nothing was set. Re-pick the flag on the content that writes it.`
+      );
+      return;
+    }
+    this.setFlag(name, value);
   }
 
   notifyEvent(eventName: string): void {
@@ -934,9 +971,18 @@ export class QuestManager {
     source: { questDefinitionId: string; stageId: string; nodeId: string }
   ): void {
     for (const action of actions) {
-      if (action.type === "setFlag" && action.key) {
+      if (action.type === "setFlag" && action.flagId) {
+        // Writes the map directly rather than calling setFlagById, which calls
+        // update(): this runs reentrantly inside refreshQuest.
+        const name = this.resolveFlagName(action.flagId);
+        if (name === null) {
+          console.warn(
+            `[quest] Flag reference "${action.flagId}" on node "${source.nodeId}" is not in the project's flag registry. Nothing was set.`
+          );
+          continue;
+        }
         this.runtimeFlags.set(
-          action.key,
+          name,
           coerceAuthoredFlagValue(action.value ?? true)
         );
         continue;
@@ -954,8 +1000,8 @@ export class QuestManager {
   private evaluateCondition(condition: QuestConditionDefinition): boolean {
     switch (condition.type) {
       case "hasFlag":
-        return this.hasFlag(
-          condition.key,
+        return this.hasFlagById(
+          condition.flagId,
           coerceAuthoredFlagValue(condition.value ?? true)
         );
       case "hasSpell":

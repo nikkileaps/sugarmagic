@@ -22,6 +22,7 @@ import {
 import { normalizeNodeGroups } from "../graph-layout";
 import type { CreditsDefinition } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
+import type { FlagDefinition } from "../flag-definition";
 import type { PlacedAssetInstance, RegionDocument } from "../region-authoring";
 import {
   createItemPresenceId,
@@ -47,6 +48,9 @@ import type {
   CreateNPCDefinitionCommand,
   CreateQuestDefinitionCommand,
   CreateSpellDefinitionCommand,
+  CreateFlagDefinitionCommand,
+  UpdateFlagDefinitionCommand,
+  DeleteFlagDefinitionCommand,
   DeleteItemDefinitionCommand,
   DeleteNPCDefinitionCommand,
   DeleteDialogueDefinitionCommand,
@@ -401,6 +405,12 @@ export function getAllSpellDefinitions(
   session: AuthoringSession
 ): SpellDefinition[] {
   return session.gameProject.spellDefinitions;
+}
+
+export function getAllFlagDefinitions(
+  session: AuthoringSession
+): FlagDefinition[] {
+  return session.gameProject.flagDefinitions;
 }
 
 export function getAllDocumentDefinitions(
@@ -1547,6 +1557,84 @@ function applyCreateSpellDefinitionCommand(
   };
 }
 
+function applyCreateFlagDefinitionCommand(
+  session: AuthoringSession,
+  command: CreateFlagDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      flagDefinitions: [
+        ...session.gameProject.flagDefinitions,
+        command.payload.definition
+      ]
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdateFlagDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdateFlagDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      flagDefinitions: session.gameProject.flagDefinitions.map((definition) =>
+        definition.definitionId === command.payload.definitionId
+          ? { ...definition, ...command.payload.changes }
+          : definition
+      )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+/**
+ * Removes the entry. Content still referencing it is left alone and becomes a
+ * dangling reference, which the picker shows as an error and the quest
+ * validator reports -- deleting a flag out from under an author's content
+ * should be visible, not silently rewritten.
+ */
+function applyDeleteFlagDefinitionCommand(
+  session: AuthoringSession,
+  command: DeleteFlagDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      flagDefinitions: session.gameProject.flagDefinitions.filter(
+        (definition) => definition.definitionId !== command.payload.definitionId
+      )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyCreateDocumentDefinitionCommand(
   session: AuthoringSession,
   command: CreateDocumentDefinitionCommand
@@ -2372,6 +2460,18 @@ export function applyCommand(
 
   if (command.kind === "CreateItemDefinition") {
     return applyCreateItemDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "CreateFlagDefinition") {
+    return applyCreateFlagDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "UpdateFlagDefinition") {
+    return applyUpdateFlagDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "DeleteFlagDefinition") {
+    return applyDeleteFlagDefinitionCommand(session, command);
   }
 
   if (command.kind === "CreateSpellDefinition") {

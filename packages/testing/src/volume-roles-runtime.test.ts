@@ -162,7 +162,7 @@ describe("069.5 — conditional containment gate", () => {
     condition: {
       questDefinitionId: null,
       questStageId: null,
-      worldFlagEquals: { key: "freed", valueType: "boolean", value: "true" }
+      worldFlagEquals: { flagId: "freed", valueType: "boolean", value: "true" }
     }
   });
 
@@ -199,7 +199,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     const binding = {
       questDefinitionId: null,
       questStageId: null,
-      worldFlagEquals: { key: "k", valueType: "boolean" as const, value: "true" }
+      worldFlagEquals: { flagId: "k", valueType: "boolean" as const, value: "true" }
     };
     expect(evaluateRegionQuestBinding(binding, { activeQuests: [] })).toBe(false);
     expect(
@@ -230,10 +230,10 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
 
   it("coerces authored flag values", () => {
     expect(
-      coerceWorldFlagValue({ key: "k", valueType: "boolean", value: null })
+      coerceWorldFlagValue({ valueType: "boolean", value: null })
     ).toBe(true);
     expect(
-      coerceWorldFlagValue({ key: "k", valueType: "number", value: "3" })
+      coerceWorldFlagValue({ valueType: "number", value: "3" })
     ).toBe(3);
   });
 
@@ -247,7 +247,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
       return {
         questDefinitionId: null,
         questStageId: null,
-        worldFlagEquals: { key: "gate", valueType, value: null }
+        worldFlagEquals: { flagId: "gate", valueType, value: null }
       };
     }
 
@@ -290,7 +290,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
         questDefinitionId: null,
         questStageId: null,
         worldFlagEquals: {
-          key: "gate",
+          flagId: "gate",
           valueType: "number" as const,
           value: "3"
         }
@@ -302,17 +302,17 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
 
   it("write value is always the declared type (never boolean into a number slot)", () => {
     expect(
-      resolveWorldFlagWriteValue({ key: "k", valueType: "number", value: "7" })
+      resolveWorldFlagWriteValue({ valueType: "number", value: "7" })
     ).toBe(7);
     // Valueless declarations fall back to the TYPE's zero, not `true`.
     expect(
-      resolveWorldFlagWriteValue({ key: "k", valueType: "number", value: null })
+      resolveWorldFlagWriteValue({ valueType: "number", value: null })
     ).toBe(0);
     expect(
-      resolveWorldFlagWriteValue({ key: "k", valueType: "string", value: null })
+      resolveWorldFlagWriteValue({ valueType: "string", value: null })
     ).toBe("");
     expect(
-      resolveWorldFlagWriteValue({ key: "k", valueType: "boolean", value: null })
+      resolveWorldFlagWriteValue({ valueType: "boolean", value: null })
     ).toBe(true);
   });
 
@@ -324,7 +324,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     const binding = {
       questDefinitionId: "quest.find-the-luggage",
       questStageId: "stage.find-suitcase",
-      worldFlagEquals: { key: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
+      worldFlagEquals: { flagId: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
     };
     const ctx = (stageId: string, hasFlag: boolean) => ({
       activeQuests: [{ questDefinitionId: "quest.find-the-luggage", stageId }],
@@ -348,7 +348,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     const binding = {
       questDefinitionId: "quest.find-the-luggage",
       questStageId: "stage.find-suitcase",
-      worldFlagEquals: { key: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
+      worldFlagEquals: { flagId: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
     };
     const flagAlwaysSet = (k: string, v: unknown) =>
       k === "talkedToDockWorker" && v === true;

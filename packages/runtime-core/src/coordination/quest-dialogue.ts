@@ -40,10 +40,14 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
     if (!dialogueManager || !questManager) return;
 
         dialogueManager.setConditionContext({
-          // Dialogue flag conditions are authored as text in the same way quest
-          // ones are, so they get the same coercion before the comparison.
-          hasFlag: (key, value) =>
-            questManager?.hasFlag(key, coerceAuthoredFlagValue(value ?? true)) ?? false,
+          // Dialogue flag conditions are authored the same way quest ones are:
+          // a flag reference plus a value typed as text. Same resolution, same
+          // coercion, so the two grammars cannot drift apart.
+          hasFlag: (flagId, value) =>
+            questManager?.hasFlagById(
+              flagId,
+              coerceAuthoredFlagValue(value ?? true)
+            ) ?? false,
           hasItem: (itemDefinitionId, count) => hasItem?.(itemDefinitionId, count) ?? false,
           hasSpell: (spellDefinitionId) => hasSpell?.(spellDefinitionId) ?? false,
           canCastSpell: (spellDefinitionId) => canCastSpell?.(spellDefinitionId) ?? false,

@@ -48,6 +48,7 @@ import {
   type ViewportToolbarItem
 } from "@sugarmagic/ui";
 import type { ViewportStore } from "@sugarmagic/shell";
+import { FlagSelect } from "../../flags";
 import type { WorkspaceViewContribution } from "../../workspace-view";
 import { useVanillaStoreSelector } from "../../use-vanilla-store";
 import { LayoutOrientationWidget } from "../layout/LayoutOrientationWidget";
@@ -665,14 +666,12 @@ export function useSpatialWorkspaceView(
                 />
                 {selectedVolume.roles.includes("containment-boundary") && (
                   <Group grow>
-                    <TextInput
+                    <FlagSelect
                       label="Open when flag"
-                      size="xs"
-                      placeholder="boss_defeated"
                       value={
-                        selectedVolume.condition?.worldFlagEquals?.key ?? ""
+                        selectedVolume.condition?.worldFlagEquals?.flagId ?? null
                       }
-                      onChange={(event) =>
+                      onChange={(flagId) =>
                         updateVolume({
                           // Spread the existing condition so a clause this
                           // control does not show is not erased by editing the
@@ -680,9 +679,9 @@ export function useSpatialWorkspaceView(
                           condition: {
                             ...(selectedVolume.condition ??
                               createRegionBehaviorQuestBinding()),
-                            worldFlagEquals: event.currentTarget.value
+                            worldFlagEquals: flagId
                               ? {
-                                  key: event.currentTarget.value,
+                                  flagId,
                                   valueType:
                                     selectedVolume.condition?.worldFlagEquals
                                       ?.valueType ?? "boolean",
@@ -702,10 +701,10 @@ export function useSpatialWorkspaceView(
                         selectedVolume.condition?.worldFlagEquals?.value ?? ""
                       }
                       disabled={
-                        !selectedVolume.condition?.worldFlagEquals?.key
+                        !selectedVolume.condition?.worldFlagEquals?.flagId
                       }
                       onChange={(event) =>
-                        selectedVolume.condition?.worldFlagEquals?.key &&
+                        selectedVolume.condition?.worldFlagEquals?.flagId &&
                         updateVolume({
                           condition: {
                             questDefinitionId:
@@ -713,7 +712,8 @@ export function useSpatialWorkspaceView(
                             questStageId:
                               selectedVolume.condition.questStageId,
                             worldFlagEquals: {
-                              key: selectedVolume.condition.worldFlagEquals.key,
+                              flagId:
+                                selectedVolume.condition.worldFlagEquals.flagId,
                               valueType:
                                 selectedVolume.condition.worldFlagEquals
                                   .valueType,

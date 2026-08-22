@@ -29,7 +29,7 @@ function dialogue(): DialogueDefinition {
           {
             targetNodeId: "n3",
             choiceText: "Let me pass",
-            condition: { type: "flag", key: "has-pass" }
+            condition: { type: "flag", flagId: "has-pass" }
           }
         ],
         graphPosition: { x: 10, y: 20 }

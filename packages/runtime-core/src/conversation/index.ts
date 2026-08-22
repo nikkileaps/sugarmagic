@@ -515,7 +515,7 @@ function evaluateDialogueCondition(
 ): boolean {
   switch (condition.type) {
     case "flag":
-      return context.hasFlag?.(condition.key, condition.value) ?? false;
+      return context.hasFlag?.(condition.flagId, condition.value) ?? false;
     case "hasItem":
       return context.hasItem?.(condition.itemId, condition.count) ?? false;
     case "hasSpell":

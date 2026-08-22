@@ -1,4 +1,5 @@
 import { Select, TextInput } from "@mantine/core";
+import { FlagSelect } from "../../flags";
 import type {
   RegionBehaviorWorldFlagCondition,
   RegionNPCBehaviorTask
@@ -29,25 +30,23 @@ export function WorldFlagActivationFields(props: WorldFlagActivationFieldsProps)
 
   return (
     <>
-      <TextInput
+      <FlagSelect
         label="World Flag"
-        size="xs"
-        description="Optional runtime world flag required for this task to activate."
-        value={task.activation.worldFlagEquals?.key ?? ""}
-        onChange={(event) => {
-          const nextKey = event.currentTarget.value;
+        description="Optional. The task only activates while this flag matches."
+        value={task.activation.worldFlagEquals?.flagId ?? null}
+        onChange={(flagId) => {
           onUpdateTask({
             ...task,
             activation: {
               ...task.activation,
-              worldFlagEquals:
-                nextKey.trim().length > 0
-                  ? {
-                      key: nextKey,
-                      valueType: task.activation.worldFlagEquals?.valueType ?? "boolean",
-                      value: task.activation.worldFlagEquals?.value ?? null
-                    }
-                  : null
+              worldFlagEquals: flagId
+                ? {
+                    flagId,
+                    valueType:
+                      task.activation.worldFlagEquals?.valueType ?? "boolean",
+                    value: task.activation.worldFlagEquals?.value ?? null
+                  }
+                : null
             }
           });
         }}

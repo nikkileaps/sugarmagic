@@ -186,6 +186,7 @@ function buildBootJsonPayload(
     contentLibrary: snapshot.contentLibrary,
     mechanics: gameProject.mechanics,
     playerDefinition: gameProject.playerDefinition,
+    flagDefinitions: gameProject.flagDefinitions,
     spellDefinitions: gameProject.spellDefinitions,
     itemDefinitions: gameProject.itemDefinitions,
     documentDefinitions: gameProject.documentDefinitions,

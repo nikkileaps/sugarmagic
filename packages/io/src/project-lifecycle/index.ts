@@ -18,7 +18,8 @@ import {
   createDefaultGameProject,
   createDefaultRegion,
   createEmptyContentLibrarySnapshot,
-  normalizeGameProject
+  normalizeGameProject,
+  migrateFlagReferences
 } from "@sugarmagic/domain";
 import {
   deleteFile,
@@ -298,6 +299,12 @@ export async function loadProjectFromHandle(
     }
   }
 
+  // Flags authored before the registry existed are named by key in the field
+  // that now holds a reference. This runs over the project and its regions
+  // together -- a flag a quest writes can be read by a region condition, and
+  // they live in different files. Idempotent, so it is safe every load.
+  const migrated = migrateFlagReferences(project, regions);
+
   await storeProjectHandle(project.identity.id, handle);
 
   return {
@@ -309,9 +316,9 @@ export async function loadProjectFromHandle(
       exportsPath: "exports",
       publishPath: "publish"
     },
-    gameProject: project,
+    gameProject: migrated.gameProject,
     contentLibrary,
-    regions
+    regions: migrated.regions
   };
 }
 

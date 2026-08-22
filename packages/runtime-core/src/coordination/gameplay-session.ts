@@ -32,6 +32,8 @@ import {
   type NPCAnimationSlot,
   type NPCDefinition,
   type PlayerDefinition,
+  createFlagNameResolver,
+  type FlagDefinition,
   type QuestDefinition,
   type RegionItemPresence,
   type RegionNPCPresence,
@@ -239,6 +241,8 @@ export interface RuntimeGameplaySessionControllerOptions {
    */
   backgroundMusicCueId?: string | null;
   playerDefinition: PlayerDefinition;
+  /** The project's flag registry. Resolves flag references to store keys. */
+  flagDefinitions: FlagDefinition[];
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -536,6 +540,7 @@ export function createRuntimeGameplaySessionController(
     inputManager,
     activeRegion,
     playerDefinition,
+    flagDefinitions,
     spellDefinitions,
     itemDefinitions,
     documentDefinitions,
@@ -759,6 +764,9 @@ export function createRuntimeGameplaySessionController(
     }
     const flag = trigger.action.setWorldFlag;
     if (flag?.key) {
+      // The one writer that still names a flag by store key rather than by
+      // reference. #216 replaces this trigger action with QuestActionDefinition,
+      // at which point it goes through setFlagById like everything else.
       questManager.setFlag(flag.key, resolveWorldFlagWriteValue(flag));
     }
   }
@@ -1412,8 +1420,8 @@ export function createRuntimeGameplaySessionController(
   function buildPresenceQuestContext(): RegionConditionContext {
     return {
       activeQuests: questManager.getActiveQuestStates(),
-      hasWorldFlag: (key: string, value?: unknown) =>
-        questManager.hasFlag(key, value),
+      hasWorldFlag: (flagId: string, value?: unknown) =>
+        questManager.hasFlagById(flagId, value),
       isNodeCompleted: (questDefinitionId: string, nodeId: string) =>
         questManager.isNodeCompleted(questDefinitionId, nodeId)
     };
@@ -1959,6 +1967,7 @@ export function createRuntimeGameplaySessionController(
   });
 
   questManager.registerDefinitions(questDefinitions);
+  questManager.setFlagNameResolver(createFlagNameResolver(flagDefinitions));
   questManager.setInventoryCountProvider((itemDefinitionId) =>
     inventoryManager.getQuantity(itemDefinitionId)
   );
@@ -2379,7 +2388,9 @@ export function createRuntimeGameplaySessionController(
       }
 
       if (effect.type === "world-flag" && effect.targetId) {
-        questManager.setFlag(effect.targetId, effect.value ?? true);
+        // `targetId` on a world-flag effect is a flag reference, authored the
+        // same way a quest setFlag action's is.
+        questManager.setFlagById(effect.targetId, effect.value ?? true);
       }
     }
     spellMenuUi.update();
@@ -2417,7 +2428,7 @@ export function createRuntimeGameplaySessionController(
             entity: entry.entity
           })
         ),
-      hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+      hasWorldFlag: (flagId, value) => questManager.hasFlagById(flagId, value),
       isNodeCompleted: (questDefinitionId, nodeId) =>
         questManager.isNodeCompleted(questDefinitionId, nodeId),
       // Plan 069.9 — NPCs follow the baked navmesh (host loads it async).
@@ -2525,7 +2536,7 @@ export function createRuntimeGameplaySessionController(
       if (sharedCollisionWorld.gates.length > 0) {
         applyVolumeColliderGates(sharedCollisionWorld, {
           activeQuests,
-          hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+          hasWorldFlag: (flagId, value) => questManager.hasFlagById(flagId, value),
           isNodeCompleted: (questDefinitionId, nodeId) =>
             questManager.isNodeCompleted(questDefinitionId, nodeId)
         });

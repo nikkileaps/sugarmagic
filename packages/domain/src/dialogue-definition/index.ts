@@ -111,7 +111,8 @@ export function isPlayerSpeaker(speaker: DialogueSpeakerRef | null): boolean {
 }
 
 export type DialogueCondition =
-  | { type: "flag"; key: string; value?: unknown }
+  // `flagId` references a FlagDefinition; the runtime resolves it to a name.
+  | { type: "flag"; flagId: string; value?: unknown }
   | { type: "hasItem"; itemId: string; count?: number }
   | { type: "hasSpell"; spellId: string }
   | { type: "canCastSpell"; spellId: string }
@@ -240,6 +241,17 @@ function normalizeDialogueCondition(
     return normalizedInner
       ? { type: "not", condition: normalizedInner }
       : undefined;
+  }
+
+  if (condition.type === "flag") {
+    // Pre-206 files hold a flag NAME in `key`. Carried through as if it were
+    // an id; the load-time flag migration turns it into a real reference.
+    const legacyKey = (condition as unknown as Record<string, unknown>).key;
+    return {
+      ...condition,
+      flagId:
+        condition.flagId ?? (typeof legacyKey === "string" ? legacyKey : "")
+    };
   }
 
   return condition;

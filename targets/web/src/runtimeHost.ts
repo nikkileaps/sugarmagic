@@ -41,6 +41,7 @@ import {
   type PluginConfigurationRecord,
   type PlayerDefinition,
   type QuestDefinition,
+  type FlagDefinition,
   type SpellDefinition,
   type RegionDocument,
   type HUDDefinition,
@@ -354,6 +355,7 @@ export interface WebRuntimeStartState {
   contentLibrary: ContentLibrarySnapshot;
   mechanics: MechanicsDefinition;
   playerDefinition: PlayerDefinition;
+  flagDefinitions: FlagDefinition[];
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -3076,6 +3078,7 @@ export function createWebRuntimeHost(
       // real initial track starts where the loading gate closes, below.
       backgroundMusicCueId: null,
       playerDefinition: state.playerDefinition,
+      flagDefinitions: state.flagDefinitions,
       spellDefinitions: state.spellDefinitions,
       itemDefinitions: state.itemDefinitions,
       documentDefinitions: state.documentDefinitions,

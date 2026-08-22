@@ -50,7 +50,7 @@ const GATED_PRESENCE: RegionNPCPresence = {
     questDefinitionId: null,
     questStageId: null,
     worldFlagEquals: {
-      key: FLAG_KEY,
+      flagId: FLAG_KEY,
       valueType: "boolean",
       value: "true"
     }

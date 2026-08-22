@@ -69,7 +69,9 @@ export type QuestNarrativeSubtype = "voiceover" | "dialogue" | "cutscene";
 export type QuestStageState = "active" | "completed";
 
 export type QuestConditionDefinition =
-  | { type: "hasFlag"; key: string; value?: unknown }
+  // `flagId` references a FlagDefinition, not the runtime store's key. The
+  // runtime resolves it to that flag's name before comparing.
+  | { type: "hasFlag"; flagId: string; value?: unknown }
   | { type: "hasSpell"; spellDefinitionId: string }
   | { type: "canCastSpell"; spellDefinitionId: string }
   | { type: "questActive"; questDefinitionId: string }
@@ -93,7 +95,7 @@ export type QuestConditionDefinition =
  */
 export type QuestActionDefinition =
   // Sets a runtime flag. Mirrors the `hasFlag` condition.
-  | { type: "setFlag"; key: string; value?: unknown }
+  | { type: "setFlag"; flagId: string; value?: unknown }
   // Fires a quest event, completing any active node waiting on that name.
   | { type: "emitEvent"; eventName: string }
   | { type: "giveItem"; itemDefinitionId: string | null; count: number }
@@ -204,7 +206,7 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
     case "setFlag":
       // The value is spelled out rather than left blank: a condition compares
       // against it with `===`, so an author has to see what they are setting.
-      return { type, key: "", value: "true" };
+      return { type, flagId: "", value: "true" };
     case "emitEvent":
       return { type, eventName: "" };
     case "giveItem":
@@ -431,6 +433,14 @@ function normalizeQuestCondition(
     const normalized = normalizeQuestCondition(condition.condition);
     return normalized ? { type: "not", condition: normalized } : undefined;
   }
+  if (condition.type === "hasFlag") {
+    // Pre-206 files hold a flag NAME in `key`. Carried through as if it were
+    // an id; the load-time flag migration turns it into a real reference.
+    const legacyKey = readString(
+      (condition as unknown as Record<string, unknown>).key
+    );
+    return { ...condition, flagId: condition.flagId ?? legacyKey ?? "" };
+  }
   return condition;
 }
 
@@ -481,9 +491,16 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
 
   switch (type) {
     case "setFlag":
+      // Pre-206 files hold a flag NAME in `key`. It is carried through here as
+      // if it were an id; the load-time flag migration turns it into a real
+      // reference once it can see the whole project.
       return {
         type: "setFlag",
-        key: readString(source.key) ?? legacyTargetId ?? "",
+        flagId:
+          readString(source.flagId) ??
+          readString(source.key) ??
+          legacyTargetId ??
+          "",
         value: source.value
       };
     case "emitEvent":

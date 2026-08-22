@@ -5,6 +5,8 @@ export * from "./content-library/index";
 export * from "./deployment/index";
 export * from "./deployment-requirements/index";
 export * from "./document-definition/index";
+export * from "./flag-definition/index";
+export * from "./flag-definition/migration";
 export * from "./dialogue-definition/index";
 export * from "./game-project/index";
 export * from "./gameplay-authoring/index";

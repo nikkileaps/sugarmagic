@@ -33,6 +33,7 @@ import {
   createNodeGroup
 } from "@sugarmagic/domain";
 import { AddNodeMenu, Inspector, WarnToast } from "@sugarmagic/ui";
+import { FlagSelect } from "../flags";
 import {
   NodeEditor,
   type GraphEditorConnection,
@@ -239,7 +240,7 @@ function DialogueConditionEditor({
   function handleTypeChange(type: string) {
     switch (type) {
       case "flag":
-        onChange({ type: "flag", key: "" });
+        onChange({ type: "flag", flagId: "" });
         break;
       case "hasItem":
         onChange({ type: "hasItem", itemId: "" });
@@ -265,7 +266,7 @@ function DialogueConditionEditor({
         });
         break;
       case "not":
-        onChange({ type: "not", condition: { type: "flag", key: "" } });
+        onChange({ type: "not", condition: { type: "flag", flagId: "" } });
         break;
       default:
         break;
@@ -342,12 +343,11 @@ function DialogueConditionEditor({
 
         {condition.type === "flag" && (
           <>
-            <TextInput
-              size="xs"
-              label="Flag Key"
-              value={condition.key}
-              onChange={(event) =>
-                onChange({ ...condition, key: event.currentTarget.value })
+            <FlagSelect
+              label="Flag"
+              value={condition.flagId || null}
+              onChange={(flagId) =>
+                onChange({ ...condition, flagId: flagId ?? "" })
               }
             />
             <TextInput
@@ -1200,7 +1200,7 @@ export function useDialogueWorkspaceView(
                               updateNodeEdge(selectedNode, index, {
                                 condition: next.condition
                                   ? undefined
-                                  : { type: "flag", key: "" }
+                                  : { type: "flag", flagId: "" }
                               })
                             }
                           >

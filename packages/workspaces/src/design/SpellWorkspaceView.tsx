@@ -25,6 +25,7 @@ import {
   createDefaultSpellEffectDefinition,
 } from "@sugarmagic/domain";
 import { Inspector } from "@sugarmagic/ui";
+import { FlagSelect } from "../flags";
 import type { WorkspaceViewContribution } from "../workspace-view";
 import {
   CastableInvocationEditor,
@@ -287,26 +288,46 @@ export function useSpellWorkspaceView(
                     );
                   }}
                 />
-                <TextInput
-                  label="Target Id"
-                  size="xs"
-                  value={effect.targetId ?? ""}
-                  onChange={(event) =>
-                    updateEffectList(definition, key, (current) =>
-                      current.map((candidate) =>
-                        candidate.effectId === effect.effectId
-                          ? {
-                              ...candidate,
-                              targetId:
-                                event.currentTarget.value.trim().length > 0
-                                  ? event.currentTarget.value
-                                  : undefined
-                            }
-                          : candidate
+                {/* `targetId` means a different thing per effect type. On a
+                    world-flag effect it is a flag reference, so it gets the
+                    same picker every other flag surface uses; the other types
+                    still name their target as free text. */}
+                {effect.type === "world-flag" ? (
+                  <FlagSelect
+                    label="Flag"
+                    value={effect.targetId ?? null}
+                    onChange={(flagId) =>
+                      updateEffectList(definition, key, (current) =>
+                        current.map((candidate) =>
+                          candidate.effectId === effect.effectId
+                            ? { ...candidate, targetId: flagId ?? undefined }
+                            : candidate
+                        )
                       )
-                    )
-                  }
-                />
+                    }
+                  />
+                ) : (
+                  <TextInput
+                    label="Target Id"
+                    size="xs"
+                    value={effect.targetId ?? ""}
+                    onChange={(event) =>
+                      updateEffectList(definition, key, (current) =>
+                        current.map((candidate) =>
+                          candidate.effectId === effect.effectId
+                            ? {
+                                ...candidate,
+                                targetId:
+                                  event.currentTarget.value.trim().length > 0
+                                    ? event.currentTarget.value
+                                    : undefined
+                              }
+                            : candidate
+                        )
+                      )
+                    }
+                  />
+                )}
                 <TextInput
                   label="Value"
                   size="xs"

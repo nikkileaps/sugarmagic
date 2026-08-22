@@ -82,6 +82,8 @@ import {
   getAllQuestDefinitions,
   getAllSurfaceDefinitions,
   getAllSpellDefinitions,
+  getAllFlagDefinitions,
+  createFlagDefinition,
   getAllTextureDefinitions,
   listFlowerTypeDefinitions,
   listGrassTypeDefinitions,
@@ -185,6 +187,8 @@ import {
 } from "@sugarmagic/shell";
 import {
   SurfaceAuthoringProvider,
+  FlagRegistryProvider,
+  type FlagRegistry,
   type WorkspaceViewport,
   useBuildProductModeView,
   useDesignProductModeView,
@@ -927,6 +931,7 @@ async function postPreviewBootMessage(
       contentLibrary: session.contentLibrary,
       mechanics: session.gameProject.mechanics,
       playerDefinition: session.gameProject.playerDefinition,
+      flagDefinitions: session.gameProject.flagDefinitions,
       spellDefinitions: session.gameProject.spellDefinitions,
       itemDefinitions: session.gameProject.itemDefinitions,
       documentDefinitions: session.gameProject.documentDefinitions,
@@ -1179,6 +1184,34 @@ export function App() {
     if (!session) return [];
     return getAllSpellDefinitions(session);
   }, [session]);
+
+  const flagDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllFlagDefinitions(session);
+  }, [session]);
+
+  const flagRegistry = useMemo<FlagRegistry>(
+    () => ({
+      flagDefinitions,
+      createFlag: (name) => {
+        const definition = createFlagDefinition({ name, displayName: name });
+        dispatchCommand({
+          kind: "CreateFlagDefinition",
+          target: {
+            aggregateKind: "game-project",
+            aggregateId: projectStore.getState().session?.gameProject.identity.id ?? ""
+          },
+          subject: {
+            subjectKind: "flag-definition",
+            subjectId: definition.definitionId
+          },
+          payload: { definition }
+        });
+        return definition.definitionId;
+      }
+    }),
+    [flagDefinitions]
+  );
 
   const documentDefinitions = useMemo(() => {
     if (!session) return [];
@@ -3551,6 +3584,7 @@ export function App() {
 
   return (
     <SurfaceAuthoringProvider catalog={surfaceAuthoringCatalog}>
+    <FlagRegistryProvider registry={flagRegistry}>
       <ProjectManagerDialog
         opened={phase === "no-project"}
         onOpen={handleOpenProject}
@@ -4308,6 +4342,7 @@ export function App() {
           onDismiss={() => setPreviewBootError(null)}
         />
       ) : null}
+    </FlagRegistryProvider>
     </SurfaceAuthoringProvider>
   );
 }

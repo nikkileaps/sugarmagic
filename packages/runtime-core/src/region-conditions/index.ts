@@ -32,11 +32,25 @@ export interface RegionConditionContext {
    * which doors open.
    */
   activeQuests: RegionConditionQuestState[];
-  /** Truthy when the world flag `key` holds `value` (value omitted => any). */
-  hasWorldFlag?: (key: string, value?: unknown) => boolean;
+  /**
+   * Truthy when the flag that `flagId` references holds `value`. Takes a
+   * reference, not a store key -- the caller supplies a predicate that
+   * resolves, so this module never needs the flag registry.
+   */
+  hasWorldFlag?: (flagId: string, value?: unknown) => boolean;
   /** Truthy when that quest node has been completed at any point. */
   isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean;
 }
+
+/**
+ * The declared type and authored text of a flag value -- the only parts the
+ * coercion reads. Narrower than the full condition so the volume trigger's
+ * flag assignment, which names its flag differently, shares the one rule.
+ */
+export type WorldFlagValueDeclaration = Pick<
+  RegionBehaviorWorldFlagCondition,
+  "valueType" | "value"
+>;
 
 /**
  * Coerce an authored flag value into the type the flag store holds, for both
@@ -50,7 +64,7 @@ export interface RegionConditionContext {
  * before that check existed.
  */
 export function coerceWorldFlagValue(
-  condition: RegionBehaviorWorldFlagCondition
+  condition: WorldFlagValueDeclaration
 ): string | boolean | number {
   if (condition.valueType === "boolean") {
     if (condition.value === null) {
@@ -71,7 +85,7 @@ export function coerceWorldFlagValue(
  * region-side flag writer and this is the seam it deletes.
  */
 export function resolveWorldFlagWriteValue(
-  condition: RegionBehaviorWorldFlagCondition
+  condition: WorldFlagValueDeclaration
 ): string | number | boolean {
   return coerceWorldFlagValue(condition);
 }
@@ -111,12 +125,12 @@ export function evaluateRegionQuestBinding(
       return false;
     }
   }
-  if (binding.worldFlagEquals?.key) {
+  if (binding.worldFlagEquals?.flagId) {
     if (!context.hasWorldFlag) {
       return false;
     }
     const expectedValue = coerceWorldFlagValue(binding.worldFlagEquals);
-    if (!context.hasWorldFlag(binding.worldFlagEquals.key, expectedValue)) {
+    if (!context.hasWorldFlag(binding.worldFlagEquals.flagId, expectedValue)) {
       return false;
     }
   }

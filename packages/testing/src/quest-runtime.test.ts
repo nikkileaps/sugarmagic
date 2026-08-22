@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  createFlagDefinition,
+  createFlagNameResolver,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
   createDefaultQuestStageDefinition,
@@ -48,13 +50,17 @@ describe("QuestManager", () => {
   });
 
   /**
-   * A branch on the `gate-open` flag. Pass path leads to "Walk Through Gate",
-   * fail path to "Find Another Way".
+   * A branch on a flag. Conditions reference the flag by id; the manager
+   * resolves that id to the store key "gate-open", which is what the tests
+   * then set. Pass path leads to "Walk Through Gate", fail path to "Find
+   * Another Way".
    */
+  const GATE_FLAG_ID = "flag:gate";
+
   function createGateBranchManager(
     condition: QuestConditionDefinition = {
       type: "hasFlag",
-      key: "gate-open",
+      flagId: GATE_FLAG_ID,
       value: "true"
     }
   ): QuestManager {
@@ -107,6 +113,11 @@ describe("QuestManager", () => {
         stageDefinitions: [stage]
       }
     ]);
+    manager.setFlagNameResolver(
+      createFlagNameResolver([
+        createFlagDefinition({ definitionId: GATE_FLAG_ID, name: "gate-open" })
+      ])
+    );
     return manager;
   }
 
@@ -146,7 +157,7 @@ describe("QuestManager", () => {
   it("matches an authored value against the same authored value", () => {
     const manager = createGateBranchManager({
       type: "hasFlag",
-      key: "gate-open",
+      flagId: GATE_FLAG_ID,
       value: "unlatched"
     });
     manager.setFlag("gate-open", "unlatched");
@@ -160,7 +171,7 @@ describe("QuestManager", () => {
   it("leaves the pass path locked when the values differ", () => {
     const manager = createGateBranchManager({
       type: "hasFlag",
-      key: "gate-open",
+      flagId: GATE_FLAG_ID,
       value: "unlatched"
     });
     manager.setFlag("gate-open", "jammed");
