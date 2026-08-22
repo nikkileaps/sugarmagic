@@ -191,16 +191,6 @@ export const QUEST_ACTION_TYPE_OPTIONS: Array<{
  * when an author adds an action, and the normalizer when it reads one whose
  * fields are missing.
  */
-/**
- * A flag condition or action with no value never matches anything, because the
- * comparison is an equality check. Blank is refused at authoring time rather
- * than given a meaning, so there is one rule: a flag holds a value, and a
- * condition names the value it wants.
- */
-export function isBlankWorldFlagValue(value: unknown): boolean {
-  return value === undefined || value === null || value === "";
-}
-
 export function createQuestAction(type: QuestActionType): QuestActionDefinition {
   switch (type) {
     case "setFlag":

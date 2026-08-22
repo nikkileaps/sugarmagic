@@ -84,6 +84,8 @@ import {
   getAllSpellDefinitions,
   getAllWorldFlagDefinitions,
   createWorldFlagDefinition,
+  validateProjectContent,
+  blockingIssues,
   getAllTextureDefinitions,
   listFlowerTypeDefinitions,
   listGrassTypeDefinitions,
@@ -512,6 +514,24 @@ async function performSave(
   );
   if (!mechanicsValidation.valid) {
     const reason = `Project mechanics are invalid:\n${mechanicsValidation.issues
+      .map((issue) => `- ${issue.path}: ${issue.message}`)
+      .join("\n")}`;
+    if (!options.silentOverwriteManagedFiles) {
+      window.alert(`${reason}\n\nProject was not saved.`);
+    }
+    return { ok: false, reason };
+  }
+  // Content that references something which does not exist cannot work in
+  // play and cannot be fixed by playing further, so it stops the save. The
+  // same checker's warnings -- a half-authored talk node, say -- are normal
+  // mid-session and let the save through.
+  const contentValidation = validateProjectContent(
+    session.gameProject,
+    getAllRegions(session)
+  );
+  if (!contentValidation.valid) {
+    const blocking = blockingIssues(contentValidation);
+    const reason = `Project content is invalid:\n${blocking
       .map((issue) => `- ${issue.path}: ${issue.message}`)
       .join("\n")}`;
     if (!options.silentOverwriteManagedFiles) {
