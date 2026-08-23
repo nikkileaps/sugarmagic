@@ -25,7 +25,10 @@ import type {
   RegionBehaviorQuestBinding,
   RegionDocument
 } from "../region-authoring";
-import { isBlankWorldFlagValue } from "../world-flag";
+import {
+  findDuplicateWorldFlagNames,
+  isBlankWorldFlagValue
+} from "../world-flag";
 import { collectWorldFlagReferences } from "../world-flag/references";
 
 export type ContentValidationSeverity = "error" | "warning";
@@ -283,6 +286,19 @@ export function validateProjectContent(
 
   for (const quest of gameProject.questDefinitions) {
     issues.push(...validateQuest(quest));
+  }
+
+  // Two entries with one name share a slot in the runtime store, so two flags
+  // the author sees as separate would read and write each other's value.
+  for (const name of findDuplicateWorldFlagNames(
+    gameProject.worldFlagDefinitions
+  )) {
+    issues.push(
+      error(
+        "world flags",
+        `More than one flag is named "${name}". Two flags with one name share a value at runtime.`
+      )
+    );
   }
 
   const knownFlagIds = new Set(

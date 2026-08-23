@@ -653,13 +653,23 @@ async function performSave(
     );
     return { ok: true };
   } catch (error) {
+    // Logged as well as returned: the reason reaches the caller, but the stack
+    // is the only thing that says which write threw.
+    console.error("[studio] save failed", error);
     const reason = error instanceof Error ? error.message : String(error);
     return { ok: false, reason };
   }
 }
 
 async function handleSave() {
-  await performSave({ silentOverwriteManagedFiles: false });
+  const result = await performSave({ silentOverwriteManagedFiles: false });
+  // A save that does not happen has to say so. The refusal paths inside
+  // performSave show their own dialog, but an exception on the way to disk was
+  // caught and returned as a reason nobody read -- so the project stayed dirty
+  // and looked saved.
+  if (!result.ok && result.reason) {
+    window.alert(`Project was not saved.\n\n${result.reason}`);
+  }
 }
 
 // Story 45.8 — exposed to the plugin workspace via PluginWorkspaceViewProps.
@@ -3145,6 +3155,7 @@ export function App() {
   const designView = useDesignProductModeView({
     activeDesignKind,
     gameProjectId: session?.gameProject.identity.id ?? null,
+    gameProject: session?.gameProject ?? null,
     regions: regionDocuments,
     scenes: session?.gameProject.scenes ?? [],
     soundCueDefinitions,

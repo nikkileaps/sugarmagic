@@ -34,6 +34,7 @@ import type {
   NPCInteractionMode,
   CreditsDefinition,
   PlayerDefinition,
+  GameProject,
   QuestDefinition,
   QuestNodeDefinition,
   RegionDocument,
@@ -57,10 +58,18 @@ import { useNPCWorkspaceView } from "./NPCWorkspaceView";
 import { usePlayerWorkspaceView } from "./PlayerWorkspaceView";
 import type { CharacterWizardServices } from "./character-wizard/CharacterWizard";
 import { useQuestWorkspaceView } from "./QuestWorkspaceView";
+import { useWorldFlagWorkspaceView } from "./WorldFlagWorkspaceView";
 import { useSpellWorkspaceView } from "./SpellWorkspaceView";
 import { useGameUIWorkspaceView } from "./game-ui";
 
-const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
+/**
+ * The Design tab strip. Every id here must also be in
+ * `CORE_DESIGN_WORKSPACE_KINDS` (packages/shell), or App.tsx treats the kind as
+ * unavailable and bounces the selection back to "player" -- a tab that renders
+ * the wrong workspace rather than failing. `DesignWorkspaceKind` widens to
+ * `string`, so the compiler cannot catch the mismatch; a test does.
+ */
+export const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "player", label: "Player", icon: "🧙" },
   { id: "npcs", label: "NPCs", icon: "👤" },
   { id: "spells", label: "Spells", icon: "✨" },
@@ -68,6 +77,7 @@ const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
   { id: "documents", label: "Documents", icon: "📚" },
   { id: "dialogues", label: "Dialogues", icon: "💬" },
   { id: "quests", label: "Quests", icon: "📜" },
+  { id: "world-flags", label: "World Flags", icon: "🚩" },
   { id: "mechanics", label: "Mechanics", icon: "🎲" },
   { id: "game-ui", label: "Game UI", icon: "🖥️" }
 ];
@@ -75,6 +85,8 @@ const designWorkspaceKinds: BuildWorkspaceKindItem[] = [
 export interface DesignProductModeViewProps {
   activeDesignKind: DesignWorkspaceKind;
   gameProjectId: string | null;
+  /** The whole project, for the world flag registry's reference walk. */
+  gameProject: GameProject | null;
   regions: RegionDocument[];
   /** Plan 058 §058.5 — Scene picker source for quest Scene
    *  actions (unlockScene / advanceToNextScene). */
@@ -164,6 +176,7 @@ export function useDesignProductModeView(
   const {
     activeDesignKind,
     gameProjectId,
+    gameProject,
     regions,
     scenes,
     soundCueDefinitions,
@@ -234,6 +247,15 @@ export function useDesignProductModeView(
     onImportCharacterModelDefinition,
     characterWizardServices: characterWizardServices ?? null,
     renderInspectorSections: renderNPCInspectorSections
+  });
+
+  const worldFlagView = useWorldFlagWorkspaceView({
+    isActive: activeDesignKind === "world-flags",
+    gameProjectId,
+    gameProject,
+    regions,
+    onCommand,
+    onNavigateToTarget
   });
 
   const itemView = useItemWorkspaceView({
@@ -337,7 +359,9 @@ export function useDesignProductModeView(
       />
     ),
     leftPanel:
-      activeDesignKind === "dialogues"
+      activeDesignKind === "world-flags"
+        ? worldFlagView.leftPanel
+        : activeDesignKind === "dialogues"
         ? dialogueView.leftPanel
         : activeDesignKind === "mechanics"
           ? mechanicsView.leftPanel
@@ -355,7 +379,9 @@ export function useDesignProductModeView(
                       ? documentView.leftPanel
                       : playerView.leftPanel,
     rightPanel:
-      activeDesignKind === "dialogues"
+      activeDesignKind === "world-flags"
+        ? worldFlagView.rightPanel
+        : activeDesignKind === "dialogues"
         ? dialogueView.rightPanel
         : activeDesignKind === "mechanics"
           ? mechanicsView.rightPanel
@@ -391,7 +417,9 @@ export function useDesignProductModeView(
                       ? npcView.centerPanel
                       : undefined,
     viewportOverlay:
-      activeDesignKind === "dialogues"
+      activeDesignKind === "world-flags"
+        ? worldFlagView.viewportOverlay
+        : activeDesignKind === "dialogues"
         ? dialogueView.viewportOverlay
         : activeDesignKind === "mechanics"
           ? mechanicsView.viewportOverlay

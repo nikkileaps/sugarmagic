@@ -44,6 +44,7 @@ export type CoreDesignWorkspaceKind =
   | "documents"
   | "dialogues"
   | "quests"
+  | "world-flags"
   | "mechanics"
   | "game-ui";
 
@@ -65,6 +66,7 @@ export const CORE_DESIGN_WORKSPACE_KINDS: CoreDesignWorkspaceKind[] = [
   "documents",
   "dialogues",
   "quests",
+  "world-flags",
   "mechanics",
   "game-ui"
 ];
