@@ -4,12 +4,17 @@ import {
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
   createDefaultQuestStageDefinition,
+  createDefaultRegionLandscapeState,
+  createEmptyContentLibrarySnapshot,
   createWorldFlagDefinition,
   createWorldFlagNameResolver,
   findDuplicateWorldFlagNames,
   migrateWorldFlagReferences,
   normalizeGameProject,
-  type GameProject
+  normalizeRegionDocumentForLoad,
+  validateProjectContent,
+  type GameProject,
+  type RegionDocument
 } from "@sugarmagic/domain";
 import { buildPublishedWebManagedFiles } from "@sugarmagic/plugins";
 
@@ -83,6 +88,99 @@ describe("the deployed boot payload", () => {
 
     const boot = JSON.parse(bootFile?.content ?? "{}");
     expect(boot.worldFlagDefinitions).toEqual([flag]);
+  });
+});
+
+/**
+ * A region file written before epic 206 names its flag in `key`, not
+ * `worldFlagId`. Both the normalizer and the flag migration read that legacy
+ * field through one helper, so a region resolves whichever runs first. A
+ * reference the migration cannot see survives as a raw flag name and then
+ * fails validation as a flag that is not in the registry.
+ */
+describe("a region written before the registry", () => {
+  function rawLegacyRegion() {
+    return {
+      identity: { id: "region:test", schema: "RegionDocument", version: 1 },
+      displayName: "Test Region",
+      placement: { gridPosition: { x: 0, y: 0 }, placementPolicy: "world-grid" },
+      placedAssets: [],
+      folders: [],
+      environmentBinding: { defaultEnvironmentId: null },
+      areas: [],
+      behaviors: [
+        {
+          behaviorId: "behavior:test",
+          npcDefinitionId: "npc:test",
+          displayName: "Test Behavior",
+          tasks: [
+            {
+              taskId: "task:test",
+              displayName: "Default Task",
+              description: null,
+              targetAreaId: null,
+              currentActivity: "idle",
+              activation: {
+                questDefinitionId: null,
+                questStageId: null,
+                nodeCompleted: null,
+                // The pre-206 field name.
+                worldFlagEquals: {
+                  key: "talkedToDockWorker",
+                  valueType: "boolean",
+                  value: "true"
+                }
+              }
+            }
+          ]
+        }
+      ],
+      landscape: createDefaultRegionLandscapeState({}),
+      markers: [],
+      gameplayPlacements: []
+    };
+  }
+
+  it("resolves its legacy flag key once normalized, then migrated", () => {
+    const project = createDefaultGameProject("Test", "test");
+    const normalized = normalizeRegionDocumentForLoad(
+      rawLegacyRegion() as unknown as RegionDocument,
+      createEmptyContentLibrarySnapshot(project.identity.id)
+    );
+    const migrated = migrateWorldFlagReferences(project, [normalized]);
+
+    expect(migrated.gameProject.worldFlagDefinitions).toHaveLength(1);
+    const [flag] = migrated.gameProject.worldFlagDefinitions;
+    expect(flag.name).toBe("talkedToDockWorker");
+    expect(
+      migrated.regions[0].behaviors[0].tasks[0].activation.worldFlagEquals
+        ?.worldFlagId
+    ).toBe(flag.definitionId);
+
+    // And therefore the project saves.
+    expect(
+      validateProjectContent(migrated.gameProject, migrated.regions).valid
+    ).toBe(true);
+  });
+
+  // The loader used to migrate before normalizing, and the migration could not
+  // see a `key` it had not been taught about -- so the reference survived as a
+  // raw flag name and the save was refused. Migrating an unnormalized region
+  // has to work, or the order of two calls in one function is load-bearing.
+  it("resolves its legacy flag key even without normalizing first", () => {
+    const project = createDefaultGameProject("Test", "test");
+    const migrated = migrateWorldFlagReferences(project, [
+      rawLegacyRegion() as unknown as RegionDocument
+    ]);
+
+    expect(migrated.gameProject.worldFlagDefinitions).toHaveLength(1);
+    expect(
+      migrated.regions[0].behaviors[0].tasks[0].activation.worldFlagEquals
+        ?.worldFlagId
+    ).toBe(migrated.gameProject.worldFlagDefinitions[0].definitionId);
+    expect(
+      validateProjectContent(migrated.gameProject, migrated.regions).valid
+    ).toBe(true);
   });
 });
 

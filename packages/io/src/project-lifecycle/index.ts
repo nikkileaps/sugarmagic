@@ -19,6 +19,7 @@ import {
   createDefaultRegion,
   createEmptyContentLibrarySnapshot,
   normalizeGameProject,
+  normalizeRegionDocumentForLoad,
   migrateWorldFlagReferences
 } from "@sugarmagic/domain";
 import {
@@ -295,7 +296,12 @@ export async function loadProjectFromHandle(
       `${ref.regionId}.json`
     );
     if (region) {
-      regions.push(region);
+      // Normalized here, before the flag migration below, not only later in
+      // createAuthoringSession. A region file written before epic 206 names its
+      // flag in `key`; the normalizer is what turns that into a `worldFlagId`.
+      // The project side already works this way -- normalizeGameProject runs
+      // above.
+      regions.push(normalizeRegionDocumentForLoad(region, contentLibrary));
     }
   }
 

@@ -793,7 +793,7 @@ export function reconcileRegionVolumesFromAmbienceZones(
  * NAME in `key`; it is read here as if it were an id, and the load-time flag
  * migration turns it into a real reference once it can see the whole project.
  */
-function readWorldFlagReference(
+export function readWorldFlagReference(
   condition: Partial<RegionBehaviorWorldFlagCondition> | null | undefined
 ): string | null {
   const raw =

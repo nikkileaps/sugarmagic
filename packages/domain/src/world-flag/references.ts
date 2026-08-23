@@ -8,12 +8,41 @@ import type {
   QuestConditionDefinition,
   QuestDefinition
 } from "../quest-definition";
-import type {
-  RegionBehaviorQuestBinding,
-  RegionDocument
+import {
+  readWorldFlagReference,
+  type RegionBehaviorQuestBinding,
+  type RegionDocument
 } from "../region-authoring";
 import type { SpellDefinition } from "../spell-definition";
 import type { WorldFlagValueType } from "./index";
+
+/**
+ * The content holding a reference, in ids. Carried alongside `where` because
+ * `where` is prose for a person to read -- anything that needs to navigate to
+ * the content reads this instead of parsing that.
+ */
+export type WorldFlagReferenceTarget =
+  | {
+      kind: "quest-node";
+      questDefinitionId: string;
+      stageId: string;
+      nodeId: string;
+    }
+  | { kind: "dialogue-node"; dialogueDefinitionId: string; nodeId: string }
+  | { kind: "spell"; spellDefinitionId: string }
+  | {
+      kind: "behavior-task";
+      regionId: string;
+      behaviorId: string;
+      taskId: string;
+    }
+  | { kind: "volume"; regionId: string; volumeId: string }
+  | {
+      kind: "npc-placement";
+      sceneId: string;
+      regionId: string;
+      presenceId: string;
+    };
 
 /**
  * Where a world flag reference was found. `where` is written for an author to
@@ -21,6 +50,7 @@ import type { WorldFlagValueType } from "./index";
  */
 export interface WorldFlagReferenceSite {
   where: string;
+  target: WorldFlagReferenceTarget;
   /** Declared by the region grammar; the quest and dialogue ones infer. */
   valueType?: WorldFlagValueType;
 }
@@ -37,6 +67,7 @@ export type WorldFlagReferenceVisitor = (
 export interface WorldFlagReference {
   worldFlagId: string;
   where: string;
+  target: WorldFlagReferenceTarget;
 }
 
 /**
@@ -58,17 +89,14 @@ export function mapWorldFlagReferences(
 ): { gameProject: GameProject; regions: RegionDocument[] } {
   function questCondition(
     condition: QuestConditionDefinition | undefined,
-    where: string
+    site: WorldFlagReferenceSite
   ): QuestConditionDefinition | undefined {
     if (!condition) return condition;
     if (condition.type === "hasFlag") {
-      return {
-        ...condition,
-        worldFlagId: visit(condition.worldFlagId, { where })
-      };
+      return { ...condition, worldFlagId: visit(condition.worldFlagId, site) };
     }
     if (condition.type === "not") {
-      const inner = questCondition(condition.condition, where);
+      const inner = questCondition(condition.condition, site);
       return inner ? { type: "not", condition: inner } : condition;
     }
     return condition;
@@ -76,26 +104,23 @@ export function mapWorldFlagReferences(
 
   function questAction(
     action: QuestActionDefinition,
-    where: string
+    site: WorldFlagReferenceSite
   ): QuestActionDefinition {
     return action.type === "setFlag"
-      ? { ...action, worldFlagId: visit(action.worldFlagId, { where }) }
+      ? { ...action, worldFlagId: visit(action.worldFlagId, site) }
       : action;
   }
 
   function dialogueCondition(
     condition: DialogueCondition | undefined,
-    where: string
+    site: WorldFlagReferenceSite
   ): DialogueCondition | undefined {
     if (!condition) return condition;
     if (condition.type === "flag") {
-      return {
-        ...condition,
-        worldFlagId: visit(condition.worldFlagId, { where })
-      };
+      return { ...condition, worldFlagId: visit(condition.worldFlagId, site) };
     }
     if (condition.type === "not") {
-      const inner = dialogueCondition(condition.condition, where);
+      const inner = dialogueCondition(condition.condition, site);
       return inner ? { type: "not", condition: inner } : condition;
     }
     return condition;
@@ -103,16 +128,23 @@ export function mapWorldFlagReferences(
 
   function binding(
     value: RegionBehaviorQuestBinding,
-    where: string
+    site: WorldFlagReferenceSite
   ): RegionBehaviorQuestBinding {
-    if (!value.worldFlagEquals?.worldFlagId) return value;
+    // Read through the same helper the normalizer uses, so a region file that
+    // still names its flag in the pre-206 `key` is visible here whether or not
+    // it has been normalized yet. Without this the migration silently skips an
+    // unnormalized region and the reference fails validation later.
+    const reference = readWorldFlagReference(value.worldFlagEquals);
+    if (!reference) return value;
     return {
       ...value,
       worldFlagEquals: {
         ...value.worldFlagEquals,
-        worldFlagId: visit(value.worldFlagEquals.worldFlagId, {
-          where,
-          valueType: value.worldFlagEquals.valueType
+        valueType: value.worldFlagEquals?.valueType ?? "boolean",
+        value: value.worldFlagEquals?.value ?? null,
+        worldFlagId: visit(reference, {
+          ...site,
+          valueType: value.worldFlagEquals?.valueType
         })
       }
     };
@@ -125,14 +157,29 @@ export function mapWorldFlagReferences(
         ...stage,
         nodeDefinitions: stage.nodeDefinitions.map((node) => {
           const where = `quest "${quest.displayName}" node "${node.displayName}"`;
+          const target = {
+            kind: "quest-node" as const,
+            questDefinitionId: quest.definitionId,
+            stageId: stage.stageId,
+            nodeId: node.nodeId
+          };
           return {
             ...node,
-            condition: questCondition(node.condition, `${where} condition`),
+            condition: questCondition(node.condition, {
+              where: `${where} condition`,
+              target
+            }),
             onEnterActions: node.onEnterActions.map((action) =>
-              questAction(action, `${where} on-enter action`)
+              questAction(action, {
+                where: `${where} on-enter action`,
+                target
+              })
             ),
             onCompleteActions: node.onCompleteActions.map((action) =>
-              questAction(action, `${where} on-complete action`)
+              questAction(action, {
+                where: `${where} on-complete action`,
+                target
+              })
             )
           };
         })
@@ -148,10 +195,14 @@ export function mapWorldFlagReferences(
         ...node,
         next: node.next.map((edge) => ({
           ...edge,
-          condition: dialogueCondition(
-            edge.condition,
-            `dialogue "${dialogue.displayName}" node "${node.displayName ?? node.nodeId}"`
-          )
+          condition: dialogueCondition(edge.condition, {
+            where: `dialogue "${dialogue.displayName}" node "${node.displayName ?? node.nodeId}"`,
+            target: {
+              kind: "dialogue-node",
+              dialogueDefinitionId: dialogue.definitionId,
+              nodeId: node.nodeId
+            }
+          })
         }))
       }))
     }));
@@ -166,7 +217,11 @@ export function mapWorldFlagReferences(
           ? {
               ...effect,
               targetId: visit(effect.targetId, {
-                where: `spell "${spell.displayName}" world-flag effect`
+                where: `spell "${spell.displayName}" world-flag effect`,
+                target: {
+                  kind: "spell",
+                  spellDefinitionId: spell.definitionId
+                }
               })
             }
           : effect
@@ -182,20 +237,29 @@ export function mapWorldFlagReferences(
       ...behavior,
       tasks: behavior.tasks.map((task) => ({
         ...task,
-        activation: binding(
-          task.activation,
-          `region "${region.displayName}" behavior "${behavior.displayName}" task activation`
-        )
+        activation: binding(task.activation, {
+          where: `region "${region.displayName}" behavior "${behavior.displayName}" task activation`,
+          target: {
+            kind: "behavior-task",
+            regionId: region.identity.id,
+            behaviorId: behavior.behaviorId,
+            taskId: task.taskId
+          }
+        })
       }))
     })),
     volumes: region.volumes?.map((volume) =>
       volume.condition
         ? {
             ...volume,
-            condition: binding(
-              volume.condition,
-              `region "${region.displayName}" volume "${volume.volumeId}" gate`
-            )
+            condition: binding(volume.condition, {
+              where: `region "${region.displayName}" volume "${volume.volumeId}" gate`,
+              target: {
+                kind: "volume",
+                regionId: region.identity.id,
+                volumeId: volume.volumeId
+              }
+            })
           }
         : volume
     )
@@ -214,10 +278,15 @@ export function mapWorldFlagReferences(
             presence.condition
               ? {
                   ...presence,
-                  condition: binding(
-                    presence.condition,
-                    `scene "${scene.displayName}" NPC placement in region "${regionId}"`
-                  )
+                  condition: binding(presence.condition, {
+                    where: `scene "${scene.displayName}" NPC placement in region "${regionId}"`,
+                    target: {
+                      kind: "npc-placement",
+                      sceneId: scene.sceneId,
+                      regionId,
+                      presenceId: presence.presenceId
+                    }
+                  })
                 }
               : presence
           )
@@ -254,7 +323,7 @@ export function collectWorldFlagReferences(
   const references: WorldFlagReference[] = [];
   mapWorldFlagReferences(gameProject, regions, (worldFlagId, site) => {
     if (worldFlagId) {
-      references.push({ worldFlagId, where: site.where });
+      references.push({ worldFlagId, where: site.where, target: site.target });
     }
     return worldFlagId;
   });
