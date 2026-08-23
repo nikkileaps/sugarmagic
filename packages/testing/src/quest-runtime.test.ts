@@ -8,7 +8,11 @@ import {
   createQuestNodeId,
   type QuestConditionDefinition
 } from "@sugarmagic/domain";
-import { coerceAuthoredWorldFlagValue, QuestManager } from "@sugarmagic/runtime-core";
+import {
+  coerceAuthoredWorldFlagValue,
+  QuestManager,
+  WorldFlagManager
+} from "@sugarmagic/runtime-core";
 
 describe("QuestManager", () => {
   it("routes NPC talk objectives through dialogue and completes them on dialogue end", () => {
@@ -56,6 +60,14 @@ describe("QuestManager", () => {
    * Another Way".
    */
   const GATE_FLAG_ID = "flag:gate";
+  /** The flag store each fixture manager reads, so a test can write to it. */
+  const managerFlags = new WeakMap<QuestManager, WorldFlagManager>();
+
+  function flagsOf(manager: QuestManager): WorldFlagManager {
+    const flags = managerFlags.get(manager);
+    if (!flags) throw new Error("fixture manager has no world flag store");
+    return flags;
+  }
 
   function createGateBranchManager(
     condition: QuestConditionDefinition = {
@@ -113,11 +125,15 @@ describe("QuestManager", () => {
         stageDefinitions: [stage]
       }
     ]);
-    manager.setWorldFlagNameResolver(
+    const worldFlags = new WorldFlagManager();
+    worldFlags.setWorldFlagNameResolver(
       createWorldFlagNameResolver([
         createWorldFlagDefinition({ definitionId: GATE_FLAG_ID, name: "gate-open" })
       ])
     );
+    worldFlags.setChangeHandler(() => manager.update());
+    manager.setWorldFlagManager(worldFlags);
+    managerFlags.set(manager, worldFlags);
     return manager;
   }
 
@@ -146,7 +162,7 @@ describe("QuestManager", () => {
   // sides run through `coerceAuthoredWorldFlagValue`, so they agree.
   it("matches an authored 'true' condition against a flag a setFlag action wrote", () => {
     const manager = createGateBranchManager();
-    manager.setFlag("gate-open", coerceAuthoredWorldFlagValue("true"));
+    flagsOf(manager).setFlag("gate-open", coerceAuthoredWorldFlagValue("true"));
 
     manager.startQuest("quest:branch-test");
     manager.update();
@@ -160,7 +176,7 @@ describe("QuestManager", () => {
       worldFlagId: GATE_FLAG_ID,
       value: "unlatched"
     });
-    manager.setFlag("gate-open", "unlatched");
+    flagsOf(manager).setFlag("gate-open", "unlatched");
 
     manager.startQuest("quest:branch-test");
     manager.update();
@@ -174,7 +190,7 @@ describe("QuestManager", () => {
       worldFlagId: GATE_FLAG_ID,
       value: "unlatched"
     });
-    manager.setFlag("gate-open", "jammed");
+    flagsOf(manager).setFlag("gate-open", "jammed");
 
     manager.startQuest("quest:branch-test");
     manager.update();
@@ -194,10 +210,10 @@ describe("QuestManager", () => {
 
   // `runtimeHost.ts` reports flags into the quest debug dump this way.
   it("defaults a missing expected value to true, matching what setFlag writes", () => {
-    const manager = new QuestManager();
-    expect(manager.hasFlag("talkedToDockWorker")).toBe(false);
-    manager.setFlag("talkedToDockWorker");
-    expect(manager.hasFlag("talkedToDockWorker")).toBe(true);
+    const flags = new WorldFlagManager();
+    expect(flags.hasFlag("talkedToDockWorker")).toBe(false);
+    flags.setFlag("talkedToDockWorker");
+    expect(flags.hasFlag("talkedToDockWorker")).toBe(true);
   });
 
   it("completes cast spell objectives and evaluates spell conditions from providers", () => {

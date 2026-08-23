@@ -1,5 +1,4 @@
 import type {
-  WorldFlagNameResolver,
   QuestActionDefinition,
   QuestConditionDefinition,
   QuestDefinition,
@@ -9,32 +8,8 @@ import type {
   QuestStageState,
   SaveSlice
 } from "@sugarmagic/domain";
-
-/**
- * Turn a flag value typed into the quest editor into the value the flag store
- * holds. Both the `setFlag` action and the `hasFlag` condition run their
- * authored text through this, so the two sides always land on the same type
- * and `===` can decide the comparison.
- *
- * Without it, an author who leaves a `setFlag` action's value box empty stores
- * boolean `true`, then types `true` into a condition and stores the string
- * `"true"`, and the condition never matches.
- *
- * Anything that is not a string is already typed -- a save restored from JSON,
- * a flag set from code -- and passes through untouched.
- */
-export function coerceAuthoredWorldFlagValue(value: unknown): unknown {
-  if (typeof value !== "string") {
-    return value;
-  }
-  if (value === "true") return true;
-  if (value === "false") return false;
-  const asNumber = Number(value);
-  if (value.trim() !== "" && Number.isFinite(asNumber)) {
-    return asNumber;
-  }
-  return value;
-}
+import type { WorldFlagManager } from "../world-flags/WorldFlagManager";
+import { coerceAuthoredWorldFlagValue } from "../world-flags/WorldFlagManager";
 
 /**
  * An action together with the node that fired it. Handlers need the source to
@@ -186,7 +161,6 @@ export class QuestManager {
    */
   private completedNodeIdsByQuest = new Map<string, Set<string>>();
   private trackedQuestDefinitionId: string | null = null;
-  private runtimeFlags = new Map<string, unknown>();
   private onEvent: QuestRuntimeEventHandler | null = null;
   private onStateChange: (() => void) | null = null;
   private onAction: QuestRuntimeActionHandler | null = null;
@@ -197,12 +171,10 @@ export class QuestManager {
   private canCastSpellProvider: QuestSpellStateProvider = () => false;
   private isPlayerInAreaProvider: QuestPlayerAreaProvider = () => false;
   /**
-   * Resolves a flag reference to the flag's name. Injected rather than read
-   * from a registry here: the registry lives on GameProject, which runtime-core
-   * does not depend on. Default resolves nothing, so a manager with no registry
-   * wired treats every reference as dangling.
+   * The project's world flags. Not owned here -- quests are one of six callers
+   * -- but a quest condition reads them and a quest action writes them.
    */
-  private resolveFlagName: WorldFlagNameResolver = () => null;
+  private worldFlags: WorldFlagManager | null = null;
 
   registerDefinitions(definitions: QuestDefinition[]): void {
     this.definitions.clear();
@@ -248,8 +220,8 @@ export class QuestManager {
     this.isPlayerInAreaProvider = provider;
   }
 
-  setWorldFlagNameResolver(resolver: WorldFlagNameResolver): void {
-    this.resolveFlagName = resolver;
+  setWorldFlagManager(manager: WorldFlagManager): void {
+    this.worldFlags = manager;
   }
 
   update(): void {
@@ -344,51 +316,9 @@ export class QuestManager {
     return null;
   }
 
-  /**
-   * True when the flag holds `value`. An unset flag is false, so a condition
-   * reads the same whether the flag was never written or holds something else.
-   *
-   * `value` defaults to `true` because that is what `setFlag` writes by
-   * default, so `hasFlag(key)` asks the question it looks like it asks.
-   * Authored values are coerced by the caller before they get here; this is
-   * only the comparison.
-   */
-  hasFlag(key: string, value: unknown = true): boolean {
-    if (!this.runtimeFlags.has(key)) {
-      return false;
-    }
-    return this.runtimeFlags.get(key) === value;
-  }
 
-  setFlag(key: string, value: unknown = true): void {
-    this.runtimeFlags.set(key, value);
-    this.update();
-  }
 
-  /**
-   * The same question as `hasFlag`, asked the way authored content asks it:
-   * by flag reference rather than by store key. Resolves, then hands off --
-   * the comparison itself stays in one place.
-   *
-   * A reference that names no flag fails closed. The condition cannot be
-   * evaluated, so guessing a key would be worse than answering no.
-   */
-  hasFlagById(worldFlagId: string, value: unknown = true): boolean {
-    const name = this.resolveFlagName(worldFlagId);
-    return name === null ? false : this.hasFlag(name, value);
-  }
 
-  /** Writes by flag reference. An unresolved reference writes nothing. */
-  setFlagById(worldFlagId: string, value: unknown = true): void {
-    const name = this.resolveFlagName(worldFlagId);
-    if (name === null) {
-      console.warn(
-        `[quest] Flag reference "${worldFlagId}" is not in the project's flag registry. Nothing was set. Re-pick the flag on the content that writes it.`
-      );
-      return;
-    }
-    this.setFlag(name, value);
-  }
 
   notifyEvent(eventName: string): void {
     let changed = false;
@@ -972,17 +902,10 @@ export class QuestManager {
   ): void {
     for (const action of actions) {
       if (action.type === "setFlag" && action.worldFlagId) {
-        // Writes the map directly rather than calling setFlagById, which calls
-        // update(): this runs reentrantly inside refreshQuest.
-        const name = this.resolveFlagName(action.worldFlagId);
-        if (name === null) {
-          console.warn(
-            `[quest] Flag reference "${action.worldFlagId}" on node "${source.nodeId}" is not in the project's flag registry. Nothing was set.`
-          );
-          continue;
-        }
-        this.runtimeFlags.set(
-          name,
+        // The write that does not notify: this runs reentrantly inside
+        // refreshQuest, and a change notification would refresh again.
+        this.worldFlags?.setFlagByIdWithoutNotifying(
+          action.worldFlagId,
           coerceAuthoredWorldFlagValue(action.value ?? true)
         );
         continue;
@@ -1000,9 +923,11 @@ export class QuestManager {
   private evaluateCondition(condition: QuestConditionDefinition): boolean {
     switch (condition.type) {
       case "hasFlag":
-        return this.hasFlagById(
-          condition.worldFlagId,
-          coerceAuthoredWorldFlagValue(condition.value ?? true)
+        return (
+          this.worldFlags?.hasFlagById(
+            condition.worldFlagId,
+            coerceAuthoredWorldFlagValue(condition.value ?? true)
+          ) ?? false
         );
       case "hasSpell":
         return this.hasSpellProvider(condition.spellDefinitionId);
@@ -1061,10 +986,6 @@ export class QuestManager {
         stageProgress
       };
     }
-    const runtimeFlags: Record<string, unknown> = {};
-    for (const [key, value] of this.runtimeFlags) {
-      runtimeFlags[key] = value;
-    }
     const completedNodeIds: Record<string, string[]> = {};
     for (const [questId, nodeIds] of this.completedNodeIdsByQuest) {
       completedNodeIds[questId] = Array.from(nodeIds);
@@ -1073,8 +994,7 @@ export class QuestManager {
       activeQuests,
       completedQuestIds: Array.from(this.completedQuestIds),
       completedNodeIds,
-      trackedQuestDefinitionId: this.trackedQuestDefinitionId,
-      runtimeFlags
+      trackedQuestDefinitionId: this.trackedQuestDefinitionId
     };
   }
 
@@ -1098,8 +1018,8 @@ export class QuestManager {
    * console.warn (usually authoring renamed the id after the save
    * was written).
    *
-   * `completedQuestIds`, `completedNodeIds`,
-   * `trackedQuestDefinitionId`, and `runtimeFlags` fully replace
+   * `completedQuestIds`, `completedNodeIds` and
+   * `trackedQuestDefinitionId` fully replace
    * whatever's currently there — they're single-value stores, not
    * composed. Replacing is safe for `completedNodeIds` because
    * this runs before `startInitialQuests`, so nothing has
@@ -1155,7 +1075,6 @@ export class QuestManager {
     if (data.trackedQuestDefinitionId !== undefined) {
       this.trackedQuestDefinitionId = data.trackedQuestDefinitionId;
     }
-    this.runtimeFlags = new Map(Object.entries(data.runtimeFlags ?? {}));
 
     // Restore IS a state change — fire the same notification
     // `startQuest`/`completeNode` do so every derived consumer
@@ -1215,10 +1134,6 @@ export interface SerializedActiveQuest {
  *     the full stage/node progress tree.
  *   - `completedQuestIds` a plain array; converted to a Set on
  *     restore.
- *   - `runtimeFlags` `Record` mirrors the internal
- *     `Map<string, unknown>`. Values are opaque scalars authors
- *     poke via quest actions; whatever survives JSON round-trip
- *     is fine.
  *
  * Legacy pre-055 saves reach `deserializeSaveSlice` with only
  * `trackedQuestDefinitionId` populated (synthesized by
@@ -1231,5 +1146,4 @@ export interface QuestManagerSlice {
   /** Completed node ids per quest. Absent in saves written before it existed. */
   completedNodeIds?: Record<string, string[]>;
   trackedQuestDefinitionId: string | null;
-  runtimeFlags: Record<string, unknown>;
 }

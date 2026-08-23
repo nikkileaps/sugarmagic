@@ -137,8 +137,7 @@ describe("QuestManager save slice", () => {
         data: {
           activeQuests: {},
           completedQuestIds: ["quest:legacy"],
-          trackedQuestDefinitionId: null,
-          runtimeFlags: {}
+          trackedQuestDefinitionId: null
         }
       } as SaveSlice<QuestManagerSlice>);
 
@@ -157,7 +156,6 @@ describe("QuestManager save slice", () => {
       const source = new QuestManager();
       source.registerDefinitions([quest]);
       source.startQuest("quest:round-trip");
-      source.setFlag("has-been-here", true);
 
       const slice = source.serializeSaveSlice();
 
@@ -166,7 +164,6 @@ describe("QuestManager save slice", () => {
       restored.deserializeSaveSlice({ schemaVersion: 1, data: slice });
 
       expect(restored.isQuestActive("quest:round-trip")).toBe(true);
-      expect(restored.hasFlag("has-been-here", true)).toBe(true);
       expect(restored.serializeSaveSlice()).toEqual(slice);
     });
 
@@ -183,8 +180,7 @@ describe("QuestManager save slice", () => {
         data: {
           activeQuests: {},
           completedQuestIds: ["quest:done"],
-          trackedQuestDefinitionId: "quest:tracking",
-          runtimeFlags: {}
+          trackedQuestDefinitionId: "quest:tracking"
         }
       });
 
@@ -209,8 +205,7 @@ describe("QuestManager save slice", () => {
         activeQuests: {},
         completedQuestIds: [],
         completedNodeIds: {},
-        trackedQuestDefinitionId: null,
-        runtimeFlags: {}
+        trackedQuestDefinitionId: null
       });
     });
 
@@ -303,8 +298,7 @@ describe("QuestManager save slice", () => {
         data: {
           activeQuests: {},
           completedQuestIds: [],
-          trackedQuestDefinitionId: "quest:legacy",
-          runtimeFlags: {}
+          trackedQuestDefinitionId: "quest:legacy"
         }
       });
 
@@ -328,8 +322,7 @@ describe("QuestManager save slice", () => {
         activeQuests: {},
         completedQuestIds: [],
         completedNodeIds: {},
-        trackedQuestDefinitionId: null,
-        runtimeFlags: {}
+        trackedQuestDefinitionId: null
       });
     });
   });
@@ -356,8 +349,7 @@ describe("QuestManager save slice", () => {
           }
         },
         completedQuestIds: [],
-        trackedQuestDefinitionId: null,
-        runtimeFlags: {}
+        trackedQuestDefinitionId: null
       };
       // Silence the expected warn so it doesn't pollute output.
       const originalWarn = console.warn;
@@ -391,8 +383,7 @@ describe("createQuestManagerSaveParticipant", () => {
     expect(p.serialize()).toEqual({
       activeQuests: {},
       completedQuestIds: [],
-      trackedQuestDefinitionId: null,
-      runtimeFlags: {}
+      trackedQuestDefinitionId: null
     });
   });
 
@@ -403,8 +394,7 @@ describe("createQuestManagerSaveParticipant", () => {
       data: {
         activeQuests: {},
         completedQuestIds: ["quest:x"],
-        trackedQuestDefinitionId: null,
-        runtimeFlags: {}
+        trackedQuestDefinitionId: null
       }
     });
     const p = createQuestManagerSaveParticipant({
@@ -438,8 +428,7 @@ describe("createQuestManagerSaveParticipant", () => {
       data: {
         activeQuests: {},
         completedQuestIds: ["quest:done"],
-        trackedQuestDefinitionId: null,
-        runtimeFlags: {}
+        trackedQuestDefinitionId: null
       }
     });
     expect(manager.serializeSaveSlice().completedQuestIds).toEqual([

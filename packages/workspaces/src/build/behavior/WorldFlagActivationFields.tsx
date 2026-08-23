@@ -1,24 +1,10 @@
 import { Select, TextInput } from "@mantine/core";
 import { WorldFlagSelect } from "../../world-flags";
-import type {
-  RegionBehaviorWorldFlagCondition,
-  RegionNPCBehaviorTask
+import {
+  WORLD_FLAG_VALUE_TYPE_OPTIONS,
+  isWorldFlagValueType,
+  type RegionNPCBehaviorTask
 } from "@sugarmagic/domain";
-
-const WORLD_FLAG_VALUE_TYPE_OPTIONS = [
-  { value: "boolean", label: "Boolean" },
-  { value: "number", label: "Number" },
-  { value: "string", label: "String" }
-] as const satisfies ReadonlyArray<{
-  value: RegionBehaviorWorldFlagCondition["valueType"];
-  label: string;
-}>;
-
-function isWorldFlagValueType(
-  value: string
-): value is RegionBehaviorWorldFlagCondition["valueType"] {
-  return WORLD_FLAG_VALUE_TYPE_OPTIONS.some((option) => option.value === value);
-}
 
 export interface WorldFlagActivationFieldsProps {
   task: RegionNPCBehaviorTask;

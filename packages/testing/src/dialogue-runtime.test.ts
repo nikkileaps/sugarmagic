@@ -104,7 +104,7 @@ describe("DialogueManager", () => {
     const manager = new DialogueManager(mock.presenter);
     manager.registerDefinition(createConditionalDialogue());
     manager.setConditionContext({
-      hasFlag: (key) => key === "gate-open"
+      hasWorldFlag: (worldFlagId) => worldFlagId === "gate-open"
     });
     manager.setSpeakerNameResolver((speakerId) =>
       speakerId === "builtin:dialogue-speaker:narrator" ? "Narrator" : undefined

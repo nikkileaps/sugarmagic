@@ -20,7 +20,7 @@ import {
   coerceWorldFlagValue,
   createSpatialAreaTracker,
   evaluateRegionQuestBinding,
-  QuestManager,
+  WorldFlagManager,
   resolveMove,
   resolveWorldFlagWriteValue
 } from "@sugarmagic/runtime-core";
@@ -241,7 +241,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
   // declaration always matches a condition read from the same declaration --
   // including the valueless case, which lands on the declared type's zero at
   // both ends instead of `undefined` at one and `0` at the other. Wired through
-  // a real QuestManager because the bug lived in the seam, not in either side.
+  // the real flag store because the bug lived in the seam, not in either side.
   describe("a valueless flag condition matches a flag written the same way", () => {
     function gateOn(valueType: "boolean" | "number" | "string") {
       return {
@@ -251,21 +251,20 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
       };
     }
 
-    function contextFrom(manager: QuestManager) {
+    function contextFrom(flags: WorldFlagManager) {
       return {
         activeQuests: [],
-        hasWorldFlag: (key: string, value?: unknown) =>
-          manager.hasFlag(key, value)
+        hasWorldFlag: (key: string, value?: unknown) => flags.hasFlag(key, value)
       };
     }
 
     function withFlag(value: unknown) {
-      const manager = new QuestManager();
-      manager.setFlag("gate", value);
-      return contextFrom(manager);
+      const flags = new WorldFlagManager();
+      flags.setFlag("gate", value);
+      return contextFrom(flags);
     }
 
-    const withoutFlag = () => contextFrom(new QuestManager());
+    const withoutFlag = () => contextFrom(new WorldFlagManager());
 
     // The write side is what a valueless declaration stores; the read side has
     // to land on the same value. Anything else is a silent miss.

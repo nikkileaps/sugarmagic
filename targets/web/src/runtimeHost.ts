@@ -112,6 +112,7 @@ import {
   createPlaythroughIdentitySaveParticipant,
   createPlayerKnownFactsSaveParticipant,
   createQuestManagerSaveParticipant,
+  createWorldFlagSaveParticipant,
   type QuestManagerSlice,
   createRuntimeGameplayAssembly,
   createWorldPresenceSaveParticipant,
@@ -1566,11 +1567,12 @@ export function createWebRuntimeHost(
   // Raccoon lady id: "139daaec-a618-4053-b697-0ced0024d80d"
   function smQuestDebug(npcDefinitionId?: string): Record<string, unknown> {
     const qm = gameplaySession?.questManager ?? null;
+    const flags = gameplaySession?.worldFlagManager ?? null;
     const nbs = gameplaySession?.npcBehaviorSystem ?? null;
     const slice = qm?.serializeSaveSlice() ?? null;
     const result: Record<string, unknown> = {
-      runtimeFlags: slice?.runtimeFlags ?? null,
-      talkedToDockWorker: qm?.hasFlag("talkedToDockWorker") ?? null,
+      worldFlags: flags?.getAllFlags() ?? null,
+      talkedToDockWorker: flags?.hasFlag("talkedToDockWorker") ?? null,
       activeQuests: slice?.activeQuests ?? null,
       completedQuestIds: slice?.completedQuestIds ?? null
     };
@@ -1585,13 +1587,13 @@ export function createWebRuntimeHost(
   // behavior-task injection directly:
   //   __smsetflag("talkedToDockWorker", true)
   function smSetFlag(key: string, value: unknown = true): void {
-    const qm = gameplaySession?.questManager ?? null;
-    if (!qm) {
+    const flags = gameplaySession?.worldFlagManager ?? null;
+    if (!flags) {
       // eslint-disable-next-line no-console
-      console.warn("[smsetflag] no active quest manager");
+      console.warn("[smsetflag] no active world flag manager");
       return;
     }
-    qm.setFlag(key, value);
+    flags.setFlag(key, value);
     // eslint-disable-next-line no-console
     console.info("[smsetflag]", key, "=", value);
   }
@@ -3149,6 +3151,15 @@ export function createWebRuntimeHost(
     saveParticipantRegistry.register(
       createQuestManagerSaveParticipant({
         getQuestManager: () => gameplaySession?.questManager ?? null
+      })
+    );
+    // World flags used to persist inside the quest slice. They have their own
+    // owner now, so they have their own slice. A save written before the split
+    // carries them in the quest slice still; the quest manager forwards those
+    // on restore, which is why this participant needs no legacy path.
+    saveParticipantRegistry.register(
+      createWorldFlagSaveParticipant({
+        getWorldFlagManager: () => gameplaySession?.worldFlagManager ?? null
       })
     );
     // Plan 055 §055.5 — inventory.player restores collected items
