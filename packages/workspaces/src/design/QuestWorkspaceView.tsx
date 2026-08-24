@@ -418,7 +418,7 @@ function QuestConditionEditor({
               a string. The picked flag declares a valueType; this box could
               follow it -- a checkbox, a number input, or text. Worth doing
               once a non-boolean flag is authored for real, or the first time
-              a value mismatch is reported. Tracked on issue #206. */}
+              a value mismatch is reported. Tracked on issue #224. */}
           <TextInput
             size="xs"
             label="Expected Value"
