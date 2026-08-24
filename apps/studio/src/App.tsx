@@ -494,6 +494,13 @@ interface PerformSaveOptions {
 interface PerformSaveResult {
   ok: boolean;
   reason?: string;
+  /**
+   * Whether this refusal already put its reason on screen. The refusal paths
+   * below each show their own dialog, worded for what they refused; a caller
+   * that alerts on every `ok: false` would show a second, more generic one
+   * over the top of it.
+   */
+  alreadyReported?: boolean;
 }
 
 async function performSave(
@@ -519,7 +526,7 @@ async function performSave(
     if (!options.silentOverwriteManagedFiles) {
       window.alert(`${reason}\n\nProject was not saved.`);
     }
-    return { ok: false, reason };
+    return { ok: false, reason, alreadyReported: !options.silentOverwriteManagedFiles };
   }
   // Content that references something which does not exist cannot work in
   // play and cannot be fixed by playing further, so it stops the save. The
@@ -537,7 +544,7 @@ async function performSave(
     if (!options.silentOverwriteManagedFiles) {
       window.alert(`${reason}\n\nProject was not saved.`);
     }
-    return { ok: false, reason };
+    return { ok: false, reason, alreadyReported: !options.silentOverwriteManagedFiles };
   }
   const baseSaveInput = {
     handle,
@@ -591,7 +598,11 @@ async function performSave(
           contentLibrary: result.reconciledContentLibrary
         })
       );
-      return { ok: false, reason };
+      return {
+        ok: false,
+        reason,
+        alreadyReported: !options.silentOverwriteManagedFiles
+      };
     }
 
     const managedFiles = deploymentPlan?.managedFiles ?? [];
@@ -663,11 +674,11 @@ async function performSave(
 
 async function handleSave() {
   const result = await performSave({ silentOverwriteManagedFiles: false });
-  // A save that does not happen has to say so. The refusal paths inside
-  // performSave show their own dialog, but an exception on the way to disk was
-  // caught and returned as a reason nobody read -- so the project stayed dirty
-  // and looked saved.
-  if (!result.ok && result.reason) {
+  // A save that does not happen has to say so. Only the refusals that have not
+  // already shown their own dialog reach this -- an exception on the way to
+  // disk used to be caught and returned as a reason nobody read, so the project
+  // stayed dirty and looked saved.
+  if (!result.ok && result.reason && !result.alreadyReported) {
     window.alert(`Project was not saved.\n\n${result.reason}`);
   }
 }
@@ -1232,7 +1243,7 @@ export function App() {
             aggregateId: projectStore.getState().session?.gameProject.identity.id ?? ""
           },
           subject: {
-            subjectKind: "flag-definition",
+            subjectKind: "world-flag-definition",
             subjectId: definition.definitionId
           },
           payload: { definition }

@@ -231,6 +231,12 @@ export function mapWorldFlagReferences(
 
   // Behavior task activations and containment-volume gates live in the region
   // file. `volumes` is absent in pre-069.4 files.
+  //
+  // A volume's `trigger.action.setWorldFlag` is NOT walked here, and cannot be:
+  // it names a flag by store key rather than by id, so there is no reference to
+  // rewrite or resolve. `validateProjectContent` reports one whose key matches
+  // no registered flag name instead. #216 deletes the field, at which point the
+  // volume's flag write becomes a quest action and joins this walk.
   const mappedRegions: RegionDocument[] = regions.map((region) => ({
     ...region,
     behaviors: region.behaviors.map((behavior) => ({
@@ -313,8 +319,8 @@ export function mapWorldFlagReferences(
  *
  * Content validation uses this to report dangling references. Filtering it by
  * `worldFlagId` is also how a delete says how much content it is about to
- * orphan, once there is a surface that deletes a flag -- `DeleteWorldFlag-
- * Definition` has no caller today.
+ * orphan: the World Flags workspace warns with it before dispatching
+ * `DeleteWorldFlagDefinition`.
  */
 export function collectWorldFlagReferences(
   gameProject: GameProject,

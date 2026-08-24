@@ -62,6 +62,11 @@ export type WorldFlagValueDeclaration = Pick<
  * `true`) rather than to "no constraint". Authoring a condition with no value
  * is refused in the editor, so this fallback only catches content authored
  * before that check existed.
+ *
+ * Text that does not parse as the declared number is a different case, and
+ * returns `NaN` rather than that zero. `NaN === NaN` is false, so the condition
+ * matches nothing -- an authoring mistake reads as "not satisfied" instead of
+ * quietly reading as "equals 0" and matching a flag that happens to hold zero.
  */
 export function coerceWorldFlagValue(
   condition: WorldFlagValueDeclaration
@@ -73,8 +78,10 @@ export function coerceWorldFlagValue(
     return condition.value.toLowerCase() === "true";
   }
   if (condition.valueType === "number") {
-    const parsed = Number(condition.value);
-    return condition.value !== null && Number.isFinite(parsed) ? parsed : 0;
+    if (condition.value === null) {
+      return 0;
+    }
+    return Number(condition.value);
   }
   return condition.value ?? "";
 }
@@ -83,6 +90,12 @@ export function coerceWorldFlagValue(
  * The value to write when setting a world flag. Same rule as reading -- see
  * `coerceWorldFlagValue`. Kept as its own name because #216 removes the
  * region-side flag writer and this is the seam it deletes.
+ *
+ * Writing a number the author mistyped stores `NaN`, which JSON serializes as
+ * `null`. That is a broken flag either way -- it matches no condition before or
+ * after a save -- and it stays symmetric with the read rather than storing a
+ * zero the read would not agree with. The one caller is the volume trigger
+ * action #216 deletes.
  */
 export function resolveWorldFlagWriteValue(
   condition: WorldFlagValueDeclaration

@@ -101,9 +101,13 @@ export function createWorldFlagNameResolver(
 }
 
 /**
- * True when every entry has a distinct, non-empty name. Duplicate names share
- * one slot in the runtime store, so two flags an author sees as separate would
- * read and write each other's value.
+ * The names that more than one entry uses. Duplicates share one slot in the
+ * runtime store, so two flags an author sees as separate would read and write
+ * each other's value.
+ *
+ * Says nothing about a name being blank; `validateProjectContent` checks that
+ * separately, because one blank name is a problem on its own and two of them
+ * would otherwise only be reported as a duplicate.
  */
 export function findDuplicateWorldFlagNames(
   definitions: readonly WorldFlagDefinition[]

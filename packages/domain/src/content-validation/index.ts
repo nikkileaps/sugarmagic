@@ -288,6 +288,19 @@ export function validateProjectContent(
     issues.push(...validateQuest(quest));
   }
 
+  // The name is the runtime store key. A blank one is a key nothing can write
+  // on purpose and nothing can read back.
+  for (const definition of gameProject.worldFlagDefinitions) {
+    if (definition.name.trim().length === 0) {
+      issues.push(
+        error(
+          "world flags",
+          `The flag "${definition.displayName}" has a blank name. A flag's name is the key it is stored under at runtime.`
+        )
+      );
+    }
+  }
+
   // Two entries with one name share a slot in the runtime store, so two flags
   // the author sees as separate would read and write each other's value.
   for (const name of findDuplicateWorldFlagNames(
@@ -310,6 +323,28 @@ export function validateProjectContent(
         error(
           reference.where,
           `References world flag "${reference.worldFlagId}", which is not in the project's flag registry.`
+        )
+      );
+    }
+  }
+
+  // A volume trigger's flag write names a flag by store key, not by id, so the
+  // reference walk cannot see it and a rename cannot follow it. A key matching
+  // no registered flag writes a flag nothing reads -- the silent miss this
+  // registry exists to remove. A warning rather than an error: the field is
+  // legacy and #216 deletes it, and refusing the save over it would block a
+  // project that plays correctly today.
+  const knownFlagNames = new Set(
+    gameProject.worldFlagDefinitions.map((definition) => definition.name)
+  );
+  for (const region of regions) {
+    for (const volume of region.volumes ?? []) {
+      const key = volume.trigger?.action.setWorldFlag?.key;
+      if (!key || knownFlagNames.has(key)) continue;
+      issues.push(
+        warning(
+          `region "${region.displayName}" volume "${volume.volumeId}" trigger`,
+          `Sets world flag "${key}", which is not a registered flag name. Nothing reads it.`
         )
       );
     }

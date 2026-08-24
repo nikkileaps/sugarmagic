@@ -198,6 +198,13 @@ export class WorldFlagManager {
     for (const [key, value] of Object.entries(restored)) {
       this.write(key, value);
     }
-    this.onChange?.();
+    // Deliberately does NOT notify. The change handler means "re-evaluate quest
+    // conditions", and quest state has already been restored by the time this
+    // runs -- so refreshing here would activate and complete nodes during load
+    // and toast them at the player, the same re-toast `QuestManager`'s own
+    // restore avoids. The first frame calls `update()` anyway.
+    //
+    // The write observer DID fire for every key above, so the blackboard
+    // projection is up to date regardless.
   }
 }

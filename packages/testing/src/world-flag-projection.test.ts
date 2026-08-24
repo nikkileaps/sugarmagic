@@ -127,6 +127,23 @@ describe("world flag projection", () => {
     expect(getWorldFlagFact(blackboard, GATE_FLAG_NAME)).toBeNull();
   });
 
+  // Quest state is restored before flags are. Re-evaluating quest conditions
+  // here would activate and complete nodes during load and toast them at the
+  // player; the first frame's `update()` does the evaluation instead.
+  it("does not re-evaluate quest conditions while restoring", () => {
+    const { flags } = createProjectedStore();
+    flags.setChangeHandler(() => {
+      throw new Error("restore must not trigger a quest refresh");
+    });
+
+    flags.deserializeSaveSlice({
+      schemaVersion: 1,
+      data: { worldFlags: { [GATE_FLAG_NAME]: true } }
+    });
+
+    expect(flags.hasFlag(GATE_FLAG_NAME, true)).toBe(true);
+  });
+
   // The dev console handle and an agent's conversation proposal name a flag in
   // a string. Those stay in the store and stay in the save; they are not a
   // closed set of keys, so they do not become blackboard facts.

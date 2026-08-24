@@ -297,6 +297,26 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
       expect(evaluateRegionQuestBinding(binding, withFlag(3))).toBe(true);
       expect(evaluateRegionQuestBinding(binding, withFlag(4))).toBe(false);
     });
+
+    // Distinct from the valueless case above, which falls back to 0. Text that
+    // is not a number is an authoring mistake, and reading it as 0 would
+    // silently match a flag that happens to hold zero.
+    it("a number condition whose value is not a number matches nothing", () => {
+      expect(
+        coerceWorldFlagValue({ valueType: "number", value: "abc" })
+      ).toBeNaN();
+
+      const binding = {
+        questDefinitionId: null,
+        questStageId: null,
+        worldFlagEquals: {
+          worldFlagId: "gate",
+          valueType: "number" as const,
+          value: "abc"
+        }
+      };
+      expect(evaluateRegionQuestBinding(binding, withFlag(0))).toBe(false);
+    });
   });
 
   it("write value is always the declared type (never boolean into a number slot)", () => {
@@ -314,6 +334,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
       resolveWorldFlagWriteValue({ valueType: "boolean", value: null })
     ).toBe(true);
   });
+
 
   // Plan 077.4 (D5): compound AND binding -- stage + world-flag together.
   // Models the "upset passenger activates only after dock-worker conversation

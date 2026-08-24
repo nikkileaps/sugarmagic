@@ -3169,9 +3169,10 @@ export function createWebRuntimeHost(
       })
     );
     // World flags used to persist inside the quest slice. They have their own
-    // owner now, so they have their own slice. A save written before the split
-    // carries them in the quest slice still; the quest manager forwards those
-    // on restore, which is why this participant needs no legacy path.
+    // owner now, so they have their own slice, and nothing reads the old
+    // location: a save written before the split restores with no flags set.
+    // Deliberate -- the flags in play at the time were one test quest's, and a
+    // reader for a shape nothing writes is a path that rots unexercised.
     saveParticipantRegistry.register(
       createWorldFlagSaveParticipant({
         getWorldFlagManager: () => gameplaySession?.worldFlagManager ?? null

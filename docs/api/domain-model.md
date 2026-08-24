@@ -243,14 +243,25 @@ handed to plugins -- plugins never hold a blackboard handle; they request
 writes through the conversation action proposal channel. Plugins may
 contribute their own fact definitions.
 
-**World flags** are the author-facing store and are NOT blackboard facts:
-`QuestManager.runtimeFlags` is a free-string map written by quest `setFlag`
-actions, volume triggers, mechanics effects, and conversation proposals,
-and read by quest conditions, dialogue conditions, NPC presence gating, and
-NPC behavior activation. Flag names are unvalidated strings; a typo between
-writer and reader silently never matches. Flags persist in the quest save
-slice. This split (typed owned facts vs free author flags) is current
-reality, not a design ideal -- unifying it is open work.
+**World flags** are the author-facing store, owned by `WorldFlagManager`
+(`runtime-core/src/world-flags/`) and persisted in their own save slice.
+Written by quest `setFlag` actions, volume triggers, spell `world-flag`
+effects and conversation proposals; read by quest conditions, dialogue
+conditions, NPC presence gating, NPC behavior activation and containment
+volume gates.
+
+Authored content names a flag by `definitionId`, resolved against
+`GameProject.worldFlagDefinitions` -- the registry that makes the set of flags
+a closed, validated one rather than free strings that silently never match.
+The runtime store is keyed by the flag's `name`, because the paths that can
+only name a flag in a string (a conversation proposal, the dev console) cannot
+produce an id.
+
+Flags are also projected onto the blackboard as `world.flag` facts, one per
+flag, scoped by name, so a narrative system can read them without holding the
+store. `WorldFlagManager` stays the write and persistence home; the blackboard
+copy is a projection, per [ADR 031](../adr/031-blackboard-is-a-projection-surface.md).
+Only registered flags are projected.
 
 ### Events
 

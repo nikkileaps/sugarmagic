@@ -43,7 +43,10 @@ import {
   type RegionVolumeDefinition,
   type SoundEventBindingMap
 } from "@sugarmagic/domain";
-import { WorldFlagManager } from "../world-flags/WorldFlagManager";
+import {
+  WorldFlagManager,
+  coerceAuthoredWorldFlagValue
+} from "../world-flags/WorldFlagManager";
 import { createWorldFlagProjection } from "../world-flags/projection";
 import {
   CasterManager,
@@ -2405,9 +2408,15 @@ export function createRuntimeGameplaySessionController(
       }
 
       if (effect.type === "world-flag" && effect.targetId) {
-        // `targetId` on a world-flag effect is a flag reference, authored the
-        // same way a quest setFlag action's is.
-        worldFlagManager.setFlagById(effect.targetId, effect.value ?? true);
+        // `targetId` on a world-flag effect is a flag reference, and the value
+        // box beside it is free text, authored the same way a quest setFlag
+        // action's is -- so it coerces the same way. Without this the spell
+        // writes the string "true" while a condition on the same flag reads
+        // boolean true, and the gate never opens.
+        worldFlagManager.setFlagById(
+          effect.targetId,
+          coerceAuthoredWorldFlagValue(effect.value ?? true)
+        );
       }
     }
     spellMenuUi.update();
