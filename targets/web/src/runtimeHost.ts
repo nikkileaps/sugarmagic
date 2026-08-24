@@ -153,6 +153,7 @@ import {
   createUIContextStore,
   createUIStateStore,
   registerDefaultUIActions,
+  getWorldFlagFact,
   type GameStateStore,
   type MutableObservableValue,
   type ObservableValue,
@@ -1570,8 +1571,22 @@ export function createWebRuntimeHost(
     const flags = gameplaySession?.worldFlagManager ?? null;
     const nbs = gameplaySession?.npcBehaviorSystem ?? null;
     const slice = qm?.serializeSaveSlice() ?? null;
+    const storedFlags = flags?.getAllFlags() ?? null;
+    const blackboard = gameplaySession?.blackboard ?? null;
+    // What each stored flag looks like on the blackboard. A flag that is set
+    // but reads null here is not in the project's flag registry.
+    const projectedFlags =
+      storedFlags && blackboard
+        ? Object.fromEntries(
+            Object.keys(storedFlags).map((name) => [
+              name,
+              getWorldFlagFact(blackboard, name)
+            ])
+          )
+        : null;
     const result: Record<string, unknown> = {
-      worldFlags: flags?.getAllFlags() ?? null,
+      worldFlags: storedFlags,
+      projectedWorldFlags: projectedFlags,
       talkedToDockWorker: flags?.hasFlag("talkedToDockWorker") ?? null,
       activeQuests: slice?.activeQuests ?? null,
       completedQuestIds: slice?.completedQuestIds ?? null

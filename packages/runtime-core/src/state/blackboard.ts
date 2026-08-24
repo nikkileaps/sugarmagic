@@ -315,6 +315,30 @@ export const PLAYER_KNOWN_FACTS_FACT = defineBlackboardFact<string[]>({
   lifecycle: { kind: "session" }
 });
 
+/**
+ * World flags projected onto the blackboard. One fact per flag, told apart by
+ * the scope id, which is the flag's NAME -- the same key the flag store uses,
+ * so a debug readout and the store read alike.
+ *
+ * `WorldFlagManager` owns the values and persists them in its own save slice;
+ * this is a copy that narrative systems can read without holding the store.
+ * Written only by the projection wired in gameplay-session.ts, off the store's
+ * write observer. Session lifecycle: cleared with the rest of the session and
+ * re-published from the save slice on restore.
+ *
+ * Only flags in the project's flag registry are projected. A flag named in a
+ * string at runtime -- an agent proposal, the dev console handle -- stays in
+ * the store and does not land here.
+ */
+export const WORLD_FLAG_SOURCE_SYSTEM = "world-flag-system";
+
+export const WORLD_FLAG_FACT = defineBlackboardFact<unknown>({
+  key: "world.flag",
+  ownerSystem: WORLD_FLAG_SOURCE_SYSTEM,
+  allowedScopeKinds: ["global"],
+  lifecycle: { kind: "session" }
+});
+
 export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   ENTITY_POSITION_FACT,
   ENTITY_LOCATION_FACT,
@@ -329,7 +353,8 @@ export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   GOAL_SURFACED_COUNT_FACT,
   WORLD_TIME_OF_DAY_FACT,
   WORLD_DAY_FACT,
-  PLAYER_KNOWN_FACTS_FACT
+  PLAYER_KNOWN_FACTS_FACT,
+  WORLD_FLAG_FACT
 ] as const satisfies readonly BlackboardFactDefinition<unknown>[];
 
 export function defineBlackboardFact<TValue>(
@@ -910,6 +935,49 @@ export function setPlayerKnownFacts(
     scope: createBlackboardScope("global", "player.known-facts"),
     value: facts,
     sourceSystem: PLAYER_FACTS_SOURCE_SYSTEM
+  });
+}
+
+// World flag projection getters/setters. Named "...WorldFlagFact" so they do
+// not read as the flag store's own setFlag/hasFlag, or as the volume trigger's
+// setWorldFlag action.
+
+/**
+ * The projected value of a flag, or null when the flag is unset or is not in
+ * the registry. A caller that needs the authoritative value asks
+ * `WorldFlagManager`; this is the read surface for systems that do not hold it.
+ */
+export function getWorldFlagFact(
+  blackboard: RuntimeBlackboard,
+  flagName: string
+): unknown | null {
+  return (
+    blackboard.getFact(WORLD_FLAG_FACT, createBlackboardScope("global", flagName))?.value ??
+    null
+  );
+}
+
+export function setWorldFlagFact(
+  blackboard: RuntimeBlackboard,
+  flagName: string,
+  value: unknown
+): void {
+  blackboard.setFact({
+    definition: WORLD_FLAG_FACT,
+    scope: createBlackboardScope("global", flagName),
+    value,
+    sourceSystem: WORLD_FLAG_SOURCE_SYSTEM
+  });
+}
+
+export function clearWorldFlagFact(
+  blackboard: RuntimeBlackboard,
+  flagName: string
+): void {
+  blackboard.clearFact({
+    definition: WORLD_FLAG_FACT,
+    scope: createBlackboardScope("global", flagName),
+    sourceSystem: WORLD_FLAG_SOURCE_SYSTEM
   });
 }
 

@@ -32,6 +32,19 @@ export interface WorldFlagSlice {
 }
 
 /**
+ * Told about every value that lands in the store, and every one that leaves.
+ *
+ * Separate from the change handler on purpose. The change handler means
+ * "re-evaluate quest conditions" and is skipped for the write that runs inside
+ * the quest refresh loop; an observer that inherited that skip would miss every
+ * authored setFlag action, which is the most common write in the game.
+ */
+export interface WorldFlagWriteObserver {
+  onSet(key: string, value: unknown): void;
+  onCleared(key: string): void;
+}
+
+/**
  * The project's world flags at runtime.
  *
  * One store, read and written by quests, dialogue, spells, NPC behavior,
@@ -44,8 +57,9 @@ export interface WorldFlagSlice {
  * string -- the dev handles, an agent's proposal -- use the name directly.
  */
 export class WorldFlagManager {
-  private flags = new Map<string, unknown>();
+  private readonly flags = new Map<string, unknown>();
   private onChange: (() => void) | null = null;
+  private writeObserver: WorldFlagWriteObserver | null = null;
   /**
    * Resolves a flag reference to the flag's name. Injected rather than read
    * from a registry here: the registry lives on GameProject, which
@@ -67,6 +81,28 @@ export class WorldFlagManager {
     this.resolveFlagName = resolver;
   }
 
+  setWriteObserver(observer: WorldFlagWriteObserver): void {
+    this.writeObserver = observer;
+  }
+
+  /**
+   * The one place a value is put into the map. Everything that writes a flag --
+   * the notifying and non-notifying setters, and the save restore -- comes
+   * through here, so anything watching the store sees every write.
+   */
+  private write(key: string, value: unknown): void {
+    this.flags.set(key, value);
+    this.writeObserver?.onSet(key, value);
+  }
+
+  /** The one place a value is taken out. Pairs with `write`. */
+  private remove(key: string): void {
+    if (!this.flags.delete(key)) {
+      return;
+    }
+    this.writeObserver?.onCleared(key);
+  }
+
   /**
    * True when the flag holds `value`. An unset flag is false, so a condition
    * reads the same whether the flag was never written or holds something else.
@@ -84,7 +120,7 @@ export class WorldFlagManager {
   }
 
   setFlag(key: string, value: unknown = true): void {
-    this.flags.set(key, value);
+    this.write(key, value);
     this.onChange?.();
   }
 
@@ -95,7 +131,7 @@ export class WorldFlagManager {
    * map, so the store still has one owner.
    */
   setFlagWithoutNotifying(key: string, value: unknown = true): void {
-    this.flags.set(key, value);
+    this.write(key, value);
   }
 
   /**
@@ -146,9 +182,22 @@ export class WorldFlagManager {
     return { worldFlags: this.getAllFlags() };
   }
 
+  /**
+   * Restore replaces the whole store, but goes key by key rather than swapping
+   * the map: a flag that was set before the restore and is absent from the save
+   * has to be taken out, or a watcher would keep showing it.
+   */
   deserializeSaveSlice(slice: SaveSlice<WorldFlagSlice> | null): void {
     if (!slice) return;
-    this.flags = new Map(Object.entries(slice.data.worldFlags ?? {}));
+    const restored = slice.data.worldFlags ?? {};
+    for (const key of [...this.flags.keys()]) {
+      if (!(key in restored)) {
+        this.remove(key);
+      }
+    }
+    for (const [key, value] of Object.entries(restored)) {
+      this.write(key, value);
+    }
     this.onChange?.();
   }
 }

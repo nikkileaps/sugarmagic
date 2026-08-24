@@ -44,6 +44,7 @@ import {
   type SoundEventBindingMap
 } from "@sugarmagic/domain";
 import { WorldFlagManager } from "../world-flags/WorldFlagManager";
+import { createWorldFlagProjection } from "../world-flags/projection";
 import {
   CasterManager,
   CasterSystem,
@@ -697,6 +698,12 @@ export function createRuntimeGameplaySessionController(
         .flatMap((plugin) => plugin.blackboardFactDefinitions ?? []) ?? [])
     ]
   });
+  // Wired here rather than beside the name resolver below, so that a flag
+  // written before the session finishes assembling still reaches the
+  // blackboard.
+  worldFlagManager.setWriteObserver(
+    createWorldFlagProjection({ blackboard, definitions: worldFlagDefinitions })
+  );
   const questDialogueCoordinator = createRuntimeQuestDialogueCoordinator();
   const conversationProviders: ConversationProvider[] =
     pluginManager
