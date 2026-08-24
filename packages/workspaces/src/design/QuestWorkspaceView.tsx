@@ -67,6 +67,8 @@ import {
   QUEST_ACTION_TYPE_OPTIONS,
   TIME_OF_DAY_BAND_OPTIONS,
   createQuestAction,
+  validateQuest,
+  isBlankWorldFlagValue,
   createDefaultDialogueDefinition,
   createDefaultQuestDefinition,
   createDefaultQuestNodeDefinition,
@@ -75,6 +77,7 @@ import {
   createQuestNodeId
 } from "@sugarmagic/domain";
 import { AddNodeMenu, Inspector } from "@sugarmagic/ui";
+import { WorldFlagSelect } from "../world-flags";
 import {
   NodeEditor,
   type GraphEditorConnection,
@@ -149,143 +152,14 @@ export interface QuestWorkspaceViewProps {
 }
 
 /**
- * A stage with no nodes completes the moment it starts, so a next-stage loop made
- * only of empty stages never settles on anything. The runtime parks the quest
- * rather than hanging; this is where the author finds out.
+ * A new flag condition. The value is spelled out rather than left blank so the
+ * author sees what is being compared -- `createQuestAction` does the same for
+ * the `setFlag` action, and the two have to agree for the condition to match.
  */
-function emptyStageLoop(quest: QuestDefinition): string[] {
-  const stagesById = new Map(
-    quest.stageDefinitions.map((stage) => [stage.stageId, stage])
-  );
-  const reported = new Set<string>();
-  const warnings: string[] = [];
-
-  for (const start of quest.stageDefinitions) {
-    if (reported.has(start.stageId)) continue;
-    const path: string[] = [];
-    const seen = new Set<string>();
-    let stage: QuestStageDefinition | undefined = start;
-
-    while (stage && stage.nodeDefinitions.length === 0) {
-      if (seen.has(stage.stageId)) {
-        for (const stageId of path) reported.add(stageId);
-        warnings.push(
-          `Stages ${path
-            .map(
-              (stageId) =>
-                `"${stagesById.get(stageId)?.displayName ?? stageId}"`
-            )
-            .join(
-              " -> "
-            )} have no nodes and loop back on each other, so the quest can never move past them.`
-        );
-        break;
-      }
-      seen.add(stage.stageId);
-      path.push(stage.stageId);
-      stage = stage.nextStageId ? stagesById.get(stage.nextStageId) : undefined;
-    }
-  }
-  return warnings;
+function createWorldFlagCondition(): QuestConditionDefinition {
+  return { type: "hasFlag", worldFlagId: "", value: "true" };
 }
 
-function validateQuest(quest: QuestDefinition): string[] {
-  const warnings: string[] = [];
-  const stageIds = new Set(
-    quest.stageDefinitions.map((stage) => stage.stageId)
-  );
-  if (!stageIds.has(quest.startStageId)) {
-    warnings.push("Start stage is missing.");
-  }
-  warnings.push(...emptyStageLoop(quest));
-
-  for (const stage of quest.stageDefinitions) {
-    if (stage.nextStageId && !stageIds.has(stage.nextStageId)) {
-      warnings.push(
-        `Stage "${stage.displayName}" points to a missing next stage.`
-      );
-    }
-    if (stage.nodeDefinitions.length === 0) {
-      warnings.push(`Stage "${stage.displayName}" has no nodes.`);
-      continue;
-    }
-
-    const nodeIds = new Set(stage.nodeDefinitions.map((node) => node.nodeId));
-    for (const node of stage.nodeDefinitions) {
-      for (const prerequisiteNodeId of node.prerequisiteNodeIds) {
-        if (!nodeIds.has(prerequisiteNodeId)) {
-          warnings.push(
-            `Node "${node.displayName}" has a missing prerequisite.`
-          );
-        }
-      }
-      for (const failTargetNodeId of node.failTargetNodeIds) {
-        if (!nodeIds.has(failTargetNodeId)) {
-          warnings.push(
-            `Node "${node.displayName}" has a missing fail target.`
-          );
-        }
-      }
-      if (node.nodeBehavior === "condition" || node.nodeBehavior === "branch") {
-        if (!node.condition) {
-          warnings.push(`Node "${node.displayName}" is missing a condition.`);
-        }
-      }
-      if (
-        node.nodeBehavior === "objective" &&
-        node.objectiveSubtype === "location" &&
-        !node.targetAreaId
-      ) {
-        warnings.push(
-          `Location node "${node.displayName}" has no target area, so nothing completes it.`
-        );
-      }
-      if (
-        node.nodeBehavior === "objective" &&
-        node.objectiveSubtype === "talk" &&
-        !node.targetId
-      ) {
-        warnings.push(`Talk node "${node.displayName}" has no NPC target.`);
-      }
-      if (
-        node.nodeBehavior === "objective" &&
-        node.objectiveSubtype === "talk" &&
-        !node.dialogueDefinitionId
-      ) {
-        warnings.push(
-          `Talk node "${node.displayName}" has no dialogue linked.`
-        );
-      }
-      if (
-        node.nodeBehavior === "objective" &&
-        node.objectiveSubtype === "collect" &&
-        !node.targetId
-      ) {
-        warnings.push(`Collect node "${node.displayName}" has no item target.`);
-      }
-      if (
-        node.nodeBehavior === "objective" &&
-        node.objectiveSubtype === "castSpell" &&
-        !node.targetId
-      ) {
-        warnings.push(
-          `Cast Spell node "${node.displayName}" has no spell target.`
-        );
-      }
-      if (
-        node.nodeBehavior === "narrative" &&
-        node.narrativeSubtype === "dialogue" &&
-        !node.dialogueDefinitionId
-      ) {
-        warnings.push(
-          `Narrative node "${node.displayName}" has no dialogue selected.`
-        );
-      }
-    }
-  }
-
-  return warnings;
-}
 
 /**
  * The body of a quest node on the graph. Ports and the selection ring are drawn
@@ -468,7 +342,7 @@ function QuestConditionEditor({
   function handleTypeChange(type: string) {
     switch (type) {
       case "hasFlag":
-        onChange({ type: "hasFlag", key: "" });
+        onChange(createWorldFlagCondition());
         break;
       case "hasSpell":
         onChange({ type: "hasSpell", spellDefinitionId: "" });
@@ -491,7 +365,7 @@ function QuestConditionEditor({
         });
         break;
       case "not":
-        onChange({ type: "not", condition: { type: "hasFlag", key: "" } });
+        onChange({ type: "not", condition: createWorldFlagCondition() });
         break;
       default:
         break;
@@ -535,18 +409,25 @@ function QuestConditionEditor({
       />
       {condition.type === "hasFlag" && (
         <>
-          <TextInput
-            size="xs"
-            label="Flag Key"
-            value={condition.key}
-            onChange={(event) =>
-              onChange({ ...condition, key: event.currentTarget.value })
-            }
+          <WorldFlagSelect
+            label="Flag"
+            value={condition.worldFlagId || null}
+            onChange={(worldFlagId) => onChange({ ...condition, worldFlagId: worldFlagId ?? "" })}
           />
+          {/* Free text, so an author can type `5` against a flag declared as
+              a string. The picked flag declares a valueType; this box could
+              follow it -- a checkbox, a number input, or text. Worth doing
+              once a non-boolean flag is authored for real, or the first time
+              a value mismatch is reported. Tracked on issue #224. */}
           <TextInput
             size="xs"
             label="Expected Value"
             value={condition.value == null ? "" : String(condition.value)}
+            error={
+              isBlankWorldFlagValue(condition.value)
+                ? "Required. A condition with no value never matches."
+                : undefined
+            }
             onChange={(event) =>
               onChange({ ...condition, value: event.currentTarget.value })
             }
@@ -681,24 +562,22 @@ function QuestActionFields({
     case "setFlag":
       return (
         <>
-          <TextInput
-            size="xs"
-            label="Flag Key"
-            value={action.key}
-            onChange={(event) =>
-              onChange({ ...action, key: event.currentTarget.value })
-            }
+          <WorldFlagSelect
+            label="Flag"
+            value={action.worldFlagId || null}
+            onChange={(worldFlagId) => onChange({ ...action, worldFlagId: worldFlagId ?? "" })}
           />
           <TextInput
             size="xs"
             label="Value"
-            placeholder="(true)"
             value={action.value == null ? "" : String(action.value)}
+            error={
+              isBlankWorldFlagValue(action.value)
+                ? "Required. Conditions compare against this value."
+                : undefined
+            }
             onChange={(event) =>
-              onChange({
-                ...action,
-                value: event.currentTarget.value || undefined
-              })
+              onChange({ ...action, value: event.currentTarget.value })
             }
           />
         </>
@@ -1959,9 +1838,9 @@ export function useQuestWorkspaceView({
                   Validation
                 </Text>
                 <Stack gap={4}>
-                  {validateQuest(selectedQuest).map((warning, index) => (
-                    <Text key={`${warning}:${index}`} size="sm" c="#f38ba8">
-                      • {warning}
+                  {validateQuest(selectedQuest).map((issue, index) => (
+                    <Text key={`${issue.message}:${index}`} size="sm" c="#f38ba8">
+                      • {issue.message}
                     </Text>
                   ))}
                 </Stack>
@@ -2334,7 +2213,7 @@ export function useQuestWorkspaceView({
                       : undefined,
                   condition:
                     value === "condition" || value === "branch"
-                      ? (selectedNode.condition ?? { type: "hasFlag", key: "" })
+                      ? (selectedNode.condition ?? createWorldFlagCondition())
                       : undefined,
                   failTargetNodeIds:
                     value === "branch" ? selectedNode.failTargetNodeIds : []
@@ -2560,7 +2439,7 @@ export function useQuestWorkspaceView({
               selectedNode.nodeBehavior === "branch") && (
               <QuestConditionEditor
                 condition={
-                  selectedNode.condition ?? { type: "hasFlag", key: "" }
+                  selectedNode.condition ?? createWorldFlagCondition()
                 }
                 spellDefinitions={spellDefinitions}
                 onChange={(condition) =>

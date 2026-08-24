@@ -20,6 +20,7 @@ import {
   coerceWorldFlagValue,
   createSpatialAreaTracker,
   evaluateRegionQuestBinding,
+  WorldFlagManager,
   resolveMove,
   resolveWorldFlagWriteValue
 } from "@sugarmagic/runtime-core";
@@ -161,7 +162,7 @@ describe("069.5 — conditional containment gate", () => {
     condition: {
       questDefinitionId: null,
       questStageId: null,
-      worldFlagEquals: { key: "freed", valueType: "boolean", value: "true" }
+      worldFlagEquals: { worldFlagId: "freed", valueType: "boolean", value: "true" }
     }
   });
 
@@ -198,7 +199,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     const binding = {
       questDefinitionId: null,
       questStageId: null,
-      worldFlagEquals: { key: "k", valueType: "boolean" as const, value: "true" }
+      worldFlagEquals: { worldFlagId: "k", valueType: "boolean" as const, value: "true" }
     };
     expect(evaluateRegionQuestBinding(binding, { activeQuests: [] })).toBe(false);
     expect(
@@ -229,28 +230,111 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
 
   it("coerces authored flag values", () => {
     expect(
-      coerceWorldFlagValue({ key: "k", valueType: "boolean", value: null })
+      coerceWorldFlagValue({ valueType: "boolean", value: null })
     ).toBe(true);
     expect(
-      coerceWorldFlagValue({ key: "k", valueType: "number", value: "3" })
+      coerceWorldFlagValue({ valueType: "number", value: "3" })
     ).toBe(3);
+  });
+
+  // Reading and writing share one coercion, so a flag written from an authored
+  // declaration always matches a condition read from the same declaration --
+  // including the valueless case, which lands on the declared type's zero at
+  // both ends instead of `undefined` at one and `0` at the other. Wired through
+  // the real flag store because the bug lived in the seam, not in either side.
+  describe("a valueless flag condition matches a flag written the same way", () => {
+    function gateOn(valueType: "boolean" | "number" | "string") {
+      return {
+        questDefinitionId: null,
+        questStageId: null,
+        worldFlagEquals: { worldFlagId: "gate", valueType, value: null }
+      };
+    }
+
+    function contextFrom(flags: WorldFlagManager) {
+      return {
+        activeQuests: [],
+        hasWorldFlag: (key: string, value?: unknown) => flags.hasFlag(key, value)
+      };
+    }
+
+    function withFlag(value: unknown) {
+      const flags = new WorldFlagManager();
+      flags.setFlag("gate", value);
+      return contextFrom(flags);
+    }
+
+    const withoutFlag = () => contextFrom(new WorldFlagManager());
+
+    // The write side is what a valueless declaration stores; the read side has
+    // to land on the same value. Anything else is a silent miss.
+    it.each([
+      ["number" as const, 0],
+      ["string" as const, ""],
+      ["boolean" as const, true]
+    ])("%s: write and read agree on the valueless case", (valueType, stored) => {
+      const declaration = { key: "gate", valueType, value: null };
+      expect(resolveWorldFlagWriteValue(declaration)).toBe(stored);
+      expect(coerceWorldFlagValue(declaration)).toBe(stored);
+      expect(
+        evaluateRegionQuestBinding(gateOn(valueType), withFlag(stored))
+      ).toBe(true);
+      expect(
+        evaluateRegionQuestBinding(gateOn(valueType), withoutFlag())
+      ).toBe(false);
+    });
+
+    it("a declared value still has to match what the flag holds", () => {
+      const binding = {
+        questDefinitionId: null,
+        questStageId: null,
+        worldFlagEquals: {
+          worldFlagId: "gate",
+          valueType: "number" as const,
+          value: "3"
+        }
+      };
+      expect(evaluateRegionQuestBinding(binding, withFlag(3))).toBe(true);
+      expect(evaluateRegionQuestBinding(binding, withFlag(4))).toBe(false);
+    });
+
+    // Distinct from the valueless case above, which falls back to 0. Text that
+    // is not a number is an authoring mistake, and reading it as 0 would
+    // silently match a flag that happens to hold zero.
+    it("a number condition whose value is not a number matches nothing", () => {
+      expect(
+        coerceWorldFlagValue({ valueType: "number", value: "abc" })
+      ).toBeNaN();
+
+      const binding = {
+        questDefinitionId: null,
+        questStageId: null,
+        worldFlagEquals: {
+          worldFlagId: "gate",
+          valueType: "number" as const,
+          value: "abc"
+        }
+      };
+      expect(evaluateRegionQuestBinding(binding, withFlag(0))).toBe(false);
+    });
   });
 
   it("write value is always the declared type (never boolean into a number slot)", () => {
     expect(
-      resolveWorldFlagWriteValue({ key: "k", valueType: "number", value: "7" })
+      resolveWorldFlagWriteValue({ valueType: "number", value: "7" })
     ).toBe(7);
     // Valueless declarations fall back to the TYPE's zero, not `true`.
     expect(
-      resolveWorldFlagWriteValue({ key: "k", valueType: "number", value: null })
+      resolveWorldFlagWriteValue({ valueType: "number", value: null })
     ).toBe(0);
     expect(
-      resolveWorldFlagWriteValue({ key: "k", valueType: "string", value: null })
+      resolveWorldFlagWriteValue({ valueType: "string", value: null })
     ).toBe("");
     expect(
-      resolveWorldFlagWriteValue({ key: "k", valueType: "boolean", value: null })
+      resolveWorldFlagWriteValue({ valueType: "boolean", value: null })
     ).toBe(true);
   });
+
 
   // Plan 077.4 (D5): compound AND binding -- stage + world-flag together.
   // Models the "upset passenger activates only after dock-worker conversation
@@ -260,7 +344,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     const binding = {
       questDefinitionId: "quest.find-the-luggage",
       questStageId: "stage.find-suitcase",
-      worldFlagEquals: { key: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
+      worldFlagEquals: { worldFlagId: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
     };
     const ctx = (stageId: string, hasFlag: boolean) => ({
       activeQuests: [{ questDefinitionId: "quest.find-the-luggage", stageId }],
@@ -284,7 +368,7 @@ describe("069.5 — shared quest/flag grammar (single evaluator)", () => {
     const binding = {
       questDefinitionId: "quest.find-the-luggage",
       questStageId: "stage.find-suitcase",
-      worldFlagEquals: { key: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
+      worldFlagEquals: { worldFlagId: "talkedToDockWorker", valueType: "boolean" as const, value: "true" }
     };
     const flagAlwaysSet = (k: string, v: unknown) =>
       k === "talkedToDockWorker" && v === true;

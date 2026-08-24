@@ -82,6 +82,10 @@ import {
   getAllQuestDefinitions,
   getAllSurfaceDefinitions,
   getAllSpellDefinitions,
+  getAllWorldFlagDefinitions,
+  createWorldFlagDefinition,
+  validateProjectContent,
+  blockingIssues,
   getAllTextureDefinitions,
   listFlowerTypeDefinitions,
   listGrassTypeDefinitions,
@@ -185,6 +189,8 @@ import {
 } from "@sugarmagic/shell";
 import {
   SurfaceAuthoringProvider,
+  WorldFlagRegistryProvider,
+  type WorldFlagRegistry,
   type WorkspaceViewport,
   useBuildProductModeView,
   useDesignProductModeView,
@@ -488,6 +494,13 @@ interface PerformSaveOptions {
 interface PerformSaveResult {
   ok: boolean;
   reason?: string;
+  /**
+   * Whether this refusal already put its reason on screen. The refusal paths
+   * below each show their own dialog, worded for what they refused; a caller
+   * that alerts on every `ok: false` would show a second, more generic one
+   * over the top of it.
+   */
+  alreadyReported?: boolean;
 }
 
 async function performSave(
@@ -513,7 +526,25 @@ async function performSave(
     if (!options.silentOverwriteManagedFiles) {
       window.alert(`${reason}\n\nProject was not saved.`);
     }
-    return { ok: false, reason };
+    return { ok: false, reason, alreadyReported: !options.silentOverwriteManagedFiles };
+  }
+  // Content that references something which does not exist cannot work in
+  // play and cannot be fixed by playing further, so it stops the save. The
+  // same checker's warnings -- a half-authored talk node, say -- are normal
+  // mid-session and let the save through.
+  const contentValidation = validateProjectContent(
+    session.gameProject,
+    getAllRegions(session)
+  );
+  if (!contentValidation.valid) {
+    const blocking = blockingIssues(contentValidation);
+    const reason = `Project content is invalid:\n${blocking
+      .map((issue) => `- ${issue.path}: ${issue.message}`)
+      .join("\n")}`;
+    if (!options.silentOverwriteManagedFiles) {
+      window.alert(`${reason}\n\nProject was not saved.`);
+    }
+    return { ok: false, reason, alreadyReported: !options.silentOverwriteManagedFiles };
   }
   const baseSaveInput = {
     handle,
@@ -567,7 +598,11 @@ async function performSave(
           contentLibrary: result.reconciledContentLibrary
         })
       );
-      return { ok: false, reason };
+      return {
+        ok: false,
+        reason,
+        alreadyReported: !options.silentOverwriteManagedFiles
+      };
     }
 
     const managedFiles = deploymentPlan?.managedFiles ?? [];
@@ -629,13 +664,23 @@ async function performSave(
     );
     return { ok: true };
   } catch (error) {
+    // Logged as well as returned: the reason reaches the caller, but the stack
+    // is the only thing that says which write threw.
+    console.error("[studio] save failed", error);
     const reason = error instanceof Error ? error.message : String(error);
     return { ok: false, reason };
   }
 }
 
 async function handleSave() {
-  await performSave({ silentOverwriteManagedFiles: false });
+  const result = await performSave({ silentOverwriteManagedFiles: false });
+  // A save that does not happen has to say so. Only the refusals that have not
+  // already shown their own dialog reach this -- an exception on the way to
+  // disk used to be caught and returned as a reason nobody read, so the project
+  // stayed dirty and looked saved.
+  if (!result.ok && result.reason && !result.alreadyReported) {
+    window.alert(`Project was not saved.\n\n${result.reason}`);
+  }
 }
 
 // Story 45.8 — exposed to the plugin workspace via PluginWorkspaceViewProps.
@@ -927,6 +972,7 @@ async function postPreviewBootMessage(
       contentLibrary: session.contentLibrary,
       mechanics: session.gameProject.mechanics,
       playerDefinition: session.gameProject.playerDefinition,
+      worldFlagDefinitions: session.gameProject.worldFlagDefinitions,
       spellDefinitions: session.gameProject.spellDefinitions,
       itemDefinitions: session.gameProject.itemDefinitions,
       documentDefinitions: session.gameProject.documentDefinitions,
@@ -1179,6 +1225,34 @@ export function App() {
     if (!session) return [];
     return getAllSpellDefinitions(session);
   }, [session]);
+
+  const worldFlagDefinitions = useMemo(() => {
+    if (!session) return [];
+    return getAllWorldFlagDefinitions(session);
+  }, [session]);
+
+  const worldFlagRegistry = useMemo<WorldFlagRegistry>(
+    () => ({
+      worldFlagDefinitions,
+      createWorldFlag: (name) => {
+        const definition = createWorldFlagDefinition({ name, displayName: name });
+        dispatchCommand({
+          kind: "CreateWorldFlagDefinition",
+          target: {
+            aggregateKind: "game-project",
+            aggregateId: projectStore.getState().session?.gameProject.identity.id ?? ""
+          },
+          subject: {
+            subjectKind: "world-flag-definition",
+            subjectId: definition.definitionId
+          },
+          payload: { definition }
+        });
+        return definition.definitionId;
+      }
+    }),
+    [worldFlagDefinitions]
+  );
 
   const documentDefinitions = useMemo(() => {
     if (!session) return [];
@@ -3092,6 +3166,7 @@ export function App() {
   const designView = useDesignProductModeView({
     activeDesignKind,
     gameProjectId: session?.gameProject.identity.id ?? null,
+    gameProject: session?.gameProject ?? null,
     regions: regionDocuments,
     scenes: session?.gameProject.scenes ?? [],
     soundCueDefinitions,
@@ -3551,6 +3626,7 @@ export function App() {
 
   return (
     <SurfaceAuthoringProvider catalog={surfaceAuthoringCatalog}>
+    <WorldFlagRegistryProvider registry={worldFlagRegistry}>
       <ProjectManagerDialog
         opened={phase === "no-project"}
         onOpen={handleOpenProject}
@@ -4308,6 +4384,7 @@ export function App() {
           onDismiss={() => setPreviewBootError(null)}
         />
       ) : null}
+    </WorldFlagRegistryProvider>
     </SurfaceAuthoringProvider>
   );
 }

@@ -41,6 +41,7 @@ import {
   type PluginConfigurationRecord,
   type PlayerDefinition,
   type QuestDefinition,
+  type WorldFlagDefinition,
   type SpellDefinition,
   type RegionDocument,
   type HUDDefinition,
@@ -111,6 +112,7 @@ import {
   createPlaythroughIdentitySaveParticipant,
   createPlayerKnownFactsSaveParticipant,
   createQuestManagerSaveParticipant,
+  createWorldFlagSaveParticipant,
   type QuestManagerSlice,
   createRuntimeGameplayAssembly,
   createWorldPresenceSaveParticipant,
@@ -151,6 +153,7 @@ import {
   createUIContextStore,
   createUIStateStore,
   registerDefaultUIActions,
+  getWorldFlagFact,
   type GameStateStore,
   type MutableObservableValue,
   type ObservableValue,
@@ -354,6 +357,7 @@ export interface WebRuntimeStartState {
   contentLibrary: ContentLibrarySnapshot;
   mechanics: MechanicsDefinition;
   playerDefinition: PlayerDefinition;
+  worldFlagDefinitions: WorldFlagDefinition[];
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -1564,11 +1568,26 @@ export function createWebRuntimeHost(
   // Raccoon lady id: "139daaec-a618-4053-b697-0ced0024d80d"
   function smQuestDebug(npcDefinitionId?: string): Record<string, unknown> {
     const qm = gameplaySession?.questManager ?? null;
+    const flags = gameplaySession?.worldFlagManager ?? null;
     const nbs = gameplaySession?.npcBehaviorSystem ?? null;
     const slice = qm?.serializeSaveSlice() ?? null;
+    const storedFlags = flags?.getAllFlags() ?? null;
+    const blackboard = gameplaySession?.blackboard ?? null;
+    // What each stored flag looks like on the blackboard. A flag that is set
+    // but reads null here is not in the project's flag registry.
+    const projectedFlags =
+      storedFlags && blackboard
+        ? Object.fromEntries(
+            Object.keys(storedFlags).map((name) => [
+              name,
+              getWorldFlagFact(blackboard, name)
+            ])
+          )
+        : null;
     const result: Record<string, unknown> = {
-      runtimeFlags: slice?.runtimeFlags ?? null,
-      talkedToDockWorker: qm?.hasFlag("talkedToDockWorker") ?? null,
+      worldFlags: storedFlags,
+      projectedWorldFlags: projectedFlags,
+      talkedToDockWorker: flags?.hasFlag("talkedToDockWorker") ?? null,
       activeQuests: slice?.activeQuests ?? null,
       completedQuestIds: slice?.completedQuestIds ?? null
     };
@@ -1583,13 +1602,13 @@ export function createWebRuntimeHost(
   // behavior-task injection directly:
   //   __smsetflag("talkedToDockWorker", true)
   function smSetFlag(key: string, value: unknown = true): void {
-    const qm = gameplaySession?.questManager ?? null;
-    if (!qm) {
+    const flags = gameplaySession?.worldFlagManager ?? null;
+    if (!flags) {
       // eslint-disable-next-line no-console
-      console.warn("[smsetflag] no active quest manager");
+      console.warn("[smsetflag] no active world flag manager");
       return;
     }
-    qm.setFlag(key, value);
+    flags.setFlag(key, value);
     // eslint-disable-next-line no-console
     console.info("[smsetflag]", key, "=", value);
   }
@@ -3076,6 +3095,7 @@ export function createWebRuntimeHost(
       // real initial track starts where the loading gate closes, below.
       backgroundMusicCueId: null,
       playerDefinition: state.playerDefinition,
+      worldFlagDefinitions: state.worldFlagDefinitions,
       spellDefinitions: state.spellDefinitions,
       itemDefinitions: state.itemDefinitions,
       documentDefinitions: state.documentDefinitions,
@@ -3146,6 +3166,16 @@ export function createWebRuntimeHost(
     saveParticipantRegistry.register(
       createQuestManagerSaveParticipant({
         getQuestManager: () => gameplaySession?.questManager ?? null
+      })
+    );
+    // World flags used to persist inside the quest slice. They have their own
+    // owner now, so they have their own slice, and nothing reads the old
+    // location: a save written before the split restores with no flags set.
+    // Deliberate -- the flags in play at the time were one test quest's, and a
+    // reader for a shape nothing writes is a path that rots unexercised.
+    saveParticipantRegistry.register(
+      createWorldFlagSaveParticipant({
+        getWorldFlagManager: () => gameplaySession?.worldFlagManager ?? null
       })
     );
     // Plan 055 §055.5 — inventory.player restores collected items

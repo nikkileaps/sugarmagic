@@ -32,20 +32,45 @@ export interface RegionConditionContext {
    * which doors open.
    */
   activeQuests: RegionConditionQuestState[];
-  /** Truthy when the world flag `key` holds `value` (value omitted => any). */
-  hasWorldFlag?: (key: string, value?: unknown) => boolean;
+  /**
+   * Truthy when the flag that `worldFlagId` references holds `value`. Takes a
+   * reference, not a store key -- the caller supplies a predicate that
+   * resolves, so this module never needs the flag registry.
+   */
+  hasWorldFlag?: (worldFlagId: string, value?: unknown) => boolean;
   /** Truthy when that quest node has been completed at any point. */
   isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean;
 }
 
 /**
- * Coerce an authored string flag value into the comparison type the flag
- * store holds. `null` boolean => `true` (a bare "flag is set" check);
- * `null`/unparseable number => `undefined` (no constraint).
+ * The declared type and authored text of a flag value -- the only parts the
+ * coercion reads. Narrower than the full condition so the volume trigger's
+ * flag assignment, which names its flag differently, shares the one rule.
+ */
+export type WorldFlagValueDeclaration = Pick<
+  RegionBehaviorWorldFlagCondition,
+  "valueType" | "value"
+>;
+
+/**
+ * Coerce an authored flag value into the type the flag store holds, for both
+ * reading and writing. One function so the two sides cannot disagree: a
+ * condition compares with `===`, so a value written one way and read another
+ * never matches, which is a silent miss with nothing to see at authoring time.
+ *
+ * A valueless declaration falls back to the declared type's zero (`0` / `""` /
+ * `true`) rather than to "no constraint". Authoring a condition with no value
+ * is refused in the editor, so this fallback only catches content authored
+ * before that check existed.
+ *
+ * Text that does not parse as the declared number is a different case, and
+ * returns `NaN` rather than that zero. `NaN === NaN` is false, so the condition
+ * matches nothing -- an authoring mistake reads as "not satisfied" instead of
+ * quietly reading as "equals 0" and matching a flag that happens to hold zero.
  */
 export function coerceWorldFlagValue(
-  condition: RegionBehaviorWorldFlagCondition
-): string | boolean | number | undefined {
+  condition: WorldFlagValueDeclaration
+): string | boolean | number {
   if (condition.valueType === "boolean") {
     if (condition.value === null) {
       return true;
@@ -54,33 +79,28 @@ export function coerceWorldFlagValue(
   }
   if (condition.valueType === "number") {
     if (condition.value === null) {
-      return undefined;
+      return 0;
     }
-    const parsed = Number(condition.value);
-    return Number.isFinite(parsed) ? parsed : undefined;
+    return Number(condition.value);
   }
-  return condition.value ?? undefined;
+  return condition.value ?? "";
 }
 
 /**
- * The value to WRITE when SETTING a world flag (Plan 069.5 trigger action).
- * Unlike `coerceWorldFlagValue` (a read-side coercion that returns `undefined`
- * for a valueless number/string), this always yields a value of the declared
- * type — so a number flag never gets stored as boolean `true`. A valueless
- * declaration falls back to the type's zero (`0` / `""` / `true`).
+ * The value to write when setting a world flag. Same rule as reading -- see
+ * `coerceWorldFlagValue`. Kept as its own name because #216 removes the
+ * region-side flag writer and this is the seam it deletes.
+ *
+ * Writing a number the author mistyped stores `NaN`, which JSON serializes as
+ * `null`. That is a broken flag either way -- it matches no condition before or
+ * after a save -- and it stays symmetric with the read rather than storing a
+ * zero the read would not agree with. The one caller is the volume trigger
+ * action #216 deletes.
  */
 export function resolveWorldFlagWriteValue(
-  condition: RegionBehaviorWorldFlagCondition
+  condition: WorldFlagValueDeclaration
 ): string | number | boolean {
-  const coerced = coerceWorldFlagValue(condition);
-  if (coerced !== undefined) {
-    return coerced;
-  }
-  return condition.valueType === "number"
-    ? 0
-    : condition.valueType === "string"
-      ? ""
-      : true;
+  return coerceWorldFlagValue(condition);
 }
 
 /**
@@ -118,12 +138,12 @@ export function evaluateRegionQuestBinding(
       return false;
     }
   }
-  if (binding.worldFlagEquals?.key) {
+  if (binding.worldFlagEquals?.worldFlagId) {
     if (!context.hasWorldFlag) {
       return false;
     }
     const expectedValue = coerceWorldFlagValue(binding.worldFlagEquals);
-    if (!context.hasWorldFlag(binding.worldFlagEquals.key, expectedValue)) {
+    if (!context.hasWorldFlag(binding.worldFlagEquals.worldFlagId, expectedValue)) {
       return false;
     }
   }

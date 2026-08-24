@@ -196,8 +196,14 @@ it. A missing reference on any action is skipped rather than guessed at.
 
 ## World Flags
 
-World flags are `string -> unknown` pairs managed by `QuestManager`. They
-persist across sessions (serialized in the quest save slice).
+World flags are `string -> unknown` pairs managed by `WorldFlagManager`
+(`runtime-core/src/world-flags/`). They persist across sessions in their own
+save slice. Quests are one caller among several: dialogue, spells, NPC
+behavior, containment volumes and agent conversation read or write them too.
+
+Authored content references a flag by `definitionId` and the store resolves it
+to the flag's `name`, which is what the store is keyed by. See the world flag
+registry on `GameProject` for the authoring side.
 
 **How they get set:**
 
@@ -206,11 +212,28 @@ persist across sessions (serialized in the quest save slice).
    fires, the runtime auto-completes the Talk node and fires its
    `onCompleteActions` -- the `setFlag` action in that list runs.
 3. An agentified NPC turn: PlanStage can emit `{ kind: "set-conversation-flag",
-   key, value }` -> `handleConversationActionProposal` -> `questManager.setFlag`.
+   key, value }` -> `handleConversationActionProposal` ->
+   `worldFlagManager.setFlag`.
 4. A trigger volume: `RegionVolumeTriggerAction.setWorldFlag` fires when the
    player enters the volume (see API 006). Being replaced by volume enter/exit
    action lists -- #216.
 5. Dev console: `__smsetflag("myFlag", true)` (see Dev Handles below).
+
+Paths 1 and 2 name a flag by `definitionId`. Paths 3 and 5 name it by a string
+and can name a flag the registry does not list.
+
+**One write path.** All five land on one private method inside
+`WorldFlagManager`, as does save restore. That is what lets anything watch the
+store and see every write. The store's change handler is a separate thing: it
+means "re-evaluate quest conditions", and it is deliberately skipped for the
+write that runs inside the quest refresh loop, which is the path a `setFlag`
+action takes.
+
+**Flags are readable on the blackboard.** Every registered flag is projected as
+a `world.flag` fact, scoped by flag name, so a system that does not hold
+`WorldFlagManager` can still read it. A flag the registry does not list is set
+and saved as normal but is not projected, and logs one warning. See
+[API: The Blackboard](blackboard.md).
 
 **How they gate behavior:**
 
@@ -465,12 +488,16 @@ appears in the recent-events block for that session.
 Available in the preview console when a game session is active.
 
 ```javascript
-// Print current quest flags, active/completed quests
+// Print current world flags, active/completed quests
 __smquestDebug()
 
 // Also show a specific NPC's resolved behavior task
 __smquestDebug("npc:definition-id")
-// Returns: { runtimeFlags, activeQuests, completedQuestIds, npcTask }
+// Returns: { worldFlags, projectedWorldFlags, activeQuests,
+//            completedQuestIds, npcTask }
+//
+// projectedWorldFlags is what each stored flag looks like on the blackboard.
+// A flag that is set but reads null there is not in the flag registry.
 
 // Force-set a world flag (bypasses dialogue, for testing behavior gating)
 __smsetflag("talkedToDockWorker", true)

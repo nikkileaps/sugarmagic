@@ -18,7 +18,9 @@ import {
   createDefaultGameProject,
   createDefaultRegion,
   createEmptyContentLibrarySnapshot,
-  normalizeGameProject
+  normalizeGameProject,
+  normalizeRegionDocumentForLoad,
+  migrateWorldFlagReferences
 } from "@sugarmagic/domain";
 import {
   deleteFile,
@@ -294,9 +296,20 @@ export async function loadProjectFromHandle(
       `${ref.regionId}.json`
     );
     if (region) {
-      regions.push(region);
+      // Normalized here, before the flag migration below, not only later in
+      // createAuthoringSession. A region file written before epic 206 names its
+      // flag in `key`; the normalizer is what turns that into a `worldFlagId`.
+      // The project side already works this way -- normalizeGameProject runs
+      // above.
+      regions.push(normalizeRegionDocumentForLoad(region, contentLibrary));
     }
   }
+
+  // Flags authored before the registry existed are named by key in the field
+  // that now holds a reference. This runs over the project and its regions
+  // together -- a flag a quest writes can be read by a region condition, and
+  // they live in different files. Idempotent, so it is safe every load.
+  const migrated = migrateWorldFlagReferences(project, regions);
 
   await storeProjectHandle(project.identity.id, handle);
 
@@ -309,9 +322,9 @@ export async function loadProjectFromHandle(
       exportsPath: "exports",
       publishPath: "publish"
     },
-    gameProject: project,
+    gameProject: migrated.gameProject,
     contentLibrary,
-    regions
+    regions: migrated.regions
   };
 }
 

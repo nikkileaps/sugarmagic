@@ -8,6 +8,8 @@ import type {
   QuestStageState,
   SaveSlice
 } from "@sugarmagic/domain";
+import type { WorldFlagManager } from "../world-flags/WorldFlagManager";
+import { coerceAuthoredWorldFlagValue } from "../world-flags/WorldFlagManager";
 
 /**
  * An action together with the node that fired it. Handlers need the source to
@@ -159,7 +161,6 @@ export class QuestManager {
    */
   private completedNodeIdsByQuest = new Map<string, Set<string>>();
   private trackedQuestDefinitionId: string | null = null;
-  private runtimeFlags = new Map<string, unknown>();
   private onEvent: QuestRuntimeEventHandler | null = null;
   private onStateChange: (() => void) | null = null;
   private onAction: QuestRuntimeActionHandler | null = null;
@@ -169,6 +170,11 @@ export class QuestManager {
   private hasSpellProvider: QuestSpellStateProvider = () => false;
   private canCastSpellProvider: QuestSpellStateProvider = () => false;
   private isPlayerInAreaProvider: QuestPlayerAreaProvider = () => false;
+  /**
+   * The project's world flags. Not owned here -- quests are one of six callers
+   * -- but a quest condition reads them and a quest action writes them.
+   */
+  private worldFlags: WorldFlagManager | null = null;
 
   registerDefinitions(definitions: QuestDefinition[]): void {
     this.definitions.clear();
@@ -212,6 +218,10 @@ export class QuestManager {
 
   setPlayerAreaProvider(provider: QuestPlayerAreaProvider): void {
     this.isPlayerInAreaProvider = provider;
+  }
+
+  setWorldFlagManager(manager: WorldFlagManager): void {
+    this.worldFlags = manager;
   }
 
   update(): void {
@@ -306,20 +316,9 @@ export class QuestManager {
     return null;
   }
 
-  hasFlag(key: string, value?: unknown): boolean {
-    if (!this.runtimeFlags.has(key)) {
-      return false;
-    }
-    if (arguments.length === 1) {
-      return true;
-    }
-    return this.runtimeFlags.get(key) === value;
-  }
 
-  setFlag(key: string, value: unknown = true): void {
-    this.runtimeFlags.set(key, value);
-    this.update();
-  }
+
+
 
   notifyEvent(eventName: string): void {
     let changed = false;
@@ -902,8 +901,13 @@ export class QuestManager {
     source: { questDefinitionId: string; stageId: string; nodeId: string }
   ): void {
     for (const action of actions) {
-      if (action.type === "setFlag" && action.key) {
-        this.runtimeFlags.set(action.key, action.value ?? true);
+      if (action.type === "setFlag" && action.worldFlagId) {
+        // The write that does not notify: this runs reentrantly inside
+        // refreshQuest, and a change notification would refresh again.
+        this.worldFlags?.setFlagByIdWithoutNotifying(
+          action.worldFlagId,
+          coerceAuthoredWorldFlagValue(action.value ?? true)
+        );
         continue;
       }
 
@@ -919,7 +923,12 @@ export class QuestManager {
   private evaluateCondition(condition: QuestConditionDefinition): boolean {
     switch (condition.type) {
       case "hasFlag":
-        return this.hasFlag(condition.key, condition.value);
+        return (
+          this.worldFlags?.hasFlagById(
+            condition.worldFlagId,
+            coerceAuthoredWorldFlagValue(condition.value ?? true)
+          ) ?? false
+        );
       case "hasSpell":
         return this.hasSpellProvider(condition.spellDefinitionId);
       case "canCastSpell":
@@ -977,10 +986,6 @@ export class QuestManager {
         stageProgress
       };
     }
-    const runtimeFlags: Record<string, unknown> = {};
-    for (const [key, value] of this.runtimeFlags) {
-      runtimeFlags[key] = value;
-    }
     const completedNodeIds: Record<string, string[]> = {};
     for (const [questId, nodeIds] of this.completedNodeIdsByQuest) {
       completedNodeIds[questId] = Array.from(nodeIds);
@@ -989,8 +994,7 @@ export class QuestManager {
       activeQuests,
       completedQuestIds: Array.from(this.completedQuestIds),
       completedNodeIds,
-      trackedQuestDefinitionId: this.trackedQuestDefinitionId,
-      runtimeFlags
+      trackedQuestDefinitionId: this.trackedQuestDefinitionId
     };
   }
 
@@ -1014,8 +1018,8 @@ export class QuestManager {
    * console.warn (usually authoring renamed the id after the save
    * was written).
    *
-   * `completedQuestIds`, `completedNodeIds`,
-   * `trackedQuestDefinitionId`, and `runtimeFlags` fully replace
+   * `completedQuestIds`, `completedNodeIds` and
+   * `trackedQuestDefinitionId` fully replace
    * whatever's currently there — they're single-value stores, not
    * composed. Replacing is safe for `completedNodeIds` because
    * this runs before `startInitialQuests`, so nothing has
@@ -1071,7 +1075,6 @@ export class QuestManager {
     if (data.trackedQuestDefinitionId !== undefined) {
       this.trackedQuestDefinitionId = data.trackedQuestDefinitionId;
     }
-    this.runtimeFlags = new Map(Object.entries(data.runtimeFlags ?? {}));
 
     // Restore IS a state change — fire the same notification
     // `startQuest`/`completeNode` do so every derived consumer
@@ -1131,10 +1134,6 @@ export interface SerializedActiveQuest {
  *     the full stage/node progress tree.
  *   - `completedQuestIds` a plain array; converted to a Set on
  *     restore.
- *   - `runtimeFlags` `Record` mirrors the internal
- *     `Map<string, unknown>`. Values are opaque scalars authors
- *     poke via quest actions; whatever survives JSON round-trip
- *     is fine.
  *
  * Legacy pre-055 saves reach `deserializeSaveSlice` with only
  * `trackedQuestDefinitionId` populated (synthesized by
@@ -1147,5 +1146,4 @@ export interface QuestManagerSlice {
   /** Completed node ids per quest. Absent in saves written before it existed. */
   completedNodeIds?: Record<string, string[]>;
   trackedQuestDefinitionId: string | null;
-  runtimeFlags: Record<string, unknown>;
 }

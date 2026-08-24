@@ -34,8 +34,7 @@ function emptySlice(): QuestManagerSlice {
   return {
     activeQuests: {},
     completedQuestIds: [],
-    trackedQuestDefinitionId: null,
-    runtimeFlags: {}
+    trackedQuestDefinitionId: null
   };
 }
 

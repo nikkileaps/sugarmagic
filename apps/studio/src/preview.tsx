@@ -59,6 +59,7 @@ import type {
   NPCDefinition,
   PlayerDefinition,
   QuestDefinition,
+  WorldFlagDefinition,
   SpellDefinition,
   HUDDefinition,
   MenuDefinition,
@@ -134,6 +135,7 @@ interface PreviewBootMessage {
   contentLibrary: ContentLibrarySnapshot;
   mechanics: MechanicsDefinition;
   playerDefinition: PlayerDefinition;
+  worldFlagDefinitions: WorldFlagDefinition[];
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -311,6 +313,7 @@ window.addEventListener("message", (event) => {
         contentLibrary: data.contentLibrary,
         mechanics: data.mechanics,
         playerDefinition: data.playerDefinition,
+        worldFlagDefinitions: data.worldFlagDefinitions,
         spellDefinitions: data.spellDefinitions,
         itemDefinitions: data.itemDefinitions,
         documentDefinitions: data.documentDefinitions,

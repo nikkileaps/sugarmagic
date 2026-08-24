@@ -27,6 +27,7 @@ import {
   Interactable,
   Position,
   QuestManager,
+  WorldFlagManager,
   World
 } from "@sugarmagic/runtime-core";
 import type {
@@ -50,7 +51,7 @@ const GATED_PRESENCE: RegionNPCPresence = {
     questDefinitionId: null,
     questStageId: null,
     worldFlagEquals: {
-      key: FLAG_KEY,
+      worldFlagId: FLAG_KEY,
       valueType: "boolean",
       value: "true"
     }
@@ -79,11 +80,31 @@ const PRESENCES = [GATED_PRESENCE, ALWAYS_PRESENCE];
 
 type EntityEntry = { entity: Entity; npcDefinitionId: string };
 
-function buildQuestCtx(questManager: QuestManager): RegionConditionContext {
+/**
+ * Quests and world flags are separate stores with separate owners; these
+ * fixtures need both, so they travel together.
+ */
+interface Managers {
+  questManager: QuestManager;
+  worldFlags: WorldFlagManager;
+}
+
+function newManagers(): Managers {
+  const questManager = new QuestManager();
+  const worldFlags = new WorldFlagManager();
+  questManager.setWorldFlagManager(worldFlags);
+  worldFlags.setChangeHandler(() => questManager.update());
+  return { questManager, worldFlags };
+}
+
+function buildQuestCtx({
+  questManager,
+  worldFlags
+}: Managers): RegionConditionContext {
   return {
     activeQuests: questManager.getActiveQuestStates(),
     hasWorldFlag: (key: string, value?: unknown) =>
-      questManager.hasFlag(key, value),
+      worldFlags.hasFlag(key, value),
     isNodeCompleted: (questDefinitionId: string, nodeId: string) =>
       questManager.isNodeCompleted(questDefinitionId, nodeId)
   };
@@ -116,11 +137,11 @@ function despawnNpc(
 
 function register(
   presences: RegionNPCPresence[],
-  questManager: QuestManager,
+  managers: Managers,
   world: World,
   entityMap: Map<string, EntityEntry>
 ): void {
-  const ctx = buildQuestCtx(questManager);
+  const ctx = buildQuestCtx(managers);
   for (const p of presences) {
     if (p.condition === null || evaluateRegionQuestBinding(p.condition, ctx)) {
       spawnNpc(p, world, entityMap);
@@ -130,11 +151,11 @@ function register(
 
 function reconcile(
   presences: RegionNPCPresence[],
-  questManager: QuestManager,
+  managers: Managers,
   world: World,
   entityMap: Map<string, EntityEntry>
 ): void {
-  const ctx = buildQuestCtx(questManager);
+  const ctx = buildQuestCtx(managers);
   for (const p of presences) {
     const active =
       p.condition === null || evaluateRegionQuestBinding(p.condition, ctx);
@@ -154,10 +175,10 @@ function reconcile(
 describe("079.2 -- NPC presence reconciler", () => {
   it("flag-gated presence absent at load when flag not set", () => {
     const world = new World();
-    const questManager = new QuestManager();
+    const managers = newManagers();
     const entityMap = new Map<string, EntityEntry>();
 
-    register(PRESENCES, questManager, world, entityMap);
+    register(PRESENCES, managers, world, entityMap);
 
     expect(entityMap.has(GATED_PRESENCE.presenceId)).toBe(false);
     // null-condition presence is always active
@@ -168,13 +189,13 @@ describe("079.2 -- NPC presence reconciler", () => {
 
   it("flag-gated presence spawns after setFlag mid-region (no reload)", () => {
     const world = new World();
-    const questManager = new QuestManager();
+    const managers = newManagers();
     const entityMap = new Map<string, EntityEntry>();
 
-    register(PRESENCES, questManager, world, entityMap);
+    register(PRESENCES, managers, world, entityMap);
 
-    questManager.setFlag(FLAG_KEY, true);
-    reconcile(PRESENCES, questManager, world, entityMap);
+    managers.worldFlags.setFlag(FLAG_KEY, true);
+    reconcile(PRESENCES, managers, world, entityMap);
 
     expect(entityMap.has(GATED_PRESENCE.presenceId)).toBe(true);
     expect(entityMap.has(ALWAYS_PRESENCE.presenceId)).toBe(true);
@@ -183,18 +204,18 @@ describe("079.2 -- NPC presence reconciler", () => {
 
   it("flag-gated presence despawns when flag clears", () => {
     const world = new World();
-    const questManager = new QuestManager();
+    const managers = newManagers();
     const entityMap = new Map<string, EntityEntry>();
 
-    register(PRESENCES, questManager, world, entityMap);
+    register(PRESENCES, managers, world, entityMap);
 
-    questManager.setFlag(FLAG_KEY, true);
-    reconcile(PRESENCES, questManager, world, entityMap);
+    managers.worldFlags.setFlag(FLAG_KEY, true);
+    reconcile(PRESENCES, managers, world, entityMap);
     // Both active
     expect(world.query(Interactable)).toHaveLength(2);
 
-    questManager.setFlag(FLAG_KEY, false);
-    reconcile(PRESENCES, questManager, world, entityMap);
+    managers.worldFlags.setFlag(FLAG_KEY, false);
+    reconcile(PRESENCES, managers, world, entityMap);
 
     expect(entityMap.has(GATED_PRESENCE.presenceId)).toBe(false);
     expect(entityMap.has(ALWAYS_PRESENCE.presenceId)).toBe(true);
@@ -203,18 +224,18 @@ describe("079.2 -- NPC presence reconciler", () => {
 
   it("despawn removes ECS entity -- Interactable component is gone, not dangling", () => {
     const world = new World();
-    const questManager = new QuestManager();
+    const managers = newManagers();
     const entityMap = new Map<string, EntityEntry>();
 
-    register(PRESENCES, questManager, world, entityMap);
-    questManager.setFlag(FLAG_KEY, true);
-    reconcile(PRESENCES, questManager, world, entityMap);
+    register(PRESENCES, managers, world, entityMap);
+    managers.worldFlags.setFlag(FLAG_KEY, true);
+    reconcile(PRESENCES, managers, world, entityMap);
 
     const spawnedEntity = entityMap.get(GATED_PRESENCE.presenceId)!.entity;
     expect(world.hasComponent(spawnedEntity, Interactable)).toBe(true);
 
-    questManager.setFlag(FLAG_KEY, false);
-    reconcile(PRESENCES, questManager, world, entityMap);
+    managers.worldFlags.setFlag(FLAG_KEY, false);
+    reconcile(PRESENCES, managers, world, entityMap);
 
     // Entity destroyed -- component storage cleared, no ghost E-prompt
     expect(world.hasComponent(spawnedEntity, Interactable)).toBe(false);
@@ -222,16 +243,16 @@ describe("079.2 -- NPC presence reconciler", () => {
 
   it("null-condition presence survives flag toggling unchanged", () => {
     const world = new World();
-    const questManager = new QuestManager();
+    const managers = newManagers();
     const entityMap = new Map<string, EntityEntry>();
 
-    register(PRESENCES, questManager, world, entityMap);
+    register(PRESENCES, managers, world, entityMap);
     const alwaysEntity = entityMap.get(ALWAYS_PRESENCE.presenceId)!.entity;
 
-    questManager.setFlag(FLAG_KEY, true);
-    reconcile(PRESENCES, questManager, world, entityMap);
-    questManager.setFlag(FLAG_KEY, false);
-    reconcile(PRESENCES, questManager, world, entityMap);
+    managers.worldFlags.setFlag(FLAG_KEY, true);
+    reconcile(PRESENCES, managers, world, entityMap);
+    managers.worldFlags.setFlag(FLAG_KEY, false);
+    reconcile(PRESENCES, managers, world, entityMap);
 
     // Same entity, never despawned
     expect(entityMap.get(ALWAYS_PRESENCE.presenceId)?.entity).toBe(alwaysEntity);
@@ -240,15 +261,15 @@ describe("079.2 -- NPC presence reconciler", () => {
 
   it("reconcile is idempotent -- no duplicate entities on repeated calls", () => {
     const world = new World();
-    const questManager = new QuestManager();
+    const managers = newManagers();
     const entityMap = new Map<string, EntityEntry>();
 
-    register(PRESENCES, questManager, world, entityMap);
-    questManager.setFlag(FLAG_KEY, true);
+    register(PRESENCES, managers, world, entityMap);
+    managers.worldFlags.setFlag(FLAG_KEY, true);
 
-    reconcile(PRESENCES, questManager, world, entityMap);
-    reconcile(PRESENCES, questManager, world, entityMap);
-    reconcile(PRESENCES, questManager, world, entityMap);
+    reconcile(PRESENCES, managers, world, entityMap);
+    reconcile(PRESENCES, managers, world, entityMap);
+    reconcile(PRESENCES, managers, world, entityMap);
 
     expect(entityMap.size).toBe(2);
     expect(world.query(Interactable)).toHaveLength(2);
@@ -262,7 +283,7 @@ describe("presence conditions and node completion", () => {
    * evaluator the presence path calls, through the same context builder.
    */
   it("keeps an NPC out until its node completes, then spawns it", () => {
-    const questManager = new QuestManager();
+    const managers = newManagers();
     const condition = {
       questDefinitionId: null,
       questStageId: null,
@@ -275,8 +296,8 @@ describe("presence conditions and node completion", () => {
 
     let done = false;
     const ctx: RegionConditionContext = {
-      activeQuests: questManager.getActiveQuestStates(),
-      hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+      activeQuests: managers.questManager.getActiveQuestStates(),
+      hasWorldFlag: (key, value) => managers.worldFlags.hasFlag(key, value),
       isNodeCompleted: (questDefinitionId, nodeId) =>
         done &&
         questDefinitionId === "quest:offering" &&

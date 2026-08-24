@@ -32,6 +32,8 @@ import {
   type NPCAnimationSlot,
   type NPCDefinition,
   type PlayerDefinition,
+  createWorldFlagNameResolver,
+  type WorldFlagDefinition,
   type QuestDefinition,
   type RegionItemPresence,
   type RegionNPCPresence,
@@ -41,6 +43,11 @@ import {
   type RegionVolumeDefinition,
   type SoundEventBindingMap
 } from "@sugarmagic/domain";
+import {
+  WorldFlagManager,
+  coerceAuthoredWorldFlagValue
+} from "../world-flags/WorldFlagManager";
+import { createWorldFlagProjection } from "../world-flags/projection";
 import {
   CasterManager,
   CasterSystem,
@@ -239,6 +246,8 @@ export interface RuntimeGameplaySessionControllerOptions {
    */
   backgroundMusicCueId?: string | null;
   playerDefinition: PlayerDefinition;
+  /** The project's flag registry. Resolves flag references to store keys. */
+  worldFlagDefinitions: WorldFlagDefinition[];
   spellDefinitions: SpellDefinition[];
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
@@ -316,6 +325,8 @@ export interface RuntimeGameplaySessionController {
   ) => ConversationRuntimeContext;
   readonly dialogueManager: DialogueManager;
   readonly questManager: QuestManager;
+  /** The project's world flags. Quests are one caller of six. */
+  readonly worldFlagManager: WorldFlagManager;
   readonly inventoryManager: InventoryManager;
   readonly casterManager: CasterManager;
   readonly npcBehaviorSystem: RuntimeNpcBehaviorSystem | null;
@@ -536,6 +547,7 @@ export function createRuntimeGameplaySessionController(
     inputManager,
     activeRegion,
     playerDefinition,
+    worldFlagDefinitions,
     spellDefinitions,
     itemDefinitions,
     documentDefinitions,
@@ -650,7 +662,9 @@ export function createRuntimeGameplaySessionController(
     actionRegistry: options.actionRegistry
   });
   const dialogueManager = new DialogueManager(dialoguePanel);
+  const worldFlagManager = new WorldFlagManager();
   const questManager = new QuestManager();
+  questManager.setWorldFlagManager(worldFlagManager);
   /**
    * The contribution whose form is on screen. Held so the submit goes back to
    * the plugin that produced it rather than being broadcast to all of them.
@@ -687,6 +701,12 @@ export function createRuntimeGameplaySessionController(
         .flatMap((plugin) => plugin.blackboardFactDefinitions ?? []) ?? [])
     ]
   });
+  // Wired here rather than beside the name resolver below, so that a flag
+  // written before the session finishes assembling still reaches the
+  // blackboard.
+  worldFlagManager.setWriteObserver(
+    createWorldFlagProjection({ blackboard, definitions: worldFlagDefinitions })
+  );
   const questDialogueCoordinator = createRuntimeQuestDialogueCoordinator();
   const conversationProviders: ConversationProvider[] =
     pluginManager
@@ -759,7 +779,10 @@ export function createRuntimeGameplaySessionController(
     }
     const flag = trigger.action.setWorldFlag;
     if (flag?.key) {
-      questManager.setFlag(flag.key, resolveWorldFlagWriteValue(flag));
+      // The one writer that still names a flag by store key rather than by
+      // reference. #216 replaces this trigger action with QuestActionDefinition,
+      // at which point it goes through setFlagById like everything else.
+      worldFlagManager.setFlag(flag.key, resolveWorldFlagWriteValue(flag));
     }
   }
 
@@ -1301,7 +1324,7 @@ export function createRuntimeGameplaySessionController(
   ): void {
     switch (proposal.kind) {
       case "set-conversation-flag":
-        questManager.setFlag(proposal.key, proposal.value);
+        worldFlagManager.setFlag(proposal.key, proposal.value);
         return;
       case "notify-quest-event":
         questManager.notifyEvent(proposal.eventName);
@@ -1412,8 +1435,8 @@ export function createRuntimeGameplaySessionController(
   function buildPresenceQuestContext(): RegionConditionContext {
     return {
       activeQuests: questManager.getActiveQuestStates(),
-      hasWorldFlag: (key: string, value?: unknown) =>
-        questManager.hasFlag(key, value),
+      hasWorldFlag: (worldFlagId: string, value?: unknown) =>
+        worldFlagManager.hasFlagById(worldFlagId, value),
       isNodeCompleted: (questDefinitionId: string, nodeId: string) =>
         questManager.isNodeCompleted(questDefinitionId, nodeId)
     };
@@ -1950,7 +1973,7 @@ export function createRuntimeGameplaySessionController(
     dialogueDefinitions,
     questDefinitions
   );
-  questDialogueCoordinator.attach(dialogueManager, questManager, {
+  questDialogueCoordinator.attach(dialogueManager, questManager, worldFlagManager, {
     hasItem: (itemDefinitionId, count) =>
       inventoryManager.hasItem(itemDefinitionId, count),
     hasSpell: (spellDefinitionId) => casterManager.hasSpell(spellDefinitionId),
@@ -1959,6 +1982,12 @@ export function createRuntimeGameplaySessionController(
   });
 
   questManager.registerDefinitions(questDefinitions);
+  worldFlagManager.setWorldFlagNameResolver(
+    createWorldFlagNameResolver(worldFlagDefinitions)
+  );
+  // A flag written from outside the quest system still has to re-evaluate
+  // quest conditions -- a spell effect or an agent proposal can satisfy one.
+  worldFlagManager.setChangeHandler(() => questManager.update());
   questManager.setInventoryCountProvider((itemDefinitionId) =>
     inventoryManager.getQuantity(itemDefinitionId)
   );
@@ -2379,7 +2408,15 @@ export function createRuntimeGameplaySessionController(
       }
 
       if (effect.type === "world-flag" && effect.targetId) {
-        questManager.setFlag(effect.targetId, effect.value ?? true);
+        // `targetId` on a world-flag effect is a flag reference, and the value
+        // box beside it is free text, authored the same way a quest setFlag
+        // action's is -- so it coerces the same way. Without this the spell
+        // writes the string "true" while a condition on the same flag reads
+        // boolean true, and the gate never opens.
+        worldFlagManager.setFlagById(
+          effect.targetId,
+          coerceAuthoredWorldFlagValue(effect.value ?? true)
+        );
       }
     }
     spellMenuUi.update();
@@ -2417,7 +2454,7 @@ export function createRuntimeGameplaySessionController(
             entity: entry.entity
           })
         ),
-      hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+      hasWorldFlag: (worldFlagId, value) => worldFlagManager.hasFlagById(worldFlagId, value),
       isNodeCompleted: (questDefinitionId, nodeId) =>
         questManager.isNodeCompleted(questDefinitionId, nodeId),
       // Plan 069.9 — NPCs follow the baked navmesh (host loads it async).
@@ -2487,6 +2524,7 @@ export function createRuntimeGameplaySessionController(
   return {
     dialogueManager,
     questManager,
+    worldFlagManager,
     /**
      * The runtime context a conversation with this NPC would get right now
      * (null for no NPC).
@@ -2525,7 +2563,7 @@ export function createRuntimeGameplaySessionController(
       if (sharedCollisionWorld.gates.length > 0) {
         applyVolumeColliderGates(sharedCollisionWorld, {
           activeQuests,
-          hasWorldFlag: (key, value) => questManager.hasFlag(key, value),
+          hasWorldFlag: (worldFlagId, value) => worldFlagManager.hasFlagById(worldFlagId, value),
           isNodeCompleted: (questDefinitionId, nodeId) =>
             questManager.isNodeCompleted(questDefinitionId, nodeId)
         });
@@ -2533,8 +2571,11 @@ export function createRuntimeGameplaySessionController(
       // Plan 079.2 -- reconcile conditional NPC presences each frame.
       reconcileNpcPresences();
       npcBehaviorSystem?.sync({ deltaSeconds, activeQuests });
+      // Spatial facts are written every frame because they change every frame.
+      // Quest facts are not: `questManager.setStateChangeHandler` runs
+      // `syncBlackboardQuestFacts` whenever quest state actually moves, so
+      // writing them here as well would rebuild the same values every frame.
       syncBlackboardSpatialFacts();
-      syncBlackboardQuestFacts();
       spellMenuUi.update();
       flushAudioCommands();
     },

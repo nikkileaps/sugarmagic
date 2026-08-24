@@ -1,12 +1,15 @@
 import type { DialogueDefinition, QuestDefinition } from "@sugarmagic/domain";
 import type { DialogueManager } from "../dialogue";
 import type { QuestManager } from "../quest";
+import type { WorldFlagManager } from "../world-flags/WorldFlagManager";
+import { coerceAuthoredWorldFlagValue } from "../world-flags/WorldFlagManager";
 
 export interface RuntimeQuestDialogueCoordinator {
   loadDefinitions: (dialogueDefinitions: DialogueDefinition[], questDefinitions: QuestDefinition[]) => void;
   attach: (
     dialogueManager: DialogueManager,
     questManager: QuestManager,
+    worldFlagManager: WorldFlagManager,
     options?: {
       hasItem?: (itemDefinitionId: string, count?: number) => boolean;
       hasSpell?: (spellDefinitionId: string) => boolean;
@@ -31,6 +34,7 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
   let loadedQuestDefinitions: QuestDefinition[] = [];
   let dialogueManager: DialogueManager | null = null;
   let questManager: QuestManager | null = null;
+  let worldFlagManager: WorldFlagManager | null = null;
   let hasItem: ((itemDefinitionId: string, count?: number) => boolean) | null = null;
   let hasSpell: ((spellDefinitionId: string) => boolean) | null = null;
   let canCastSpell: ((spellDefinitionId: string) => boolean) | null = null;
@@ -39,7 +43,14 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
     if (!dialogueManager || !questManager) return;
 
         dialogueManager.setConditionContext({
-          hasFlag: (key, value) => questManager?.hasFlag(key, value) ?? false,
+          // Dialogue flag conditions are authored the same way quest ones are:
+          // a flag reference plus a value typed as text. Same resolution, same
+          // coercion, so the two grammars cannot drift apart.
+          hasWorldFlag: (worldFlagId, value) =>
+            worldFlagManager?.hasFlagById(
+              worldFlagId,
+              coerceAuthoredWorldFlagValue(value ?? true)
+            ) ?? false,
           hasItem: (itemDefinitionId, count) => hasItem?.(itemDefinitionId, count) ?? false,
           hasSpell: (spellDefinitionId) => hasSpell?.(spellDefinitionId) ?? false,
           canCastSpell: (spellDefinitionId) => canCastSpell?.(spellDefinitionId) ?? false,
@@ -78,9 +89,10 @@ export function createRuntimeQuestDialogueCoordinator(): RuntimeQuestDialogueCoo
       }
     },
 
-    attach(nextDialogueManager, nextQuestManager, options) {
+    attach(nextDialogueManager, nextQuestManager, nextWorldFlagManager, options) {
       dialogueManager = nextDialogueManager;
       questManager = nextQuestManager;
+      worldFlagManager = nextWorldFlagManager;
       hasItem = options?.hasItem ?? null;
       hasSpell = options?.hasSpell ?? null;
       canCastSpell = options?.canCastSpell ?? null;

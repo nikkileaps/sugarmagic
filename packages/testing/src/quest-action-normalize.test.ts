@@ -50,7 +50,9 @@ describe("quest action load path", () => {
         { type: "learn-fact", targetId: "fact:name", value: "The bell rings" }
       ])
     ).toEqual([
-      { type: "setFlag", key: "gate-open", value: true },
+      // The legacy name lands in `worldFlagId` as-is; the load-time flag migration
+      // turns it into a real registry reference once it sees the whole project.
+      { type: "setFlag", worldFlagId: "gate-open", value: true },
       { type: "emitEvent", eventName: "bell-rung" },
       { type: "giveItem", itemDefinitionId: "item:key", count: 3 },
       { type: "removeItem", itemDefinitionId: "item:key", count: 1 },

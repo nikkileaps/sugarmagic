@@ -1,23 +1,10 @@
 import { Select, TextInput } from "@mantine/core";
-import type {
-  RegionBehaviorWorldFlagCondition,
-  RegionNPCBehaviorTask
+import { WorldFlagSelect } from "../../world-flags";
+import {
+  WORLD_FLAG_VALUE_TYPE_OPTIONS,
+  isWorldFlagValueType,
+  type RegionNPCBehaviorTask
 } from "@sugarmagic/domain";
-
-const WORLD_FLAG_VALUE_TYPE_OPTIONS = [
-  { value: "boolean", label: "Boolean" },
-  { value: "number", label: "Number" },
-  { value: "string", label: "String" }
-] as const satisfies ReadonlyArray<{
-  value: RegionBehaviorWorldFlagCondition["valueType"];
-  label: string;
-}>;
-
-function isWorldFlagValueType(
-  value: string
-): value is RegionBehaviorWorldFlagCondition["valueType"] {
-  return WORLD_FLAG_VALUE_TYPE_OPTIONS.some((option) => option.value === value);
-}
 
 export interface WorldFlagActivationFieldsProps {
   task: RegionNPCBehaviorTask;
@@ -29,25 +16,23 @@ export function WorldFlagActivationFields(props: WorldFlagActivationFieldsProps)
 
   return (
     <>
-      <TextInput
+      <WorldFlagSelect
         label="World Flag"
-        size="xs"
-        description="Optional runtime world flag required for this task to activate."
-        value={task.activation.worldFlagEquals?.key ?? ""}
-        onChange={(event) => {
-          const nextKey = event.currentTarget.value;
+        description="Optional. The task only activates while this flag matches."
+        value={task.activation.worldFlagEquals?.worldFlagId ?? null}
+        onChange={(worldFlagId) => {
           onUpdateTask({
             ...task,
             activation: {
               ...task.activation,
-              worldFlagEquals:
-                nextKey.trim().length > 0
-                  ? {
-                      key: nextKey,
-                      valueType: task.activation.worldFlagEquals?.valueType ?? "boolean",
-                      value: task.activation.worldFlagEquals?.value ?? null
-                    }
-                  : null
+              worldFlagEquals: worldFlagId
+                ? {
+                    worldFlagId,
+                    valueType:
+                      task.activation.worldFlagEquals?.valueType ?? "boolean",
+                    value: task.activation.worldFlagEquals?.value ?? null
+                  }
+                : null
             }
           });
         }}

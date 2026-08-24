@@ -315,6 +315,30 @@ export const PLAYER_KNOWN_FACTS_FACT = defineBlackboardFact<string[]>({
   lifecycle: { kind: "session" }
 });
 
+/**
+ * World flags projected onto the blackboard. One fact per flag, told apart by
+ * the scope id, which is the flag's NAME -- the same key the flag store uses,
+ * so a debug readout and the store read alike.
+ *
+ * `WorldFlagManager` owns the values and persists them in its own save slice;
+ * this is a copy that narrative systems can read without holding the store.
+ * Written only by the projection wired in gameplay-session.ts, off the store's
+ * write observer. Session lifecycle: cleared with the rest of the session and
+ * re-published from the save slice on restore.
+ *
+ * Only flags in the project's flag registry are projected. A flag named in a
+ * string at runtime -- an agent proposal, the dev console handle -- stays in
+ * the store and does not land here.
+ */
+export const WORLD_FLAG_SOURCE_SYSTEM = "world-flag-system";
+
+export const WORLD_FLAG_FACT = defineBlackboardFact<unknown>({
+  key: "world.flag",
+  ownerSystem: WORLD_FLAG_SOURCE_SYSTEM,
+  allowedScopeKinds: ["global"],
+  lifecycle: { kind: "session" }
+});
+
 export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   ENTITY_POSITION_FACT,
   ENTITY_LOCATION_FACT,
@@ -329,7 +353,8 @@ export const RUNTIME_BLACKBOARD_FACT_DEFINITIONS = [
   GOAL_SURFACED_COUNT_FACT,
   WORLD_TIME_OF_DAY_FACT,
   WORLD_DAY_FACT,
-  PLAYER_KNOWN_FACTS_FACT
+  PLAYER_KNOWN_FACTS_FACT,
+  WORLD_FLAG_FACT
 ] as const satisfies readonly BlackboardFactDefinition<unknown>[];
 
 export function defineBlackboardFact<TValue>(
@@ -342,6 +367,14 @@ export class RuntimeBlackboard {
   private readonly now: () => number;
   private readonly definitions = new Map<string, BlackboardFactDefinition<unknown>>();
   private readonly facts = new Map<string, BlackboardFactEnvelope<unknown>>();
+  /**
+   * Which facts exist under each fact key. One fact key covers many facts --
+   * one per scope -- and clearing by lifecycle asks for exactly that set.
+   * Without this, clearing frame facts scans every fact in the store once per
+   * frame-lifecycle definition, so the work grows with facts the sweep has no
+   * interest in.
+   */
+  private readonly storageKeysByFactKey = new Map<string, Set<string>>();
   private readonly listeners = new Set<BlackboardListener>();
   private readonly expiryTimers = new Map<string, ReturnType<typeof globalThis.setTimeout>>();
 
@@ -380,6 +413,7 @@ export class RuntimeBlackboard {
 
     this.clearExpiryTimer(storageKey);
     this.facts.set(storageKey, envelope);
+    this.indexStorageKey(definition.key, storageKey);
     this.scheduleExpiryIfNeeded(definition, storageKey, envelope);
     this.emit({
       type: "set",
@@ -416,31 +450,39 @@ export class RuntimeBlackboard {
   }
 
   clearSessionFacts(): void {
-    for (const definition of this.definitions.values()) {
-      if (definition.lifecycle.kind !== "session") {
-        continue;
-      }
-
-      for (const fact of this.facts.values()) {
-        if (fact.key !== definition.key) {
-          continue;
-        }
-        this.clearFactInternal(definition.key, fact.scope, "session-clear");
-      }
-    }
+    this.clearFactsWithLifecycle("session", "session-clear");
   }
 
   advanceFrame(): void {
+    this.clearFactsWithLifecycle("frame", "frame-advance");
+  }
+
+  /**
+   * Clears every fact whose definition has the given lifecycle. Reaches the
+   * facts through the key index, so the work is the number of facts actually
+   * being cleared rather than the size of the whole store.
+   */
+  private clearFactsWithLifecycle(
+    lifecycleKind: BlackboardFactLifecycle["kind"],
+    reason: Exclude<BlackboardChangeReason, "explicit-set">
+  ): void {
     for (const definition of this.definitions.values()) {
-      if (definition.lifecycle.kind !== "frame") {
+      if (definition.lifecycle.kind !== lifecycleKind) {
         continue;
       }
 
-      for (const fact of this.facts.values()) {
-        if (fact.key !== definition.key) {
+      const storageKeys = this.storageKeysByFactKey.get(definition.key);
+      if (!storageKeys) {
+        continue;
+      }
+
+      // Copied because clearing empties the set being read.
+      for (const storageKey of [...storageKeys]) {
+        const fact = this.facts.get(storageKey);
+        if (!fact) {
           continue;
         }
-        this.clearFactInternal(definition.key, fact.scope, "frame-advance");
+        this.clearFactInternal(definition.key, fact.scope, reason);
       }
     }
   }
@@ -455,20 +497,7 @@ export class RuntimeBlackboard {
     }
 
     const timer = globalThis.setTimeout(() => {
-      const current = this.facts.get(storageKey);
-      if (!current) {
-        return;
-      }
-      this.clearExpiryTimer(storageKey);
-      this.facts.delete(storageKey);
-      this.emit({
-        type: "expire",
-        key: envelope.key,
-        scope: envelope.scope,
-        reason: "ephemeral-expiry",
-        current: null,
-        previous: current
-      });
+      this.clearFactInternal(envelope.key, envelope.scope, "ephemeral-expiry");
     }, definition.lifecycle.expiresAfterMs);
 
     this.expiryTimers.set(storageKey, timer);
@@ -487,6 +516,7 @@ export class RuntimeBlackboard {
 
     this.clearExpiryTimer(storageKey);
     this.facts.delete(storageKey);
+    this.unindexStorageKey(key, storageKey);
     this.emit({
       type: reason === "ephemeral-expiry" ? "expire" : "clear",
       key,
@@ -495,6 +525,26 @@ export class RuntimeBlackboard {
       current: null,
       previous
     });
+  }
+
+  private indexStorageKey(factKey: string, storageKey: string): void {
+    const existing = this.storageKeysByFactKey.get(factKey);
+    if (existing) {
+      existing.add(storageKey);
+      return;
+    }
+    this.storageKeysByFactKey.set(factKey, new Set([storageKey]));
+  }
+
+  private unindexStorageKey(factKey: string, storageKey: string): void {
+    const storageKeys = this.storageKeysByFactKey.get(factKey);
+    if (!storageKeys) {
+      return;
+    }
+    storageKeys.delete(storageKey);
+    if (storageKeys.size === 0) {
+      this.storageKeysByFactKey.delete(factKey);
+    }
   }
 
   private clearExpiryTimer(storageKey: string): void {
@@ -910,6 +960,49 @@ export function setPlayerKnownFacts(
     scope: createBlackboardScope("global", "player.known-facts"),
     value: facts,
     sourceSystem: PLAYER_FACTS_SOURCE_SYSTEM
+  });
+}
+
+// World flag projection getters/setters. Named "...WorldFlagFact" so they do
+// not read as the flag store's own setFlag/hasFlag, or as the volume trigger's
+// setWorldFlag action.
+
+/**
+ * The projected value of a flag, or null when the flag is unset or is not in
+ * the registry. A caller that needs the authoritative value asks
+ * `WorldFlagManager`; this is the read surface for systems that do not hold it.
+ */
+export function getWorldFlagFact(
+  blackboard: RuntimeBlackboard,
+  flagName: string
+): unknown | null {
+  return (
+    blackboard.getFact(WORLD_FLAG_FACT, createBlackboardScope("global", flagName))?.value ??
+    null
+  );
+}
+
+export function setWorldFlagFact(
+  blackboard: RuntimeBlackboard,
+  flagName: string,
+  value: unknown
+): void {
+  blackboard.setFact({
+    definition: WORLD_FLAG_FACT,
+    scope: createBlackboardScope("global", flagName),
+    value,
+    sourceSystem: WORLD_FLAG_SOURCE_SYSTEM
+  });
+}
+
+export function clearWorldFlagFact(
+  blackboard: RuntimeBlackboard,
+  flagName: string
+): void {
+  blackboard.clearFact({
+    definition: WORLD_FLAG_FACT,
+    scope: createBlackboardScope("global", flagName),
+    sourceSystem: WORLD_FLAG_SOURCE_SYSTEM
   });
 }
 

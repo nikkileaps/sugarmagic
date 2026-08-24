@@ -231,7 +231,8 @@ export interface RegionBehaviorNodeCompletedCondition {
 }
 
 export interface RegionBehaviorWorldFlagCondition {
-  key: string | null;
+  /** References a WorldFlagDefinition; the runtime resolves it to that flag's name. */
+  worldFlagId: string | null;
   valueType: "boolean" | "number" | "string";
   value: string | null;
 }
@@ -787,9 +788,24 @@ export function reconcileRegionVolumesFromAmbienceZones(
   return withDerivedRegionAliases(region, volumes);
 }
 
+/**
+ * The flag a world-flag condition points at. Pre-206 region files hold a flag
+ * NAME in `key`; it is read here as if it were an id, and the load-time flag
+ * migration turns it into a real reference once it can see the whole project.
+ */
+export function readWorldFlagReference(
+  condition: Partial<RegionBehaviorWorldFlagCondition> | null | undefined
+): string | null {
+  const raw =
+    condition?.worldFlagId ??
+    (condition as Record<string, unknown> | null | undefined)?.key;
+  return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : null;
+}
+
 export function createRegionBehaviorQuestBinding(
   overrides: Partial<RegionBehaviorQuestBinding> = {}
 ): RegionBehaviorQuestBinding {
+  const worldFlagId = readWorldFlagReference(overrides.worldFlagEquals);
   return {
     questDefinitionId:
       typeof overrides.questDefinitionId === "string" &&
@@ -811,19 +827,17 @@ export function createRegionBehaviorQuestBinding(
             nodeId: overrides.nodeCompleted.nodeId.trim()
           }
         : null,
-    worldFlagEquals:
-      typeof overrides.worldFlagEquals?.key === "string" &&
-      overrides.worldFlagEquals.key.trim().length > 0
-        ? {
-            key: overrides.worldFlagEquals.key.trim(),
-            valueType: overrides.worldFlagEquals.valueType ?? "boolean",
-            value:
-              typeof overrides.worldFlagEquals.value === "string" &&
-              overrides.worldFlagEquals.value.trim().length > 0
-                ? overrides.worldFlagEquals.value.trim()
-                : null
-          }
-        : null
+    worldFlagEquals: worldFlagId
+      ? {
+          worldFlagId,
+          valueType: overrides.worldFlagEquals?.valueType ?? "boolean",
+          value:
+            typeof overrides.worldFlagEquals?.value === "string" &&
+            overrides.worldFlagEquals.value.trim().length > 0
+              ? overrides.worldFlagEquals.value.trim()
+              : null
+        }
+      : null
   };
 }
 

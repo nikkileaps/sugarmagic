@@ -1,0 +1,101 @@
+# ADR 031: The blackboard is a projection surface, not a store
+
+## Status
+
+Accepted.
+
+## Context
+
+Two stores answer "what is true in the world right now", and the boundary
+between them had never been written down:
+
+- `RuntimeBlackboard` (`runtime-core/src/state/blackboard.ts`): typed fact
+  definitions with an owning system, scope kinds, and a lifecycle. Never
+  persisted. Read by narrative consumers -- sugaragent conversation context,
+  the teacher, the debug HUD.
+- `QuestManager.runtimeFlags` plus the rest of the quest save slice
+  (`activeQuests`, `completedQuestIds`, `completedNodeIds`): authored,
+  persisted, written by quest actions, volume triggers, **spell** `world-flag`
+  effects (`world-flag` is a `SpellEffectType`; the mechanics subsystem writes
+  no flags) and agent conversation proposals.
+
+Epic #206 (flag registry) forced the question: do registered flags move into
+the blackboard, or stay in `QuestManager`? Answering it required saying what
+the blackboard IS, because both "one store for everything" and "two stores
+that each hold some truth" lead somewhere bad -- the first to a junk drawer
+nobody can reason about, the second to readers that must know every owner.
+
+Other engines split the same way. Unreal's Blackboard is ephemeral AI working
+memory, with persistent quest state kept in save-driven world-state systems.
+CD Projekt's Facts Database is the opposite pole: authored, persistent story
+facts checked by dialog and quest conditions -- but it is a free-string bag
+with no owner and no expiry, the junk drawer. Firewatch unified story state on
+a blackboard and shipped; it is the exception, and it shipped without the
+write-discipline problem because one small team held the whole vocabulary in
+their heads.
+
+## Decision: the charter
+
+1. The blackboard is the current-state read surface for narrative systems.
+   O(1), typed, queryable.
+2. It holds projections only. Every fact has an owning system that can
+   republish it; the blackboard is never persisted and never the only copy of
+   anything.
+3. Facts about the past are welcome as current facts ("the offering was
+   made"); records of the past live with their owners, in save slices.
+4. Nothing goes on it without a `BlackboardFactDefinition` -- owner, scope,
+   lifecycle. That is the junk-drawer guard: how a fact got there is its
+   owner; how it leaves is its lifecycle.
+
+"Now versus history" is a consequence of rule 2, not the rule itself. The
+blackboard carries no timeline because a projection has no reason to keep one.
+"Quest X is complete" is a legitimate blackboard fact -- it describes the
+world as it is now -- but the record of it lives in the quest save slice,
+and the blackboard copy is rebuilt from that record on boot.
+
+## Consequences
+
+- **Registered flags stay in `QuestManager`** (the write and persistence
+  home) **and are projected onto the blackboard as a quest-system-owned fact
+  family, unconditionally.** The projection is the point, not a nicety: the
+  blackboard is the one surface every narrative consumer queries, and the
+  flag registry makes the projection **enumerable and validated** -- not
+  typed. Registry entries are data, so a projected flag's value is `unknown`
+  at compile time whichever projection shape is chosen; what the registry buys
+  is a closed set of keys and a place to reject unregistered ones.
+- **Project on change, at the rate the source actually changes.** Flags change
+  a few times a minute, so their projection hooks the write path and save
+  restore; a per-frame re-sync of N flags would be N map writes and N listener
+  notifications per frame for data that almost never changes.
+  This is not an absolute ban on per-frame projection: the spatial family
+  writes every frame, deliberately, because those facts genuinely change every
+  frame: `syncBlackboardSpatialFacts` (`gameplay-session.ts:933-960`, called at
+  `:2479` and `:2536`) writes position, current-area, location and
+  player-relation, and the behavior system writes the movement fact per NPC per
+  frame (`behavior/system.ts:790`) -- a second owner on the same cadence. The rule is that the projection rate matches the source, not
+  that projection is always lazy. `syncBlackboardQuestFacts` is the other
+  end of the same rule -- quest facts change rarely, so it runs off
+  `QuestManager.setStateChangeHandler` rather than off the frame loop.
+- **Engine internals take injected predicates for authored state**
+  (`hasWorldFlag`, `isNodeCompleted`, `isPlayerInArea`) rather than querying
+  the blackboard -- per-frame systems want a function call, and authored state
+  has an owner that can hand one over. They DO read the blackboard for
+  globally-scoped derived world facts: behavior task selection calls
+  `getTimeOfDayBand(blackboard)` once per NPC per frame
+  (`behavior/system.ts:595`), and the blackboard is a required option of that
+  system (`:57`). The rule is about which store owns a fact, not a ban on
+  reading. The blackboard additionally serves conversation, teaching, dialogue
+  selection and debugging.
+- Clearing facts by lifecycle goes through an index from fact key to the facts
+  under it, so `advanceFrame` and `clearSessionFacts` cost the number of facts
+  they clear rather than the size of the whole store. The fact population grows
+  with authored content, and a sweep that scans everything would grow with it.
+
+## Enforcement
+
+- The blackboard has no serialize path; adding one for anything other than a
+  debug snapshot is a violation of rule 2 and should be caught in review.
+- `assertWriteAllowed` already throws on non-owner writes; author-named state
+  therefore cannot live natively on the blackboard, because authors are not a
+  system. Anything author-named reaches the blackboard through a projection
+  owned by the system that persists it.

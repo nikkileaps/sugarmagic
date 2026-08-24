@@ -22,6 +22,7 @@ import {
 import { normalizeNodeGroups } from "../graph-layout";
 import type { CreditsDefinition } from "../game-project";
 import type { DocumentDefinition } from "../document-definition";
+import type { WorldFlagDefinition } from "../world-flag";
 import type { PlacedAssetInstance, RegionDocument } from "../region-authoring";
 import {
   createItemPresenceId,
@@ -47,6 +48,9 @@ import type {
   CreateNPCDefinitionCommand,
   CreateQuestDefinitionCommand,
   CreateSpellDefinitionCommand,
+  CreateWorldFlagDefinitionCommand,
+  UpdateWorldFlagDefinitionCommand,
+  DeleteWorldFlagDefinitionCommand,
   DeleteItemDefinitionCommand,
   DeleteNPCDefinitionCommand,
   DeleteDialogueDefinitionCommand,
@@ -401,6 +405,12 @@ export function getAllSpellDefinitions(
   session: AuthoringSession
 ): SpellDefinition[] {
   return session.gameProject.spellDefinitions;
+}
+
+export function getAllWorldFlagDefinitions(
+  session: AuthoringSession
+): WorldFlagDefinition[] {
+  return session.gameProject.worldFlagDefinitions;
 }
 
 export function getAllDocumentDefinitions(
@@ -1547,6 +1557,84 @@ function applyCreateSpellDefinitionCommand(
   };
 }
 
+function applyCreateWorldFlagDefinitionCommand(
+  session: AuthoringSession,
+  command: CreateWorldFlagDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definition.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      worldFlagDefinitions: [
+        ...session.gameProject.worldFlagDefinitions,
+        command.payload.definition
+      ]
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+function applyUpdateWorldFlagDefinitionCommand(
+  session: AuthoringSession,
+  command: UpdateWorldFlagDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      worldFlagDefinitions: session.gameProject.worldFlagDefinitions.map((definition) =>
+        definition.definitionId === command.payload.definitionId
+          ? { ...definition, ...command.payload.changes }
+          : definition
+      )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
+/**
+ * Removes the entry. Content still referencing it is left alone and becomes a
+ * dangling reference, which the picker shows as an error and the quest
+ * validator reports -- deleting a flag out from under an author's content
+ * should be visible, not silently rewritten.
+ */
+function applyDeleteWorldFlagDefinitionCommand(
+  session: AuthoringSession,
+  command: DeleteWorldFlagDefinitionCommand
+): AuthoringSession {
+  const transaction = createTransactionForCommand(command, [
+    command.payload.definitionId
+  ]);
+
+  return {
+    ...session,
+    gameProject: {
+      ...session.gameProject,
+      worldFlagDefinitions: session.gameProject.worldFlagDefinitions.filter(
+        (definition) => definition.definitionId !== command.payload.definitionId
+      )
+    },
+    undoStack: [...session.undoStack, checkpointSession(session)],
+    redoStack: [],
+    history: pushTransaction(session.history, transaction),
+    isDirty: true
+  };
+}
+
 function applyCreateDocumentDefinitionCommand(
   session: AuthoringSession,
   command: CreateDocumentDefinitionCommand
@@ -2372,6 +2460,18 @@ export function applyCommand(
 
   if (command.kind === "CreateItemDefinition") {
     return applyCreateItemDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "CreateWorldFlagDefinition") {
+    return applyCreateWorldFlagDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "UpdateWorldFlagDefinition") {
+    return applyUpdateWorldFlagDefinitionCommand(session, command);
+  }
+
+  if (command.kind === "DeleteWorldFlagDefinition") {
+    return applyDeleteWorldFlagDefinitionCommand(session, command);
   }
 
   if (command.kind === "CreateSpellDefinition") {

@@ -131,15 +131,19 @@ export interface ConversationChoice {
 export type ConversationActionProposal =
   | { kind: "start-scripted-followup"; dialogueDefinitionId: string }
   /**
-   * Quest FLAG write (via questManager.setFlag in handleConversationActionProposal
-   * -> gameplay-session.ts). Sets a world flag that authored region conditions
-   * (evaluateRegionQuestBinding) can read -- e.g. a scripted dock-NPC
-   * conversation setting "talkedToDockWorker=true" that gates an upset
-   * passenger's behavior task. This is a QUEST FLAG, distinct from the
-   * "bump-goal-surfaced" proposal which writes a world-NARRATIVE FACT on the
-   * blackboard (Plan 077.3a/D4). Do not conflate them: flags are authored
-   * string keys in the quest system; narrative facts are typed blackboard
-   * entries owned by narrative-system.
+   * World flag write (via worldFlagManager.setFlag in
+   * handleConversationActionProposal -> gameplay-session.ts). Sets a flag that
+   * authored region conditions (evaluateRegionQuestBinding) can read -- e.g. a
+   * scripted dock-NPC conversation setting "talkedToDockWorker=true" that gates
+   * an upset passenger's behavior task.
+   *
+   * Names the flag by its store key, not by a registry reference: an agent
+   * proposal is a string an LLM produced and cannot carry an id.
+   *
+   * Distinct from the "bump-goal-surfaced" proposal, which writes a
+   * world-NARRATIVE FACT on the blackboard (Plan 077.3a/D4). Do not conflate
+   * them: world flags are a free store owned by WorldFlagManager; narrative
+   * facts are typed blackboard entries owned by narrative-system.
    */
   | { kind: "set-conversation-flag"; key: string; value: unknown }
   | { kind: "notify-quest-event"; eventName: string }
@@ -495,7 +499,12 @@ export function createConversationHost(options: {
 }
 
 export interface DialogueConditionContext {
-  hasFlag?: (key: string, value?: unknown) => boolean;
+  /**
+   * Truthy when the flag that `worldFlagId` references holds `value`. Named to
+   * match the region grammar's predicate -- the same question asked of the same
+   * store should not have two names.
+   */
+  hasWorldFlag?: (worldFlagId: string, value?: unknown) => boolean;
   hasItem?: (itemId: string, count?: number) => boolean;
   hasSpell?: (spellId: string) => boolean;
   canCastSpell?: (spellId: string) => boolean;
@@ -515,7 +524,9 @@ function evaluateDialogueCondition(
 ): boolean {
   switch (condition.type) {
     case "flag":
-      return context.hasFlag?.(condition.key, condition.value) ?? false;
+      return (
+        context.hasWorldFlag?.(condition.worldFlagId, condition.value) ?? false
+      );
     case "hasItem":
       return context.hasItem?.(condition.itemId, condition.count) ?? false;
     case "hasSpell":
