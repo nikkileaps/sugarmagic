@@ -61,7 +61,9 @@ export interface RuntimeNpcBehaviorSystemOptions {
   /**
    * Whether a quest node has ever been completed. Injected the same way as
    * hasWorldFlag rather than read off the blackboard, which carries no
-   * completed-node fact and which this system does not read.
+   * completed-node fact. This system does read the blackboard for derived
+   * world facts -- see `getTimeOfDayBand` in `syncNpc` -- but
+   * authored state comes from the system that owns it.
    */
   isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean;
   movementSpeedMetersPerSecond?: number;

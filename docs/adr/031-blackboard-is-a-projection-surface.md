@@ -73,8 +73,9 @@ and the blackboard copy is rebuilt from that record on boot.
   `:2479` and `:2536`) writes position, current-area, location and
   player-relation, and the behavior system writes the movement fact per NPC per
   frame (`behavior/system.ts:790`) -- a second owner on the same cadence. The rule is that the projection rate matches the source, not
-  that projection is always lazy. `syncBlackboardQuestFacts` violates it in the
-  other direction -- quest facts change rarely and are rewritten per frame.
+  that projection is always lazy. `syncBlackboardQuestFacts` is the other
+  end of the same rule -- quest facts change rarely, so it runs off
+  `QuestManager.setStateChangeHandler` rather than off the frame loop.
 - **Engine internals take injected predicates for authored state**
   (`hasWorldFlag`, `isNodeCompleted`, `isPlayerInArea`) rather than querying
   the blackboard -- per-frame systems want a function call, and authored state
@@ -85,11 +86,10 @@ and the blackboard copy is rebuilt from that record on boot.
   system (`:57`). The rule is about which store owns a fact, not a ban on
   reading. The blackboard additionally serves conversation, teaching, dialogue
   selection and debugging.
-- Two pre-existing per-frame costs are noted for #206's debugging work, since
-  a bigger fact population will magnify them: `advanceFrame()` sweeps the
-  whole store per frame-lifecycle definition (`blackboard.ts:433-446`) instead
-  of indexing by key, and `syncBlackboardQuestFacts` re-sets the tracked-quest
-  facts every frame with fresh allocations rather than on change.
+- Clearing facts by lifecycle goes through an index from fact key to the facts
+  under it, so `advanceFrame` and `clearSessionFacts` cost the number of facts
+  they clear rather than the size of the whole store. The fact population grows
+  with authored content, and a sweep that scans everything would grow with it.
 
 ## Enforcement
 

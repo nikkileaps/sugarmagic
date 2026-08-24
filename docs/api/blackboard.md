@@ -32,8 +32,9 @@ that is the normal case, not a smell.
 projects on change and on save restore -- world flags work this way. Genuinely
 per-frame state projects per frame: the spatial family writes player and NPC
 position, area and movement facts every frame, which is correct. What is wrong
-is a mismatch in either direction, and there is one in the codebase today --
-`syncBlackboardQuestFacts` rewrites rarely-changing quest facts every frame.
+is a mismatch in either direction. Quest facts are the worked example: they
+change rarely, so `syncBlackboardQuestFacts` runs off
+`QuestManager.setStateChangeHandler` and not off the frame loop.
 
 **Who reads it, and for what.** Narrative consumers read it freely. Engine
 internals -- behavior task selection, collision gates, NPC presence -- take

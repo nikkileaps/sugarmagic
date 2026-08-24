@@ -2562,8 +2562,11 @@ export function createRuntimeGameplaySessionController(
       // Plan 079.2 -- reconcile conditional NPC presences each frame.
       reconcileNpcPresences();
       npcBehaviorSystem?.sync({ deltaSeconds, activeQuests });
+      // Spatial facts are written every frame because they change every frame.
+      // Quest facts are not: `questManager.setStateChangeHandler` runs
+      // `syncBlackboardQuestFacts` whenever quest state actually moves, so
+      // writing them here as well would rebuild the same values every frame.
       syncBlackboardSpatialFacts();
-      syncBlackboardQuestFacts();
       spellMenuUi.update();
       flushAudioCommands();
     },

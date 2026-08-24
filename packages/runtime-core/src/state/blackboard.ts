@@ -367,6 +367,14 @@ export class RuntimeBlackboard {
   private readonly now: () => number;
   private readonly definitions = new Map<string, BlackboardFactDefinition<unknown>>();
   private readonly facts = new Map<string, BlackboardFactEnvelope<unknown>>();
+  /**
+   * Which facts exist under each fact key. One fact key covers many facts --
+   * one per scope -- and clearing by lifecycle asks for exactly that set.
+   * Without this, clearing frame facts scans every fact in the store once per
+   * frame-lifecycle definition, so the work grows with facts the sweep has no
+   * interest in.
+   */
+  private readonly storageKeysByFactKey = new Map<string, Set<string>>();
   private readonly listeners = new Set<BlackboardListener>();
   private readonly expiryTimers = new Map<string, ReturnType<typeof globalThis.setTimeout>>();
 
@@ -405,6 +413,7 @@ export class RuntimeBlackboard {
 
     this.clearExpiryTimer(storageKey);
     this.facts.set(storageKey, envelope);
+    this.indexStorageKey(definition.key, storageKey);
     this.scheduleExpiryIfNeeded(definition, storageKey, envelope);
     this.emit({
       type: "set",
@@ -441,31 +450,39 @@ export class RuntimeBlackboard {
   }
 
   clearSessionFacts(): void {
-    for (const definition of this.definitions.values()) {
-      if (definition.lifecycle.kind !== "session") {
-        continue;
-      }
-
-      for (const fact of this.facts.values()) {
-        if (fact.key !== definition.key) {
-          continue;
-        }
-        this.clearFactInternal(definition.key, fact.scope, "session-clear");
-      }
-    }
+    this.clearFactsWithLifecycle("session", "session-clear");
   }
 
   advanceFrame(): void {
+    this.clearFactsWithLifecycle("frame", "frame-advance");
+  }
+
+  /**
+   * Clears every fact whose definition has the given lifecycle. Reaches the
+   * facts through the key index, so the work is the number of facts actually
+   * being cleared rather than the size of the whole store.
+   */
+  private clearFactsWithLifecycle(
+    lifecycleKind: BlackboardFactLifecycle["kind"],
+    reason: Exclude<BlackboardChangeReason, "explicit-set">
+  ): void {
     for (const definition of this.definitions.values()) {
-      if (definition.lifecycle.kind !== "frame") {
+      if (definition.lifecycle.kind !== lifecycleKind) {
         continue;
       }
 
-      for (const fact of this.facts.values()) {
-        if (fact.key !== definition.key) {
+      const storageKeys = this.storageKeysByFactKey.get(definition.key);
+      if (!storageKeys) {
+        continue;
+      }
+
+      // Copied because clearing empties the set being read.
+      for (const storageKey of [...storageKeys]) {
+        const fact = this.facts.get(storageKey);
+        if (!fact) {
           continue;
         }
-        this.clearFactInternal(definition.key, fact.scope, "frame-advance");
+        this.clearFactInternal(definition.key, fact.scope, reason);
       }
     }
   }
@@ -480,20 +497,7 @@ export class RuntimeBlackboard {
     }
 
     const timer = globalThis.setTimeout(() => {
-      const current = this.facts.get(storageKey);
-      if (!current) {
-        return;
-      }
-      this.clearExpiryTimer(storageKey);
-      this.facts.delete(storageKey);
-      this.emit({
-        type: "expire",
-        key: envelope.key,
-        scope: envelope.scope,
-        reason: "ephemeral-expiry",
-        current: null,
-        previous: current
-      });
+      this.clearFactInternal(envelope.key, envelope.scope, "ephemeral-expiry");
     }, definition.lifecycle.expiresAfterMs);
 
     this.expiryTimers.set(storageKey, timer);
@@ -512,6 +516,7 @@ export class RuntimeBlackboard {
 
     this.clearExpiryTimer(storageKey);
     this.facts.delete(storageKey);
+    this.unindexStorageKey(key, storageKey);
     this.emit({
       type: reason === "ephemeral-expiry" ? "expire" : "clear",
       key,
@@ -520,6 +525,26 @@ export class RuntimeBlackboard {
       current: null,
       previous
     });
+  }
+
+  private indexStorageKey(factKey: string, storageKey: string): void {
+    const existing = this.storageKeysByFactKey.get(factKey);
+    if (existing) {
+      existing.add(storageKey);
+      return;
+    }
+    this.storageKeysByFactKey.set(factKey, new Set([storageKey]));
+  }
+
+  private unindexStorageKey(factKey: string, storageKey: string): void {
+    const storageKeys = this.storageKeysByFactKey.get(factKey);
+    if (!storageKeys) {
+      return;
+    }
+    storageKeys.delete(storageKey);
+    if (storageKeys.size === 0) {
+      this.storageKeysByFactKey.delete(factKey);
+    }
   }
 
   private clearExpiryTimer(storageKey: string): void {

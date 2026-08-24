@@ -135,6 +135,66 @@ describe("RuntimeBlackboard", () => {
     expect(getActiveQuestStage(blackboard, "quest:suitcase")).toBeNull();
   });
 
+  // One fact key covers one fact per scope. Clearing by lifecycle reaches them
+  // through a key index, so these pin that the index tracks every scope and
+  // survives being emptied and refilled.
+  it("clears every scope under a frame fact key", () => {
+    const blackboard = createRuntimeBlackboard({
+      definitions: [ENTITY_POSITION_FACT]
+    });
+    const entityIds = ["npc:one", "npc:two", "npc:three"];
+    const place = (entityId: string) =>
+      setEntityPosition(blackboard, {
+        entityId,
+        x: 0,
+        y: 0,
+        z: 0,
+        regionId: "region:station",
+        sceneId: "scene:lobby"
+      });
+
+    entityIds.forEach(place);
+    blackboard.advanceFrame();
+    for (const entityId of entityIds) {
+      expect(getEntityPosition(blackboard, entityId)).toBeNull();
+    }
+
+    // Refilled after the index entry for this key was emptied.
+    entityIds.forEach(place);
+    for (const entityId of entityIds) {
+      expect(getEntityPosition(blackboard, entityId)).not.toBeNull();
+    }
+    blackboard.advanceFrame();
+    for (const entityId of entityIds) {
+      expect(getEntityPosition(blackboard, entityId)).toBeNull();
+    }
+  });
+
+  it("still clears the remaining scopes after one is cleared explicitly", () => {
+    const blackboard = createRuntimeBlackboard({
+      definitions: [ENTITY_POSITION_FACT]
+    });
+    for (const entityId of ["npc:one", "npc:two"]) {
+      setEntityPosition(blackboard, {
+        entityId,
+        x: 0,
+        y: 0,
+        z: 0,
+        regionId: "region:station",
+        sceneId: "scene:lobby"
+      });
+    }
+
+    blackboard.clearFact({
+      definition: ENTITY_POSITION_FACT,
+      scope: createBlackboardScope("entity", "npc:one"),
+      sourceSystem: ENTITY_POSITION_FACT.ownerSystem
+    });
+    blackboard.advanceFrame();
+
+    expect(getEntityPosition(blackboard, "npc:two")).toBeNull();
+  });
+
   it("supports typed accessors while keeping listFacts for inspection", () => {
     const blackboard = createRuntimeBlackboard({
       definitions: [

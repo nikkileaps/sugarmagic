@@ -216,6 +216,50 @@ describe("QuestManager", () => {
     expect(flags.hasFlag("talkedToDockWorker")).toBe(true);
   });
 
+  // Derived consumers -- the quest tracker, NPC interaction availability, the
+  // blackboard quest facts -- resync off this handler rather than rebuilding
+  // themselves every frame. A transition that moves quest state without firing
+  // it leaves all of them stale.
+  it("announces a state change on quest start and on node completion", () => {
+    const stage = createDefaultQuestStageDefinition({
+      nodeDefinitions: [
+        {
+          ...createDefaultQuestNodeDefinition({
+            displayName: "Talk to Guard",
+            description: "Speak with the station guard",
+            objectiveSubtype: "talk"
+          }),
+          targetId: "npc:guard",
+          dialogueDefinitionId: "dialogue:guard",
+          completeOn: "dialogueEnd"
+        }
+      ]
+    });
+    const manager = new QuestManager();
+    manager.registerDefinitions([
+      {
+        ...createDefaultQuestDefinition({
+          definitionId: "quest:notify",
+          displayName: "Notify"
+        }),
+        startStageId: stage.stageId,
+        stageDefinitions: [stage]
+      }
+    ]);
+
+    let stateChanges = 0;
+    manager.setStateChangeHandler(() => {
+      stateChanges += 1;
+    });
+
+    manager.startQuest("quest:notify");
+    expect(stateChanges).toBeGreaterThan(0);
+
+    const afterStart = stateChanges;
+    manager.notifyDialogueFinished("dialogue:guard");
+    expect(stateChanges).toBeGreaterThan(afterStart);
+  });
+
   it("completes cast spell objectives and evaluates spell conditions from providers", () => {
     const stage = createDefaultQuestStageDefinition({
       nodeDefinitions: [
