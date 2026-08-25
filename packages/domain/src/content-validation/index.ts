@@ -15,6 +15,7 @@
  * idea, which is why this adds `severity` to that shape instead of renaming it.
  */
 
+import { getAllScenes } from "../episodes";
 import type { GameProject } from "../game-project";
 import type {
   QuestConditionDefinition,
@@ -256,7 +257,7 @@ function collectQuestBindings(
       }
     }
   }
-  for (const scene of gameProject.scenes) {
+  for (const scene of getAllScenes(gameProject.episodes)) {
     for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
       for (const presence of overlay.npcPresences) {
         if (presence.condition) {

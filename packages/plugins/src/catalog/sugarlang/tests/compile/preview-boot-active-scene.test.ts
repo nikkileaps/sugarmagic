@@ -22,6 +22,7 @@ import { describe, expect, it } from "vitest";
 import {
   createAuthoringSession,
   createDefaultGameProject,
+  createDefaultEpisode,
   createDefaultScene,
   createPluginConfigurationRecord,
   createRegionNPCPresence
@@ -60,21 +61,26 @@ describe("preview boot composes the active Scene overlay", () => {
         })
       ],
       npcDefinitions: [CHEESE_NPC],
-      scenes: [
-        createDefaultScene({
-          sceneId: "scene:overlay-test",
-          regionOverlays: {
-            [region.identity.id]: {
-              assetAppearanceOverrides: {},
-              folders: [],
-              placedAssets: [],
-              playerPresence: null,
-              npcPresences: [
-                createRegionNPCPresence({ npcDefinitionId: "npc-finnick" })
-              ],
-              itemPresences: []
-            }
-          }
+      episodes: [
+        createDefaultEpisode({
+          episodeId: "episode:overlay-test",
+          scenes: [
+            createDefaultScene({
+              sceneId: "scene:overlay-test",
+              regionOverlays: {
+                [region.identity.id]: {
+                  assetAppearanceOverrides: {},
+                  folders: [],
+                  placedAssets: [],
+                  playerPresence: null,
+                  npcPresences: [
+                    createRegionNPCPresence({ npcDefinitionId: "npc-finnick" })
+                  ],
+                  itemPresences: []
+                }
+              }
+            })
+          ]
         })
       ]
     };

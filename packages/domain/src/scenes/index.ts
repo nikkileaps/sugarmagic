@@ -1,10 +1,15 @@
 /**
  * packages/domain/src/scenes/index.ts
  *
- * Purpose: The `Scene` narrative-partition primitive (Plan 058).
- * A Scene is a chunk of authored narrative content that unlocks
- * and releases sequentially — what an author might label a
- * "Chapter", "Episode", or "Act" (per-project `scenesUiLabel`).
+ * Purpose: The `Scene` primitive — one place, with the overlays
+ * that dress it for this part of the story.
+ *
+ * A Scene is ORDERED but NOT GATED: its position inside its
+ * Episode says what comes next, and nothing holds the player
+ * back — finishing one moves them to the next. The gate lives on
+ * `Episode` (`episodes/`), which also holds the Scenes and owns
+ * their order. A Scene therefore carries no order number and no
+ * unlock rule of its own.
  *
  * Pattern (Plan 058 §Design patterns): Base + Overlay (Layer
  * Composition). Regions are the shared geographic BASE; each
@@ -58,27 +63,6 @@ export function createSceneId(): string {
 }
 
 /**
- * When a Scene becomes playable. Evaluated at runtime boot
- * against the player's save (Plan 058 Pattern 3 — Filtered
- * Composition at Runtime).
- *
- *   - `"always"` — unlocked from the first boot. The default.
- *   - `manual` — only unlocked by an explicit `unlockScene`
- *     quest action (Plan 058.5's transition hook).
- *   - `questComplete` — unlocks when the referenced quest is in
- *     the save's completed set.
- *   - `wallClock` — unlocks at/after an ISO timestamp. Compared
- *     against `Date.now()` at boot; a runtime read, never
- *     persisted (the no-wallclock-in-slice rule applies to save
- *     slices, not authored schedule data).
- */
-export type SceneUnlockCondition =
-  | "always"
-  | { kind: "manual" }
-  | { kind: "questComplete"; questDefinitionId: string }
-  | { kind: "wallClock"; unlockAtIso: string };
-
-/**
  * Per-Scene atmosphere override. When set, the runtime uses this
  * environment for the Scene instead of the region's default
  * (`region.environmentBinding.defaultEnvironmentId`). Null falls
@@ -99,11 +83,15 @@ export interface SceneAudioOverride {
 }
 
 /**
- * Player-facing title card rendered when the game advances INTO
- * this Scene ("CHAPTER 3: THE RECKONING"). Null on the Scene
- * means hard cut, no card.
+ * Player-facing title card rendered when the game advances into
+ * something ("CHAPTER 3: THE RECKONING"). Null means hard cut, no
+ * card.
+ *
+ * Shared by both owners: an Episode's chapter card and a Scene's
+ * between-Scenes cut are the same shape and differ only in who
+ * holds them and when they play. Named for neither.
  */
-export interface SceneTransitionConfig {
+export interface TransitionConfig {
   titleText: string;
   subtitleText: string | null;
   durationMs: number;
@@ -238,14 +226,10 @@ export interface RegionSceneOverlay {
 
 export interface Scene {
   sceneId: string;
-  /** Position in the narrative sequence; drives selector order
-   *  and the default "first Scene" pick at fresh boot. */
-  sceneOrder: number;
   displayName: string;
   description: string;
   /** Free-form author notes (design intent, TODOs). */
   notes: string;
-  unlockCondition: SceneUnlockCondition;
   /** Region the game loads when this Scene is entered on a fresh
    *  boot (no save, no explicit request). Null = first region.
    *  Resolution precedence at runtime: saved region > explicit
@@ -254,7 +238,7 @@ export interface Scene {
   startingRegionId: string | null;
   environmentOverride: SceneEnvironmentOverride | null;
   audioOverride: SceneAudioOverride | null;
-  transitionConfig: SceneTransitionConfig | null;
+  transitionConfig: TransitionConfig | null;
   /** Keyed by regionId. A region absent from the record simply
    *  has no overlay in this Scene — base-only. */
   regionOverlays: Record<string, RegionSceneOverlay>;
@@ -295,42 +279,15 @@ export function createDefaultScene(
 ): Scene {
   return {
     sceneId: overrides.sceneId ?? createSceneId(),
-    sceneOrder: overrides.sceneOrder ?? 0,
     displayName: overrides.displayName ?? "Scene 1",
     description: overrides.description ?? "",
     notes: overrides.notes ?? "",
-    unlockCondition: overrides.unlockCondition ?? "always",
     startingRegionId: overrides.startingRegionId ?? null,
     environmentOverride: overrides.environmentOverride ?? null,
     audioOverride: overrides.audioOverride ?? null,
     transitionConfig: overrides.transitionConfig ?? null,
     regionOverlays: overrides.regionOverlays ?? {}
   };
-}
-
-function normalizeUnlockCondition(input: unknown): SceneUnlockCondition {
-  if (input === "always") return "always";
-  if (!input || typeof input !== "object") return "always";
-  const record = input as Record<string, unknown>;
-  if (record.kind === "manual") return { kind: "manual" };
-  if (
-    record.kind === "questComplete" &&
-    typeof record.questDefinitionId === "string" &&
-    record.questDefinitionId.trim().length > 0
-  ) {
-    return {
-      kind: "questComplete",
-      questDefinitionId: record.questDefinitionId.trim()
-    };
-  }
-  if (
-    record.kind === "wallClock" &&
-    typeof record.unlockAtIso === "string" &&
-    record.unlockAtIso.trim().length > 0
-  ) {
-    return { kind: "wallClock", unlockAtIso: record.unlockAtIso.trim() };
-  }
-  return "always";
 }
 
 function normalizeEnvironmentOverride(
@@ -364,9 +321,14 @@ function normalizeAudioOverride(input: unknown): SceneAudioOverride | null {
   return { backgroundMusicId, ambientSoundId };
 }
 
-function normalizeTransitionConfig(
+/**
+ * Coerce a title card. Exported because both owners need it —
+ * one normalizer, not a copy in each module. `episodes/` imports
+ * it from here.
+ */
+export function normalizeTransitionConfig(
   input: unknown
-): SceneTransitionConfig | null {
+): TransitionConfig | null {
   if (!input || typeof input !== "object") return null;
   const record = input as Record<string, unknown>;
   if (
@@ -495,11 +457,6 @@ export function normalizeScene(input: unknown): Scene | null {
   }
   return {
     sceneId: record.sceneId.trim(),
-    sceneOrder:
-      typeof record.sceneOrder === "number" &&
-      Number.isFinite(record.sceneOrder)
-        ? Math.floor(record.sceneOrder)
-        : 0,
     displayName:
       typeof record.displayName === "string" &&
       record.displayName.trim().length > 0
@@ -508,7 +465,6 @@ export function normalizeScene(input: unknown): Scene | null {
     description:
       typeof record.description === "string" ? record.description : "",
     notes: typeof record.notes === "string" ? record.notes : "",
-    unlockCondition: normalizeUnlockCondition(record.unlockCondition),
     startingRegionId:
       typeof record.startingRegionId === "string" &&
       record.startingRegionId.trim().length > 0
@@ -524,82 +480,14 @@ export function normalizeScene(input: unknown): Scene | null {
 }
 
 /**
- * Plan 058 §058.4 — Pattern 3 (Filtered Composition at Runtime):
- * evaluate every Scene's unlock condition against the player's
- * save state at boot. Pure; the caller supplies `now` (epoch ms)
- * so the wall-clock read stays at the seam, never persisted.
- */
-export function resolveUnlockedSceneIds(input: {
-  scenes: readonly Scene[];
-  /** Scene ids explicitly unlocked by gameplay (the `unlockScene`
-   *  quest action, Plan 058.5) — from campaign.progression. */
-  manuallyUnlockedSceneIds: readonly string[];
-  /** From the quest.manager slice — drives `questComplete`. */
-  completedQuestIds: readonly string[];
-  now: number;
-}): Set<string> {
-  const manual = new Set(input.manuallyUnlockedSceneIds);
-  const quests = new Set(input.completedQuestIds);
-  const unlocked = new Set<string>();
-  for (const scene of input.scenes) {
-    const condition = scene.unlockCondition;
-    if (condition === "always") {
-      unlocked.add(scene.sceneId);
-    } else if (condition.kind === "manual") {
-      if (manual.has(scene.sceneId)) unlocked.add(scene.sceneId);
-    } else if (condition.kind === "questComplete") {
-      if (
-        quests.has(condition.questDefinitionId) ||
-        manual.has(scene.sceneId)
-      ) {
-        unlocked.add(scene.sceneId);
-      }
-    } else {
-      const unlockAt = Date.parse(condition.unlockAtIso);
-      if (
-        (Number.isFinite(unlockAt) && input.now >= unlockAt) ||
-        manual.has(scene.sceneId)
-      ) {
-        unlocked.add(scene.sceneId);
-      }
-    }
-  }
-  return unlocked;
-}
-
-/**
- * Plan 058 §058.4 — pick the Scene the runtime boots into.
- * Precedence: the requested Scene (saved `currentSceneId`, or
- * Studio Preview's ambient selection) IF it is unlocked; else the
- * first unlocked Scene by order; else the first Scene outright (a
- * project whose every Scene is locked still has to boot — authors
- * lock Scene 1 by accident, players shouldn't hit a black screen).
- */
-export function resolveActiveScene(input: {
-  scenes: readonly Scene[];
-  unlockedSceneIds: ReadonlySet<string>;
-  requestedSceneId: string | null;
-}): Scene | null {
-  const ordered = [...input.scenes].sort(
-    (left, right) => left.sceneOrder - right.sceneOrder
-  );
-  const requested = ordered.find(
-    (scene) =>
-      scene.sceneId === input.requestedSceneId &&
-      input.unlockedSceneIds.has(scene.sceneId)
-  );
-  return (
-    requested ??
-    ordered.find((scene) => input.unlockedSceneIds.has(scene.sceneId)) ??
-    ordered[0] ??
-    null
-  );
-}
-
-/**
- * Normalize a project's `scenes` array. Drops malformed entries,
- * dedupes by sceneId (first wins), and sorts by `sceneOrder` so
- * every consumer sees a stable narrative sequence.
+ * Normalize a list of Scenes. Drops malformed entries and dedupes
+ * by sceneId (first wins).
+ *
+ * PRESERVES input order — it does not sort. Order is list
+ * position now, so a sort here would be the load path quietly
+ * rewriting the narrative, and the damage would be permanent
+ * rather than merely wrong. `episodes/` owns the resolvers that
+ * used to live beside this.
  */
 export function normalizeScenes(input: unknown): Scene[] {
   if (!Array.isArray(input)) return [];
@@ -611,5 +499,5 @@ export function normalizeScenes(input: unknown): Scene[] {
     seen.add(scene.sceneId);
     scenes.push(scene);
   }
-  return scenes.sort((left, right) => left.sceneOrder - right.sceneOrder);
+  return scenes;
 }

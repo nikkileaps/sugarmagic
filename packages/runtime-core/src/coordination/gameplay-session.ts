@@ -219,13 +219,14 @@ export interface RuntimeGameplaySessionControllerOptions {
    */
   activeScene?: Scene | null;
   /**
-   * Plan 058 §058.5 — quest Scene-progression actions
-   * (unlockScene / advanceToNextScene) forward here; the host
-   * owns campaign.progression and the world reload that a Scene
-   * change implies.
+   * Quest campaign-progression actions (unlockEpisode /
+   * advanceToNextScene) forward here; the host owns
+   * campaign.progression and the world reload that a Scene change
+   * implies.
    */
   onSceneAction?: (action: {
-    type: "unlockScene" | "advanceToNextScene";
+    type: "unlockEpisode" | "advanceToNextScene";
+    episodeId?: string | null;
     sceneId: string | null;
   }) => void;
   /**
@@ -2050,9 +2051,15 @@ export function createRuntimeGameplaySessionController(
         });
         return;
 
-      // Plan 058 §058.5 — Scene progression actions belong to the
-      // host (campaign.progression lives there), not the assembly.
-      case "unlockScene":
+      // Campaign progression actions belong to the host
+      // (campaign.progression lives there), not the assembly.
+      case "unlockEpisode":
+        options.onSceneAction?.({
+          type: action.type,
+          episodeId: action.episodeId,
+          sceneId: null
+        });
+        return;
       case "advanceToNextScene":
         options.onSceneAction?.({
           type: action.type,

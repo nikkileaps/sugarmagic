@@ -51,11 +51,22 @@ import {
   type AudioMixerSettings,
   type UITheme,
   composeRegionContents,
+  createDefaultEpisode,
+  DEFAULT_EPISODE_END_ROUTING,
+  DEFAULT_EPISODE_ID,
+  findEpisodeBySceneId,
+  findSceneById,
+  getAllScenes,
   migrateToScenes,
+  normalizeEpisodeEndRouting,
+  normalizeEpisodes,
   resolveRegionVolumes,
+  resolveActiveEpisode,
   resolveActiveScene,
-  resolveUnlockedSceneIds,
+  resolveUnlockedEpisodeIds,
   type CreditsDefinition,
+  type Episode,
+  type EpisodeEndRouting,
   type MusicBindings,
   type Scene
 } from "@sugarmagic/domain";
@@ -175,7 +186,7 @@ import {
   createCampaignProgressionParticipant,
   type CampaignProgressionSlice
 } from "./save/campaignProgressionParticipant";
-import { showEntryTitleSequence } from "./sceneTransitionCard";
+import { showEntryTitleSequence } from "./transitionCard";
 import { showSceneExitOverlay } from "./creditsRoll";
 import {
   runPreNewGameSteps,
@@ -247,24 +258,30 @@ export const BOOT_READINESS_TIMEOUT_MS = 60_000;
 export interface WebRuntimeStartState {
   regions: RegionDocument[];
   /**
-   * Plan 058 §058.1 — the project's narrative Scenes. The host
-   * picks the active Scene (first by sceneOrder until Plan 058.4
-   * wires `campaign.progression`) and composes its per-region
-   * overlay onto the region base for every spawn read. Optional
-   * for back-compat: a stale pre-058 boot.json carries regions
-   * with legacy `scene` nests instead, which `migrateToScenes`
-   * lifts at start().
+   * The campaign: ordered, gated Episodes, each holding its own
+   * ordered Scenes. The host gates the Episodes, picks the active
+   * Scene inside the chosen one, and composes that Scene's
+   * per-region overlay onto the region base for every spawn read.
+   * Optional for back-compat: a stale pre-058 boot.json carries
+   * regions with legacy `scene` nests instead, which
+   * `migrateToScenes` lifts at start().
    */
-  scenes?: Scene[];
-  /** Plan 059 §059.4 — player-facing label for Scenes ("Scene" /
-   *  "Chapter" / ...), used by the Episodes screen. */
-  scenesUiLabel?: string | null;
+  episodes?: Episode[];
   /**
-   * Plan 058 §058.2 — which Scene to boot into. Studio Preview
-   * passes the editor's ambient Scene selection; the deployed
-   * game omits it (the player's Scene comes from the
-   * `campaign.progression` save slice in Plan 058.4, falling
-   * through to the first Scene by order until then).
+   * A pre-Episodes boot.json's flat Scene list. Read ONLY to fold
+   * into one Episode at start(), for a player still holding a
+   * cached bundle from before Episodes shipped. Nothing writes it.
+   */
+  legacyScenes?: Scene[];
+  /** Where the player goes when an Episode ends — see
+   *  `GameProject.episodeEndRouting`. */
+  episodeEndRouting?: EpisodeEndRouting | null;
+  /**
+   * Which Scene to boot into. Studio Preview passes the editor's
+   * ambient Scene selection; the deployed game omits it and the
+   * player's place comes from the `campaign.progression` save
+   * slice, falling through to the first Scene of the first open
+   * Episode.
    */
   activeSceneId?: string | null;
   activeRegionId?: string | null;
@@ -1113,46 +1130,59 @@ export function createWebRuntimeHost(
   // Scene the same way Continue does — no separate mid-session
   // recompose machinery.
   function hostHandleSceneAction(action: {
-    type: "unlockScene" | "advanceToNextScene";
+    type: "unlockEpisode" | "advanceToNextScene";
+    episodeId?: string | null;
     sceneId: string | null;
   }): void {
-    if (action.type === "unlockScene") {
-      if (!action.sceneId) {
+    if (action.type === "unlockEpisode") {
+      const episodeId = action.episodeId ?? null;
+      if (!episodeId) {
         console.warn(
-          "[web-runtime] unlockScene action without a sceneId targetId; ignoring."
+          "[web-runtime] unlockEpisode action without an episodeId; ignoring."
         );
         return;
       }
-      if (!manuallyUnlockedSceneIds.includes(action.sceneId)) {
-        manuallyUnlockedSceneIds.push(action.sceneId);
+      if (!manuallyUnlockedEpisodeIds.includes(episodeId)) {
+        manuallyUnlockedEpisodeIds.push(episodeId);
       }
       return;
     }
 
-    const ordered = [...bootScenes].sort(
-      (left, right) => left.sceneOrder - right.sceneOrder
-    );
-    const currentIndex = ordered.findIndex(
+    const currentEpisode =
+      findEpisodeBySceneId(bootEpisodes, activeSceneIdForSave) ??
+      bootEpisodes[0] ??
+      null;
+    const withinEpisode = currentEpisode?.scenes ?? [];
+    const currentIndex = withinEpisode.findIndex(
       (scene) => scene.sceneId === activeSceneIdForSave
     );
+    // An explicit target may name a Scene in any Episode; the
+    // implicit one is the next Scene in THIS Episode. Running off
+    // the end of the Episode is the Episode boundary, not an
+    // error — it is what makes credits roll.
     const target = action.sceneId
-      ? ordered.find((scene) => scene.sceneId === action.sceneId) ?? null
-      : ordered[currentIndex + 1] ?? null;
-    // Plan 059 §059.3 — a null target is the FINAL-Scene case,
-    // not an error: the exit sequence still plays (credits!) and
-    // routes back to the menu.
+      ? findSceneById(bootEpisodes, action.sceneId)
+      : withinEpisode[currentIndex + 1] ?? null;
     if (target && target.sceneId === activeSceneIdForSave) return;
 
+    const targetEpisode = target
+      ? findEpisodeBySceneId(bootEpisodes, target.sceneId)
+      : null;
+    const isEpisodeBoundary =
+      !target || targetEpisode?.episodeId !== currentEpisode?.episodeId;
+
     hostMarkSceneCompleted(activeSceneIdForSave);
-    if (target) {
-      // Manual unlock so the advance survives condition
-      // re-evaluation on every future boot.
-      if (!manuallyUnlockedSceneIds.includes(target.sceneId)) {
-        manuallyUnlockedSceneIds.push(target.sceneId);
+    if (isEpisodeBoundary) hostMarkEpisodeCompleted(activeEpisodeIdForSave);
+    if (target && targetEpisode) {
+      // Manual unlock so the advance survives gate re-evaluation
+      // on every future boot.
+      if (!manuallyUnlockedEpisodeIds.includes(targetEpisode.episodeId)) {
+        manuallyUnlockedEpisodeIds.push(targetEpisode.episodeId);
       }
       activeSceneIdForSave = target.sceneId;
+      activeEpisodeIdForSave = targetEpisode.episodeId;
     }
-    void runExitSequenceAndReload(target);
+    void runExitSequenceAndReload(target, isEpisodeBoundary);
   }
 
   /**
@@ -1168,6 +1198,13 @@ export function createWebRuntimeHost(
     }
   }
 
+  function hostMarkEpisodeCompleted(episodeId: string | null): void {
+    if (!episodeId) return;
+    if (!completedEpisodeIds.includes(episodeId)) {
+      completedEpisodeIds.push(episodeId);
+    }
+  }
+
   /**
    * Plan 059 §059.3 — the exit sequence: force-save, credits roll
    * with the credits theme, then Netflix routing (filling Next
@@ -1176,26 +1213,44 @@ export function createWebRuntimeHost(
    * title sequence marked) or on the menu.
    */
   async function runExitSequenceAndReload(
-    target: Scene | null
+    target: Scene | null,
+    isEpisodeBoundary: boolean
   ): Promise<void> {
     // The reload can't wait for the next 5s autosave tick or the
     // advance would be lost.
     await forceWriteSave("scene advance");
 
-    // One overlay: credits scroll with the routing control in the
-    // bottom-right corner over them (Netflix model). The credits
-    // theme plays under everything until the reload cuts it.
-    const credits = bootCreditsDefinition;
-    if (credits && credits.sections.length > 0) {
+    // Credits belong to an Episode ending, not to every Scene
+    // change: rolling the writer's name between two Scenes of one
+    // chapter is not what "the credits" means. Between Scenes the
+    // player still gets the overlay and its Next control, with no
+    // credits scroll under it.
+    const credits =
+      isEpisodeBoundary && bootCreditsDefinition?.sections.length
+        ? bootCreditsDefinition
+        : null;
+    if (credits) {
       gameplaySession?.setMusicTrack(creditsThemeCueIdForSession);
     }
+
+    // An Episode boundary hands the player back to the Episodes
+    // screen unless this game asked to run straight on -- and even
+    // then, only if there IS a next Episode to run into. A gated
+    // Episode must never be a dead end, so the fallback is the
+    // same screen the default setting always shows.
+    const continuesPastBoundary =
+      !isEpisodeBoundary ||
+      (bootEpisodeEndRouting === "next-episode" && target !== null);
+
     const choice = await showSceneExitOverlay(ownerWindow.document, {
       credits,
-      nextSceneTitle: target?.displayName ?? null,
-      menuLabel: `Back to ${bootEpisodesViewModel?.scenesUiLabel ?? "Scene"}s`
+      nextSceneTitle: continuesPastBoundary
+        ? target?.displayName ?? null
+        : null,
+      menuLabel: "Back to Episodes"
     });
 
-    if (choice === "next" && target) {
+    if (choice === "next" && target && continuesPastBoundary) {
       // Skip the start menu AND play the entry title sequence on
       // the next boot (game title -> Scene title). Save was
       // force-written above, so boot restores into the new Scene.
@@ -1341,12 +1396,16 @@ export function createWebRuntimeHost(
   // as host.player's currentRegionId). The closures below are the
   // live state; 058.5's advance/unlock actions mutate them.
   let activeSceneIdForSave: string | null = null;
-  let manuallyUnlockedSceneIds: string[] = [];
+  let activeEpisodeIdForSave: string | null = null;
+  let manuallyUnlockedEpisodeIds: string[] = [];
   let completedSceneIds: string[] = [];
+  let completedEpisodeIds: string[] = [];
   let campaignRestore: CampaignProgressionSlice | null = null;
-  /** The migrated Scene list from the last start() — the advance
-   *  action resolves "next by order" against it. */
-  let bootScenes: Scene[] = [];
+  /** The campaign from the last start() — the advance action
+   *  resolves "the next Scene, then the next Episode" against it. */
+  let bootEpisodes: Episode[] = [];
+  let bootEpisodeEndRouting: EpisodeEndRouting =
+    DEFAULT_EPISODE_END_ROUTING;
   // Plan 059 §059.1 — the two music tracks for this session; the
   // lifecycle handlers below switch the channel between them.
   let sceneMusicCueIdForSession: string | null = null;
@@ -1367,9 +1426,11 @@ export function createWebRuntimeHost(
   let bootPreNewGameStepAnswers: PreNewGameStepAnswers = {};
   saveParticipantRegistry.register(
     createCampaignProgressionParticipant({
+      getCurrentEpisodeId: () => activeEpisodeIdForSave,
       getCurrentSceneId: () => activeSceneIdForSave,
-      getManuallyUnlockedSceneIds: () => manuallyUnlockedSceneIds,
+      getManuallyUnlockedEpisodeIds: () => manuallyUnlockedEpisodeIds,
       getCompletedSceneIds: () => completedSceneIds,
+      getCompletedEpisodeIds: () => completedEpisodeIds,
       applyRestoredSlice: (data) => {
         campaignRestore = data;
       }
@@ -2510,48 +2571,83 @@ export function createWebRuntimeHost(
       typeof resolvedActiveRegionId === "string" ? resolvedActiveRegionId : null;
     // Plan 058 §058.1 — belt-and-suspenders migration for stale
     // pre-058 boot payloads (regions carrying legacy `scene`
-    // nests, no `scenes` array). Idempotent no-op on current
-    // payloads.
+    // nests). Idempotent no-op on current payloads. Runs on the
+    // FLAT Scene list because the legacy nest predates Episodes,
+    // so a payload cannot hold both.
+    const authoredEpisodes = normalizeEpisodes(state.episodes ?? []);
     const migratedContent = migrateToScenes({
-      scenes: state.scenes ?? [],
+      scenes:
+        authoredEpisodes.length > 0
+          ? getAllScenes(authoredEpisodes)
+          : state.legacyScenes ?? [],
       regions: state.regions
     });
-    bootScenes = migratedContent.scenes;
-    // Plan 058 §058.4 — Pattern 3 (Filtered Composition at
-    // Runtime): evaluate unlock conditions against the restored
-    // save, then pick the boot Scene. Precedence: saved
-    // currentSceneId > Studio Preview's ambient selection > first
-    // unlocked by order. questComplete conditions read the
-    // quest.manager slice's raw data here because unlock
+    // A pre-Episodes payload folds its Scenes into one ungated
+    // Episode, matching what the project normalizer does on the
+    // authoring side.
+    bootEpisodes =
+      authoredEpisodes.length > 0
+        ? authoredEpisodes
+        : migratedContent.scenes.length > 0
+          ? [
+              createDefaultEpisode({
+                episodeId: DEFAULT_EPISODE_ID,
+                displayName: bootGameTitle ?? "Episode 1",
+                scenes: migratedContent.scenes
+              })
+            ]
+          : [];
+    bootEpisodeEndRouting = normalizeEpisodeEndRouting(
+      state.episodeEndRouting
+    );
+    // Gate the Episodes against the restored save, then pick the
+    // boot Episode and the Scene inside it. questComplete gates
+    // read the quest.manager slice's raw data here because gate
     // evaluation happens in Phase 1, before the quest system
     // exists (Phase 2) — a deliberate cross-slice READ of plain
     // save data, not a reach into another system.
-    manuallyUnlockedSceneIds = [...(campaignRestore?.unlockedSceneIds ?? [])];
+    manuallyUnlockedEpisodeIds = [
+      ...(campaignRestore?.unlockedEpisodeIds ?? [])
+    ];
     completedSceneIds = [...(campaignRestore?.completedSceneIds ?? [])];
+    completedEpisodeIds = [...(campaignRestore?.completedEpisodeIds ?? [])];
     const questSliceData = restoredSlices[QUEST_MANAGER_PARTICIPANT_ID]
       ?.data as { completedQuestIds?: string[] } | undefined;
-    const unlockedSceneIds = resolveUnlockedSceneIds({
-      scenes: migratedContent.scenes,
-      manuallyUnlockedSceneIds,
+    const unlockedEpisodeIds = resolveUnlockedEpisodeIds({
+      episodes: bootEpisodes,
+      manuallyUnlockedEpisodeIds,
       completedQuestIds: questSliceData?.completedQuestIds ?? [],
       // Runtime read at the seam — never persisted (the
       // no-wallclock rule applies to slices, not boot evaluation).
       now: Date.now()
     });
-    const activeScene = resolveActiveScene({
-      scenes: migratedContent.scenes,
-      unlockedSceneIds,
-      requestedSceneId:
-        campaignRestore?.currentSceneId ?? state.activeSceneId ?? null
+    const requestedSceneId =
+      campaignRestore?.currentSceneId ?? state.activeSceneId ?? null;
+    const activeEpisode = resolveActiveEpisode({
+      episodes: bootEpisodes,
+      unlockedEpisodeIds,
+      requestedEpisodeId:
+        campaignRestore?.currentEpisodeId ??
+        findEpisodeBySceneId(bootEpisodes, requestedSceneId)?.episodeId ??
+        null
     });
+    const activeScene = resolveActiveScene({
+      episode: activeEpisode,
+      requestedSceneId
+    });
+    activeEpisodeIdForSave = activeEpisode?.episodeId ?? null;
     activeSceneIdForSave = activeScene?.sceneId ?? null;
     // Plan 059 §059.4 — Episodes screen view model. Forward-only
     // v1: only the frontier ("current") card is enterable.
+    //
+    // Still one card per SCENE. Scenes are not gated, so a card's
+    // locked/unlocked state now comes from the gate on the Episode
+    // that owns it. What this screen ultimately lists — Scenes or
+    // Episodes — is story 2's call; collapsing it here would be a
+    // silent regression from three cards to one.
     bootEpisodesViewModel = {
-      scenesUiLabel: state.scenesUiLabel ?? "Scene",
-      entries: [...migratedContent.scenes]
-        .sort((left, right) => left.sceneOrder - right.sceneOrder)
-        .map((scene) => ({
+      entries: bootEpisodes.flatMap((episode) =>
+        episode.scenes.map((scene) => ({
           sceneId: scene.sceneId,
           displayName: scene.displayName,
           description: scene.description,
@@ -2560,10 +2656,11 @@ export function createWebRuntimeHost(
               ? ("current" as const)
               : completedSceneIds.includes(scene.sceneId)
                 ? ("completed" as const)
-                : unlockedSceneIds.has(scene.sceneId)
+                : unlockedEpisodeIds.has(episode.episodeId)
                   ? ("unlocked" as const)
                   : ("locked" as const)
         }))
+      )
     };
     const activeRegion = getActiveRegion(
       migratedContent.regions,

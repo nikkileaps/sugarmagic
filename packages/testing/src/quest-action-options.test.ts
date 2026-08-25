@@ -22,7 +22,7 @@ describe("quest action type options", () => {
       "playCue",
       "playAnimation",
       "emitEvent",
-      "unlockScene",
+      "unlockEpisode",
       "advanceToNextScene",
       "set-time-of-day",
       "advance-day",

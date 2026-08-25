@@ -35,10 +35,21 @@ import {
   createDefaultScene,
   createRegionSceneOverlay,
   migrateToScenes,
+  normalizeScenes,
   type ComposedRegionContents,
   type RegionSceneOverlay,
   type Scene
 } from "../scenes";
+import {
+  createDefaultEpisode,
+  DEFAULT_EPISODE_ID,
+  findEpisodeBySceneId,
+  findSceneById,
+  getAllScenes,
+  mapScenes,
+  normalizeEpisodes,
+  type Episode
+} from "../episodes";
 import type { AuthoringHistory } from "../history";
 import type {
   SemanticCommand,
@@ -262,16 +273,25 @@ export function getActiveRegion(
 }
 
 /**
- * Plan 058 §058.1 — resolve the author's active Scene. Falls
- * back to the first Scene by order when the pointer is unset or
- * dangling (Scene deleted); a migrated project always has ≥1.
+ * Resolve the author's active Scene. Falls back to the first
+ * Scene in the campaign when the pointer is unset or dangling
+ * (Scene deleted); a migrated project always has >= 1.
  */
 export function getActiveScene(session: AuthoringSession): Scene | null {
-  const scenes = session.gameProject.scenes;
-  if (scenes.length === 0) return null;
+  const episodes = session.gameProject.episodes;
   return (
-    scenes.find((scene) => scene.sceneId === session.activeSceneId) ??
-    scenes[0] ??
+    findSceneById(episodes, session.activeSceneId) ??
+    getAllScenes(episodes)[0] ??
+    null
+  );
+}
+
+/** The Episode holding the author's active Scene. */
+export function getActiveEpisode(session: AuthoringSession): Episode | null {
+  const episodes = session.gameProject.episodes;
+  return (
+    findEpisodeBySceneId(episodes, getActiveScene(session)?.sceneId ?? null) ??
+    episodes[0] ??
     null
   );
 }
@@ -296,8 +316,8 @@ export function switchActiveScene(
   session: AuthoringSession,
   sceneId: string
 ): AuthoringSession {
-  const exists = session.gameProject.scenes.some(
-    (scene) => scene.sceneId === sceneId
+  const exists = Boolean(
+    findSceneById(session.gameProject.episodes, sceneId)
   );
   if (!exists || session.activeSceneId === sceneId) return session;
   return {
@@ -461,28 +481,41 @@ export function createAuthoringSession(
   )
 ): AuthoringSession {
   // Plan 058 §058.1 — lift pre-058 `region.scene` nests into the
-  // project's default Scene BEFORE normalization, so overlay
+  // project's first Scene BEFORE normalization, so overlay
   // presences flow through the same contentLibrary-aware
   // normalization the regions get. Idempotent: an already-
   // migrated project passes through unchanged.
+  //
+  // This works on a FLAT Scene list because the legacy nest
+  // predates Episodes entirely — a file cannot hold both. When the
+  // project already has Episodes there is no nest to lift and no
+  // Scene to synthesize, so only the region-side strip matters and
+  // the Episodes pass through untouched.
+  const authoredEpisodes = normalizeEpisodes(
+    (gameProject as { episodes?: unknown }).episodes
+  );
   const migrated = migrateToScenes({
-    scenes: gameProject.scenes ?? [],
+    scenes:
+      authoredEpisodes.length > 0
+        ? getAllScenes(authoredEpisodes)
+        : normalizeScenes((gameProject as { scenes?: unknown }).scenes),
     regions
   });
-  const normalizedProject = normalizeGameProject({
-    ...gameProject,
-    scenes: migrated.scenes
-  });
+  const normalizedProject = normalizeGameProject(
+    authoredEpisodes.length > 0
+      ? { ...gameProject, episodes: authoredEpisodes }
+      : { ...gameProject, scenes: migrated.scenes }
+  );
   const normalizedContentLibrary = normalizeContentLibrarySnapshot(
     contentLibrary,
     normalizedProject.identity.id
   );
   const projectWithScenes: GameProject = {
     ...normalizedProject,
-    scenes: normalizeScenesForLoad(
-      normalizedProject.scenes,
-      normalizedContentLibrary
-    )
+    episodes: normalizedProject.episodes.map((episode) => ({
+      ...episode,
+      scenes: normalizeScenesForLoad(episode.scenes, normalizedContentLibrary)
+    }))
   };
   const regionMap = new Map<string, RegionDocument>();
   for (const region of migrated.regions) {
@@ -497,7 +530,7 @@ export function createAuthoringSession(
     contentLibrary: normalizedContentLibrary,
     regions: regionMap,
     activeRegionId: regions[0]?.identity.id ?? null,
-    activeSceneId: projectWithScenes.scenes[0]?.sceneId ?? null,
+    activeSceneId: getAllScenes(projectWithScenes.episodes)[0]?.sceneId ?? null,
     undoStack: [],
     redoStack: [],
     history: createEmptyHistory(),
@@ -748,11 +781,11 @@ function applyDeleteShaderGraphCommand(
   return {
     ...session,
     // Plan 058 §058.1 — scrub overlay-side references across
-    // EVERY Scene's overlays (base-side scrub is in `regions`
-    // below).
+    // EVERY Scene's overlays, in every Episode (base-side scrub is
+    // in `regions` below).
     gameProject: {
       ...session.gameProject,
-      scenes: session.gameProject.scenes.map((scene) => ({
+      episodes: mapScenes(session.gameProject.episodes, (scene) => ({
         ...scene,
         regionOverlays: Object.fromEntries(
           Object.entries(scene.regionOverlays).map(([regionId, overlay]) => [
@@ -2568,7 +2601,7 @@ export function applyCommand(
         ? session.gameProject
         : {
             ...session.gameProject,
-            scenes: session.gameProject.scenes.map((scene) =>
+            episodes: mapScenes(session.gameProject.episodes, (scene) =>
               scene.sceneId === result.scene.sceneId ? result.scene : scene
             )
           },
@@ -2653,39 +2686,95 @@ export function addRegionToSession(
 // addRegionToSession: structural mutations outside the semantic
 // command/undo stream) ---
 
-function withScenes(
+function withEpisodes(
   session: AuthoringSession,
-  scenes: Scene[]
+  episodes: Episode[]
 ): AuthoringSession {
   return {
     ...session,
-    gameProject: { ...session.gameProject, scenes },
+    gameProject: { ...session.gameProject, episodes },
     isDirty: true
   };
 }
 
-/** Append a new empty Scene (no overlays anywhere — base assets
- *  show through automatically) and make it active. */
+/** Rewrite one Episode's Scene list, leaving the others alone. */
+function withEpisodeScenes(
+  session: AuthoringSession,
+  episodeId: string,
+  scenes: Scene[]
+): AuthoringSession {
+  return withEpisodes(
+    session,
+    session.gameProject.episodes.map((episode) =>
+      episode.episodeId === episodeId ? { ...episode, scenes } : episode
+    )
+  );
+}
+
+/** Patch Episode metadata and its gate. Scene membership and
+ *  order are not patchable here — those move Scenes, which is
+ *  what the Scene CRUD below is for. */
+export function updateEpisodeInSession(
+  session: AuthoringSession,
+  episodeId: string,
+  patch: Partial<
+    Pick<
+      Episode,
+      "displayName" | "description" | "notes" | "unlockCondition" | "transitionConfig"
+    >
+  >
+): AuthoringSession {
+  if (
+    !session.gameProject.episodes.some(
+      (episode) => episode.episodeId === episodeId
+    )
+  ) {
+    return session;
+  }
+  return withEpisodes(
+    session,
+    session.gameProject.episodes.map((episode) =>
+      episode.episodeId === episodeId ? { ...episode, ...patch } : episode
+    )
+  );
+}
+
+/**
+ * Append a new empty Scene to the end of an Episode (no overlays
+ * anywhere — base assets show through automatically) and make it
+ * active. Appending IS the ordering: there is no order number to
+ * compute.
+ *
+ * Without an `episodeId` the Scene joins the Episode holding the
+ * active Scene, which is where an author working in the Scene
+ * selector expects it to land.
+ */
 export function addSceneToSession(
   session: AuthoringSession,
-  options: { displayName: string }
+  options: { displayName: string; episodeId?: string }
 ): AuthoringSession {
-  const maxOrder = session.gameProject.scenes.reduce(
-    (max, scene) => Math.max(max, scene.sceneOrder),
-    -1
-  );
+  const episode = options.episodeId
+    ? session.gameProject.episodes.find(
+        (entry) => entry.episodeId === options.episodeId
+      )
+    : getActiveEpisode(session);
+  if (!episode) return session;
   const scene = createDefaultScene({
-    displayName: options.displayName.trim() || "Untitled Scene",
-    sceneOrder: maxOrder + 1
+    displayName: options.displayName.trim() || "Untitled Scene"
   });
   return {
-    ...withScenes(session, [...session.gameProject.scenes, scene]),
+    ...withEpisodeScenes(session, episode.episodeId, [
+      ...episode.scenes,
+      scene
+    ]),
     activeSceneId: scene.sceneId
   };
 }
 
-/** Patch Scene metadata + per-Scene overrides (Plan 058 §058.6 —
- *  the Scene properties panel writes through here). */
+/** Patch Scene metadata + per-Scene overrides (the Scene
+ *  properties panel writes through here). Order and the unlock
+ *  gate are not patchable: order is list position, and only an
+ *  Episode is gated. */
 export function updateSceneInSession(
   session: AuthoringSession,
   sceneId: string,
@@ -2695,7 +2784,6 @@ export function updateSceneInSession(
       | "displayName"
       | "description"
       | "notes"
-      | "unlockCondition"
       | "startingRegionId"
       | "environmentOverride"
       | "audioOverride"
@@ -2703,60 +2791,61 @@ export function updateSceneInSession(
     >
   >
 ): AuthoringSession {
-  if (!session.gameProject.scenes.some((scene) => scene.sceneId === sceneId)) {
-    return session;
-  }
-  return withScenes(
+  if (!findSceneById(session.gameProject.episodes, sceneId)) return session;
+  return withEpisodes(
     session,
-    session.gameProject.scenes.map((scene) =>
+    mapScenes(session.gameProject.episodes, (scene) =>
       scene.sceneId === sceneId ? { ...scene, ...patch } : scene
     )
   );
 }
 
 /** Delete a Scene and its overlays. Refuses to delete the last
- *  Scene (a project always has >= 1); the active pointer moves to
- *  the first remaining Scene. Destructive — the caller confirms. */
+ *  Scene in the project (a project always has >= 1); the
+ *  remaining Scenes close the gap, and the active pointer moves to
+ *  the first one left. Destructive — the caller confirms. */
 export function deleteSceneFromSession(
   session: AuthoringSession,
   sceneId: string
 ): AuthoringSession {
-  const scenes = session.gameProject.scenes;
-  if (scenes.length <= 1) return session;
-  const remaining = scenes.filter((scene) => scene.sceneId !== sceneId);
-  if (remaining.length === scenes.length) return session;
+  const episodes = session.gameProject.episodes;
+  if (getAllScenes(episodes).length <= 1) return session;
+  const owner = findEpisodeBySceneId(episodes, sceneId);
+  if (!owner) return session;
+  const remaining = owner.scenes.filter((scene) => scene.sceneId !== sceneId);
+  const next = withEpisodeScenes(session, owner.episodeId, remaining);
   return {
-    ...withScenes(session, remaining),
+    ...next,
     activeSceneId:
       session.activeSceneId === sceneId
-        ? remaining[0]?.sceneId ?? null
+        ? getAllScenes(next.gameProject.episodes)[0]?.sceneId ?? null
         : session.activeSceneId
   };
 }
 
-/** Swap a Scene one step up/down the narrative order. */
+/**
+ * Move a Scene one step up or down inside its Episode. Moving the
+ * entry IS the reorder — nothing is renumbered afterwards, so
+ * there is no second copy of the order to keep in step.
+ *
+ * A Scene at the edge of its Episode does not hop into the
+ * neighbouring one; moving between Episodes is its own operation.
+ */
 export function reorderSceneInSession(
   session: AuthoringSession,
   sceneId: string,
   direction: "up" | "down"
 ): AuthoringSession {
-  const scenes = [...session.gameProject.scenes].sort(
-    (left, right) => left.sceneOrder - right.sceneOrder
-  );
+  const owner = findEpisodeBySceneId(session.gameProject.episodes, sceneId);
+  if (!owner) return session;
+  const scenes = [...owner.scenes];
   const index = scenes.findIndex((scene) => scene.sceneId === sceneId);
   const targetIndex = direction === "up" ? index - 1 : index + 1;
   if (index < 0 || targetIndex < 0 || targetIndex >= scenes.length) {
     return session;
   }
-  const reordered = [...scenes];
-  [reordered[index], reordered[targetIndex]] = [
-    reordered[targetIndex]!,
-    reordered[index]!
-  ];
-  return withScenes(
-    session,
-    reordered.map((scene, order) => ({ ...scene, sceneOrder: order }))
-  );
+  [scenes[index], scenes[targetIndex]] = [scenes[targetIndex]!, scenes[index]!];
+  return withEpisodeScenes(session, owner.episodeId, scenes);
 }
 
 /**
@@ -2806,7 +2895,7 @@ export function convertAssetScopeInSession(
       : [...region.placedAssets, moved]
   });
 
-  const newScenes = session.gameProject.scenes.map((scene) => {
+  const newEpisodes = mapScenes(session.gameProject.episodes, (scene) => {
     if (scene.sceneId !== activeScene.sceneId) return scene;
     const current =
       scene.regionOverlays[options.regionId] ?? createRegionSceneOverlay();
@@ -2827,7 +2916,7 @@ export function convertAssetScopeInSession(
   });
 
   return {
-    ...withScenes(session, newScenes),
+    ...withEpisodes(session, newEpisodes),
     regions: newRegions
   };
 }
@@ -2848,11 +2937,13 @@ export function copyOverlayEntryToScene(
   }
 ): AuthoringSession {
   if (options.fromSceneId === options.toSceneId) return session;
-  const fromScene = session.gameProject.scenes.find(
-    (scene) => scene.sceneId === options.fromSceneId
+  const fromScene = findSceneById(
+    session.gameProject.episodes,
+    options.fromSceneId
   );
-  const toScene = session.gameProject.scenes.find(
-    (scene) => scene.sceneId === options.toSceneId
+  const toScene = findSceneById(
+    session.gameProject.episodes,
+    options.toSceneId
   );
   const fromOverlay = fromScene?.regionOverlays[options.regionId];
   if (!fromScene || !toScene || !fromOverlay) return session;
@@ -2922,9 +3013,9 @@ export function copyOverlayEntryToScene(
   }
 
   if (!nextTarget) return session;
-  return withScenes(
+  return withEpisodes(
     session,
-    session.gameProject.scenes.map((scene) =>
+    mapScenes(session.gameProject.episodes, (scene) =>
       scene.sceneId === options.toSceneId
         ? {
             ...scene,
@@ -4005,7 +4096,7 @@ export function assetDefinitionHasSceneReferences(
     )
   );
   if (inBase) return true;
-  return session.gameProject.scenes.some((scene) =>
+  return getAllScenes(session.gameProject.episodes).some((scene) =>
     Object.values(scene.regionOverlays).some((overlay) =>
       overlay.placedAssets.some(
         (asset) => asset.assetDefinitionId === definitionId

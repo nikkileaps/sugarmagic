@@ -3,8 +3,10 @@
  *
  * Purpose: Plan 059 §059.4 — the built-in Episodes screen: one
  * card per Scene showing title, synopsis, and progress state
- * (completed / current frontier / unlocked / locked). Forward-
- * only v1: only the frontier card is enterable ("Continue");
+ * (completed / current frontier / unlocked / locked). A card's
+ * locked/unlocked state comes from the gate on the Episode that
+ * owns the Scene — Scenes themselves are ordered, not gated.
+ * Forward-only v1: only the frontier card is enterable ("Continue");
  * completed cards render their state but are not clickable —
  * that affordance is reserved for the future sandbox replay mode
  * (Plan 059 central tension).
@@ -24,8 +26,6 @@ import type { JSX } from "react";
 export type EpisodeCardStatus = "completed" | "current" | "unlocked" | "locked";
 
 export interface EpisodesViewModel {
-  /** Player-facing label for Scenes ("Scene" / "Chapter" / ...). */
-  scenesUiLabel: string;
   entries: Array<{
     sceneId: string;
     displayName: string;
@@ -72,7 +72,7 @@ export function EpisodesScreen(props: {
           opacity: 0.7
         }}
       >
-        {episodes.scenesUiLabel}s
+        Episodes
       </div>
       <div
         style={{

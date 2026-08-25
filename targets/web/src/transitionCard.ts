@@ -1,33 +1,30 @@
 /**
- * targets/web/src/sceneTransitionCard.ts
+ * targets/web/src/transitionCard.ts
  *
- * Purpose: Plan 058 §058.5 — the player-facing Scene transition
- * title card ("CHAPTER 3: THE RECKONING"). Rendered by the host
- * when a quest action advances the campaign into a Scene that
- * carries a `transitionConfig`; a null config is a hard cut (no
- * card).
+ * Purpose: the player-facing transition title card ("CHAPTER 3:
+ * THE RECKONING"). Rendered by the host when the campaign advances
+ * into something carrying a `transitionConfig` — an Episode's
+ * chapter card or a Scene's between-Scenes cut, same shape either
+ * way. A null config is a hard cut (no card).
  *
  * Plain DOM on purpose: the card renders over a world that is
- * about to be torn down by the Scene-change reload, so it must
- * not depend on the React UI layer's lifecycle. The full-viewport
- * overlay also blocks pointer/keyboard focus for its duration,
- * which is the "block player input during the animation" rule.
- *
- * Implements: Plan 058 §058.5
+ * about to be torn down by the reload, so it must not depend on
+ * the React UI layer's lifecycle. The full-viewport overlay also
+ * blocks pointer/keyboard focus for its duration, which is the
+ * "block player input during the animation" rule.
  *
  * Status: active
  */
 
-import type { SceneTransitionConfig } from "@sugarmagic/domain";
+import type { TransitionConfig } from "@sugarmagic/domain";
 
 /**
- * Plan 058 §058.6 — these styling constants are EXPORTED so
- * Studio's Scene properties panel renders its static card
- * preview from the same source; preview and runtime card can't
+ * These styling constants are EXPORTED so Studio's card preview
+ * renders from the same source as the runtime card; the two can't
  * drift apart.
  */
-export const SCENE_CARD_FADE_BACKGROUNDS: Record<
-  SceneTransitionConfig["fadeStyle"],
+export const TRANSITION_CARD_FADE_BACKGROUNDS: Record<
+  TransitionConfig["fadeStyle"],
   string
 > = {
   black: "#000000",
@@ -37,8 +34,8 @@ export const SCENE_CARD_FADE_BACKGROUNDS: Record<
   cross: "rgba(0, 0, 0, 0.72)"
 };
 
-export const SCENE_CARD_FADE_TEXT_COLORS: Record<
-  SceneTransitionConfig["fadeStyle"],
+export const TRANSITION_CARD_FADE_TEXT_COLORS: Record<
+  TransitionConfig["fadeStyle"],
   string
 > = {
   black: "#f5f0e8",
@@ -46,7 +43,7 @@ export const SCENE_CARD_FADE_TEXT_COLORS: Record<
   cross: "#f5f0e8"
 };
 
-export const SCENE_CARD_FONT_FAMILY =
+export const TRANSITION_CARD_FONT_FAMILY =
   "Georgia, 'Times New Roman', serif";
 
 /**
@@ -61,7 +58,7 @@ export const SCENE_CARD_FONT_FAMILY =
  * Plan 059 §059.3 — the ENTRY title sequence, played over a
  * freshly booted Scene (doubles as a loading mask): game title
  * card, then the Scene's own title card, each fading in, holding,
- * fading out. Unlike `showSceneTransitionCard` the overlays are
+ * fading out. Unlike `showTransitionCard` the overlays are
  * REMOVED on completion — gameplay continues underneath in the
  * same document. Resolves when the sequence has fully cleared.
  */
@@ -69,7 +66,7 @@ export async function showEntryTitleSequence(
   ownerDocument: Document,
   options: {
     gameTitle: string | null;
-    sceneCard: SceneTransitionConfig | null;
+    sceneCard: TransitionConfig | null;
   }
 ): Promise<void> {
   if (options.gameTitle) {
@@ -89,7 +86,7 @@ const CARD_FADE_MS = 400;
 
 function playRemovableCard(
   ownerDocument: Document,
-  config: SceneTransitionConfig
+  config: TransitionConfig
 ): Promise<void> {
   const overlay = buildCardOverlay(ownerDocument, config);
   ownerDocument.body.appendChild(overlay);
@@ -109,7 +106,7 @@ function playRemovableCard(
 
 function buildCardOverlay(
   ownerDocument: Document,
-  config: SceneTransitionConfig
+  config: TransitionConfig
 ): HTMLDivElement {
   const overlay = ownerDocument.createElement("div");
   overlay.setAttribute("data-scene-transition-card", "");
@@ -122,12 +119,12 @@ function buildCardOverlay(
     "align-items: center",
     "justify-content: center",
     "gap: 12px",
-    `background: ${SCENE_CARD_FADE_BACKGROUNDS[config.fadeStyle]}`,
+    `background: ${TRANSITION_CARD_FADE_BACKGROUNDS[config.fadeStyle]}`,
     "opacity: 0",
     `transition: opacity ${CARD_FADE_MS}ms ease-in-out`,
     "pointer-events: all",
     "user-select: none",
-    `font-family: ${SCENE_CARD_FONT_FAMILY}`,
+    `font-family: ${TRANSITION_CARD_FONT_FAMILY}`,
     "text-align: center",
     "padding: 24px"
   ].join(";");
@@ -135,7 +132,7 @@ function buildCardOverlay(
   const title = ownerDocument.createElement("div");
   title.textContent = config.titleText;
   title.style.cssText = [
-    `color: ${SCENE_CARD_FADE_TEXT_COLORS[config.fadeStyle]}`,
+    `color: ${TRANSITION_CARD_FADE_TEXT_COLORS[config.fadeStyle]}`,
     "font-size: clamp(28px, 5vw, 56px)",
     "letter-spacing: 0.12em",
     "text-transform: uppercase"
@@ -146,7 +143,7 @@ function buildCardOverlay(
     const subtitle = ownerDocument.createElement("div");
     subtitle.textContent = config.subtitleText;
     subtitle.style.cssText = [
-      `color: ${SCENE_CARD_FADE_TEXT_COLORS[config.fadeStyle]}`,
+      `color: ${TRANSITION_CARD_FADE_TEXT_COLORS[config.fadeStyle]}`,
       "font-size: clamp(14px, 2vw, 22px)",
       "letter-spacing: 0.3em",
       "opacity: 0.75",
@@ -160,9 +157,9 @@ function buildCardOverlay(
   return overlay;
 }
 
-export function showSceneTransitionCard(
+export function showTransitionCard(
   ownerDocument: Document,
-  config: SceneTransitionConfig
+  config: TransitionConfig
 ): Promise<void> {
   const overlay = buildCardOverlay(ownerDocument, config);
   ownerDocument.body.appendChild(overlay);

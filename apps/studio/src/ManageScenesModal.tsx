@@ -32,23 +32,23 @@ import {
   TextInput
 } from "@mantine/core";
 import type {
+  Episode,
+  EpisodeUnlockCondition,
   QuestDefinition,
   Scene,
-  SceneTransitionConfig,
-  SceneUnlockCondition
+  TransitionConfig
 } from "@sugarmagic/domain";
 import {
-  SCENE_CARD_FADE_BACKGROUNDS,
-  SCENE_CARD_FADE_TEXT_COLORS,
-  SCENE_CARD_FONT_FAMILY
+  TRANSITION_CARD_FADE_BACKGROUNDS,
+  TRANSITION_CARD_FADE_TEXT_COLORS,
+  TRANSITION_CARD_FONT_FAMILY
 } from "@sugarmagic/target-web";
 
 export interface ManageScenesModalProps {
   opened: boolean;
   onClose: () => void;
-  scenes: Scene[];
+  episodes: Episode[];
   activeSceneId: string | null;
-  scenesUiLabel: string;
   questDefinitions: QuestDefinition[];
   environmentDefinitions: { definitionId: string; displayName: string }[];
   /** Region options for the per-Scene starting region. */
@@ -64,7 +64,6 @@ export interface ManageScenesModalProps {
         Scene,
         | "description"
         | "notes"
-        | "unlockCondition"
         | "startingRegionId"
         | "environmentOverride"
         | "audioOverride"
@@ -75,11 +74,18 @@ export interface ManageScenesModalProps {
   onDeleteScene: (sceneId: string) => void;
   onReorderScene: (sceneId: string, direction: "up" | "down") => void;
   onSelectScene: (sceneId: string) => void;
+  /** The gate belongs to the Episode, not the Scene. Editing it
+   *  from here is a placeholder until story 2 gives Episodes
+   *  their own authoring surface. */
+  onUpdateEpisode: (
+    episodeId: string,
+    patch: Partial<Pick<Episode, "unlockCondition">>
+  ) => void;
 }
 
 type UnlockKind = "always" | "manual" | "questComplete" | "wallClock";
 
-function unlockKindOf(condition: SceneUnlockCondition): UnlockKind {
+function unlockKindOf(condition: EpisodeUnlockCondition): UnlockKind {
   return condition === "always" ? "always" : condition.kind;
 }
 
@@ -96,16 +102,15 @@ function isoToLocalInputValue(iso: string): string {
   );
 }
 
-const DEFAULT_CARD_FADE: SceneTransitionConfig["fadeStyle"] = "black";
+const DEFAULT_CARD_FADE: TransitionConfig["fadeStyle"] = "black";
 const DEFAULT_CARD_DURATION_MS = 2500;
 
 export function ManageScenesModal(props: ManageScenesModalProps) {
   const {
     opened,
     onClose,
-    scenes,
+    episodes,
     activeSceneId,
-    scenesUiLabel,
     questDefinitions,
     environmentDefinitions,
     regions,
@@ -115,17 +120,29 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
     onUpdateScene,
     onDeleteScene,
     onReorderScene,
-    onSelectScene
+    onSelectScene,
+    onUpdateEpisode
   } = props;
   const [newSceneName, setNewSceneName] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [renameDrafts, setRenameDrafts] = useState<Record<string, string>>({});
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
 
+  const scenes = episodes.flatMap((episode) => episode.scenes);
   const selectedScene =
     scenes.find((scene) => scene.sceneId === selectedSceneId) ??
     scenes.find((scene) => scene.sceneId === activeSceneId) ??
     scenes[0] ??
+    null;
+  /** The Episode holding the selected Scene — the gate below
+   *  belongs to it. */
+  const selectedEpisode =
+    episodes.find((episode) =>
+      episode.scenes.some(
+        (scene) => scene.sceneId === selectedScene?.sceneId
+      )
+    ) ??
+    episodes[0] ??
     null;
 
   const commitRename = (scene: Scene) => {
@@ -151,10 +168,10 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
   // domain normalizer, which drops titleless configs on load).
   const commitTransition = (
     scene: Scene,
-    patch: Partial<SceneTransitionConfig>
+    patch: Partial<TransitionConfig>
   ) => {
     const current = scene.transitionConfig;
-    const next: SceneTransitionConfig = {
+    const next: TransitionConfig = {
       titleText: patch.titleText ?? current?.titleText ?? "",
       subtitleText:
         patch.subtitleText !== undefined
@@ -183,7 +200,7 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
         setPendingDeleteId(null);
         onClose();
       }}
-      title={`Manage ${scenesUiLabel}s`}
+      title="Manage Scenes"
       centered
       size="62rem"
       styles={{
@@ -298,8 +315,8 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
                     onClick={() => setPendingDeleteId(scene.sceneId)}
                     title={
                       scenes.length <= 1
-                        ? `A project always has at least one ${scenesUiLabel}`
-                        : `Delete this ${scenesUiLabel} and its placements`
+                        ? "A project always has at least one Scene"
+                        : "Delete this Scene and its placements"
                     }
                   >
                     🗑
@@ -322,7 +339,7 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
             <TextInput
               size="xs"
               style={{ flex: 1 }}
-              placeholder={`New ${scenesUiLabel} name`}
+              placeholder="New Scene name"
               value={newSceneName}
               onChange={(event) => setNewSceneName(event.currentTarget.value)}
               onKeyDown={(event) => {
@@ -334,13 +351,13 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
               onClick={submitNewScene}
               disabled={!newSceneName.trim()}
             >
-              + Add {scenesUiLabel}
+              + Add Scene
             </Button>
           </Group>
           <Text size="xs" c="var(--sm-color-overlay0)">
-            Deleting a {scenesUiLabel} removes its placements (NPCs, items,
-            player spawns, {scenesUiLabel}-scoped assets) in every region.
-            Base assets are unaffected.
+            Deleting a Scene removes its placements (NPCs, items, player
+            spawns, Scene-scoped assets) in every region. Base assets are
+            unaffected.
           </Text>
         </Stack>
 
@@ -384,90 +401,100 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
               }
               {...fieldLabelProps}
             />
-            <Select
-              size="xs"
-              label="Unlock condition"
-              data={[
-                { value: "always", label: "Always unlocked" },
-                { value: "manual", label: "Unlocked by a quest action" },
-                { value: "questComplete", label: "When a quest completes" },
-                { value: "wallClock", label: "At a scheduled time" }
-              ]}
-              value={unlockKindOf(selectedScene.unlockCondition)}
-              onChange={(value) => {
-                if (!value) return;
-                const kind = value as UnlockKind;
-                const unlockCondition: SceneUnlockCondition =
-                  kind === "always"
-                    ? "always"
-                    : kind === "manual"
-                      ? { kind: "manual" }
-                      : kind === "questComplete"
-                        ? {
-                            kind: "questComplete",
-                            questDefinitionId:
-                              questDefinitions[0]?.definitionId ?? ""
-                          }
-                        : {
-                            kind: "wallClock",
-                            unlockAtIso: new Date().toISOString()
-                          };
-                onUpdateScene(selectedScene.sceneId, { unlockCondition });
-              }}
-              {...fieldLabelProps}
-            />
-            {unlockKindOf(selectedScene.unlockCondition) ===
-              "questComplete" && (
-              <Select
-                size="xs"
-                label="Quest"
-                data={questDefinitions.map((quest) => ({
-                  value: quest.definitionId,
-                  label: quest.displayName
-                }))}
-                value={
-                  selectedScene.unlockCondition !== "always" &&
-                  selectedScene.unlockCondition.kind === "questComplete"
-                    ? selectedScene.unlockCondition.questDefinitionId
-                    : null
-                }
-                onChange={(value) => {
-                  if (!value) return;
-                  onUpdateScene(selectedScene.sceneId, {
-                    unlockCondition: {
-                      kind: "questComplete",
-                      questDefinitionId: value
+            {selectedEpisode && (
+              <>
+                <Select
+                  size="xs"
+                  label={`Episode "${selectedEpisode.displayName}" unlocks`}
+                  data={[
+                    { value: "always", label: "Always unlocked" },
+                    { value: "manual", label: "Unlocked by a quest action" },
+                    {
+                      value: "questComplete",
+                      label: "When a quest completes"
+                    },
+                    { value: "wallClock", label: "At a scheduled time" }
+                  ]}
+                  value={unlockKindOf(selectedEpisode.unlockCondition)}
+                  onChange={(value) => {
+                    if (!value) return;
+                    const kind = value as UnlockKind;
+                    const unlockCondition: EpisodeUnlockCondition =
+                      kind === "always"
+                        ? "always"
+                        : kind === "manual"
+                          ? { kind: "manual" }
+                          : kind === "questComplete"
+                            ? {
+                                kind: "questComplete",
+                                questDefinitionId:
+                                  questDefinitions[0]?.definitionId ?? ""
+                              }
+                            : {
+                                kind: "wallClock",
+                                unlockAtIso: new Date().toISOString()
+                              };
+                    onUpdateEpisode(selectedEpisode.episodeId, {
+                      unlockCondition
+                    });
+                  }}
+                  {...fieldLabelProps}
+                />
+                {unlockKindOf(selectedEpisode.unlockCondition) ===
+                  "questComplete" && (
+                  <Select
+                    size="xs"
+                    label="Quest"
+                    data={questDefinitions.map((quest) => ({
+                      value: quest.definitionId,
+                      label: quest.displayName
+                    }))}
+                    value={
+                      selectedEpisode.unlockCondition !== "always" &&
+                      selectedEpisode.unlockCondition.kind === "questComplete"
+                        ? selectedEpisode.unlockCondition.questDefinitionId
+                        : null
                     }
-                  });
-                }}
-                {...fieldLabelProps}
-              />
-            )}
-            {unlockKindOf(selectedScene.unlockCondition) === "wallClock" && (
-              <TextInput
-                size="xs"
-                label="Unlocks at"
-                type="datetime-local"
-                value={
-                  selectedScene.unlockCondition !== "always" &&
-                  selectedScene.unlockCondition.kind === "wallClock"
-                    ? isoToLocalInputValue(
-                        selectedScene.unlockCondition.unlockAtIso
-                      )
-                    : ""
-                }
-                onChange={(event) => {
-                  const parsed = new Date(event.currentTarget.value);
-                  if (Number.isNaN(parsed.getTime())) return;
-                  onUpdateScene(selectedScene.sceneId, {
-                    unlockCondition: {
-                      kind: "wallClock",
-                      unlockAtIso: parsed.toISOString()
+                    onChange={(value) => {
+                      if (!value) return;
+                      onUpdateEpisode(selectedEpisode.episodeId, {
+                        unlockCondition: {
+                          kind: "questComplete",
+                          questDefinitionId: value
+                        }
+                      });
+                    }}
+                    {...fieldLabelProps}
+                  />
+                )}
+                {unlockKindOf(selectedEpisode.unlockCondition) ===
+                  "wallClock" && (
+                  <TextInput
+                    size="xs"
+                    label="Unlocks at"
+                    type="datetime-local"
+                    value={
+                      selectedEpisode.unlockCondition !== "always" &&
+                      selectedEpisode.unlockCondition.kind === "wallClock"
+                        ? isoToLocalInputValue(
+                            selectedEpisode.unlockCondition.unlockAtIso
+                          )
+                        : ""
                     }
-                  });
-                }}
-                {...fieldLabelProps}
-              />
+                    onChange={(event) => {
+                      const parsed = new Date(event.currentTarget.value);
+                      if (Number.isNaN(parsed.getTime())) return;
+                      onUpdateEpisode(selectedEpisode.episodeId, {
+                        unlockCondition: {
+                          kind: "wallClock",
+                          unlockAtIso: parsed.toISOString()
+                        }
+                      });
+                    }}
+                    {...fieldLabelProps}
+                  />
+                )}
+              </>
             )}
             <Select
               size="xs"
@@ -588,7 +615,7 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
                 onChange={(value) => {
                   if (!value) return;
                   commitTransition(selectedScene, {
-                    fadeStyle: value as SceneTransitionConfig["fadeStyle"]
+                    fadeStyle: value as TransitionConfig["fadeStyle"]
                   });
                 }}
                 {...fieldLabelProps}
@@ -624,10 +651,10 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
                   borderRadius: 8,
                   border: "1px solid var(--sm-panel-border)",
                   background:
-                    SCENE_CARD_FADE_BACKGROUNDS[
+                    TRANSITION_CARD_FADE_BACKGROUNDS[
                       selectedScene.transitionConfig.fadeStyle
                     ],
-                  fontFamily: SCENE_CARD_FONT_FAMILY,
+                  fontFamily: TRANSITION_CARD_FONT_FAMILY,
                   textAlign: "center",
                   padding: 12,
                   userSelect: "none"
@@ -636,7 +663,7 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
                 <div
                   style={{
                     color:
-                      SCENE_CARD_FADE_TEXT_COLORS[
+                      TRANSITION_CARD_FADE_TEXT_COLORS[
                         selectedScene.transitionConfig.fadeStyle
                       ],
                     fontSize: 26,
@@ -650,7 +677,7 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
                   <div
                     style={{
                       color:
-                        SCENE_CARD_FADE_TEXT_COLORS[
+                        TRANSITION_CARD_FADE_TEXT_COLORS[
                           selectedScene.transitionConfig.fadeStyle
                         ],
                       fontSize: 12,

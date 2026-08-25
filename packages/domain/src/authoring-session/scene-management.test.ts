@@ -28,8 +28,15 @@ import {
   createDefaultRegion,
   createPlacedAssetInstance,
   createRegionNPCPresence,
+  getAllScenes,
+  mapScenes,
   type AuthoringSession
 } from "../index";
+
+/** Every Scene in the session, flattened across Episodes. */
+function scenesOf(session: AuthoringSession) {
+  return getAllScenes(session.gameProject.episodes);
+}
 
 function makeSession(): AuthoringSession {
   const session = createAuthoringSession(
@@ -58,33 +65,35 @@ describe("Scene CRUD", () => {
     const session = addSceneToSession(makeSession(), {
       displayName: "Scene 2"
     });
-    expect(session.gameProject.scenes).toHaveLength(2);
-    const added = session.gameProject.scenes[1]!;
+    expect(scenesOf(session)).toHaveLength(2);
+    const added = scenesOf(session)[1]!;
     expect(added.displayName).toBe("Scene 2");
     expect(added.regionOverlays).toEqual({});
-    expect(added.sceneOrder).toBeGreaterThan(
-      session.gameProject.scenes[0]!.sceneOrder
-    );
+    // Appending IS the ordering — the new Scene lands last in its
+    // Episode, with no order number to compute.
+    expect(session.gameProject.episodes).toHaveLength(1);
+    expect(
+      session.gameProject.episodes[0]!.scenes.map((scene) => scene.displayName)
+    ).toEqual(["Scene 1", "Scene 2"]);
     expect(session.activeSceneId).toBe(added.sceneId);
     expect(session.isDirty).toBe(true);
   });
 
   it("renames a Scene", () => {
     let session = makeSession();
-    const sceneId = session.gameProject.scenes[0]!.sceneId;
+    const sceneId = scenesOf(session)[0]!.sceneId;
     session = updateSceneInSession(session, sceneId, {
       displayName: "The Founding"
     });
-    expect(session.gameProject.scenes[0]!.displayName).toBe("The Founding");
+    expect(scenesOf(session)[0]!.displayName).toBe("The Founding");
   });
 
   it("patches per-Scene properties (Plan 058 §058.6 panel fields)", () => {
     let session = makeSession();
-    const sceneId = session.gameProject.scenes[0]!.sceneId;
+    const sceneId = scenesOf(session)[0]!.sceneId;
     session = updateSceneInSession(session, sceneId, {
       description: "The player arrives at the station.",
       notes: "TODO: rain",
-      unlockCondition: { kind: "questComplete", questDefinitionId: "q:1" },
       environmentOverride: { environmentId: "env:twilight" },
       transitionConfig: {
         titleText: "SCENE 1",
@@ -93,13 +102,9 @@ describe("Scene CRUD", () => {
         fadeStyle: "cross"
       }
     });
-    const scene = session.gameProject.scenes[0]!;
+    const scene = scenesOf(session)[0]!;
     expect(scene.description).toBe("The player arrives at the station.");
     expect(scene.notes).toBe("TODO: rain");
-    expect(scene.unlockCondition).toEqual({
-      kind: "questComplete",
-      questDefinitionId: "q:1"
-    });
     expect(scene.environmentOverride).toEqual({
       environmentId: "env:twilight"
     });
@@ -109,13 +114,13 @@ describe("Scene CRUD", () => {
       environmentOverride: null,
       transitionConfig: null
     });
-    expect(session.gameProject.scenes[0]!.environmentOverride).toBeNull();
-    expect(session.gameProject.scenes[0]!.transitionConfig).toBeNull();
+    expect(scenesOf(session)[0]!.environmentOverride).toBeNull();
+    expect(scenesOf(session)[0]!.transitionConfig).toBeNull();
   });
 
   it("refuses to delete the last Scene", () => {
     const session = makeSession();
-    const sceneId = session.gameProject.scenes[0]!.sceneId;
+    const sceneId = scenesOf(session)[0]!.sceneId;
     expect(deleteSceneFromSession(session, sceneId)).toBe(session);
   });
 
@@ -123,24 +128,34 @@ describe("Scene CRUD", () => {
     let session = addSceneToSession(makeSession(), { displayName: "Scene 2" });
     const secondId = session.activeSceneId!;
     session = deleteSceneFromSession(session, secondId);
-    expect(session.gameProject.scenes).toHaveLength(1);
-    expect(session.activeSceneId).toBe(session.gameProject.scenes[0]!.sceneId);
+    expect(scenesOf(session)).toHaveLength(1);
+    expect(session.activeSceneId).toBe(scenesOf(session)[0]!.sceneId);
   });
 
-  it("reorders Scenes by swapping and renumbering", () => {
+  it("reorders Scenes by moving the entry, with nothing to renumber", () => {
     let session = addSceneToSession(makeSession(), { displayName: "Scene 2" });
-    const [first, second] = session.gameProject.scenes;
+    const [first, second] = scenesOf(session);
     session = reorderSceneInSession(session, second!.sceneId, "up");
+    expect(scenesOf(session).map((scene) => scene.sceneId)).toEqual([
+      second!.sceneId,
+      first!.sceneId
+    ]);
+    // No-op at the boundary — a Scene does not hop into a
+    // neighbouring Episode.
     expect(
-      session.gameProject.scenes.map((scene) => scene.sceneId)
-    ).toEqual([second!.sceneId, first!.sceneId]);
-    expect(session.gameProject.scenes.map((scene) => scene.sceneOrder)).toEqual(
-      [0, 1]
-    );
-    // No-op at the boundary.
-    expect(
-      reorderSceneInSession(session, second!.sceneId, "up").gameProject.scenes
-    ).toEqual(session.gameProject.scenes);
+      scenesOf(reorderSceneInSession(session, second!.sceneId, "up"))
+    ).toEqual(scenesOf(session));
+  });
+
+  it("deleting the middle Scene leaves the rest contiguous", () => {
+    let session = addSceneToSession(makeSession(), { displayName: "Scene 2" });
+    session = addSceneToSession(session, { displayName: "Scene 3" });
+    const middleId = scenesOf(session)[1]!.sceneId;
+    session = deleteSceneFromSession(session, middleId);
+    expect(scenesOf(session).map((scene) => scene.displayName)).toEqual([
+      "Scene 1",
+      "Scene 3"
+    ]);
   });
 });
 
@@ -225,13 +240,13 @@ describe("scope conversion", () => {
 describe("cross-Scene copy", () => {
   it("copies an NPC presence into another Scene with a fresh id", () => {
     let session = makeSession();
-    const sceneOneId = session.gameProject.scenes[0]!.sceneId;
+    const sceneOneId = scenesOf(session)[0]!.sceneId;
     // Seed an NPC presence in Scene 1's overlay.
     session = {
       ...session,
       gameProject: {
         ...session.gameProject,
-        scenes: session.gameProject.scenes.map((scene) => ({
+        episodes: mapScenes(session.gameProject.episodes, (scene) => ({
           ...scene,
           regionOverlays: {
             "region:town": {
@@ -267,7 +282,7 @@ describe("cross-Scene copy", () => {
       id: "npc:testy"
     });
 
-    const sceneTwo = session.gameProject.scenes.find(
+    const sceneTwo = scenesOf(session).find(
       (scene) => scene.sceneId === sceneTwoId
     )!;
     const copied = sceneTwo.regionOverlays["region:town"]!.npcPresences[0]!;
@@ -275,7 +290,7 @@ describe("cross-Scene copy", () => {
     expect(copied.transform.position).toEqual([3, 0, 3]);
     expect(copied.presenceId).not.toBe("npc:testy");
     // Source untouched.
-    const sceneOne = session.gameProject.scenes.find(
+    const sceneOne = scenesOf(session).find(
       (scene) => scene.sceneId === sceneOneId
     )!;
     expect(
@@ -285,12 +300,12 @@ describe("cross-Scene copy", () => {
 
   it("never clobbers an existing player spawn in the destination", () => {
     let session = makeSession();
-    const sceneOneId = session.gameProject.scenes[0]!.sceneId;
+    const sceneOneId = scenesOf(session)[0]!.sceneId;
     session = {
       ...session,
       gameProject: {
         ...session.gameProject,
-        scenes: session.gameProject.scenes.map((scene) => ({
+        episodes: mapScenes(session.gameProject.episodes, (scene) => ({
           ...scene,
           regionOverlays: {
             "region:town": {
@@ -322,7 +337,7 @@ describe("cross-Scene copy", () => {
       kind: "player",
       id: "player:1"
     });
-    const firstCopy = session.gameProject.scenes.find(
+    const firstCopy = scenesOf(session).find(
       (scene) => scene.sceneId === sceneTwoId
     )!.regionOverlays["region:town"]!.playerPresence;
     expect(firstCopy).not.toBeNull();
@@ -335,19 +350,19 @@ describe("cross-Scene copy", () => {
       id: "player:1"
     });
     expect(
-      again.gameProject.scenes.find((scene) => scene.sceneId === sceneTwoId)!
+      scenesOf(again).find((scene) => scene.sceneId === sceneTwoId)!
         .regionOverlays["region:town"]!.playerPresence
     ).toEqual(firstCopy);
   });
 
   it("switching Scenes shows different composed contents", () => {
     let session = makeSession();
-    const sceneOneId = session.gameProject.scenes[0]!.sceneId;
+    const sceneOneId = scenesOf(session)[0]!.sceneId;
     session = {
       ...session,
       gameProject: {
         ...session.gameProject,
-        scenes: session.gameProject.scenes.map((scene) => ({
+        episodes: mapScenes(session.gameProject.episodes, (scene) => ({
           ...scene,
           regionOverlays: {
             "region:town": {

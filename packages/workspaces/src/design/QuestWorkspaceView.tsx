@@ -57,7 +57,7 @@ import type {
   QuestNodeDefinition,
   QuestStageDefinition,
   RegionDocument,
-  Scene,
+  Episode,
   SoundCueDefinition,
   SpellDefinition,
   SemanticCommand
@@ -74,7 +74,8 @@ import {
   createDefaultQuestNodeDefinition,
   createDefaultQuestStageDefinition,
   createNodeGroup,
-  createQuestNodeId
+  createQuestNodeId,
+  getAllScenes
 } from "@sugarmagic/domain";
 import { AddNodeMenu, Inspector } from "@sugarmagic/ui";
 import { WorldFlagSelect } from "../world-flags";
@@ -133,7 +134,7 @@ export interface QuestWorkspaceViewProps {
   regions: RegionDocument[];
   /** Plan 058 §058.5 — Scene picker source for the
    *  unlockScene / advanceToNextScene action editors. */
-  scenes: Scene[];
+  episodes: Episode[];
   /** Cue picker source for the playCue action editor. */
   soundCueDefinitions: SoundCueDefinition[];
   dialogueDefinitions: DialogueDefinition[];
@@ -547,14 +548,14 @@ function QuestActionFields({
   action,
   itemDefinitions,
   npcDefinitions,
-  scenes,
+  episodes,
   soundCueDefinitions,
   onChange
 }: {
   action: QuestActionDefinition;
   itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
-  scenes: Scene[];
+  episodes: Episode[];
   soundCueDefinitions: SoundCueDefinition[];
   onChange: (action: QuestActionDefinition) => void;
 }) {
@@ -629,19 +630,30 @@ function QuestActionFields({
         </>
       );
 
-    case "unlockScene":
+    case "unlockEpisode":
+      return (
+        <Select
+          size="xs"
+          label="Episode"
+          clearable
+          placeholder="Pick an Episode"
+          data={episodes.map((episode) => ({
+            value: episode.episodeId,
+            label: episode.displayName
+          }))}
+          value={action.episodeId}
+          onChange={(value) => onChange({ ...action, episodeId: value })}
+        />
+      );
+
     case "advanceToNextScene":
       return (
         <Select
           size="xs"
           label="Scene"
           clearable
-          placeholder={
-            action.type === "advanceToNextScene"
-              ? "(next by order)"
-              : "Pick a Scene"
-          }
-          data={scenes.map((scene) => ({
+          placeholder="(next in this Episode)"
+          data={getAllScenes(episodes).map((scene) => ({
             value: scene.sceneId,
             label: scene.displayName
           }))}
@@ -795,7 +807,7 @@ function QuestActionsEditor({
   actions,
   itemDefinitions,
   npcDefinitions,
-  scenes,
+  episodes,
   soundCueDefinitions,
   onChange,
   label
@@ -803,7 +815,7 @@ function QuestActionsEditor({
   actions: QuestActionDefinition[];
   itemDefinitions: ItemDefinition[];
   npcDefinitions: NPCDefinition[];
-  scenes: Scene[];
+  episodes: Episode[];
   soundCueDefinitions: SoundCueDefinition[];
   onChange: (actions: QuestActionDefinition[]) => void;
   label: string;
@@ -879,7 +891,7 @@ function QuestActionsEditor({
                 action={action}
                 itemDefinitions={itemDefinitions}
                 npcDefinitions={npcDefinitions}
-                scenes={scenes}
+                episodes={episodes}
                 soundCueDefinitions={soundCueDefinitions}
                 onChange={(updated) => {
                   const next = [...actions];
@@ -900,7 +912,7 @@ export function useQuestWorkspaceView({
   gameProjectId,
   questDefinitions,
   regions,
-  scenes,
+  episodes,
   soundCueDefinitions,
   dialogueDefinitions,
   itemDefinitions,
@@ -1044,7 +1056,7 @@ export function useQuestWorkspaceView({
         questStageId: string | null;
       } | null;
     }> = [];
-    for (const scene of scenes) {
+    for (const scene of getAllScenes(episodes)) {
       for (const [regionId, overlay] of Object.entries(scene.regionOverlays)) {
         const region = regions.find((r) => r.identity.id === regionId);
         const regionDisplayName = region?.displayName ?? regionId;
@@ -1071,7 +1083,7 @@ export function useQuestWorkspaceView({
       }
     }
     return items;
-  }, [scenes, regions, npcDefinitions]);
+  }, [episodes, regions, npcDefinitions]);
 
   const handleToggleNPCPresence = useCallback(
     (
@@ -2460,7 +2472,7 @@ export function useQuestWorkspaceView({
               actions={selectedNode.onEnterActions}
               itemDefinitions={itemDefinitions}
               npcDefinitions={npcDefinitions}
-              scenes={scenes}
+              episodes={episodes}
               soundCueDefinitions={soundCueDefinitions}
               onChange={(onEnterActions) =>
                 updateNode({ ...selectedNode, onEnterActions })
@@ -2471,7 +2483,7 @@ export function useQuestWorkspaceView({
               actions={selectedNode.onCompleteActions}
               itemDefinitions={itemDefinitions}
               npcDefinitions={npcDefinitions}
-              scenes={scenes}
+              episodes={episodes}
               soundCueDefinitions={soundCueDefinitions}
               onChange={(onCompleteActions) =>
                 updateNode({ ...selectedNode, onCompleteActions })

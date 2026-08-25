@@ -100,11 +100,13 @@ export type QuestActionDefinition =
   | { type: "emitEvent"; eventName: string }
   | { type: "giveItem"; itemDefinitionId: string | null; count: number }
   | { type: "removeItem"; itemDefinitionId: string | null; count: number }
-  // Plan 058 §058.5 -- Scene progression. `unlockScene` adds the Scene to
-  // campaign.progression's manual unlocks; `advanceToNextScene` completes the
+  // Campaign progression. `unlockEpisode` opens an Episode's gate by adding
+  // it to campaign.progression's manual unlocks -- Episodes are gated, Scenes
+  // are not, so there is no unlockScene. `advanceToNextScene` completes the
   // current Scene and moves the player into `sceneId`, or into the next Scene
-  // by order when it is null.
-  | { type: "unlockScene"; sceneId: string | null }
+  // of the current Episode when it is null; running off the end of an Episode
+  // is the Episode boundary, where credits roll.
+  | { type: "unlockEpisode"; episodeId: string | null }
   | { type: "advanceToNextScene"; sceneId: string | null }
   | { type: "playCue"; cueDefinitionId: string | null }
   // Plays one of the NPC's bound animation slots `repeatCount` times through,
@@ -163,7 +165,7 @@ const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
   emitEvent: "Emit Event",
   giveItem: "Give Item",
   removeItem: "Remove Item",
-  unlockScene: "Unlock Scene",
+  unlockEpisode: "Unlock Episode",
   advanceToNextScene: "Advance to Next Scene",
   "set-time-of-day": "Set Time of Day",
   "advance-day": "Advance Day",
@@ -202,7 +204,8 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
     case "giveItem":
     case "removeItem":
       return { type, itemDefinitionId: null, count: 1 };
-    case "unlockScene":
+    case "unlockEpisode":
+      return { type, episodeId: null };
     case "advanceToNextScene":
       return { type, sceneId: null };
     case "playCue":
@@ -507,7 +510,11 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
           source.count !== undefined ? source.count : source.value
         )
       };
-    case "unlockScene":
+    case "unlockEpisode":
+      return {
+        type,
+        episodeId: readString(source.episodeId) ?? legacyTargetId
+      };
     case "advanceToNextScene":
       return {
         type,

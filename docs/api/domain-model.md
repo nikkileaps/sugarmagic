@@ -87,8 +87,8 @@ Manager projects quest facts into the Runtime Blackboard*.
 `GameProject` (`packages/domain/src/game-project`) is the authored root: on
 disk it is `project.sgrmagic` + `content-library.sgrmagic` +
 `regions/*.json` + assets. It owns project settings, sound-event and music
-bindings, credits, and the campaign (the ordered `Scene` list with unlock
-progression).
+bindings, credits, and the campaign (the `Episode` list -- see Ordered and
+gated below).
 
 `ContentLibrary` (`packages/domain/src/content-library`) owns every reusable
 definition: assets (with colliders), materials and textures, character
@@ -96,21 +96,61 @@ models and animation libraries, audio clips and sound cues, environment
 lighting presets -- plus the gameplay definitions below. A definition owns
 what a thing IS; it never owns where the thing is placed.
 
-### Region and Scene
+### Ordered and gated
+
+Two words for the two independent things a narrative structure does. Every
+doc, code comment and UI label uses them with exactly this meaning:
+
+- **Episodes are ordered and gated.** Order says which chapter comes after
+  which. The unlock rule says whether the player may go there yet.
+- **Scenes are ordered but not gated.** Order says which Scene comes after
+  which inside the chapter. Nothing holds the player back -- finishing one
+  moves them to the next.
+
+So **ordered** is about sequence and **gated** is about permission. They are
+separate: a thing can be ordered without being gated, which is exactly what a
+Scene is. "Locked", "unlocked", "available" and "sequenced" are not loose
+synonyms for either.
+
+**Order is list position.** `GameProject.episodes` is ordered, and each
+`Episode.scenes` is ordered. Neither carries an order number: a stored
+ordinal beside an ordered list is the same fact written twice, and the two
+drift the moment a delete leaves a hole. Player-facing numbering ("Scene 3 of
+5") derives from position, so it is always contiguous from 1. A Scene that
+needs a fixed name like "Chapter 7" puts it in `displayName`, which is a
+title, not an order. Because there is no sort key to recover from, the load
+path never reorders -- `normalizeEpisodes` and `normalizeScenes` preserve
+input order, and a round-trip test pins it.
+
+### Episode, Region and Scene
+
+`Episode` (`packages/domain/src/episodes`) holds an ordered run of Scenes plus
+the gate that decides when the player may enter it (`always`, `manual`,
+`questComplete`, `wallClock`). An Episode HOLDS its Scenes rather than naming
+them by id, so a Scene belongs to exactly one Episode by construction. Code
+that needs a Scene without caring which Episode owns it uses `getAllScenes` /
+`findSceneById` / `mapScenes`.
 
 `Region` (`packages/domain/src/region-authoring`) is the authored place:
 placed asset instances, landscape, environment, and the region-local
 gameplay placements -- `RegionNPCPresence` (which NPC exists here, optionally
-gated by a quest binding: quest active / stage / world-flag equals) and
+conditioned by a quest binding: quest active / stage / world-flag equals) and
 region volumes whose trigger actions can set world flags and play audio on
 entry.
 
-`Scene` (`packages/domain/src/scenes`) is an episode overlay on a region:
-content additions/overrides, environment and audio overrides, unlock
-conditions, transitions. The campaign sequences Scenes; quest actions
-(`unlockScene`, `advanceToNextScene`) drive progression through them.
-Viewport and runtime always resolve region + active scene overlay composed,
-never the base region alone.
+`Scene` (`packages/domain/src/scenes`) is one place with the overlays that
+dress it for this part of the story: content additions/overrides, environment
+and audio overrides, a title card. It carries no order number and no gate of
+its own. Quest actions drive progression -- `advanceToNextScene` moves within
+an Episode (and running off the end is the Episode boundary, where credits
+roll), `unlockEpisode` opens a gate. Viewport and runtime always resolve
+region + active scene overlay composed, never the base region alone.
+
+`GameProject.episodeEndRouting` decides where the player goes when an Episode
+ends: `episodes-screen` (the default) hands them the Episodes screen to
+choose; `next-episode` continues into the next Episode when its gate is open,
+falling back to the same screen when it is shut, so a gated Episode is never
+a dead end.
 
 ### NPC, Dialogue, Item, Spell
 
@@ -167,7 +207,7 @@ runtime inventory and caster.
 - **Actions:** `onEnterActions` / `onCompleteActions` lists of
   `QuestActionDefinition`, a discriminated union on `type` where each
   variant declares its own named fields: setFlag, emitEvent, giveItem,
-  removeItem, unlockScene, advanceToNextScene, set-time-of-day,
+  removeItem, unlockEpisode, advanceToNextScene, set-time-of-day,
   advance-day, learn-fact, playCue, playAnimation. Every one is consumed
   at runtime.
 - Nodes carry `graphPosition` for the quest graph editor, `showInHud`,
@@ -275,8 +315,33 @@ pass, not a subscription: `notifyEvent(name)` completes active nodes whose
 ### Persistence
 
 Per-player runtime state persists as `SaveParticipant` slices (Plan 055
-memento pattern): quest manager (progress + flags + tracked), world time,
-player known facts, NPC behavior, caster stats, and plugin participants.
+memento pattern). **This table is the canonical list; other docs link here
+rather than restating it.**
+
+| participant id | what it holds | owner |
+|---|---|---|
+| `quest.manager` | active + completed quests, completed nodes, tracked quest | runtime-core |
+| `world.flags` | the world flag store | runtime-core |
+| `world.time` | clock band + day | runtime-core |
+| `world.presence` | which item presences the player has collected, keyed region -> scene | runtime-core |
+| `player.known-facts` | facts the player has learned | runtime-core |
+| `inventory.player` | the player's inventory | runtime-core |
+| `npc.behavior` | per-NPC behavior state | runtime-core |
+| `caster.stats` | caster stats | runtime-core |
+| `playthrough.identity` | which playthrough this save is | runtime-core |
+| `host.player` | current region + player position | web host |
+| `campaign.progression` | current Episode and Scene, manually unlocked Episodes, completed Scenes and Episodes | web host |
+
+Plugins contribute their own participants on top (sugarlang's target
+language, for example).
+
+Each slice carries a `schemaVersion`. Two patterns exist and the choice is
+per-slice: **upgrade in place** when the old shape still means something
+(`world.presence` v1 -> v2 wraps pre-Scenes collections under the default
+Scene), or **discard** when it does not (`campaign.progression` v1 was
+Scene-gated, and Scenes stopped being gated, so there is nothing to convert
+-- a v1 save keeps every other slice and restarts the campaign).
+
 The blackboard itself is never persisted; participant stores re-project
 their facts into it on restore. Quest restore drops quests whose
 definition no longer exists and re-fires state-change (not events) so

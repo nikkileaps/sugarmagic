@@ -20,7 +20,7 @@ import type { CreditsDefinition } from "@sugarmagic/domain";
 import { normalizeCreditsDefinition } from "@sugarmagic/domain";
 import {
   computeCreditsRollDurationMs,
-  SCENE_CARD_FONT_FAMILY
+  TRANSITION_CARD_FONT_FAMILY
 } from "@sugarmagic/target-web";
 
 const CYCLE_PAUSE_MS = 1200;
@@ -68,7 +68,7 @@ export function CreditsPreview(props: { credits: CreditsDefinition }) {
         inset: 0,
         overflow: "hidden",
         background: "#000000",
-        fontFamily: SCENE_CARD_FONT_FAMILY,
+        fontFamily: TRANSITION_CARD_FONT_FAMILY,
         textAlign: "center",
         userSelect: "none"
       }}

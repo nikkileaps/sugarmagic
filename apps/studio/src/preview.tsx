@@ -70,7 +70,7 @@ import type {
   MusicBindings,
   UITheme,
   RegionDocument,
-  Scene
+  Episode
 } from "@sugarmagic/domain";
 import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
 import {
@@ -120,10 +120,10 @@ import "@sugarmagic/ui/node-editor.css";
 interface PreviewBootMessage {
   type: "PREVIEW_BOOT";
   regions: RegionDocument[];
-  /** Plan 058 §058.1 — narrative Scenes for overlay composition. */
-  scenes?: Scene[];
-  /** Plan 059 §059.4 — Episodes screen label. */
-  scenesUiLabel?: string | null;
+  /** The campaign: ordered, gated Episodes holding their Scenes. */
+  episodes?: Episode[];
+  /** Where the player goes when an Episode ends. */
+  episodeEndRouting?: string | null;
   /** Plan 058 §058.2 — the editor's active Scene (Ambient
    *  Context); Preview boots into it. */
   activeSceneId?: string | null;
@@ -282,8 +282,11 @@ window.addEventListener("message", (event) => {
       });
       void host.start({
         regions: data.regions,
-        scenes: data.scenes,
-        scenesUiLabel: data.scenesUiLabel,
+        episodes: data.episodes,
+        episodeEndRouting:
+          data.episodeEndRouting === "next-episode"
+            ? "next-episode"
+            : "episodes-screen",
         activeSceneId: data.activeSceneId,
         // Deliberately NOT forwarding the Studio-edited region:
         // Preview is the GAME (same region resolution as a

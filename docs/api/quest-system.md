@@ -117,6 +117,25 @@ dialogue narrative opens the conversation with nobody nearby and no press.
 
 ---
 
+## Condition, event, action
+
+Three words the code already uses, whose distinction decides which tool a
+piece of authoring reaches for:
+
+- **condition** -- a boolean test against current state, polled. `hasFlag`,
+  `questCompleted`, `questStage`.
+- **event** -- a named momentary poke. `emitEvent` / `notifyEvent`. Not
+  persistent: if nothing is listening at that instant it is gone.
+- **action** -- something a node does. `setFlag`, `giveItem`,
+  `advanceToNextScene`.
+
+The polled-versus-momentary split matters most when a condition needs to
+react to something that happened: "the player talked to Penelope" is an
+event, so it reaches a condition by way of a world flag, not directly.
+
+(For **ordered** and **gated**, see
+[domain-model.md](./domain-model.md#ordered-and-gated).)
+
 ## Actions or behavior tasks: which one
 
 Two systems can make the world change when a quest moves, and picking the wrong
@@ -169,8 +188,8 @@ to a real system is not offered.
 | `emitEvent` | `eventName` | fires a named event; completes any active node waiting on it |
 | `giveItem` | `itemDefinitionId`, `count` | adds items to the player inventory |
 | `removeItem` | `itemDefinitionId`, `count` | removes items from the inventory |
-| `unlockScene` | `sceneId` | adds the Scene to campaign progression |
-| `advanceToNextScene` | `sceneId` (null = next by order) | completes the Scene and moves the player |
+| `unlockEpisode` | `episodeId` | opens an Episode's gate (Episodes are gated, Scenes are not) |
+| `advanceToNextScene` | `sceneId` (null = next in this Episode) | completes the Scene and moves the player; running off the end of an Episode is the Episode boundary, where credits roll |
 | `set-time-of-day` | `band` | sets the world clock band (persisted) |
 | `advance-day` | -- | increments the world day counter (persisted) |
 | `learn-fact` | `factId`, `displayText` | writes a player-known fact (see below) |
@@ -514,12 +533,14 @@ __sugaragentQuestContext.dump("npc:definition-id")
 
 ## Save and Persistence
 
-| what | participant id | persists |
-|---|---|---|
-| Quest manager state (flags, active quests, completed quests, completed nodes) | `quest.manager` | yes |
-| World clock (band + day) | `world.time` | yes |
-| Player known facts | `player.known-facts` | yes |
-| Recent world events | -- | no (session-only) |
+The quest system's own state lives in the `quest.manager` slice (flags, active
+quests, completed quests, completed nodes). The world clock (`world.time`) and
+player known facts (`player.known-facts`) are separate slices that quest
+content reads. Recent world events are session-only and never persist.
+
+**The full save-participant list lives in
+[domain-model.md](./domain-model.md#persistence)** -- one canonical table, not
+restated here.
 
 All save participants restore before `startInitialQuests()` is called.
 

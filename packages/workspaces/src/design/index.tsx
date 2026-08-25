@@ -38,7 +38,7 @@ import type {
   QuestDefinition,
   QuestNodeDefinition,
   RegionDocument,
-  Scene,
+  Episode,
   SoundCueDefinition,
   SpellDefinition,
   UITheme,
@@ -88,9 +88,9 @@ export interface DesignProductModeViewProps {
   /** The whole project, for the world flag registry's reference walk. */
   gameProject: GameProject | null;
   regions: RegionDocument[];
-  /** Plan 058 §058.5 — Scene picker source for quest Scene
-   *  actions (unlockScene / advanceToNextScene). */
-  scenes: Scene[];
+  /** Picker source for the quest campaign actions (unlockEpisode
+   *  picks an Episode, advanceToNextScene picks a Scene). */
+  episodes: Episode[];
   /** Cue picker source for the quest playCue action. */
   soundCueDefinitions: SoundCueDefinition[];
   playerDefinition: PlayerDefinition | null;
@@ -178,7 +178,7 @@ export function useDesignProductModeView(
     gameProjectId,
     gameProject,
     regions,
-    scenes,
+    episodes,
     soundCueDefinitions,
     playerDefinition,
     spellDefinitions,
@@ -307,7 +307,7 @@ export function useDesignProductModeView(
     gameProjectId,
     questDefinitions,
     regions,
-    scenes,
+    episodes,
     soundCueDefinitions,
     dialogueDefinitions,
     itemDefinitions,
