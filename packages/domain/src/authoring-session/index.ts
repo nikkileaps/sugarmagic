@@ -48,7 +48,8 @@ import {
   getAllScenes,
   mapScenes,
   normalizeEpisodes,
-  type Episode
+  type Episode,
+  type EpisodeEndRouting
 } from "../episodes";
 import type { AuthoringHistory } from "../history";
 import type {
@@ -2711,6 +2712,135 @@ function withEpisodeScenes(
   );
 }
 
+/**
+ * Append a new Episode to the end of the campaign, holding one
+ * empty Scene, and make that Scene active. Appending IS the
+ * ordering — there is no order number.
+ *
+ * The Scene comes with it because an Episode with no Scenes has
+ * nothing to enter: the runtime resolves an Episode then a Scene
+ * inside it, and an empty Episode would resolve to null.
+ */
+export function addEpisodeToSession(
+  session: AuthoringSession,
+  options: { displayName: string }
+): AuthoringSession {
+  const scene = createDefaultScene({ displayName: "Scene 1" });
+  const episode = createDefaultEpisode({
+    displayName: options.displayName.trim() || "Untitled Episode",
+    scenes: [scene]
+  });
+  return {
+    ...withEpisodes(session, [...session.gameProject.episodes, episode]),
+    activeSceneId: scene.sceneId
+  };
+}
+
+/**
+ * Delete an Episode and every Scene inside it. Refuses to delete
+ * the last Episode (a project always has >= 1); the remaining
+ * Episodes close the gap, and the active pointer moves to the
+ * first Scene left. Destructive — the caller confirms.
+ */
+export function deleteEpisodeFromSession(
+  session: AuthoringSession,
+  episodeId: string
+): AuthoringSession {
+  const episodes = session.gameProject.episodes;
+  if (episodes.length <= 1) return session;
+  const remaining = episodes.filter(
+    (episode) => episode.episodeId !== episodeId
+  );
+  if (remaining.length === episodes.length) return session;
+  const next = withEpisodes(session, remaining);
+  const activeSurvives = Boolean(
+    findSceneById(remaining, session.activeSceneId)
+  );
+  return {
+    ...next,
+    activeSceneId: activeSurvives
+      ? session.activeSceneId
+      : getAllScenes(remaining)[0]?.sceneId ?? null
+  };
+}
+
+/**
+ * Move an Episode one step up or down the campaign. Moving the
+ * entry IS the reorder — nothing is renumbered afterwards.
+ */
+export function reorderEpisodeInSession(
+  session: AuthoringSession,
+  episodeId: string,
+  direction: "up" | "down"
+): AuthoringSession {
+  const episodes = [...session.gameProject.episodes];
+  const index = episodes.findIndex(
+    (episode) => episode.episodeId === episodeId
+  );
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || targetIndex < 0 || targetIndex >= episodes.length) {
+    return session;
+  }
+  [episodes[index], episodes[targetIndex]] = [
+    episodes[targetIndex]!,
+    episodes[index]!
+  ];
+  return withEpisodes(session, episodes);
+}
+
+/**
+ * Move a Scene out of the Episode holding it and onto the end of
+ * another. Single ownership is preserved by doing both halves in
+ * one pass: the Scene is removed everywhere and appended once.
+ *
+ * Refuses to empty an Episode — an Episode with no Scenes cannot
+ * be entered. Move the other Scenes in first, or delete it.
+ */
+export function moveSceneToEpisodeInSession(
+  session: AuthoringSession,
+  sceneId: string,
+  toEpisodeId: string
+): AuthoringSession {
+  const episodes = session.gameProject.episodes;
+  const from = findEpisodeBySceneId(episodes, sceneId);
+  const scene = findSceneById(episodes, sceneId);
+  const to = episodes.find((episode) => episode.episodeId === toEpisodeId);
+  if (!from || !scene || !to || from.episodeId === to.episodeId) {
+    return session;
+  }
+  if (from.scenes.length <= 1) return session;
+  return withEpisodes(
+    session,
+    episodes.map((episode) => {
+      if (episode.episodeId === from.episodeId) {
+        return {
+          ...episode,
+          scenes: episode.scenes.filter(
+            (entry) => entry.sceneId !== sceneId
+          )
+        };
+      }
+      if (episode.episodeId === to.episodeId) {
+        return { ...episode, scenes: [...episode.scenes, scene] };
+      }
+      return episode;
+    })
+  );
+}
+
+/** Where the player goes when an Episode ends — see
+ *  `GameProject.episodeEndRouting`. */
+export function updateEpisodeEndRoutingInSession(
+  session: AuthoringSession,
+  routing: EpisodeEndRouting
+): AuthoringSession {
+  return {
+    ...session,
+    gameProject: { ...session.gameProject, episodeEndRouting: routing },
+    isDirty: true
+  };
+}
+
 /** Patch Episode metadata and its gate. Scene membership and
  *  order are not patchable here — those move Scenes, which is
  *  what the Scene CRUD below is for. */
@@ -2812,6 +2942,11 @@ export function deleteSceneFromSession(
   if (getAllScenes(episodes).length <= 1) return session;
   const owner = findEpisodeBySceneId(episodes, sceneId);
   if (!owner) return session;
+  // An Episode with no Scenes cannot be entered -- `resolveActiveScene`
+  // returns null for one, and neither `addEpisodeToSession` nor
+  // `moveSceneToEpisodeInSession` will produce one. Deleting an Episode's
+  // last Scene would, so it is refused: delete the Episode instead.
+  if (owner.scenes.length <= 1) return session;
   const remaining = owner.scenes.filter((scene) => scene.sceneId !== sceneId);
   const next = withEpisodeScenes(session, owner.episodeId, remaining);
   return {

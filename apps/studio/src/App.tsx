@@ -58,6 +58,12 @@ import {
   addSceneToSession,
   updateSceneInSession,
   updateEpisodeInSession,
+  addEpisodeToSession,
+  deleteEpisodeFromSession,
+  reorderEpisodeInSession,
+  moveSceneToEpisodeInSession,
+  updateEpisodeEndRoutingInSession,
+  type EpisodeEndRouting,
   deleteSceneFromSession,
   reorderSceneInSession,
   convertAssetScopeInSession,
@@ -751,8 +757,49 @@ function handleRenameScene(sceneId: string, displayName: string) {
     .updateSession(updateSceneInSession(session, sceneId, { displayName }));
 }
 
-// Episode properties writes — today only the gate, from the
-// Manage Scenes modal. Story 2 gives Episodes their own surface.
+// Episode structural mutations, same seam as the Scene handlers
+// below (session-level, outside the semantic command/undo stream).
+function handleAddEpisode(displayName: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(addEpisodeToSession(session, { displayName }));
+}
+
+function handleDeleteEpisode(episodeId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(deleteEpisodeFromSession(session, episodeId));
+}
+
+function handleReorderEpisode(episodeId: string, direction: "up" | "down") {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(reorderEpisodeInSession(session, episodeId, direction));
+}
+
+function handleMoveSceneToEpisode(sceneId: string, toEpisodeId: string) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(moveSceneToEpisodeInSession(session, sceneId, toEpisodeId));
+}
+
+function handleUpdateEpisodeEndRouting(routing: EpisodeEndRouting) {
+  const { session } = projectStore.getState();
+  if (!session) return;
+  projectStore
+    .getState()
+    .updateSession(updateEpisodeEndRoutingInSession(session, routing));
+}
+
+// Episode metadata + gate writes from the Manage Scenes modal.
 function handleUpdateEpisode(
   episodeId: string,
   patch: Parameters<typeof updateEpisodeInSession>[2]
@@ -3736,7 +3783,13 @@ export function App() {
           onDeleteScene={handleDeleteScene}
           onReorderScene={handleReorderScene}
           onSelectScene={handleSceneSelect}
+          episodeEndRouting={session.gameProject.episodeEndRouting}
+          onUpdateEpisodeEndRouting={handleUpdateEpisodeEndRouting}
+          onAddEpisode={handleAddEpisode}
           onUpdateEpisode={handleUpdateEpisode}
+          onDeleteEpisode={handleDeleteEpisode}
+          onReorderEpisode={handleReorderEpisode}
+          onMoveSceneToEpisode={handleMoveSceneToEpisode}
         />
       )}
       <Modal
@@ -4246,7 +4299,7 @@ export function App() {
                         }
                       }}
                     >
-                      ⚙ Manage Scenes...
+                      ⚙ Manage Story...
                     </Menu.Item>
                   </Menu.Dropdown>
                 </Menu>

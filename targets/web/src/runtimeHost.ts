@@ -2640,27 +2640,24 @@ export function createWebRuntimeHost(
     // Plan 059 §059.4 — Episodes screen view model. Forward-only
     // v1: only the frontier ("current") card is enterable.
     //
-    // Still one card per SCENE. Scenes are not gated, so a card's
-    // locked/unlocked state now comes from the gate on the Episode
-    // that owns it. What this screen ultimately lists — Scenes or
-    // Episodes — is story 2's call; collapsing it here would be a
-    // silent regression from three cards to one.
+    // One card per EPISODE. An Episode is the gated unit, so it is
+    // the thing whose lock state a card can show; a Scene has no
+    // gate to report. Entering an Episode resumes at whichever
+    // Scene the save holds.
     bootEpisodesViewModel = {
-      entries: bootEpisodes.flatMap((episode) =>
-        episode.scenes.map((scene) => ({
-          sceneId: scene.sceneId,
-          displayName: scene.displayName,
-          description: scene.description,
-          status:
-            scene.sceneId === activeSceneIdForSave
-              ? ("current" as const)
-              : completedSceneIds.includes(scene.sceneId)
-                ? ("completed" as const)
-                : unlockedEpisodeIds.has(episode.episodeId)
-                  ? ("unlocked" as const)
-                  : ("locked" as const)
-        }))
-      )
+      entries: bootEpisodes.map((episode) => ({
+        episodeId: episode.episodeId,
+        displayName: episode.displayName,
+        description: episode.description,
+        status:
+          episode.episodeId === activeEpisodeIdForSave
+            ? ("current" as const)
+            : completedEpisodeIds.includes(episode.episodeId)
+              ? ("completed" as const)
+              : unlockedEpisodeIds.has(episode.episodeId)
+                ? ("unlocked" as const)
+                : ("locked" as const)
+      }))
     };
     const activeRegion = getActiveRegion(
       migratedContent.regions,
