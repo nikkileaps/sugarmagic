@@ -64,7 +64,7 @@ export interface ManageScenesModalProps {
   regions: { regionId: string; displayName: string }[];
   /** Plan 059 §059.1 — options for the background-music override. */
   soundCueDefinitions: { definitionId: string; displayName: string }[];
-  onAddScene: (displayName: string) => void;
+  onAddScene: (displayName: string, episodeId: string) => void;
   onRenameScene: (sceneId: string, displayName: string) => void;
   onUpdateScene: (
     sceneId: string,
@@ -305,8 +305,8 @@ export function ManageScenesModal(props: ManageScenesModalProps) {
 
   const submitNewScene = () => {
     const name = newSceneName.trim();
-    if (!name) return;
-    onAddScene(name);
+    if (!name || !selectedEpisode) return;
+    onAddScene(name, selectedEpisode.episodeId);
     setNewSceneName("");
   };
 

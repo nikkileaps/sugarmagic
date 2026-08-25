@@ -76,18 +76,35 @@ describe("NpcInteractionModeStore", () => {
     expect(store.set("npc.finnick", null)).toBe(false);
   });
 
-  it("notifies only on a real change", () => {
+  it("notifies only on a real change, and stops after unsubscribe", () => {
     const store = new NpcInteractionModeStore();
     let calls = 0;
-    store.setChangeHandler(() => {
+    const unsubscribe = store.subscribe(() => {
       calls += 1;
     });
     store.set("npc.finnick", "agent");
     store.set("npc.finnick", "agent");
     expect(calls).toBe(1);
-    store.setChangeHandler(null);
+    unsubscribe();
     store.set("npc.finnick", "scripted");
     expect(calls).toBe(1);
+  });
+
+  it("keeps every subscriber -- a second does not evict the first", () => {
+    const store = new NpcInteractionModeStore();
+    let first = 0;
+    let second = 0;
+    store.subscribe(() => {
+      first += 1;
+    });
+    const stopSecond = store.subscribe(() => {
+      second += 1;
+    });
+    store.set("npc.finnick", "agent");
+    expect([first, second]).toEqual([1, 1]);
+    stopSecond();
+    store.set("npc.finnick", "scripted");
+    expect([first, second]).toEqual([2, 1]);
   });
 });
 

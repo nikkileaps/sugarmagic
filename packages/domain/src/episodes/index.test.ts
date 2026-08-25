@@ -242,11 +242,14 @@ describe("resolveUnlockedEpisodeIds", () => {
 });
 
 describe("resolveActiveEpisode", () => {
-  const episodes = [
-    createDefaultEpisode({ episodeId: "e:1" }),
-    createDefaultEpisode({ episodeId: "e:2" }),
-    createDefaultEpisode({ episodeId: "e:3" })
-  ];
+  // Each holds a Scene: an Episode with none cannot be entered and is
+  // skipped, which the last test in this block pins.
+  const episodes = ["e:1", "e:2", "e:3"].map((episodeId) =>
+    createDefaultEpisode({
+      episodeId,
+      scenes: [createDefaultScene({ sceneId: `s:${episodeId}` })]
+    })
+  );
 
   it("honors the requested Episode when its gate is open", () => {
     expect(
@@ -274,6 +277,23 @@ describe("resolveActiveEpisode", () => {
         episodes,
         unlockedEpisodeIds: new Set(),
         requestedEpisodeId: null
+      })?.episodeId
+    ).toBe("e:1");
+  });
+
+  it("skips an Episode with no Scenes -- it cannot be entered", () => {
+    // `resolveActiveScene` returns null for an empty Episode, so booting
+    // into one is a black screen. The session functions cannot make one;
+    // a hand-edited file can.
+    const withEmptyFirst = [
+      createDefaultEpisode({ episodeId: "e:empty" }),
+      ...episodes
+    ];
+    expect(
+      resolveActiveEpisode({
+        episodes: withEmptyFirst,
+        unlockedEpisodeIds: new Set(["e:empty", "e:1"]),
+        requestedEpisodeId: "e:empty"
       })?.episodeId
     ).toBe("e:1");
   });

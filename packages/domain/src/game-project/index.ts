@@ -473,11 +473,9 @@ export function normalizeGameProject(
         audioMixer?: Partial<AudioMixerSettings> | null;
         mechanics?: Partial<MechanicsDefinition> | null;
         defaultGameSavePayload?: GameSavePayload | null;
-        // Epic 207 story 1 — pre-207 project files have a flat
-        // `scenes` array and a `scenesUiLabel` instead of `episodes`.
-        // The migration below folds those Scenes into one Episode and
-        // DROPS both keys from the output shape. `scenesUiLabel` has no
-        // successor: Episodes carry their own display names.
+        // A file written before Episodes carries `scenes` and
+        // `scenesUiLabel`. Both are accepted on input only so they can be
+        // dropped from the output; nothing converts them.
         episodes?: unknown;
         episodeEndRouting?: unknown;
         scenes?: unknown;
@@ -507,11 +505,9 @@ export function normalizeGameProject(
   const {
     deployment: legacyDeployment,
     versionedProjectIdentifiers: legacyVersionedProjectIdentifiers,
-    // Epic 207 story 1 — the pre-Episodes campaign keys. `migrateToEpisodes`
-    // below reads `scenes` off the raw input; dropping both here keeps them
-    // from riding the spread back out and being written to disk again. A file
-    // carrying BOTH `episodes` and a stale `scenes` is the shape that would
-    // make the migration ambiguous on a later load.
+    // The pre-Episodes campaign keys. Nothing reads them -- dropping them
+    // here keeps a stale file from writing them back out alongside the
+    // `episodes` that replaced them.
     scenes: _legacyScenes,
     scenesUiLabel: _legacyScenesUiLabel,
     ...gameProjectRest
@@ -578,7 +574,7 @@ export function normalizeGameProject(
       (gameProject as { defaultGameSavePayload?: unknown })
         .defaultGameSavePayload
     ),
-    episodes: migrateToEpisodes(gameProject),
+    episodes: resolveEpisodes(gameProject),
     episodeEndRouting: normalizeEpisodeEndRouting(
       (gameProject as { episodeEndRouting?: unknown }).episodeEndRouting
     ),
@@ -597,65 +593,24 @@ export function normalizeGameProject(
 }
 
 /**
- * Epic 207 story 1 — bring a project's campaign forward to
- * Episodes.
+ * The project's campaign. A file with no `episodes` gets one
+ * holding one Scene rather than an empty campaign, so Studio
+ * always has an active Scene to author against and the runtime
+ * always has something to boot into.
  *
- * Three inputs, one output:
- *
- *   - Already has `episodes` — normalize and return them. This is
- *     what makes the migration a NO-OP when run twice, which
- *     matters because a project is normalized on every load, not
- *     once.
- *   - Has a pre-207 flat `scenes` array — fold every Scene, in
- *     its existing order, into one Episode. `sceneOrder` is read
- *     here and only here: it was the old sort key, so it decides
- *     the order the Scenes take in the new list, and is then gone
- *     for good. A per-Scene `unlockCondition` is deliberately NOT
- *     carried over -- only Episodes are gated, and the synthesized
- *     Episode is ungated so the campaign still opens.
- *   - Has neither — an empty list. The Studio load-time migration
- *     synthesizes the default Scene, because it needs the
- *     regions' legacy fields that this project-level normalizer
- *     cannot see.
+ * There is NO migration from the pre-Episodes `scenes` shape.
+ * That shape is gone; a file still carrying it is overwritten
+ * with a fresh campaign rather than converted.
  */
-function migrateToEpisodes(gameProject: {
-  episodes?: unknown;
-  scenes?: unknown;
-  displayName?: unknown;
-}): Episode[] {
-  // An EMPTY `episodes` array is not "already migrated" -- a
-  // caller that normalized once and is normalizing again passes
-  // `episodes: []` alongside the Scenes it still has, and
-  // short-circuiting here would drop them on the floor.
+function resolveEpisodes(gameProject: { episodes?: unknown }): Episode[] {
   const authored = normalizeEpisodes(gameProject.episodes);
   if (authored.length > 0) return authored;
-  if (!Array.isArray(gameProject.scenes) || gameProject.scenes.length === 0) {
-    return [];
-  }
-  const ordered = [...gameProject.scenes].sort((left, right) => {
-    const leftOrder = readLegacySceneOrder(left);
-    const rightOrder = readLegacySceneOrder(right);
-    return leftOrder - rightOrder;
-  });
-  const scenes = normalizeScenes(ordered);
-  if (scenes.length === 0) return [];
   return [
     createDefaultEpisode({
       episodeId: DEFAULT_EPISODE_ID,
-      displayName:
-        typeof gameProject.displayName === "string" &&
-        gameProject.displayName.trim().length > 0
-          ? gameProject.displayName.trim()
-          : "Episode 1",
-      scenes
+      scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })]
     })
   ];
-}
-
-/** The pre-207 sort key. Read once, during the fold above. */
-function readLegacySceneOrder(scene: unknown): number {
-  const order = (scene as { sceneOrder?: unknown } | null)?.sceneOrder;
-  return typeof order === "number" && Number.isFinite(order) ? order : 0;
 }
 
 export function createDefaultGameProject(

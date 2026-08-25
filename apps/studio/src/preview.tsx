@@ -72,6 +72,7 @@ import type {
   RegionDocument,
   Episode
 } from "@sugarmagic/domain";
+import { normalizeEpisodeEndRouting } from "@sugarmagic/domain";
 import type { RuntimePluginEnvironment } from "@sugarmagic/plugins";
 import {
   createAnonymousLocalIdentityProvider,
@@ -283,10 +284,7 @@ window.addEventListener("message", (event) => {
       void host.start({
         regions: data.regions,
         episodes: data.episodes,
-        episodeEndRouting:
-          data.episodeEndRouting === "next-episode"
-            ? "next-episode"
-            : "episodes-screen",
+        episodeEndRouting: normalizeEpisodeEndRouting(data.episodeEndRouting),
         activeSceneId: data.activeSceneId,
         // Deliberately NOT forwarding the Studio-edited region:
         // Preview is the GAME (same region resolution as a

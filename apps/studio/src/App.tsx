@@ -741,12 +741,18 @@ function handleSceneSelect(sceneId: string) {
 
 // Plan 058 §058.3 — Manage Scenes handlers (session-level
 // structural mutations, same seam as addRegionToSession).
-function handleAddScene(displayName: string) {
+function handleAddScene(displayName: string, episodeId?: string) {
   const { session } = projectStore.getState();
   if (!session) return;
-  projectStore
-    .getState()
-    .updateSession(addSceneToSession(session, { displayName }));
+  projectStore.getState().updateSession(
+    addSceneToSession(session, {
+      displayName,
+      // The Episode the author has SELECTED, which is what the modal's
+      // field says it will use. Without it the Scene lands in whichever
+      // Episode holds the active Scene.
+      ...(episodeId ? { episodeId } : {})
+    })
+  );
 }
 
 function handleRenameScene(sceneId: string, displayName: string) {

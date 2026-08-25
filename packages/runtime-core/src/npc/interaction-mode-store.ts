@@ -40,7 +40,7 @@ export interface NpcInteractionModeSlice {
  */
 export class NpcInteractionModeStore {
   private readonly overrides = new Map<string, NPCInteractionMode>();
-  private listener: (() => void) | null = null;
+  private readonly listeners = new Set<() => void>();
 
   /** The override for this NPC, or null when none is set. */
   get(npcDefinitionId: string): NPCInteractionMode | null {
@@ -64,19 +64,28 @@ export class NpcInteractionModeStore {
     } else {
       this.overrides.set(npcDefinitionId, mode);
     }
-    this.listener?.();
+    for (const listener of this.listeners) listener();
     return true;
   }
 
   /**
-   * Called after any change that took effect. The Teacher warmer
-   * subscribes: a mode flip usually does NOT move the situation
-   * key (which is scene/quest/objectives/time and has no NPC
-   * axis), so without this a newly agentified NPC would talk on
-   * whatever directive the region was warmed with.
+   * Subscribe to changes that took effect; returns an unsubscribe.
+   *
+   * A SET rather than one slot: more than one plugin may care, and
+   * a second subscriber silently evicting the first is the kind of
+   * bug that shows up as "the Teacher went stale sometimes".
+   *
+   * The Teacher warmer is the subscriber that matters today -- a
+   * mode flip usually does NOT move the situation key (which is
+   * scene/quest/objectives/time and has no NPC axis), so without
+   * this a newly agentified NPC talks on whatever directive the
+   * region was warmed with.
    */
-  setChangeHandler(listener: (() => void) | null): void {
-    this.listener = listener;
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   serializeSaveSlice(): NpcInteractionModeSlice {

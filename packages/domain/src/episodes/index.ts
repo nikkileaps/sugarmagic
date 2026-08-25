@@ -273,17 +273,23 @@ export function resolveActiveEpisode(input: {
   unlockedEpisodeIds: ReadonlySet<string>;
   requestedEpisodeId: string | null;
 }): Episode | null {
-  const requested = input.episodes.find(
+  // An Episode with no Scenes cannot be entered -- `resolveActiveScene`
+  // returns null for one -- so boot never lands on it. The session
+  // functions cannot produce an empty Episode; a hand-edited file can.
+  const enterable = input.episodes.filter(
+    (episode) => episode.scenes.length > 0
+  );
+  const requested = enterable.find(
     (episode) =>
       episode.episodeId === input.requestedEpisodeId &&
       input.unlockedEpisodeIds.has(episode.episodeId)
   );
   return (
     requested ??
-    input.episodes.find((episode) =>
+    enterable.find((episode) =>
       input.unlockedEpisodeIds.has(episode.episodeId)
     ) ??
-    input.episodes[0] ??
+    enterable[0] ??
     null
   );
 }

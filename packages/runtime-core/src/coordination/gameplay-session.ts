@@ -2867,12 +2867,8 @@ export function createRuntimeGameplayAssembly(
           options.npcInteractionModeStore?.get(npcDefinitionId) ?? null
         ).mode;
       },
-      onNpcInteractionModeChange: (listener) => {
-        const store = options.npcInteractionModeStore;
-        if (!store) return () => {};
-        store.setChangeHandler(listener);
-        return () => store.setChangeHandler(null);
-      },
+      onNpcInteractionModeChange: (listener) =>
+        options.npcInteractionModeStore?.subscribe(listener) ?? (() => {}),
       dialogueDefinitions: options.dialogueDefinitions,
       questDefinitions: options.questDefinitions,
       buildConversationRuntimeContext:

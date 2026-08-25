@@ -269,12 +269,6 @@ export interface WebRuntimeStartState {
    * `migrateToScenes` lifts at start().
    */
   episodes?: Episode[];
-  /**
-   * A pre-Episodes boot.json's flat Scene list. Read ONLY to fold
-   * into one Episode at start(), for a player still holding a
-   * cached bundle from before Episodes shipped. Nothing writes it.
-   */
-  legacyScenes?: Scene[];
   /** Where the player goes when an Episode ends — see
    *  `GameProject.episodeEndRouting`. */
   episodeEndRouting?: EpisodeEndRouting | null;
@@ -1158,13 +1152,23 @@ export function createWebRuntimeHost(
     const currentIndex = withinEpisode.findIndex(
       (scene) => scene.sceneId === activeSceneIdForSave
     );
-    // An explicit target may name a Scene in any Episode; the
-    // implicit one is the next Scene in THIS Episode. Running off
-    // the end of the Episode is the Episode boundary, not an
-    // error — it is what makes credits roll.
+    // An explicit target may name a Scene in any Episode. The implicit
+    // one is the next Scene in THIS Episode; running off the end of it
+    // is the Episode boundary, so the implicit target continues into
+    // the FIRST SCENE OF THE NEXT OPEN EPISODE.
+    //
+    // Resolving it here rather than treating the end of an Episode as
+    // "nowhere" is what makes the campaign advance at all: without it
+    // the save pointer stays on the Episode just finished, that Episode
+    // renders as `current`, and the only enterable card drops the
+    // player back into the Scene they already completed.
+    //
+    // The gate is honoured -- a shut next Episode leaves `target` null,
+    // and the exit sequence routes to the Episodes screen instead.
     const target = action.sceneId
       ? findSceneById(bootEpisodes, action.sceneId)
-      : withinEpisode[currentIndex + 1] ?? null;
+      : (withinEpisode[currentIndex + 1] ??
+        firstSceneOfNextOpenEpisode(currentEpisode));
     if (target && target.sceneId === activeSceneIdForSave) return;
 
     const targetEpisode = target
@@ -1185,6 +1189,48 @@ export function createWebRuntimeHost(
       activeEpisodeIdForSave = targetEpisode.episodeId;
     }
     void runExitSequenceAndReload(target, isEpisodeBoundary);
+  }
+
+  /**
+   * The Scene an Episode boundary continues into: the first Scene of
+   * the next Episode by list position whose gate is open. Null when
+   * there is no next Episode, or the next one is still shut -- both of
+   * which route the player to the Episodes screen rather than nowhere.
+   *
+   * Gates are re-evaluated here rather than reusing the boot-time set,
+   * because a quest completed during THIS session may have opened one.
+   */
+  function firstSceneOfNextOpenEpisode(
+    currentEpisode: Episode | null
+  ): Scene | null {
+    if (!currentEpisode) return null;
+    const index = bootEpisodes.findIndex(
+      (episode) => episode.episodeId === currentEpisode.episodeId
+    );
+    if (index < 0) return null;
+    // Only the quests an Episode gate actually names matter, so ask
+    // about those rather than adding a list-everything accessor.
+    const questManager = gameplaySession?.questManager ?? null;
+    const completedQuestIds = bootEpisodes
+      .map((episode) => episode.unlockCondition)
+      .filter(
+        (condition): condition is { kind: "questComplete"; questDefinitionId: string } =>
+          condition !== "always" && condition.kind === "questComplete"
+      )
+      .map((condition) => condition.questDefinitionId)
+      .filter((questId) => questManager?.isQuestCompleted(questId) ?? false);
+    const unlocked = resolveUnlockedEpisodeIds({
+      episodes: bootEpisodes,
+      manuallyUnlockedEpisodeIds,
+      completedQuestIds,
+      now: Date.now()
+    });
+    for (const episode of bootEpisodes.slice(index + 1)) {
+      if (!unlocked.has(episode.episodeId)) continue;
+      const first = episode.scenes[0];
+      if (first) return first;
+    }
+    return null;
   }
 
   /**
@@ -2581,34 +2627,14 @@ export function createWebRuntimeHost(
     const resolvedActiveRegionId = hostPlayerRestore?.currentRegionId ?? null;
     activeRegionIdForSave =
       typeof resolvedActiveRegionId === "string" ? resolvedActiveRegionId : null;
-    // Plan 058 §058.1 — belt-and-suspenders migration for stale
-    // pre-058 boot payloads (regions carrying legacy `scene`
-    // nests). Idempotent no-op on current payloads. Runs on the
-    // FLAT Scene list because the legacy nest predates Episodes,
-    // so a payload cannot hold both.
-    const authoredEpisodes = normalizeEpisodes(state.episodes ?? []);
+    bootEpisodes = normalizeEpisodes(state.episodes ?? []);
+    // Plan 058 §058.1 — strip the pre-058 `region.scene` nest off the
+    // regions. Its Scene-side output is ignored: the campaign ships as
+    // `episodes` now.
     const migratedContent = migrateToScenes({
-      scenes:
-        authoredEpisodes.length > 0
-          ? getAllScenes(authoredEpisodes)
-          : state.legacyScenes ?? [],
+      scenes: getAllScenes(bootEpisodes),
       regions: state.regions
     });
-    // A pre-Episodes payload folds its Scenes into one ungated
-    // Episode, matching what the project normalizer does on the
-    // authoring side.
-    bootEpisodes =
-      authoredEpisodes.length > 0
-        ? authoredEpisodes
-        : migratedContent.scenes.length > 0
-          ? [
-              createDefaultEpisode({
-                episodeId: DEFAULT_EPISODE_ID,
-                displayName: bootGameTitle ?? "Episode 1",
-                scenes: migratedContent.scenes
-              })
-            ]
-          : [];
     bootEpisodeEndRouting = normalizeEpisodeEndRouting(
       state.episodeEndRouting
     );
@@ -2661,14 +2687,18 @@ export function createWebRuntimeHost(
         episodeId: episode.episodeId,
         displayName: episode.displayName,
         description: episode.description,
-        status:
-          episode.episodeId === activeEpisodeIdForSave
+        // COMPLETED outranks CURRENT. The save pointer can still name an
+        // Episode the player has finished -- when its last Scene advanced
+        // into a shut gate there was nowhere to move it to -- and reading
+        // that as "current" would offer Continue back into a Scene they
+        // already played.
+        status: completedEpisodeIds.includes(episode.episodeId)
+          ? ("completed" as const)
+          : episode.episodeId === activeEpisodeIdForSave
             ? ("current" as const)
-            : completedEpisodeIds.includes(episode.episodeId)
-              ? ("completed" as const)
-              : unlockedEpisodeIds.has(episode.episodeId)
-                ? ("unlocked" as const)
-                : ("locked" as const)
+            : unlockedEpisodeIds.has(episode.episodeId)
+              ? ("unlocked" as const)
+              : ("locked" as const)
       }))
     };
     const activeRegion = getActiveRegion(

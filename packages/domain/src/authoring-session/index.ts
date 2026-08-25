@@ -481,32 +481,17 @@ export function createAuthoringSession(
     gameProject.identity.id
   )
 ): AuthoringSession {
-  // Plan 058 §058.1 — lift pre-058 `region.scene` nests into the
-  // project's first Scene BEFORE normalization, so overlay
-  // presences flow through the same contentLibrary-aware
-  // normalization the regions get. Idempotent: an already-
-  // migrated project passes through unchanged.
-  //
-  // This works on a FLAT Scene list because the legacy nest
-  // predates Episodes entirely — a file cannot hold both. When the
-  // project already has Episodes there is no nest to lift and no
-  // Scene to synthesize, so only the region-side strip matters and
-  // the Episodes pass through untouched.
-  const authoredEpisodes = normalizeEpisodes(
-    (gameProject as { episodes?: unknown }).episodes
-  );
+  // `normalizeGameProject` resolves the campaign, including the floor
+  // of one Episode holding one Scene for a project that has none.
+  const normalizedProject = normalizeGameProject(gameProject);
+  // Plan 058 §058.1 — strip the pre-058 `region.scene` nest off the
+  // regions. Its Scene-side output is ignored: the campaign comes from
+  // `episodes` now, and a file old enough to carry that nest is not
+  // converted, just overwritten.
   const migrated = migrateToScenes({
-    scenes:
-      authoredEpisodes.length > 0
-        ? getAllScenes(authoredEpisodes)
-        : normalizeScenes((gameProject as { scenes?: unknown }).scenes),
+    scenes: getAllScenes(normalizedProject.episodes),
     regions
   });
-  const normalizedProject = normalizeGameProject(
-    authoredEpisodes.length > 0
-      ? { ...gameProject, episodes: authoredEpisodes }
-      : { ...gameProject, scenes: migrated.scenes }
-  );
   const normalizedContentLibrary = normalizeContentLibrarySnapshot(
     contentLibrary,
     normalizedProject.identity.id
