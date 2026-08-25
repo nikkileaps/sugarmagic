@@ -1,6 +1,9 @@
 import { createUuid } from "../shared/identity";
 import { normalizeNodeGroups, type NodeGroup } from "../graph-layout/index";
-import type { NPCAnimationSlot } from "../npc-definition/index";
+import type {
+  NPCAnimationSlot,
+  NPCInteractionMode
+} from "../npc-definition/index";
 
 // Plan 074 §074.1' -- canonical location; runtime-core re-exports from here.
 export type TimeOfDayBand =
@@ -109,6 +112,15 @@ export type QuestActionDefinition =
   | { type: "unlockEpisode"; episodeId: string | null }
   | { type: "advanceToNextScene"; sceneId: string | null }
   | { type: "playCue"; cueDefinitionId: string | null }
+  // Overrides an NPC's interaction mode from here on, or clears the override
+  // with a null `mode` so the NPC falls back to its authored definition.
+  // Targets the DEFINITION, so it reaches every presence of that NPC --
+  // same reach as `playAnimation`. Persisted, so it survives a reload.
+  | {
+      type: "setNpcInteractionMode";
+      npcDefinitionId: string | null;
+      mode: NPCInteractionMode | null;
+    }
   // Plays one of the NPC's bound animation slots `repeatCount` times through,
   // then hands the NPC back to its normal locomotion animation. Every presence
   // of that NPC in the scene plays.
@@ -171,6 +183,7 @@ const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
   "advance-day": "Advance Day",
   "learn-fact": "Learn Fact",
   playCue: "Play Cue",
+  setNpcInteractionMode: "Set NPC Interaction Mode",
   playAnimation: "Play Animation"
 };
 
@@ -210,6 +223,10 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
       return { type, sceneId: null };
     case "playCue":
       return { type, cueDefinitionId: null };
+    case "setNpcInteractionMode":
+      // Null mode = clear the override. The author picks the NPC and
+      // the mode; both start unset.
+      return { type, npcDefinitionId: null, mode: null };
     case "playAnimation":
       return { type, npcDefinitionId: null, slot: null, repeatCount: 1 };
     case "set-time-of-day":
@@ -525,6 +542,18 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
         type: "playCue",
         cueDefinitionId: readString(source.cueDefinitionId) ?? legacyTargetId
       };
+    case "setNpcInteractionMode": {
+      const mode = readString(source.mode);
+      return {
+        type: "setNpcInteractionMode",
+        npcDefinitionId: readString(source.npcDefinitionId) ?? legacyTargetId,
+        // Anything outside the union normalizes to null, which means
+        // "clear the override" rather than a hard failure -- an authored
+        // mode removed from the union should hand the NPC back to its
+        // definition, not strand the action.
+        mode: mode === "scripted" || mode === "agent" ? mode : null
+      };
+    }
     case "playAnimation": {
       const slot = readString(source.slot);
       return {

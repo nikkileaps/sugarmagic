@@ -45,6 +45,7 @@ import type {
   ItemDefinition,
   CastableInvocation,
   NPCDefinition,
+  NPCInteractionMode,
   PlayerDefinition,
   QuestDefinition,
   RegionDocument,
@@ -477,6 +478,30 @@ export interface RuntimePluginContext {
   itemDefinitions?: ItemDefinition[];
   documentDefinitions?: DocumentDefinition[];
   npcDefinitions?: NPCDefinition[];
+  /**
+   * An NPC's interaction mode AS IT STANDS -- its authored
+   * definition unless a quest has overridden it. A plugin that
+   * branches on scripted-vs-agent asks this rather than reading
+   * `npcDefinition.interactionMode`, which is the authored value
+   * and ignores the override.
+   *
+   * Absent when the host supplies no override store, in which case
+   * a caller falls back to the definition.
+   */
+  getEffectiveNpcInteractionMode?: (
+    npcDefinitionId: string
+  ) => NPCInteractionMode | null;
+  /**
+   * Subscribe to interaction-mode changes. Returns an unsubscribe.
+   *
+   * A plugin that pre-computes anything per NPC mode needs this
+   * because a flip does not necessarily change anything else the
+   * plugin watches -- sugarlang's Teacher warm is keyed by scene,
+   * quest, objectives and time, with no NPC axis, so an NPC going
+   * agent mid-scene would otherwise talk on a directive planned
+   * without it.
+   */
+  onNpcInteractionModeChange?: (listener: () => void) => () => void;
   dialogueDefinitions?: DialogueDefinition[];
   questDefinitions?: QuestDefinition[];
 }

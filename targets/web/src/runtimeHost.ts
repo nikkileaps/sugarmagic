@@ -127,6 +127,8 @@ import {
   type QuestManagerSlice,
   createRuntimeGameplayAssembly,
   createWorldPresenceSaveParticipant,
+  createNpcInteractionModeSaveParticipant,
+  NpcInteractionModeStore,
   createWorldTimeSaveParticipant,
   WorldPresenceTracker,
   type RuntimeBannerContribution,
@@ -1444,6 +1446,16 @@ export function createWebRuntimeHost(
   const worldPresenceTracker = new WorldPresenceTracker();
   saveParticipantRegistry.register(
     createWorldPresenceSaveParticipant({ tracker: worldPresenceTracker })
+  );
+  // Quest-set NPC interaction modes. Host-lifetime because the mode
+  // decides how a conversation opens and which NPCs the Teacher warms,
+  // both read from the moment the world spawns -- so its slice is
+  // `host-owned` and lands in Phase 1, before the assembly exists.
+  const npcInteractionModeStore = new NpcInteractionModeStore();
+  saveParticipantRegistry.register(
+    createNpcInteractionModeSaveParticipant({
+      store: npcInteractionModeStore
+    })
   );
   // Story 47.10 follow-up — live user + last-known save snapshot
   // surfaced to the Session debug HUD card. Story 51.3 migrated
@@ -3194,6 +3206,7 @@ export function createWebRuntimeHost(
       itemDefinitions: state.itemDefinitions,
       documentDefinitions: state.documentDefinitions,
       npcDefinitions: state.npcDefinitions,
+      npcInteractionModeStore,
       dialogueDefinitions: state.dialogueDefinitions,
       questDefinitions: state.questDefinitions,
       contentLibrary: state.contentLibrary,

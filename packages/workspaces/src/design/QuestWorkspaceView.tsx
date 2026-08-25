@@ -791,6 +791,47 @@ function QuestActionFields({
         </>
       );
 
+    case "setNpcInteractionMode":
+      return (
+        <>
+          <Select
+            size="xs"
+            label="NPC"
+            clearable
+            placeholder="Pick an NPC"
+            data={npcDefinitions.map((npc) => ({
+              value: npc.definitionId,
+              label: npc.displayName
+            }))}
+            value={action.npcDefinitionId}
+            onChange={(value) =>
+              onChange({ ...action, npcDefinitionId: value })
+            }
+          />
+          <Select
+            size="xs"
+            label="Becomes"
+            clearable
+            // Clearing means "back to whatever the NPC is authored as",
+            // which is why this is clearable rather than a two-value
+            // toggle.
+            placeholder="(back to its own setting)"
+            data={[
+              { value: "scripted", label: "Scripted" },
+              { value: "agent", label: "Agent" }
+            ]}
+            value={action.mode}
+            onChange={(value) =>
+              onChange({
+                ...action,
+                mode:
+                  value === "scripted" || value === "agent" ? value : null
+              })
+            }
+          />
+        </>
+      );
+
     // Takes no parameters.
     case "advance-day":
       return null;

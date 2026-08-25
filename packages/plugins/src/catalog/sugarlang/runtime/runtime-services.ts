@@ -23,6 +23,7 @@ import type {
   DialogueDefinition,
   ItemDefinition,
   NPCDefinition,
+  NPCInteractionMode,
   PlayerDefinition,
   QuestDefinition,
   RegionDocument,
@@ -204,6 +205,11 @@ interface BoundRuntimeContext {
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
+  /** Resolves an NPC's mode including any quest override. Absent
+   *  when the host supplies no override store. */
+  getEffectiveNpcInteractionMode?: (
+    npcDefinitionId: string
+  ) => NPCInteractionMode | null;
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
 }
@@ -371,6 +377,12 @@ export class SugarlangRuntimeServices {
       itemDefinitions: context.itemDefinitions ?? [],
       documentDefinitions: context.documentDefinitions ?? [],
       npcDefinitions: context.npcDefinitions ?? [],
+      ...(context.getEffectiveNpcInteractionMode
+        ? {
+            getEffectiveNpcInteractionMode:
+              context.getEffectiveNpcInteractionMode
+          }
+        : {}),
       dialogueDefinitions: context.dialogueDefinitions ?? [],
       questDefinitions: context.questDefinitions ?? [],
       ...(context.buildConversationRuntimeContext
@@ -834,9 +846,17 @@ export class SugarlangRuntimeServices {
     if (!bound.activeRegion) return [];
     const presences =
       composeRegionContents(bound.activeRegion, bound.activeScene).npcPresences ?? [];
+    // EFFECTIVE mode, not the authored one. A quest can flip an NPC
+    // to agent mid-session, and warming is exactly what that NPC then
+    // needs; reading `npc.interactionMode` here would keep warming the
+    // set the project shipped with.
     const agentIds = new Set(
       bound.npcDefinitions
-        .filter((npc) => npc.interactionMode === "agent")
+        .filter(
+          (npc) =>
+            (bound.getEffectiveNpcInteractionMode?.(npc.definitionId) ??
+              npc.interactionMode) === "agent"
+        )
         .map((npc) => npc.definitionId)
     );
     const present = presences

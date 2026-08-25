@@ -287,6 +287,8 @@ export function createSugarlangPlugin(
     listWarmableNpcIds: () => services.listWarmableNpcIds(),
     buildWarmContext: () => services.buildRegionWarmContext()
   });
+  /** Set in init when the host offers mode-change notifications. */
+  let unsubscribeInteractionMode: (() => void) | null = null;
 
   return {
     pluginId: context.configuration.pluginId,
@@ -314,6 +316,17 @@ export function createSugarlangPlugin(
     },
     async init(runtimeContext) {
       services.bindRuntime(runtimeContext);
+      // A quest can flip an NPC between scripted and agent mid-session.
+      // The warm key is scene/quest/objectives/time and has NO NPC axis,
+      // so a flip usually leaves it sitting still -- the newly agentified
+      // NPC would then talk on a directive planned when it was scripted
+      // and therefore not warmed at all. Forcing the re-warm here is what
+      // `invalidate` was written for; until now nothing production called
+      // it.
+      unsubscribeInteractionMode =
+        runtimeContext.onNpcInteractionModeChange?.(() => {
+          regionWarmer.invalidate();
+        }) ?? null;
       const bootPayload = runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID];
       const lexicons = extractSugarlangPreviewBootLexicons(bootPayload);
       await seedSugarlangRuntimeCompileCache(lexicons);
@@ -387,6 +400,8 @@ export function createSugarlangPlugin(
       // test asserts this guarantee, and until this line existed the guarantee
       // was untested behaviour that production never invoked.
       regionWarmer.dispose();
+      unsubscribeInteractionMode?.();
+      unsubscribeInteractionMode = null;
       // Then the directive itself. Stopping the warmer stops new calls; this
       // drops what is held and refuses a write from a call already running.
       services.disposeTeachers();

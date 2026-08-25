@@ -33,6 +33,41 @@ export const NPC_ANIMATION_SLOT_LABELS: Record<NPCAnimationSlot, string> = {
 };
 export type NPCInteractionMode = "scripted" | "agent";
 
+/** Where an NPC's effective mode came from. */
+export type NPCInteractionModeTier = "definition" | "quest";
+
+export interface ResolvedNPCInteractionMode {
+  mode: NPCInteractionMode;
+  tier: NPCInteractionModeTier;
+}
+
+/**
+ * THE precedence for an NPC's interaction mode. The authored
+ * definition says what an NPC normally is; a quest action can
+ * override it while the story needs something else, and clearing
+ * the override hands the NPC back to its definition.
+ *
+ * Every site that branches on scripted-vs-agent resolves through
+ * here rather than reading `npcDefinition.interactionMode`, so
+ * there is one answer rather than one per caller. Today that is
+ * four sites: three in `gameplay-session` (which selection shape,
+ * whether the NPC is interactable, which resolve path) and
+ * sugarlang's `listWarmableNpcIds`. Everything further downstream
+ * already routes on the DERIVED `conversationKind`, so it follows
+ * automatically.
+ *
+ * `tier` is returned so a caller can say WHY -- the same reason
+ * `resolveEffectiveInstanceCollider` returns one.
+ */
+export function resolveEffectiveInteractionMode(
+  definitionMode: NPCInteractionMode,
+  questOverride: NPCInteractionMode | null | undefined
+): ResolvedNPCInteractionMode {
+  return questOverride
+    ? { mode: questOverride, tier: "quest" }
+    : { mode: definitionMode, tier: "definition" };
+}
+
 export interface NPCAnimationBindings {
   idle: string | null;
   walk: string | null;

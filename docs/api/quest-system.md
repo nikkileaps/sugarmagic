@@ -195,6 +195,7 @@ to a real system is not offered.
 | `learn-fact` | `factId`, `displayText` | writes a player-known fact (see below) |
 | `playCue` | `cueDefinitionId` | plays a sound cue, keyed per node |
 | `playAnimation` | `npcDefinitionId`, `slot`, `repeatCount` | plays one of the NPC's bound animation slots, on every presence of that NPC, then returns it to locomotion |
+| `setNpcInteractionMode` | `npcDefinitionId`, `mode` | overrides an NPC's scripted/agent mode from here on; a null `mode` clears the override and hands the NPC back to its authored definition. Targets the definition, so it reaches every presence. Persisted |
 
 An unknown cue is reported once per cue id with the quest and node that named
 it. A missing reference on any action is skipped rather than guessed at.
@@ -343,6 +344,44 @@ uncached user prompt block (see API 008 for the full prompt seam).
 
 **Studio:** Author tasks in the Behavior inspector. "Active Time Window" is a
 multi-select of the 7 bands. Leave blank for any time.
+
+---
+
+## NPC Interaction Mode
+
+An NPC is authored `scripted` (says what its dialogue says) or `agent` (talks
+freely through SugarAgent). A quest can override that mid-session with the
+`setNpcInteractionMode` action, and clearing the override hands the NPC back to
+its definition. A shopkeeper can be scripted until the player has been properly
+introduced, then free to talk.
+
+**Precedence lives in one place.** `resolveEffectiveInteractionMode`
+(`packages/domain/src/npc-definition`) takes the authored mode and the override
+and returns `{ mode, tier }`, where `tier` is `definition` or `quest`. Every
+site that branches on scripted-vs-agent resolves through it rather than reading
+`npcDefinition.interactionMode`, which is the authored value and ignores the
+override.
+
+**The override reaches the definition, not one placement** -- every presence of
+that NPC flips together, the same reach `playAnimation` has.
+
+**What actually changes** is `conversationKind`: `scripted` builds a
+`scripted-dialogue` selection, anything else builds `free-form`. That matters
+because everything downstream routes on the derived kind rather than on the
+mode -- SugarAgent's `canHandle` tests for `free-form`, and sugarlang's teacher
+middleware skips `scripted-dialogue`. So resolving the mode once, where the
+selection is built, is what makes a flip reach the whole pipeline.
+
+**A flip forces a Teacher re-warm.** The warm situation key is
+scene/quest/objectives/time and has no NPC axis, so flipping an NPC usually
+leaves the key sitting still -- a newly agentified NPC would talk on a directive
+planned when it was scripted and therefore never warmed. The host notifies
+plugins of a mode change (`onNpcInteractionModeChange`), and sugarlang responds
+by invalidating the warm. A flip that changes nothing does not notify.
+
+**Persisted** in the `npc.interaction-mode` slice, `host-owned` tier -- the mode
+decides how a conversation opens and which NPCs get warmed, both read from the
+moment the world spawns.
 
 ---
 

@@ -327,6 +327,7 @@ rather than restating it.**
 | `player.known-facts` | facts the player has learned | runtime-core |
 | `inventory.player` | the player's inventory | runtime-core |
 | `npc.behavior` | per-NPC behavior state | runtime-core |
+| `npc.interaction-mode` | quest-set overrides of an NPC's scripted/agent mode | runtime-core |
 | `caster.stats` | caster stats | runtime-core |
 | `playthrough.identity` | which playthrough this save is | runtime-core |
 | `host.player` | current region + player position | web host |
