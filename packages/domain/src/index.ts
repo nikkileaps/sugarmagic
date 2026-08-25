@@ -10,6 +10,7 @@ export * from "./world-flag/index";
 export * from "./world-flag/migration";
 export * from "./world-flag/references";
 export * from "./dialogue-definition/index";
+export * from "./episodes/index";
 export * from "./game-project/index";
 export * from "./gameplay-authoring/index";
 export * from "./history/index";

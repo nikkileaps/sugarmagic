@@ -117,6 +117,25 @@ dialogue narrative opens the conversation with nobody nearby and no press.
 
 ---
 
+## Condition, event, action
+
+Three words the code already uses, whose distinction decides which tool a
+piece of authoring reaches for:
+
+- **condition** -- a boolean test against current state, polled. `hasFlag`,
+  `questCompleted`, `questStage`.
+- **event** -- a named momentary poke. `emitEvent` / `notifyEvent`. Not
+  persistent: if nothing is listening at that instant it is gone.
+- **action** -- something a node does. `setFlag`, `giveItem`,
+  `advanceToNextScene`.
+
+The polled-versus-momentary split matters most when a condition needs to
+react to something that happened: "the player talked to Penelope" is an
+event, so it reaches a condition by way of a world flag, not directly.
+
+(For **ordered** and **gated**, see
+[domain-model.md](./domain-model.md#ordered-and-gated).)
+
 ## Actions or behavior tasks: which one
 
 Two systems can make the world change when a quest moves, and picking the wrong
@@ -169,13 +188,14 @@ to a real system is not offered.
 | `emitEvent` | `eventName` | fires a named event; completes any active node waiting on it |
 | `giveItem` | `itemDefinitionId`, `count` | adds items to the player inventory |
 | `removeItem` | `itemDefinitionId`, `count` | removes items from the inventory |
-| `unlockScene` | `sceneId` | adds the Scene to campaign progression |
-| `advanceToNextScene` | `sceneId` (null = next by order) | completes the Scene and moves the player |
+| `unlockEpisode` | `episodeId` | opens an Episode's gate (Episodes are gated, Scenes are not) |
+| `advanceToNextScene` | `sceneId` (null = next in this Episode) | completes the Scene and moves the player; running off the end of an Episode is the Episode boundary, where credits roll |
 | `set-time-of-day` | `band` | sets the world clock band (persisted) |
 | `advance-day` | -- | increments the world day counter (persisted) |
 | `learn-fact` | `factId`, `displayText` | writes a player-known fact (see below) |
 | `playCue` | `cueDefinitionId` | plays a sound cue, keyed per node |
 | `playAnimation` | `npcDefinitionId`, `slot`, `repeatCount` | plays one of the NPC's bound animation slots, on every presence of that NPC, then returns it to locomotion |
+| `setNpcInteractionMode` | `npcDefinitionId`, `mode` | overrides an NPC's scripted/agent mode from here on; a null `mode` clears the override and hands the NPC back to its authored definition. Targets the definition, so it reaches every presence. Persisted |
 
 An unknown cue is reported once per cue id with the quest and node that named
 it. A missing reference on any action is skipped rather than guessed at.
@@ -324,6 +344,44 @@ uncached user prompt block (see API 008 for the full prompt seam).
 
 **Studio:** Author tasks in the Behavior inspector. "Active Time Window" is a
 multi-select of the 7 bands. Leave blank for any time.
+
+---
+
+## NPC Interaction Mode
+
+An NPC is authored `scripted` (says what its dialogue says) or `agent` (talks
+freely through SugarAgent). A quest can override that mid-session with the
+`setNpcInteractionMode` action, and clearing the override hands the NPC back to
+its definition. A shopkeeper can be scripted until the player has been properly
+introduced, then free to talk.
+
+**Precedence lives in one place.** `resolveEffectiveInteractionMode`
+(`packages/domain/src/npc-definition`) takes the authored mode and the override
+and returns `{ mode, tier }`, where `tier` is `definition` or `quest`. Every
+site that branches on scripted-vs-agent resolves through it rather than reading
+`npcDefinition.interactionMode`, which is the authored value and ignores the
+override.
+
+**The override reaches the definition, not one placement** -- every presence of
+that NPC flips together, the same reach `playAnimation` has.
+
+**What actually changes** is `conversationKind`: `scripted` builds a
+`scripted-dialogue` selection, anything else builds `free-form`. That matters
+because everything downstream routes on the derived kind rather than on the
+mode -- SugarAgent's `canHandle` tests for `free-form`, and sugarlang's teacher
+middleware skips `scripted-dialogue`. So resolving the mode once, where the
+selection is built, is what makes a flip reach the whole pipeline.
+
+**A flip forces a Teacher re-warm.** The warm situation key is
+scene/quest/objectives/time and has no NPC axis, so flipping an NPC usually
+leaves the key sitting still -- a newly agentified NPC would talk on a directive
+planned when it was scripted and therefore never warmed. The host notifies
+plugins of a mode change (`onNpcInteractionModeChange`), and sugarlang responds
+by invalidating the warm. A flip that changes nothing does not notify.
+
+**Persisted** in the `npc.interaction-mode` slice, `host-owned` tier -- the mode
+decides how a conversation opens and which NPCs get warmed, both read from the
+moment the world spawns.
 
 ---
 
@@ -514,12 +572,14 @@ __sugaragentQuestContext.dump("npc:definition-id")
 
 ## Save and Persistence
 
-| what | participant id | persists |
-|---|---|---|
-| Quest manager state (flags, active quests, completed quests, completed nodes) | `quest.manager` | yes |
-| World clock (band + day) | `world.time` | yes |
-| Player known facts | `player.known-facts` | yes |
-| Recent world events | -- | no (session-only) |
+The quest system's own state lives in the `quest.manager` slice (flags, active
+quests, completed quests, completed nodes). The world clock (`world.time`) and
+player known facts (`player.known-facts`) are separate slices that quest
+content reads. Recent world events are session-only and never persist.
+
+**The full save-participant list lives in
+[domain-model.md](./domain-model.md#persistence)** -- one canonical table, not
+restated here.
 
 All save participants restore before `startInitialQuests()` is called.
 

@@ -1,6 +1,9 @@
 import { createUuid } from "../shared/identity";
 import { normalizeNodeGroups, type NodeGroup } from "../graph-layout/index";
-import type { NPCAnimationSlot } from "../npc-definition/index";
+import type {
+  NPCAnimationSlot,
+  NPCInteractionMode
+} from "../npc-definition/index";
 
 // Plan 074 §074.1' -- canonical location; runtime-core re-exports from here.
 export type TimeOfDayBand =
@@ -100,13 +103,24 @@ export type QuestActionDefinition =
   | { type: "emitEvent"; eventName: string }
   | { type: "giveItem"; itemDefinitionId: string | null; count: number }
   | { type: "removeItem"; itemDefinitionId: string | null; count: number }
-  // Plan 058 §058.5 -- Scene progression. `unlockScene` adds the Scene to
-  // campaign.progression's manual unlocks; `advanceToNextScene` completes the
+  // Campaign progression. `unlockEpisode` opens an Episode's gate by adding
+  // it to campaign.progression's manual unlocks -- Episodes are gated, Scenes
+  // are not, so there is no unlockScene. `advanceToNextScene` completes the
   // current Scene and moves the player into `sceneId`, or into the next Scene
-  // by order when it is null.
-  | { type: "unlockScene"; sceneId: string | null }
+  // of the current Episode when it is null; running off the end of an Episode
+  // is the Episode boundary, where credits roll.
+  | { type: "unlockEpisode"; episodeId: string | null }
   | { type: "advanceToNextScene"; sceneId: string | null }
   | { type: "playCue"; cueDefinitionId: string | null }
+  // Overrides an NPC's interaction mode from here on, or clears the override
+  // with a null `mode` so the NPC falls back to its authored definition.
+  // Targets the DEFINITION, so it reaches every presence of that NPC --
+  // same reach as `playAnimation`. Persisted, so it survives a reload.
+  | {
+      type: "setNpcInteractionMode";
+      npcDefinitionId: string | null;
+      mode: NPCInteractionMode | null;
+    }
   // Plays one of the NPC's bound animation slots `repeatCount` times through,
   // then hands the NPC back to its normal locomotion animation. Every presence
   // of that NPC in the scene plays.
@@ -163,12 +177,13 @@ const QUEST_ACTION_TYPE_LABELS: Record<QuestActionType, string> = {
   emitEvent: "Emit Event",
   giveItem: "Give Item",
   removeItem: "Remove Item",
-  unlockScene: "Unlock Scene",
+  unlockEpisode: "Unlock Episode",
   advanceToNextScene: "Advance to Next Scene",
   "set-time-of-day": "Set Time of Day",
   "advance-day": "Advance Day",
   "learn-fact": "Learn Fact",
   playCue: "Play Cue",
+  setNpcInteractionMode: "Set NPC Interaction Mode",
   playAnimation: "Play Animation"
 };
 
@@ -202,11 +217,16 @@ export function createQuestAction(type: QuestActionType): QuestActionDefinition 
     case "giveItem":
     case "removeItem":
       return { type, itemDefinitionId: null, count: 1 };
-    case "unlockScene":
+    case "unlockEpisode":
+      return { type, episodeId: null };
     case "advanceToNextScene":
       return { type, sceneId: null };
     case "playCue":
       return { type, cueDefinitionId: null };
+    case "setNpcInteractionMode":
+      // Null mode = clear the override. The author picks the NPC and
+      // the mode; both start unset.
+      return { type, npcDefinitionId: null, mode: null };
     case "playAnimation":
       return { type, npcDefinitionId: null, slot: null, repeatCount: 1 };
     case "set-time-of-day":
@@ -507,7 +527,11 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
           source.count !== undefined ? source.count : source.value
         )
       };
-    case "unlockScene":
+    case "unlockEpisode":
+      return {
+        type,
+        episodeId: readString(source.episodeId) ?? legacyTargetId
+      };
     case "advanceToNextScene":
       return {
         type,
@@ -518,6 +542,18 @@ function normalizeQuestAction(action: unknown): QuestActionDefinition | null {
         type: "playCue",
         cueDefinitionId: readString(source.cueDefinitionId) ?? legacyTargetId
       };
+    case "setNpcInteractionMode": {
+      const mode = readString(source.mode);
+      return {
+        type: "setNpcInteractionMode",
+        npcDefinitionId: readString(source.npcDefinitionId) ?? legacyTargetId,
+        // Anything outside the union normalizes to null, which means
+        // "clear the override" rather than a hard failure -- an authored
+        // mode removed from the union should hand the NPC back to its
+        // definition, not strand the action.
+        mode: mode === "scripted" || mode === "agent" ? mode : null
+      };
+    }
     case "playAnimation": {
       const slot = readString(source.slot);
       return {

@@ -20,9 +20,17 @@ import { type GameSavePayload } from "../save";
 import {
   createDefaultScene,
   DEFAULT_SCENE_ID,
-  normalizeScenes,
-  type Scene
+  normalizeScenes
 } from "../scenes";
+import {
+  createDefaultEpisode,
+  DEFAULT_EPISODE_END_ROUTING,
+  DEFAULT_EPISODE_ID,
+  normalizeEpisodeEndRouting,
+  normalizeEpisodes,
+  type Episode,
+  type EpisodeEndRouting
+} from "../episodes";
 import {
   normalizeItemDefinition,
   type ItemDefinition
@@ -217,19 +225,30 @@ export interface GameProject {
   gameRootPath: string;
   regionRegistry: RegionReference[];
   /**
-   * Plan 058 §058.1 — narrative partitions (Base + Overlay
-   * pattern). Regions are the shared geographic base; each Scene
-   * carries per-region overlays. Pre-058 projects load with an
-   * empty array; the Studio load-time migration synthesizes the
-   * default Scene from the regions' legacy `region.scene` fields.
+   * The campaign: ordered, gated Episodes, each holding its own
+   * ordered Scenes. Position in this list IS the order — there is
+   * no order number. Scenes live inside their Episode, so reach
+   * them with `getAllScenes` / `findSceneById` / `mapScenes`
+   * rather than a flat project-level array.
+   *
+   * Regions remain the shared geographic base; a Scene carries
+   * per-region overlays composed on top while it is active.
    */
-  scenes: Scene[];
+  episodes: Episode[];
   /**
-   * Plan 058 — what the game calls its Scenes in player-facing UI
-   * ("Chapter" / "Episode" / "Act"). Engine-side the primitive is
-   * always `Scene`; this label is presentation only.
+   * Where the player goes when an Episode ends, after credits.
+   *
+   *   - `"episodes-screen"` — land on the Episodes screen and
+   *     choose. The default.
+   *   - `"next-episode"` — continue straight into the next
+   *     Episode IF its gate is open; fall back to the Episodes
+   *     screen when it is shut, so a gated Episode is never a
+   *     dead end.
+   *
+   * Between two Scenes of one Episode this has no effect — that
+   * transition is not configurable.
    */
-  scenesUiLabel: string;
+  episodeEndRouting: EpisodeEndRouting;
   pluginConfigurations: PluginConfigurationRecord[];
   contentLibraryId: string | null;
   playerDefinition: PlayerDefinition;
@@ -422,8 +441,8 @@ export function normalizeGameProject(
         | "audioMixer"
         | "mechanics"
         | "defaultGameSavePayload"
-        | "scenes"
-        | "scenesUiLabel"
+        | "episodes"
+        | "episodeEndRouting"
         | "musicBindings"
         | "creditsDefinition"
       > & {
@@ -454,7 +473,11 @@ export function normalizeGameProject(
         audioMixer?: Partial<AudioMixerSettings> | null;
         mechanics?: Partial<MechanicsDefinition> | null;
         defaultGameSavePayload?: GameSavePayload | null;
-        // Plan 058 §058.1 — pre-058 project files lack these keys.
+        // A file written before Episodes carries `scenes` and
+        // `scenesUiLabel`. Both are accepted on input only so they can be
+        // dropped from the output; nothing converts them.
+        episodes?: unknown;
+        episodeEndRouting?: unknown;
         scenes?: unknown;
         scenesUiLabel?: unknown;
         // Plan 059 §059.1 — pre-059 project files lack this key.
@@ -482,10 +505,17 @@ export function normalizeGameProject(
   const {
     deployment: legacyDeployment,
     versionedProjectIdentifiers: legacyVersionedProjectIdentifiers,
+    // The pre-Episodes campaign keys. Nothing reads them -- dropping them
+    // here keeps a stale file from writing them back out alongside the
+    // `episodes` that replaced them.
+    scenes: _legacyScenes,
+    scenesUiLabel: _legacyScenesUiLabel,
     ...gameProjectRest
   } = gameProject as {
     deployment?: unknown;
     versionedProjectIdentifiers?: unknown;
+    scenes?: unknown;
+    scenesUiLabel?: unknown;
   } & Record<string, unknown>;
   const migratedPluginConfigurations = migrateLegacyDeployFields(
     normalizePluginConfigurationRecords(
@@ -544,13 +574,9 @@ export function normalizeGameProject(
       (gameProject as { defaultGameSavePayload?: unknown })
         .defaultGameSavePayload
     ),
-    // Plan 058 §058.1 — pre-058 projects have no `scenes` key;
-    // normalize to empty and let the Studio load-time migration
-    // synthesize the default Scene (it needs the regions' legacy
-    // fields, which this project-level normalizer doesn't see).
-    scenes: normalizeScenes((gameProject as { scenes?: unknown }).scenes),
-    scenesUiLabel: normalizeScenesUiLabel(
-      (gameProject as { scenesUiLabel?: unknown }).scenesUiLabel
+    episodes: resolveEpisodes(gameProject),
+    episodeEndRouting: normalizeEpisodeEndRouting(
+      (gameProject as { episodeEndRouting?: unknown }).episodeEndRouting
     ),
     musicBindings: normalizeMusicBindings(
       (gameProject as { musicBindings?: Partial<MusicBindings> | null })
@@ -566,10 +592,25 @@ export function normalizeGameProject(
   };
 }
 
-function normalizeScenesUiLabel(input: unknown): string {
-  return typeof input === "string" && input.trim().length > 0
-    ? input.trim()
-    : "Scene";
+/**
+ * The project's campaign. A file with no `episodes` gets one
+ * holding one Scene rather than an empty campaign, so Studio
+ * always has an active Scene to author against and the runtime
+ * always has something to boot into.
+ *
+ * There is NO migration from the pre-Episodes `scenes` shape.
+ * That shape is gone; a file still carrying it is overwritten
+ * with a fresh campaign rather than converted.
+ */
+function resolveEpisodes(gameProject: { episodes?: unknown }): Episode[] {
+  const authored = normalizeEpisodes(gameProject.episodes);
+  if (authored.length > 0) return authored;
+  return [
+    createDefaultEpisode({
+      episodeId: DEFAULT_EPISODE_ID,
+      scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })]
+    })
+  ];
 }
 
 export function createDefaultGameProject(
@@ -599,11 +640,17 @@ export function createDefaultGameProject(
     audioMixer: createDefaultAudioMixerSettings(),
     mechanics: createDefaultMechanicsDefinition(),
     defaultGameSavePayload: null,
-    // Plan 058 §058.1 — fresh projects start with the default
-    // Scene already in place so authoring always has an active
-    // Scene context (Ambient Context pattern) from day one.
-    scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })],
-    scenesUiLabel: "Scene",
+    // A fresh project starts with one Episode holding the default
+    // Scene, so authoring always has an active Scene context
+    // (Ambient Context pattern) from day one.
+    episodes: [
+      createDefaultEpisode({
+        episodeId: DEFAULT_EPISODE_ID,
+        displayName: gameName,
+        scenes: [createDefaultScene({ sceneId: DEFAULT_SCENE_ID })]
+      })
+    ],
+    episodeEndRouting: DEFAULT_EPISODE_END_ROUTING,
     musicBindings: normalizeMusicBindings(null),
     creditsDefinition: normalizeCreditsDefinition(null)
   };

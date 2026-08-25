@@ -18,6 +18,7 @@ import {
   createDefaultGameProject,
   createDefaultRegion,
   createEmptyContentLibrarySnapshot,
+  getAllScenes,
   normalizeGameProject,
   normalizeRegionDocumentForLoad,
   migrateWorldFlagReferences
@@ -391,7 +392,7 @@ export async function saveProjectWithManagedFiles(
   const reconciliation = reconcilePaintedMaskDefinitionsForSave(
     active.contentLibrary,
     active.regions,
-    active.gameProject.scenes ?? []
+    getAllScenes(active.gameProject.episodes ?? [])
   );
 
   await writeJsonFile(active.handle, [PROJECT_FILE], active.gameProject);

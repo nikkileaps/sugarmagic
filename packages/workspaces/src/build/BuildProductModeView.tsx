@@ -39,6 +39,7 @@ import {
   getActiveRegion,
   getActiveRegionContents,
   getActiveScene,
+  getAllScenes,
   type AuthoringSession,
   type MusicBindings
 } from "@sugarmagic/domain";
@@ -276,7 +277,7 @@ export function useBuildProductModeView(
     getRegionContents: () =>
       session ? getActiveRegionContents(session) : null,
     getActiveScene: () => (session ? getActiveScene(session) : null),
-    getAllScenes: () => session?.gameProject.scenes ?? [],
+    getAllScenes: () => getAllScenes(session?.gameProject.episodes ?? []),
     onConvertAssetScope: props.onConvertAssetScope,
     onCopyEntryToScene: props.onCopyEntryToScene,
     assetDefinitions,

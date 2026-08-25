@@ -44,10 +44,10 @@ export { SUGARMAGIC_VERSION } from "./version";
 // Scene properties preview so preview and runtime card can't
 // drift apart.
 export {
-  SCENE_CARD_FADE_BACKGROUNDS,
-  SCENE_CARD_FADE_TEXT_COLORS,
-  SCENE_CARD_FONT_FAMILY
-} from "./sceneTransitionCard";
+  TRANSITION_CARD_FADE_BACKGROUNDS,
+  TRANSITION_CARD_FADE_TEXT_COLORS,
+  TRANSITION_CARD_FONT_FAMILY
+} from "./transitionCard";
 // Plan 059 — the exit overlay (credits + Netflix routing) and
 // the pacing formula Studio's live preview shares (§059.6).
 export {

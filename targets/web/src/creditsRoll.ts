@@ -13,7 +13,7 @@
  *   - finale (no next) -> a return button, no countdown; the
  *     overlay waits for the press.
  *
- * Plain DOM (sceneTransitionCard family): renders while the world
+ * Plain DOM (transitionCard family): renders while the world
  * is about to be torn down by the reload; the overlay stays up
  * after resolve to mask the reload flash.
  *
@@ -23,7 +23,7 @@
  */
 
 import type { CreditsDefinition } from "@sugarmagic/domain";
-import { SCENE_CARD_FONT_FAMILY } from "./sceneTransitionCard";
+import { TRANSITION_CARD_FONT_FAMILY } from "./transitionCard";
 
 /** Scroll pacing: how long each viewport-height of content takes
  *  to travel. Tuned for read-along speed; clamped so tiny credits
@@ -72,7 +72,7 @@ export function showSceneExitOverlay(
     "transition: opacity 400ms ease-in-out",
     "pointer-events: all",
     "user-select: none",
-    `font-family: ${SCENE_CARD_FONT_FAMILY}`,
+    `font-family: ${TRANSITION_CARD_FONT_FAMILY}`,
     "text-align: center"
   ].join(";");
 
@@ -142,7 +142,7 @@ export function showSceneExitOverlay(
     "padding: 12px 28px",
     "font-size: 16px",
     "letter-spacing: 0.08em",
-    `font-family: ${SCENE_CARD_FONT_FAMILY}`,
+    `font-family: ${TRANSITION_CARD_FONT_FAMILY}`,
     "color: #f5f0e8",
     "background: rgba(245, 240, 232, 0.08)",
     "border: 1px solid rgba(245, 240, 232, 0.45)",

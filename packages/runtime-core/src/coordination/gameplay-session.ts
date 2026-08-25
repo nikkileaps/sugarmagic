@@ -31,6 +31,8 @@ import {
   type MechanicsDefinition,
   type NPCAnimationSlot,
   type NPCDefinition,
+  type NPCInteractionMode,
+  resolveEffectiveInteractionMode,
   type PlayerDefinition,
   createWorldFlagNameResolver,
   type WorldFlagDefinition,
@@ -111,6 +113,7 @@ import {
   type CollisionWorld
 } from "../collision";
 import type { NavMeshPathfinder } from "../navmesh";
+import type { NpcInteractionModeStore } from "../npc/interaction-mode-store";
 import {
   resolveWorldFlagWriteValue,
   evaluateRegionQuestBinding,
@@ -219,13 +222,14 @@ export interface RuntimeGameplaySessionControllerOptions {
    */
   activeScene?: Scene | null;
   /**
-   * Plan 058 §058.5 — quest Scene-progression actions
-   * (unlockScene / advanceToNextScene) forward here; the host
-   * owns campaign.progression and the world reload that a Scene
-   * change implies.
+   * Quest campaign-progression actions (unlockEpisode /
+   * advanceToNextScene) forward here; the host owns
+   * campaign.progression and the world reload that a Scene change
+   * implies.
    */
   onSceneAction?: (action: {
-    type: "unlockScene" | "advanceToNextScene";
+    type: "unlockEpisode" | "advanceToNextScene";
+    episodeId?: string | null;
     sceneId: string | null;
   }) => void;
   /**
@@ -252,6 +256,13 @@ export interface RuntimeGameplaySessionControllerOptions {
   itemDefinitions: ItemDefinition[];
   documentDefinitions: DocumentDefinition[];
   npcDefinitions: NPCDefinition[];
+  /**
+   * Quest-set overrides of an NPC's authored interaction mode.
+   * The host owns the store so it outlives the assembly and rides
+   * the save; the assembly reads it and writes through
+   * `onSetNpcInteractionMode`.
+   */
+  npcInteractionModeStore?: NpcInteractionModeStore | null;
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
   mechanics: MechanicsDefinition;
@@ -498,19 +509,30 @@ export function createConversationSelectionFromNpc(options: {
   dialogueDefinitionId?: string | null;
   trackedQuest?: QuestTrackerView | null;
   metadata?: Record<string, unknown>;
+  /** A quest-set override of the NPC's authored mode, or null. */
+  interactionModeOverride?: NPCInteractionMode | null;
 }): ConversationSelectionContext | null {
   const {
     npcDefinition,
     dialogueDefinitionId = null,
     trackedQuest = null,
-    metadata
+    metadata,
+    interactionModeOverride = null
   } = options;
   const selectionMetadata = cloneSelectionMetadata({
     selectionMetadata: metadata,
     npcMetadata: npcDefinition.metadata
   });
+  // The EFFECTIVE mode, not the authored one -- a quest may have
+  // flipped this NPC. Everything downstream routes on the derived
+  // `conversationKind`, so resolving here is what makes the flip
+  // reach sugaragent and the teacher middleware.
+  const { mode: interactionMode } = resolveEffectiveInteractionMode(
+    npcDefinition.interactionMode,
+    interactionModeOverride
+  );
 
-  if (npcDefinition.interactionMode === "scripted") {
+  if (interactionMode === "scripted") {
     if (!dialogueDefinitionId) {
       return null;
     }
@@ -530,7 +552,7 @@ export function createConversationSelectionFromNpc(options: {
     npcDefinitionId: npcDefinition.definitionId,
     npcDisplayName: npcDefinition.displayName,
     npcDescription: npcDefinition.description ?? null,
-    interactionMode: npcDefinition.interactionMode,
+    interactionMode,
     lorePageId: npcDefinition.lorePageId,
     activeQuest: toActiveQuestContext(trackedQuest),
     scriptedFollowupDialogueDefinitionId: dialogueDefinitionId,
@@ -552,6 +574,7 @@ export function createRuntimeGameplaySessionController(
     itemDefinitions,
     documentDefinitions,
     npcDefinitions,
+    npcInteractionModeStore = null,
     dialogueDefinitions,
     questDefinitions,
     mechanics,
@@ -1225,6 +1248,29 @@ export function createRuntimeGameplaySessionController(
     questJournal.update(questManager.getJournalData());
   }
 
+  /** The quest-set override for this NPC, or null. */
+  function getNpcInteractionModeOverride(
+    npcDefinitionId: string
+  ): NPCInteractionMode | null {
+    return npcInteractionModeStore?.get(npcDefinitionId) ?? null;
+  }
+
+  /**
+   * An NPC's mode AS IT STANDS -- the authored definition unless a
+   * quest has overridden it. Every branch on scripted-vs-agent in
+   * this file goes through here; reading
+   * `npcDefinition.interactionMode` directly would ignore the
+   * override and give a second answer.
+   */
+  function effectiveInteractionModeOf(
+    npcDefinition: NPCDefinition
+  ): NPCInteractionMode {
+    return resolveEffectiveInteractionMode(
+      npcDefinition.interactionMode,
+      getNpcInteractionModeOverride(npcDefinition.definitionId)
+    ).mode;
+  }
+
   // Single enforcer for NPC interactable availability, used both at
   // interactable creation and on every sync. Missing definition falls to
   // the scripted/coordinator path.
@@ -1232,7 +1278,10 @@ export function createRuntimeGameplaySessionController(
     const npcDefinition = npcDefinitions.find(
       (candidate) => candidate.definitionId === npcDefinitionId
     );
-    if (!npcDefinition || npcDefinition.interactionMode === "scripted") {
+    if (
+      !npcDefinition ||
+      effectiveInteractionModeOf(npcDefinition) === "scripted"
+    ) {
       return questDialogueCoordinator.isNpcInteractableAvailable(npcDefinitionId);
     }
     return conversationProviders.length > 0;
@@ -1263,7 +1312,7 @@ export function createRuntimeGameplaySessionController(
       return null;
     }
 
-    if (npcDefinition.interactionMode === "scripted") {
+    if (effectiveInteractionModeOf(npcDefinition) === "scripted") {
       const dialogueDefinitionId =
         questDialogueCoordinator.resolveNpcDialogueDefinitionId(
           npcDefinitionId
@@ -1273,13 +1322,14 @@ export function createRuntimeGameplaySessionController(
           "conversation-selection-scripted-missing-dialogue",
           {
             npcDefinitionId,
-            interactionMode: npcDefinition.interactionMode
+            interactionMode: effectiveInteractionModeOf(npcDefinition)
           }
         );
         return null;
       }
       const selection = createConversationSelectionFromNpc({
         npcDefinition,
+        interactionModeOverride: getNpcInteractionModeOverride(npcDefinitionId),
         dialogueDefinitionId
       });
       if (!selection) {
@@ -1288,7 +1338,7 @@ export function createRuntimeGameplaySessionController(
       logConversationDebug("conversation-selection-resolved", {
         npcDefinitionId,
         npcDisplayName: npcDefinition.displayName,
-        interactionMode: npcDefinition.interactionMode,
+        interactionMode: effectiveInteractionModeOf(npcDefinition),
         conversationKind: selection.conversationKind,
         dialogueDefinitionId
       });
@@ -1301,6 +1351,7 @@ export function createRuntimeGameplaySessionController(
 
     const selection = createConversationSelectionFromNpc({
       npcDefinition,
+      interactionModeOverride: getNpcInteractionModeOverride(npcDefinitionId),
       dialogueDefinitionId,
       trackedQuest
     });
@@ -1310,7 +1361,7 @@ export function createRuntimeGameplaySessionController(
     logConversationDebug("conversation-selection-resolved", {
       npcDefinitionId,
       npcDisplayName: npcDefinition.displayName,
-      interactionMode: npcDefinition.interactionMode,
+      interactionMode: effectiveInteractionModeOf(npcDefinition),
       conversationKind: selection.conversationKind,
       dialogueDefinitionId: selection.dialogueDefinitionId ?? null,
       lorePageId: selection.lorePageId ?? null,
@@ -2050,9 +2101,32 @@ export function createRuntimeGameplaySessionController(
         });
         return;
 
-      // Plan 058 §058.5 — Scene progression actions belong to the
-      // host (campaign.progression lives there), not the assembly.
-      case "unlockScene":
+      case "setNpcInteractionMode": {
+        if (!action.npcDefinitionId || !npcInteractionModeStore) return;
+        // A no-op flip must not invalidate the Teacher warm, so the
+        // store reports whether anything actually changed.
+        const changed = npcInteractionModeStore.set(
+          action.npcDefinitionId,
+          action.mode
+        );
+        if (!changed) return;
+        // The NPC may have just become interactable, or stopped being
+        // so: availability is resolved per sync from the effective
+        // mode, and this makes the change visible without waiting for
+        // the player to walk away and back.
+        syncNpcInteractionAvailability();
+        return;
+      }
+
+      // Campaign progression actions belong to the host
+      // (campaign.progression lives there), not the assembly.
+      case "unlockEpisode":
+        options.onSceneAction?.({
+          type: action.type,
+          episodeId: action.episodeId,
+          sceneId: null
+        });
+        return;
       case "advanceToNextScene":
         options.onSceneAction?.({
           type: action.type,
@@ -2780,6 +2854,21 @@ export function createRuntimeGameplayAssembly(
       itemDefinitions: options.itemDefinitions,
       documentDefinitions: options.documentDefinitions,
       npcDefinitions: options.npcDefinitions,
+      // The EFFECTIVE mode, so a plugin that branches on
+      // scripted-vs-agent sees a quest's flip rather than only what
+      // the project shipped with.
+      getEffectiveNpcInteractionMode: (npcDefinitionId) => {
+        const npcDefinition = options.npcDefinitions.find(
+          (candidate) => candidate.definitionId === npcDefinitionId
+        );
+        if (!npcDefinition) return null;
+        return resolveEffectiveInteractionMode(
+          npcDefinition.interactionMode,
+          options.npcInteractionModeStore?.get(npcDefinitionId) ?? null
+        ).mode;
+      },
+      onNpcInteractionModeChange: (listener) =>
+        options.npcInteractionModeStore?.subscribe(listener) ?? (() => {}),
       dialogueDefinitions: options.dialogueDefinitions,
       questDefinitions: options.questDefinitions,
       buildConversationRuntimeContext:

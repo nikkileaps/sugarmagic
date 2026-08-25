@@ -2,6 +2,7 @@ import type {
   DialogueCondition,
   DialogueDefinition
 } from "../dialogue-definition";
+import { mapScenes } from "../episodes";
 import type { GameProject } from "../game-project";
 import type {
   QuestActionDefinition,
@@ -272,8 +273,8 @@ export function mapWorldFlagReferences(
   }));
 
   // NPC presence conditions are Scene-scoped, not region-scoped: they live on
-  // Scene.regionOverlays in the GameProject (Plan 058).
-  const scenes = gameProject.scenes.map((scene) => ({
+  // Scene.regionOverlays, inside the Episode that owns the Scene.
+  const episodes = mapScenes(gameProject.episodes, (scene) => ({
     ...scene,
     regionOverlays: Object.fromEntries(
       Object.entries(scene.regionOverlays).map(([regionId, overlay]) => [
@@ -307,7 +308,7 @@ export function mapWorldFlagReferences(
       questDefinitions,
       dialogueDefinitions,
       spellDefinitions,
-      scenes
+      episodes
     },
     regions: mappedRegions
   };

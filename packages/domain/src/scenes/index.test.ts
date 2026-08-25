@@ -1,12 +1,13 @@
 /**
  * packages/domain/src/scenes/index.test.ts
  *
- * Purpose: Pins the Scene domain type's defensive normalization
- * (Plan 058 §058.1) — malformed input collapses to safe defaults,
- * overlays coerce through the region-authoring factories, scenes
- * dedupe by id and sort by sceneOrder.
+ * Purpose: Pins the Scene domain type's defensive normalization —
+ * malformed input collapses to safe defaults, overlays coerce
+ * through the region-authoring factories, and a Scene list dedupes
+ * by id while PRESERVING input order.
  *
- * Implements: Plan 058 §058.1 tests
+ * The gate and the campaign resolvers live in `episodes/` and are
+ * tested there: a Scene is ordered but not gated.
  *
  * Status: active
  */
@@ -17,9 +18,7 @@ import {
   createDefaultScene,
   createRegionSceneOverlay,
   normalizeScene,
-  normalizeScenes,
-  resolveActiveScene,
-  resolveUnlockedSceneIds
+  normalizeScenes
 } from "./index";
 
 describe("createDefaultScene", () => {
@@ -30,12 +29,18 @@ describe("createDefaultScene", () => {
     });
     expect(scene.sceneId).toBe("scene:default");
     expect(scene.displayName).toBe("The Founding");
-    expect(scene.sceneOrder).toBe(0);
-    expect(scene.unlockCondition).toBe("always");
     expect(scene.environmentOverride).toBeNull();
     expect(scene.audioOverride).toBeNull();
     expect(scene.transitionConfig).toBeNull();
     expect(scene.regionOverlays).toEqual({});
+  });
+
+  it("has no order number and no gate of its own", () => {
+    // Asserting a field is ABSENT means reading off-type, so the
+    // double cast is the point rather than a checker workaround.
+    const scene = createDefaultScene() as unknown as Record<string, unknown>;
+    expect(scene.sceneOrder).toBeUndefined();
+    expect(scene.unlockCondition).toBeUndefined();
   });
 
   it("generates a unique sceneId when none is supplied", () => {
@@ -56,9 +61,7 @@ describe("normalizeScene", () => {
   it("coerces malformed fields to defaults", () => {
     const scene = normalizeScene({
       sceneId: " scene:x ",
-      sceneOrder: "three",
       displayName: "",
-      unlockCondition: { kind: "bogus" },
       environmentOverride: { environmentId: "" },
       audioOverride: { backgroundMusicId: "", ambientSoundId: "" },
       transitionConfig: { titleText: "" },
@@ -66,32 +69,22 @@ describe("normalizeScene", () => {
     });
     expect(scene).not.toBeNull();
     expect(scene!.sceneId).toBe("scene:x");
-    expect(scene!.sceneOrder).toBe(0);
     expect(scene!.displayName).toBe("Scene");
-    expect(scene!.unlockCondition).toBe("always");
     expect(scene!.environmentOverride).toBeNull();
     expect(scene!.audioOverride).toBeNull();
     expect(scene!.transitionConfig).toBeNull();
     expect(scene!.regionOverlays).toEqual({});
   });
 
-  it("preserves valid unlock conditions", () => {
-    expect(
-      normalizeScene({
-        sceneId: "s",
-        unlockCondition: { kind: "questComplete", questDefinitionId: "q:1" }
-      })!.unlockCondition
-    ).toEqual({ kind: "questComplete", questDefinitionId: "q:1" });
-    expect(
-      normalizeScene({
-        sceneId: "s",
-        unlockCondition: { kind: "wallClock", unlockAtIso: "2026-09-15T00:00:00Z" }
-      })!.unlockCondition
-    ).toEqual({ kind: "wallClock", unlockAtIso: "2026-09-15T00:00:00Z" });
-    expect(
-      normalizeScene({ sceneId: "s", unlockCondition: { kind: "manual" } })!
-        .unlockCondition
-    ).toEqual({ kind: "manual" });
+  it("drops a pre-Episodes order number and gate rather than keeping them", () => {
+    const scene = normalizeScene({
+      sceneId: "s",
+      sceneOrder: 4,
+      unlockCondition: { kind: "questComplete", questDefinitionId: "q:1" }
+    }) as Record<string, unknown> | null;
+    expect(scene).not.toBeNull();
+    expect(scene!.sceneOrder).toBeUndefined();
+    expect(scene!.unlockCondition).toBeUndefined();
   });
 
   it("normalizes transition config with clamped defaults", () => {
@@ -162,119 +155,27 @@ describe("normalizeScenes", () => {
     expect(scenes[0]!.displayName).toBe("One");
   });
 
-  it("sorts by sceneOrder", () => {
+  it("PRESERVES input order and never sorts", () => {
+    // Order is list position now. A sort here would be the load
+    // path quietly rewriting the narrative, and unlike a wrong
+    // sort key that damage cannot be recovered from.
     const scenes = normalizeScenes([
-      { sceneId: "s:late", sceneOrder: 5 },
-      { sceneId: "s:early", sceneOrder: 1 },
-      { sceneId: "s:mid", sceneOrder: 3 }
+      { sceneId: "s:third" },
+      { sceneId: "s:first" },
+      { sceneId: "s:second" }
     ]);
     expect(scenes.map((scene) => scene.sceneId)).toEqual([
-      "s:early",
-      "s:mid",
-      "s:late"
+      "s:third",
+      "s:first",
+      "s:second"
     ]);
   });
-});
 
-describe("resolveUnlockedSceneIds", () => {
-  const NOW = Date.parse("2026-07-03T12:00:00Z");
-  const scenes = [
-    createDefaultScene({ sceneId: "s:always", sceneOrder: 0 }),
-    createDefaultScene({
-      sceneId: "s:manual",
-      sceneOrder: 1,
-      unlockCondition: { kind: "manual" }
-    }),
-    createDefaultScene({
-      sceneId: "s:quest",
-      sceneOrder: 2,
-      unlockCondition: { kind: "questComplete", questDefinitionId: "q:1" }
-    }),
-    createDefaultScene({
-      sceneId: "s:timed",
-      sceneOrder: 3,
-      unlockCondition: {
-        kind: "wallClock",
-        unlockAtIso: "2026-07-04T00:00:00Z"
-      }
-    })
-  ];
-
-  it("evaluates each condition kind against save state", () => {
-    const unlocked = resolveUnlockedSceneIds({
-      scenes,
-      manuallyUnlockedSceneIds: [],
-      completedQuestIds: [],
-      now: NOW
-    });
-    expect([...unlocked]).toEqual(["s:always"]);
-  });
-
-  it("quest completion and manual unlocks open their Scenes", () => {
-    const unlocked = resolveUnlockedSceneIds({
-      scenes,
-      manuallyUnlockedSceneIds: ["s:manual"],
-      completedQuestIds: ["q:1"],
-      now: NOW
-    });
-    expect(unlocked.has("s:manual")).toBe(true);
-    expect(unlocked.has("s:quest")).toBe(true);
-    expect(unlocked.has("s:timed")).toBe(false);
-  });
-
-  it("wall clock unlocks at the configured instant", () => {
-    const unlocked = resolveUnlockedSceneIds({
-      scenes,
-      manuallyUnlockedSceneIds: [],
-      completedQuestIds: [],
-      now: Date.parse("2026-07-04T00:00:00Z")
-    });
-    expect(unlocked.has("s:timed")).toBe(true);
-  });
-
-  it("a manual unlock overrides any condition kind", () => {
-    const unlocked = resolveUnlockedSceneIds({
-      scenes,
-      manuallyUnlockedSceneIds: ["s:quest", "s:timed"],
-      completedQuestIds: [],
-      now: NOW
-    });
-    expect(unlocked.has("s:quest")).toBe(true);
-    expect(unlocked.has("s:timed")).toBe(true);
-  });
-});
-
-describe("resolveActiveScene", () => {
-  const scenes = [
-    createDefaultScene({ sceneId: "s:1", sceneOrder: 0 }),
-    createDefaultScene({ sceneId: "s:2", sceneOrder: 1 }),
-    createDefaultScene({ sceneId: "s:3", sceneOrder: 2 })
-  ];
-
-  it("honors the requested Scene when unlocked", () => {
-    const active = resolveActiveScene({
-      scenes,
-      unlockedSceneIds: new Set(["s:1", "s:2"]),
-      requestedSceneId: "s:2"
-    });
-    expect(active?.sceneId).toBe("s:2");
-  });
-
-  it("falls back to the first unlocked Scene when the request is locked", () => {
-    const active = resolveActiveScene({
-      scenes,
-      unlockedSceneIds: new Set(["s:2"]),
-      requestedSceneId: "s:3"
-    });
-    expect(active?.sceneId).toBe("s:2");
-  });
-
-  it("boots the first Scene outright when everything is locked", () => {
-    const active = resolveActiveScene({
-      scenes,
-      unlockedSceneIds: new Set(),
-      requestedSceneId: null
-    });
-    expect(active?.sceneId).toBe("s:1");
+  it("ignores a stale sceneOrder when deciding order", () => {
+    const scenes = normalizeScenes([
+      { sceneId: "s:a", sceneOrder: 99 },
+      { sceneId: "s:b", sceneOrder: 0 }
+    ]);
+    expect(scenes.map((scene) => scene.sceneId)).toEqual(["s:a", "s:b"]);
   });
 });
