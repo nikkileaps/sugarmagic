@@ -257,6 +257,39 @@ function taskMatchesActivation(
   });
 }
 
+/**
+ * How many conditions a task asks for. A task that asks for more is a
+ * more specific answer to "what is this NPC doing", and wins over one
+ * that asks for less.
+ *
+ * Counts the four independent slots of the activation binding plus the
+ * time window, which gates the task just as narrowly even though it is
+ * evaluated separately.
+ */
+function taskSpecificity(task: RegionNPCBehaviorTask): number {
+  const activation = task.activation;
+  let count = 0;
+  if (activation.questDefinitionId) count += 1;
+  if (activation.questStageId) count += 1;
+  if (activation.nodeCompleted) count += 1;
+  if (activation.worldFlagEquals?.worldFlagId) count += 1;
+  return count;
+}
+
+/**
+ * The task this NPC should be doing: of every task whose conditions
+ * currently hold, the MOST SPECIFIC one.
+ *
+ * Specificity rather than list position, because the natural way to
+ * author an NPC is one task with no conditions -- what he does unless
+ * something else applies -- plus narrower ones for the moments that
+ * override it. Picking the first match made that exact shape fail: a
+ * task with no conditions matches every frame, so anything after it
+ * could never run, silently and permanently.
+ *
+ * Ties break on list order, so two equally specific tasks behave as
+ * they always did.
+ */
 function resolveBehaviorTask(
   behavior: RegionNPCBehaviorDefinition | null,
   activeQuests: RuntimeBehaviorQuestState[],
@@ -268,17 +301,28 @@ function resolveBehaviorTask(
     return null;
   }
 
-  const questMatchedTask =
-    behavior.tasks.find((task) =>
-      taskMatchesActivation(
+  let chosen: RegionNPCBehaviorTask | null = null;
+  let chosenSpecificity = -1;
+  for (const task of behavior.tasks) {
+    if (
+      !taskMatchesActivation(
         task,
         activeQuests,
         hasWorldFlag,
         currentTimeBand,
         isNodeCompleted
       )
-    ) ?? null;
-  return questMatchedTask;
+    ) {
+      continue;
+    }
+    const specificity = taskSpecificity(task);
+    // Strictly greater, so an earlier task keeps a tie.
+    if (specificity > chosenSpecificity) {
+      chosen = task;
+      chosenSpecificity = specificity;
+    }
+  }
+  return chosen;
 }
 
 function distance2d(

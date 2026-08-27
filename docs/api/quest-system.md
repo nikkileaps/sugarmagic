@@ -147,9 +147,9 @@ the node activates or completes, and that is the whole life of it. Nothing
 remembers it happened.
 
 **A behavior task is re-decided every frame.** `resolveBehaviorTask` walks an
-NPC's task list every sync and picks the first whose activation matches. It is
-not an instruction that was issued; it is the answer to "what is this NPC doing
-right now", asked again continuously.
+NPC's task list every sync and picks the most specific one whose activation
+matches. It is not an instruction that was issued; it is the answer to "what is
+this NPC doing right now", asked again continuously.
 
 So the test is: **does this need to still be true in ten minutes?**
 
@@ -297,10 +297,16 @@ NPC staging is authored as a quest-bound behavior task, not as a quest action.
 Two grains:
 
 - **Stage grain** -- set `questDefinitionId` and `questStageId` on the task's
-  activation. The NPC takes that task while the quest sits on that stage.
+  activation. The NPC takes that task while the quest sits on that stage, and
+  drops it when the quest advances or completes.
 - **Node grain** -- set `nodeCompleted`. The NPC takes that task once that
   specific node completes, and keeps it afterwards, including once the quest
   has finished.
+
+Pair either with a baseline task carrying no conditions, and the NPC returns to
+the baseline when the staged task stops applying. An NPC who blocks a doorway
+during a quest and returns to work afterwards is two tasks: the blocking one
+at stage grain, and the baseline. See the activation rules below.
 
 To place an NPC somewhere with no journey at all, place it twice in the region
 and condition each placement instead. That is presence rather than movement:
@@ -311,8 +317,8 @@ the placement whose condition fails is not spawned.
 **Studio:** Behavior inspector, Tasks section
 
 Each NPC entity in a region can have a list of tasks. Each frame the runtime
-resolves the first task whose `activation` AND `timeWindow` both match the
-current world state.
+resolves the MOST SPECIFIC task whose `activation` AND `timeWindow` both match
+the current world state.
 
 ```typescript
 interface RegionNPCBehaviorTask {
@@ -327,12 +333,43 @@ interface RegionNPCBehaviorTask {
 }
 ```
 
-**Activation:** Tasks are ordered; the first matching task wins. If no task
-matches, the NPC gets `taskId: null` and `currentActivity: "idle"`.
+**Activation: most specific wins, not first in the list.** Every task is
+evaluated; among those that match, the one asking for the MOST conditions is
+chosen. Specificity counts the four activation slots -- `questDefinitionId`,
+`questStageId`, `nodeCompleted`, `worldFlagEquals` -- plus a non-empty
+`timeWindow`. Ties break on list order, so two equally specific tasks resolve
+to the earlier one. If nothing matches, the NPC gets `taskId: null` and
+`currentActivity: "idle"`.
 
-**Default task:** A task with all activation fields null always matches
-(provided its `timeWindow` also matches) and serves as the NPC's
-unconditional baseline.
+List position therefore does not decide behaviour. That matters because Studio
+has no control for reordering tasks, and the order is not displayed anywhere.
+
+**Default task:** A task with all activation fields null matches whenever its
+`timeWindow` does, and is the NPC's baseline -- what they do when nothing more
+specific applies. Because it asks for nothing, any matching task beats it, so
+it can sit anywhere in the list.
+
+Under the previous first-match rule a condition-free task made every task below
+it unreachable, permanently and silently. That is the shape this rule exists to
+support: one baseline task plus narrower ones that override it.
+
+**Conditions expire at different rates**, which decides how long a task holds:
+
+| condition | lifespan |
+|---|---|
+| `questDefinitionId` | ends when the quest completes -- it leaves `activeQuests` |
+| `questStageId` | ends when the stage advances |
+| `nodeCompleted` | permanent; a completed node stays completed |
+| `worldFlagEquals` | whatever the flag does |
+
+So a task set to "during quest X" switches off the moment that quest finishes.
+To hold from a story beat onward, use `nodeCompleted` alone. To hold only
+during part of the story, use the quest and stage slots and expect the task to
+end with them.
+
+Mixing an expiring condition with `nodeCompleted` gives an intersection of
+both, which is a window with a closing edge -- occasionally what you want, and
+easy to author by accident.
 
 **Time window:** When `timeWindow` is set with a non-empty `bands` array, the
 task is skipped if the current `world.time-of-day` band is not in the array.
