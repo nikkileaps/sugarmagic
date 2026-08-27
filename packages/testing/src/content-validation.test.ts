@@ -13,7 +13,8 @@ import {
   type GameProject,
   type QuestConditionDefinition,
   type QuestDefinition,
-  type RegionDocument
+  type RegionDocument,
+  type RegionNPCBehaviorTask
 } from "@sugarmagic/domain";
 
 /**
@@ -188,7 +189,7 @@ describe("dangling world flag references", () => {
   });
 });
 
-describe("dangling nodeCompleted references", () => {
+describe("dangling story point references", () => {
   function regionWaitingOn(
     questDefinitionId: string,
     nodeId: string
@@ -209,10 +210,11 @@ describe("dangling nodeCompleted references", () => {
           tasks: [
             {
               ...createRegionNPCBehaviorTask({ displayName: "Test Task" }),
-              activation: {
-                ...createRegionBehaviorQuestBinding(),
+              // Through the factory, the way a loaded file arrives: an old
+              // `nodeCompleted` becomes that node on the "after" side.
+              activation: createRegionBehaviorQuestBinding({
                 nodeCompleted: { questDefinitionId, nodeId }
-              }
+              })
             }
           ]
         }
@@ -224,7 +226,7 @@ describe("dangling nodeCompleted references", () => {
     return [region];
   }
 
-  it("refuses a binding waiting on a quest that is not in the project", () => {
+  it("refuses a binding naming a quest that is not in the project", () => {
     const flag = createWorldFlagDefinition({ name: "a" });
     const result = validateProjectContent(
       {
@@ -249,7 +251,7 @@ describe("dangling nodeCompleted references", () => {
     ).toBe(true);
   });
 
-  it("refuses a binding waiting on a node the quest does not have", () => {
+  it("refuses a binding naming a node the quest does not have", () => {
     const flag = createWorldFlagDefinition({ name: "a" });
     const result = validateProjectContent(
       {
@@ -272,5 +274,103 @@ describe("dangling nodeCompleted references", () => {
           issue.severity === "error" && issue.message.includes("node:gone")
       )
     ).toBe(true);
+  });
+});
+
+describe("behavior tasks with no ordering between them", () => {
+  function regionWithTasks(
+    tasks: Array<Partial<RegionNPCBehaviorTask["activation"]>>
+  ): RegionDocument[] {
+    return [
+      {
+        identity: { id: "region:test", schema: "RegionDocument", version: 1 },
+        displayName: "Test Region",
+        placement: {
+          gridPosition: { x: 0, y: 0 },
+          placementPolicy: "world-grid"
+        },
+        placedAssets: [],
+        folders: [],
+        environmentBinding: { defaultEnvironmentId: null },
+        areas: [],
+        behaviors: [
+          {
+            behaviorId: "behavior:test",
+            npcDefinitionId: "npc:test",
+            displayName: "Horace",
+            tasks: tasks.map((activation, index) => ({
+              ...createRegionNPCBehaviorTask({
+                displayName: `Task ${index + 1}`
+              }),
+              activation: {
+                ...createRegionBehaviorQuestBinding(),
+                ...activation
+              }
+            }))
+          }
+        ],
+        landscape: createDefaultRegionLandscapeState({}),
+        markers: [],
+        gameplayPlacements: []
+      }
+    ];
+  }
+
+  function validate(regions: RegionDocument[]) {
+    const flag = createWorldFlagDefinition({ name: "upset" });
+    return {
+      flag,
+      result: validateProjectContent(
+        {
+          ...projectWith(
+            questWith({
+              type: "hasFlag",
+              worldFlagId: flag.definitionId,
+              value: "true"
+            })
+          ),
+          worldFlagDefinitions: [flag]
+        },
+        regions
+      )
+    };
+  }
+
+  it("warns when a quest task and a flag task can both apply", () => {
+    // Neither is a sharper version of the other, so nothing the author
+    // wrote says which Horace should do while both hold.
+    const flag = createWorldFlagDefinition({ name: "upset" });
+    const { result } = validate(
+      regionWithTasks([
+        { questDefinitionId: "quest:test" },
+        {
+          worldFlagEquals: {
+            worldFlagId: flag.definitionId,
+            valueType: "boolean",
+            value: "true"
+          }
+        }
+      ])
+    );
+
+    const ambiguous = result.issues.filter((issue) =>
+      issue.message.includes("neither is more specific")
+    );
+    expect(ambiguous).toHaveLength(1);
+    // A question to settle, not a reason to refuse the save.
+    expect(ambiguous[0]?.severity).toBe("warning");
+  });
+
+  it("stays quiet when one task is simply narrower than the other", () => {
+    // The shape authors are meant to write: a baseline plus an override.
+    const { result } = validate(
+      regionWithTasks([{}, { questDefinitionId: "quest:test" }])
+    );
+
+    expect(
+      result.issues.some((issue) =>
+        issue.message.includes("neither is more specific")
+      )
+    ).toBe(false);
   });
 });

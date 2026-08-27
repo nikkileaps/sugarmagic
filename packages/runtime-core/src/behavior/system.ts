@@ -1,3 +1,4 @@
+import { compareTaskSpecificity } from "@sugarmagic/domain";
 import type {
   RegionDocument,
   RegionNPCBehaviorDefinition,
@@ -19,6 +20,7 @@ import {
   type CollisionWorld
 } from "../collision";
 import { evaluateRegionQuestBinding } from "../region-conditions";
+import type { QuestProgressReader } from "../region-conditions";
 import type { NavMeshPathfinder } from "../navmesh";
 
 /** One dynamic agent (NPC/player) the NPC mover must not interpenetrate
@@ -66,6 +68,13 @@ export interface RuntimeNpcBehaviorSystemOptions {
    * authored state comes from the system that owns it.
    */
   isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean;
+  /**
+   * The rest of the quest progress questions a story point can ask -- has
+   * this stage or quest finished, is this node the one being worked on.
+   * Supplied together so a task set to "ever since X finished" can be
+   * answered; without it those tasks read as not satisfied.
+   */
+  questProgress?: QuestProgressReader;
   movementSpeedMetersPerSecond?: number;
   stuckTimeoutMs?: number;
   arrivalThresholdMeters?: number;
@@ -238,7 +247,7 @@ function taskMatchesActivation(
   activeQuests: RuntimeBehaviorQuestState[],
   hasWorldFlag?: (key: string, value?: unknown) => boolean,
   currentTimeBand?: string | null,
-  isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean
+  questProgress?: QuestProgressReader
 ): boolean {
   // Plan 074 §074.4 -- time-window gating: skip tasks outside the active band.
   if (
@@ -253,56 +262,43 @@ function taskMatchesActivation(
   return evaluateRegionQuestBinding(task.activation, {
     activeQuests,
     hasWorldFlag,
-    isNodeCompleted
+    ...questProgress
   });
 }
 
 /**
- * How many conditions a task asks for. A task that asks for more is a
- * more specific answer to "what is this NPC doing", and wins over one
- * that asks for less.
+ * The task this NPC should be doing: of every task that can run right
+ * now, the most specific one.
  *
- * Counts the four independent slots of the activation binding plus the
- * time window, which gates the task just as narrowly even though it is
- * evaluated separately.
- */
-function taskSpecificity(task: RegionNPCBehaviorTask): number {
-  const activation = task.activation;
-  let count = 0;
-  if (activation.questDefinitionId) count += 1;
-  if (activation.questStageId) count += 1;
-  if (activation.nodeCompleted) count += 1;
-  if (activation.worldFlagEquals?.worldFlagId) count += 1;
-  return count;
-}
-
-/**
- * The task this NPC should be doing: of every task whose conditions
- * currently hold, the MOST SPECIFIC one.
+ * "Most specific" means the task whose conditions are the narrowest --
+ * the one that only turns on in situations where the others would have
+ * turned on too. `compareTaskSpecificity` in the domain holds the rule
+ * and the reasoning behind it.
  *
  * Specificity rather than list position, because the natural way to
- * author an NPC is one task with no conditions -- what he does unless
+ * author an NPC is one task with no conditions -- what they do unless
  * something else applies -- plus narrower ones for the moments that
  * override it. Picking the first match made that exact shape fail: a
  * task with no conditions matches every frame, so anything after it
  * could never run, silently and permanently.
  *
- * Ties break on list order, so two equally specific tasks behave as
- * they always did.
+ * Two tasks can be live with neither narrower than the other, which
+ * means nothing the author wrote decides between them. Here the earlier
+ * one wins so a player mid-session keeps playing; Studio reports the
+ * pair when the project is saved so it gets fixed at the source.
  */
 function resolveBehaviorTask(
   behavior: RegionNPCBehaviorDefinition | null,
   activeQuests: RuntimeBehaviorQuestState[],
   hasWorldFlag?: (key: string, value?: unknown) => boolean,
   currentTimeBand?: string | null,
-  isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean
+  questProgress?: QuestProgressReader
 ): RegionNPCBehaviorTask | null {
   if (!behavior || behavior.tasks.length === 0) {
     return null;
   }
 
   let chosen: RegionNPCBehaviorTask | null = null;
-  let chosenSpecificity = -1;
   for (const task of behavior.tasks) {
     if (
       !taskMatchesActivation(
@@ -310,16 +306,15 @@ function resolveBehaviorTask(
         activeQuests,
         hasWorldFlag,
         currentTimeBand,
-        isNodeCompleted
+        questProgress
       )
     ) {
       continue;
     }
-    const specificity = taskSpecificity(task);
-    // Strictly greater, so an earlier task keeps a tie.
-    if (specificity > chosenSpecificity) {
+    // Only a strictly narrower task takes over, so an earlier task keeps
+    // both an exact tie and a pair with no ordering between them.
+    if (chosen === null || compareTaskSpecificity(task, chosen) === "narrower") {
       chosen = task;
-      chosenSpecificity = specificity;
     }
   }
   return chosen;
@@ -465,6 +460,7 @@ export function createRuntimeNpcBehaviorSystem(
     getNpcEntities,
     hasWorldFlag,
     isNodeCompleted,
+    questProgress: questProgressOption,
     movementSpeedMetersPerSecond = DEFAULT_MOVEMENT_SPEED_METERS_PER_SECOND,
     stuckTimeoutMs = DEFAULT_STUCK_TIMEOUT_MS,
     arrivalThresholdMeters = DEFAULT_ARRIVAL_THRESHOLD_METERS,
@@ -473,6 +469,12 @@ export function createRuntimeNpcBehaviorSystem(
     getCollisionContext,
     getPathfinder
   } = options;
+  // `isNodeCompleted` is the older way to pass one of these four. Anything in
+  // the reader wins, so a caller supplying both is not ambiguous.
+  const questProgress: QuestProgressReader = {
+    isNodeCompleted,
+    ...(questProgressOption ?? {})
+  };
   const movementStateByNpcId = new Map<string, MovementState>();
   // Plan 069.9 — ephemeral (not persisted) navmesh route per NPC: the
   // waypoint list + which one we're heading to + the final target it was
@@ -639,7 +641,7 @@ export function createRuntimeNpcBehaviorSystem(
       activeQuests,
       hasWorldFlag,
       getTimeOfDayBand(blackboard),
-      isNodeCompleted
+      questProgress
     );
     const targetArea = task ? findRegionAreaById(region, task.targetAreaId) : null;
     const directiveTargetPoint = targetArea

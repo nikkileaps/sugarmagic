@@ -285,13 +285,11 @@ describe("presence conditions and node completion", () => {
   it("keeps an NPC out until its node completes, then spawns it", () => {
     const managers = newManagers();
     const condition = {
-      questDefinitionId: null,
       questStageId: null,
       worldFlagEquals: null,
-      nodeCompleted: {
-        questDefinitionId: "quest:offering",
-        nodeId: "node:offered"
-      }
+      questDefinitionId: "quest:offering",
+      questNodeId: "node:offered",
+      storyPointSide: "after" as const
     };
 
     let done = false;
@@ -313,13 +311,11 @@ describe("presence conditions and node completion", () => {
     // A presence whose condition cannot be evaluated must not spawn. Failing
     // open would put an NPC in the world the story has not introduced.
     const condition = {
-      questDefinitionId: null,
       questStageId: null,
       worldFlagEquals: null,
-      nodeCompleted: {
-        questDefinitionId: "quest:offering",
-        nodeId: "node:offered"
-      }
+      questDefinitionId: "quest:offering",
+      questNodeId: "node:offered",
+      storyPointSide: "after" as const
     };
     expect(
       evaluateRegionQuestBinding(condition, { activeQuests: [] })

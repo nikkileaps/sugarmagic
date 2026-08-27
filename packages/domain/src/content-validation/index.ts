@@ -15,6 +15,7 @@
  * idea, which is why this adds `severity` to that shape instead of renaming it.
  */
 
+import { tasksAreAmbiguous } from "../behavior-specificity";
 import { getAllScenes } from "../episodes";
 import type { GameProject } from "../game-project";
 import type {
@@ -351,7 +352,8 @@ export function validateProjectContent(
     }
   }
 
-  // `nodeCompleted` is an authored id pair with no validation anywhere else.
+  // A story point is authored as ids with no validation anywhere else, so a
+  // quest or node that has since been deleted is only caught here.
   const nodeIdsByQuest = new Map(
     gameProject.questDefinitions.map((quest) => [
       quest.definitionId,
@@ -363,30 +365,79 @@ export function validateProjectContent(
     ])
   );
   for (const { binding, where } of collectQuestBindings(gameProject, regions)) {
-    const completed = binding.nodeCompleted;
-    if (!completed) continue;
-    const nodeIds = nodeIdsByQuest.get(completed.questDefinitionId);
+    const questDefinitionId = binding.questDefinitionId;
+    if (!questDefinitionId) continue;
+    const nodeIds = nodeIdsByQuest.get(questDefinitionId);
     if (!nodeIds) {
       issues.push(
         error(
           where,
-          `Waits on quest "${completed.questDefinitionId}", which is not in the project.`
+          `Names quest "${questDefinitionId}", which is not in the project.`
         )
       );
-    } else if (!nodeIds.has(completed.nodeId)) {
+      continue;
+    }
+    if (binding.questNodeId && !nodeIds.has(binding.questNodeId)) {
       issues.push(
         error(
           where,
-          `Waits on node "${completed.nodeId}", which is not in quest "${completed.questDefinitionId}".`
+          `Names node "${binding.questNodeId}", which is not in quest "${questDefinitionId}".`
         )
       );
     }
   }
 
+  issues.push(...findAmbiguousBehaviorTasks(gameProject, regions));
+
   return {
     valid: !issues.some((issue) => issue.severity === "error"),
     issues
   };
+}
+
+/**
+ * Pairs of tasks on one NPC that can be live at the same moment with
+ * neither being the narrower instruction.
+ *
+ * An NPC's tasks work by one overriding another: "block the way during
+ * the Introduction quest" sits on top of "supervise the docks", and the
+ * NPC drops back to supervising when the quest ends. That only works
+ * while every pair has a narrower one. Two tasks asking unrelated
+ * questions -- one about a quest, one about a world flag -- give no
+ * answer for the moments both apply, and the author has to say which
+ * they meant by making one of them narrower.
+ *
+ * A warning, not an error. The project plays: the runtime keeps the
+ * earlier task, so this is a question to settle rather than a reason to
+ * refuse a save mid-edit.
+ */
+function findAmbiguousBehaviorTasks(
+  gameProject: GameProject,
+  regions: readonly RegionDocument[]
+): ContentValidationIssue[] {
+  const issues: ContentValidationIssue[] = [];
+  for (const region of regions) {
+    for (const behavior of region.behaviors) {
+      for (let index = 0; index < behavior.tasks.length; index += 1) {
+        for (let other = index + 1; other < behavior.tasks.length; other += 1) {
+          const left = behavior.tasks[index]!;
+          const right = behavior.tasks[other]!;
+          if (
+            !tasksAreAmbiguous(left, right, gameProject.questDefinitions)
+          ) {
+            continue;
+          }
+          issues.push(
+            warning(
+              `region "${region.displayName}" behavior "${behavior.displayName}"`,
+              `Tasks "${left.displayName}" and "${right.displayName}" can both apply at once and neither is more specific, so which one runs is not decided by anything authored. Narrow one of them.`
+            )
+          );
+        }
+      }
+    }
+  }
+  return issues;
 }
 
 /** The errors only, for a caller that reports what is blocking a save. */

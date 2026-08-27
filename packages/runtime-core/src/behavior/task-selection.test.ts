@@ -18,7 +18,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { createDefaultRegion, type RegionNPCBehaviorTask } from "@sugarmagic/domain";
+import {
+  createDefaultRegion,
+  TIME_OF_DAY_BANDS,
+  type RegionNPCBehaviorTask
+} from "@sugarmagic/domain";
 import { World, Position } from "../ecs";
 import { createRuntimeBlackboard } from "../state/blackboard";
 import { createRuntimeNpcBehaviorSystem } from "./system";
@@ -29,7 +33,8 @@ const STAGE_ID = "stage:start";
 
 function task(
   displayName: string,
-  activation: Partial<RegionNPCBehaviorTask["activation"]>
+  activation: Partial<RegionNPCBehaviorTask["activation"]>,
+  bands: string[] | null = null
 ): RegionNPCBehaviorTask {
   return {
     taskId: `task:${displayName}`,
@@ -41,11 +46,12 @@ function task(
     activation: {
       questDefinitionId: null,
       questStageId: null,
-      nodeCompleted: null,
+      questNodeId: null,
+      storyPointSide: "while",
       worldFlagEquals: null,
       ...activation
     },
-    timeWindow: null
+    timeWindow: bands ? { bands } : null
   } as RegionNPCBehaviorTask;
 }
 
@@ -55,6 +61,7 @@ function chosenTask(
   options: {
     questActive?: boolean;
     completedNodes?: string[];
+    activeNodes?: string[];
     flags?: Record<string, unknown>;
   } = {}
 ): string | null {
@@ -79,8 +86,12 @@ function chosenTask(
     world,
     blackboard: createRuntimeBlackboard(),
     npcEntities: [{ presenceId: "p:1", npcDefinitionId: NPC_ID, entity }],
-    isNodeCompleted: (_questId, nodeId) =>
-      (options.completedNodes ?? []).includes(nodeId),
+    questProgress: {
+      isNodeCompleted: (_questId, nodeId) =>
+        (options.completedNodes ?? []).includes(nodeId),
+      isNodeActive: (_questId, nodeId) =>
+        (options.activeNodes ?? []).includes(nodeId)
+    },
     hasWorldFlag: (flagId, value) =>
       Object.prototype.hasOwnProperty.call(options.flags ?? {}, flagId) &&
       (options.flags ?? {})[flagId] === value
@@ -140,18 +151,18 @@ describe("specificity is how many conditions a task asks for", () => {
     );
   });
 
-  it("counts a node condition", () => {
+  it("a node inside the quest is narrower than the quest", () => {
     const questOnly = task("Quest only", { questDefinitionId: QUEST_ID });
-    const questAndNode = task("Quest and node", {
+    const atNode = task("At node", {
       questDefinitionId: QUEST_ID,
-      nodeCompleted: { questDefinitionId: QUEST_ID, nodeId: "node:welcome" }
+      questNodeId: "node:welcome"
     });
     expect(
-      chosenTask([questOnly, questAndNode], {
+      chosenTask([questOnly, atNode], {
         questActive: true,
-        completedNodes: ["node:welcome"]
+        activeNodes: ["node:welcome"]
       })
-    ).toBe("Quest and node");
+    ).toBe("At node");
   });
 
   it("counts a world flag condition", () => {
@@ -178,6 +189,65 @@ describe("specificity is how many conditions a task asks for", () => {
     expect(chosenTask([block, supervise], { questActive: false })).toBe(
       "Supervise the docks"
     );
+  });
+});
+
+describe("story instructions outrank the clock", () => {
+  // The blackboard's time-of-day defaults to "morning" here, so a
+  // ["morning"] window is live and an ["evening"] one is not.
+
+  it("a routine on a timer loses to a quest task, either order", () => {
+    // The clock version of the original bug: before this rule a time
+    // window scored the same as a quest condition, so these tied and
+    // list order decided.
+    const routine = task("Supervise the docks", {}, ["morning"]);
+    const quest = task("Block the way", { questDefinitionId: QUEST_ID });
+    expect(chosenTask([routine, quest], { questActive: true })).toBe(
+      "Block the way"
+    );
+    expect(chosenTask([quest, routine], { questActive: true })).toBe(
+      "Block the way"
+    );
+  });
+
+  it("ticking every band is 'any time', and does not outrank a quest", () => {
+    // Selecting all seven in Studio is a natural way to say "whenever",
+    // and rules nothing out -- so it must not buy any standing.
+    const routine = task("Supervise the docks", {}, [...TIME_OF_DAY_BANDS]);
+    const quest = task("Block the way", { questDefinitionId: QUEST_ID });
+    expect(chosenTask([routine, quest], { questActive: true })).toBe(
+      "Block the way"
+    );
+  });
+
+  it("among equal story conditions, the narrower window wins", () => {
+    const mornings = task("Greet arrivals", { questDefinitionId: QUEST_ID }, [
+      "morning"
+    ]);
+    const anyTime = task("Watch the gate", { questDefinitionId: QUEST_ID });
+    expect(chosenTask([anyTime, mornings], { questActive: true })).toBe(
+      "Greet arrivals"
+    );
+    expect(chosenTask([mornings, anyTime], { questActive: true })).toBe(
+      "Greet arrivals"
+    );
+  });
+
+  it("outside its window the narrower task is gone, not merely outranked", () => {
+    const evenings = task("Greet arrivals", { questDefinitionId: QUEST_ID }, [
+      "evening"
+    ]);
+    const anyTime = task("Watch the gate", { questDefinitionId: QUEST_ID });
+    expect(chosenTask([evenings, anyTime], { questActive: true })).toBe(
+      "Watch the gate"
+    );
+  });
+
+  it("a windowed task that is out of band leaves nothing at all", () => {
+    const evenings = task("Greet arrivals", { questDefinitionId: QUEST_ID }, [
+      "evening"
+    ]);
+    expect(chosenTask([evenings], { questActive: true })).toBeNull();
   });
 });
 

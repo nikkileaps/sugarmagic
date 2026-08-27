@@ -1,5 +1,6 @@
 export * from "./asset-paths";
 export * from "./authoring-session/index";
+export * from "./behavior-specificity/index";
 export * from "./commands/index";
 export * from "./content-library/index";
 export * from "./content-validation/index";

@@ -40,7 +40,25 @@ export interface RegionConditionContext {
   hasWorldFlag?: (worldFlagId: string, value?: unknown) => boolean;
   /** Truthy when that quest node has been completed at any point. */
   isNodeCompleted?: (questDefinitionId: string, nodeId: string) => boolean;
+  /** Truthy while that node is the one being worked on. */
+  isNodeActive?: (questDefinitionId: string, nodeId: string) => boolean;
+  /** Truthy once that quest has finished, and from then on. */
+  isQuestCompleted?: (questDefinitionId: string) => boolean;
+  /** Truthy once that stage has finished, and from then on. */
+  isStageCompleted?: (questDefinitionId: string, stageId: string) => boolean;
 }
+
+/**
+ * The quest progress questions a story point can ask, in one object so the
+ * four travel together instead of as four parameters through every layer
+ * that forwards them.
+ *
+ * `QuestManager` implements all four; anything holding one can supply this.
+ */
+export type QuestProgressReader = Pick<
+  RegionConditionContext,
+  "isNodeCompleted" | "isNodeActive" | "isQuestCompleted" | "isStageCompleted"
+>;
 
 /**
  * The declared type and authored text of a flag value -- the only parts the
@@ -104,6 +122,64 @@ export function resolveWorldFlagWriteValue(
 }
 
 /**
+ * Whether the story point named by this binding is satisfied.
+ *
+ * The point is the deepest of the three ids that is set -- a node if there is
+ * one, otherwise a stage, otherwise the quest. `storyPointSide` says which
+ * side of it counts:
+ *
+ *   "while"  the point is happening right now, and stops the moment it ends.
+ *   "after"  the point has finished, and stays true from then on, including
+ *            once the whole quest is over.
+ *
+ * Naming no quest names no point, which is satisfied always -- that is what
+ * makes a task with nothing filled in the NPC's baseline.
+ *
+ * A missing predicate fails closed, so a caller that cannot answer "has this
+ * finished" never gets a silent yes.
+ */
+function satisfiesStoryPoint(
+  binding: RegionBehaviorQuestBinding,
+  context: RegionConditionContext
+): boolean {
+  const questId = binding.questDefinitionId;
+  const stageId = binding.questStageId;
+  const nodeId = binding.questNodeId;
+  if (!questId && !stageId) {
+    return true;
+  }
+
+  if (binding.storyPointSide === "after") {
+    if (nodeId && questId) {
+      return context.isNodeCompleted?.(questId, nodeId) ?? false;
+    }
+    if (stageId && questId) {
+      return context.isStageCompleted?.(questId, stageId) ?? false;
+    }
+    return questId ? context.isQuestCompleted?.(questId) ?? false : false;
+  }
+
+  // "while": the quest has to be in progress, and the stage and node have to
+  // be the ones it is on. All three are checked against the SAME active quest
+  // -- checking them apart would let a quest from one entry and a stage from
+  // another jointly satisfy a binding that neither satisfies.
+  const onPoint = context.activeQuests.some(
+    (quest) =>
+      (!questId || quest.questDefinitionId === questId) &&
+      (!stageId || quest.stageId === stageId)
+  );
+  if (!onPoint) {
+    return false;
+  }
+  // A node is "while" only between opening and completing -- not before its
+  // prerequisites are met, and not after it is done.
+  if (nodeId && questId) {
+    return context.isNodeActive?.(questId, nodeId) ?? false;
+  }
+  return true;
+}
+
+/**
  * True when every populated clause of the binding is satisfied. An
  * all-null binding is vacuously satisfied (the behavior system's "default
  * task" fallback relies on this). Missing quest / flag predicate => the
@@ -113,30 +189,8 @@ export function evaluateRegionQuestBinding(
   binding: RegionBehaviorQuestBinding,
   context: RegionConditionContext
 ): boolean {
-  // Both quest clauses are checked against the SAME quest. Checking them
-  // separately would let quest X from one active quest and a stage from
-  // another jointly satisfy a binding that neither satisfies.
-  if (binding.questDefinitionId || binding.questStageId) {
-    const matched = context.activeQuests.some(
-      (quest) =>
-        (!binding.questDefinitionId ||
-          quest.questDefinitionId === binding.questDefinitionId) &&
-        (!binding.questStageId || quest.stageId === binding.questStageId)
-    );
-    if (!matched) {
-      return false;
-    }
-  }
-  if (binding.nodeCompleted) {
-    if (
-      !context.isNodeCompleted ||
-      !context.isNodeCompleted(
-        binding.nodeCompleted.questDefinitionId,
-        binding.nodeCompleted.nodeId
-      )
-    ) {
-      return false;
-    }
+  if (!satisfiesStoryPoint(binding, context)) {
+    return false;
   }
   if (binding.worldFlagEquals?.worldFlagId) {
     if (!context.hasWorldFlag) {

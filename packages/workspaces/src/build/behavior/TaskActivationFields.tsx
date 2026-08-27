@@ -1,5 +1,9 @@
-import { Select } from "@mantine/core";
-import type { QuestDefinition, RegionNPCBehaviorTask } from "@sugarmagic/domain";
+import { SegmentedControl, Select, Stack, Text } from "@mantine/core";
+import type {
+  QuestDefinition,
+  RegionNPCBehaviorTask,
+  StoryPointSide
+} from "@sugarmagic/domain";
 import { WorldFlagActivationFields } from "./WorldFlagActivationFields";
 
 export interface TaskActivationFieldsProps {
@@ -10,26 +14,55 @@ export interface TaskActivationFieldsProps {
   onUpdateTask: (task: RegionNPCBehaviorTask) => void;
 }
 
+/**
+ * Two things make a story point: which point, and which side of it.
+ *
+ * The three pickers run widest to narrowest -- the quest, a stage inside it,
+ * a node inside that -- and the deepest one filled in is the point. Each
+ * picker only offers what fits the ones above it, so the three always name
+ * one place in one quest.
+ *
+ * The side says whether the task applies while that point is running or ever
+ * since it finished. The two sides are back to back, so a pair of tasks set
+ * to opposite sides of one point hands over with no overlap and no gap.
+ */
 export function TaskActivationFields(props: TaskActivationFieldsProps) {
   const { task, questDefinitions, questOptions, questStageOptions, onUpdateTask } =
     props;
 
-  // One picker for one idea: which quest moment turns this task on. Grouped by
-  // quest so the node names read in context. The option value carries both ids
-  // because a node id is only unique within its quest.
-  const NODE_KEY_SEPARATOR = "::";
-  const nodeGroups = questDefinitions.map((definition) => ({
-    group: definition.displayName,
-    items: definition.stageDefinitions.flatMap((stage) =>
-      stage.nodeDefinitions.map((node) => ({
-        value: `${definition.definitionId}${NODE_KEY_SEPARATOR}${node.nodeId}`,
-        label: `${stage.displayName} — ${node.displayName}`
-      }))
-    )
+  const { questDefinitionId, questStageId } = task.activation;
+  const questNodeId = task.activation.questNodeId ?? null;
+  const side: StoryPointSide =
+    task.activation.storyPointSide === "after" ? "after" : "while";
+
+  const selectedQuest = questDefinitions.find(
+    (definition) => definition.definitionId === questDefinitionId
+  );
+  // Only the stages the stage picker has left in play.
+  const stagesInPlay = questStageId
+    ? selectedQuest?.stageDefinitions.filter(
+        (stage) => stage.stageId === questStageId
+      ) ?? []
+    : selectedQuest?.stageDefinitions ?? [];
+  const nodeGroups = stagesInPlay.map((stage) => ({
+    group: stage.displayName,
+    items: stage.nodeDefinitions.map((node) => ({
+      value: node.nodeId,
+      label: node.displayName
+    }))
   }));
-  const selectedNodeKey = task.activation.nodeCompleted
-    ? `${task.activation.nodeCompleted.questDefinitionId}${NODE_KEY_SEPARATOR}${task.activation.nodeCompleted.nodeId}`
-    : "";
+  const nodeStillOffered = nodeGroups.some((group) =>
+    group.items.some((item) => item.value === questNodeId)
+  );
+
+  const update = (activation: Partial<RegionNPCBehaviorTask["activation"]>) =>
+    onUpdateTask({ ...task, activation: { ...task.activation, ...activation } });
+
+  /** The stage a node sits in, for dropping a node put out of reach. */
+  const stageHolding = (nodeId: string): string | null =>
+    selectedQuest?.stageDefinitions.find((stage) =>
+      stage.nodeDefinitions.some((node) => node.nodeId === nodeId)
+    )?.stageId ?? null;
 
   return (
     <>
@@ -37,58 +70,66 @@ export function TaskActivationFields(props: TaskActivationFieldsProps) {
         label="Quest"
         size="xs"
         data={[{ value: "", label: "Any Quest State" }, ...questOptions]}
-        value={task.activation.questDefinitionId ?? ""}
-        onChange={(value) =>
-          onUpdateTask({
-            ...task,
-            activation: {
-              ...task.activation,
-              questDefinitionId: value && value.length > 0 ? value : null,
-              questStageId: value && value.length > 0 ? task.activation.questStageId : null
-            }
-          })
-        }
+        value={questDefinitionId ?? ""}
+        onChange={(value) => {
+          const nextQuestId = value && value.length > 0 ? value : null;
+          // A stage and a node only mean something inside their own quest.
+          update({
+            questDefinitionId: nextQuestId,
+            questStageId: null,
+            questNodeId: null
+          });
+        }}
       />
       <Select
         label="Quest Stage"
         size="xs"
         data={questStageOptions}
-        value={task.activation.questStageId ?? ""}
-        onChange={(value) =>
-          onUpdateTask({
-            ...task,
-            activation: {
-              ...task.activation,
-              questStageId: value && value.length > 0 ? value : null
-            }
-          })
-        }
-      />
-      <WorldFlagActivationFields task={task} onUpdateTask={onUpdateTask} />
-      <Select
-        label="Starts After Node"
-        size="xs"
-        clearable
-        searchable
-        placeholder="Any time"
-        data={nodeGroups}
-        value={selectedNodeKey.length > 0 ? selectedNodeKey : null}
+        value={questStageId ?? ""}
         onChange={(value) => {
-          const [questDefinitionId, nodeId] = (value ?? "").split(
-            NODE_KEY_SEPARATOR
-          );
-          onUpdateTask({
-            ...task,
-            activation: {
-              ...task.activation,
-              nodeCompleted:
-                questDefinitionId && nodeId
-                  ? { questDefinitionId, nodeId }
-                  : null
-            }
+          const nextStageId = value && value.length > 0 ? value : null;
+          const nodeFits =
+            !nextStageId ||
+            (questNodeId ? stageHolding(questNodeId) === nextStageId : true);
+          update({
+            questStageId: nextStageId,
+            questNodeId: nodeFits ? questNodeId : null
           });
         }}
       />
+      <Select
+        label="Quest Node"
+        size="xs"
+        clearable
+        searchable
+        placeholder={questDefinitionId ? "Whole stage" : "Pick a quest first"}
+        disabled={!questDefinitionId}
+        data={nodeGroups}
+        value={questNodeId && nodeStillOffered ? questNodeId : null}
+        onChange={(value) =>
+          update({ questNodeId: value && value.length > 0 ? value : null })
+        }
+      />
+      {questDefinitionId ? (
+        <Stack gap={4}>
+          <Text size="xs" fw={500}>
+            Applies
+          </Text>
+          <SegmentedControl
+            size="xs"
+            fullWidth
+            data={[
+              { value: "while", label: "While it runs" },
+              { value: "after", label: "Ever since it finished" }
+            ]}
+            value={side}
+            onChange={(value) =>
+              update({ storyPointSide: value as StoryPointSide })
+            }
+          />
+        </Stack>
+      ) : null}
+      <WorldFlagActivationFields task={task} onUpdateTask={onUpdateTask} />
     </>
   );
 }
