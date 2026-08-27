@@ -117,7 +117,8 @@ import type { NpcInteractionModeStore } from "../npc/interaction-mode-store";
 import {
   resolveWorldFlagWriteValue,
   evaluateRegionQuestBinding,
-  type RegionConditionContext
+  type RegionConditionContext,
+  type QuestProgressReader
 } from "../region-conditions";
 import {
   createRuntimeQuestJournal,
@@ -1483,13 +1484,30 @@ export function createRuntimeGameplaySessionController(
     debugBillboardBindings.delete(entry.entity);
   }
 
+  /**
+   * The four quest progress questions a story point can ask. One builder so
+   * every gate -- NPC placements, containment volumes, behavior tasks --
+   * answers them the same way.
+   */
+  function buildQuestProgressReader(): QuestProgressReader {
+    return {
+      isNodeCompleted: (questDefinitionId: string, nodeId: string) =>
+        questManager.isNodeCompleted(questDefinitionId, nodeId),
+      isNodeActive: (questDefinitionId: string, nodeId: string) =>
+        questManager.isNodeActive(questDefinitionId, nodeId),
+      isQuestCompleted: (questDefinitionId: string) =>
+        questManager.isQuestCompleted(questDefinitionId),
+      isStageCompleted: (questDefinitionId: string, stageId: string) =>
+        questManager.isStageCompleted(questDefinitionId, stageId)
+    };
+  }
+
   function buildPresenceQuestContext(): RegionConditionContext {
     return {
       activeQuests: questManager.getActiveQuestStates(),
       hasWorldFlag: (worldFlagId: string, value?: unknown) =>
         worldFlagManager.hasFlagById(worldFlagId, value),
-      isNodeCompleted: (questDefinitionId: string, nodeId: string) =>
-        questManager.isNodeCompleted(questDefinitionId, nodeId)
+      ...buildQuestProgressReader()
     };
   }
 
@@ -2529,8 +2547,7 @@ export function createRuntimeGameplaySessionController(
           })
         ),
       hasWorldFlag: (worldFlagId, value) => worldFlagManager.hasFlagById(worldFlagId, value),
-      isNodeCompleted: (questDefinitionId, nodeId) =>
-        questManager.isNodeCompleted(questDefinitionId, nodeId),
+      questProgress: buildQuestProgressReader(),
       // Plan 069.9 — NPCs follow the baked navmesh (host loads it async).
       // DEFERRED (079): if an NPC that was pathfinding toward a conditional
       // containment gate becomes absent (condition clears), its in-flight
@@ -2638,8 +2655,7 @@ export function createRuntimeGameplaySessionController(
         applyVolumeColliderGates(sharedCollisionWorld, {
           activeQuests,
           hasWorldFlag: (worldFlagId, value) => worldFlagManager.hasFlagById(worldFlagId, value),
-          isNodeCompleted: (questDefinitionId, nodeId) =>
-            questManager.isNodeCompleted(questDefinitionId, nodeId)
+          ...buildQuestProgressReader()
         });
       }
       // Plan 079.2 -- reconcile conditional NPC presences each frame.

@@ -531,10 +531,11 @@ describe("069.5 — on-enter trigger tracker (extends the area tracker)", () => 
 describe("containment gates and node completion", () => {
   it("stays shut until the node completes, then opens", () => {
     const gate = {
-      questDefinitionId: null,
       questStageId: null,
       worldFlagEquals: null,
-      nodeCompleted: { questDefinitionId: "quest:gate", nodeId: "node:key" }
+      questDefinitionId: "quest:gate",
+      questNodeId: "node:key",
+      storyPointSide: "after" as const
     };
     let done = false;
     const ctx = {
@@ -548,27 +549,47 @@ describe("containment gates and node completion", () => {
     expect(evaluateRegionQuestBinding(gate, ctx)).toBe(true);
   });
 
-  it("ANDs the node clause with the others rather than replacing them", () => {
+  it("stays open once the node is done, including after the quest ends", () => {
+    // A node on the "after" side asks one thing: has that node been done.
+    // It does NOT also require the quest to still be running -- that is the
+    // point of the side, and it is why a gate opened by a story beat does
+    // not slam shut when the quest finishes.
     const gate = {
-      questDefinitionId: "quest:gate",
       questStageId: null,
       worldFlagEquals: null,
-      nodeCompleted: { questDefinitionId: "quest:gate", nodeId: "node:key" }
+      questDefinitionId: "quest:gate",
+      questNodeId: "node:key",
+      storyPointSide: "after" as const
     };
     const nodeDone = () => true;
-
-    // Node done but the quest is not in progress -> still shut.
-    expect(
-      evaluateRegionQuestBinding(gate, {
-        activeQuests: [],
-        isNodeCompleted: nodeDone
-      })
-    ).toBe(false);
 
     expect(
       evaluateRegionQuestBinding(gate, {
         activeQuests: [{ questDefinitionId: "quest:gate", stageId: "s1" }],
         isNodeCompleted: nodeDone
+      })
+    ).toBe(true);
+    // Quest over, node still done -> still open.
+    expect(
+      evaluateRegionQuestBinding(gate, {
+        activeQuests: [],
+        isNodeCompleted: nodeDone
+      })
+    ).toBe(true);
+  });
+
+  it("a point on the while side does need the quest to be running", () => {
+    const gate = {
+      questStageId: null,
+      worldFlagEquals: null,
+      questDefinitionId: "quest:gate",
+      questNodeId: null,
+      storyPointSide: "while" as const
+    };
+    expect(evaluateRegionQuestBinding(gate, { activeQuests: [] })).toBe(false);
+    expect(
+      evaluateRegionQuestBinding(gate, {
+        activeQuests: [{ questDefinitionId: "quest:gate", stageId: "s1" }]
       })
     ).toBe(true);
   });

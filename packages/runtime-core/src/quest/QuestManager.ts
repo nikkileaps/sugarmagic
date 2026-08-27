@@ -472,6 +472,33 @@ export class QuestManager {
   }
 
   /**
+   * True while this node is the one being worked on: its prerequisites are
+   * met and it has not been completed. False before it opens and false again
+   * once it is done.
+   */
+  isNodeActive(questDefinitionId: string, nodeId: string): boolean {
+    const state = this.activeQuests.get(questDefinitionId);
+    if (!state) {
+      return false;
+    }
+    for (const stageProgress of state.stageProgress.values()) {
+      const progress = stageProgress.nodeProgress.get(nodeId);
+      if (progress) {
+        return progress.status === "active";
+      }
+    }
+    return false;
+  }
+
+  /**
+   * True once every node this stage needs has been completed, and from then
+   * on -- including after the whole quest has finished.
+   */
+  isStageCompleted(questDefinitionId: string, stageId: string): boolean {
+    return this.getQuestStageState(questDefinitionId, stageId) === "completed";
+  }
+
+  /**
    * Every quest in progress, with the stage it is on.
    *
    * This is what region quest bindings evaluate against -- which NPCs stand

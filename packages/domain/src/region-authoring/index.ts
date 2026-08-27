@@ -210,17 +210,48 @@ export interface RegionAreaDefinition {
   bounds: RegionAreaBounds;
 }
 
+/**
+ * Which side of a story point this binding is on.
+ *
+ * "while" means the point is happening right now, and stops being true when
+ * it finishes. "after" means the point has finished, and stays true from then
+ * on -- including once the quest it belongs to is over.
+ *
+ * The two are back to back: "while the Introduction quest runs" ends at the
+ * exact moment "ever since the Introduction quest finished" begins.
+ */
+export type StoryPointSide = "while" | "after";
+
+/**
+ * A point in the story, and which side of it.
+ *
+ * The point is the deepest of the three ids that is set: a quest, a stage
+ * inside it, or a node inside that. Naming a stage or a node means naming the
+ * quest as well, so the three read as one place.
+ *
+ * Evaluated wherever this grammar is: behavior tasks, NPC placements,
+ * containment volumes.
+ */
 export interface RegionBehaviorQuestBinding {
   questDefinitionId: string | null;
   questStageId: string | null;
+  /**
+   * A node inside the named stage. Optional so a hand-written binding need
+   * not carry it; the factory always normalizes it to a value.
+   */
+  questNodeId?: string | null;
+  /**
+   * Which side of the point. Ignored when no quest is named, since there is
+   * then no point to be on a side of.
+   */
+  storyPointSide?: StoryPointSide;
   worldFlagEquals: RegionBehaviorWorldFlagCondition | null;
   /**
-   * Satisfied once that quest node has been completed, and stays satisfied
-   * after the quest itself finishes. Evaluated wherever this grammar is:
-   * behavior tasks, NPC placements, containment volumes.
+   * How a node was named before the point gained a side: always "the node has
+   * been completed". Read on load and folded into `questNodeId` with
+   * `storyPointSide: "after"`, then dropped.
    *
-   * Optional so a hand-written binding need not carry it; the factory always
-   * normalizes it to a value.
+   * @deprecated Author `questNodeId` and `storyPointSide` instead.
    */
   nodeCompleted?: RegionBehaviorNodeCompletedCondition | null;
 }
@@ -312,8 +343,10 @@ export interface RegionNPCBehaviorTask {
   currentActivity: string;
   currentGoal: string;
   activation: RegionBehaviorQuestBinding;
-  // Plan 074 §074.4 -- time-window gating. When set, this task is only active
-  // if the current world.time-of-day band is in the array. Null/absent = any time.
+  // When set, this task only applies while the current world.time-of-day band
+  // is in the array. Null, absent or every band = any time. The window rules a
+  // task out; it never lets a task outrank one tied to the story. See
+  // `compareTaskSpecificity`.
   timeWindow?: { bands: TimeOfDayBand[] } | null;
 }
 
@@ -548,7 +581,12 @@ export function createRegionVolumeDefinition(
     labelKind: hasLabel ? overrides.labelKind ?? null : null,
     lorePageId: hasLabel ? overrides.lorePageId ?? null : null,
     blockDirection: blocksAnything ? overrides.blockDirection ?? null : null,
-    condition: blocksAnything ? overrides.condition ?? null : null,
+    // Through the binding factory like every other gate, so a condition
+    // written before the story point had a side is read the same way here.
+    condition:
+      blocksAnything && overrides.condition
+        ? createRegionBehaviorQuestBinding(overrides.condition)
+        : null,
     trigger: roles.includes("trigger") ? overrides.trigger ?? null : null,
     navCost: roles.includes("non-walkable") ? overrides.navCost ?? null : null,
     color: overrides.color ?? null
@@ -806,27 +844,33 @@ export function createRegionBehaviorQuestBinding(
   overrides: Partial<RegionBehaviorQuestBinding> = {}
 ): RegionBehaviorQuestBinding {
   const worldFlagId = readWorldFlagReference(overrides.worldFlagEquals);
+  const text = (value: unknown): string | null =>
+    typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+
+  // A file written before the point had a side names its node under
+  // `nodeCompleted`, which always meant "the node has been completed". That
+  // reads as the node point on the "after" side, and the node carries the
+  // quest it belongs to.
+  const legacyNode = overrides.nodeCompleted;
+  const legacyNodeId = text(legacyNode?.nodeId);
+  const legacyNodeQuestId = text(legacyNode?.questDefinitionId);
+  const migratingLegacyNode = Boolean(legacyNodeId && legacyNodeQuestId);
+
+  const questNodeId = text(overrides.questNodeId) ?? legacyNodeId;
+  const questDefinitionId = migratingLegacyNode
+    ? legacyNodeQuestId
+    : text(overrides.questDefinitionId);
+
   return {
-    questDefinitionId:
-      typeof overrides.questDefinitionId === "string" &&
-      overrides.questDefinitionId.trim().length > 0
-        ? overrides.questDefinitionId.trim()
-        : null,
-    questStageId:
-      typeof overrides.questStageId === "string" &&
-      overrides.questStageId.trim().length > 0
-        ? overrides.questStageId.trim()
-        : null,
-    nodeCompleted:
-      typeof overrides.nodeCompleted?.questDefinitionId === "string" &&
-      overrides.nodeCompleted.questDefinitionId.trim().length > 0 &&
-      typeof overrides.nodeCompleted?.nodeId === "string" &&
-      overrides.nodeCompleted.nodeId.trim().length > 0
-        ? {
-            questDefinitionId: overrides.nodeCompleted.questDefinitionId.trim(),
-            nodeId: overrides.nodeCompleted.nodeId.trim()
-          }
-        : null,
+    questDefinitionId,
+    questStageId: text(overrides.questStageId),
+    // A node only means something inside a quest.
+    questNodeId: questDefinitionId ? questNodeId : null,
+    storyPointSide: migratingLegacyNode
+      ? "after"
+      : overrides.storyPointSide === "after"
+        ? "after"
+        : "while",
     worldFlagEquals: worldFlagId
       ? {
           worldFlagId,

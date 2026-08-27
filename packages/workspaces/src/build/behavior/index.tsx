@@ -134,6 +134,7 @@ export function useBehaviorWorkspaceView(
     centerPanel: (
       <BehaviorTaskTrack
         behavior={selectedBehavior}
+        questDefinitions={questDefinitions}
         selectedTaskId={selectedTaskId}
         activityLabelByValue={activityLabelByValue}
         goalLabelByValue={goalLabelByValue}

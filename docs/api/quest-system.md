@@ -147,9 +147,9 @@ the node activates or completes, and that is the whole life of it. Nothing
 remembers it happened.
 
 **A behavior task is re-decided every frame.** `resolveBehaviorTask` walks an
-NPC's task list every sync and picks the first whose activation matches. It is
-not an instruction that was issued; it is the answer to "what is this NPC doing
-right now", asked again continuously.
+NPC's task list every sync and picks the most specific one whose activation
+matches. It is not an instruction that was issued; it is the answer to "what is
+this NPC doing right now", asked again continuously.
 
 So the test is: **does this need to still be true in ten minutes?**
 
@@ -267,18 +267,26 @@ grammar shared by everything that gates on quest state: behavior tasks
 interface RegionBehaviorQuestBinding {
   questDefinitionId: string | null
   questStageId: string | null
+  questNodeId?: string | null
+  storyPointSide?: "while" | "after"
   worldFlagEquals: { key: string | null; valueType: "boolean"|"number"|"string"; value: string | null } | null
-  nodeCompleted?: { questDefinitionId: string; nodeId: string } | null
 }
 ```
 
-All populated clauses are ANDed. Any field left null is not checked.
-- Quest active on stage X only: set `questDefinitionId` + `questStageId`, leave the rest null.
-- Flag set regardless of quest: set `worldFlagEquals`, leave quest fields null.
-- After a story beat: set `nodeCompleted`. It stays satisfied once that node has
-  completed, including after its quest finishes and across save and load.
+A binding names one story point and which side of it, ANDed with an optional
+world flag. The point is the deepest of the three ids that is set; the side says
+whether it applies while that point runs or ever since it finished. Any field
+left null is not checked.
 
-**Two things worth knowing.** The quest and stage clauses are checked against
+- While a quest sits on stage X: set `questDefinitionId` + `questStageId`, side
+  `"while"`.
+- Ever since a story beat: set the quest and the node, side `"after"`. It stays
+  satisfied once that node has completed, including after its quest finishes and
+  across save and load.
+- Flag set regardless of the story: set `worldFlagEquals`, leave the quest fields
+  null.
+
+**Two things worth knowing.** The quest, stage and node are all checked against
 the SAME quest -- one active quest supplying the id and a different one
 supplying the stage does not satisfy a binding neither satisfies. And bindings
 evaluate against EVERY quest in progress, not the one the player has selected in
@@ -296,11 +304,21 @@ absent evaluates false rather than being skipped.
 NPC staging is authored as a quest-bound behavior task, not as a quest action.
 Two grains:
 
-- **Stage grain** -- set `questDefinitionId` and `questStageId` on the task's
-  activation. The NPC takes that task while the quest sits on that stage.
-- **Node grain** -- set `nodeCompleted`. The NPC takes that task once that
-  specific node completes, and keeps it afterwards, including once the quest
-  has finished.
+- **Stage grain** -- set `questDefinitionId` and `questStageId`, side `"while"`.
+  The NPC takes that task while the quest sits on that stage, and drops it when
+  the quest advances or completes.
+- **Node grain** -- set the quest and `questNodeId`, side `"after"`. The NPC
+  takes that task once that specific node completes, and keeps it afterwards,
+  including once the quest has finished.
+
+Pair either with a baseline task carrying no conditions, and the NPC returns to
+the baseline when the staged task stops applying. An NPC who blocks a doorway
+during a quest and returns to work afterwards is two tasks: the blocking one at
+stage grain, and the baseline.
+
+For "and afterwards he does something different", the plainest shape is two
+tasks on opposite sides of one point -- while the quest runs, and ever since it
+finished. Those never overlap. See the activation rules below.
 
 To place an NPC somewhere with no journey at all, place it twice in the region
 and condition each placement instead. That is presence rather than movement:
@@ -311,8 +329,9 @@ the placement whose condition fails is not spawned.
 **Studio:** Behavior inspector, Tasks section
 
 Each NPC entity in a region can have a list of tasks. Each frame the runtime
-resolves the first task whose `activation` AND `timeWindow` both match the
-current world state.
+takes the tasks whose `activation` AND `timeWindow` both match the current
+world state, and among those picks the one carrying the most specific
+instruction.
 
 ```typescript
 interface RegionNPCBehaviorTask {
@@ -327,23 +346,188 @@ interface RegionNPCBehaviorTask {
 }
 ```
 
-**Activation:** Tasks are ordered; the first matching task wins. If no task
-matches, the NPC gets `taskId: null` and `currentActivity: "idle"`.
+**Most specific wins, not first in the list.** The rule, and its reasoning,
+live in `compareTaskSpecificity` (`packages/domain/src/behavior-specificity/`).
 
-**Default task:** A task with all activation fields null always matches
-(provided its `timeWindow` also matches) and serves as the NPC's
-unconditional baseline.
+Task A is more specific than task B when **every situation that turns A on
+would also have turned B on**, and B is on in situations A is not. A is then
+the narrower version of the same instruction, so A wins while it applies -- and
+when A stops applying, B is still there and the NPC falls back to it. Nobody
+authors the fallback; it is whatever the next widest matching task is.
+
+That is the point of authoring behaviors this way. Write "supervise the docks"
+as the baseline, then "block the way during the Introduction quest" over the
+top, and never edit the first one or add "unless the Introduction quest is
+running" to it.
+
+### A story point, and which side of it
+
+A task names one point in the story and says which side of it counts. Two
+things, and they are independent.
+
+**The point** is the deepest of the three ids that is set. Quest, then a stage
+inside it, then a node inside that. Naming a stage or a node names the quest as
+well, so the three read as one place:
+
+```typescript
+interface RegionBehaviorQuestBinding {
+  questDefinitionId: string | null
+  questStageId: string | null
+  questNodeId?: string | null
+  storyPointSide?: "while" | "after"
+  worldFlagEquals: RegionBehaviorWorldFlagCondition | null
+}
+```
+
+**The side** says whether the task applies while that point is running, or ever
+since it finished:
+
+- `"while"` -- it is happening right now. Stops the moment it ends.
+- `"after"` -- it has finished, and stays true from then on, including once the
+  whole quest is over.
+
+Naming no quest names no point, and the side then says nothing. That is what
+makes a task with nothing filled in the NPC's baseline.
+
+**The two sides are back to back.** "While the Introduction quest runs" ends at
+the exact moment "ever since the Introduction quest finished" begins:
+
+```
+        quest starts                          quest ends
+             |------------------------------------|-------------------->
+
+While Introduction runs    [========================]
+Ever since it finished                              [==================>
+```
+
+No gap and no overlap. So a pair of tasks set to opposite sides of one point
+hands over cleanly: Horace blocks the way, the quest ends, he walks. That is
+the plain way to author "and afterwards he does this".
+
+**All six combinations are available**, because the runtime tracks both states
+at all three levels:
+
+| | while | after |
+|---|---|---|
+| Quest | the quest is in progress | the quest has been finished |
+| Stage | the quest is on that stage | that stage has been got through |
+| Node | that node is the one being worked on | that node has been completed |
+
+### How the point decides which task wins
+
+**On the "while" side the deeper point is narrower**, the way you would expect.
+A stage runs for part of its quest, and a node for part of its stage:
+
+| Task names | Beats |
+|---|---|
+| nothing | -- |
+| while a quest | the baseline |
+| while a stage | that quest, and the baseline |
+| while a node | that stage, and everything above |
+
+**On the "after" side it turns around.** Things finish innermost first -- a node
+completes, then the stage holding it, then the whole quest -- so "ever since the
+quest finished" starts latest and covers the least time. "Ever since the
+Introduction quest finished" is inside "ever since its farewell node was done",
+not the other way round.
+
+**Opposite sides never rank against each other**, because neither encloses the
+other. They also usually cannot happen at once, so there is nothing to decide.
+
+**Story outranks the clock.** Comparison runs in two passes: the story point and
+world flag first, then `timeWindow`, and only when the story conditions are
+identical. A daily routine never displaces a task tied to a quest, however few
+hours it covers. The window rules a task out; it never promotes one.
+
+**Not a count of filled-in boxes.** Counting conditions looks equivalent and is
+not. "Introduction + Arrival stage" and "Introduction + a world flag" fill the
+same number of boxes, but only the first is a sharper version of
+"Introduction" -- the second asks a different question. Counting also gets it
+backwards: "during the Introduction quest" is genuinely narrower than "any
+quest, mornings only" despite naming fewer things.
+
+**When there is no answer.** Two tasks can both apply with neither narrower --
+"during the Introduction quest" against "while the upset flag is set". There is
+no correct pick, so `validateProjectContent` reports the pair as a **warning**
+(it does not block the save) and Studio marks both tasks `Unclear` in the task
+list. Fix it by making one of them narrower. The runtime keeps the earlier task
+so a player mid-session keeps playing.
+
+Two tasks that can never be live together -- different quests, or the same flag
+at two values -- are not reported.
+
+Exact ties resolve to the earlier task in the list. If nothing matches, the NPC
+gets `taskId: null` and `currentActivity: "idle"`.
+
+**Default task:** A task with all activation fields null and no window is the
+NPC's baseline -- what they do when nothing narrower applies. Every other task
+is narrower than it, so it can sit anywhere in the list.
+
+Under the previous first-match rule a condition-free task made every task below
+it unreachable, permanently and silently. That is the shape this rule exists to
+support: one baseline task plus narrower ones that override it.
+
+### How long a task holds
+
+The side decides this, and it is the whole reason the side exists:
+
+- **`"while"` ends.** A task set to "while quest X runs" switches off the moment
+  that quest finishes. Same for a stage when the stage advances, and for a node
+  when the node completes.
+- **`"after"` never ends.** Once the point has been passed it stays passed for
+  the rest of the playthrough.
+
+So "block the way while the Introduction quest runs" plus "walk the route ever
+since the Introduction quest finished" covers the whole story with two tasks and
+no overlap.
+
+A `worldFlagEquals` clause is separate from the point and lasts as long as the
+flag does. It is ANDed with the point, so a task carrying both only applies when
+both hold.
+
+**Reading a file written before the side existed.** A saved task named its node
+under `nodeCompleted`, which always meant "once that node is done". That is the
+node point on the `"after"` side, and the node names the quest it belongs to, so
+the load path rewrites it that way and drops the old field. Every place a
+binding is loaded goes through `createRegionBehaviorQuestBinding`, so behavior
+tasks, containment volumes and NPC placements all convert the same way.
+
+One behavior change comes with that. The old shape allowed a quest clause AND a
+node clause on one task, meaning "the quest is running and that beat has passed"
+-- a window with a closing edge. There is no separate closing edge now, so such
+a task becomes "ever since that beat", which keeps holding once the quest ends.
+That is what the authors of those tasks nearly always meant; the closing edge
+was the shape that made an NPC freeze when their quest completed.
 
 **Time window:** When `timeWindow` is set with a non-empty `bands` array, the
 task is skipped if the current `world.time-of-day` band is not in the array.
-Null or empty `bands` = any time.
+Null or empty `bands` = any time. Naming fewer bands makes a task narrower, and
+that only breaks ties between tasks with equal story conditions -- it never
+promotes a routine over a story instruction.
 
 **NPC prompt injection:** The resolved task's `displayName`, `description`,
 `currentActivity`, and `currentGoal` all flow into the agentified NPC's
 uncached user prompt block (see API 008 for the full prompt seam).
 
-**Studio:** Author tasks in the Behavior inspector. "Active Time Window" is a
-multi-select of the 7 bands. Leave blank for any time.
+**Studio:** Author tasks in the Behavior inspector. The three point pickers run
+widest to narrowest -- Quest, Quest Stage, Quest Node -- and each only offers
+what fits the ones above it, so the three always name one place in one quest.
+Changing a picker clears a choice below it that no longer fits. The Quest Node
+picker is disabled until a quest is named.
+
+Below them, "Applies" is the side: **While it runs** or **Ever since it
+finished**. It appears once a quest is named, since with no point there is no
+side.
+
+To author "Horace blocks the way, then walks once the quest is over": one task
+with Quest = Introduction and Applies = While it runs, and a second with
+Quest = Introduction and Applies = Ever since it finished.
+
+"Active Time Window" is a multi-select of the 7 bands; leave blank for any time.
+
+The Tasks panel groups tasks by the point in the story they name and indents
+them, so the indenting is the override order. A task marked `Unclear` shares a
+moment with another where neither is narrower.
 
 ---
 
@@ -588,7 +772,7 @@ All save participants restore before `startInitialQuests()` is called.
 Node progress lives inside `activeQuests`, which is deleted the moment a quest
 finishes. So "node Z was completed" is recorded separately, per quest, at the
 moment it completes -- outside the state that gets torn down. That is what makes
-a `nodeCompleted` activation still true after its quest is over.
+a story point on the "after" side still true once its quest is over.
 
 It is never cleared. Nothing restarts a quest: `startQuest` refuses any quest
 already in `completedQuestIds`. On restore it replaces rather than merges, which

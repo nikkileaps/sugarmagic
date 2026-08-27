@@ -1100,13 +1100,11 @@ describe("time-window task gating (074.4)", () => {
       currentActivity: "waiting",
       currentGoal: "wait_for_delivery",
       activation: {
-        questDefinitionId: null,
         questStageId: null,
-        worldFlagEquals: null,
-        nodeCompleted: {
-          questDefinitionId: "quest:find-suitcase",
-          nodeId: "node:found-it"
-        }
+      worldFlagEquals: null,
+      questDefinitionId: "quest:find-suitcase",
+      questNodeId: "node:found-it",
+      storyPointSide: "after"
       }
     });
 
@@ -1156,13 +1154,11 @@ describe("time-window task gating (074.4)", () => {
       currentActivity: "waiting",
       currentGoal: "wait_for_delivery",
       activation: {
-        questDefinitionId: null,
         questStageId: null,
-        worldFlagEquals: null,
-        nodeCompleted: {
-          questDefinitionId: "quest:find-suitcase",
-          nodeId: "node:found-it"
-        }
+      worldFlagEquals: null,
+      questDefinitionId: "quest:find-suitcase",
+      questNodeId: "node:found-it",
+      storyPointSide: "after"
       }
     });
 
