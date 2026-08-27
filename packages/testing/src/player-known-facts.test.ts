@@ -142,8 +142,9 @@ describe("playerKnownFactsSaveParticipant", () => {
     const participant = createPlayerKnownFactsSaveParticipant({
       getPlayerKnownFactsStore: () => store
     });
+    // A slice is the envelope only. Which participant it belongs to is the
+    // key it is filed under, not a field on the slice.
     participant.deserialize({
-      participantId: PLAYER_KNOWN_FACTS_PARTICIPANT_ID,
       schemaVersion: PLAYER_KNOWN_FACTS_SLICE_SCHEMA_VERSION,
       data: { facts: [{ id: "fact:a", text: "Fact A." }] }
     });

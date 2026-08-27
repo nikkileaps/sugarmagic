@@ -122,6 +122,11 @@ export function createAtlasProvider(
     getFrequencyRank(lemmaId, lang) {
       return map.get(`${lang}:${lemmaId}`)?.frequencyRank ?? undefined;
     },
+    // These entries carry no inflected forms. A caller asking for them gets
+    // the same answer it would for a lemma the real atlas has no forms for.
+    getForms() {
+      return undefined;
+    },
     listLemmasAtBand(band, lang) {
       return Array.from(map.values())
         .filter((entry) => entry.lang === lang && entry.cefrPriorBand === band)
@@ -147,6 +152,8 @@ export function createReducerObservationEvent(options: {
   sessionId?: string;
   lang?: string;
   dwellMs?: number;
+  chunkId?: string;
+  surfaceMatched?: string;
 }): ObservationEvent {
   const observedAtMs = options.observedAtMs ?? 1000;
   const base = {
@@ -183,6 +190,16 @@ export function createReducerObservationEvent(options: {
                       attemptedForm: "ola",
                       expectedForm: "hola"
                     }
-                  : { ...base, kind: options.kind }
+                  : // A chunk observation names which chunk was matched and
+                    // the surface text that matched it.
+                    options.kind === "chunk-encountered" ||
+                      options.kind === "chunk-produced"
+                    ? {
+                        ...base,
+                        kind: options.kind,
+                        chunkId: options.chunkId ?? "chunk-1",
+                        surfaceMatched: options.surfaceMatched ?? "hola"
+                      }
+                    : { ...base, kind: options.kind }
   };
 }

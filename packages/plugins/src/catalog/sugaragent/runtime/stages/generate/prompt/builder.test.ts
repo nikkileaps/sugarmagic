@@ -59,6 +59,7 @@ function baseContext(
     memoryDigest: "",
     knownFacts: null,
     recentWorldEvents: null,
+    timeOfDay: null,
     ...overrides
   };
 }

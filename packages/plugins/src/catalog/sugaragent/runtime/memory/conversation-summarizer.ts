@@ -278,9 +278,8 @@ async function runAsyncSummary(
   }
   try {
     const result = await deps.llmProvider.generateStructuredTurn({
-      // Model id stays server-side (Plan 073.2). The gateway maps
-      // purpose:"summary" to SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL.
-      model: "",
+      // Which model runs this is the gateway's call, not the caller's: it
+      // maps purpose "summary" to SUGARMAGIC_SUGARAGENT_SUMMARY_MODEL.
       purpose: "summary",
       systemPrompt: SUMMARY_SYSTEM_PROMPT,
       userPrompt: buildTranscriptText(transcript),

@@ -11,7 +11,7 @@
  * Status: active
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { InterpretStage } from "./InterpretStage";
 import { interpretPlayerTurn, nfdStrip, buildLexiconPattern } from "./interpretation";
 
@@ -181,31 +181,6 @@ describe("interpretPlayerTurn -- with interpretLexicon", () => {
 // InterpretStage -- lexicon threaded from annotation bus
 // ---------------------------------------------------------------------------
 describe("InterpretStage -- lexicon from contributions", () => {
-  function makeContext() {
-    return {
-      turnId: "t1",
-      sessionId: "s1",
-      pluginId: "sugaragent",
-      selection: { conversationKind: "free-form" as const, npcDefinitionId: "npc-1" },
-      config: {
-        proxyBaseUrl: "",
-        gatewayBearerToken: "",
-        loreSourceKind: "local" as const,
-        loreLocalPath: "",
-        loreRepositoryUrl: "",
-        loreRepositoryRef: "main",
-        maxLoreResults: 4,
-        maxLoreCharsPerItem: 600,
-        debugLogging: false,
-        tone: "",
-        moderationEnabled: false,
-        blocklist: ""
-      },
-      logStageStart() { return undefined; },
-      logStageEnd() { return undefined; }
-    };
-  }
-
   it("adios routes to farewell when the annotation bus carries the Spanish lexicon", async () => {
     const stage = new InterpretStage();
     const result = await stage.execute({
@@ -235,7 +210,7 @@ describe("InterpretStage -- lexicon from contributions", () => {
         sessionId: "s1", turnCount: 1, consecutiveFallbackTurns: 0,
         consecutiveJudgeFailures: 0, closeRequested: false, history: [], lastTurnDiagnostics: {}
       }
-    } as never, makeContext() as never);
+    } as never);
 
     expect(result.output.interpretation.socialMove).toBe("farewell");
     expect(result.output.shouldCloseAfterReply).toBe(true);
