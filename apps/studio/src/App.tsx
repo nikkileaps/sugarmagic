@@ -281,7 +281,7 @@ function renderPluginSectionGroup(
 }
 
 /**
- * Plan 092.2 — lets a plugin put a derived artifact into the project's
+ * Lets a plugin put a derived artifact into the project's
  * `assets/`, which is how it reaches a deployed game.
  *
  * Injected here rather than spelled out at each of the six prop sites: it
@@ -316,8 +316,8 @@ async function writeProjectAssetFile(
 }
 
 /**
- * Plan 092.2 — the read half. Serves the copy the asset-source store already
- * holds, which is populated on project open for every declared path.
+ * The read half. Serves the copy the asset-source store already holds,
+ * which is populated on project open for every declared path.
  *
  * Going through the store rather than the disk is deliberate: `readBlobFile`
  * intermittently returns null just after a write, and this file is declared,
@@ -491,7 +491,7 @@ function dispatchCommand(command: SemanticCommand) {
 }
 
 interface PerformSaveOptions {
-  // Story 45.8 — `true` skips the managed-files overwrite confirm
+  // `true` skips the managed-files overwrite confirm
   // dialog. Used by plugin-driven sagas (cut-major-version) that have
   // already confirmed the operation up-front through their own modal
   // and just need to flush the bumped state to disk silently.
@@ -566,7 +566,7 @@ async function performSave(
   );
   const canRunSugarDeploy = sugarDeployConfiguration?.enabled === true;
   const publishedWebSnapshot = {
-    // Story 46.10 follow-up — feed the in-memory runtime snapshot
+    // Feed the in-memory runtime snapshot
     // through so boot.json bakes the real game content (regions +
     // content library + asset sources) rather than empty
     // placeholders.
@@ -577,11 +577,11 @@ async function performSave(
     activeEnvironmentId: null as string | null
   };
 
-  // Story 46.15 reshape — non-secret runtime config env now flows
-  // from per-game plugin config (which is already in memory on the
-  // session) rather than from sugarmagic-root .env. No async fetch,
-  // no two-pass plan: planGameDeployment computes the env map
-  // internally from enabled plugins' gatewayRuntimeConfigKeys.
+  // Non-secret runtime config env comes from per-game plugin config,
+  // which is already in memory on the session, rather than from
+  // sugarmagic-root .env. No async fetch and no two-pass plan:
+  // planGameDeployment computes the env map internally from enabled
+  // plugins' gatewayRuntimeConfigKeys.
   const deploymentPlan =
     canRunSugarDeploy &&
     getDeploymentSettings(session.gameProject).backendDeploymentTargetId
@@ -690,9 +690,9 @@ async function handleSave() {
   }
 }
 
-// Story 45.8 — exposed to the plugin workspace via PluginWorkspaceViewProps.
-// Lets sagas (cut-major-version is the first) flush in-memory dispatches
-// to disk mid-flow with no UI prompts.
+// Exposed to the plugin workspace via PluginWorkspaceViewProps. Lets sagas
+// (cut-major-version is the first) flush in-memory dispatches to disk
+// mid-flow with no UI prompts.
 async function requestSaveFromPlugin(): Promise<PerformSaveResult> {
   return performSave({ silentOverwriteManagedFiles: true });
 }
@@ -730,17 +730,18 @@ function handleRegionSelect(regionId: string) {
   shellStore.getState().setActiveRegionId(regionId);
 }
 
-// Plan 058 §058.2 — Ambient Context switch: the top-bar Scene
-// selector routes here. Every Design workspace + Preview follows
-// the session's activeSceneId.
+// Ambient Context switch: the top-bar Scene selector routes here.
+// Every Design workspace and Preview follows the session's
+// activeSceneId.
 function handleSceneSelect(sceneId: string) {
   const { session } = projectStore.getState();
   if (!session) return;
   projectStore.getState().updateSession(switchActiveScene(session, sceneId));
 }
 
-// Plan 058 §058.3 — Manage Scenes handlers (session-level
-// structural mutations, same seam as addRegionToSession).
+// Scene structural mutations, session-level rather than semantic
+// commands — same seam as addRegionToSession, and outside the undo
+// stream.
 function handleAddScene(displayName: string, episodeId?: string) {
   const { session } = projectStore.getState();
   if (!session) return;
@@ -817,8 +818,8 @@ function handleUpdateEpisode(
     .updateSession(updateEpisodeInSession(session, episodeId, patch));
 }
 
-// Plan 058 §058.6 — Scene properties panel writes (description,
-// notes, overrides, transition card).
+// Scene properties panel writes: description, notes, overrides,
+// transition card.
 function handleUpdateScene(
   sceneId: string,
   patch: Parameters<typeof updateSceneInSession>[2]
@@ -889,11 +890,11 @@ function handleStartPreview(
   const capturedAssetSources = assetSources;
   const capturedInstalledPluginIds = installedPluginIds;
   const capturedSnapshot = snapshot;
-  // Story 47.10.5 — listener stays attached for the lifetime of the
-  // preview window so a window.location.reload() inside preview.tsx
-  // (the "New Game" reset path) gets a fresh PREVIEW_BOOT response.
-  // Originally one-shot; removing the listener after the first
-  // READY meant a reloaded preview hung on a blank screen forever
+  // The listener stays attached for the lifetime of the preview
+  // window so a window.location.reload() inside preview.tsx (the
+  // "New Game" reset path) gets a fresh PREVIEW_BOOT response.
+  // Removing it after the first READY leaves a reloaded preview
+  // hanging on a blank screen forever
   // because Studio stopped answering. Removed when the preview
   // window closes (handled by the same interval below).
   async function onMessage(event: MessageEvent) {
@@ -1047,22 +1048,22 @@ async function postPreviewBootMessage(
       uiTheme: session.gameProject.uiTheme,
       soundEventBindings: session.gameProject.soundEventBindings,
       audioMixer: session.gameProject.audioMixer,
-      // Plan 059 §059.1 — project music slots.
+      // Project music slots.
       musicBindings: session.gameProject.musicBindings,
-      // Plan 059 §059.2 — credits roll content.
+      // Credits roll content.
       creditsDefinition: session.gameProject.creditsDefinition,
-      // Plan 059 §059.3 — entry title sequence's first card.
+      // The entry title sequence's first card.
       gameTitle: session.gameProject.displayName,
-      // Plan 092.6 — Preview serves every project from ONE origin, so without
-      // this two projects share the same databases and read each other's
-      // saves and learner data. displayName is for humans; the id is what
-      // storage is keyed on.
+      // Preview serves every project from ONE origin, so without this two
+      // projects share the same databases and read each other's saves and
+      // learner data. displayName is for humans; the id is what storage is
+      // keyed on.
       gameId: session.gameProject.identity.id,
       assetSources,
-      // Story 47.10.5 — authored fresh-start record. Studio preview
-      // mirrors the published-web boot.json shape so a "New Game"
-      // reset spawns at the project-curated values rather than the
-      // implicit playerPresence defaults.
+      // The authored fresh-start record. Studio preview mirrors the
+      // published-web boot.json shape so a "New Game" reset spawns at
+      // the project-curated values rather than the implicit
+      // playerPresence defaults.
       defaultGameSavePayload: session.gameProject.defaultGameSavePayload,
       pluginBootPayloads: {
         sugarlang: sugarlangBootPayload ?? undefined
@@ -1107,7 +1108,7 @@ export function App() {
   const session = useStore(projectStore, (s) => s.session);
   const previewWindow = useStore(previewStore, (s) => s.previewWindow);
 
-  // Plan 092.6 — Studio itself needs the open project's id, because some
+  // Studio itself needs the open project's id, because some
   // author-facing panels read the PLAYER's storage directly (the SugarProfile
   // panel's anonymous-user row and its Regenerate button). Those names lead
   // with the game, so without this they cannot be built and the panel throws.
@@ -1122,8 +1123,8 @@ export function App() {
 
   const isDirty = session?.isDirty ?? false;
   const undoCount = session?.undoStack.length ?? 0;
-  // Plan 070.7 — flips false->true once when a project loads; used as the only
-  // session-derived trigger for the preview boot so edits don't re-fire it.
+  // Flips false->true once when a project loads; the only session-derived
+  // trigger for the preview boot, so edits don't re-fire it.
   const hasSession = session != null;
   const isBuild = activeProductMode === "build";
   const isDesign = activeProductMode === "design";
@@ -1373,11 +1374,11 @@ export function App() {
     });
   }, []);
 
-  // Plan 070.7 — the Preview boots ONCE, when you launch it, and does NOT
-  // auto-reboot on Studio churn. This effect used to re-post PREVIEW_BOOT on
-  // every selection change, workspace-tab switch, and session edit; because
-  // `host.start()` is not idempotent (preview.tsx tears the runtime down and
-  // back up) AND the fresh-start flag is consumed on the first boot, any
+  // The Preview boots ONCE, when you launch it, and does NOT auto-reboot on
+  // Studio churn. Re-posting PREVIEW_BOOT on every selection change,
+  // workspace-tab switch and session edit does not work: `host.start()` is
+  // not idempotent (preview.tsx tears the runtime down and back up) AND the
+  // fresh-start flag is consumed on the first boot, so any
   // re-post dumped a running game back onto the Start menu (the classic
   // "hit New Game, get in, bounced back to New Game"). The earlier
   // `assetSources` fix was the same class of bug; this generalizes it.
@@ -1639,10 +1640,10 @@ export function App() {
           materialDefinition
         );
       }
-      // Plan 069.1 — bake the collider's localBounds in-memory from the
-      // imported bytes (Box3.setFromObject), never re-reading the just-
-      // written file (the FSAccess read-after-write flake). io set the
-      // kind-aware shape; "none" colliders need no bounds.
+      // Bake the collider's localBounds in-memory from the imported bytes
+      // (Box3.setFromObject), never re-reading the just-written file --
+      // FSAccess intermittently returns null right after a write. io set
+      // the kind-aware shape; "none" colliders need no bounds.
       let importedAsset = result.assetDefinition;
       if (
         importedAsset.collider &&
@@ -1823,11 +1824,11 @@ export function App() {
     }
   }, []);
 
-  // Plan 062 §062.6 — Studio-side Character Wizard services: io +
-  // the solver worker + the vendored CC0 clips, behind the
-  // workspaces-facing interface. Definitions register on the
-  // session here (same shape as the import handlers above); the
-  // workspace binds slots via its own update command.
+  // Studio-side Character Wizard services: io, the solver worker and
+  // the vendored CC0 clips, behind the workspaces-facing interface.
+  // Definitions register on the session here (same shape as the import
+  // handlers above); the workspace binds slots via its own update
+  // command.
   const characterWizardServices = useMemo(
     () =>
       createCharacterWizardServices({
@@ -1858,10 +1859,10 @@ export function App() {
           }
           projectStore.getState().updateSession(nextSession);
         },
-        // §062.9 — edit-in-place rewrote asset files under the same
-        // paths; publish the written bytes directly (re-reading a
-        // just-written file trips the FSAccess flake and nukes the
-        // blob URL).
+        // Edit-in-place rewrites asset files under the same paths, so
+        // publish the written bytes directly: re-reading a just-written
+        // file intermittently returns null from FSAccess, which nukes
+        // the blob URL.
         publishAssetSource: (relativeAssetPath, blob) =>
           assetSourceStore.getState().setSource(relativeAssetPath, blob)
       }),
@@ -2078,7 +2079,7 @@ export function App() {
     []
   );
 
-  // Plan 059 §059.1 — project music slots.
+  // Project music slots.
   const handleUpdateMusicBindings = useCallback(
     (patch: Partial<MusicBindings>) => {
       const { session: currentSession } = projectStore.getState();
@@ -2302,9 +2303,9 @@ export function App() {
     return result;
   }, []);
 
-  // Painted-mask preview cache (Plan 068.8 QoL): live pixels behind
-  // the inspector thumbnails. Filled lazily from disk, updated on
-  // every stroke/fill commit via handleWriteMaskTexture.
+  // Painted-mask preview cache: live pixels behind the inspector
+  // thumbnails. Filled lazily from disk, updated on every stroke/fill
+  // commit via handleWriteMaskTexture.
   const paintedMaskPreviewCanvases = useRef(
     new Map<string, HTMLCanvasElement>()
   );
@@ -2377,10 +2378,10 @@ export function App() {
           pathSegments,
           new Blob([result.glb], { type: "model/gltf-binary" })
         );
-        // Plan 069.1 — the paint-UV bake is geometry-neutral (it appends a
-        // uv1 channel; vertex positions don't move), so the collider's
-        // localBounds stay valid — no rebake needed here (unlike origin
-        // correction, which shifts geometry).
+        // The paint-UV bake is geometry-neutral: it appends a uv1 channel
+        // and vertex positions don't move, so the collider's localBounds
+        // stay valid and need no rebake here. Origin correction below is
+        // the opposite case -- it does shift geometry.
         // Drop the renderables FIRST: the refreshPaths store tick is
         // what triggers the projection pass that re-schedules their
         // loads. The reverse order rebuilt before dropping and left
@@ -2451,9 +2452,9 @@ export function App() {
           pathSegments,
           new Blob([result.glb], { type: "model/gltf-binary" })
         );
-        // Plan 069.1 — origin correction shifted geometry relative to the
-        // origin, so the collider's localBounds are now stale; recompute
-        // from the in-memory corrected GLB and patch the definition.
+        // Origin correction shifted geometry relative to the origin, so
+        // the collider's localBounds are now stale; recompute from the
+        // in-memory corrected GLB and patch the definition.
         if (definition.collider && definition.collider.shape !== "none") {
           try {
             const localBounds = await computeAssetColliderBounds(result.glb);
@@ -2494,7 +2495,7 @@ export function App() {
     []
   );
 
-  // Plan 069.6 -- set an asset's DEFINITION collider shape (the type-level
+  // Set an asset's DEFINITION collider shape (the type-level
   // default every placed / scattered instance inherits). "none" is the
   // walk-through decor answer for scattered foliage. Switching to a solid
   // shape bakes bounds from the GLB (reusing any already-baked bounds).
@@ -2556,10 +2557,11 @@ export function App() {
     []
   );
 
-  // Plan 069.8 -- bake the region navmesh from the collision geometry inside
-  // nav-bounds volumes, write the artifact + publish the in-memory blob to
-  // the asset-source store (never read-after-write, per the FSAccess flake),
-  // and record the reference (+ input hash for staleness) on the region.
+  // Bake the region navmesh from the collision geometry inside nav-bounds
+  // volumes, write the artifact and publish the in-memory blob to the
+  // asset-source store -- never read-after-write, because FSAccess
+  // intermittently returns null right after one -- then record the
+  // reference and its input hash (for staleness) on the region.
   const handleBakeNavMesh = useCallback(async () => {
     const { session, handle } = projectStore.getState();
     if (!session || !handle) {
@@ -2616,7 +2618,7 @@ export function App() {
     });
   }, []);
 
-  // Plan 068 -- idempotent paint-UV ensure: generate only when the asset
+  // Idempotent paint-UV ensure: generate only when the asset
   // doesn't already have them. Wired into both the Surface Brush's
   // first-touch setup and the Open-in-Studio entry so painting always
   // has a paint channel without a manual step.
@@ -2875,16 +2877,15 @@ export function App() {
 
   // --- Viewport lifecycle (tied to the shared center viewport DOM) ---
   const viewportRef = useRef<HTMLDivElement>(null);
-  // The mounted WorkspaceViewport instance (Plan 068.8: paint-UV
-  // baking asks it to reload an asset's renderables after the source
-  // GLB is rewritten).
+  // The mounted WorkspaceViewport instance. Paint-UV baking asks it to
+  // reload an asset's renderables after the source GLB is rewritten.
   const workspaceViewportRef = useRef<WorkspaceViewport | null>(null);
 
   // --- Active region remains shell/project truth; the authoring viewport now
   // observes it directly via shell-store projection instead of a React effect.
   const activeRegion = session ? getActiveRegion(session) : null;
 
-  // Plan 069.8 -- navmesh staleness: re-derive the bake input hash and
+  // Navmesh staleness: re-derive the bake input hash and
   // compare to the baked one; a collider/nav-volume edit postdating the bake
   // flips this true (drives the "rebake" warning in the Spatial workspace).
   // Deps are the ACTUAL hash inputs (region + library + scene + player), not
@@ -2911,10 +2912,10 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRegion, staleContentLibrary, staleActiveScene, stalePlayerDefinition]);
 
-  // --- Surface Studio (Plan 068.10) ---
+  // --- Surface Studio ---
   const [surfaceStudioTarget, setSurfaceStudioTarget] =
     useState<SurfaceStudioTarget | null>(null);
-  // Transient progress toast (Plan 068) -- e.g. while the scene reloads
+  // Transient progress toast -- e.g. while the scene reloads
   // after the Surface Studio closes, so it doesn't read as a hang.
   const [busyToast, setBusyToast] = useState<string | null>(null);
   useEffect(() => {
@@ -2926,10 +2927,10 @@ export function App() {
     return () => clearTimeout(timeout);
   }, [busyToast]);
 
-  // Plan 069.1 — backfill collider localBounds for projects created before
-  // colliders existed. The domain normalize sets the SHAPE on load; bounds
-  // need the GLB, so fill them here, once per opened project (they persist
-  // after save). Best-effort + sequential; skips "none" and already-baked.
+  // Backfill collider localBounds for projects created before colliders
+  // existed. The domain normalize sets the SHAPE on load; bounds need the
+  // GLB, so fill them here, once per opened project (they persist after
+  // save). Best-effort and sequential; skips "none" and already-baked.
   // Keyed on the project identity (not `session`) so an edit doesn't re-run
   // it; reads the LATEST session from the store to dodge stale closures.
   useEffect(() => {
@@ -3128,7 +3129,7 @@ export function App() {
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null),
     onNavigateToTarget: handleWorkspaceNavigation,
     onImportAsset: handleImportAsset,
-    // Plan 058 §058.3 — scope conversion + cross-Scene copy.
+    // Scope conversion and cross-Scene copy.
     onConvertAssetScope: (regionId, instanceId) => {
       const { session } = projectStore.getState();
       if (!session) return;
@@ -3384,7 +3385,7 @@ export function App() {
     navigationTarget: workspaceNavigationTarget,
     onConsumeNavigationTarget: () => setWorkspaceNavigationTarget(null)
   });
-  // Story 46.5 — gather plugin-contributed Publish workspaces (e.g.
+  // Gather plugin-contributed Publish workspaces (e.g.
   // SugarDeploy's Provision / Release / Deploy). Two halves: shell
   // contributions provide labels + icons + sort order; plugin
   // workspace definitions provide createWorkspaceView. We zip them
@@ -3555,7 +3556,7 @@ export function App() {
     if (!shouldRenderSharedViewport) {
       return;
     }
-    // Plan 068.10 -- the Surface Studio mounts its own focused render
+    // The Surface Studio mounts its own focused render
     // view for the selected asset; unmount the main scene viewport
     // while it is open so only one render loop runs on the engine.
     if (surfaceStudioTarget) {
@@ -4227,9 +4228,9 @@ export function App() {
                 >
                   v{session.gameProject.majorVersion}
                 </Badge>
-                {/* Plan 058 §058.2 — Scene selector (Ambient
-                    Context). Scope narrows left to right:
-                    project > version > Scene > workspaces. */}
+                {/* Scene selector (Ambient Context). Scope narrows
+                    left to right: project > version > Scene >
+                    workspaces. */}
                 <Menu position="bottom-start" width={240}>
                   <Menu.Target>
                     <UnstyledButton
