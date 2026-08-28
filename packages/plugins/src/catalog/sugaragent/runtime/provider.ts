@@ -496,10 +496,14 @@ async function executePipeline(args: {
     Audit: auditDiagnostics,
     Regenerate: regenerateDiagnostics
   };
-  state.consecutiveFallbackTurns = isStalledTurn(
+  // Decided once: the counter that closes the conversation and the telemetry
+  // that reports why must not be able to disagree about whether this turn
+  // stalled.
+  const turnStalled = isStalledTurn(
     state.lastTurnDiagnostics,
     Boolean(interpret.userText)
-  )
+  );
+  state.consecutiveFallbackTurns = turnStalled
     ? state.consecutiveFallbackTurns + 1
     : 0;
 
@@ -542,7 +546,7 @@ async function executePipeline(args: {
       sessionId: state.sessionId,
       npcDefinitionId: execution.selection.npcDefinitionId ?? null,
       stages: state.lastTurnDiagnostics,
-      stalled: isStalledTurn(state.lastTurnDiagnostics, Boolean(interpret.userText)),
+      stalled: turnStalled,
       autoClosed: autoCloseAfterMs !== null,
       terminalClose,
       consecutiveFallbackTurns: state.consecutiveFallbackTurns,

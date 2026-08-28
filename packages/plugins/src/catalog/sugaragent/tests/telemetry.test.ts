@@ -238,6 +238,119 @@ describe("buildDegradedTurnEvent", () => {
   });
 });
 
+describe("stalled turns with no degraded stage", () => {
+  // Found in prod: a close reported consecutiveFallbackTurns 3, but only one
+  // event existed for the whole run. The two turns that built up to it stalled
+  // through Plan's verdict with every stage reading `ok`, so nothing was
+  // emitted and the cause of the close was invisible.
+
+  it("reports a turn that stalled on clarify even though no stage degraded", () => {
+    const event = buildDegradedTurnEvent(
+      facts({
+        stages: {
+          Plan: stage("Plan", { payload: { responseIntent: "clarify" } }),
+          Generate: stage("Generate")
+        },
+        stalled: true,
+        consecutiveFallbackTurns: 1
+      }),
+      1000
+    );
+
+    expect(event).not.toBeNull();
+    expect(event).toMatchObject({
+      stalled: true,
+      responseIntent: "clarify",
+      stageId: null,
+      degradedStages: []
+    });
+  });
+
+  it("reports a turn that stalled on a generic-only response", () => {
+    const event = buildDegradedTurnEvent(
+      facts({
+        stages: {
+          Plan: stage("Plan", {
+            payload: { responseSpecificity: "generic-only", turnPath: "grounded" }
+          })
+        },
+        stalled: true
+      }),
+      1000
+    );
+
+    expect(event).toMatchObject({
+      stalled: true,
+      responseSpecificity: "generic-only",
+      turnPath: "grounded"
+    });
+  });
+
+  it("still emits nothing for a turn that neither stalled nor degraded", () => {
+    const event = buildDegradedTurnEvent(
+      facts({
+        stages: { Plan: stage("Plan", { payload: { responseIntent: "answer" } }) },
+        stalled: false
+      }),
+      1000
+    );
+
+    expect(event).toBeNull();
+  });
+});
+
+describe("attributing a close", () => {
+  it("THE INNOCENT JUDGE: the Plan verdict rides along so the close is attributable", () => {
+    // The prod close named `Judge / judge-language-fail` as its only degraded
+    // stage -- but isStalledTurn deliberately does NOT count a language flag
+    // as a stall ("the conversation is not stalled, the teaching just
+    // missed"). So the Judge did not cause that close and the event said
+    // nothing about what did.
+    const event = buildDegradedTurnEvent(
+      facts({
+        stages: {
+          Plan: stage("Plan", {
+            payload: { responseIntent: "clarify", responseSpecificity: "generic-only" }
+          }),
+          Judge: stage("Judge", {
+            status: "degraded",
+            fallbackReason: "judge-language-fail"
+          })
+        },
+        stalled: true,
+        terminalClose: true,
+        autoClosed: true,
+        consecutiveFallbackTurns: 3,
+        llmBackend: "deterministic"
+      }),
+      1000
+    );
+
+    expect(event).toMatchObject({
+      trigger: TERMINAL_CLOSE_TRIGGER,
+      responseIntent: "clarify",
+      responseSpecificity: "generic-only"
+    });
+    // The Judge is still on the record, just no longer the only explanation.
+    expect(event?.degradedStages).toEqual([
+      { stageId: "Judge", trigger: null, fallbackReason: "judge-language-fail" }
+    ]);
+  });
+
+  it("leaves the Plan fields null when Plan recorded nothing", () => {
+    const event = buildDegradedTurnEvent(
+      facts({ stages: {}, terminalClose: true }),
+      1000
+    );
+
+    expect(event).toMatchObject({
+      responseIntent: null,
+      responseSpecificity: null,
+      turnPath: null
+    });
+  });
+});
+
 describe("collector ownership", () => {
   // THE TEARDOWN RACE this guards against: teardown is not awaited --
   // runtimeHost fires `void assembly.dispose()` and proceeds -- and sugarlang's

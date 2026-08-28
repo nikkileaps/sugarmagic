@@ -64,6 +64,35 @@ interface DegradedStage {
 }
 
 /**
+ * What the Plan stage decided this turn.
+ *
+ * These three are what `isStalledTurn` actually reads, so without them a
+ * conversation that closed cannot be attributed. Observed in prod: a
+ * terminal close whose only degraded stage was a Judge language flag --
+ * which `isStalledTurn` deliberately does NOT count as a stall. The Judge was
+ * innocent and the event named it anyway; the real driver was a `clarify` or
+ * `generic-only` verdict that appeared nowhere on the event.
+ */
+interface PlanVerdict {
+  responseIntent: string | null;
+  responseSpecificity: string | null;
+  turnPath: string | null;
+}
+
+function readPlanVerdict(
+  stages: Record<string, TurnStageDiagnostics>
+): PlanVerdict {
+  const payload = stages.Plan?.payload;
+  const read = (key: string): string | null =>
+    typeof payload?.[key] === "string" ? (payload[key] as string) : null;
+  return {
+    responseIntent: read("responseIntent"),
+    responseSpecificity: read("responseSpecificity"),
+    turnPath: read("turnPath")
+  };
+}
+
+/**
  * The stages that came out degraded, with the two fields that say why.
  *
  * Keyed off `status`, never off the presence of a `trigger`: RegenerateStage
@@ -86,16 +115,25 @@ function collectDegradedStages(
 /**
  * Builds the event for a turn, or returns null when the turn was fine.
  *
- * A turn counts as degraded when a stage says so or when the three-strike
- * close fired. The close is its own condition because it replaces the reply
- * after the stages have run, so on that turn the stages can all read `ok`.
+ * A turn counts as degraded when a stage says so, when the turn STALLED, or
+ * when the three-strike close fired.
+ *
+ * Stalling is its own condition because a turn can stall with every stage
+ * reading `ok`: `isStalledTurn` also returns true for a `clarify` intent or a
+ * `generic-only` response, neither of which degrades a stage. Those are the
+ * turns that accumulate toward the close. Reporting only the close was
+ * observed in prod to hide its whole cause -- three consecutive stalls, one
+ * event, and nothing saying what the other two turns did.
+ *
+ * The close is its own condition too, because it replaces the reply after the
+ * stages have run.
  */
 export function buildDegradedTurnEvent(
   facts: DegradedTurnFacts,
   timestamp: number
 ): TelemetryEvent | null {
   const degradedStages = collectDegradedStages(facts.stages);
-  if (degradedStages.length === 0 && !facts.terminalClose) {
+  if (degradedStages.length === 0 && !facts.stalled && !facts.terminalClose) {
     return null;
   }
 
@@ -119,6 +157,9 @@ export function buildDegradedTurnEvent(
     // Every degraded stage, so a turn that failed in more than one place is
     // not reported as though only the last thing went wrong.
     degradedStages,
+    // What Plan decided. A stalled turn with no degraded stage is explained by
+    // these and nothing else.
+    ...readPlanVerdict(facts.stages),
     stalled: facts.stalled,
     autoClosed: facts.autoClosed,
     terminalClose: facts.terminalClose,

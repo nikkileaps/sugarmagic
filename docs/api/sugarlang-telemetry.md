@@ -332,20 +332,32 @@ shipping it would trade the diagnostic value against nothing.
 **Built by:** `buildDegradedTurnEvent` in
 `packages/plugins/src/catalog/sugaragent/runtime/telemetry.ts`
 
-One event per turn where the NPC gave up and read a canned line instead of
-answering. The decision is made in the browser and used to stay there, so in a
-deployed game "why did the NPC give up?" was answered by reasoning about what
-had not failed.
+One event per turn that went wrong: a stage degraded, the turn STALLED, or the
+three-strike close fired. The decision is made in the browser and used to stay
+there, so in a deployed game "why did the NPC give up?" was answered by
+reasoning about what had not failed.
 
 | Field | Meaning |
 |---|---|
-| `stageId` | the stage that produced the reply the player saw; null on a terminal close |
+| `stageId` | the stage that produced the reply the player saw; null on a terminal close or a stall with no degraded stage |
 | `trigger` | the stage's own trigger, or `terminal-close` |
 | `fallbackReason` | the stage's fallback reason |
 | `degradedStages` | every degraded stage, so a turn that failed in more than one place is not reported as though only the last thing went wrong |
+| `responseIntent`, `responseSpecificity`, `turnPath` | what Plan decided; the three fields `isStalledTurn` actually reads |
 | `stalled` / `autoClosed` | the two verdicts the provider already derives |
 | `terminalClose` | the three-strike close fired and the conversation was ended |
 | `consecutiveFallbackTurns`, `turnCount`, `llmBackend` | turn context |
+
+**Stalling is its own emit condition.** A turn can stall with every stage
+reading `ok` -- `isStalledTurn` also returns true for a `clarify` intent or a
+`generic-only` response, neither of which degrades a stage. Those are the turns
+that accumulate toward the close, so reporting only the close hides its cause.
+
+**The Plan verdict is what attributes a close.** A close observed in prod
+listed `Judge / judge-language-fail` as its only degraded stage -- but
+`isStalledTurn` deliberately does not count a language flag as a stall, so the
+Judge had not caused it. Without `responseIntent` and `responseSpecificity` the
+event named an innocent stage and said nothing about the real driver.
 
 `conversationId` carries the NPC definition id. Sugarlang keys its events on
 the same value under the same name, which is what lets one conversation be read
