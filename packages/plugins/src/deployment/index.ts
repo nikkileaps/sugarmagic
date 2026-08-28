@@ -614,9 +614,11 @@ function buildGatewayServerFile(
 // builds its URL from. It is not imported from there because value imports in
 // this file must use relative paths (see the note on the imports above), and
 // a fourth escape-the-package-root import is worse than a literal that a test
-// pins. `telemetry-route-agreement.test.ts` fails if the two ever disagree --
-// which matters, because a route that does not match answers 404 while every
-// client believes it is recording.
+// pins. The "serves the telemetry route from every gateway" case in
+// packages/testing/src/plugin-infrastructure.test.ts compares this against
+// that constant and fails if they ever disagree -- which matters, because a
+// route that does not match answers 404 while every client believes it is
+// recording.
 const TELEMETRY_INGEST_ROUTE = {
   routeId: "telemetry",
   path: "/api/telemetry",

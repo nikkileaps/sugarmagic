@@ -2,13 +2,13 @@ import {
   createDeploymentRequirementId,
   type DeploymentRequirement
 } from "@sugarmagic/domain";
+import { BindableTelemetryCollector } from "@sugarmagic/runtime-core";
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import {
   createSugarAgentConversationProvider,
   createSugarAgentLorePageResolver,
   createSugarAgentVectorStoreProvider
 } from "./runtime/provider";
-import { sugaragentTelemetry } from "./runtime/telemetry";
 import { createSugarAgentLogger } from "./runtime/logger";
 import {
   createNpcMemoryMiddleware,
@@ -523,6 +523,10 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
   },
   runtime: {
     createRuntimePlugin: ({ configuration, environment }) => {
+    // One per plugin instance, not per module. A shared collector would be
+    // unbound by whichever instance is torn down last, and teardown is not
+    // awaited -- an old session's dispose can land after a new one has bound.
+    const telemetry = new BindableTelemetryCollector();
       const config = normalizeSugarAgentPluginConfig(
         configuration.config,
         environment
@@ -561,7 +565,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
           // The host owns delivery. The provider was built before this ran, so
           // it holds the bindable collector and this points it somewhere.
           // Absent when there is no gateway, and then events go nowhere.
-          sugaragentTelemetry.bind(runtimeContext?.telemetry ?? null);
+          telemetry.bind(runtimeContext?.telemetry ?? null);
           // Plan 073.5 — dev-only memory inspection handle (window.__sugaragentMemory).
           installNpcMemoryDebugHandle();
           // Plan 077.5 — dev-only quest-context inspection handle (window.__sugaragentQuestContext).
@@ -581,7 +585,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
               summary:
                 "Agentified NPC provider with Interpret/Retrieve/Plan/Generate/Audit/Repair stages.",
               status: "ready",
-              provider: createSugarAgentConversationProvider(config)
+              provider: createSugarAgentConversationProvider(config, telemetry)
             }
           },
           // Plan 073.3 — context-stage middleware that loads NPC memory once
@@ -674,7 +678,7 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
             pluginId: configuration.pluginId
           });
           // Unbinds only -- the host's collector serves other producers.
-          sugaragentTelemetry.dispose();
+          telemetry.dispose();
         }
       };
     }

@@ -8,7 +8,6 @@
  *   - SUGARAGENT_TURN_DEGRADED_EVENT_KIND
  *   - TERMINAL_CLOSE_TRIGGER
  *   - buildDegradedTurnEvent
- *   - sugaragentTelemetry
  *
  * WHY THIS EXISTS
  *   An NPC that gives up and reads its canned line decided that in the
@@ -26,7 +25,6 @@
  */
 
 import {
-  BindableTelemetryCollector,
   createTelemetryEvent,
   type TelemetryEvent
 } from "@sugarmagic/runtime-core";
@@ -40,12 +38,6 @@ export const SUGARAGENT_TURN_DEGRADED_EVENT_KIND = "sugaragent.turn-degraded";
  * stage's own.
  */
 export const TERMINAL_CLOSE_TRIGGER = "terminal-close";
-
-/**
- * The collector sugaragent emits through. Bound to the host's at plugin init;
- * the provider is built before that, so it holds this instead.
- */
-export const sugaragentTelemetry = new BindableTelemetryCollector();
 
 export interface DegradedTurnFacts {
   turnId: string;

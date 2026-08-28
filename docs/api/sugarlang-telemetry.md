@@ -1,32 +1,46 @@
-# API 011: Sugarlang Telemetry
+# API 011: Telemetry
 
 ## Purpose
 
-This document covers the developer-facing surface of Sugarlang's telemetry
-system: the canonical event schema, the event taxonomy actually emitted at
-runtime, sink resolution (local debug vs published production), the gateway
-ingestion route, and the proxy base URL environment resolution.
+This document covers the developer-facing surface of telemetry: the shared
+collector every runtime system emits through, the event schema, the event
+taxonomy actually emitted at runtime, the gateway ingestion route, and the
+PII scrub.
 
 ## Overview
 
-One file owns the whole contract:
+Delivery is shared and lives in core:
 
-**File:** `packages/plugins/src/catalog/sugarlang/runtime/telemetry/telemetry.ts`
+**File:** `packages/runtime-core/src/telemetry/index.ts`
 
-It defines the typed event union, the `TelemetrySink` interface, all four sink
-implementations, and `resolveSugarlangTelemetrySink`. Every producer
-(middlewares, Teacher, learner reducer, classifier, chunk compiler) emits
-through `emitTelemetry`, which is fire-and-forget: a failing sink logs a
-warning and drops the event, never blocking a turn.
+It defines the producer-neutral envelope, the `TelemetryCollector` contract,
+`GatewayTelemetryCollector` (batching and delivery), `BindableTelemetryCollector`
+(what a plugin holds before the host hands one over), and the PII policy.
+Telemetry belongs to no one plugin -- sugarlang records what it taught,
+sugaragent records the turns it could not answer -- and a plugin cannot import
+another plugin's catalog, so a collector owned by either could only ever serve
+that one.
+
+The host builds the collector and supplies it on `RuntimePluginContext`. A
+plugin emits its own event kinds and knows nothing about batching, auth, or the
+route. Emitting goes through `emitTelemetry`, which is fire-and-forget: a
+failing collector logs a warning and drops the event, never blocking a turn.
+
+Producers today:
+
+| Producer | Events | Schema owned in |
+|---|---|---|
+| sugarlang | 54 kinds, teaching analytics | `catalog/sugarlang/runtime/telemetry/telemetry.ts` |
+| sugaragent | `sugaragent.turn-degraded` | `catalog/sugaragent/runtime/telemetry.ts` |
 
 ## Event Schema and Versioning
 
-Every event extends `TelemetryEventBase`:
+Every event extends the shared `TelemetryEventBase`:
 
 ```typescript
 interface TelemetryEventBase {
-  eventId: string;          // "sugarlang-telemetry:<ms>:<counter>" unless supplied
-  schemaVersion: 1;         // SUGARLANG_TELEMETRY_SCHEMA_VERSION
+  eventId: string;          // "telemetry:<ms>:<counter>" unless supplied
+  schemaVersion: 1;         // TELEMETRY_SCHEMA_VERSION
   timestamp: number;
   kind: string;
   conversationId?: string;  // join keys for cross-event analysis
@@ -34,6 +48,19 @@ interface TelemetryEventBase {
   sessionId?: string;
 }
 ```
+
+The shape is deliberately open: each producer declares its own `kind` values
+and its own payload fields over that envelope, flattened onto it rather than
+nested under a payload key. A closed union in core would mean one producer's
+events could not typecheck against the shared collector.
+
+`kind` is `family.kebab-case-event`. Cloud Logging queries key on it, so the
+naming is load-bearing rather than cosmetic.
+
+Sugarlang additionally keeps its own typed union and its own
+`SUGARLANG_TELEMETRY_SCHEMA_VERSION` (also `1`) for its 54 kinds. That union is
+the source of truth for what each sugarlang event carries; it rides on the
+shared envelope for delivery.
 
 `TelemetryEvent` is a discriminated union over `kind` with a typed payload per
 event (the single source of truth for what each event carries).
@@ -143,13 +170,14 @@ and `dispose` (optional). `QueryableTelemetrySink` requires `flush` and
 the plugin's `dispose()` in `manifest.ts` calls `flushTelemetry` and then
 `sink.dispose?.()` so the session tail is not lost on teardown.
 
-| Sink | Storage | Notes |
+| Collector | Storage | Notes |
 |---|---|---|
-| `MemoryTelemetrySink` | in-memory ring | capacity 1000 (default), queryable; used in tests |
-| `NoOpTelemetrySink` | none | `query()` throws `NotSupportedTelemetryQueryError` |
-| `GatewaySugarlangTelemetrySink` | POST to gateway | batches up to 100 events per request, flush every 5s, drop-on-failure |
+| `GatewayTelemetryCollector` | POST to gateway | core; batches up to 100 events per request, flush every 5s, drop-on-failure |
+| `BindableTelemetryCollector` | forwards | core; what a plugin holds until the host binds one |
+| `NoOpTelemetryCollector` | none | core; no gateway configured |
+| `MemoryTelemetrySink` | in-memory ring | sugarlang; capacity 1000, queryable, used in tests |
 
-`GatewaySugarlangTelemetrySink` delivery guarantees:
+`GatewayTelemetryCollector` delivery guarantees:
 
 - A flush drains at most 100 events; if more are pending it immediately
   reschedules itself, so a burst larger than the cap drains in successive
@@ -160,16 +188,30 @@ the plugin's `dispose()` in `manifest.ts` calls `flushTelemetry` and then
   overflow drops, matching the drop-on-failure posture).
 - `dispose()` clears the flush timer, removes both listeners, and drains
   everything still pending.
+- **A non-2xx response is reported.** The collector reads the status and warns
+  the first time delivery breaks and the first time it recovers, staying quiet
+  in between. Delivery is best-effort, but best-effort is not the same as
+  silent: an earlier sink never read the status, so a route that answered 404
+  for nine days looked exactly like one that was recording, and the metrics
+  built on it held nothing.
 
-`resolveSugarlangTelemetrySink({ proxyBaseUrl })` picks one, called once per
-plugin instance in `manifest.ts`. There is no compile-profile branch:
+The host builds the collector once per world spawn in
+`targets/web/src/runtimeHost.ts` and passes it into the gameplay assembly,
+which puts it on `RuntimePluginContext.telemetry`. A gateway URL means a
+`GatewayTelemetryCollector`; no URL means no telemetry, which is the case in
+Studio with nothing deployed.
 
-- proxy base URL configured: `GatewaySugarlangTelemetrySink`.
-- otherwise: `NoOpTelemetrySink` (events dropped).
+A plugin builds a `BindableTelemetryCollector` per instance and binds it in
+`init`. This exists because a plugin constructs its services before `init` runs,
+so they need something real to hold. Per instance, not per module: teardown is
+not awaited, so a shared one would be unbound by whichever instance is torn
+down last, and an old session's dispose landing after a new one has bound would
+silence telemetry for the rest of the page. `dispose()` on a bindable unbinds
+only -- the host's collector outlives any one plugin and serves other producers.
 
-Studio, Preview and the published game therefore have the same destination,
-so a gateway fault is visible while authoring instead of only in production,
-and a reading taken in Preview is evidence about what the deployed game does.
+Studio, Preview and the published game have the same destination, so a gateway
+fault is visible while authoring instead of only in production, and a reading
+taken in Preview is evidence about what the deployed game does.
 
 ## Reading Events
 
@@ -216,14 +258,24 @@ Three questions it answers:
 
 ## Gateway Ingestion Route
 
-**Route:** `POST /api/sugarlang/telemetry`
-**Handler:** `handleSugarlangTelemetry` in
+**Route:** `POST /api/telemetry` (`TELEMETRY_INGEST_ROUTE_PATH`)
+**Handler:** `handleTelemetryIngest` in
 `packages/plugins/src/deployment/gateway/core.ts`
 
-The route is declared by the plugin manifest as a `proxy-route` deployment
-requirement (`routeId: "sugarlang-telemetry"`, `required: false`) in
-`packages/plugins/src/catalog/sugarlang/manifest.ts`; the gateway dispatcher
-routes on that `routeId`.
+The route belongs to no plugin. `buildGatewayRoutesFile` in
+`packages/plugins/src/deployment/index.ts` adds it to every generated gateway,
+because the handler is compiled into all of them and any runtime system can
+emit through the shared collector. Owning it there rather than in a plugin
+manifest is what stops it from disappearing when whichever plugin happened to
+declare it is disabled.
+
+The path is spelled in the deployment planner and again as
+`TELEMETRY_INGEST_ROUTE_PATH` in core, which is what the browser builds its URL
+from; the planner cannot import values across the package alias. The
+"serves the telemetry route from every gateway" case in
+`packages/testing/src/plugin-infrastructure.test.ts` compares the two and fails
+if they disagree. That matters: a route that does not match answers 404 while
+every client believes it is recording.
 
 Handler contract:
 
@@ -237,7 +289,7 @@ Handler contract:
   is deferred (a log-sink config flip, per the comment above the handler).
 - Responds `200 { ok: true, accepted }`.
 
-Client batch shape (from `GatewaySugarlangTelemetrySink.flush`):
+Client batch shape (from `GatewayTelemetryCollector.flush`):
 
 ```json
 { "events": [ ... ], "schemaVersion": 1 }
@@ -245,27 +297,73 @@ Client batch shape (from `GatewaySugarlangTelemetrySink.flush`):
 
 ## PII Scrub
 
-The primary scrub is CLIENT-side, in `GatewaySugarlangTelemetrySink`. Before
-an event leaves the browser, `stripPii` drops these top-level fields
-(`SERVER_BOUND_PII_FIELDS`):
+The primary scrub is CLIENT-side, in `GatewayTelemetryCollector`. Before an
+event leaves the browser, it drops the top-level fields named in
+`PLAYER_TEXT_PII_POLICY` (`packages/runtime-core/src/telemetry/index.ts`):
 
 - `inputText` (classifier.verdict)
+- `originalText` / `repairedText`
 - `playerResponseText` (comprehension probe events)
 
 plus one known nested path: `observe.observations-applied` nests player-typed
-text at `observations[].observation.inputText` (`produced-typed`
-observations, see `runtime/contracts/observation.ts`), which `stripPii`
-removes while keeping the rest of the observation.
+text at `observations[].observation.inputText` (`produced-typed` observations,
+see sugarlang's `runtime/contracts/observation.ts`), which the policy removes
+while keeping the rest of the observation.
 
-The gateway re-scrubs as defense in depth: `scrubSugarlangTelemetryEvent`
-in `packages/plugins/src/deployment/gateway/core.ts` deletes the same
-top-level fields and the nested `observation.inputText` from every event
-before it is written to stdout. The field list is duplicated there
-(`SUGARLANG_TELEMETRY_PII_FIELDS`) because the gateway compiles standalone;
-keep it in sync with `SERVER_BOUND_PII_FIELDS` in `telemetry.ts`.
+Every producer's fields sit in that one list on purpose. A strip each producer
+performed for itself would be enforced nowhere, and one producer forgetting is
+a player's typing on the wire.
 
-The local IndexedDB sink stores full events including these fields -- that is
-the debugging point of the Studio sink.
+The gateway re-scrubs as defense in depth: `scrubTelemetryEvent` in
+`packages/plugins/src/deployment/gateway/core.ts` deletes the same top-level
+fields and the nested `observation.inputText` from every event before it is
+written to stdout. The field list is duplicated there (`TELEMETRY_PII_FIELDS`)
+because the gateway compiles standalone and cannot import from a plugin or core
+package; keep it in sync with `PLAYER_TEXT_PII_POLICY`. An old client is still
+a client.
+
+**Sugaragent's degraded-turn event carries no text at all** -- not the player's
+and not the NPC's. The NPC's line is deterministic from the trigger, so
+shipping it would trade the diagnostic value against nothing.
+
+## Sugaragent: the degraded turn
+
+**Kind:** `sugaragent.turn-degraded`
+**Built by:** `buildDegradedTurnEvent` in
+`packages/plugins/src/catalog/sugaragent/runtime/telemetry.ts`
+
+One event per turn where the NPC gave up and read a canned line instead of
+answering. The decision is made in the browser and used to stay there, so in a
+deployed game "why did the NPC give up?" was answered by reasoning about what
+had not failed.
+
+| Field | Meaning |
+|---|---|
+| `stageId` | the stage that produced the reply the player saw; null on a terminal close |
+| `trigger` | the stage's own trigger, or `terminal-close` |
+| `fallbackReason` | the stage's fallback reason |
+| `degradedStages` | every degraded stage, so a turn that failed in more than one place is not reported as though only the last thing went wrong |
+| `stalled` / `autoClosed` | the two verdicts the provider already derives |
+| `terminalClose` | the three-strike close fired and the conversation was ended |
+| `consecutiveFallbackTurns`, `turnCount`, `llmBackend` | turn context |
+
+`conversationId` carries the NPC definition id. Sugarlang keys its events on
+the same value under the same name, which is what lets one conversation be read
+across both producers.
+
+Two things worth knowing when querying it:
+
+- **Degraded is `status`, not the presence of a `trigger`.** RegenerateStage
+  stamps `judge-fail-regen` on a turn it repaired successfully -- status `ok`,
+  real text, no fallback reason. Keying off the trigger would report a
+  successful repair as the NPC giving up.
+- **The terminal close is its own trigger.** It runs after every stage has
+  finished, so on that turn the stages can all read `ok` while the player is
+  shown the door. Filter `trigger = "terminal-close"` for conversations that
+  ejected a player.
+
+Not yet covered: a degraded turn on the pre-placement envelope-override path
+returns before the event is built, so those are unreported.
 
 ## Proxy Base URL Resolution
 
@@ -273,15 +371,18 @@ the debugging point of the Studio sink.
 (`SUGARLANG_PROXY_BASE_URL_ENV` in
 `packages/plugins/src/catalog/sugarlang/config.ts`)
 
-Resolution order, applied identically in `manifest.ts` (telemetry sink) and
-`runtime/runtime-services.ts` (LLM gateway client):
+The host reads the same two names directly when it builds the telemetry
+collector, since there is one gateway and one URL spelled two ways.
+
+Resolution order, applied identically in `runtime/runtime-services.ts` (LLM
+gateway client) and in the host's collector construction:
 
 1. `SUGARMAGIC_SUGARLANG_PROXY_BASE_URL` (trimmed)
 2. `SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL` (trimmed) -- sugarlang shares the
    SugarAgent gateway; the `/api/sugaragent/generate` handler is a generic
    Claude proxy, not sugaragent-specific
-3. empty string -> no gateway client (teacher runs fallback-only) and, on a
-   published target, the NoOp telemetry sink
+3. empty string -> no gateway client (teacher runs fallback-only) and no
+   telemetry collector, so events go nowhere
 
 Related but distinct: the manifest declares `gatewayRuntimeConfigKeys` for the
 values the gateway genuinely reads (models). `targetLanguage` was declared here

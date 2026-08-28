@@ -1,12 +1,14 @@
 import { createUuid } from "@sugarmagic/domain";
 import {
+  createNoOpTelemetryCollector,
   emitTelemetry,
   getActiveAccessToken,
   type ConversationExecutionContext,
   type ConversationProvider,
   type ConversationProviderContext,
   type ConversationProviderSession,
-  type ConversationTurnEnvelope
+  type ConversationTurnEnvelope,
+  type TelemetryCollector
 } from "@sugarmagic/runtime-core";
 import {
   // Story 46.14 — only the gateway-routed providers remain; direct-API
@@ -42,7 +44,7 @@ import {
   RetrieveStage
 } from "./stages";
 import { buildTerminalFallbackReply } from "./stages/helpers";
-import { buildDegradedTurnEvent, sugaragentTelemetry } from "./telemetry";
+import { buildDegradedTurnEvent } from "./telemetry";
 import type {
   SugarAgentPluginConfig,
   SugarAgentProviderState,
@@ -376,6 +378,7 @@ async function executePipeline(args: {
   state: SugarAgentProviderState;
   config: SugarAgentPluginConfig;
   logger: SugarAgentLogger;
+  telemetry: TelemetryCollector;
   stages: {
     interpret: InterpretStage;
     retrieve: RetrieveStage;
@@ -386,7 +389,7 @@ async function executePipeline(args: {
     regenerate: RegenerateStage;
   };
 }): Promise<ConversationTurnEnvelope> {
-  const { execution, state, config, logger, stages } =
+  const { execution, state, config, logger, telemetry, stages } =
     args;
   const context = createTurnContext(execution.selection, config, state, logger);
   const activeQuestDisplayName =
@@ -549,7 +552,7 @@ async function executePipeline(args: {
     Date.now()
   );
   if (degradedTurnEvent) {
-    void emitTelemetry(sugaragentTelemetry, degradedTurnEvent);
+    void emitTelemetry(telemetry, degradedTurnEvent);
   }
 
   state.closeRequested =
@@ -589,7 +592,13 @@ async function executePipeline(args: {
 }
 
 export function createSugarAgentConversationProvider(
-  config: SugarAgentPluginConfig
+  config: SugarAgentPluginConfig,
+  // Passed in rather than reached for, so it belongs to the plugin instance
+  // that built this provider. A collector shared across instances would be
+  // unbound by whichever instance is torn down last, and teardown is not
+  // awaited -- an old session's dispose lands after a new one has bound and
+  // silently kills the telemetry for the rest of the page.
+  telemetry: TelemetryCollector = createNoOpTelemetryCollector()
 ): ConversationProvider {
   // Plan 072.4 (absorbed 071.8): honor debugLogging. It was ORed with the
   // (mandatory) proxyBaseUrl, which pinned logging always-on and made the
@@ -658,6 +667,7 @@ export function createSugarAgentConversationProvider(
             state: providerState,
             config,
             logger,
+            telemetry,
             stages
           });
         },
@@ -703,6 +713,7 @@ export function createSugarAgentConversationProvider(
         state,
         config,
         logger,
+        telemetry,
         stages
       });
       return {

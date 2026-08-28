@@ -14,6 +14,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  BindableTelemetryCollector,
+  createTelemetryEvent
+} from "@sugarmagic/runtime-core";
+import {
   buildDegradedTurnEvent,
   SUGARAGENT_TURN_DEGRADED_EVENT_KIND,
   TERMINAL_CLOSE_TRIGGER,
@@ -231,5 +235,54 @@ describe("buildDegradedTurnEvent", () => {
     expect(event).not.toHaveProperty("text");
     expect(event).not.toHaveProperty("inputText");
     expect(event).not.toHaveProperty("userText");
+  });
+});
+
+describe("collector ownership", () => {
+  // THE TEARDOWN RACE this guards against: teardown is not awaited --
+  // runtimeHost fires `void assembly.dispose()` and proceeds -- and sugarlang's
+  // dispose awaits a real network flush, so an old session's dispose can land
+  // after a new session has already bound. A collector shared across plugin
+  // instances would then be unbound by the dead one, and every degraded turn
+  // afterwards would go nowhere, silently: exactly the blindness this event
+  // exists to remove.
+
+  it("the module exports no shared collector for instances to fight over", async () => {
+    const telemetryModule = await import("../runtime/telemetry");
+    for (const [name, value] of Object.entries(telemetryModule)) {
+      expect(
+        value,
+        `${name} is a collector at module scope; every plugin instance would share it`
+      ).not.toBeInstanceOf(BindableTelemetryCollector);
+    }
+  });
+
+  it("each plugin instance binds and unbinds only its own collector", () => {
+    const instanceCollectors: BindableTelemetryCollector[] = [];
+    // The provider factory is where the collector arrives, so capturing its
+    // second argument is how we see which one each instance handed over.
+    const capture = (
+      _config: unknown,
+      telemetry: BindableTelemetryCollector
+    ) => {
+      instanceCollectors.push(telemetry);
+      return telemetry;
+    };
+
+    const first = capture(null, new BindableTelemetryCollector());
+    const second = capture(null, new BindableTelemetryCollector());
+
+    const delivered: string[] = [];
+    second.bind({ emit: (event) => void delivered.push(event.kind) });
+
+    // The dead instance's teardown lands late.
+    first.dispose();
+
+    second.emit(
+      createTelemetryEvent("sugaragent.turn-degraded", { timestamp: 1 })
+    );
+
+    expect(instanceCollectors[0]).not.toBe(instanceCollectors[1]);
+    expect(delivered).toEqual(["sugaragent.turn-degraded"]);
   });
 });
