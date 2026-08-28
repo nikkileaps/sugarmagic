@@ -13,6 +13,7 @@ import {
   handleSugarAgentGenerate,
   handleSugarAgentSearch,
   handleSugarAgentLoreStatus,
+  handleTelemetryIngest,
   toStructuredOutputSchema
 } from "./core";
 
@@ -996,6 +997,170 @@ describe("handleSugarAgentLoreStatus", () => {
       if (savedLorePath !== undefined) {
         process.env["SUGARMAGIC_LORE_SOURCE_PATH"] = savedLorePath;
       }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// handleTelemetryIngest
+// ---------------------------------------------------------------------------
+
+describe("handleTelemetryIngest", () => {
+  it("returns 405 for non-POST", async () => {
+    const req = makeReq({ method: "GET", url: "/api/telemetry" });
+    const res = makeRes();
+    await handleTelemetryIngest(req, res);
+    expect(res.statusCode).toBe(405);
+  });
+
+  it("returns 400 on a body that is not JSON", async () => {
+    const req = makeReq({
+      method: "POST",
+      url: "/api/telemetry",
+      headers: { "content-type": "application/json" },
+      body: "{not json"
+    });
+    const res = makeRes();
+    await handleTelemetryIngest(req, res);
+    expect(res.statusCode).toBe(400);
+    expect((JSON.parse(res.body) as { error: string }).error).toBe("InvalidJson");
+  });
+
+  it("writes one JSON line per event, which is what Cloud Logging parses", async () => {
+    const writeSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+    try {
+      const req = makeReq({
+        method: "POST",
+        url: "/api/telemetry",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          schemaVersion: 1,
+          events: [
+            { kind: "sugaragent.turn-degraded", turnId: "turn-1" },
+            { kind: "session.started", sessionId: "session-1" }
+          ]
+        })
+      });
+      const res = makeRes();
+      await handleTelemetryIngest(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toMatchObject({ ok: true, accepted: 2 });
+
+      const lines = writeSpy.mock.calls.map((call) => String(call[0]));
+      expect(lines).toHaveLength(2);
+      for (const line of lines) {
+        expect(line.endsWith("\n")).toBe(true);
+        expect(() => JSON.parse(line)).not.toThrow();
+      }
+      expect(JSON.parse(lines[0]!)).toMatchObject({
+        kind: "sugaragent.turn-degraded",
+        turnId: "turn-1"
+      });
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  it("takes any producer's kind, not only sugarlang's", async () => {
+    const writeSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+    try {
+      const req = makeReq({
+        method: "POST",
+        url: "/api/telemetry",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          events: [{ kind: "anything.at-all", producerField: 42 }]
+        })
+      });
+      const res = makeRes();
+      await handleTelemetryIngest(req, res);
+
+      expect(JSON.parse(String(writeSpy.mock.calls[0]?.[0]))).toMatchObject({
+        kind: "anything.at-all",
+        producerField: 42
+      });
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  it("THE PII BACKSTOP: strips player text an old client still sent", async () => {
+    // The client scrubs before POSTing. This runs again on arrival, because a
+    // player mid-session is running whatever build they loaded.
+    const writeSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+    try {
+      const req = makeReq({
+        method: "POST",
+        url: "/api/telemetry",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          events: [
+            {
+              kind: "classifier.verdict",
+              inputText: "what the player typed",
+              playerResponseText: "also the player",
+              originalText: "before repair",
+              repairedText: "after repair",
+              sceneId: "scene-1",
+              observations: [
+                { observation: { inputText: "nested typing", lemmaId: "hola" } }
+              ]
+            }
+          ]
+        })
+      });
+      const res = makeRes();
+      await handleTelemetryIngest(req, res);
+
+      const logged = JSON.parse(String(writeSpy.mock.calls[0]?.[0])) as Record<
+        string,
+        unknown
+      >;
+      expect(logged).not.toHaveProperty("inputText");
+      expect(logged).not.toHaveProperty("playerResponseText");
+      expect(logged).not.toHaveProperty("originalText");
+      expect(logged).not.toHaveProperty("repairedText");
+      expect(logged.sceneId).toBe("scene-1");
+      const observations = logged.observations as Array<{
+        observation: Record<string, unknown>;
+      }>;
+      expect(observations[0]?.observation).not.toHaveProperty("inputText");
+      expect(observations[0]?.observation.lemmaId).toBe("hola");
+    } finally {
+      writeSpy.mockRestore();
+    }
+  });
+
+  it("caps a batch at 100 events so one request cannot flood the log", async () => {
+    const writeSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+    try {
+      const req = makeReq({
+        method: "POST",
+        url: "/api/telemetry",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          events: Array.from({ length: 150 }, (_unused, index) => ({
+            kind: "session.started",
+            index
+          }))
+        })
+      });
+      const res = makeRes();
+      await handleTelemetryIngest(req, res);
+
+      expect(JSON.parse(res.body)).toMatchObject({ ok: true, accepted: 100 });
+      expect(writeSpy).toHaveBeenCalledTimes(100);
+    } finally {
+      writeSpy.mockRestore();
     }
   });
 });

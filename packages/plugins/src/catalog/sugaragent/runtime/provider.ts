@@ -1,5 +1,6 @@
 import { createUuid } from "@sugarmagic/domain";
 import {
+  emitTelemetry,
   getActiveAccessToken,
   type ConversationExecutionContext,
   type ConversationProvider,
@@ -41,6 +42,7 @@ import {
   RetrieveStage
 } from "./stages";
 import { buildTerminalFallbackReply } from "./stages/helpers";
+import { buildDegradedTurnEvent, sugaragentTelemetry } from "./telemetry";
 import type {
   SugarAgentPluginConfig,
   SugarAgentProviderState,
@@ -177,10 +179,18 @@ async function runStage<TInput, TOutput>(
     sessionId: context.sessionId
   });
   const result = await stage.execute(input, context);
-  context.logStageEnd(result.diagnostics);
+  // Stamped here, once, because a stage does not have to read its context to
+  // produce diagnostics -- and the ones that ignore it are exactly the ones
+  // whose output is hardest to attribute later.
+  const diagnostics: TurnStageDiagnostics = {
+    ...result.diagnostics,
+    turnId: context.turnId,
+    sessionId: context.sessionId
+  };
+  context.logStageEnd(diagnostics);
   return {
     output: result.output,
-    diagnostics: result.diagnostics
+    diagnostics
   };
 }
 
@@ -494,6 +504,11 @@ async function executePipeline(args: {
   let finalActionProposals = repair.actionProposals;
   let finalLlmBackend = repair.llmBackend;
   let autoCloseAfterMs: number | null = null;
+  // The turn ends here and the player is shown the door. Nothing in the stage
+  // diagnostics says so, because this runs after every stage has finished --
+  // which left the most severe degraded turn as the only one carrying no
+  // label at all.
+  let terminalClose = false;
 
   if (state.consecutiveFallbackTurns >= 3) {
     finalText = buildTerminalFallbackReply({
@@ -506,6 +521,7 @@ async function executePipeline(args: {
     ];
     finalLlmBackend = "deterministic";
     autoCloseAfterMs = 2200;
+    terminalClose = true;
   }
 
   if (
@@ -513,6 +529,27 @@ async function executePipeline(args: {
     shouldAutoCloseAfterTurn(state.lastTurnDiagnostics, finalActionProposals)
   ) {
     autoCloseAfterMs = 2200;
+  }
+
+  // What the pipeline decided, sent once per degraded turn. Fire-and-forget:
+  // a turn must never wait on telemetry or fail because of it.
+  const degradedTurnEvent = buildDegradedTurnEvent(
+    {
+      turnId: context.turnId,
+      sessionId: state.sessionId,
+      npcDefinitionId: execution.selection.npcDefinitionId ?? null,
+      stages: state.lastTurnDiagnostics,
+      stalled: isStalledTurn(state.lastTurnDiagnostics, Boolean(interpret.userText)),
+      autoClosed: autoCloseAfterMs !== null,
+      terminalClose,
+      consecutiveFallbackTurns: state.consecutiveFallbackTurns,
+      turnCount: state.turnCount,
+      llmBackend: finalLlmBackend
+    },
+    Date.now()
+  );
+  if (degradedTurnEvent) {
+    void emitTelemetry(sugaragentTelemetry, degradedTurnEvent);
   }
 
   state.closeRequested =

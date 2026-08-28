@@ -8,6 +8,7 @@ import {
   createSugarAgentLorePageResolver,
   createSugarAgentVectorStoreProvider
 } from "./runtime/provider";
+import { sugaragentTelemetry } from "./runtime/telemetry";
 import { createSugarAgentLogger } from "./runtime/logger";
 import {
   createNpcMemoryMiddleware,
@@ -550,13 +551,17 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
       return {
         pluginId: configuration.pluginId,
         displayName: "SugarAgent",
-        init() {
+        init(runtimeContext) {
           console.debug("[sugaragent] plugin:init", {
             pluginId: configuration.pluginId,
             transport: "proxy",
             proxyBaseUrl: config.proxyBaseUrl,
             stageLoggingEnabled: config.debugLogging
           });
+          // The host owns delivery. The provider was built before this ran, so
+          // it holds the bindable collector and this points it somewhere.
+          // Absent when there is no gateway, and then events go nowhere.
+          sugaragentTelemetry.bind(runtimeContext?.telemetry ?? null);
           // Plan 073.5 — dev-only memory inspection handle (window.__sugaragentMemory).
           installNpcMemoryDebugHandle();
           // Plan 077.5 — dev-only quest-context inspection handle (window.__sugaragentQuestContext).
@@ -668,6 +673,8 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
           console.debug("[sugaragent] plugin:dispose", {
             pluginId: configuration.pluginId
           });
+          // Unbinds only -- the host's collector serves other producers.
+          sugaragentTelemetry.dispose();
         }
       };
     }

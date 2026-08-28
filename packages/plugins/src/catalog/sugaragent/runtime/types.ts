@@ -14,6 +14,14 @@ export interface TurnStageDiagnostics {
   durationMs: number;
   payload: Record<string, unknown>;
   fallbackReason?: string | null;
+  /**
+   * Which turn and session this stage ran in. Stamped by `runStage` from the
+   * context rather than by each stage, so a stage that never looks at its
+   * context still produces diagnostics something downstream can attribute.
+   * Absent only for diagnostics assembled outside a stage run.
+   */
+  turnId?: string;
+  sessionId?: string;
 }
 
 export interface TurnStageContext {

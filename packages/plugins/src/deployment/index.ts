@@ -604,6 +604,26 @@ function buildGatewayServerFile(
 // (typechecked TypeScript) and compiled to core.compiled.ts by build:gateway-source.
 // The historical template was: import { createServer } from "node:http";
 
+// Telemetry ingestion is not any one plugin's route. The handler is compiled
+// into every gateway, and any runtime system -- plugin or not -- emits through
+// the shared collector in runtime-core, so every gateway answers this path.
+// Owning it here rather than in a plugin manifest is what stops it from
+// disappearing when whichever plugin happened to declare it is disabled.
+// The path is spelled here and again as TELEMETRY_INGEST_ROUTE_PATH in
+// packages/runtime-core/src/telemetry/index.ts, which is what the browser
+// builds its URL from. It is not imported from there because value imports in
+// this file must use relative paths (see the note on the imports above), and
+// a fourth escape-the-package-root import is worse than a literal that a test
+// pins. `telemetry-route-agreement.test.ts` fails if the two ever disagree --
+// which matters, because a route that does not match answers 404 while every
+// client believes it is recording.
+const TELEMETRY_INGEST_ROUTE = {
+  routeId: "telemetry",
+  path: "/api/telemetry",
+  protocol: "http-json" as const,
+  consumer: "browser-runtime" as const
+};
+
 function buildGatewayRoutesFile(
   targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit,
@@ -617,12 +637,15 @@ function buildGatewayRoutesFile(
     containerPort,
     label: unit.label,
     owners: unit.ownerIds,
-    routes: unit.proxyRoutes.map((route) => ({
-      routeId: route.routeId,
-      path: route.pathHint ?? `/${route.routeId}`,
-      protocol: route.protocol,
-      consumer: route.consumer
-    }))
+    routes: [
+      ...unit.proxyRoutes.map((route) => ({
+        routeId: route.routeId,
+        path: route.pathHint ?? `/${route.routeId}`,
+        protocol: route.protocol,
+        consumer: route.consumer
+      })),
+      TELEMETRY_INGEST_ROUTE
+    ]
   });
 }
 
