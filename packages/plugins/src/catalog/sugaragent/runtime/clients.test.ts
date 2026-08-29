@@ -101,6 +101,61 @@ describe("SugarAgentGatewayPersonaProvider.loadPersona (072.3)", () => {
     expect(result.digest).toBe("Warm.\nVoice: Clipped.");
   });
 
+  it("reads ## Recovery into its own layer, out of the card and core knowledge", async () => {
+    const { provider } = makeProvider((pageIds) => ({
+      ok: true,
+      pages: [
+        {
+          pageId: pageIds[0]!,
+          title: "Penelope",
+          relativePath: "npc/penelope.md",
+          sectionCount: 3,
+          body: "",
+          sections: [
+            { heading: "Persona", slug: "persona", content: "Refined." },
+            { heading: "Work", slug: "work", content: "Visits often." },
+            {
+              heading: "Recovery",
+              slug: "recovery",
+              content: "- change-subject -- she offers advice.\n- storm-off"
+            }
+          ]
+        }
+      ],
+      missingPageIds: []
+    }));
+    const result = await provider.loadPersona("lore.penelope");
+    expect(result.recoveryStrategies).toEqual(["change-subject"]);
+    expect(result.recoverySections.map((s) => s.slug)).toEqual(["recovery"]);
+    // The layer it is NOT in matters more than the layer it is in: core
+    // knowledge reaches the prompt as something the character knows.
+    expect(result.coreKnowledge.map((s) => s.slug)).toEqual(["work"]);
+    expect(result.personaCard.map((s) => s.slug)).toEqual(["persona"]);
+  });
+
+  it("loads a page with no ## Recovery as loaded, with no strategies", async () => {
+    const { provider } = makeProvider((pageIds) => ({
+      ok: true,
+      pages: [
+        {
+          pageId: pageIds[0]!,
+          title: "Tomas",
+          relativePath: "npc/tomas.md",
+          sectionCount: 1,
+          body: "",
+          sections: [
+            { heading: "Persona", slug: "persona", content: "Gruff." }
+          ]
+        }
+      ],
+      missingPageIds: []
+    }));
+    const result = await provider.loadPersona("lore.tomas");
+    expect(result.loaded).toBe(true);
+    expect(result.recoveryStrategies).toEqual([]);
+    expect(result.recoverySections).toEqual([]);
+  });
+
   it("degrades when the requested page is in missingPageIds", async () => {
     const { provider } = makeProvider((pageIds) => ({
       ok: true,

@@ -10,13 +10,14 @@ Architecture). Story 072.1 defines the convention and the parser; later stories
 load the card into the prompt (072.3/072.4) and serve it through the gateway
 (072.2).
 
-## The three layers
+## The layers
 
 | Section heading | Layer | Where it goes |
 |---|---|---|
 | `## Persona`, `## Voice` | Persona card | Loaded whole at conversation start into the (cached) system prompt. Never searched, never truncated. |
 | every other section | Core knowledge | Same load, same moment, same system prompt. What the NPC *always* knows. |
-| `## Secrets` | Excluded | Never enters any prompt, and never enters the vector index (ingest skips it). A place to author unrevealable truths. |
+| `## Secrets` | Withheld | Never enters any prompt, and never enters the vector index. A place to author unrevealable truths. |
+| `## Recovery` | Withheld | What this character does when it cannot understand the player. Read as instructions for the writer, never as something the character knows. |
 
 `## Relationships` is core knowledge like any other section, and is also read
 line by line. Each line carrying a markdown link is one entry -- the link text
@@ -36,16 +37,45 @@ NPC is given the line instead of the page. With no line they get the page,
 labelled with whose it is. A section written as prose still loads as core
 knowledge; it just yields no entries.
 
-Everything on the page except `## Secrets` is **potentially player-visible**
-until epic E adds quest-stage gating. `## Secrets` is the only guaranteed-hidden
-section today: it is stripped from the persona card, from core knowledge, and
-from the ingest chunks, so it can never surface in a conversation or a search.
+## `## Recovery` -- what this character does when it does not understand you
+
+An entry is a list item whose first word is one of five moves. Anything after
+that word is prose for the writer, and the whole section reaches the prompt as
+a brief -- so say why the move fits this character, in their terms.
+
+```markdown
+## Recovery
+
+- change-subject -- She assumes you simply have not learned how things ought to
+  be done, and tells you about them instead.
+- playful-probe
+```
+
+The five moves: `curt-exit`, `change-subject`, `joke`, `playful-probe`,
+`self-disclosure`. A line naming anything else is ignored, and the lore reader
+says so -- the warning shows in Studio's SugarAgent panel, naming the page and
+the word it did not know.
+
+A character with no `## Recovery` section falls back to talking about itself.
+That is deliberate: it keeps the conversation open and gives a confused learner
+more target-language speech to work with.
+
+## What is hidden, and what is not
+
+Everything on the page except the withheld sections is **potentially
+player-visible** until epic E adds quest-stage gating. `## Secrets` and
+`## Recovery` are stripped from the persona card, from core knowledge, and from
+the ingest chunks, so neither can surface in a conversation or a search.
+
+The two differ in one place. `## Secrets` never leaves the gateway at all.
+`## Recovery` is removed from the page `body` the gateway returns but stays on
+`sections`, because that is the channel the conversation runtime reads a page
+through -- it needs the list to know what moves this character has.
 
 Note that persona/voice/core sections DO stay in the vector index: another NPC
 must be able to retrieve this NPC's page as world lore ("who is Maren?" asked of
-the blacksmith). `## Secrets` is the only section withheld from the index on a
-normal page. A page marked `canon_level: soft` withholds all of its contents --
-see below.
+the blacksmith). A page marked `canon_level: soft` withholds all of its contents
+-- see below.
 
 ## Metadata
 

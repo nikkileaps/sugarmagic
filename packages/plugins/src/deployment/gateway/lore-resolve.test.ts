@@ -139,6 +139,24 @@ describe("lore/resolve excludes ## Secrets (Plan 072.2)", () => {
       ].join("\n"),
       "utf8"
     );
+    // Page with a Recovery section and no secret. Recovery leaves by a
+    // different door than Secrets: out of `body`, still on `sections`.
+    writeFileSync(
+      join(loreDir, "npc", "penelope.md"),
+      [
+        "---",
+        "id: lore.npc.penelope",
+        "title: Penelope",
+        "---",
+        "## Persona",
+        "Refined and theatrical.",
+        "",
+        "## Recovery",
+        "- change-subject -- RECOVERYWORD_WREN, she offers advice instead.",
+        ""
+      ].join("\n"),
+      "utf8"
+    );
     process.env["SUGARMAGIC_LORE_SOURCE_KIND"] = "local";
     process.env["SUGARMAGIC_LORE_SOURCE_PATH"] = loreDir;
   }
@@ -174,6 +192,23 @@ describe("lore/resolve excludes ## Secrets (Plan 072.2)", () => {
       )
     );
     expect(page.sectionCount).toBe(2);
+  });
+
+  it("strips ## Recovery from body but keeps it on sections", async () => {
+    seedLore();
+    const out = await resolve(["lore.npc.penelope"]);
+    const page = out.pages.find((p) => p.pageId === "lore.npc.penelope")!;
+    // `sections` is the only channel the conversation runtime reads a page
+    // through, so stripping it there would put the list out of reach.
+    expect(page.sections.map((s) => s.slug).sort()).toEqual([
+      "persona",
+      "recovery"
+    ]);
+    expect(page.sectionCount).toBe(2);
+    // `body` feeds sugarlang's scene lexicon, which has no business with it.
+    expect(page.body).not.toContain("RECOVERYWORD_WREN");
+    expect(page.body).not.toContain("Recovery");
+    expect(page.body).toContain("Refined and theatrical.");
   });
 
   it("keeps the missingPageIds convention (200, no 404)", async () => {

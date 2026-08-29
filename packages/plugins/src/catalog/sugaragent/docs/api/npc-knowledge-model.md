@@ -17,20 +17,33 @@ section headings (see `deployment/gateway/lore-designation.ts`):
 | 2. Core knowledge | every other section | same fetch | system prompt (stable) |
 | 3. World lore | the rest of the wiki | per-turn vector search | user message (evidence) |
 
-`## Secrets` is excluded from all three — from the persona card, from core
-knowledge, and from the ingest chunks / vector index — so it never enters any
-prompt or search. It is the minimum-viable secrets invariant; quest-stage-gated
-revelation is a later epic.
+Two headings are withheld from all three layers — kept out of the persona card,
+out of core knowledge, and out of the ingest chunks / vector index:
+
+- `## Secrets` never leaves the gateway. The minimum-viable secrets invariant;
+  quest-stage-gated revelation is a later epic.
+- `## Recovery` lists what the character does when it cannot understand the
+  player. It is a brief for the writer, not something the character knows, so
+  reading it back as core knowledge would have the NPC narrating its own moves.
+  Unlike a secret it survives on the resolve response's `sections`, which is the
+  only channel the runtime reads a page through; it is stripped from `body`,
+  which is what sugarlang's scene lexicon consumes.
+
+`isWithheldSection` in `deployment/gateway/lore-designation.ts` is the single
+predicate every exclusion point asks.
 
 ## Load path (session start)
 
 `SugarAgentGatewayPersonaProvider.loadPersona` (`runtime/clients.ts`) is called
 once from `startSession` before the first turn. It hits the existing gateway
-route `POST /api/sugaragent/lore/resolve` (which already strips `## Secrets`),
-runs `designateLoreSections` to split persona card vs core knowledge, and stores
-a `LoadedPersona` in provider session state. Missing/unfetchable page degrades
-(never throws): `loaded: false`, empty layers, `fallbackReason:
-"persona-unavailable"` — the conversation still runs on name + game tone.
+route `POST /api/sugaragent/lore/resolve` (which strips `## Secrets` outright
+and strips `## Recovery` from `body` only), runs `designateLoreSections` to
+split persona card vs core knowledge vs recovery, and stores a `LoadedPersona`
+in provider session state. Missing/unfetchable page degrades (never throws):
+`loaded: false`, empty layers, `fallbackReason: "persona-unavailable"` — the
+conversation still runs on name + game tone. `degradedPersona` in
+`runtime/clients.ts` is the one builder for that state; the provider's
+session-start loader calls it rather than assembling its own.
 
 ## Prompt structure (cache boundary)
 

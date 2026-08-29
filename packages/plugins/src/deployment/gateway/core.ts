@@ -17,7 +17,14 @@ import {
 // compile-options.ts precisely so this import survives into the compiled
 // bundle for the supabase-jwt auth gate that buildGatewayServerFile injects.
 import { verifySupabaseJwt } from "./supabase-jwt";
-import { isSecretSection, composeLoreBody } from "./lore-designation";
+import {
+  composeLoreBody,
+  isRecoverySection,
+  isSecretSection,
+  isWithheldSection,
+  parseRecoveryStrategies,
+  RECOVERY_STRATEGIES
+} from "./lore-designation";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -775,6 +782,25 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
       pageId;
     const sections = splitLoreSections(body);
 
+    for (const section of sections.filter(isRecoverySection)) {
+      // A misspelled move is silent at runtime by design -- the character just
+      // falls back to a default. Say it here instead, where the author is the
+      // one reading.
+      for (const name of parseRecoveryStrategies(section.content).unrecognized) {
+        warnings.push(
+          "Ignored unknown recovery strategy \"" +
+            name +
+            "\" in " +
+            relativePath +
+            " (" +
+            pageId +
+            "). Known strategies: " +
+            RECOVERY_STRATEGIES.join(", ") +
+            "."
+        );
+      }
+    }
+
     pages.push({
       pageId,
       title,
@@ -803,10 +829,11 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
     }
 
     for (const section of sections) {
-      // Plan 072.1: `## Secrets` never enters the vector index. The section
-      // stays in `pages[].sections` (072.2 strips it from lore/resolve); only
-      // the ingest chunks exclude it here.
-      if (isSecretSection(section)) continue;
+      // A withheld section never enters the vector index -- a secret must not
+      // leak through a search hit, and a recovery list is a brief for the
+      // writer rather than something the world knows. Both stay in
+      // `pages[].sections`; only the chunks exclude them.
+      if (isWithheldSection(section)) continue;
       const chunkId = pageId + "#" + section.slug;
       const embeddingText = [
         "Page ID: " + pageId,
@@ -2294,39 +2321,35 @@ export async function handleSugarAgentLoreResolve(
       missingPageIds.push(pageId);
       continue;
     }
-    // Plan 072.2: `## Secrets` must not leave the gateway. Strip it from BOTH
-    // `sections` and `body` (sugarlang's consumer feeds each into the scene
-    // lexicon). Pages without a secret section pass through byte-identical --
-    // only recompute `body` when a secret is actually being removed, so the
-    // raw markdown is preserved for the common case.
+    // The two withheld kinds leave by different doors, because their consumers
+    // differ. `## Secrets` must not leave the gateway at all. `## Recovery`
+    // must not reach sugarlang's scene lexicon, which reads `body` -- but it
+    // must reach the conversation runtime, which reads a page only through
+    // `sections`.
     //
-    // DEFERRED (Plan 072, revisit epic C/D): quest-stage-scoped knowledge
-    // gating. This exclusion point is the natural gate -- when quest state +
-    // memory feed the card fetch, filter sections by story stage here (an NPC
-    // knows different things at different points). `## Secrets` is the static
-    // precursor of that dynamic gate.
-    const hasSecret = page.sections.some(isSecretSection);
-    if (!hasSecret) {
-      resolvedPages.push({
-        pageId: page.pageId,
-        title: page.title,
-        relativePath: page.relativePath,
-        sectionCount: page.sectionCount,
-        body: page.body,
-        sections: page.sections
-      });
-      continue;
-    }
-    const visibleSections = page.sections.filter(
+    // DEFERRED (revisit epic C/D): quest-stage-scoped knowledge gating. This
+    // exclusion point is the natural gate -- when quest state + memory feed the
+    // card fetch, filter sections by story stage here (an NPC knows different
+    // things at different points). `## Secrets` is the static precursor of that
+    // dynamic gate.
+    const sections = page.sections.filter(
       (section) => !isSecretSection(section)
+    );
+    const bodySections = sections.filter(
+      (section) => !isRecoverySection(section)
     );
     resolvedPages.push({
       pageId: page.pageId,
       title: page.title,
       relativePath: page.relativePath,
-      sectionCount: visibleSections.length,
-      body: composeLoreBody(visibleSections),
-      sections: visibleSections
+      sectionCount: sections.length,
+      // A page with nothing withheld ships its raw markdown untouched;
+      // recomposing would round-trip the author's formatting for no reason.
+      body:
+        bodySections.length === page.sections.length
+          ? page.body
+          : composeLoreBody(bodySections),
+      sections
     });
   }
 

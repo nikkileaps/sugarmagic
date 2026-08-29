@@ -21,6 +21,7 @@ import {
   SugarAgentGatewayPersonaProvider,
   SugarAgentGatewayVectorStoreClient,
   SugarAgentGatewayVectorStoreProvider,
+  degradedPersona,
   type BearerTokenGetter,
   type JudgeProvider,
   type LLMProvider,
@@ -325,14 +326,7 @@ async function loadPersonaOnce(args: {
   try {
     state.persona = await personaLoader.loadPersona(lorePageId);
   } catch (error) {
-    state.persona = {
-      pageId: lorePageId,
-      loaded: false,
-      fallbackReason: "persona-unavailable",
-      personaCard: [],
-      coreKnowledge: [],
-      digest: ""
-    };
+    state.persona = degradedPersona(lorePageId);
     logger.logPluginEvent("persona-load-failed", {
       pageId: lorePageId,
       error: error instanceof Error ? error.message : String(error)
