@@ -16,12 +16,12 @@
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { GatewayTelemetryCollector } from "@sugarmagic/runtime-core";
 import {
-  GatewaySugarlangTelemetrySink,
+  HostTelemetrySink,
   MemoryTelemetrySink,
   NoOpTelemetrySink,
-  createTelemetryEvent,
-  resolveSugarlangTelemetrySink
+  createTelemetryEvent
 } from "../../runtime/telemetry/telemetry";
 
 function stubFetch(): {
@@ -114,97 +114,61 @@ describe("telemetry sinks", () => {
   });
 });
 
-describe("GatewaySugarlangTelemetrySink", () => {
-  it("THE PROD BUG: sends the player's token, or the gateway 401s every event", async () => {
-    // A deployed gateway in `supabase-jwt` mode rejected every telemetry POST
-    // because this sink sent no Authorization header at all. Production
-    // teaching analytics were silently empty for the life of the deployment.
-    const { fetchMock } = stubFetch();
-    const sink = new GatewaySugarlangTelemetrySink({
-      proxyBaseUrl: "http://gateway.test",
-      flushIntervalMs: 1,
-      getAccessToken: async () => "jwt-abc"
-    });
-    sink.emit(createTelemetryEvent("session.started", { timestamp: 1 }));
-    await sink.dispose();
 
-    const headers = (fetchMock.mock.calls[0]?.[1] as { headers: Record<string, string> })
-      .headers;
-    expect(headers.authorization).toBe("Bearer jwt-abc");
+describe("HostTelemetrySink", () => {
+  it("forwards to the host's collector once bound", async () => {
+    const emitted: Array<{ kind: string }> = [];
+    const sink = new HostTelemetrySink();
+    sink.bind({ emit: (event) => void emitted.push({ kind: event.kind }) });
+
+    sink.emit(createTelemetryEvent("session.started", { timestamp: 1 }));
+
+    expect(emitted.map((event) => event.kind)).toEqual(["session.started"]);
   });
 
-  it("sends NO auth header when there is no token, so an open gateway still works", async () => {
-    const { fetchMock } = stubFetch();
-    const sink = new GatewaySugarlangTelemetrySink({
+  it("drops events before the runtime binds instead of throwing", () => {
+    const sink = new HostTelemetrySink();
+    expect(() =>
+      sink.emit(createTelemetryEvent("session.started", { timestamp: 1 }))
+    ).not.toThrow();
+  });
+
+  it("drops events when the host supplies no collector", () => {
+    const sink = new HostTelemetrySink();
+    sink.bind(null);
+    expect(() =>
+      sink.emit(createTelemetryEvent("session.started", { timestamp: 1 }))
+    ).not.toThrow();
+  });
+
+  it("unbinds on dispose without disposing the host's collector, which outlives this plugin", () => {
+    const dispose = vi.fn();
+    const emit = vi.fn();
+    const sink = new HostTelemetrySink();
+    sink.bind({ emit, dispose });
+
+    sink.dispose();
+    sink.emit(createTelemetryEvent("session.started", { timestamp: 1 }));
+
+    expect(dispose).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+  });
+});
+
+describe("sugarlang events on the shared collector", () => {
+  it("THE PII CONTRACT: the shared default policy strips sugarlang's player text", async () => {
+    // Sugarlang no longer owns the strip -- the collector does, from one list.
+    // This asserts the real event shapes sugarlang produces are covered by
+    // that list, so a player's typing cannot reach the gateway.
+    const { bodies } = stubFetch();
+    const collector = new GatewayTelemetryCollector({
       proxyBaseUrl: "http://gateway.test",
-      flushIntervalMs: 1,
+      flushIntervalMs: 60_000,
       getAccessToken: async () => null
     });
-    sink.emit(createTelemetryEvent("session.started", { timestamp: 1 }));
-    await sink.dispose();
+    const sink = new HostTelemetrySink();
+    sink.bind(collector);
 
-    const headers = (fetchMock.mock.calls[0]?.[1] as { headers: Record<string, string> })
-      .headers;
-    expect(headers.authorization).toBeUndefined();
-  });
-
-  it("drains a burst larger than the batch cap without waiting for a later emit", async () => {
-    vi.useFakeTimers();
-    const { bodies } = stubFetch();
-    const sink = new GatewaySugarlangTelemetrySink({
-      proxyBaseUrl: "http://gateway.test",
-      flushIntervalMs: 1000
-    });
-    for (let i = 0; i < 250; i += 1) {
-      sink.emit(
-        createTelemetryEvent("session.started", {
-          timestamp: i,
-          learnerId: `learner-${i}`
-        })
-      );
-    }
-
-    await vi.runAllTimersAsync();
-
-    expect(bodies.map((body) => body.events.length)).toEqual([100, 100, 50]);
-    await sink.dispose();
-  });
-
-  it("flushes every pending event on dispose and drops emits afterwards", async () => {
-    const { fetchMock, bodies } = stubFetch();
-    const sink = new GatewaySugarlangTelemetrySink({
-      proxyBaseUrl: "http://gateway.test",
-      flushIntervalMs: 60_000
-    });
-    for (let i = 0; i < 150; i += 1) {
-      sink.emit(
-        createTelemetryEvent("session.started", {
-          timestamp: i,
-          learnerId: `learner-${i}`
-        })
-      );
-    }
-
-    await sink.dispose();
-
-    expect(bodies.map((body) => body.events.length)).toEqual([100, 50]);
-
-    sink.emit(
-      createTelemetryEvent("session.started", {
-        timestamp: 151,
-        learnerId: "learner-after-dispose"
-      })
-    );
-    await sink.flush();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("strips top-level and nested observation PII before POSTing", async () => {
-    const { bodies } = stubFetch();
-    const sink = new GatewaySugarlangTelemetrySink({
-      proxyBaseUrl: "http://gateway.test",
-      flushIntervalMs: 60_000
-    });
     sink.emit(
       createTelemetryEvent("observe.observations-applied", {
         timestamp: 1,
@@ -244,7 +208,7 @@ describe("GatewaySugarlangTelemetrySink", () => {
       })
     );
 
-    await sink.flush();
+    await collector.flush();
 
     const [applied, probePassed] = bodies[0]!.events;
     const observationEntry = (
@@ -260,44 +224,6 @@ describe("GatewaySugarlangTelemetrySink", () => {
       predictedRetrievabilities: { manzana: 0.9 },
       lemmasPassed: ["manzana"]
     });
-    await sink.dispose();
-  });
-});
-
-describe("resolveSugarlangTelemetrySink", () => {
-  it("sends to the gateway when a proxy URL is configured", () => {
-    const sink = resolveSugarlangTelemetrySink({
-      proxyBaseUrl: "http://localhost:8080"
-    });
-    expect(sink).toBeInstanceOf(GatewaySugarlangTelemetrySink);
-  });
-
-  it("drops events when no proxy URL is configured", () => {
-    expect(resolveSugarlangTelemetrySink()).toBeInstanceOf(NoOpTelemetrySink);
-    expect(resolveSugarlangTelemetrySink({ proxyBaseUrl: "  " })).toBeInstanceOf(
-      NoOpTelemetrySink
-    );
-  });
-
-  it("gives Studio and the published game the same destination", async () => {
-    // The whole point: no compile-profile branch. Preview cannot observe a
-    // different system from the one that ships, so a gateway fault shows up
-    // while authoring instead of only in production.
-    const { fetchMock } = stubFetch();
-    const sink = resolveSugarlangTelemetrySink({
-      proxyBaseUrl: "http://gateway.test"
-    });
-    expect(sink).toBeInstanceOf(GatewaySugarlangTelemetrySink);
-
-    sink.emit(
-      createTelemetryEvent("session.started", {
-        sessionId: "session-one-path",
-        timestamp: 5,
-        learnerId: "learner-one-path"
-      })
-    );
-    await sink.flush?.();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    await sink.dispose?.();
+    await collector.dispose();
   });
 });

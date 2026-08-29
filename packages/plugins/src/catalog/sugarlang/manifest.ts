@@ -82,7 +82,7 @@ import { readTurnDebugState } from "./runtime/debug/turn-debug-state";
 import { SugarlangRuntimeServices } from "./runtime/runtime-services";
 import {
   flushTelemetry,
-  resolveSugarlangTelemetrySink
+  HostTelemetrySink
 } from "./runtime/telemetry/telemetry";
 import {
   sugarlangShellContributionDefinition,
@@ -96,24 +96,10 @@ import { SUGARLANG_PLUGIN_ID } from "./plugin-id";
 import { SUGARLANG_LEARNER_MIGRATIONS } from "./runtime/learner/learner-tables";
 export const SUGARLANG_DISPLAY_NAME = "Sugarlang";
 
-const deploymentRequirements: DeploymentRequirement[] = [
-  {
-    requirementId: createDeploymentRequirementId({
-      ownerId: SUGARLANG_PLUGIN_ID,
-      kind: "proxy-route",
-      key: "sugarlang-telemetry"
-    }),
-    ownerId: SUGARLANG_PLUGIN_ID,
-    ownerKind: "plugin",
-    kind: "proxy-route",
-    required: false,
-    routeId: "sugarlang-telemetry",
-    protocol: "http-json",
-    consumer: "browser-runtime",
-    pathHint: "/api/sugarlang/telemetry",
-    description: "Browser-to-backend telemetry ingestion route for sugarlang teaching analytics."
-  }
-];
+// Telemetry needs no route declaration here. Every gateway serves
+// /api/telemetry, because the ingest handler is compiled into all of them and
+// any runtime system can emit through the shared collector in runtime-core.
+const deploymentRequirements: DeploymentRequirement[] = [];
 
 export function createSugarlangPlugin(
   context: RuntimePluginFactoryContext
@@ -127,7 +113,9 @@ export function createSugarlangPlugin(
   setSugarlangChunkExtractionEnabled(config.chunkExtraction.enabled);
   const logger = createSugarlangLogger({ debugLogging: config.debugLogging });
   const proxyBaseUrl = resolveSugarlangProxyBaseUrl(context.environment);
-  const telemetry = resolveSugarlangTelemetrySink({ proxyBaseUrl });
+  // Services are built here, before `init` hands over the runtime context, so
+  // they hold this and it forwards to the host's collector once bound below.
+  const telemetry = new HostTelemetrySink();
   const services = new SugarlangRuntimeServices({
     config,
     environment: context.environment,
@@ -327,6 +315,9 @@ export function createSugarlangPlugin(
         runtimeContext.onNpcInteractionModeChange?.(() => {
           regionWarmer.invalidate();
         }) ?? null;
+      // The host owns delivery. Absent when there is no gateway to POST to,
+      // and then events go nowhere rather than to a second destination.
+      telemetry.bind(runtimeContext.telemetry ?? null);
       const bootPayload = runtimeContext.pluginBootPayloads?.[SUGARLANG_PLUGIN_ID];
       const lexicons = extractSugarlangPreviewBootLexicons(bootPayload);
       await seedSugarlangRuntimeCompileCache(lexicons);

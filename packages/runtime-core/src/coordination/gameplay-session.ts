@@ -114,6 +114,7 @@ import {
 } from "../collision";
 import type { NavMeshPathfinder } from "../navmesh";
 import type { NpcInteractionModeStore } from "../npc/interaction-mode-store";
+import type { TelemetryCollector } from "../telemetry";
 import {
   resolveWorldFlagWriteValue,
   evaluateRegionQuestBinding,
@@ -264,6 +265,12 @@ export interface RuntimeGameplaySessionControllerOptions {
    * `onSetNpcInteractionMode`.
    */
   npcInteractionModeStore?: NpcInteractionModeStore | null;
+  /**
+   * Where plugins send telemetry. Host-built, because only the host knows the
+   * gateway URL and the identity to authenticate with; null when there is
+   * nowhere to send it, and plugins fall back to a no-op collector.
+   */
+  telemetry?: TelemetryCollector | null;
   dialogueDefinitions: DialogueDefinition[];
   questDefinitions: QuestDefinition[];
   mechanics: MechanicsDefinition;
@@ -2885,6 +2892,9 @@ export function createRuntimeGameplayAssembly(
       },
       onNpcInteractionModeChange: (listener) =>
         options.npcInteractionModeStore?.subscribe(listener) ?? (() => {}),
+      // Host-built, so the plugin emits events and nothing else. Omitted
+      // rather than passed as null when there is nowhere to send them.
+      ...(options.telemetry ? { telemetry: options.telemetry } : {}),
       dialogueDefinitions: options.dialogueDefinitions,
       questDefinitions: options.questDefinitions,
       buildConversationRuntimeContext:

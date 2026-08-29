@@ -604,6 +604,48 @@ function buildGatewayServerFile(
 // (typechecked TypeScript) and compiled to core.compiled.ts by build:gateway-source.
 // The historical template was: import { createServer } from "node:http";
 
+// Telemetry ingestion is not any one plugin's route. The handler is compiled
+// into every gateway, and any runtime system -- plugin or not -- emits through
+// the shared collector in runtime-core, so every gateway answers this path.
+// Owning it here rather than in a plugin manifest is what stops it from
+// disappearing when whichever plugin happened to declare it is disabled.
+// The path is spelled here and again as TELEMETRY_INGEST_ROUTE_PATH in
+// packages/runtime-core/src/telemetry/index.ts, which is what the browser
+// builds its URL from. It is not imported from there because value imports in
+// this file must use relative paths (see the note on the imports above), and
+// a fourth escape-the-package-root import is worse than a literal that a test
+// pins. The "serves the telemetry route from every gateway" case in
+// packages/testing/src/plugin-infrastructure.test.ts compares this against
+// that constant and fails if they ever disagree -- which matters, because a
+// route that does not match answers 404 while every client believes it is
+// recording.
+const TELEMETRY_INGEST_ROUTE = {
+  routeId: "telemetry",
+  path: "/api/telemetry",
+  protocol: "http-json" as const,
+  consumer: "browser-runtime" as const
+};
+
+/**
+ * Every route a generated gateway answers on: the ones plugins declared, plus
+ * telemetry, which belongs to no plugin.
+ *
+ * The route table and the deployment summaries read this same function, so a
+ * summary cannot list a different set of paths from the one the gateway
+ * actually serves.
+ */
+function servedRoutes(unit: DeploymentServiceUnit) {
+  return [
+    ...unit.proxyRoutes.map((route) => ({
+      routeId: route.routeId,
+      path: route.pathHint ?? `/${route.routeId}`,
+      protocol: route.protocol,
+      consumer: route.consumer
+    })),
+    TELEMETRY_INGEST_ROUTE
+  ];
+}
+
 function buildGatewayRoutesFile(
   targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit,
@@ -617,12 +659,7 @@ function buildGatewayRoutesFile(
     containerPort,
     label: unit.label,
     owners: unit.ownerIds,
-    routes: unit.proxyRoutes.map((route) => ({
-      routeId: route.routeId,
-      path: route.pathHint ?? `/${route.routeId}`,
-      protocol: route.protocol,
-      consumer: route.consumer
-    }))
+    routes: servedRoutes(unit)
   });
 }
 
@@ -758,7 +795,7 @@ function buildLocalManagedFiles(
         executionModel: unit.executionModel,
         isolation: unit.isolation,
         ownerIds: unit.ownerIds,
-        routes: unit.proxyRoutes.map((route) => route.pathHint ?? route.routeId),
+        routes: servedRoutes(unit).map((route) => route.path),
         hostPort: overrides.gatewayHostPortBase + index
       })),
       conflicts: plan.conflicts,
@@ -1138,7 +1175,7 @@ function buildGoogleCloudRunManagedFiles(
         serviceName: `${overrides.serviceNamePrefix}-${toComposeServiceName(unit.serviceUnitId)}`,
         runtimeFamily: unit.runtimeFamily,
         executionModel: unit.executionModel,
-        routes: unit.proxyRoutes.map((route) => route.pathHint ?? route.routeId)
+        routes: servedRoutes(unit).map((route) => route.path)
       })),
       conflicts: plan.conflicts,
       warnings: plan.warnings

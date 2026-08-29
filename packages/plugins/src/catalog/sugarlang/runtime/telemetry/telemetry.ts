@@ -1,7 +1,8 @@
 /**
  * packages/plugins/src/catalog/sugarlang/runtime/telemetry/telemetry.ts
  *
- * Purpose: Defines the canonical sugarlang telemetry event schema, safe sink helpers, and sink implementations.
+ * Purpose: Defines sugarlang's telemetry event schema and the sink its
+ *   services emit through.
  *
  * Exports:
  *   - Telemetry event/query types
@@ -9,8 +10,7 @@
  *   - TELEMETRY_DB_NAME
  *   - MemoryTelemetrySink
  *   - NoOpTelemetrySink
- *   - GatewaySugarlangTelemetrySink
- *   - resolveSugarlangTelemetrySink
+ *   - HostTelemetrySink
  *
  * Relationships:
  *   - Is the single telemetry contract consumed by middlewares, Teacher, and learner-state.
@@ -23,9 +23,12 @@
  *
  * WHERE EVENTS GO
  *
- *   `GatewaySugarlangTelemetrySink` batches and POSTs to the gateway, which
- *   writes each event as one JSON line to stdout. Cloud Run collects that into
- *   Cloud Logging; locally the same line shows up in `docker compose logs`.
+ *   Delivery is not sugarlang's job. `HostTelemetrySink` forwards to the
+ *   host's `TelemetryCollector` (runtime-core), which batches and POSTs to the
+ *   gateway; the gateway writes each event as one JSON line to stdout. Cloud
+ *   Run collects that into Cloud Logging; locally the same line shows up in
+ *   `docker compose logs`. Sugaragent's events take the same path, which is
+ *   why the collector lives in core rather than here.
  *
  *   Aggregating them -- sessions per week, turns per session, probe pass rate --
  *   needs a log sink into BigQuery, which is configuration on the Cloud Run
@@ -45,9 +48,18 @@ import type {
   SugarlangConstraint
 } from "../types";
 import type { LearnerSnapshot } from "../middlewares/shared";
-import { getActiveAccessToken } from "@sugarmagic/runtime-core";
+import {
+  TELEMETRY_SCHEMA_VERSION,
+  type TelemetryEventBase as SharedTelemetryEventBase
+} from "@sugarmagic/runtime-core";
 
-export const SUGARLANG_TELEMETRY_SCHEMA_VERSION = 1 as const;
+/**
+ * The schema version every event carries. Core owns the number so sugarlang's
+ * events and sugaragent's cannot end up claiming different versions of the
+ * same envelope; this alias is kept because sugarlang's own event union refers
+ * to it throughout.
+ */
+export const SUGARLANG_TELEMETRY_SCHEMA_VERSION = TELEMETRY_SCHEMA_VERSION;
 
 /**
  * The IndexedDB database telemetry used to be written to. Nothing writes it
@@ -92,15 +104,13 @@ export interface ProbeLifecycleOutcome {
   detectedLang?: string | null;
 }
 
-export interface TelemetryEventBase {
-  eventId: string;
-  schemaVersion: typeof SUGARLANG_TELEMETRY_SCHEMA_VERSION;
-  timestamp: number;
-  kind: string;
-  conversationId?: string;
-  turnId?: string;
-  sessionId?: string;
-}
+/**
+ * The shared envelope, re-exported under the name sugarlang's event union
+ * already uses. Declared in packages/runtime-core/src/telemetry -- one
+ * envelope, so a field added for one producer is available to the other and
+ * neither can drift.
+ */
+export type TelemetryEventBase = SharedTelemetryEventBase;
 
 type TelemetryEventOf<TKind extends string, TPayload> = TelemetryEventBase & {
   kind: TKind;
@@ -1026,249 +1036,19 @@ export function createNoOpTelemetrySink(): TelemetrySink {
   return new NoOpTelemetrySink();
 }
 
-const GATEWAY_BATCH_SIZE_CAP = 100;
-
-// Keep in sync with SUGARLANG_TELEMETRY_PII_FIELDS in
-// packages/plugins/src/deployment/gateway/core.ts (the gateway compiles
-// standalone and cannot import from the sugarlang runtime).
-const SERVER_BOUND_PII_FIELDS: ReadonlySet<string> = new Set([
-  "inputText",
-  "originalText",
-  "repairedText",
-  "playerResponseText"
-]);
-
-// observe.observations-applied nests player-typed text at
-// observations[].observation.inputText (produced-typed observations, see
-// contracts/observation.ts). Strip that one known nested path; anything
-// broader belongs in a deliberate schema change, not a deep scrubber.
-function stripObservationPii(value: unknown): unknown {
-  if (!Array.isArray(value)) {
-    return value;
-  }
-  return value.map((entry) => {
-    if (typeof entry !== "object" || entry === null) {
-      return entry;
-    }
-    const observation = (entry as { observation?: unknown }).observation;
-    if (
-      typeof observation !== "object" ||
-      observation === null ||
-      !("inputText" in observation)
-    ) {
-      return entry;
-    }
-    const rest = { ...(observation as Record<string, unknown>) };
-    delete rest.inputText;
-    return { ...(entry as Record<string, unknown>), observation: rest };
-  });
-}
-
-function stripPii(event: TelemetryEvent): Record<string, unknown> {
-  const stripped: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(event as unknown as Record<string, unknown>)) {
-    if (SERVER_BOUND_PII_FIELDS.has(key)) {
-      continue;
-    }
-    stripped[key] = key === "observations" ? stripObservationPii(value) : value;
-  }
-  return stripped;
-}
-
-export class GatewaySugarlangTelemetrySink implements TelemetrySink {
-  private readonly url: string;
-  private readonly flushIntervalMs: number;
-  private readonly pending: TelemetryEvent[] = [];
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
-  private disposed = false;
-
-  // Bound handlers so dispose() can remove exactly what was added.
-  private readonly handlePageHide = (): void => {
-    this.flushOnHide();
-  };
-  private readonly handleVisibilityChange = (): void => {
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-      this.flushOnHide();
-    }
-  };
-
-  /** Same reason as the LLM client: a gateway in `supabase-jwt` mode answers
-   *  401 without it, so every event a deployed game recorded was thrown away
-   *  and production teaching analytics were silently empty. Injectable so a
-   *  test can assert the header. */
-  private readonly getAccessToken: () => Promise<string | null>;
-
-  /** Last token seen by `flush()`. The unload path is synchronous -- an
-   *  awaited fetch never completes after unload -- so it cannot ask for a
-   *  fresh one and reuses this. Tokens last about an hour and unload follows
-   *  play by seconds, so a stale value here is a dropped final batch at
-   *  worst, which is already this sink's posture on failure. */
-  private lastToken = "";
-
-  /**
-   * Warmed at construction so the unload path has a token even when nothing
-   * flushed first.
-   *
-   * A session shorter than one flush interval sends exactly one request -- the
-   * one on the way out -- and that used to go unauthenticated, because the only
-   * thing that ever set `lastToken` was a flush that had not happened. The
-   * gateway answers 401 and the whole session is thrown away: precisely the
-   * short sessions worth looking at.
-   *
-   * Fire-and-forget: a sink must not make constructing it wait on the network.
-   */
-  private warmToken(): void {
-    void this.getAccessToken()
-      .then((token) => {
-        if (!this.lastToken) this.lastToken = token?.trim() ?? "";
-      })
-      .catch(() => {
-        // No token is the same as the old behaviour; nothing to add.
-      });
-  }
-
-  constructor(options: {
-    proxyBaseUrl: string;
-    flushIntervalMs?: number;
-    getAccessToken?: () => Promise<string | null>;
-  }) {
-    const base = options.proxyBaseUrl.endsWith("/")
-      ? options.proxyBaseUrl.slice(0, -1)
-      : options.proxyBaseUrl;
-    this.url = `${base}/api/sugarlang/telemetry`;
-    this.flushIntervalMs = options.flushIntervalMs ?? 5000;
-    this.getAccessToken = options.getAccessToken ?? getActiveAccessToken;
-    this.warmToken();
-    if (typeof window !== "undefined") {
-      window.addEventListener("pagehide", this.handlePageHide);
-    }
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", this.handleVisibilityChange);
-    }
-  }
-
-  emit(event: TelemetryEvent): void {
-    if (this.disposed) {
-      return;
-    }
-    this.pending.push(event);
-    this.scheduleFlush(this.flushIntervalMs);
-  }
-
-  async flush(): Promise<void> {
-    if (this.pending.length === 0) {
-      return;
-    }
-    const batch = this.pending.splice(0, GATEWAY_BATCH_SIZE_CAP);
-    if (this.pending.length > 0) {
-      // A burst larger than the cap must not strand the remainder until the
-      // next emit; drain it on the next tick.
-      this.scheduleFlush(0);
-    }
-    try {
-      const token = (await this.getAccessToken())?.trim() ?? "";
-      // Remembered for the unload path below, which cannot await.
-      this.lastToken = token;
-      await fetch(this.url, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...(token ? { authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({
-          events: batch.map(stripPii),
-          schemaVersion: SUGARLANG_TELEMETRY_SCHEMA_VERSION
-        })
-      });
-    } catch {
-      // drop-on-failure: never block a turn
-    }
-  }
-
-  async dispose(): Promise<void> {
-    if (this.disposed) {
-      return;
-    }
-    this.disposed = true;
-    if (this.flushTimer !== null) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
-    if (typeof window !== "undefined") {
-      window.removeEventListener("pagehide", this.handlePageHide);
-    }
-    if (typeof document !== "undefined") {
-      document.removeEventListener("visibilitychange", this.handleVisibilityChange);
-    }
-    while (this.pending.length > 0) {
-      await this.flush();
-    }
-  }
-
-  private scheduleFlush(delayMs: number): void {
-    if (this.disposed || this.flushTimer !== null) {
-      return;
-    }
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = null;
-      void this.flush();
-    }, delayMs);
-  }
-
-  // Tab-close path: awaited fetches never complete after unload, so fire
-  // keepalive requests for every pending batch without awaiting. keepalive
-  // bodies share a 64KB in-flight quota; overflow requests fail and drop,
-  // which matches the drop-on-failure posture.
-  private flushOnHide(): void {
-    if (this.flushTimer !== null) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
-    while (this.pending.length > 0) {
-      const batch = this.pending.splice(0, GATEWAY_BATCH_SIZE_CAP);
-      try {
-        void fetch(this.url, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            ...(this.lastToken ? { authorization: `Bearer ${this.lastToken}` } : {})
-          },
-          keepalive: true,
-          body: JSON.stringify({
-            events: batch.map(stripPii),
-            schemaVersion: SUGARLANG_TELEMETRY_SCHEMA_VERSION
-          })
-        });
-      } catch {
-        // drop-on-failure: never block unload
-      }
-    }
-  }
-}
-
-
 /**
  * ONE DESTINATION, EVERYWHERE.
  *
  * Events go to the gateway or nowhere. Studio, Preview and the published game
  * all take the same path, so what you watch while authoring is what the
- * deployed game does.
+ * deployed game does. The gateway writes each event to stdout, so reading is
+ * `docker compose logs` locally and Cloud Logging in production.
  *
- * This used to branch on the compile profile: the published game sent to the
- * gateway, while Studio and Preview wrote to a local IndexedDB store that two
- * Studio panels read. That made Preview a different system from the one that
- * ships -- a gateway fault was invisible in Preview and a Preview reading was
- * no evidence about production.
- *
- * Reading is now the same everywhere too: the gateway writes each event to
- * stdout, so it is `docker compose logs` locally and Cloud Logging in
- * production.
+ * A stable sink handed to every service at construction, forwarding to the
+ * host's collector once the runtime binds. Sugarlang's services and
+ * middlewares are built before `init` runs, so they need something to hold
+ * that is real from the start; anything emitted before the bind has nowhere
+ * to go and is dropped, which is the same answer they would get with no
+ * gateway configured.
  */
-export function resolveSugarlangTelemetrySink(
-  options?: { proxyBaseUrl?: string }
-): TelemetrySink {
-  const proxyBaseUrl = options?.proxyBaseUrl?.trim() ?? "";
-  return proxyBaseUrl
-    ? new GatewaySugarlangTelemetrySink({ proxyBaseUrl })
-    : new NoOpTelemetrySink();
-}
+export { BindableTelemetryCollector as HostTelemetrySink } from "@sugarmagic/runtime-core";

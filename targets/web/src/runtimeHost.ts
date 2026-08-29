@@ -129,6 +129,8 @@ import {
   createWorldPresenceSaveParticipant,
   createNpcInteractionModeSaveParticipant,
   NpcInteractionModeStore,
+  GatewayTelemetryCollector,
+  type TelemetryCollector,
   createWorldTimeSaveParticipant,
   WorldPresenceTracker,
   type RuntimeBannerContribution,
@@ -1503,6 +1505,10 @@ export function createWebRuntimeHost(
       store: npcInteractionModeStore
     })
   );
+  // Telemetry goes to the same gateway the plugins call. Built once per
+  // world spawn, below, where the plugin runtime environment carrying the
+  // gateway URL is readable.
+  let telemetryCollector: TelemetryCollector | null = null;
   // Story 47.10 follow-up — live user + last-known save snapshot
   // surfaced to the Session debug HUD card. Story 51.3 migrated
   // both off module-let mirrors onto host.state observables
@@ -2299,6 +2305,26 @@ export function createWebRuntimeHost(
       state.pluginBootPayloads ?? {}
     );
     activePluginManager = pluginManager;
+    // Telemetry goes to the same gateway the plugins call, so the host reads
+    // the base URL once and hands the assembly a built collector. Only the
+    // host knows this URL and the identity to authenticate with; a plugin
+    // emits its own events through the collector and knows nothing about
+    // batching, auth, or the route.
+    //
+    // The two environment names are the ones already set for the gateway --
+    // there is one gateway and one URL, spelled two ways. No URL means no
+    // telemetry, which is the case in Studio with nothing deployed.
+    {
+      const pluginEnvironment = state.pluginRuntimeEnvironment ?? {};
+      const proxyBaseUrl =
+        pluginEnvironment.SUGARMAGIC_SUGARLANG_PROXY_BASE_URL?.trim() ||
+        pluginEnvironment.SUGARMAGIC_SUGARAGENT_PROXY_BASE_URL?.trim() ||
+        "";
+      void telemetryCollector?.dispose?.();
+      telemetryCollector = proxyBaseUrl
+        ? new GatewayTelemetryCollector({ proxyBaseUrl })
+        : null;
+    }
     // Whatever the plugins declared they keep in the save. Registered here,
     // right after construction and before the first deserialize pass, so a
     // plugin's own state is restored by the time it binds. The host does not
@@ -3237,6 +3263,7 @@ export function createWebRuntimeHost(
       documentDefinitions: state.documentDefinitions,
       npcDefinitions: state.npcDefinitions,
       npcInteractionModeStore,
+      telemetry: telemetryCollector,
       dialogueDefinitions: state.dialogueDefinitions,
       questDefinitions: state.questDefinitions,
       contentLibrary: state.contentLibrary,

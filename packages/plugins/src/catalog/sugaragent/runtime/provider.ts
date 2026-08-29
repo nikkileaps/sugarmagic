@@ -1,11 +1,14 @@
 import { createUuid } from "@sugarmagic/domain";
 import {
+  createNoOpTelemetryCollector,
+  emitTelemetry,
   getActiveAccessToken,
   type ConversationExecutionContext,
   type ConversationProvider,
   type ConversationProviderContext,
   type ConversationProviderSession,
-  type ConversationTurnEnvelope
+  type ConversationTurnEnvelope,
+  type TelemetryCollector
 } from "@sugarmagic/runtime-core";
 import {
   // Story 46.14 — only the gateway-routed providers remain; direct-API
@@ -41,6 +44,7 @@ import {
   RetrieveStage
 } from "./stages";
 import { buildTerminalFallbackReply } from "./stages/helpers";
+import { buildDegradedTurnEvent } from "./telemetry";
 import type {
   SugarAgentPluginConfig,
   SugarAgentProviderState,
@@ -177,10 +181,18 @@ async function runStage<TInput, TOutput>(
     sessionId: context.sessionId
   });
   const result = await stage.execute(input, context);
-  context.logStageEnd(result.diagnostics);
+  // Stamped here, once, because a stage does not have to read its context to
+  // produce diagnostics -- and the ones that ignore it are exactly the ones
+  // whose output is hardest to attribute later.
+  const diagnostics: TurnStageDiagnostics = {
+    ...result.diagnostics,
+    turnId: context.turnId,
+    sessionId: context.sessionId
+  };
+  context.logStageEnd(diagnostics);
   return {
     output: result.output,
-    diagnostics: result.diagnostics
+    diagnostics
   };
 }
 
@@ -366,6 +378,7 @@ async function executePipeline(args: {
   state: SugarAgentProviderState;
   config: SugarAgentPluginConfig;
   logger: SugarAgentLogger;
+  telemetry: TelemetryCollector;
   stages: {
     interpret: InterpretStage;
     retrieve: RetrieveStage;
@@ -376,7 +389,7 @@ async function executePipeline(args: {
     regenerate: RegenerateStage;
   };
 }): Promise<ConversationTurnEnvelope> {
-  const { execution, state, config, logger, stages } =
+  const { execution, state, config, logger, telemetry, stages } =
     args;
   const context = createTurnContext(execution.selection, config, state, logger);
   const activeQuestDisplayName =
@@ -433,6 +446,29 @@ async function executePipeline(args: {
     );
     pushHistoryEntry(state, "assistant", generate.envelopeOverride.text);
 
+    // This path returns before the rest of the pipeline runs, so it needs its
+    // own report or a stage that degraded on the way here is never recorded.
+    // Not stalled and never a close: the override IS the reply, and the
+    // counter is deliberately reset above.
+    const overrideTurnEvent = buildDegradedTurnEvent(
+      {
+        turnId: context.turnId,
+        sessionId: state.sessionId,
+        npcDefinitionId: execution.selection.npcDefinitionId ?? null,
+        stages: state.lastTurnDiagnostics,
+        stalled: false,
+        autoClosed: false,
+        terminalClose: false,
+        consecutiveFallbackTurns: state.consecutiveFallbackTurns,
+        turnCount: state.turnCount,
+        llmBackend: generate.llmBackend
+      },
+      Date.now()
+    );
+    if (overrideTurnEvent) {
+      void emitTelemetry(telemetry, overrideTurnEvent);
+    }
+
     return {
       ...generate.envelopeOverride,
       diagnostics: {
@@ -483,10 +519,14 @@ async function executePipeline(args: {
     Audit: auditDiagnostics,
     Regenerate: regenerateDiagnostics
   };
-  state.consecutiveFallbackTurns = isStalledTurn(
+  // Decided once: the counter that closes the conversation and the telemetry
+  // that reports why must not be able to disagree about whether this turn
+  // stalled.
+  const turnStalled = isStalledTurn(
     state.lastTurnDiagnostics,
     Boolean(interpret.userText)
-  )
+  );
+  state.consecutiveFallbackTurns = turnStalled
     ? state.consecutiveFallbackTurns + 1
     : 0;
 
@@ -494,6 +534,11 @@ async function executePipeline(args: {
   let finalActionProposals = repair.actionProposals;
   let finalLlmBackend = repair.llmBackend;
   let autoCloseAfterMs: number | null = null;
+  // The turn ends here and the player is shown the door. Nothing in the stage
+  // diagnostics says so, because this runs after every stage has finished --
+  // which left the most severe degraded turn as the only one carrying no
+  // label at all.
+  let terminalClose = false;
 
   if (state.consecutiveFallbackTurns >= 3) {
     finalText = buildTerminalFallbackReply({
@@ -506,6 +551,7 @@ async function executePipeline(args: {
     ];
     finalLlmBackend = "deterministic";
     autoCloseAfterMs = 2200;
+    terminalClose = true;
   }
 
   if (
@@ -513,6 +559,27 @@ async function executePipeline(args: {
     shouldAutoCloseAfterTurn(state.lastTurnDiagnostics, finalActionProposals)
   ) {
     autoCloseAfterMs = 2200;
+  }
+
+  // What the pipeline decided, sent once per degraded turn. Fire-and-forget:
+  // a turn must never wait on telemetry or fail because of it.
+  const degradedTurnEvent = buildDegradedTurnEvent(
+    {
+      turnId: context.turnId,
+      sessionId: state.sessionId,
+      npcDefinitionId: execution.selection.npcDefinitionId ?? null,
+      stages: state.lastTurnDiagnostics,
+      stalled: turnStalled,
+      autoClosed: autoCloseAfterMs !== null,
+      terminalClose,
+      consecutiveFallbackTurns: state.consecutiveFallbackTurns,
+      turnCount: state.turnCount,
+      llmBackend: finalLlmBackend
+    },
+    Date.now()
+  );
+  if (degradedTurnEvent) {
+    void emitTelemetry(telemetry, degradedTurnEvent);
   }
 
   state.closeRequested =
@@ -552,7 +619,13 @@ async function executePipeline(args: {
 }
 
 export function createSugarAgentConversationProvider(
-  config: SugarAgentPluginConfig
+  config: SugarAgentPluginConfig,
+  // Passed in rather than reached for, so it belongs to the plugin instance
+  // that built this provider. A collector shared across instances would be
+  // unbound by whichever instance is torn down last, and teardown is not
+  // awaited -- an old session's dispose lands after a new one has bound and
+  // silently kills the telemetry for the rest of the page.
+  telemetry: TelemetryCollector = createNoOpTelemetryCollector()
 ): ConversationProvider {
   // Plan 072.4 (absorbed 071.8): honor debugLogging. It was ORed with the
   // (mandatory) proxyBaseUrl, which pinned logging always-on and made the
@@ -621,6 +694,7 @@ export function createSugarAgentConversationProvider(
             state: providerState,
             config,
             logger,
+            telemetry,
             stages
           });
         },
@@ -666,6 +740,7 @@ export function createSugarAgentConversationProvider(
         state,
         config,
         logger,
+        telemetry,
         stages
       });
       return {

@@ -41,6 +41,7 @@ export * from "./navmesh";
 export * from "./region-conditions";
 export * from "./state";
 export * from "./spatial";
+export * from "./telemetry";
 export * from "./streaming";
 export * from "./shader";
 export * from "./input-modes/registry";
