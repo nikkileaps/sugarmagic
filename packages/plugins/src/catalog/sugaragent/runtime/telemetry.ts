@@ -93,7 +93,30 @@ function readPlanVerdict(
 }
 
 /**
- * The stages that came out degraded, with the two fields that say why.
+ * The order the pipeline runs its stages in.
+ *
+ * Named here because "the deciding stage is the last one to degrade" only
+ * means anything against a known order. Reading it off `Object.values` instead
+ * would inherit the insertion order of an object literal in provider.ts --
+ * true today, silently wrong the day someone reorders that literal, and
+ * wrong in a way no test would notice.
+ *
+ * A stage the pipeline reports but this list does not name still appears; it
+ * sorts after the known ones rather than being dropped.
+ */
+const STAGE_ORDER = [
+  "Interpret",
+  "Retrieve",
+  "Plan",
+  "Generate",
+  "Judge",
+  "Audit",
+  "Regenerate"
+] as const;
+
+/**
+ * The stages that came out degraded, in pipeline order, with the two fields
+ * that say why.
  *
  * Keyed off `status`, never off the presence of a `trigger`: RegenerateStage
  * stamps `judge-fail-regen` on a turn it successfully repaired, so a trigger
@@ -102,9 +125,14 @@ function readPlanVerdict(
 function collectDegradedStages(
   stages: Record<string, TurnStageDiagnostics>
 ): DegradedStage[] {
-  return Object.values(stages)
-    .filter((stage) => stage.status === "degraded")
-    .map((stage) => ({
+  const rank = (stageId: string): number => {
+    const index = STAGE_ORDER.indexOf(stageId as (typeof STAGE_ORDER)[number]);
+    return index === -1 ? STAGE_ORDER.length : index;
+  };
+  return Object.entries(stages)
+    .filter(([, stage]) => stage.status === "degraded")
+    .sort(([leftKey], [rightKey]) => rank(leftKey) - rank(rightKey))
+    .map(([, stage]) => ({
       stageId: stage.stageId,
       trigger:
         typeof stage.payload?.trigger === "string" ? stage.payload.trigger : null,

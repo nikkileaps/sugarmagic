@@ -48,8 +48,18 @@ import type {
   SugarlangConstraint
 } from "../types";
 import type { LearnerSnapshot } from "../middlewares/shared";
+import {
+  TELEMETRY_SCHEMA_VERSION,
+  type TelemetryEventBase as SharedTelemetryEventBase
+} from "@sugarmagic/runtime-core";
 
-export const SUGARLANG_TELEMETRY_SCHEMA_VERSION = 1 as const;
+/**
+ * The schema version every event carries. Core owns the number so sugarlang's
+ * events and sugaragent's cannot end up claiming different versions of the
+ * same envelope; this alias is kept because sugarlang's own event union refers
+ * to it throughout.
+ */
+export const SUGARLANG_TELEMETRY_SCHEMA_VERSION = TELEMETRY_SCHEMA_VERSION;
 
 /**
  * The IndexedDB database telemetry used to be written to. Nothing writes it
@@ -94,15 +104,13 @@ export interface ProbeLifecycleOutcome {
   detectedLang?: string | null;
 }
 
-export interface TelemetryEventBase {
-  eventId: string;
-  schemaVersion: typeof SUGARLANG_TELEMETRY_SCHEMA_VERSION;
-  timestamp: number;
-  kind: string;
-  conversationId?: string;
-  turnId?: string;
-  sessionId?: string;
-}
+/**
+ * The shared envelope, re-exported under the name sugarlang's event union
+ * already uses. Declared in packages/runtime-core/src/telemetry -- one
+ * envelope, so a field added for one producer is available to the other and
+ * neither can drift.
+ */
+export type TelemetryEventBase = SharedTelemetryEventBase;
 
 type TelemetryEventOf<TKind extends string, TPayload> = TelemetryEventBase & {
   kind: TKind;

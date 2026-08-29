@@ -399,3 +399,61 @@ describe("collector ownership", () => {
     expect(delivered).toEqual(["sugaragent.turn-degraded"]);
   });
 });
+
+describe("stage ordering", () => {
+  it("picks the deciding stage by pipeline order, not by key order", () => {
+    // The diagnostics map is built as an object literal in provider.ts. Reading
+    // its key order would make the answer depend on the order someone happened
+    // to type those keys in, in a different file.
+    const event = buildDegradedTurnEvent(
+      facts({
+        stages: {
+          // Deliberately out of pipeline order.
+          Regenerate: stage("Regenerate", {
+            status: "degraded",
+            fallbackReason: "repair-fallback",
+            payload: { trigger: "judge-3-strike" }
+          }),
+          Retrieve: stage("Retrieve", {
+            status: "degraded",
+            fallbackReason: "vector-search-unavailable"
+          })
+        }
+      }),
+      1000
+    );
+
+    // Retrieve runs first, Regenerate last, so Regenerate decided the reply.
+    expect(event?.degradedStages).toEqual([
+      {
+        stageId: "Retrieve",
+        trigger: null,
+        fallbackReason: "vector-search-unavailable"
+      },
+      {
+        stageId: "Regenerate",
+        trigger: "judge-3-strike",
+        fallbackReason: "repair-fallback"
+      }
+    ]);
+    expect(event).toMatchObject({ stageId: "Regenerate" });
+  });
+
+  it("keeps a stage the order does not name rather than dropping it", () => {
+    const event = buildDegradedTurnEvent(
+      facts({
+        stages: {
+          Moderate: stage("Moderate", {
+            status: "degraded",
+            fallbackReason: "blocklist-hit"
+          })
+        }
+      }),
+      1000
+    );
+
+    expect(event?.degradedStages).toEqual([
+      { stageId: "Moderate", trigger: null, fallbackReason: "blocklist-hit" }
+    ]);
+  });
+});

@@ -626,6 +626,26 @@ const TELEMETRY_INGEST_ROUTE = {
   consumer: "browser-runtime" as const
 };
 
+/**
+ * Every route a generated gateway answers on: the ones plugins declared, plus
+ * telemetry, which belongs to no plugin.
+ *
+ * The route table and the deployment summaries read this same function, so a
+ * summary cannot list a different set of paths from the one the gateway
+ * actually serves.
+ */
+function servedRoutes(unit: DeploymentServiceUnit) {
+  return [
+    ...unit.proxyRoutes.map((route) => ({
+      routeId: route.routeId,
+      path: route.pathHint ?? `/${route.routeId}`,
+      protocol: route.protocol,
+      consumer: route.consumer
+    })),
+    TELEMETRY_INGEST_ROUTE
+  ];
+}
+
 function buildGatewayRoutesFile(
   targetId: BackendDeploymentTargetId,
   unit: DeploymentServiceUnit,
@@ -639,15 +659,7 @@ function buildGatewayRoutesFile(
     containerPort,
     label: unit.label,
     owners: unit.ownerIds,
-    routes: [
-      ...unit.proxyRoutes.map((route) => ({
-        routeId: route.routeId,
-        path: route.pathHint ?? `/${route.routeId}`,
-        protocol: route.protocol,
-        consumer: route.consumer
-      })),
-      TELEMETRY_INGEST_ROUTE
-    ]
+    routes: servedRoutes(unit)
   });
 }
 
@@ -783,7 +795,7 @@ function buildLocalManagedFiles(
         executionModel: unit.executionModel,
         isolation: unit.isolation,
         ownerIds: unit.ownerIds,
-        routes: unit.proxyRoutes.map((route) => route.pathHint ?? route.routeId),
+        routes: servedRoutes(unit).map((route) => route.path),
         hostPort: overrides.gatewayHostPortBase + index
       })),
       conflicts: plan.conflicts,
@@ -1163,7 +1175,7 @@ function buildGoogleCloudRunManagedFiles(
         serviceName: `${overrides.serviceNamePrefix}-${toComposeServiceName(unit.serviceUnitId)}`,
         runtimeFamily: unit.runtimeFamily,
         executionModel: unit.executionModel,
-        routes: unit.proxyRoutes.map((route) => route.pathHint ?? route.routeId)
+        routes: servedRoutes(unit).map((route) => route.path)
       })),
       conflicts: plan.conflicts,
       warnings: plan.warnings

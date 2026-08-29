@@ -446,6 +446,29 @@ async function executePipeline(args: {
     );
     pushHistoryEntry(state, "assistant", generate.envelopeOverride.text);
 
+    // This path returns before the rest of the pipeline runs, so it needs its
+    // own report or a stage that degraded on the way here is never recorded.
+    // Not stalled and never a close: the override IS the reply, and the
+    // counter is deliberately reset above.
+    const overrideTurnEvent = buildDegradedTurnEvent(
+      {
+        turnId: context.turnId,
+        sessionId: state.sessionId,
+        npcDefinitionId: execution.selection.npcDefinitionId ?? null,
+        stages: state.lastTurnDiagnostics,
+        stalled: false,
+        autoClosed: false,
+        terminalClose: false,
+        consecutiveFallbackTurns: state.consecutiveFallbackTurns,
+        turnCount: state.turnCount,
+        llmBackend: generate.llmBackend
+      },
+      Date.now()
+    );
+    if (overrideTurnEvent) {
+      void emitTelemetry(telemetry, overrideTurnEvent);
+    }
+
     return {
       ...generate.envelopeOverride,
       diagnostics: {
