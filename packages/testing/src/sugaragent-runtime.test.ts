@@ -915,6 +915,248 @@ describe("SugarAgent runtime provider", () => {
     expect((reply?.text ?? "").length).toBeGreaterThan(440);
   });
 
+  // Generation SUCCEEDS on every turn, so nothing degrades and the only thing
+  // repeating is the clarifying question itself. Every other terminal-close
+  // fixture in this file throws on /generate, which reaches the close through
+  // the degraded rung and would pass with or without the change under test.
+  function stubClarifyingGateway(): void {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.endsWith("/api/sugaragent/lore/resolve")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              pages: [
+                {
+                  pageId: "lore.finnick",
+                  title: "Finnick",
+                  relativePath: "npc/finnick.md",
+                  sectionCount: 1,
+                  body: "## Persona\n\nCheese-obsessed and chatty.",
+                  sections: [
+                    {
+                      heading: "Persona",
+                      slug: "persona",
+                      content: "Cheese-obsessed and chatty."
+                    }
+                  ]
+                }
+              ],
+              missingPageIds: []
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.endsWith("/api/sugaragent/retrieve/search")) {
+          return new Response(JSON.stringify({ results: [], requestId: "s" }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (url.endsWith("/api/sugaragent/generate")) {
+          return new Response(
+            JSON.stringify({
+              text: "Sorry friend, what do you mean by that?",
+              requestId: "g"
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error("Unexpected fetch in test: " + url);
+      })
+    );
+  }
+
+  it("does not end a conversation because the NPC asked what you meant three times", async () => {
+    stubClarifyingGateway();
+
+    const host = createConversationHost({
+      providers: [resolveSugarAgentProvider()]
+    });
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:finnick",
+      npcDisplayName: "Finnick",
+      interactionMode: "agent",
+      lorePageId: "lore.finnick"
+    });
+
+    const replies = [];
+    for (const text of ["qqq zzz", "qqq zzz", "qqq zzz"]) {
+      replies.push(await host.submitInput({ kind: "free_text", text }));
+    }
+
+    // The premise: every turn planned a clarifying question and none stalled.
+    for (const reply of replies) {
+      const stages = reply?.diagnostics?.["stages"] as
+        | Record<string, { payload?: Record<string, unknown> }>
+        | undefined;
+      expect(stages?.["Plan"]?.payload?.["responseIntent"]).toBe("clarify");
+    }
+    expect(replies.at(-1)?.diagnostics).toMatchObject({
+      consecutiveFallbackTurns: 0,
+      consecutiveClarifyTurns: 3
+    });
+
+    // The conversation is still open: no close proposal, no auto-close timer,
+    // and the player can still type.
+    const last = replies.at(-1);
+    expect(last?.text).not.toContain("Let's chat later");
+    expect(
+      last?.proposedActions?.some((proposal) => proposal.kind === "request-close")
+    ).toBe(false);
+    expect(last?.metadata?.["autoCloseAfterMs"]).toBeUndefined();
+    expect(last?.inputMode).toBe("free_text");
+  });
+
+  it("resets the clarify count when the NPC does anything but ask", async () => {
+    stubClarifyingGateway();
+    const host = createConversationHost({
+      providers: [resolveSugarAgentProvider()]
+    });
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:finnick",
+      npcDisplayName: "Finnick",
+      interactionMode: "agent",
+      lorePageId: "lore.finnick"
+    });
+
+    await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+    const second = await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+    expect(second?.diagnostics).toMatchObject({ consecutiveClarifyTurns: 2 });
+
+    // A greeting takes the social fast path and plans `chat`, not `clarify`.
+    const greeting = await host.submitInput({ kind: "free_text", text: "hello!" });
+    const stages = greeting?.diagnostics?.["stages"] as
+      | Record<string, { payload?: Record<string, unknown> }>
+      | undefined;
+    expect(stages?.["Plan"]?.payload?.["responseIntent"]).not.toBe("clarify");
+    expect(greeting?.diagnostics).toMatchObject({ consecutiveClarifyTurns: 0 });
+  });
+
+  it("resets the clarify count on a pre-placement turn, where the reply is not the planner's", async () => {
+    stubClarifyingGateway();
+    // Sugarlang's pre-placement opening line makes GenerateStage return a
+    // complete envelope, so whatever Plan chose the NPC did not ask anything.
+    const injectOnCue: ConversationMiddleware = {
+      middlewareId: "test.pre-placement",
+      displayName: "test pre-placement",
+      priority: 0,
+      stage: "context",
+      prepare: (context) => {
+        const input = context.input;
+        if (input?.kind !== "free_text" || input.text !== "placement") {
+          return context;
+        }
+        context.annotations["sugarlang.constraint"] = {
+          generatorPromptOverlay: "",
+          minimalGreetingMode: true,
+          targetVocab: { introduce: [], reinforce: [], avoid: [] },
+          supportPosture: "anchored",
+          targetLanguageRatio: 0,
+          interactionStyle: "listening_first",
+          glossingStrategy: "none",
+          sentenceComplexityCap: "single-clause",
+          targetLanguage: "es",
+          learnerCefr: "A1",
+          rawPrescription: {
+            introduce: [],
+            reinforce: [],
+            avoid: [],
+            budget: { newItemsAllowed: 0 },
+            rationale: {
+              candidateSetSize: 0,
+              envelopeSurvivorCount: 0,
+              priorityScores: [],
+              reasons: []
+            }
+          },
+          prePlacementOpeningLine: {
+            text: "Antes de empezar, una pregunta.",
+            lang: "es",
+            lineId: "opening:line-1"
+          }
+        };
+        return context;
+      }
+    };
+
+    const host = createConversationHost({
+      providers: [resolveSugarAgentProvider()],
+      middlewares: [injectOnCue]
+    });
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:finnick",
+      npcDisplayName: "Finnick",
+      interactionMode: "agent",
+      lorePageId: "lore.finnick"
+    });
+
+    await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+    const second = await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+    expect(second?.diagnostics).toMatchObject({ consecutiveClarifyTurns: 2 });
+
+    const override = await host.submitInput({
+      kind: "free_text",
+      text: "placement"
+    });
+    expect(override?.text).toBe("Antes de empezar, una pregunta.");
+    expect(override?.diagnostics).toMatchObject({
+      consecutiveClarifyTurns: 0,
+      consecutiveFallbackTurns: 0
+    });
+  });
+
+  it("still ends a conversation after three degraded turns", async () => {
+    // The counter this story leaves alone. An outage still closes at 3.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.endsWith("/api/sugaragent/lore/resolve")) {
+          return new Response(
+            JSON.stringify({ ok: true, pages: [], missingPageIds: [] }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error("Unexpected fetch in test: " + url);
+      })
+    );
+
+    const host = createConversationHost({
+      providers: [resolveSugarAgentProvider()]
+    });
+    await host.startSession({
+      conversationKind: "free-form",
+      npcDefinitionId: "npc:station-manager",
+      npcDisplayName: "Station Manager",
+      interactionMode: "agent",
+      lorePageId: "root.characters.station_manager"
+    });
+
+    // Not a greeting: a greeting takes the social fast path, which answers
+    // deterministically without calling the model and so never degrades.
+    const first = await host.submitInput({
+      kind: "free_text",
+      text: "I need my suitcase."
+    });
+    expect(first?.diagnostics).toMatchObject({ consecutiveFallbackTurns: 1 });
+    await host.submitInput({ kind: "free_text", text: "I need my suitcase." });
+    const third = await host.submitInput({
+      kind: "free_text",
+      text: "I need my suitcase."
+    });
+
+    expect(third?.text).toContain("Let's chat later");
+    expect(
+      third?.proposedActions?.some((proposal) => proposal.kind === "request-close")
+    ).toBe(true);
+  });
+
   // Plan 072.3 — session-start persona load.
   describe("persona load at session start", () => {
     type PersonaDiag = {

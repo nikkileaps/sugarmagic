@@ -77,6 +77,7 @@ function ensureProviderState(
     playerDeclaredNames: [],
     turnCount: 0,
     consecutiveFallbackTurns: 0,
+    consecutiveClarifyTurns: 0,
     consecutiveJudgeFailures: 0,
     closeRequested: false,
     history: [],
@@ -145,7 +146,13 @@ function isStalledTurn(
     return true;
   }
 
-  return responseIntent === "clarify";
+  // A clarifying question is not a stall. The NPC understood its job and did
+  // it; the player is the one who has to answer. Counting it here put an
+  // outage and a misunderstanding on the same three-strike close, which meant
+  // the cap on clarifying questions could not move without also closing a
+  // conversation on one bad model call. `state.consecutiveClarifyTurns`
+  // counts them separately.
+  return false;
 }
 
 function shouldAutoCloseAfterTurn(
@@ -418,6 +425,9 @@ async function executePipeline(args: {
       Generate: generateDiagnostics
     };
     state.consecutiveFallbackTurns = 0;
+    // The reply the player reads is the override, not the planner's, so
+    // whatever Plan chose this turn the NPC did not actually ask anything.
+    state.consecutiveClarifyTurns = 0;
     state.closeRequested = Boolean(
       generate.envelopeOverride.proposedActions?.some(
         (proposal) =>
@@ -436,6 +446,7 @@ async function executePipeline(args: {
         historyLength: state.history.length,
         llmBackend: generate.llmBackend,
         consecutiveFallbackTurns: state.consecutiveFallbackTurns,
+        consecutiveClarifyTurns: state.consecutiveClarifyTurns,
         persona: summarizePersona(state.persona)
       }
     };
@@ -483,6 +494,8 @@ async function executePipeline(args: {
   )
     ? state.consecutiveFallbackTurns + 1
     : 0;
+  state.consecutiveClarifyTurns =
+    plan.responseIntent === "clarify" ? state.consecutiveClarifyTurns + 1 : 0;
 
   let finalText = repair.text;
   let finalActionProposals = repair.actionProposals;
@@ -540,6 +553,7 @@ async function executePipeline(args: {
       historyLength: state.history.length,
       llmBackend: finalLlmBackend,
       consecutiveFallbackTurns: state.consecutiveFallbackTurns,
+      consecutiveClarifyTurns: state.consecutiveClarifyTurns,
       persona: summarizePersona(state.persona)
     }
   };

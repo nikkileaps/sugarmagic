@@ -203,6 +203,14 @@ export interface SugarAgentProviderState {
   sessionId: string;
   turnCount: number;
   consecutiveFallbackTurns: number;
+  /**
+   * Consecutive turns whose plan chose `clarify`. Separate from
+   * `consecutiveFallbackTurns` because the two answer different questions: a
+   * stalled turn means the machinery failed, a clarifying question means it
+   * worked and the player was not understood. Read by the Plan stage to cap
+   * how many times in a row an NPC may ask.
+   */
+  consecutiveClarifyTurns: number;
   /** Plan 075.2 -- 3-strike governor: consecutive turns where judge failed and regen ran */
   consecutiveJudgeFailures: number;
   closeRequested: boolean;

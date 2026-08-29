@@ -35,6 +35,18 @@ import type {
  * - execution context
  * - stage input/output
  */
+/**
+ * How many times in a row an NPC may ask what the player meant. One: the
+ * player gets a second try at saying it, which for a language learner is the
+ * point. After that, asking again cannot succeed -- the NPC has nothing to
+ * answer from -- so the character does something else instead.
+ *
+ * Read by nothing yet. #241 is the branch; this story only counts.
+ * [LAW:one-source-of-truth] It lives in the stage that will read it, the way
+ * `JUDGE_FAILURE_STRIKE_LIMIT` lives in RegenerateStage.
+ */
+export const CLARIFY_STRIKE_LIMIT = 1;
+
 export interface PlanStageInput {
   execution: ConversationExecutionContext;
   state: SugarAgentProviderState;
