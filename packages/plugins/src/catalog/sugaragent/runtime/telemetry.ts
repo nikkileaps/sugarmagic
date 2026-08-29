@@ -77,18 +77,51 @@ interface PlanVerdict {
   responseIntent: string | null;
   responseSpecificity: string | null;
   turnPath: string | null;
+  interpretationIntent: string | null;
+  pendingExpectation: string | null;
+  hasEvidence: boolean | null;
+  noveltyExhausted: boolean | null;
 }
 
+/**
+ * Reads what Plan recorded. Everything here is already computed -- these are
+ * copies, not new work.
+ *
+ * The last four exist to tell the four routes to `clarify` apart. Plan picks
+ * it for a quest question it cannot ground, for input it could not read at
+ * all, because the NPC asked a question last turn, or because it has run out
+ * of new things to say. Those want opposite fixes, and `responseIntent` alone
+ * cannot distinguish them: `responseSpecificity` reads "grounded" for every
+ * clarify regardless of evidence, because the generic-only branch only
+ * applies to greet, chat and answer.
+ */
 function readPlanVerdict(
   stages: Record<string, TurnStageDiagnostics>
 ): PlanVerdict {
   const payload = stages.Plan?.payload;
-  const read = (key: string): string | null =>
+  const readString = (key: string): string | null =>
     typeof payload?.[key] === "string" ? (payload[key] as string) : null;
+  const readBoolean = (key: string): boolean | null =>
+    typeof payload?.[key] === "boolean" ? (payload[key] as boolean) : null;
+  const novelty = payload?.noveltyState;
   return {
-    responseIntent: read("responseIntent"),
-    responseSpecificity: read("responseSpecificity"),
-    turnPath: read("turnPath")
+    responseIntent: readString("responseIntent"),
+    responseSpecificity: readString("responseSpecificity"),
+    turnPath: readString("turnPath"),
+    interpretationIntent: readString("interpretationIntent"),
+    // Recorded as an object with a `kind`, so read through to the kind.
+    pendingExpectation:
+      typeof payload?.pendingExpectation === "string"
+        ? (payload.pendingExpectation as string)
+        : typeof (payload?.pendingExpectation as { kind?: unknown })?.kind ===
+            "string"
+          ? ((payload!.pendingExpectation as { kind: string }).kind)
+          : null,
+    hasEvidence: readBoolean("hasEvidence"),
+    noveltyExhausted:
+      typeof (novelty as { exhausted?: unknown })?.exhausted === "boolean"
+        ? ((novelty as { exhausted: boolean }).exhausted)
+        : null
   };
 }
 

@@ -457,3 +457,93 @@ describe("stage ordering", () => {
     ]);
   });
 });
+
+describe("telling the four clarifies apart", () => {
+  // Prod showed three consecutive `clarify` turns ending a conversation, and
+  // the event could not say WHICH clarify. Plan picks it for four different
+  // reasons and they want opposite fixes.
+
+  it("reports the quest question it could not ground", () => {
+    const event = buildDegradedTurnEvent(
+      facts({
+        stages: {
+          Plan: stage("Plan", {
+            payload: {
+              responseIntent: "clarify",
+              interpretationIntent: "quest_guidance",
+              hasEvidence: false
+            }
+          })
+        },
+        stalled: true
+      }),
+      1000
+    );
+
+    expect(event).toMatchObject({
+      responseIntent: "clarify",
+      interpretationIntent: "quest_guidance",
+      hasEvidence: false
+    });
+  });
+
+  it("reports the self-sustaining loop: the NPC asked last turn, so it asks again", () => {
+    const event = buildDegradedTurnEvent(
+      facts({
+        stages: {
+          Plan: stage("Plan", {
+            payload: {
+              responseIntent: "clarify",
+              pendingExpectation: { kind: "clarify" },
+              hasEvidence: true
+            }
+          })
+        },
+        stalled: true
+      }),
+      1000
+    );
+
+    expect(event).toMatchObject({
+      pendingExpectation: "clarify",
+      hasEvidence: true
+    });
+  });
+
+  it("reports having run out of new things to say", () => {
+    const event = buildDegradedTurnEvent(
+      facts({
+        stages: {
+          Plan: stage("Plan", {
+            payload: {
+              responseIntent: "clarify",
+              hasEvidence: false,
+              noveltyState: { exhausted: true }
+            }
+          })
+        },
+        stalled: true
+      }),
+      1000
+    );
+
+    expect(event).toMatchObject({
+      hasEvidence: false,
+      noveltyExhausted: true
+    });
+  });
+
+  it("leaves the fields null rather than guessing when Plan recorded nothing", () => {
+    const event = buildDegradedTurnEvent(
+      facts({ stages: {}, terminalClose: true }),
+      1000
+    );
+
+    expect(event).toMatchObject({
+      interpretationIntent: null,
+      pendingExpectation: null,
+      hasEvidence: null,
+      noveltyExhausted: null
+    });
+  });
+});
