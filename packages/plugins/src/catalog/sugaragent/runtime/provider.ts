@@ -78,6 +78,7 @@ function ensureProviderState(
     turnCount: 0,
     consecutiveFallbackTurns: 0,
     consecutiveClarifyTurns: 0,
+    recoveryTurnCount: 0,
     consecutiveJudgeFailures: 0,
     closeRequested: false,
     history: [],
@@ -157,7 +158,8 @@ function isStalledTurn(
 
 function shouldAutoCloseAfterTurn(
   diagnostics: Record<string, TurnStageDiagnostics>,
-  actionProposals: ConversationTurnEnvelope["proposedActions"] | undefined
+  actionProposals: ConversationTurnEnvelope["proposedActions"] | undefined,
+  isCurtExit: boolean
 ): boolean {
   const hasCloseProposal = Boolean(
     actionProposals?.some((proposal) => proposal.kind === "request-close")
@@ -166,7 +168,12 @@ function shouldAutoCloseAfterTurn(
     return false;
   }
 
+  // A character walking off mid-conversation means it: the panel closes on a
+  // timer rather than leaving the player to click past someone who just left.
+  // Without this the close still happens -- the proposal ends the session on
+  // the next advance -- but only after the player presses on.
   return (
+    isCurtExit ||
     diagnostics.Generate?.fallbackReason === "llm-retry-exhausted" ||
     diagnostics.Regenerate?.fallbackReason === "llm-retry-exhausted"
   );
@@ -426,7 +433,7 @@ async function executePipeline(args: {
     };
     state.consecutiveFallbackTurns = 0;
     // The reply the player reads is the override, not the planner's, so
-    // whatever Plan chose this turn the NPC did not actually ask anything.
+    // whatever Plan chose this turn the NPC neither asked nor recovered.
     state.consecutiveClarifyTurns = 0;
     state.closeRequested = Boolean(
       generate.envelopeOverride.proposedActions?.some(
@@ -494,13 +501,39 @@ async function executePipeline(args: {
   )
     ? state.consecutiveFallbackTurns + 1
     : 0;
-  state.consecutiveClarifyTurns =
-    plan.responseIntent === "clarify" ? state.consecutiveClarifyTurns + 1 : 0;
+  // A clarify adds one; a recovery move holds the count; anything else clears
+  // it. Holding is what makes a long run of confusion yield exactly one
+  // clarifying question -- clearing on the recovery move instead lets the next
+  // turn ask again, which is the clarify / recover alternation this epic is
+  // meant to remove. Clearing on a real exchange is what stops the count going
+  // stale, so a player who gets back on track still earns their one question
+  // the next time they are lost.
+  if (plan.responseIntent === "clarify") {
+    state.consecutiveClarifyTurns += 1;
+  } else if (plan.responseIntent !== "recover") {
+    state.consecutiveClarifyTurns = 0;
+  }
+  if (plan.recoveryStrategy) {
+    state.recoveryTurnCount += 1;
+  }
 
   let finalText = repair.text;
   let finalActionProposals = repair.actionProposals;
   let finalLlmBackend = repair.llmBackend;
   let autoCloseAfterMs: number | null = null;
+
+  // A character whose recovery is to leave has to actually leave. Plan says
+  // which move it made; the close itself is this proposal, read back below
+  // into `closeRequested`.
+  const isCurtExit = plan.recoveryStrategy === "curt-exit";
+  if (isCurtExit) {
+    finalActionProposals = [
+      ...repair.actionProposals.filter(
+        (proposal) => proposal.kind !== "request-close"
+      ),
+      { kind: "request-close" }
+    ];
+  }
 
   if (state.consecutiveFallbackTurns >= 3) {
     finalText = buildTerminalFallbackReply({
@@ -517,7 +550,11 @@ async function executePipeline(args: {
 
   if (
     autoCloseAfterMs === null &&
-    shouldAutoCloseAfterTurn(state.lastTurnDiagnostics, finalActionProposals)
+    shouldAutoCloseAfterTurn(
+      state.lastTurnDiagnostics,
+      finalActionProposals,
+      isCurtExit
+    )
   ) {
     autoCloseAfterMs = 2200;
   }

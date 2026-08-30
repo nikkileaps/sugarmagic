@@ -78,6 +78,12 @@ export interface BasePromptContext {
   persona: {
     personaCard: Array<{ heading: string; slug: string; content: string }>;
     coreKnowledge: Array<{ heading: string; slug: string; content: string }>;
+    /**
+     * `## Recovery` as authored -- the brief for what this character does when
+     * it cannot understand the player. Rendered as an instruction, so the
+     * judge never sees it.
+     */
+    recoverySections: Array<{ heading: string; slug: string; content: string }>;
   } | null;
 
   /**
@@ -165,6 +171,17 @@ export interface AgentPromptContext extends BasePromptContext {
 
   /** The intent classification from the plan stage. */
   responseIntent: string;
+
+  /**
+   * A `recover` turn's move is NOT carried as its own field. `responseGoal`
+   * already says what the writer should do this turn, and Plan fills it from
+   * the chosen move, so the move reaches the prompt through the "Goal:" line
+   * with one representation rather than two.
+   *
+   * Worth stating because the obvious instinct is to add the field, and an
+   * optional field here that nothing reads is invisible: that is how
+   * `unknownNamedEntities` ended up dead in production (#244).
+   */
 
   /** How specific the response should be (grounded vs generic-only). */
   responseSpecificity: string;

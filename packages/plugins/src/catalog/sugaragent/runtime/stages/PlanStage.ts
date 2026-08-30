@@ -35,18 +35,6 @@ import type {
  * - execution context
  * - stage input/output
  */
-/**
- * How many times in a row an NPC may ask what the player meant. One: the
- * player gets a second try at saying it, which for a language learner is the
- * point. After that, asking again cannot succeed -- the NPC has nothing to
- * answer from -- so the character does something else instead.
- *
- * Read by nothing yet. #241 is the branch; this story only counts.
- * [LAW:one-source-of-truth] It lives in the stage that will read it, the way
- * `JUDGE_FAILURE_STRIKE_LIMIT` lives in RegenerateStage.
- */
-export const CLARIFY_STRIKE_LIMIT = 1;
-
 export interface PlanStageInput {
   execution: ConversationExecutionContext;
   state: SugarAgentProviderState;
@@ -161,7 +149,10 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       hasQuestWorldContext,
       hasScriptedFollowup,
       npcDisplayName: input.execution.selection.npcDisplayName,
-      history: input.state.history
+      history: input.state.history,
+      recoveryStrategies: input.state.persona?.recoveryStrategies ?? [],
+      consecutiveClarifyTurns: input.state.consecutiveClarifyTurns,
+      recoveryTurnCount: input.state.recoveryTurnCount
     });
     responseIntent = decision.responseIntent;
 
@@ -185,6 +176,9 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       ...(decision.unknownNamedEntities
         ? { unknownNamedEntities: decision.unknownNamedEntities }
         : {}),
+      ...(decision.recoveryStrategy
+        ? { recoveryStrategy: decision.recoveryStrategy }
+        : {}),
       responseIntent,
       responseGoal: decision.responseGoal,
       responseSpecificity: decision.responseSpecificity,
@@ -206,6 +200,9 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       output,
       diagnostics: createDiagnostics(this.stageId, startedAt, "ok", {
         responseIntent: output.responseIntent,
+        // Which move fired, so prod telemetry can answer "did she change the
+        // subject or walk off" without a repro.
+        recoveryStrategy: output.recoveryStrategy ?? null,
         responseSpecificity: output.responseSpecificity,
         turnPath: output.turnPath,
         queryType: input.interpret.queryType,

@@ -52,7 +52,8 @@ function baseContext(
       ],
       coreKnowledge: [
         { heading: "Work", slug: "work", content: "Runs the bakery on the square." }
-      ]
+      ],
+      recoverySections: []
     },
     personaDigest: "Warm, brisk, proud.\nVoice: Short sentences; says 'love'.",
     constraintReminder: "",
@@ -185,7 +186,8 @@ describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
         personaCard: [
           { heading: "Persona", slug: "persona", content: "Warm." }
         ],
-        coreKnowledge: []
+        coreKnowledge: [],
+      recoverySections: []
       }
     });
     const { systemPrompt } = buildGeneratePrompt(ctx);
@@ -459,7 +461,7 @@ describe("buildGeneratePrompt — no-lore description fallback", () => {
   it("injects npcDescription as identity anchor when persona card and core knowledge are empty", () => {
     const { systemPrompt } = buildGeneratePrompt(
       baseContext({
-        persona: { personaCard: [], coreKnowledge: [] },
+        persona: { personaCard: [], coreKnowledge: [], recoverySections: [] },
         npcDescription: "A stressed passenger worried about lost luggage."
       })
     );
@@ -478,7 +480,7 @@ describe("buildGeneratePrompt — no-lore description fallback", () => {
   it("does not inject npcDescription when npcDescription is null", () => {
     const { systemPrompt } = buildGeneratePrompt(
       baseContext({
-        persona: { personaCard: [], coreKnowledge: [] },
+        persona: { personaCard: [], coreKnowledge: [], recoverySections: [] },
         npcDescription: null
       })
     );

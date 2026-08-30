@@ -5,11 +5,25 @@ import type {
   PlanResult,
   SugarAgentSessionHistoryEntry
 } from "../types";
+import type { RecoveryStrategy } from "../../../../deployment/gateway/lore-designation";
+
+/**
+ * How many times in a row an NPC may ask what the player meant. One: the
+ * player gets a second try at saying it, which for a language learner is the
+ * point. After that, asking again cannot succeed -- the NPC has nothing to
+ * answer from -- so the character does something else instead.
+ *
+ * Lives here, with `resolvePlanDecision`, because that is what reads it. The
+ * way `JUDGE_FAILURE_STRIKE_LIMIT` lives in RegenerateStage.
+ */
+export const CLARIFY_STRIKE_LIMIT = 1;
 
 export interface PlanDecision {
   responseIntent: PlanResult["responseIntent"];
   /** Present only when the abstain is caused by an unrecognised name (#184). */
   unknownNamedEntities?: string[];
+  /** Present only on a `recover` turn: which move the character makes. */
+  recoveryStrategy?: RecoveryStrategy;
   responseSpecificity: PlanResult["responseSpecificity"];
   responseGoal: string;
   initiativeAction: PlanResult["initiativeAction"];
@@ -140,10 +154,52 @@ export function findUnrecognisedNames(
   return [...new Set(unrecognised)];
 }
 
+/**
+ * The move a character with no `## Recovery` section makes. It keeps the
+ * conversation open and hands a confused learner more target-language speech,
+ * where a curt exit would generalise the bug this epic is fixing.
+ */
+const DEFAULT_RECOVERY_STRATEGY: RecoveryStrategy = "self-disclosure";
+
+/**
+ * Which move this recovery turn makes. The list is walked in the order it was
+ * written and wraps, so a character with three moves uses all three across a
+ * conversation instead of repeating the first.
+ *
+ * Deterministic on purpose: the same conversation behaves the same way twice,
+ * and a test can say which move turn three makes.
+ */
+function selectRecoveryStrategy(
+  strategies: readonly RecoveryStrategy[],
+  recoveryTurnCount: number
+): RecoveryStrategy {
+  if (strategies.length === 0) return DEFAULT_RECOVERY_STRATEGY;
+  return strategies[recoveryTurnCount % strategies.length]!;
+}
+
+/** What the writer is asked to do on each recovery move. */
+const RECOVERY_GOAL_BY_STRATEGY: Record<RecoveryStrategy, string> = {
+  "curt-exit":
+    "You are done with this exchange. End it in your own voice and leave. Do not ask a question, and do not invite them to continue.",
+  "change-subject":
+    "Stop trying to work out what they meant. Turn the conversation to something else you care about, in your own voice.",
+  joke: "Treat what they said as a joke and answer it as one, in your own voice. Do not ask what they meant.",
+  "playful-probe":
+    "Guess at what they might have meant and offer it lightly, as teasing rather than interrogation. They must not need to answer.",
+  "self-disclosure":
+    "Say something about yourself, your work, or where you are standing. Give them something to react to instead of a question to answer."
+};
+
 function resolveResponseGoal(
   responseIntent: PlanResult["responseIntent"],
-  unknownNamedEntities: string[] = []
+  unknownNamedEntities: string[] = [],
+  recoveryStrategy?: RecoveryStrategy
 ): string {
+  // The goal on a recovery turn is the move, not the intent -- five moves, five
+  // different things to ask the writer for.
+  if (responseIntent === "recover" && recoveryStrategy) {
+    return RECOVERY_GOAL_BY_STRATEGY[recoveryStrategy];
+  }
   // Refusing because a name is unrecognised is a different refusal from
   // refusing for want of context, and the reply reads differently: "never heard
   // of it" instead of "tell me more". Naming the thing is what stops the NPC
@@ -166,16 +222,28 @@ function resolveResponseGoal(
     goodbye: "Close the interaction cleanly and in character.",
     clarify: "Ask a concise clarifying question before committing to a grounded answer.",
     abstain:
-      "State clearly that there is not enough grounded information to answer yet and invite the player to provide more context."
+      "State clearly that there is not enough grounded information to answer yet and invite the player to provide more context.",
+    // Only reached when a recovery turn somehow carries no strategy, which the
+    // planner does not produce -- an empty list falls back to self-disclosure.
+    recover: RECOVERY_GOAL_BY_STRATEGY["self-disclosure"]
   };
   return responseGoalByIntent[responseIntent];
 }
 
 function resolveInitiativeAction(
   responseIntent: PlanResult["responseIntent"],
-  shouldCloseAfterReply: boolean
+  shouldCloseAfterReply: boolean,
+  recoveryStrategy?: RecoveryStrategy
 ): PlanResult["initiativeAction"] {
   if (shouldCloseAfterReply || responseIntent === "goodbye") return "close";
+  // A curt exit is the one recovery move that ends the conversation. The rest
+  // hand the turn back to the player like any ordinary reply. This chain has no
+  // exhaustiveness check, so a new intent lands on `player_respond` silently --
+  // which is why the close case is written out rather than left to fall
+  // through.
+  if (responseIntent === "recover") {
+    return recoveryStrategy === "curt-exit" ? "close" : "player_respond";
+  }
   if (responseIntent === "clarify") return "clarify";
   if (responseIntent === "abstain") return "abstain";
   if (responseIntent === "greet") return "npc_initiate";
@@ -232,6 +300,23 @@ export function resolvePlanDecision(input: {
   hasScriptedFollowup: boolean;
   npcDisplayName: string | null | undefined;
   history: SugarAgentSessionHistoryEntry[];
+  /**
+   * The moves this character can make when it does not understand the player,
+   * from its `## Recovery` section. Empty for a character nobody has written
+   * one for, which falls back to `self-disclosure`.
+   */
+  recoveryStrategies?: readonly RecoveryStrategy[];
+  /**
+   * How many clarifying questions this NPC has asked in a row already. At the
+   * limit the next one becomes a recovery move instead.
+   */
+  consecutiveClarifyTurns?: number;
+  /**
+   * How many recovery moves this conversation has already made. Indexes the
+   * list so a character with several works through them in written order
+   * rather than repeating the first forever.
+   */
+  recoveryTurnCount?: number;
 }): PlanDecision {
   const noveltyState = computePlanNoveltyState(
     input.history,
@@ -334,11 +419,43 @@ export function resolvePlanDecision(input: {
       input.hasEvidence || memoryGrounds || personaGrounds ? "answer" : "abstain";
   }
 
+  // ONE CLARIFYING QUESTION, THEN THE CHARACTER DOES SOMETHING.
+  //
+  // Placed after the whole ladder rather than inside the `unclear` branch, so
+  // all three routes to `clarify` are capped by the same rule -- including the
+  // one derived from the NPC's own previous reply (`pendingExpectation`), which
+  // would otherwise re-arm every time a recovery move happened to contain the
+  // word "which" and give an endless clarify / recover alternation.
+  //
+  // On an `unclear` turn with no evidence the NPC has nothing to answer from,
+  // so asking again cannot succeed. Asking once is deliberate: it gives a
+  // language learner a second try at saying it.
+  let recoveryStrategy: RecoveryStrategy | undefined;
+  if (
+    responseIntent === "clarify" &&
+    (input.consecutiveClarifyTurns ?? 0) >= CLARIFY_STRIKE_LIMIT
+  ) {
+    recoveryStrategy = selectRecoveryStrategy(
+      input.recoveryStrategies ?? [],
+      input.recoveryTurnCount ?? 0
+    );
+    responseIntent = "recover";
+  }
+
+  // Runs after the cap, and never undoes it. A turn can be both `unclear` and
+  // exhausted, and when it is, the recovery move wins -- turning it back into a
+  // clarifying question is the loop this epic exists to stop.
+  //
+  // `abstain` is exempt too: an NPC that should say "I have never heard of
+  // Brindlebear's Book Emporium" must not change the subject instead, which
+  // would discard the three-site refusal mechanism #184 built for that reply.
   if (
     !input.hasEvidence &&
     noveltyState.exhausted &&
     responseIntent !== "goodbye" &&
-    responseIntent !== "redirect"
+    responseIntent !== "redirect" &&
+    responseIntent !== "abstain" &&
+    responseIntent !== "recover"
   ) {
     responseIntent = "clarify";
   }
@@ -361,16 +478,22 @@ export function resolvePlanDecision(input: {
 
   const initiativeAction = resolveInitiativeAction(
     responseIntent,
-    shouldCloseAfterReply
+    shouldCloseAfterReply,
+    recoveryStrategy
   );
 
   return {
     responseIntent,
     responseSpecificity,
-    responseGoal: resolveResponseGoal(responseIntent, input.unknownNamedEntities ?? []),
+    responseGoal: resolveResponseGoal(
+      responseIntent,
+      input.unknownNamedEntities ?? [],
+      recoveryStrategy
+    ),
     ...(namedSomethingUnreal && responseIntent === "abstain"
       ? { unknownNamedEntities: input.unknownNamedEntities ?? [] }
       : {}),
+    ...(recoveryStrategy ? { recoveryStrategy } : {}),
     initiativeAction,
     replyInputMode: resolveReplyInputMode(initiativeAction),
     replyPlaceholder: resolveReplyPlaceholder(

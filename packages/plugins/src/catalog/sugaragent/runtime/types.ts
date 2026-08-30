@@ -204,13 +204,24 @@ export interface SugarAgentProviderState {
   turnCount: number;
   consecutiveFallbackTurns: number;
   /**
-   * Consecutive turns whose plan chose `clarify`. Separate from
+   * Clarifying questions asked since the last real exchange. Separate from
    * `consecutiveFallbackTurns` because the two answer different questions: a
    * stalled turn means the machinery failed, a clarifying question means it
    * worked and the player was not understood. Read by the Plan stage to cap
    * how many times in a row an NPC may ask.
+   *
+   * A recovery turn HOLDS this rather than clearing it, so a run of confusion
+   * yields one clarifying question however long it lasts. Only a turn that is
+   * neither a clarify nor a recovery clears it -- the player said something
+   * that landed, and the next stretch of confusion earns its own question.
    */
   consecutiveClarifyTurns: number;
+  /**
+   * Recovery moves made this conversation. Indexes the character's
+   * `## Recovery` list so several authored moves are used in turn instead of
+   * the first one repeating.
+   */
+  recoveryTurnCount: number;
   /** Plan 075.2 -- 3-strike governor: consecutive turns where judge failed and regen ran */
   consecutiveJudgeFailures: number;
   closeRequested: boolean;
@@ -376,7 +387,18 @@ export interface PlanResult {
     | "redirect"
     | "goodbye"
     | "clarify"
-    | "abstain";
+    | "abstain"
+    | "recover";
+  /**
+   * Which move a `recover` turn makes, from the NPC's `## Recovery` list.
+   * Absent on every other intent.
+   *
+   * A separate axis from the intent: `recover` says the NPC stopped asking and
+   * did something instead, this says what. Keeping it off `responseIntent`
+   * means the five moves do not each need a goal sentence, an audit cue and an
+   * initiative action of their own.
+   */
+  recoveryStrategy?: RecoveryStrategy;
   responseGoal: string;
   responseSpecificity: "grounded" | "generic-only";
   turnPath: TurnPath;

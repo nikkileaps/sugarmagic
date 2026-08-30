@@ -915,14 +915,29 @@ describe("SugarAgent runtime provider", () => {
     expect((reply?.text ?? "").length).toBeGreaterThan(440);
   });
 
-  // Generation SUCCEEDS on every turn, so nothing degrades and the only thing
-  // repeating is the clarifying question itself. Every other terminal-close
-  // fixture in this file throws on /generate, which reaches the close through
-  // the degraded rung and would pass with or without the change under test.
-  function stubClarifyingGateway(): void {
+  // THE FIVE CONVERSATIONS (#241).
+  //
+  // One test per path in the epic's table, because the alternation defect that
+  // survived three review rounds was invisible to per-claim checks and obvious
+  // the moment anyone wrote a whole conversation down.
+  //
+  // Generation SUCCEEDS on every turn here, so nothing degrades and the only
+  // thing repeating is the misunderstanding. Every other terminal-close fixture
+  // in this file throws on /generate, which reaches the close through the
+  // degraded rung instead.
+  function stubRecoveryGateway(recoveryContent: string | null): {
+    generatePrompts: string[];
+  } {
+    const generatePrompts: string[] = [];
+    const sections = [
+      { heading: "Persona", slug: "persona", content: "Cheese-obsessed and chatty." },
+      ...(recoveryContent
+        ? [{ heading: "Recovery", slug: "recovery", content: recoveryContent }]
+        : [])
+    ];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === "string" ? input : input.toString();
         if (url.endsWith("/api/sugaragent/lore/resolve")) {
           return new Response(
@@ -933,15 +948,9 @@ describe("SugarAgent runtime provider", () => {
                   pageId: "lore.finnick",
                   title: "Finnick",
                   relativePath: "npc/finnick.md",
-                  sectionCount: 1,
+                  sectionCount: sections.length,
                   body: "## Persona\n\nCheese-obsessed and chatty.",
-                  sections: [
-                    {
-                      heading: "Persona",
-                      slug: "persona",
-                      content: "Cheese-obsessed and chatty."
-                    }
-                  ]
+                  sections
                 }
               ],
               missingPageIds: []
@@ -956,9 +965,10 @@ describe("SugarAgent runtime provider", () => {
           });
         }
         if (url.endsWith("/api/sugaragent/generate")) {
+          generatePrompts.push(String(init?.body ?? ""));
           return new Response(
             JSON.stringify({
-              text: "Sorry friend, what do you mean by that?",
+              text: "Well now, that reminds me of a wheel I once aged.",
               requestId: "g"
             }),
             { status: 200, headers: { "content-type": "application/json" } }
@@ -967,11 +977,10 @@ describe("SugarAgent runtime provider", () => {
         throw new Error("Unexpected fetch in test: " + url);
       })
     );
+    return { generatePrompts };
   }
 
-  it("does not end a conversation because the NPC asked what you meant three times", async () => {
-    stubClarifyingGateway();
-
+  async function startFinnick() {
     const host = createConversationHost({
       providers: [resolveSugarAgentProvider()]
     });
@@ -982,65 +991,148 @@ describe("SugarAgent runtime provider", () => {
       interactionMode: "agent",
       lorePageId: "lore.finnick"
     });
+    return host;
+  }
 
-    const replies = [];
-    for (const text of ["qqq zzz", "qqq zzz", "qqq zzz"]) {
-      replies.push(await host.submitInput({ kind: "free_text", text }));
-    }
-
-    // The premise: every turn planned a clarifying question and none stalled.
-    for (const reply of replies) {
-      const stages = reply?.diagnostics?.["stages"] as
-        | Record<string, { payload?: Record<string, unknown> }>
-        | undefined;
-      expect(stages?.["Plan"]?.payload?.["responseIntent"]).toBe("clarify");
-    }
-    expect(replies.at(-1)?.diagnostics).toMatchObject({
-      consecutiveFallbackTurns: 0,
-      consecutiveClarifyTurns: 3
-    });
-
-    // The conversation is still open: no close proposal, no auto-close timer,
-    // and the player can still type.
-    const last = replies.at(-1);
-    expect(last?.text).not.toContain("Let's chat later");
-    expect(
-      last?.proposedActions?.some((proposal) => proposal.kind === "request-close")
-    ).toBe(false);
-    expect(last?.metadata?.["autoCloseAfterMs"]).toBeUndefined();
-    expect(last?.inputMode).toBe("free_text");
-  });
-
-  it("resets the clarify count when the NPC does anything but ask", async () => {
-    stubClarifyingGateway();
-    const host = createConversationHost({
-      providers: [resolveSugarAgentProvider()]
-    });
-    await host.startSession({
-      conversationKind: "free-form",
-      npcDefinitionId: "npc:finnick",
-      npcDisplayName: "Finnick",
-      interactionMode: "agent",
-      lorePageId: "lore.finnick"
-    });
-
-    await host.submitInput({ kind: "free_text", text: "qqq zzz" });
-    const second = await host.submitInput({ kind: "free_text", text: "qqq zzz" });
-    expect(second?.diagnostics).toMatchObject({ consecutiveClarifyTurns: 2 });
-
-    // A greeting takes the social fast path and plans `chat`, not `clarify`.
-    const greeting = await host.submitInput({ kind: "free_text", text: "hello!" });
-    const stages = greeting?.diagnostics?.["stages"] as
+  function planOf(turn: { diagnostics?: Record<string, unknown> } | null) {
+    const stages = turn?.diagnostics?.["stages"] as
       | Record<string, { payload?: Record<string, unknown> }>
       | undefined;
-    expect(stages?.["Plan"]?.payload?.["responseIntent"]).not.toBe("clarify");
-    expect(greeting?.diagnostics).toMatchObject({ consecutiveClarifyTurns: 0 });
+    return stages?.["Plan"]?.payload ?? {};
+  }
+
+  it("conversation 1: one clarifying question, then the character carries it", async () => {
+    const { generatePrompts } = stubRecoveryGateway(
+      "- change-subject -- She tells you how things ought to be done.\n- playful-probe"
+    );
+    const host = await startFinnick();
+
+    const turns = [];
+    for (let i = 0; i < 4; i += 1) {
+      turns.push(await host.submitInput({ kind: "free_text", text: "qqq zzz" }));
+    }
+
+    expect(turns.map((t) => planOf(t)["responseIntent"])).toEqual([
+      "clarify",
+      "recover",
+      "recover",
+      "recover"
+    ]);
+    // The list is walked in written order and wraps, so an authored second
+    // move is actually used instead of the first repeating.
+    expect(turns.map((t) => planOf(t)["recoveryStrategy"])).toEqual([
+      null,
+      "change-subject",
+      "playful-probe",
+      "change-subject"
+    ]);
+    // One question for the whole run of confusion.
+    expect(turns.at(-1)?.diagnostics).toMatchObject({
+      consecutiveClarifyTurns: 1,
+      consecutiveFallbackTurns: 0
+    });
+    // Still open.
+    expect(
+      turns.at(-1)?.proposedActions?.some((p) => p.kind === "request-close")
+    ).toBe(false);
+    expect(turns.at(-1)?.inputMode).toBe("free_text");
+
+    // The move reaches the built prompt, not just PlanResult -- the assertion
+    // `unknownNamedEntities` never had (#244).
+    //
+    // Assert the USER half by name. Checking the whole request body for
+    // "change-subject" passes for the wrong reason: the character's own
+    // `## Recovery` section is in the SYSTEM half and contains that string, so
+    // the check stays green even with nothing carrying the move per turn.
+    const lastRequest = JSON.parse(generatePrompts.at(-1) ?? "{}") as {
+      userPrompt?: string;
+      systemBlocks?: Array<{ text?: string }>;
+    };
+    expect(lastRequest.userPrompt).toContain(
+      "Turn the conversation to something else you care about"
+    );
+    // And the character's own words about recovering ride in the system half,
+    // where they are stable for the session.
+    expect(
+      (lastRequest.systemBlocks ?? []).map((b) => b.text ?? "").join("\n")
+    ).toContain("how things ought to be done");
+  });
+
+  it("conversation 2: a brusque character leaves, and the panel closes", async () => {
+    stubRecoveryGateway("- curt-exit -- He has cheese to attend to.");
+    const host = await startFinnick();
+
+    await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+    const exit = await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+
+    expect(planOf(exit)["responseIntent"]).toBe("recover");
+    expect(planOf(exit)["recoveryStrategy"]).toBe("curt-exit");
+    expect(
+      exit?.proposedActions?.some((p) => p.kind === "request-close")
+    ).toBe(true);
+    expect(exit?.metadata?.["autoCloseAfterMs"]).toBe(2200);
+    // Never the shared farewell line.
+    expect(exit?.text).not.toContain("We'll speak again");
+    expect(exit?.text).not.toContain("Let's chat later");
+  });
+
+  it("conversation 3: a character with no list talks about itself, and never leaves", async () => {
+    stubRecoveryGateway(null);
+    const host = await startFinnick();
+
+    const turns = [];
+    for (let i = 0; i < 3; i += 1) {
+      turns.push(await host.submitInput({ kind: "free_text", text: "qqq zzz" }));
+    }
+
+    expect(turns.map((t) => planOf(t)["recoveryStrategy"])).toEqual([
+      null,
+      "self-disclosure",
+      "self-disclosure"
+    ]);
+    expect(
+      turns.at(-1)?.proposedActions?.some((p) => p.kind === "request-close")
+    ).toBe(false);
+  });
+
+  it("conversation 4: a real exchange clears the slate, so later confusion earns a question again", async () => {
+    stubRecoveryGateway("- change-subject");
+    const host = await startFinnick();
+
+    await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+    await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+
+    // Something that lands: a greeting takes the social fast path and plans
+    // `chat`, which is neither a clarify nor a recovery.
+    const landed = await host.submitInput({ kind: "free_text", text: "hello!" });
+    expect(planOf(landed)["responseIntent"]).not.toBe("clarify");
+    expect(planOf(landed)["responseIntent"]).not.toBe("recover");
+    expect(landed?.diagnostics).toMatchObject({ consecutiveClarifyTurns: 0 });
+
+    // Confused again, and owed a question rather than being recovered at.
+    const confusedAgain = await host.submitInput({
+      kind: "free_text",
+      text: "hjkl"
+    });
+    expect(planOf(confusedAgain)["responseIntent"]).toBe("clarify");
+  });
+
+  it("a recovery turn is never generic-only, so it cannot feed the outage counter", async () => {
+    stubRecoveryGateway("- change-subject");
+    const host = await startFinnick();
+
+    await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+    const recovery = await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+
+    expect(planOf(recovery)["responseSpecificity"]).toBe("grounded");
+    expect(recovery?.diagnostics).toMatchObject({ consecutiveFallbackTurns: 0 });
   });
 
   it("resets the clarify count on a pre-placement turn, where the reply is not the planner's", async () => {
-    stubClarifyingGateway();
+    stubRecoveryGateway("- change-subject");
     // Sugarlang's pre-placement opening line makes GenerateStage return a
-    // complete envelope, so whatever Plan chose the NPC did not ask anything.
+    // complete envelope, so whatever Plan chose the NPC neither asked nor
+    // recovered.
     const injectOnCue: ConversationMiddleware = {
       middlewareId: "test.pre-placement",
       displayName: "test pre-placement",
@@ -1097,9 +1189,6 @@ describe("SugarAgent runtime provider", () => {
     });
 
     await host.submitInput({ kind: "free_text", text: "qqq zzz" });
-    const second = await host.submitInput({ kind: "free_text", text: "qqq zzz" });
-    expect(second?.diagnostics).toMatchObject({ consecutiveClarifyTurns: 2 });
-
     const override = await host.submitInput({
       kind: "free_text",
       text: "placement"

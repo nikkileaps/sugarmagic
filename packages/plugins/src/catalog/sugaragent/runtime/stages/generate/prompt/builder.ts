@@ -114,6 +114,7 @@ function buildStableSystemLines(
   const voiceSections =
     context.persona?.personaCard.filter((s) => s.slug === "voice") ?? [];
   const coreSections = context.persona?.coreKnowledge ?? [];
+  const recoverySections = context.persona?.recoverySections ?? [];
 
   // Voice directive prefers an authored `## Voice` section (D5); the plugin-wide
   // `tone` config is the game-level fallback.
@@ -165,6 +166,17 @@ function buildStableSystemLines(
     // loaded once); empty on a first meeting. Slots after core knowledge and
     // before the voice directive so the cached-half stays stable.
     fact(context.memoryDigest ? context.memoryDigest : null),
+
+    // 4c. Recovery brief (## Recovery) -- what this character does when it
+    // cannot understand the player. An INSTRUCTION, not a fact: it is a brief
+    // for the writer, and as a fact the judge would be handed the character's
+    // list of moves as though it were something true about the world. Session
+    // stable, so it belongs in the cached half.
+    instruction(
+      recoverySections.length > 0
+        ? `When you cannot understand the player:\n${renderSections(recoverySections)}`
+        : null
+    ),
 
     // 5. Voice directive -- authored ## Voice wins, else game tone. HOW the
     // character speaks is a fact the judge needs to score IN-CHARACTER; the
@@ -359,6 +371,15 @@ function buildAgentPrompt(context: AgentPromptContext): GeneratePromptResult {
     instruction(
       context.responseIntent === "chat"
         ? "Respond as natural in-character social speech. Warmth is allowed. Do not turn a social reply into a factual worldbuilding answer."
+        : null
+    ),
+
+    // The character has already asked once and got nowhere. `Goal:` above says
+    // what this particular move is; this says what all of them have in common,
+    // which is that asking again is off the table.
+    instruction(
+      context.responseIntent === "recover"
+        ? "You have already asked once what they meant and it did not land. Do not ask again, and do not say you did not understand. Make the move above, in your own voice, and carry the conversation yourself."
         : null
     ),
 

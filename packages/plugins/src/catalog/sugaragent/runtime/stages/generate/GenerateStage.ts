@@ -337,7 +337,8 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         persona: input.state.persona
           ? {
               personaCard: input.state.persona.personaCard,
-              coreKnowledge: input.state.persona.coreKnowledge
+              coreKnowledge: input.state.persona.coreKnowledge,
+              recoverySections: input.state.persona.recoverySections
             }
           : null,
         // Plan 073.3 — memory digest, loaded once by the memory middleware and
