@@ -171,10 +171,19 @@ const DEFAULT_RECOVERY_STRATEGY: RecoveryStrategy = "self-disclosure";
  */
 function selectRecoveryStrategy(
   strategies: readonly RecoveryStrategy[],
-  recoveryTurnCount: number
+  recoveryTurnCount: number,
+  knowsWhoThePlayerIs: boolean
 ): RecoveryStrategy {
-  if (strategies.length === 0) return DEFAULT_RECOVERY_STRATEGY;
-  return strategies[recoveryTurnCount % strategies.length]!;
+  // A move with nothing behind it is dropped rather than attempted. Gossip
+  // needs someone to gossip about; an NPC that has not been told who it is
+  // talking to would have to make them up, which is the one thing the goal
+  // sentence spends its whole length forbidding. Structure is a better guard
+  // than an instruction.
+  const available = strategies.filter(
+    (strategy) => strategy !== "gossip" || knowsWhoThePlayerIs
+  );
+  if (available.length === 0) return DEFAULT_RECOVERY_STRATEGY;
+  return available[recoveryTurnCount % available.length]!;
 }
 
 /** What the writer is asked to do on each recovery move. */
@@ -187,7 +196,9 @@ const RECOVERY_GOAL_BY_STRATEGY: Record<RecoveryStrategy, string> = {
   "playful-probe":
     "Guess at what they might have meant and offer it lightly, as teasing rather than interrogation. They must not need to answer.",
   "self-disclosure":
-    "Say something about yourself, your work, or where you are standing. Give them something to react to instead of a question to answer."
+    "Say something about yourself, your work, or where you are standing. Give them something to react to instead of a question to answer.",
+  gossip:
+    "Say something about the person you are talking to, drawn ONLY from what you have been told about them above. Do not invent a fact about them, do not guess at their business, and do not claim to have met them before unless you remember it. Being wrong about a person to their face is worse than saying nothing."
 };
 
 function resolveResponseGoal(
@@ -317,6 +328,11 @@ export function resolvePlanDecision(input: {
    * rather than repeating the first forever.
    */
   recoveryTurnCount?: number;
+  /**
+   * Whether the NPC has been told who the player is. Gossip is only offered as
+   * a move when it has somebody to be about.
+   */
+  knowsWhoThePlayerIs?: boolean;
 }): PlanDecision {
   const noveltyState = computePlanNoveltyState(
     input.history,
@@ -437,7 +453,8 @@ export function resolvePlanDecision(input: {
   ) {
     recoveryStrategy = selectRecoveryStrategy(
       input.recoveryStrategies ?? [],
-      input.recoveryTurnCount ?? 0
+      input.recoveryTurnCount ?? 0,
+      Boolean(input.knowsWhoThePlayerIs)
     );
     responseIntent = "recover";
   }
@@ -473,7 +490,8 @@ export function resolvePlanDecision(input: {
   ) {
     recoveryStrategy = selectRecoveryStrategy(
       input.recoveryStrategies ?? [],
-      input.recoveryTurnCount ?? 0
+      input.recoveryTurnCount ?? 0,
+      Boolean(input.knowsWhoThePlayerIs)
     );
     responseIntent = "recover";
   }

@@ -86,7 +86,8 @@ export const RECOVERY_STRATEGIES = [
   "change-subject",
   "joke",
   "playful-probe",
-  "self-disclosure"
+  "self-disclosure",
+  "gossip"
 ] as const;
 
 export type RecoveryStrategy = (typeof RECOVERY_STRATEGIES)[number];

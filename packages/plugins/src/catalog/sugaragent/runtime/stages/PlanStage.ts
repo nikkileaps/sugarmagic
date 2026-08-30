@@ -152,7 +152,8 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       history: input.state.history,
       recoveryStrategies: input.state.persona?.recoveryStrategies ?? [],
       consecutiveClarifyTurns: input.state.consecutiveClarifyTurns,
-      recoveryTurnCount: input.state.recoveryTurnCount
+      recoveryTurnCount: input.state.recoveryTurnCount,
+      knowsWhoThePlayerIs: Boolean(input.state.playerIdentity)
     });
     responseIntent = decision.responseIntent;
 

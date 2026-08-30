@@ -515,3 +515,68 @@ describe("resolvePlanDecision -- going in circles (#242)", () => {
     expect(goodbye.responseIntent).toBe("goodbye");
   });
 });
+
+describe("resolvePlanDecision -- gossip (#249)", () => {
+  type PlanInput = Parameters<typeof resolvePlanDecision>[0];
+  const circling = [
+    { role: "assistant" as const, text: "I'm listening." },
+    { role: "user" as const, text: "wakka wakka" },
+    { role: "assistant" as const, text: "I'm listening." },
+    { role: "user" as const, text: "wakka wakka" }
+  ];
+  function turn(overrides: Partial<PlanInput> = {}) {
+    return resolvePlanDecision({
+      interpret: baseInterpret({ userText: "wakka wakka" }),
+      hasEvidence: false,
+      hasMemory: false,
+      hasActiveQuest: false,
+      hasScriptedFollowup: false,
+      npcDisplayName: "Finnick",
+      history: circling,
+      ...overrides
+    });
+  }
+
+  it("gossips when the NPC has been told who the player is", () => {
+    const decision = turn({
+      recoveryStrategies: ["gossip"],
+      knowsWhoThePlayerIs: true
+    });
+    expect(decision.recoveryStrategy).toBe("gossip");
+    expect(decision.responseGoal).toContain("person you are talking to");
+    expect(decision.responseGoal).toContain("Do not invent");
+  });
+
+  it("drops gossip from the menu when it would have to invent a person", () => {
+    const decision = turn({
+      recoveryStrategies: ["gossip", "change-subject"],
+      knowsWhoThePlayerIs: false
+    });
+    expect(decision.recoveryStrategy).toBe("change-subject");
+  });
+
+  it("falls back to self-disclosure when gossip was the only move", () => {
+    const decision = turn({
+      recoveryStrategies: ["gossip"],
+      knowsWhoThePlayerIs: false
+    });
+    expect(decision.recoveryStrategy).toBe("self-disclosure");
+  });
+
+  it("keeps rotating over the moves that remain", () => {
+    const list: ("gossip" | "change-subject" | "joke")[] = [
+      "gossip",
+      "change-subject",
+      "joke"
+    ];
+    const picks = [0, 1, 2].map(
+      (n) =>
+        turn({
+          recoveryStrategies: list,
+          knowsWhoThePlayerIs: false,
+          recoveryTurnCount: n
+        }).recoveryStrategy
+    );
+    expect(picks).toEqual(["change-subject", "joke", "change-subject"]);
+  });
+});

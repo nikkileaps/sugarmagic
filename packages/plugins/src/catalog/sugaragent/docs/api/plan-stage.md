@@ -85,6 +85,11 @@ order and wrapping, so several authored moves are used in turn. A character with
 no section gets `self-disclosure` -- never `curt-exit`, which would make every
 unwritten character walk away.
 
+A move with nothing behind it is dropped from the menu before selection rather
+than attempted. Today that is `gossip`, which is about the player and so needs
+the project to have said who the player is. A character whose whole list is
+unavailable falls to `self-disclosure`.
+
 ## Step 4 -- one override, for going in circles
 
     if there is no evidence AND the conversation is repeating itself

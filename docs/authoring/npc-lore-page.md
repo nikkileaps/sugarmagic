@@ -39,7 +39,7 @@ knowledge; it just yields no entries.
 
 ## `## Recovery` -- what this character does when it does not understand you
 
-An entry is a list item whose first word is one of five moves. Anything after
+An entry is a list item whose first word is one of six moves. Anything after
 that word is prose for the writer, and the whole section reaches the prompt as
 a brief -- so say why the move fits this character, in their terms.
 
@@ -51,10 +51,17 @@ a brief -- so say why the move fits this character, in their terms.
 - playful-probe
 ```
 
-The five moves: `curt-exit`, `change-subject`, `joke`, `playful-probe`,
-`self-disclosure`. A line naming anything else is ignored, and the lore reader
-says so -- the warning shows in Studio's SugarAgent panel, naming the page and
-the word it did not know.
+The six moves: `curt-exit`, `change-subject`, `joke`, `playful-probe`,
+`self-disclosure`, `gossip`.
+
+A line naming anything else is ignored, and the lore reader says so -- the
+warning shows in Studio's SugarAgent panel, naming the page and the word it did
+not know.
+
+`gossip` says something about the player, and is only offered when the game has
+been told who the player is (Design > Player > Lore Page ID). A character whose
+list is only `gossip`, in a project with no player page set, talks about itself
+instead. It will not invent a person to have opinions about.
 
 A character with no `## Recovery` section falls back to talking about itself.
 That is deliberate: it keeps the conversation open and gives a confused learner
@@ -141,7 +148,8 @@ and treated as `hard`.
 - Only an **exact** reserved word counts. `## Persona` is the card;
   `## Persona and Backstory` (slug `persona-and-backstory`) is core knowledge.
   `## Secrets` is hidden; `## Secret` (singular) is not -- it is core knowledge.
-- Reserved slugs: `persona`, `voice` (persona card); `secrets` (excluded).
+- Reserved slugs: `persona`, `voice` (persona card); `secrets` and `recovery`
+  (withheld).
 - Content before the first heading becomes an implicit `Overview` section and
   lands in **core knowledge**.
 
