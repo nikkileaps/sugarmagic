@@ -28,7 +28,7 @@ import {
   parseRelationshipEntries,
   type DesignatableLoreSection
 } from "./lore-designation";
-import { readLorePages } from "./core";
+import { readLorePages, splitLoreSections } from "./core";
 
 function section(
   slug: string,
@@ -516,5 +516,22 @@ describe("relationships sections", () => {
     expect(
       findRelationshipEntry(entries, { pageId: "lore.entities.npcs.mim", title: "Mim" })
     ).toBeNull();
+  });
+});
+
+describe("splitLoreSections drops the rule between sections", () => {
+  it("strips a trailing --- so it does not ride into the prompt", () => {
+    const [summary] = splitLoreSections(
+      ["## Summary", "", "Mim is a history mage.", "", "---", "", "## Voice", "", "Dry."].join("\n")
+    );
+    expect(summary?.content).toBe("Mim is a history mage.");
+  });
+
+  it("leaves a rule the author put mid-section alone", () => {
+    const [only] = splitLoreSections(
+      ["## Notes", "", "Before.", "", "---", "", "After."].join("\n")
+    );
+    expect(only?.content).toContain("---");
+    expect(only?.content).toContain("After.");
   });
 });

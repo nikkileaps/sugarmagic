@@ -614,6 +614,19 @@ export function readCanonLevel(
   return "hard";
 }
 
+/**
+ * Drop a horizontal rule sitting at the end of a section.
+ *
+ * Some pages separate their sections with `---`, which lands in the preceding
+ * section's text and then travels: into the prompt, and into the chunk's
+ * embedding text. It is furniture between headings, never something the author
+ * meant an NPC to read. A rule in the MIDDLE of a section is left alone -- that
+ * one is a divider somebody wrote on purpose.
+ */
+function stripTrailingRule(content: string): string {
+  return content.replace(/(?:\n\s*(?:-{3,}|\*{3,}|_{3,})\s*)+$/, "").trim();
+}
+
 export function splitLoreSections(markdown: string): LoreSection[] {
   const lines = markdown.split("\n");
   const sections: LoreSection[] = [];
@@ -626,7 +639,7 @@ export function splitLoreSections(markdown: string): LoreSection[] {
   for (const line of lines) {
     const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line.trim());
     if (headingMatch) {
-      const content = current.contentLines.join("\n").trim();
+      const content = stripTrailingRule(current.contentLines.join("\n"));
       if (content) {
         sections.push({
           heading: current.heading,
@@ -645,7 +658,7 @@ export function splitLoreSections(markdown: string): LoreSection[] {
     current.contentLines.push(line);
   }
 
-  const trailingContent = current.contentLines.join("\n").trim();
+  const trailingContent = stripTrailingRule(current.contentLines.join("\n"));
   if (trailingContent) {
     sections.push({
       heading: current.heading,
