@@ -438,3 +438,80 @@ describe("findUnrecognisedNames -- a capital owed to position is not a name (#18
     expect(findUnrecognisedNames("Buenas tardes! Hola Finnick!", CORPUS)).toEqual([]);
   });
 });
+
+describe("resolvePlanDecision -- going in circles (#242)", () => {
+  // `exhausted` needs BOTH halves: the player repeating themselves verbatim,
+  // and two of the NPC's last three replies collapsing to one string. Measured
+  // live: only the deterministic canned path produces the second half.
+  const circling = [
+    { role: "assistant" as const, text: "I'm listening." },
+    { role: "user" as const, text: "wakka wakka" },
+    { role: "assistant" as const, text: "I'm listening." },
+    { role: "user" as const, text: "wakka wakka" }
+  ];
+
+  type PlanInput = Parameters<typeof resolvePlanDecision>[0];
+
+  function circlingTurn(overrides: Partial<PlanInput> = {}) {
+    return resolvePlanDecision({
+      interpret: baseInterpret({ userText: "wakka wakka" }),
+      hasEvidence: false,
+      hasMemory: false,
+      hasActiveQuest: false,
+      hasScriptedFollowup: false,
+      npcDisplayName: "Nobody",
+      history: circling,
+      ...overrides
+    });
+  }
+
+  it("talks about itself instead of asking what the player meant", () => {
+    const decision = circlingTurn();
+    expect(decision.noveltyState.exhausted).toBe(true);
+    expect(decision.responseIntent).toBe("recover");
+    expect(decision.recoveryStrategy).toBe("self-disclosure");
+  });
+
+  it("still reaches the writer rather than the canned short-circuit", () => {
+    // Guards a property this change must not lose, NOT one it adds: the
+    // outgoing `clarify` was already grounded, because only greet, chat and
+    // answer can be generic-only. Passes before and after by design.
+    expect(circlingTurn().responseSpecificity).toBe("grounded");
+  });
+
+  it("uses the character's own move when one is authored", () => {
+    const decision = circlingTurn({
+      recoveryStrategies: ["change-subject", "joke"],
+      recoveryTurnCount: 1
+    });
+    expect(decision.recoveryStrategy).toBe("joke");
+  });
+
+  it("never converts a refusal -- 'I have never heard of it' survives", () => {
+    const decision = circlingTurn({
+      interpret: baseInterpret({
+        userText: "wakka wakka",
+        interpretation: {
+          ...baseInterpret().interpretation,
+          intent: "lore_world"
+        },
+        turnRouting: {
+          path: "grounded",
+          socialFastPathEligible: false,
+          factualRiskSignals: []
+        }
+      }),
+      unknownNamedEntities: ["Brindlebear's Book Emporium"]
+    });
+    expect(decision.noveltyState.exhausted).toBe(true);
+    expect(decision.responseIntent).toBe("abstain");
+    expect(decision.recoveryStrategy).toBeUndefined();
+  });
+
+  it("leaves goodbye and redirect alone", () => {
+    const goodbye = circlingTurn({
+      interpret: baseInterpret({ userText: "wakka wakka", shouldCloseAfterReply: true })
+    });
+    expect(goodbye.responseIntent).toBe("goodbye");
+  });
+});

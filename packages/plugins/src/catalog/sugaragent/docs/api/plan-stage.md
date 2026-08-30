@@ -89,16 +89,30 @@ unwritten character walk away.
 
     if there is no evidence AND the conversation is repeating itself
        AND the reply is not already GOODBYE, REDIRECT, ABSTAIN or RECOVER
-           -> force CLARIFY
+           -> RECOVER, using the same move selection as step 3
 
 This is about repetition, not knowledge, which is why it ignores everything
 step 2 decided.
 
 It runs after the cap and never undoes it. A turn can be both unclear and
-repeating; when it is, the recovery move wins, because turning it back into a
-clarifying question is the loop this whole design removes. ABSTAIN is exempt for
-a different reason: an NPC that should say "I have never heard of Brindlebear's
-Book Emporium" must not change the subject instead.
+repeating; when it is, the move chosen in step 3 wins, because turning it back
+into a clarifying question is the loop this whole design removes. ABSTAIN is
+exempt for a different reason: an NPC that should say "I have never heard of
+Brindlebear's Book Emporium" must not change the subject instead.
+
+**When this can fire, measured.** "Repeating itself" needs both halves: the
+player repeating their message word for word, AND two of the NPC's last three
+replies collapsing to one string. A generated reply is never byte-identical to
+an earlier one, so the second half only happens when the NPC is already on the
+deterministic canned path -- no lore page, no evidence. Driven against a live
+gateway on 2026-08-30, an NPC with a page never triggered it across six
+identical player turns; an NPC without one triggered it on the fourth.
+
+So this branch only ever affects characters nobody has written a page for. What
+it changes is what the interrupting turn says: it stops asking a player who is
+plainly out of words to supply more, and hands them something to react to. It
+does not fix the underlying repetition -- the following turn returns to the
+canned path.
 
 ## Step 5 -- decide how specific the reply may be
 

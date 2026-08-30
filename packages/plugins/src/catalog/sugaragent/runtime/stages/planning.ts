@@ -442,13 +442,27 @@ export function resolvePlanDecision(input: {
     responseIntent = "recover";
   }
 
-  // Runs after the cap, and never undoes it. A turn can be both `unclear` and
-  // exhausted, and when it is, the recovery move wins -- turning it back into a
-  // clarifying question is the loop this epic exists to stop.
+  // GOING IN CIRCLES: TALK ABOUT YOURSELF, DO NOT ASK.
   //
-  // `abstain` is exempt too: an NPC that should say "I have never heard of
-  // Brindlebear's Book Emporium" must not change the subject instead, which
-  // would discard the three-site refusal mechanism #184 built for that reply.
+  // Runs after the cap and never undoes it. A turn can be both `unclear` and
+  // circling, and when it is, the move chosen above wins -- turning it back
+  // into a question is the loop this epic exists to stop.
+  //
+  // `abstain` is exempt for a different reason: an NPC that should say "I have
+  // never heard of Brindlebear's Book Emporium" must not change the subject
+  // instead, which would discard the three-site refusal mechanism #184 built
+  // for that reply.
+  //
+  // Measured before this changed (2026-08-30, live gateway): `exhausted` needs
+  // two of the NPC's last three replies to be byte-identical, which a generated
+  // reply never is. It fires only when the NPC is already stuck on the
+  // deterministic canned path -- no page, no evidence -- so this branch never
+  // touches a character anyone has written a lore page for.
+  //
+  // What changes is only what the interrupting turn SAYS. Both `clarify` and
+  // `recover` are grounded, so both already reached the writer; the difference
+  // is that one asked a player who is plainly out of words to supply more, and
+  // the other hands them something to react to.
   if (
     !input.hasEvidence &&
     noveltyState.exhausted &&
@@ -457,7 +471,11 @@ export function resolvePlanDecision(input: {
     responseIntent !== "abstain" &&
     responseIntent !== "recover"
   ) {
-    responseIntent = "clarify";
+    recoveryStrategy = selectRecoveryStrategy(
+      input.recoveryStrategies ?? [],
+      input.recoveryTurnCount ?? 0
+    );
+    responseIntent = "recover";
   }
 
   // Plan 073.3 / 077.1 -- memoryGrounds and questGrounds are grounding sources
