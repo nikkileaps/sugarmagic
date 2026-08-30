@@ -414,6 +414,22 @@ export function usePlayerWorkspaceView(
                   })
                 }
               />
+              <TextInput
+                label="Lore Page ID"
+                size="xs"
+                description="Wiki page for the character the player is playing. NPCs read it to know who they are talking to."
+                placeholder="lore.entities.characters.mim"
+                value={playerDefinition.lorePageId ?? ""}
+                onChange={(event) =>
+                  updatePlayerDefinition({
+                    ...playerDefinition,
+                    lorePageId:
+                      event.currentTarget.value.trim().length > 0
+                        ? event.currentTarget.value.trim()
+                        : null
+                  })
+                }
+              />
             </Stack>
 
             <Stack gap="xs">

@@ -341,6 +341,7 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
               recoverySections: input.state.persona.recoverySections
             }
           : null,
+        playerIdentity: input.state.playerIdentity ?? null,
         // Plan 073.3 — memory digest, loaded once by the memory middleware and
         // memoized in execution.state; slots into the byte-stable system half.
         memoryDigest:

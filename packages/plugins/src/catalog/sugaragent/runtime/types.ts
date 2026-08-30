@@ -222,6 +222,13 @@ export interface SugarAgentProviderState {
    * the first one repeating.
    */
   recoveryTurnCount: number;
+  /**
+   * Who the player is, from the `## Summary` of the character page the project
+   * points at. Loaded once at session start. `null` means no page, no summary,
+   * or the fetch failed -- the NPC talks to a stranger, as it always did.
+   * `undefined` means the load has not run yet.
+   */
+  playerIdentity?: string | null;
   /** Plan 075.2 -- 3-strike governor: consecutive turns where judge failed and regen ran */
   consecutiveJudgeFailures: number;
   closeRequested: boolean;

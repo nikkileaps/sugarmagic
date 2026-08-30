@@ -512,13 +512,16 @@ export function createConversationSelectionFromNpc(options: {
   metadata?: Record<string, unknown>;
   /** A quest-set override of the NPC's authored mode, or null. */
   interactionModeOverride?: NPCInteractionMode | null;
+  /** The page for the character the player is playing, from PlayerDefinition. */
+  playerLorePageId?: string | null;
 }): ConversationSelectionContext | null {
   const {
     npcDefinition,
     dialogueDefinitionId = null,
     trackedQuest = null,
     metadata,
-    interactionModeOverride = null
+    interactionModeOverride = null,
+    playerLorePageId = null
   } = options;
   const selectionMetadata = cloneSelectionMetadata({
     selectionMetadata: metadata,
@@ -555,6 +558,7 @@ export function createConversationSelectionFromNpc(options: {
     npcDescription: npcDefinition.description ?? null,
     interactionMode,
     lorePageId: npcDefinition.lorePageId,
+    playerLorePageId,
     activeQuest: toActiveQuestContext(trackedQuest),
     scriptedFollowupDialogueDefinitionId: dialogueDefinitionId,
     ...(selectionMetadata ? { metadata: selectionMetadata } : {})
@@ -1331,7 +1335,8 @@ export function createRuntimeGameplaySessionController(
       const selection = createConversationSelectionFromNpc({
         npcDefinition,
         interactionModeOverride: getNpcInteractionModeOverride(npcDefinitionId),
-        dialogueDefinitionId
+        dialogueDefinitionId,
+        playerLorePageId: playerDefinition.lorePageId
       });
       if (!selection) {
         return null;
@@ -1354,7 +1359,8 @@ export function createRuntimeGameplaySessionController(
       npcDefinition,
       interactionModeOverride: getNpcInteractionModeOverride(npcDefinitionId),
       dialogueDefinitionId,
-      trackedQuest
+      trackedQuest,
+      playerLorePageId: playerDefinition.lorePageId
     });
     if (!selection) {
       return null;

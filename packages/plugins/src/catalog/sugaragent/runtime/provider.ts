@@ -248,6 +248,7 @@ function resolveProviders(
   judgeProvider: JudgeProvider | null;
   vectorStoreProvider: VectorStoreProvider | null;
   personaLoader: PersonaLoader;
+  lorePageResolver: LorePageResolver;
 } {
   const baseUrl = config.proxyBaseUrl.trim();
   // Story 47.9.5 — token source depends on gateway auth mode:
@@ -282,7 +283,10 @@ function resolveProviders(
     vectorStoreProvider: createSugarAgentVectorStoreProvider(config),
     personaLoader: new SugarAgentGatewayPersonaProvider(
       new SugarAgentGatewayLoreClient(baseUrl, getBearerToken)
-    )
+    ),
+    // Same factory the quest-context middleware is given, so page fetching has
+    // one construction site rather than two that can drift.
+    lorePageResolver: createSugarAgentLorePageResolver(config)
   };
 }
 
@@ -352,6 +356,57 @@ async function loadPersonaOnce(args: {
     fallbackReason: state.persona.fallbackReason,
     personaSectionCount: state.persona.personaCard.length,
     coreSectionCount: state.persona.coreKnowledge.length
+  });
+}
+
+/**
+ * The one section of a player's page an NPC is given. A character page carries
+ * material for two different readers, and only this part is something another
+ * person could plausibly have heard.
+ */
+const PLAYER_SUMMARY_SECTION_SLUG = "summary";
+
+/**
+ * Who the player is, read once at session start from the character page the
+ * project points `PlayerDefinition.lorePageId` at.
+ *
+ * Only `## Summary` is taken. The rest of a player page is written for whoever
+ * writes that character -- habits, blind spots, notes on what not to invent --
+ * and handing an NPC that material would tell it things no character could
+ * know. The summary is the part another person could plausibly have heard.
+ *
+ * Never throws. No page, no summary, or an unreachable gateway all mean the
+ * same thing to a conversation: the NPC simply does not know who it is talking
+ * to, which is where every NPC stood before this existed.
+ */
+async function loadPlayerIdentityOnce(args: {
+  lorePageResolver: LorePageResolver;
+  playerLorePageId: string | null;
+  state: SugarAgentProviderState;
+  logger: SugarAgentLogger;
+}): Promise<void> {
+  const { lorePageResolver, playerLorePageId, state, logger } = args;
+  if (state.playerIdentity !== undefined) return;
+  state.playerIdentity = null;
+
+  const pageId = playerLorePageId?.trim() ?? "";
+  if (!pageId) return;
+
+  try {
+    const [page] = await lorePageResolver.resolvePages([pageId]);
+    const summary = page?.sections.find(
+      (section) => section.slug === PLAYER_SUMMARY_SECTION_SLUG
+    );
+    state.playerIdentity = summary?.content.trim() || null;
+  } catch (error) {
+    logger.logPluginEvent("player-identity-load-failed", {
+      pageId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+  logger.logPluginEvent("player-identity-loaded", {
+    pageId,
+    loaded: state.playerIdentity !== null
   });
 }
 
@@ -603,7 +658,13 @@ export function createSugarAgentConversationProvider(
   // (mandatory) proxyBaseUrl, which pinned logging always-on and made the
   // setting a no-op. Now stage logging + the prompt dump follow the flag.
   const logger = createSugarAgentLogger(config.debugLogging);
-  const { llmProvider, judgeProvider, vectorStoreProvider, personaLoader } = resolveProviders(
+  const {
+    llmProvider,
+    judgeProvider,
+    vectorStoreProvider,
+    personaLoader,
+    lorePageResolver
+  } = resolveProviders(
     config,
     logger
   );
@@ -647,6 +708,15 @@ export function createSugarAgentConversationProvider(
       await loadPersonaOnce({
         personaLoader,
         lorePageId: context.selection.lorePageId ?? null,
+        state,
+        logger
+      });
+
+      // Who the NPC is talking to. Same once-per-conversation shape, and just
+      // as optional -- a project that points at nothing keeps working.
+      await loadPlayerIdentityOnce({
+        lorePageResolver,
+        playerLorePageId: context.selection.playerLorePageId ?? null,
         state,
         logger
       });

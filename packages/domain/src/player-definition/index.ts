@@ -36,6 +36,16 @@ export interface PlayerPresentationProfile {
 export interface PlayerDefinition {
   definitionId: string;
   displayName: string;
+  /**
+   * The lore wiki page for the character the player is playing, so NPCs can
+   * know who they are talking to. Null when none is set, which reads to the
+   * runtime the same way an NPC without a page does: quietly, with less.
+   *
+   * The wiki describes a world and does not know a game exists, so the page it
+   * points at is an ordinary character page. This field is where the
+   * game-specific fact -- that this is the one the player controls -- lives.
+   */
+  lorePageId: string | null;
   physicalProfile: PlayerPhysicalProfile;
   movementProfile: PlayerMovementProfile;
   casterProfile: PlayerCasterProfile;
@@ -83,6 +93,7 @@ export function createDefaultPlayerDefinition(
     definitionId:
       options.definitionId ?? `${projectId}:player:default`,
     displayName: options.displayName ?? "Player",
+    lorePageId: null,
     physicalProfile: { ...DEFAULT_PLAYER_PHYSICAL_PROFILE },
     movementProfile: { ...DEFAULT_PLAYER_MOVEMENT_PROFILE },
     casterProfile: {
@@ -110,6 +121,13 @@ export function normalizePlayerDefinition(
   return {
     definitionId: playerDefinition.definitionId ?? defaultDefinition.definitionId,
     displayName: playerDefinition.displayName ?? defaultDefinition.displayName,
+    // Same trim-or-null shape NPCDefinition uses, so a blank box in the
+    // workspace and an absent field in an older project mean the same thing.
+    lorePageId:
+      typeof playerDefinition.lorePageId === "string" &&
+      playerDefinition.lorePageId.trim().length > 0
+        ? playerDefinition.lorePageId.trim()
+        : null,
     physicalProfile: {
       ...defaultDefinition.physicalProfile,
       ...(playerDefinition.physicalProfile ?? {})

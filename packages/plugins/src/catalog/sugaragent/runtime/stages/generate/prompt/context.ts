@@ -38,6 +38,17 @@ export interface BasePromptContext {
   /** Parent area display name (e.g. "Station" containing "Courtyard"). */
   currentParentAreaDisplayName: string | null;
 
+  /**
+   * Who the player is -- the `## Summary` of the character page the project
+   * points at, loaded once at session start. Null when no page is set or it
+   * had no summary, which reads as "you do not know this person".
+   *
+   * A FACT, not an instruction: it is true in the world, the NPC could
+   * plausibly have heard it, and the judge needs it or it scores the NPC
+   * saying "you're the history mage" as an invention.
+   */
+  playerIdentity: string | null;
+
   /** Player-NPC spatial relationship. */
   npcPlayerRelation: {
     proximityBand: string;

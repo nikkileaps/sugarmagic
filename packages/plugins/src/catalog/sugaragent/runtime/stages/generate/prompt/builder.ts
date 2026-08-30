@@ -161,6 +161,16 @@ function buildStableSystemLines(
         : null
     ),
 
+    // 4a2. Who you are talking to. Session-stable, so it belongs in the cached
+    // half beside core knowledge. Only the player page's summary reaches here;
+    // the rest of that page is written for whoever writes the player, and an
+    // NPC handed it would know things nobody could have told it.
+    fact(
+      context.playerIdentity
+        ? `Who you are talking to:\n${context.playerIdentity}`
+        : null
+    ),
+
     // 4b. Memory (Plan 073.3, D4) -- what you remember about THIS player from
     // earlier conversations. Byte-stable within a session (the record is
     // loaded once); empty on a first meeting. Slots after core knowledge and
