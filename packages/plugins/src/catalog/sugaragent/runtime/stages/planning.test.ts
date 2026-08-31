@@ -508,11 +508,32 @@ describe("resolvePlanDecision -- going in circles (#242)", () => {
     expect(decision.recoveryStrategy).toBeUndefined();
   });
 
-  it("leaves goodbye and redirect alone", () => {
+  it("leaves goodbye alone", () => {
     const goodbye = circlingTurn({
       interpret: baseInterpret({ userText: "wakka wakka", shouldCloseAfterReply: true })
     });
     expect(goodbye.responseIntent).toBe("goodbye");
+  });
+
+  it("leaves redirect alone", () => {
+    // quest_guidance with an active quest resolves to `redirect` in the ladder.
+    const redirect = circlingTurn({
+      interpret: baseInterpret({
+        userText: "wakka wakka",
+        interpretation: {
+          ...baseInterpret().interpretation,
+          intent: "quest_guidance"
+        },
+        turnRouting: {
+          path: "grounded",
+          socialFastPathEligible: false,
+          factualRiskSignals: []
+        }
+      }),
+      hasActiveQuest: true
+    });
+    expect(redirect.responseIntent).toBe("redirect");
+    expect(redirect.recoveryStrategy).toBeUndefined();
   });
 });
 

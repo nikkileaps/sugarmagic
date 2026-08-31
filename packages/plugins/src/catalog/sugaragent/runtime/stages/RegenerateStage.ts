@@ -90,6 +90,9 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
       const fallbackText = normalizeNpcSpeech(buildFallbackReply({
         interpret: input.interpret,
         responseIntent: input.plan.responseIntent,
+        ...(input.plan.recoveryStrategy
+          ? { recoveryStrategy: input.plan.recoveryStrategy }
+          : {}),
         activeQuestDisplayName
       }));
       return {
@@ -160,6 +163,9 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
       const fallbackText = normalizeNpcSpeech(buildFallbackReply({
         interpret: input.interpret,
         responseIntent: input.plan.responseIntent,
+        ...(input.plan.recoveryStrategy
+          ? { recoveryStrategy: input.plan.recoveryStrategy }
+          : {}),
         activeQuestDisplayName
       }));
       return {
@@ -191,6 +197,9 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
       const fallbackText = normalizeNpcSpeech(buildFallbackReply({
         interpret: input.interpret,
         responseIntent: input.plan.responseIntent,
+        ...(input.plan.recoveryStrategy
+          ? { recoveryStrategy: input.plan.recoveryStrategy }
+          : {}),
         activeQuestDisplayName
       }));
       return {
@@ -290,6 +299,9 @@ export class RegenerateStage implements TurnStage<RegenerateStageInput, RepairRe
     const fallbackText = normalizeNpcSpeech(buildFallbackReply({
       interpret: input.interpret,
       responseIntent: input.plan.responseIntent,
+      ...(input.plan.recoveryStrategy
+        ? { recoveryStrategy: input.plan.recoveryStrategy }
+        : {}),
       activeQuestDisplayName
     }));
     return {

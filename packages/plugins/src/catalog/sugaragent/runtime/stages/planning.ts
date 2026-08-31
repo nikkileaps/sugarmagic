@@ -206,8 +206,8 @@ function resolveResponseGoal(
   unknownNamedEntities: string[] = [],
   recoveryStrategy?: RecoveryStrategy
 ): string {
-  // The goal on a recovery turn is the move, not the intent -- five moves, five
-  // different things to ask the writer for.
+  // The goal on a recovery turn is the move, not the intent -- one instruction
+  // per move, rather than one for the whole intent.
   if (responseIntent === "recover" && recoveryStrategy) {
     return RECOVERY_GOAL_BY_STRATEGY[recoveryStrategy];
   }

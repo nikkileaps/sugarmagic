@@ -453,6 +453,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           text = normalizeNpcSpeech(buildFallbackReply({
             interpret: input.interpret,
             responseIntent: input.plan.responseIntent,
+            ...(input.plan.recoveryStrategy
+              ? { recoveryStrategy: input.plan.recoveryStrategy }
+              : {}),
             activeQuestDisplayName
           }));
         }
@@ -463,6 +466,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       text = normalizeNpcSpeech(buildFallbackReply({
         interpret: input.interpret,
         responseIntent: input.plan.responseIntent,
+        ...(input.plan.recoveryStrategy
+          ? { recoveryStrategy: input.plan.recoveryStrategy }
+          : {}),
         activeQuestDisplayName
       }));
     }
