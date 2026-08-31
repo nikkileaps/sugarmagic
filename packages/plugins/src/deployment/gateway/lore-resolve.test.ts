@@ -58,7 +58,6 @@ interface ResolvedPage {
   sectionCount: number;
   body: string;
   sections: Array<{ heading: string; slug: string; content: string }>;
-  recoverySections?: Array<{ heading: string; slug: string; content: string }>;
 }
 interface ResolveResponse {
   ok: boolean;
@@ -195,21 +194,14 @@ describe("lore/resolve excludes ## Secrets (Plan 072.2)", () => {
     expect(page.sectionCount).toBe(2);
   });
 
-  it("moves ## Recovery off sections onto its own field", async () => {
+  it("keeps a leftover ## Recovery section on sections like any other", async () => {
     seedLore();
     const out = await resolve(["lore.npc.penelope"]);
     const page = out.pages.find((p) => p.pageId === "lore.npc.penelope")!;
-    // Recovery leaves `sections` entirely: sugarlang's scene compiler reads
-    // that array as well as `body`, so a brief left in it would be tokenized
-    // into scene vocabulary. It travels on its own field instead, which only
-    // the conversation runtime reads.
-    expect(page.sections.map((s) => s.slug)).toEqual(["persona"]);
-    expect(page.recoverySections?.map((s) => s.slug)).toEqual(["recovery"]);
-    expect(page.sectionCount).toBe(1);
-    // `body` feeds sugarlang's scene lexicon, which has no business with it.
-    expect(page.body).not.toContain("RECOVERYWORD_WREN");
-    expect(JSON.stringify(page.sections)).not.toContain("RECOVERYWORD_WREN");
-    expect(page.body).not.toContain("Recovery");
+    // The heading is no longer reserved -- recovery strategies are authored on
+    // the NPC -- so the section travels as ordinary core knowledge.
+    expect(page.sections.map((s) => s.slug)).toEqual(["persona", "recovery"]);
+    expect(page.sectionCount).toBe(2);
     expect(page.body).toContain("Refined and theatrical.");
   });
 

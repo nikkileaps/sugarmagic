@@ -150,7 +150,9 @@ export class PlanStage implements TurnStage<PlanStageInput, PlanResult> {
       hasScriptedFollowup,
       npcDisplayName: input.execution.selection.npcDisplayName,
       history: input.state.history,
-      recoveryStrategies: input.state.persona?.recoveryStrategies ?? [],
+      recoveryStrategies: (
+        input.execution.selection.recoveryStrategies ?? []
+      ).map((entry) => entry.strategy),
       consecutiveClarifyTurns: input.state.consecutiveClarifyTurns,
       recoveryTurnCount: input.state.recoveryTurnCount,
       knowsWhoThePlayerIs: Boolean(input.state.playerIdentity)

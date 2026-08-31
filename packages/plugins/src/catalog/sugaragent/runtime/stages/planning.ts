@@ -5,7 +5,7 @@ import type {
   PlanResult,
   SugarAgentSessionHistoryEntry
 } from "../types";
-import type { RecoveryStrategy } from "../../../../deployment/gateway/lore-designation";
+import type { RecoveryStrategy } from "@sugarmagic/domain";
 
 /**
  * How many times in a row an NPC may ask what the player meant. One: the

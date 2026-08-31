@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createPluginConfigurationRecord } from "@sugarmagic/domain";
+import {
+  createPluginConfigurationRecord,
+  type NPCRecoveryStrategy
+} from "@sugarmagic/domain";
 import {
   createRuntimePluginInstances,
   getDiscoveredPluginDefinition,
@@ -925,18 +928,13 @@ describe("SugarAgent runtime provider", () => {
   // thing repeating is the misunderstanding. Every other terminal-close fixture
   // in this file throws on /generate, which reaches the close through the
   // degraded rung instead.
-  function stubRecoveryGateway(recoveryContent: string | null): {
+  function stubRecoveryGateway(): {
     generatePrompts: string[];
   } {
     const generatePrompts: string[] = [];
     const sections = [
       { heading: "Persona", slug: "persona", content: "Cheese-obsessed and chatty." }
     ];
-    // Recovery rides on its own field, the way the resolve route delivers it --
-    // off `sections`, where sugarlang's scene compiler would tokenize it.
-    const recoverySections = recoveryContent
-      ? [{ heading: "Recovery", slug: "recovery", content: recoveryContent }]
-      : [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -952,8 +950,7 @@ describe("SugarAgent runtime provider", () => {
                   relativePath: "npc/finnick.md",
                   sectionCount: sections.length,
                   body: "## Persona\n\nCheese-obsessed and chatty.",
-                  sections,
-                  recoverySections
+                  sections
                 }
               ],
               missingPageIds: []
@@ -983,7 +980,7 @@ describe("SugarAgent runtime provider", () => {
     return { generatePrompts };
   }
 
-  async function startFinnick() {
+  async function startFinnick(recoveryStrategies: NPCRecoveryStrategy[] = []) {
     const host = createConversationHost({
       providers: [resolveSugarAgentProvider()]
     });
@@ -992,7 +989,8 @@ describe("SugarAgent runtime provider", () => {
       npcDefinitionId: "npc:finnick",
       npcDisplayName: "Finnick",
       interactionMode: "agent",
-      lorePageId: "lore.finnick"
+      lorePageId: "lore.finnick",
+      recoveryStrategies
     });
     return host;
   }
@@ -1005,10 +1003,14 @@ describe("SugarAgent runtime provider", () => {
   }
 
   it("conversation 1: one clarifying question, then the character carries it", async () => {
-    const { generatePrompts } = stubRecoveryGateway(
-      "- change-subject -- She tells you how things ought to be done.\n- playful-probe"
-    );
-    const host = await startFinnick();
+    const { generatePrompts } = stubRecoveryGateway();
+    const host = await startFinnick([
+      {
+        strategy: "change-subject",
+        note: "She tells you how things ought to be done."
+      },
+      { strategy: "playful-probe", note: "" }
+    ]);
 
     const turns = [];
     for (let i = 0; i < 4; i += 1) {
@@ -1044,9 +1046,9 @@ describe("SugarAgent runtime provider", () => {
     // `unknownNamedEntities` never had (#244).
     //
     // Assert the USER half by name. Checking the whole request body for
-    // "change-subject" passes for the wrong reason: the character's own
-    // `## Recovery` section is in the SYSTEM half and contains that string, so
-    // the check stays green even with nothing carrying the move per turn.
+    // "change-subject" passes for the wrong reason: the recovery brief is in
+    // the SYSTEM half and contains that string, so the check stays green even
+    // with nothing carrying the strategy per turn.
     const lastRequest = JSON.parse(generatePrompts.at(-1) ?? "{}") as {
       userPrompt?: string;
       systemBlocks?: Array<{ text?: string }>;
@@ -1054,16 +1056,18 @@ describe("SugarAgent runtime provider", () => {
     expect(lastRequest.userPrompt).toContain(
       "Turn the conversation to something else you care about"
     );
-    // And the character's own words about recovering ride in the system half,
-    // where they are stable for the session.
+    // And the writer's note rides in the system half, where it is stable for
+    // the session.
     expect(
       (lastRequest.systemBlocks ?? []).map((b) => b.text ?? "").join("\n")
     ).toContain("how things ought to be done");
   });
 
   it("conversation 2: a brusque character leaves, and the panel closes", async () => {
-    stubRecoveryGateway("- curt-exit -- He has cheese to attend to.");
-    const host = await startFinnick();
+    stubRecoveryGateway();
+    const host = await startFinnick([
+      { strategy: "curt-exit", note: "He has cheese to attend to." }
+    ]);
 
     await host.submitInput({ kind: "free_text", text: "qqq zzz" });
     const exit = await host.submitInput({ kind: "free_text", text: "qqq zzz" });
@@ -1080,7 +1084,7 @@ describe("SugarAgent runtime provider", () => {
   });
 
   it("conversation 3: a character with no list talks about itself, and never leaves", async () => {
-    stubRecoveryGateway(null);
+    stubRecoveryGateway();
     const host = await startFinnick();
 
     const turns = [];
@@ -1099,8 +1103,10 @@ describe("SugarAgent runtime provider", () => {
   });
 
   it("conversation 4: a real exchange clears the slate, so later confusion earns a question again", async () => {
-    stubRecoveryGateway("- change-subject");
-    const host = await startFinnick();
+    stubRecoveryGateway();
+    const host = await startFinnick([
+      { strategy: "change-subject", note: "" }
+    ]);
 
     await host.submitInput({ kind: "free_text", text: "qqq zzz" });
     await host.submitInput({ kind: "free_text", text: "qqq zzz" });
@@ -1121,8 +1127,10 @@ describe("SugarAgent runtime provider", () => {
   });
 
   it("a recovery turn is never generic-only, so it cannot feed the outage counter", async () => {
-    stubRecoveryGateway("- change-subject");
-    const host = await startFinnick();
+    stubRecoveryGateway();
+    const host = await startFinnick([
+      { strategy: "change-subject", note: "" }
+    ]);
 
     await host.submitInput({ kind: "free_text", text: "qqq zzz" });
     const recovery = await host.submitInput({ kind: "free_text", text: "qqq zzz" });
@@ -1132,7 +1140,7 @@ describe("SugarAgent runtime provider", () => {
   });
 
   it("resets the clarify count on a pre-placement turn, where the reply is not the planner's", async () => {
-    stubRecoveryGateway("- change-subject");
+    stubRecoveryGateway();
     // Sugarlang's pre-placement opening line makes GenerateStage return a
     // complete envelope, so whatever Plan chose the NPC neither asked nor
     // recovered.

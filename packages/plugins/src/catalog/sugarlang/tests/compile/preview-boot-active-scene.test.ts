@@ -38,6 +38,7 @@ const CHEESE_NPC: NPCDefinition = {
     "A traveling cheesemonger obsessed with cheese. He judges every town by its cheese.",
   interactionMode: "agent",
   lorePageId: null,
+  recoveryStrategies: [],
   presentation: {
     modelAssetDefinitionId: null,
     modelHeight: 1.7,

@@ -2,7 +2,8 @@ import type {
   DialogueCondition,
   DialogueDefinition,
   DialogueEdgeDefinition,
-  DialogueNodeDefinition
+  DialogueNodeDefinition,
+  NPCRecoveryStrategy
 } from "@sugarmagic/domain";
 import type {
   EntityCurrentAreaFact,
@@ -52,6 +53,12 @@ export interface ConversationSelectionContext {
    * NPC's own page.
    */
   playerLorePageId?: string | null;
+  /**
+   * What this NPC does when it cannot understand the player, in the order it
+   * reaches for them. Authored on the NPC, so it travels with the project
+   * rather than being fetched.
+   */
+  recoveryStrategies?: NPCRecoveryStrategy[];
   activeQuest?: ConversationActiveQuestContext | null;
   scriptedFollowupDialogueDefinitionId?: string | null;
   targetLanguage?: string | null;

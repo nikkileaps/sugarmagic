@@ -104,6 +104,7 @@ describe("projectSceneContextSources (Plan 090.1)", () => {
           description: "A cheesemonger, forever waiting on a late shipment.",
           interactionMode: "agent",
           lorePageId: null,
+          recoveryStrategies: [],
           presentation: {} as never
         }
       ]
@@ -131,6 +132,7 @@ describe("projectSceneContextSources (Plan 090.1)", () => {
           description: "Stands in another region entirely.",
           interactionMode: "agent",
           lorePageId: null,
+          recoveryStrategies: [],
           presentation: {} as never
         }
       ]

@@ -163,6 +163,7 @@ describe("flushSceneContext", () => {
             description: "Completely different bio now.",
             interactionMode: "agent",
             lorePageId: null,
+            recoveryStrategies: [],
             presentation: {} as never
           }
         ]

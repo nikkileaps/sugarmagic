@@ -264,6 +264,7 @@ export function createTestSceneAuthoringContext(
         description: "Station manager of Wordlark Hollow.",
         interactionMode: "agent",
         lorePageId: "doc-npc",
+        recoveryStrategies: [],
         presentation: {
           modelAssetDefinitionId: null,
           modelHeight: 1.7,

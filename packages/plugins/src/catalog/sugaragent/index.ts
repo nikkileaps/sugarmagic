@@ -2,7 +2,9 @@ import {
   createDeploymentRequirementId,
   type DeploymentRequirement
 } from "@sugarmagic/domain";
+import { createElement } from "react";
 import { BindableTelemetryCollector } from "@sugarmagic/runtime-core";
+import { RecoveryStrategiesSection } from "./ui/RecoveryStrategiesSection";
 import type { DiscoveredPluginDefinition } from "../../sdk";
 import {
   createSugarAgentConversationProvider,
@@ -699,6 +701,22 @@ export const pluginDefinition: DiscoveredPluginDefinition = {
         label: "SugarAgent",
         icon: "🧠",
         summary: "Configure runtime backends and diagnostics for agentified NPC conversations."
+      }
+    ],
+    designSections: [
+      {
+        pluginId: SUGARAGENT_PLUGIN_ID,
+        workspaceKind: "npcs",
+        sectionId: "recovery-strategies",
+        label: "Recovery",
+        summary: "What this NPC does when it cannot understand the player.",
+        render: (props) =>
+          props.selectedNPC && props.updateNPC
+            ? createElement(RecoveryStrategiesSection, {
+                selectedNPC: props.selectedNPC,
+                updateNPC: props.updateNPC
+              })
+            : null
       }
     ]
   }

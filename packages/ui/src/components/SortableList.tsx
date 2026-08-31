@@ -40,6 +40,9 @@ export interface SortableListProps<T extends SortableListItem> {
   renderLeading?: (item: T, index: number) => ReactNode;
   renderLabel?: (item: T, index: number) => ReactNode;
   renderItem?: (item: T, index: number) => ReactNode;
+  /** Row controls, placed left of the drag handle. Use for an action a caller
+   *  wants visible rather than behind the right-click menu. */
+  renderActions?: (item: T, index: number) => ReactNode;
 }
 
 export function SortableList<T extends SortableListItem>({
@@ -56,7 +59,8 @@ export function SortableList<T extends SortableListItem>({
   canToggleItem,
   renderLeading,
   renderLabel,
-  renderItem
+  renderItem,
+  renderActions
 }: SortableListProps<T>) {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -192,6 +196,7 @@ export function SortableList<T extends SortableListItem>({
                 </Stack>
               </Group>
               <Group gap={4} wrap="nowrap">
+                {renderActions ? renderActions(item, index) : null}
                 <ActionIcon
                   size="sm"
                   variant="subtle"

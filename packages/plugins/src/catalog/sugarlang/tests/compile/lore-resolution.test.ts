@@ -66,6 +66,7 @@ describe("resolveSceneAuthoringContexts", () => {
               description: "Station manager of Wordlark Hollow.",
               interactionMode: "agent",
               lorePageId: "lore.entities.npcs.orrin",
+              recoveryStrategies: [],
               presentation: {
                 modelAssetDefinitionId: null,
                 modelHeight: 1.7,

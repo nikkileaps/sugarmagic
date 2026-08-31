@@ -33,6 +33,45 @@ export const NPC_ANIMATION_SLOT_LABELS: Record<NPCAnimationSlot, string> = {
 };
 export type NPCInteractionMode = "scripted" | "agent";
 
+/**
+ * What an NPC does when it cannot understand the player.
+ *
+ * The list is closed: an author picks from these six rather than typing a
+ * word, so nothing downstream has to decide what an unrecognized one means.
+ */
+export const RECOVERY_STRATEGIES = [
+  "curt-exit",
+  "change-subject",
+  "joke",
+  "playful-probe",
+  "self-disclosure",
+  "gossip"
+] as const;
+
+export type RecoveryStrategy = (typeof RECOVERY_STRATEGIES)[number];
+
+const RECOVERY_STRATEGY_SET: ReadonlySet<string> = new Set(RECOVERY_STRATEGIES);
+
+/** [LAW:parse-dont-validate] The one place an unknown word becomes a known
+ *  strategy. Callers take `RecoveryStrategy` and never re-check. */
+export function isRecoveryStrategy(value: unknown): value is RecoveryStrategy {
+  return typeof value === "string" && RECOVERY_STRATEGY_SET.has(value);
+}
+
+/**
+ * One authored recovery entry: the strategy and the writer's note about why
+ * it suits this character.
+ *
+ * [LAW:one-source-of-truth] The strategy an NPC reaches for and the prose that
+ * reaches the prompt are two readings of ONE authored entry, not two fields
+ * that can disagree.
+ */
+export interface NPCRecoveryStrategy {
+  strategy: RecoveryStrategy;
+  /** Empty when the author has not written one. */
+  note: string;
+}
+
 /** Where an NPC's effective mode came from. */
 export type NPCInteractionModeTier = "definition" | "quest";
 
@@ -86,6 +125,12 @@ export interface NPCDefinition {
   description?: string;
   interactionMode: NPCInteractionMode;
   lorePageId: string | null;
+  /**
+   * What this NPC does when it cannot understand the player, in the order it
+   * reaches for them. Order is authored order and decides which strategy comes
+   * first. Empty is valid and means the NPC talks about itself.
+   */
+  recoveryStrategies: NPCRecoveryStrategy[];
   // Plugin metadata keys must follow the namespace convention documented in
   // packages/domain/README.md ("Plugin Metadata Convention").
   metadata?: Record<string, unknown>;
@@ -114,6 +159,37 @@ function normalizeNpcMetadata(
   return { ...metadata };
 }
 
+/**
+ * Reads authored recovery entries, dropping anything that is not one of the
+ * six strategies and keeping the first entry when a strategy repeats.
+ *
+ * A project saved before this field existed reads as an empty list, which is
+ * the same as an NPC whose author has not chosen any: it talks about itself.
+ */
+function normalizeRecoveryStrategies(value: unknown): NPCRecoveryStrategy[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seen = new Set<RecoveryStrategy>();
+  const entries: NPCRecoveryStrategy[] = [];
+
+  for (const entry of value) {
+    if (!isMetadataRecord(entry)) continue;
+    const strategy = entry["strategy"];
+    if (!isRecoveryStrategy(strategy) || seen.has(strategy)) continue;
+
+    seen.add(strategy);
+    const note = entry["note"];
+    entries.push({
+      strategy,
+      note: typeof note === "string" ? note.trim() : ""
+    });
+  }
+
+  return entries;
+}
+
 export function createNPCDefinitionId(): string {
   return createUuid();
 }
@@ -131,6 +207,7 @@ export function createDefaultNPCDefinition(
     description: options.description,
     interactionMode: "scripted",
     lorePageId: null,
+    recoveryStrategies: [],
     presentation: {
       modelAssetDefinitionId: null,
       modelHeight: DEFAULT_NPC_MODEL_HEIGHT,
@@ -208,6 +285,9 @@ export function normalizeNPCDefinition(
       npcDefinition.lorePageId.trim().length > 0
         ? npcDefinition.lorePageId.trim()
         : null,
+    recoveryStrategies: normalizeRecoveryStrategies(
+      npcDefinition.recoveryStrategies
+    ),
     ...(normalizedMetadata ? { metadata: normalizedMetadata } : {}),
     presentation: {
       modelAssetDefinitionId:

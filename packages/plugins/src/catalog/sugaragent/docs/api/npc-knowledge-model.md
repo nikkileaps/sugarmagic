@@ -17,39 +17,35 @@ section headings (see `deployment/gateway/lore-designation.ts`):
 | 2. Core knowledge | every other section | same fetch | system prompt (stable) |
 | 3. World lore | the rest of the wiki | per-turn vector search | user message (evidence) |
 
-Two headings are withheld from all three layers — kept out of the persona card,
+One heading is withheld from all three layers — kept out of the persona card,
 out of core knowledge, and out of the ingest chunks / vector index:
 
 - `## Secrets` never leaves the gateway. The minimum-viable secrets invariant;
   quest-stage-gated revelation is a later epic.
-- `## Recovery` lists what the character does when it cannot understand the
-  player. It is a brief for the writer, not something the character knows, so
-  reading it back as core knowledge would have the NPC narrating its own moves.
-  Unlike a secret it does leave the gateway — on its own `recoverySections`
-  field, out of both `body` and `sections`.
 
-  It gets a field rather than a place in `sections` because sugarlang's scene
-  compiler reads that array (`compile/lore-resolution.ts` →
-  `compile/scene-traversal.ts`) and folds every section into the scene's lemma
-  set. A brief left there would put the move names and the writer-facing prose
-  into the vocabulary the game believes the world contains. A separate field
-  means no other consumer has to remember to filter.
+`isSecretSection` (`deployment/gateway/lore-designation.ts`) is that test, and
+it drives both the ingest skip and the `sections` filter on resolve.
 
-`isWithheldSection` (`deployment/gateway/lore-designation.ts`) is the shared
-"not for general consumption" test — it drives the ingest skip and the
-`sections` filter. Where the two withheld kinds diverge, the resolve route asks
-`isSecretSection` and `isRecoverySection` individually, because one is dropped
-and the other is redirected.
+## Recovery strategies are not on the page
+
+What a character does when it cannot understand the player is authored on the
+NPC in Studio (Design > NPCs > Recovery) and saved in the project file, as
+`NPCDefinition.recoveryStrategies`. It is an instruction to the conversation
+pipeline rather than knowledge about the world, so the lore wiki is the wrong
+home for it, and it never reaches ingest or retrieval at all.
+
+The list travels to the provider on `ConversationSelectionContext`, the way the
+NPC's name and lore page id do. `PlanStage` reads the strategy names to choose
+one; the prompt builder renders the same entries — name plus the writer's note
+— as the recovery brief in the system half. One authored list, two readings.
 
 ## Load path (session start)
 
 `SugarAgentGatewayPersonaProvider.loadPersona` (`runtime/clients.ts`) is called
 once from `startSession` before the first turn. It hits the existing gateway
-route `POST /api/sugaragent/lore/resolve` (which drops `## Secrets` outright and
-moves `## Recovery` to `recoverySections`), runs `designateLoreSections` over
-`sections` to split persona card vs core knowledge, reads the moves off
-`recoverySections`, and stores a `LoadedPersona`
-in provider session state. Missing/unfetchable page degrades (never throws):
+route `POST /api/sugaragent/lore/resolve` (which drops `## Secrets`), runs
+`designateLoreSections` over `sections` to split persona card vs core
+knowledge, and stores a `LoadedPersona` in provider session state. Missing/unfetchable page degrades (never throws):
 `loaded: false`, empty layers, `fallbackReason: "persona-unavailable"` — the
 conversation still runs on name + game tone. `degradedPersona` in
 `runtime/clients.ts` is the one builder for that state; the provider's

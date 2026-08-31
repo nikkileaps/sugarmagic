@@ -102,6 +102,7 @@ const TEST_NPC_DEFINITIONS: NPCDefinition[] = [
     description: "Station manager of Wordlark Hollow.",
     interactionMode: "agent",
     lorePageId: null,
+    recoveryStrategies: [],
     presentation: {
       modelAssetDefinitionId: null,
       modelHeight: 1.7,

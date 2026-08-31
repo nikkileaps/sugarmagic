@@ -19,11 +19,7 @@ import {
 import { verifySupabaseJwt } from "./supabase-jwt";
 import {
   composeLoreBody,
-  isRecoverySection,
   isSecretSection,
-  isWithheldSection,
-  parseRecoveryStrategies,
-  RECOVERY_STRATEGIES
 } from "./lore-designation";
 
 // ---------------------------------------------------------------------------
@@ -73,21 +69,6 @@ interface LorePage {
   sectionCount: number;
   body: string;
   sections: LoreSection[];
-  /**
-   * `## Recovery`, carried on its own field rather than mixed into `sections`.
-   *
-   * One consumer needs it -- the conversation runtime, to know what moves a
-   * character has. Every other reader of `sections` must not see it, and
-   * sugarlang's scene compiler reads `sections` as well as `body`
-   * (`compile/lore-resolution.ts`, `compile/scene-traversal.ts`), so leaving it
-   * in the shared bag put the writer's brief and the move names into compiled
-   * scene vocabulary. A separate field means nobody has to remember to filter.
-   *
-   * Absent on a page with no `## Recovery`, and on the internal read path --
-   * `readLorePages` returns whole pages, and only the resolve route splits
-   * them by audience.
-   */
-  recoverySections?: LoreSection[];
 }
 
 interface LoreChunk {
@@ -810,25 +791,6 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
       pageId;
     const sections = splitLoreSections(body);
 
-    for (const section of sections.filter(isRecoverySection)) {
-      // A misspelled move is silent at runtime by design -- the character just
-      // falls back to a default. Say it here instead, where the author is the
-      // one reading.
-      for (const name of parseRecoveryStrategies(section.content).unrecognized) {
-        warnings.push(
-          "Ignored unknown recovery strategy \"" +
-            name +
-            "\" in " +
-            relativePath +
-            " (" +
-            pageId +
-            "). Known strategies: " +
-            RECOVERY_STRATEGIES.join(", ") +
-            "."
-        );
-      }
-    }
-
     pages.push({
       pageId,
       title,
@@ -857,11 +819,9 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
     }
 
     for (const section of sections) {
-      // A withheld section never enters the vector index -- a secret must not
-      // leak through a search hit, and a recovery list is a brief for the
-      // writer rather than something the world knows. Both stay in
-      // `pages[].sections`; only the chunks exclude them.
-      if (isWithheldSection(section)) continue;
+      // A secret never enters the vector index: it must not leak through a
+      // search hit. It stays in `pages[].sections`; only the chunks exclude it.
+      if (isSecretSection(section)) continue;
       const chunkId = pageId + "#" + section.slug;
       const embeddingText = [
         "Page ID: " + pageId,
@@ -2349,38 +2309,28 @@ export async function handleSugarAgentLoreResolve(
       missingPageIds.push(pageId);
       continue;
     }
-    // The two withheld kinds leave by different doors, because their consumers
-    // differ. `## Secrets` must not leave the gateway at all. `## Recovery`
-    // must not reach sugarlang's scene lexicon, which reads `body` -- but it
-    // must reach the conversation runtime, which reads a page only through
-    // `sections`.
+    // `## Secrets` must not leave the gateway at all.
     //
     // DEFERRED (revisit epic C/D): quest-stage-scoped knowledge gating. This
     // exclusion point is the natural gate -- when quest state + memory feed the
     // card fetch, filter sections by story stage here (an NPC knows different
     // things at different points). `## Secrets` is the static precursor of that
     // dynamic gate.
-    // Withheld sections leave `sections` entirely. `## Secrets` goes nowhere;
-    // `## Recovery` moves to its own field, because exactly one consumer wants
-    // it and everyone else reading `sections` would be handed a brief written
-    // for a writer.
     const sections = page.sections.filter(
-      (section) => !isWithheldSection(section)
+      (section) => !isSecretSection(section)
     );
-    const recoverySections = page.sections.filter(isRecoverySection);
     resolvedPages.push({
       pageId: page.pageId,
       title: page.title,
       relativePath: page.relativePath,
       sectionCount: sections.length,
-      // A page with nothing withheld ships its raw markdown untouched;
-      // recomposing would round-trip the author's formatting for no reason.
+      // A page with no secrets ships its raw markdown untouched; recomposing
+      // would round-trip the author's formatting for no reason.
       body:
         sections.length === page.sections.length
           ? page.body
           : composeLoreBody(sections),
-      sections,
-      ...(recoverySections.length > 0 ? { recoverySections } : {})
+      sections
     });
   }
 

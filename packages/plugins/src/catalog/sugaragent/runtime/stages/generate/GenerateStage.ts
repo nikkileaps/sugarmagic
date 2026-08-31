@@ -337,10 +337,12 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         persona: input.state.persona
           ? {
               personaCard: input.state.persona.personaCard,
-              coreKnowledge: input.state.persona.coreKnowledge,
-              recoverySections: input.state.persona.recoverySections
+              coreKnowledge: input.state.persona.coreKnowledge
             }
           : null,
+        // Authored on the NPC, so it is present whether or not a lore page
+        // loaded.
+        recoveryStrategies: input.execution.selection.recoveryStrategies ?? [],
         playerIdentity: input.state.playerIdentity ?? null,
         // Plan 073.3 — memory digest, loaded once by the memory middleware and
         // memoized in execution.state; slots into the byte-stable system half.

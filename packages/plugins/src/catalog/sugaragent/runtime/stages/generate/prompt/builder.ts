@@ -114,7 +114,13 @@ function buildStableSystemLines(
   const voiceSections =
     context.persona?.personaCard.filter((s) => s.slug === "voice") ?? [];
   const coreSections = context.persona?.coreKnowledge ?? [];
-  const recoverySections = context.persona?.recoverySections ?? [];
+  // One line per authored strategy: the name the planner acts on, plus the
+  // writer's note when there is one.
+  const recoveryBrief = context.recoveryStrategies
+    .map((entry) =>
+      entry.note ? `- ${entry.strategy} -- ${entry.note}` : `- ${entry.strategy}`
+    )
+    .join("\n");
 
   // Voice directive prefers an authored `## Voice` section (D5); the plugin-wide
   // `tone` config is the game-level fallback.
@@ -177,14 +183,13 @@ function buildStableSystemLines(
     // before the voice directive so the cached-half stays stable.
     fact(context.memoryDigest ? context.memoryDigest : null),
 
-    // 4c. Recovery brief (## Recovery) -- what this character does when it
-    // cannot understand the player. An INSTRUCTION, not a fact: it is a brief
-    // for the writer, and as a fact the judge would be handed the character's
-    // list of moves as though it were something true about the world. Session
-    // stable, so it belongs in the cached half.
+    // 4c. Recovery brief -- what this character does when it cannot understand
+    // the player. An INSTRUCTION, not a fact: as a fact the judge would be
+    // handed the character's own list as though it were something true about
+    // the world. Session stable, so it belongs in the cached half.
     instruction(
-      recoverySections.length > 0
-        ? `When you cannot understand the player:\n${renderSections(recoverySections)}`
+      recoveryBrief
+        ? `When you cannot understand the player:\n${recoveryBrief}`
         : null
     ),
 
