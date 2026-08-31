@@ -39,6 +39,7 @@ import {
   type SerializedSaveStore
 } from "../save";
 import type { BlackboardFactDefinition, RuntimeBlackboard } from "../state";
+import type { TelemetryCollector } from "../telemetry";
 import type {
   DocumentDefinition,
   DialogueDefinition,
@@ -467,6 +468,16 @@ export interface RuntimePluginContext {
    * across deploys and never update.
    */
   assetSources?: Record<string, string>;
+  /**
+   * Where a plugin sends telemetry. The host owns the transport, so a plugin
+   * emits its own event kinds and knows nothing about batching, auth, or the
+   * route.
+   *
+   * Absent when the host supplies none, in which case a plugin emits through
+   * `createNoOpTelemetryCollector()` rather than branching at every call site.
+   * Emitting must never block or fail a turn.
+   */
+  telemetry?: TelemetryCollector;
   blackboard?: RuntimeBlackboard;
   activeRegion?: RegionDocument | null;
   /** Plan 058 §058.1 — the active narrative Scene whose overlay

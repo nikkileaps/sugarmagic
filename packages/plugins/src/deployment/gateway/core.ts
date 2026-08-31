@@ -2990,29 +2990,30 @@ export async function handleSugarAgentLoreProbe(
   sendJson(res, 200, { ok: true, steps, durationMs });
 }
 
-// Plan 081.2 -- /api/sugarlang/telemetry
+// /api/telemetry -- every runtime system's events arrive here.
 // DEFERRED (081): events land in Cloud Run structured logs via stdout only.
 // BigQuery export is a log-sink config flip on the Cloud Run project; revisit
 // when the first real tuning question needs SQL over months of events.
 
 // Server-side re-strip of player-text PII before events hit stdout/logs.
-// The client (GatewaySugarlangTelemetrySink.stripPii) already strips these;
-// this is a cheap defense-in-depth pass for old or misbehaving clients.
-// Keep in sync with SERVER_BOUND_PII_FIELDS in
-// packages/plugins/src/catalog/sugarlang/runtime/telemetry/telemetry.ts
-// (the gateway compiles standalone and cannot import from that package).
-const SUGARLANG_TELEMETRY_PII_FIELDS = [
+// The client already strips these; this is a cheap defense-in-depth pass for
+// old or misbehaving clients. The list is the union of every producer's PII
+// fields, because the gateway compiles standalone and cannot import the
+// per-producer policies from the plugin packages. Keep in sync with the `pii`
+// options passed to GatewayTelemetryCollector -- sugarlang's are in
+// packages/plugins/src/catalog/sugarlang/runtime/telemetry/telemetry.ts.
+const TELEMETRY_PII_FIELDS = [
   "inputText",
   "originalText",
   "repairedText",
   "playerResponseText"
 ];
 
-function scrubSugarlangTelemetryEvent(event: Record<string, unknown>): void {
-  for (const field of SUGARLANG_TELEMETRY_PII_FIELDS) {
+export function scrubTelemetryEvent(event: Record<string, unknown>): void {
+  for (const field of TELEMETRY_PII_FIELDS) {
     delete event[field];
   }
-  // observe.observations-applied nests player-typed text at
+  // sugarlang's observe.observations-applied nests player-typed text at
   // observations[].observation.inputText.
   const observations = event.observations;
   if (!Array.isArray(observations)) {
@@ -3029,7 +3030,7 @@ function scrubSugarlangTelemetryEvent(event: Record<string, unknown>): void {
   }
 }
 
-async function handleSugarlangTelemetry(
+export async function handleTelemetryIngest(
   req: IncomingMessage,
   res: ServerResponse
 ): Promise<void> {
@@ -3061,7 +3062,7 @@ async function handleSugarlangTelemetry(
   for (let i = 0; i < accepted; i++) {
     const event = events[i];
     if (typeof event === "object" && event !== null) {
-      scrubSugarlangTelemetryEvent(event as Record<string, unknown>);
+      scrubTelemetryEvent(event as Record<string, unknown>);
       process.stdout.write(JSON.stringify(event) + "\n");
     }
   }
@@ -3224,9 +3225,9 @@ export const server = createServer(async (req: GatewayRequest, res: GatewayRespo
       return;
     }
 
-    if (match.routeId === "sugarlang-telemetry" && path === match.path) {
+    if (match.routeId === "telemetry" && path === match.path) {
       logInfo("gateway:dispatch", { routeId: match.routeId, path });
-      await handleSugarlangTelemetry(req, res);
+      await handleTelemetryIngest(req, res);
       return;
     }
 

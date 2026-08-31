@@ -83,6 +83,7 @@ import { verifySupabaseJwt } from "../../plugins/src/deployment/gateway/supabase
 import {
   createRuntimeBootModel,
   createRuntimePluginManager,
+  TELEMETRY_INGEST_ROUTE_PATH,
   type ConversationMiddleware,
   type ConversationProvider
 } from "@sugarmagic/runtime-core";
@@ -616,11 +617,12 @@ describe("plugin infrastructure", () => {
     ]);
   });
 
-  it("serves a proxy route from a plugin that declares no runtime service", () => {
-    // Sugarlang declares a proxy route (its telemetry ingestion path) and no
-    // runtime service. Sugaragent is the only plugin that runs a service, so
-    // it owns the gateway -- and sugarlang's route has to reach that gateway
-    // anyway, or the path is generated into nothing and 404s in the game.
+  it("serves the telemetry route from every gateway, whoever is installed", () => {
+    // Telemetry ingestion belongs to no plugin. The handler is compiled into
+    // every gateway and any runtime system emits through the shared collector,
+    // so the path has to be in the generated route table the running gateway
+    // matches on -- otherwise it is generated into nothing and 404s in the
+    // game, which is how it went unrecorded for nine days once already.
     const plan = planGameDeployment(
       normalizeGameProject({
         ...makeProject(),
@@ -636,22 +638,51 @@ describe("plugin infrastructure", () => {
       (unit) => unit.serviceUnitId === "sugarmagic-gateway"
     );
     expect(gateway).toBeDefined();
-    expect(gateway!.proxyRoutes.map((route) => route.pathHint)).toContain(
-      "/api/sugarlang/telemetry"
-    );
-    expect(gateway!.ownerIds).toContain(SUGARLANG_PLUGIN_ID);
 
-    // And it reaches the generated route table the running gateway matches on.
     const routesFile = plan.managedFiles.find((file) =>
       file.relativePath.endsWith("services/sugarmagic-gateway/routes.json")
     );
     expect(routesFile).toBeDefined();
-    expect(routesFile!.content).toContain("/api/sugarlang/telemetry");
+
+    // THE PATHS MUST AGREE. The planner spells the path here and the browser
+    // builds its URL from TELEMETRY_INGEST_ROUTE_PATH; the planner cannot
+    // import that value across the package alias, so nothing but this holds
+    // them together. A mismatch is invisible in play -- the client posts, the
+    // gateway 404s, the client never reads the status, the events are gone.
+    const routes = (
+      JSON.parse(routesFile!.content) as {
+        routes: Array<{ routeId: string; path: string }>;
+      }
+    ).routes;
+    const telemetryRoute = routes.find((route) => route.routeId === "telemetry");
+    expect(telemetryRoute).toBeDefined();
+    expect(telemetryRoute!.path).toBe(TELEMETRY_INGEST_ROUTE_PATH);
 
     // No route may be left unplaced -- that is the failure this pins.
     expect(
       plan.conflicts.filter((conflict) => conflict.kind === "proxy-route-unplaced")
     ).toEqual([]);
+  });
+
+  it("serves the telemetry route with sugaragent alone, and without sugarlang", () => {
+    // Telemetry is not sugarlang's. A game that teaches no language still
+    // records why its NPCs gave up.
+    const plan = planGameDeployment(
+      normalizeGameProject({
+        ...makeProject(),
+        deployment: { backendDeploymentTargetId: "local" },
+        pluginConfigurations: [
+          createPluginConfigurationRecord(SUGARAGENT_PLUGIN_ID, true)
+        ]
+      })
+    );
+
+    const routesFile = plan.managedFiles.find((file) =>
+      file.relativePath.endsWith("services/sugarmagic-gateway/routes.json")
+    );
+    expect(routesFile).toBeDefined();
+    expect(routesFile!.content).toContain("/api/telemetry");
+    expect(routesFile!.content).not.toContain("/api/sugarlang/telemetry");
   });
 
   it("emits Netlify managed files when the frontend deployment target is selected (story 46.6)", () => {
