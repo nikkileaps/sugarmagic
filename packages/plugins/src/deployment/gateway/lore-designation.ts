@@ -105,13 +105,15 @@ export function isRecoverySection(section: DesignatableLoreSection): boolean {
 }
 
 /**
- * Sections kept out of `body` and out of the vector index. Two reasons, one
- * rule: a secret must never leave the gateway, and a recovery list is a brief
- * for the writer rather than something the character knows.
+ * Sections that never enter the vector index, and never travel on the resolve
+ * route's `sections`. Two reasons, one rule: a secret must never leave the
+ * gateway, and a recovery list is a brief for the writer rather than something
+ * the character knows.
  *
- * [LAW:single-enforcer] Every consumer that withholds a section asks here, so
- * adding a third reserved slug is one edit rather than a hunt through the
- * ingest, resolve and card-fetch paths.
+ * Where the two DIFFER, the resolve route asks the individual predicates
+ * instead: a secret is dropped outright, a recovery section moves to its own
+ * field. So this is the shared "not for general consumption" test, not the only
+ * place either slug is named.
  */
 export function isWithheldSection(section: DesignatableLoreSection): boolean {
   return isSecretSection(section) || isRecoverySection(section);

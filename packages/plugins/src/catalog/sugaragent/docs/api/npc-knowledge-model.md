@@ -25,20 +25,30 @@ out of core knowledge, and out of the ingest chunks / vector index:
 - `## Recovery` lists what the character does when it cannot understand the
   player. It is a brief for the writer, not something the character knows, so
   reading it back as core knowledge would have the NPC narrating its own moves.
-  Unlike a secret it survives on the resolve response's `sections`, which is the
-  only channel the runtime reads a page through; it is stripped from `body`,
-  which is what sugarlang's scene lexicon consumes.
+  Unlike a secret it does leave the gateway — on its own `recoverySections`
+  field, out of both `body` and `sections`.
 
-`isWithheldSection` in `deployment/gateway/lore-designation.ts` is the single
-predicate every exclusion point asks.
+  It gets a field rather than a place in `sections` because sugarlang's scene
+  compiler reads that array (`compile/lore-resolution.ts` →
+  `compile/scene-traversal.ts`) and folds every section into the scene's lemma
+  set. A brief left there would put the move names and the writer-facing prose
+  into the vocabulary the game believes the world contains. A separate field
+  means no other consumer has to remember to filter.
+
+`isWithheldSection` (`deployment/gateway/lore-designation.ts`) is the shared
+"not for general consumption" test — it drives the ingest skip and the
+`sections` filter. Where the two withheld kinds diverge, the resolve route asks
+`isSecretSection` and `isRecoverySection` individually, because one is dropped
+and the other is redirected.
 
 ## Load path (session start)
 
 `SugarAgentGatewayPersonaProvider.loadPersona` (`runtime/clients.ts`) is called
 once from `startSession` before the first turn. It hits the existing gateway
-route `POST /api/sugaragent/lore/resolve` (which strips `## Secrets` outright
-and strips `## Recovery` from `body` only), runs `designateLoreSections` to
-split persona card vs core knowledge vs recovery, and stores a `LoadedPersona`
+route `POST /api/sugaragent/lore/resolve` (which drops `## Secrets` outright and
+moves `## Recovery` to `recoverySections`), runs `designateLoreSections` over
+`sections` to split persona card vs core knowledge, reads the moves off
+`recoverySections`, and stores a `LoadedPersona`
 in provider session state. Missing/unfetchable page degrades (never throws):
 `loaded: false`, empty layers, `fallbackReason: "persona-unavailable"` — the
 conversation still runs on name + game tone. `degradedPersona` in

@@ -930,11 +930,13 @@ describe("SugarAgent runtime provider", () => {
   } {
     const generatePrompts: string[] = [];
     const sections = [
-      { heading: "Persona", slug: "persona", content: "Cheese-obsessed and chatty." },
-      ...(recoveryContent
-        ? [{ heading: "Recovery", slug: "recovery", content: recoveryContent }]
-        : [])
+      { heading: "Persona", slug: "persona", content: "Cheese-obsessed and chatty." }
     ];
+    // Recovery rides on its own field, the way the resolve route delivers it --
+    // off `sections`, where sugarlang's scene compiler would tokenize it.
+    const recoverySections = recoveryContent
+      ? [{ heading: "Recovery", slug: "recovery", content: recoveryContent }]
+      : [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -950,7 +952,8 @@ describe("SugarAgent runtime provider", () => {
                   relativePath: "npc/finnick.md",
                   sectionCount: sections.length,
                   body: "## Persona\n\nCheese-obsessed and chatty.",
-                  sections
+                  sections,
+                  recoverySections
                 }
               ],
               missingPageIds: []

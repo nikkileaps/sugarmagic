@@ -113,7 +113,11 @@ describe("SugarAgentGatewayPersonaProvider.loadPersona (072.3)", () => {
           body: "",
           sections: [
             { heading: "Persona", slug: "persona", content: "Refined." },
-            { heading: "Work", slug: "work", content: "Visits often." },
+            { heading: "Work", slug: "work", content: "Visits often." }
+          ],
+          // Recovery arrives on its own field -- the resolve route keeps it off
+          // `sections` so sugarlang's scene compiler never tokenizes the brief.
+          recoverySections: [
             {
               heading: "Recovery",
               slug: "recovery",

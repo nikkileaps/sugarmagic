@@ -73,6 +73,21 @@ interface LorePage {
   sectionCount: number;
   body: string;
   sections: LoreSection[];
+  /**
+   * `## Recovery`, carried on its own field rather than mixed into `sections`.
+   *
+   * One consumer needs it -- the conversation runtime, to know what moves a
+   * character has. Every other reader of `sections` must not see it, and
+   * sugarlang's scene compiler reads `sections` as well as `body`
+   * (`compile/lore-resolution.ts`, `compile/scene-traversal.ts`), so leaving it
+   * in the shared bag put the writer's brief and the move names into compiled
+   * scene vocabulary. A separate field means nobody has to remember to filter.
+   *
+   * Absent on a page with no `## Recovery`, and on the internal read path --
+   * `readLorePages` returns whole pages, and only the resolve route splits
+   * them by audience.
+   */
+  recoverySections?: LoreSection[];
 }
 
 interface LoreChunk {
@@ -2345,12 +2360,14 @@ export async function handleSugarAgentLoreResolve(
     // card fetch, filter sections by story stage here (an NPC knows different
     // things at different points). `## Secrets` is the static precursor of that
     // dynamic gate.
+    // Withheld sections leave `sections` entirely. `## Secrets` goes nowhere;
+    // `## Recovery` moves to its own field, because exactly one consumer wants
+    // it and everyone else reading `sections` would be handed a brief written
+    // for a writer.
     const sections = page.sections.filter(
-      (section) => !isSecretSection(section)
+      (section) => !isWithheldSection(section)
     );
-    const bodySections = sections.filter(
-      (section) => !isRecoverySection(section)
-    );
+    const recoverySections = page.sections.filter(isRecoverySection);
     resolvedPages.push({
       pageId: page.pageId,
       title: page.title,
@@ -2359,10 +2376,11 @@ export async function handleSugarAgentLoreResolve(
       // A page with nothing withheld ships its raw markdown untouched;
       // recomposing would round-trip the author's formatting for no reason.
       body:
-        bodySections.length === page.sections.length
+        sections.length === page.sections.length
           ? page.body
-          : composeLoreBody(bodySections),
-      sections
+          : composeLoreBody(sections),
+      sections,
+      ...(recoverySections.length > 0 ? { recoverySections } : {})
     });
   }
 

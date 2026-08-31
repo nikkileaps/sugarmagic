@@ -454,6 +454,13 @@ export interface ResolvedLorePage {
   sectionCount: number;
   body: string;
   sections: ResolvedLorePageSection[];
+  /**
+   * `## Recovery`, delivered separately from `sections` so that only the
+   * conversation runtime sees it. Absent when the page has none, and absent
+   * from a gateway that predates the split -- which reads as a character with
+   * no authored moves, the same as not writing the section.
+   */
+  recoverySections?: ResolvedLorePageSection[];
 }
 
 export interface LoreResolveResult {
@@ -584,9 +591,13 @@ export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
       return degradedPersona(trimmed);
     }
     // `page.sections` matches DesignatableLoreSection structurally.
-    const { personaCard, coreKnowledge, recovery } = designateLoreSections(
+    const { personaCard, coreKnowledge } = designateLoreSections(
       page.sections as DesignatableLoreSection[]
     );
+    // Recovery arrives on its own field: the resolve route keeps it out of
+    // `sections` so no other consumer of that array is handed a brief meant
+    // for whoever writes this character.
+    const recovery = (page.recoverySections ?? []) as DesignatableLoreSection[];
     const toCardSection = (section: DesignatableLoreSection) => ({
       heading: section.heading,
       slug: section.slug,

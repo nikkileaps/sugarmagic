@@ -74,10 +74,16 @@ player-visible** until epic E adds quest-stage gating. `## Secrets` and
 `## Recovery` are stripped from the persona card, from core knowledge, and from
 the ingest chunks, so neither can surface in a conversation or a search.
 
-The two differ in one place. `## Secrets` never leaves the gateway at all.
-`## Recovery` is removed from the page `body` the gateway returns but stays on
-`sections`, because that is the channel the conversation runtime reads a page
-through -- it needs the list to know what moves this character has.
+The two differ in where they go. `## Secrets` never leaves the gateway at all.
+`## Recovery` leaves, but by its own door: the resolve route removes it from
+both `body` and `sections` and returns it on a separate `recoverySections`
+field. Only the conversation runtime reads that field, and it is the one
+consumer that needs the list.
+
+That split is not fussiness. Sugarlang's scene compiler reads `sections` as
+well as `body`, and folds every section it finds into the scene's vocabulary --
+so a brief left in the shared array would put "change-subject" and the prose
+around it into the words the game thinks the world contains.
 
 Note that persona/voice/core sections DO stay in the vector index: another NPC
 must be able to retrieve this NPC's page as world lore ("who is Maren?" asked of

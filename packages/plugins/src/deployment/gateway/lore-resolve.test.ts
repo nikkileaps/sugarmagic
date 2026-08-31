@@ -58,6 +58,7 @@ interface ResolvedPage {
   sectionCount: number;
   body: string;
   sections: Array<{ heading: string; slug: string; content: string }>;
+  recoverySections?: Array<{ heading: string; slug: string; content: string }>;
 }
 interface ResolveResponse {
   ok: boolean;
@@ -140,7 +141,7 @@ describe("lore/resolve excludes ## Secrets (Plan 072.2)", () => {
       "utf8"
     );
     // Page with a Recovery section and no secret. Recovery leaves by a
-    // different door than Secrets: out of `body`, still on `sections`.
+    // different door than Secrets: off `sections` entirely, onto its own field.
     writeFileSync(
       join(loreDir, "npc", "penelope.md"),
       [
@@ -194,19 +195,20 @@ describe("lore/resolve excludes ## Secrets (Plan 072.2)", () => {
     expect(page.sectionCount).toBe(2);
   });
 
-  it("strips ## Recovery from body but keeps it on sections", async () => {
+  it("moves ## Recovery off sections onto its own field", async () => {
     seedLore();
     const out = await resolve(["lore.npc.penelope"]);
     const page = out.pages.find((p) => p.pageId === "lore.npc.penelope")!;
-    // `sections` is the only channel the conversation runtime reads a page
-    // through, so stripping it there would put the list out of reach.
-    expect(page.sections.map((s) => s.slug).sort()).toEqual([
-      "persona",
-      "recovery"
-    ]);
-    expect(page.sectionCount).toBe(2);
+    // Recovery leaves `sections` entirely: sugarlang's scene compiler reads
+    // that array as well as `body`, so a brief left in it would be tokenized
+    // into scene vocabulary. It travels on its own field instead, which only
+    // the conversation runtime reads.
+    expect(page.sections.map((s) => s.slug)).toEqual(["persona"]);
+    expect(page.recoverySections?.map((s) => s.slug)).toEqual(["recovery"]);
+    expect(page.sectionCount).toBe(1);
     // `body` feeds sugarlang's scene lexicon, which has no business with it.
     expect(page.body).not.toContain("RECOVERYWORD_WREN");
+    expect(JSON.stringify(page.sections)).not.toContain("RECOVERYWORD_WREN");
     expect(page.body).not.toContain("Recovery");
     expect(page.body).toContain("Refined and theatrical.");
   });
