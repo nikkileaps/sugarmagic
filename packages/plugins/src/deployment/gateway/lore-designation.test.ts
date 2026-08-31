@@ -21,14 +21,16 @@ import {
   designateLoreSections,
   findRelationshipEntry,
   isPersonaCardSection,
-  isRecoverySection,
   isSecretSection,
-  isWithheldSection,
-  parseRecoveryStrategies,
   parseRelationshipEntries,
   type DesignatableLoreSection
 } from "./lore-designation";
-import { readLorePages, splitLoreSections } from "./core";
+import {
+  composeChunkText,
+  readLorePages,
+  splitLoreSections,
+  stripChunkHeader
+} from "./core";
 
 function section(
   slug: string,
@@ -107,73 +109,55 @@ describe("designateLoreSections", () => {
     expect(designateLoreSections([])).toEqual({
       personaCard: [],
       coreKnowledge: [],
-      secrets: [],
-      recovery: []
+      secrets: []
     });
   });
 });
 
-describe("designateLoreSections -- ## Recovery", () => {
-  it("routes ## Recovery to its own bucket, not the card and not core knowledge", () => {
+describe("designateLoreSections -- a leftover ## Recovery section", () => {
+  // Recovery strategies are authored on the NPC, so the heading means nothing
+  // here. A page that still carries one reads as ordinary core knowledge
+  // rather than disappearing.
+  it("treats ## Recovery as core knowledge", () => {
     const result = designateLoreSections([
       section("persona"),
       section("recovery"),
       section("work")
     ]);
-    expect(result.recovery.map((s) => s.slug)).toEqual(["recovery"]);
-    expect(result.coreKnowledge.map((s) => s.slug)).toEqual(["work"]);
+    expect(result.coreKnowledge.map((s) => s.slug)).toEqual([
+      "recovery",
+      "work"
+    ]);
     expect(result.personaCard.map((s) => s.slug)).toEqual(["persona"]);
-  });
-
-  it("does not designate a near-miss heading", () => {
-    expect(isRecoverySection(section("recovering"))).toBe(false);
-    expect(designateLoreSections([section("recovering")]).recovery).toEqual([]);
-  });
-
-  it("counts both Secrets and Recovery as withheld", () => {
-    expect(isWithheldSection(section("secrets"))).toBe(true);
-    expect(isWithheldSection(section("recovery"))).toBe(true);
-    expect(isWithheldSection(section("persona"))).toBe(false);
+    expect(result.secrets).toEqual([]);
   });
 });
 
-describe("parseRecoveryStrategies", () => {
-  it("reads the move from each list item and ignores the prose after it", () => {
-    const result = parseRecoveryStrategies(
-      [
-        "- change-subject -- She assumes you have not yet learned how things",
-        "  ought to be done, and tells you.",
-        "- playful-probe",
-        "* joke: delivered with a straight face."
-      ].join("\n")
-    );
-    expect(result.strategies).toEqual([
-      "change-subject",
-      "playful-probe",
-      "joke"
-    ]);
-    expect(result.unrecognized).toEqual([]);
-  });
-
-  it("reports a name that is not a move instead of dropping it silently", () => {
-    const result = parseRecoveryStrategies(
-      ["- curt-exit", "- storms-off-in-a-huff -- she leaves"].join("\n")
-    );
-    expect(result.strategies).toEqual(["curt-exit"]);
-    expect(result.unrecognized).toEqual(["storms-off-in-a-huff"]);
-  });
-
-  it("matches names case-insensitively", () => {
-    expect(parseRecoveryStrategies("- Self-Disclosure").strategies).toEqual([
-      "self-disclosure"
-    ]);
-  });
-
-  it("returns nothing for a section with no list items", () => {
-    expect(parseRecoveryStrategies("She simply carries on.")).toEqual({
-      strategies: [],
-      unrecognized: []
+describe("chunk header round trip", () => {
+  // The format is written by one function and read by another. A test that
+  // hand-copies the header would pass while the pair drifted apart, so this
+  // composes with the real writer and reads with the real reader.
+  it("gives back exactly the content that was composed", () => {
+    const content = "Warm and brisk.\n\nProud of her sourdough.";
+    const text = composeChunkText({
+      pageId: "lore.npc.maren",
+      title: "Maren",
+      sectionHeading: "Persona",
+      content
     });
+    expect(text.startsWith("Page ID: lore.npc.maren")).toBe(true);
+    expect(stripChunkHeader(text)).toBe(content);
+  });
+
+  it("yields nothing for a soft page's identity-only chunk", () => {
+    const text = composeChunkText({ pageId: "lore.media.pod", title: "Pod" });
+    expect(stripChunkHeader(text)).toBe("");
+  });
+
+  it("returns text that carries no header as-is", () => {
+    // Something uploaded to the store by hand. Emptying it would put words in
+    // an author's mouth.
+    expect(stripChunkHeader("just some prose")).toBe("just some prose");
   });
 });
 
@@ -257,7 +241,7 @@ describe("ingest excludes ## Secrets from the vector index", () => {
   });
 });
 
-describe("ingest excludes ## Recovery, and names an unknown move", () => {
+describe("ingest and a leftover ## Recovery section", () => {
   let loreDir: string | null = null;
   const savedPath = process.env["SUGARMAGIC_LORE_SOURCE_PATH"];
   const savedKind = process.env["SUGARMAGIC_LORE_SOURCE_KIND"];
@@ -271,7 +255,7 @@ describe("ingest excludes ## Recovery, and names an unknown move", () => {
     else process.env["SUGARMAGIC_LORE_SOURCE_KIND"] = savedKind;
   });
 
-  function seed(recoveryBody: string[]): ReturnType<typeof readLorePages> {
+  function seed(sectionLines: string[]): ReturnType<typeof readLorePages> {
     loreDir = mkdtempSync(join(tmpdir(), "sm-lore-"));
     mkdirSync(join(loreDir, "entities"), { recursive: true });
     writeFileSync(
@@ -284,8 +268,7 @@ describe("ingest excludes ## Recovery, and names an unknown move", () => {
         "## Persona",
         "Warm, brisk, proud of her sourdough.",
         "",
-        "## Recovery",
-        ...recoveryBody,
+        ...sectionLines,
         ""
       ].join("\n"),
       "utf8"
@@ -295,8 +278,11 @@ describe("ingest excludes ## Recovery, and names an unknown move", () => {
     return readLorePages();
   }
 
-  it("keeps the section on the page but never chunks it", () => {
+  // The heading is no longer reserved: recovery strategies are authored on the
+  // NPC. A page that still has the section is chunked like any other.
+  it("chunks a leftover ## Recovery section like ordinary core knowledge", () => {
     const { pages, chunks } = seed([
+      "## Recovery",
       "- change-subject -- RECOVERYWORD_WREN, she talks about the oven."
     ]);
 
@@ -307,24 +293,20 @@ describe("ingest excludes ## Recovery, and names an unknown move", () => {
     ]);
 
     const pageChunks = chunks.filter((c) => c.pageId === "lore.npc.maren");
+    expect(pageChunks.map((c) => c.sectionSlug).sort()).toEqual([
+      "persona",
+      "recovery"
+    ]);
+  });
+
+  it("still keeps ## Secrets out of the chunks", () => {
+    const { chunks } = seed(["## Secrets", "SECRETWORD_WREN is her real name."]);
+
+    const pageChunks = chunks.filter((c) => c.pageId === "lore.npc.maren");
     expect(pageChunks.map((c) => c.sectionSlug)).toEqual(["persona"]);
     expect(
-      pageChunks.some((c) => c.embeddingText.includes("RECOVERYWORD_WREN"))
+      pageChunks.some((c) => c.embeddingText.includes("SECRETWORD_WREN"))
     ).toBe(false);
-  });
-
-  it("warns with the page id when a move is not one it knows", () => {
-    const { warnings } = seed(["- curt-exit", "- storms-off-in-a-huff"]);
-
-    const warning = warnings.find((w) => w.includes("storms-off-in-a-huff"));
-    expect(warning).toBeDefined();
-    expect(warning).toContain("lore.npc.maren");
-    expect(warning).toContain("curt-exit");
-  });
-
-  it("says nothing when every move is one it knows", () => {
-    const { warnings } = seed(["- curt-exit", "- joke"]);
-    expect(warnings.filter((w) => w.includes("recovery strategy"))).toEqual([]);
   });
 });
 

@@ -566,6 +566,7 @@ export function createConversationSelectionFromNpc(options: {
     interactionMode,
     lorePageId: npcDefinition.lorePageId,
     playerLorePageId,
+    recoveryStrategies: npcDefinition.recoveryStrategies,
     activeQuest: toActiveQuestContext(trackedQuest),
     scriptedFollowupDialogueDefinitionId: dialogueDefinitionId,
     ...(selectionMetadata ? { metadata: selectionMetadata } : {})

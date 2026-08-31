@@ -155,8 +155,11 @@ a dead end.
 ### NPC, Dialogue, Item, Spell
 
 `NPCDefinition` (`packages/domain/src/npc-definition`) carries display,
-presentation profile, animation bindings, lore page reference, and
-`interactionMode: "scripted" | "agent"`. The mode is a static property of
+presentation profile, animation bindings, lore page reference,
+`recoveryStrategies`, and `interactionMode: "scripted" | "agent"`.
+`recoveryStrategies` is an ordered list of `{ strategy, note }` saying what the
+character does when it cannot understand the player; the order is what it
+reaches for first, and an empty list means it talks about itself. The mode is a static property of
 the definition: `scripted` NPCs only converse through a bound
 `DialogueDefinition`; `agent` NPCs converse through the sugaragent pipeline.
 

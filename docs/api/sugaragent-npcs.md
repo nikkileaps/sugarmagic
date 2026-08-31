@@ -465,7 +465,7 @@ it as an invention.
 
 Absent page, absent summary, or an unreachable gateway all read the same way:
 the NPC does not know who it is talking to, which is where every NPC stood
-before this existed. The `gossip` recovery move is withheld entirely in that
+before this existed. The `gossip` recovery strategy is withheld entirely in that
 state rather than left to invent a person.
 
 **Files:** `PlayerDefinition.lorePageId` (domain),
@@ -598,7 +598,7 @@ Replaces RepairStage. Decision tree (priority order):
 **The deterministic fallback is per-intent** (`buildFallbackReply`,
 `stages/helpers.ts`). Every intent needs its own line, because the catch-all
 asks the player for more to go on -- and on a `recover` turn that is the one
-thing the turn exists to stop doing. A recovery turn takes the move into
+thing the turn exists to stop doing. A recovery turn takes the strategy into
 account too: `curt-exit` gets a line that reads as leaving, since the close is
 decided from the plan and would otherwise pair "tell me more" with a 2.2s
 auto-close. **Adding an intent means adding its fallback**; nothing in the type

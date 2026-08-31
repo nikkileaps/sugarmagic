@@ -17,7 +17,6 @@ load the card into the prompt (072.3/072.4) and serve it through the gateway
 | `## Persona`, `## Voice` | Persona card | Loaded whole at conversation start into the (cached) system prompt. Never searched, never truncated. |
 | every other section | Core knowledge | Same load, same moment, same system prompt. What the NPC *always* knows. |
 | `## Secrets` | Withheld | Never enters any prompt, and never enters the vector index. A place to author unrevealable truths. |
-| `## Recovery` | Withheld | What this character does when it cannot understand the player. Read as instructions for the writer, never as something the character knows. |
 
 `## Relationships` is core knowledge like any other section, and is also read
 line by line. Each line carrying a markdown link is one entry -- the link text
@@ -37,53 +36,18 @@ NPC is given the line instead of the page. With no line they get the page,
 labelled with whose it is. A section written as prose still loads as core
 knowledge; it just yields no entries.
 
-## `## Recovery` -- what this character does when it does not understand you
-
-An entry is a list item whose first word is one of six moves. Anything after
-that word is prose for the writer, and the whole section reaches the prompt as
-a brief -- so say why the move fits this character, in their terms.
-
-```markdown
-## Recovery
-
-- change-subject -- She assumes you simply have not learned how things ought to
-  be done, and tells you about them instead.
-- playful-probe
-```
-
-The six moves: `curt-exit`, `change-subject`, `joke`, `playful-probe`,
-`self-disclosure`, `gossip`.
-
-A line naming anything else is ignored, and the lore reader says so -- the
-warning shows in Studio's SugarAgent panel, naming the page and the word it did
-not know.
-
-`gossip` says something about the player, and is only offered when the game has
-been told who the player is (Design > Player > Lore Page ID). A character whose
-list is only `gossip`, in a project with no player page set, talks about itself
-instead. It will not invent a person to have opinions about.
-
-A character with no `## Recovery` section falls back to talking about itself.
-That is deliberate: it keeps the conversation open and gives a confused learner
-more target-language speech to work with.
-
 ## What is hidden, and what is not
 
-Everything on the page except the withheld sections is **potentially
-player-visible** until epic E adds quest-stage gating. `## Secrets` and
-`## Recovery` are stripped from the persona card, from core knowledge, and from
-the ingest chunks, so neither can surface in a conversation or a search.
+Everything on the page except `## Secrets` is **potentially player-visible**
+until epic E adds quest-stage gating. `## Secrets` is stripped from the persona
+card, from core knowledge, and from the ingest chunks, so it cannot surface in a
+conversation or a search. It never leaves the gateway at all.
 
-The two differ in where they go. `## Secrets` never leaves the gateway at all.
-`## Recovery` leaves, but by its own door: the resolve route removes it from
-both `body` and `sections` and returns it on a separate `recoverySections`
-field. Only the conversation runtime reads that field, and it is the one
-consumer that needs the list.
-
-That split is not fussiness. Sugarlang's scene compiler reads `sections` as
-well as `body`, and folds every section it finds into the scene's vocabulary --
-so a brief left in the shared array would put "change-subject" and the prose
-around it into the words the game thinks the world contains.
+A character's recovery strategies -- what it does when it cannot understand the
+player -- are NOT authored here. They are game data, not world knowledge, so
+they live on the NPC in Studio (Design > NPCs > Recovery) and travel in the
+project file. The heading `## Recovery` is not reserved; a page that still
+carries one reads as ordinary core knowledge.
 
 Note that persona/voice/core sections DO stay in the vector index: another NPC
 must be able to retrieve this NPC's page as world lore ("who is Maren?" asked of
@@ -136,8 +100,11 @@ Indexing only the identity removes the competition without removing the page. A
 player asking about the *Handbook for the Recently Transported* still finds it,
 because that query matches its title.
 
-The full text is untouched either way: the page keeps all its sections and can
-still be fetched whole by id. Only the search index is shallow.
+The markdown is untouched either way. What the game can reach is not: it reads
+lore only from the search index, so a `soft` page reaches it as an identity and
+nothing else. An NPC bound to one loads no persona at all and falls back to its
+name and the game's tone. Use `soft` for in-world media, never for a character
+someone talks to.
 
 `## Secrets` exclusion applies at both levels.
 
@@ -154,8 +121,7 @@ and treated as `hard`.
 - Only an **exact** reserved word counts. `## Persona` is the card;
   `## Persona and Backstory` (slug `persona-and-backstory`) is core knowledge.
   `## Secrets` is hidden; `## Secret` (singular) is not -- it is core knowledge.
-- Reserved slugs: `persona`, `voice` (persona card); `secrets` and `recovery`
-  (withheld).
+- Reserved slugs: `persona`, `voice` (persona card); `secrets` (withheld).
 - Content before the first heading becomes an implicit `Overview` section and
   lands in **core knowledge**.
 

@@ -4,7 +4,6 @@ import type { LoadedPersona, LoreCardSection, RetrievedEvidenceItem } from "./ty
 // it is the "third consumer" (the card fetch) named in Plan 072.1.
 import {
   designateLoreSections,
-  parseRecoveryStrategies,
   type DesignatableLoreSection
 } from "../../../deployment/gateway/lore-designation";
 
@@ -454,13 +453,6 @@ export interface ResolvedLorePage {
   sectionCount: number;
   body: string;
   sections: ResolvedLorePageSection[];
-  /**
-   * `## Recovery`, delivered separately from `sections` so that only the
-   * conversation runtime sees it. Absent when the page has none, and absent
-   * from a gateway that predates the split -- which reads as a character with
-   * no authored moves, the same as not writing the section.
-   */
-  recoverySections?: ResolvedLorePageSection[];
 }
 
 export interface LoreResolveResult {
@@ -539,9 +531,7 @@ export function degradedPersona(pageId: string | null): LoadedPersona {
     fallbackReason: "persona-unavailable",
     personaCard: [],
     coreKnowledge: [],
-    digest: "",
-    recoveryStrategies: [],
-    recoverySections: []
+    digest: ""
   };
 }
 
@@ -586,18 +576,20 @@ export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
     }
     const result = await this.client.resolve({ pageIds: [trimmed] });
     const page = result.pages.find((entry) => entry.pageId === trimmed);
-    if (!page) {
+    if (!page || page.sections.length === 0) {
       // A page in missingPageIds (or absent) IS the degraded path (D3).
+      //
+      // A page that resolves with no sections is the same outcome by a
+      // different route: a `canon_level: soft` page indexes only its identity,
+      // so the store can say it exists and nothing more. Reporting that as
+      // loaded would give the NPC an empty persona card and no fallback
+      // reason -- a character with no personality and no sign of why.
       return degradedPersona(trimmed);
     }
     // `page.sections` matches DesignatableLoreSection structurally.
     const { personaCard, coreKnowledge } = designateLoreSections(
       page.sections as DesignatableLoreSection[]
     );
-    // Recovery arrives on its own field: the resolve route keeps it out of
-    // `sections` so no other consumer of that array is handed a brief meant
-    // for whoever writes this character.
-    const recovery = (page.recoverySections ?? []) as DesignatableLoreSection[];
     const toCardSection = (section: DesignatableLoreSection) => ({
       heading: section.heading,
       slug: section.slug,
@@ -610,13 +602,7 @@ export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
       fallbackReason: null,
       personaCard: card,
       coreKnowledge: coreKnowledge.map(toCardSection),
-      digest: buildPersonaDigest(card),
-      // A name the page asks for that is not a move is dropped here and
-      // reported by the lore reader, where the author is the one looking.
-      recoveryStrategies: recovery.flatMap(
-        (section) => parseRecoveryStrategies(section.content).strategies
-      ),
-      recoverySections: recovery.map(toCardSection)
+      digest: buildPersonaDigest(card)
     };
   }
 }

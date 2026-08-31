@@ -3,10 +3,7 @@ import type {
   ConversationSelectionContext,
   ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
-// The gateway owns what a recovery strategy is; the runtime consumes the same
-// definition rather than restating it. `lore-designation` is the deliberately
-// import-free module both sides share.
-import type { RecoveryStrategy } from "../../../deployment/gateway/lore-designation";
+import type { RecoveryStrategy } from "@sugarmagic/domain";
 
 export type TurnStageStatus = "ok" | "degraded" | "failed";
 
@@ -191,20 +188,6 @@ export interface LoadedPersona {
    * degraded or no persona sections authored.
    */
   digest: string;
-  /**
-   * The moves this character can make when it does not understand the player,
-   * read from `## Recovery`. Empty for a character with no such section, which
-   * is every character until one is written -- the planner supplies a default.
-   *
-   * Required rather than optional so a persona built anywhere has to say what
-   * it holds.
-   */
-  recoveryStrategies: RecoveryStrategy[];
-  /**
-   * The `## Recovery` prose as authored, for the prompt. The strategy names
-   * above are the same text read as data; this is what the writer sees.
-   */
-  recoverySections: LoreCardSection[];
 }
 
 export interface SugarAgentProviderState {

@@ -28,9 +28,9 @@ Plan writes no prose and calls no model. It is a pure decision:
       in reality recognises
     - is a quest active, did quest lore resolve, is a scripted line waiting
     - the conversation so far
-    - the NPC's recovery moves, from its `## Recovery` section
+    - the NPC's recovery strategies, authored on the NPC
     - clarifying questions asked since the last real exchange
-    - recovery moves made so far this conversation (indexes the list)
+    - recovery turns made so far this conversation (indexes the list)
 
 ## Step 1 -- work out what there is to go on
 
@@ -68,11 +68,11 @@ Only GREET (no message to check) and GOODBYE (they are leaving) come first.
 
     if the reply is CLARIFY
        AND the NPC has already asked once since the last real exchange
-           -> RECOVER, plus one move from the NPC's `## Recovery` list
+           -> RECOVER, plus one strategy from the NPC's list
 
 Placed after the whole ladder, so all three routes to CLARIFY are capped by one
 rule -- including the route derived from the NPC's own previous reply. A
-recovery move containing the word "which" sets a clarify expectation for the
+recovery reply containing the word "which" sets a clarify expectation for the
 next turn; without the cap sitting above that, the conversation alternates
 between asking and recovering forever.
 
@@ -80,12 +80,12 @@ Asking once is deliberate. It gives a language learner a second try at saying
 it. Asking twice cannot succeed: on an unclear turn with no evidence the NPC has
 nothing to answer from.
 
-The move comes from the character's `## Recovery` section, walked in written
-order and wrapping, so several authored moves are used in turn. A character with
-no section gets `self-disclosure` -- never `curt-exit`, which would make every
-unwritten character walk away.
+The strategy comes from the NPC's authored list (Design > NPCs > Recovery),
+walked in written order and wrapping, so several authored strategies are used in
+turn. A character with an empty list gets `self-disclosure` -- never
+`curt-exit`, which would make every unwritten character walk away.
 
-A move with nothing behind it is dropped from the menu before selection rather
+A strategy with nothing behind it is dropped from the menu before selection rather
 than attempted. Today that is `gossip`, which is about the player and so needs
 the project to have said who the player is. A character whose whole list is
 unavailable falls to `self-disclosure`.
@@ -138,7 +138,7 @@ depended on it, but it is inconsistent with step 2, which does count the page.
 ## Step 6 -- what Plan hands back
 
     - the kind of reply       -> becomes "Intent:" in the generate prompt
-    - the recovery move       -> present only on a RECOVER turn
+    - the recovery strategy   -> present only on a RECOVER turn
     - how specific to be      -> grounded vs generic
     - the goal sentence       -> becomes "Goal:" in the generate prompt
     - who speaks next, what the input box does, its placeholder
@@ -152,7 +152,7 @@ questions asked since the last real exchange.
 **1. A confused player and a character whose list is `change-subject`,
 `playful-probe`.**
 
-| turn | player says | reply | move | count | conversation |
+| turn | player says | reply | strategy | count | conversation |
 |---|---|---|---|---|---|
 | 1 | "qqq zzz" | CLARIFY | -- | 1 | open |
 | 2 | "qqq zzz" | RECOVER | `change-subject` | 1 | open |
@@ -163,7 +163,7 @@ One question for the whole run of confusion. The list wraps.
 
 **2. The same player, a character whose list is `curt-exit`.**
 
-| turn | player says | reply | move | count | conversation |
+| turn | player says | reply | strategy | count | conversation |
 |---|---|---|---|---|---|
 | 1 | "qqq zzz" | CLARIFY | -- | 1 | open |
 | 2 | "qqq zzz" | RECOVER | `curt-exit` | 1 | closes |
@@ -171,9 +171,9 @@ One question for the whole run of confusion. The list wraps.
 The exit sets a close proposal and a 2.2s auto-close. The line is generated from
 the character's page; the player never reads one written by the engine.
 
-**3. The same player, a character with no `## Recovery` section.**
+**3. The same player, a character with no authored strategies.**
 
-| turn | player says | reply | move | count | conversation |
+| turn | player says | reply | strategy | count | conversation |
 |---|---|---|---|---|---|
 | 1 | "qqq zzz" | CLARIFY | -- | 1 | open |
 | 2 | "qqq zzz" | RECOVER | `self-disclosure` | 1 | open |
@@ -184,14 +184,14 @@ signals that could are computed every turn and branched on by nothing.
 
 **4. Confusion, then the player gets it right.**
 
-| turn | player says | reply | move | count | conversation |
+| turn | player says | reply | strategy | count | conversation |
 |---|---|---|---|---|---|
 | 1 | "qqq zzz" | CLARIFY | -- | 1 | open |
 | 2 | "qqq zzz" | RECOVER | `change-subject` | 1 | open |
 | 3 | "hello!" | CHAT | -- | **0** | open |
 | 4 | "hjkl" | CLARIFY | -- | 1 | open |
 
-The count is HELD by a recovery move and CLEARED by a real exchange. Holding is
+The count is HELD by a recovery turn and CLEARED by a real exchange. Holding is
 what makes one run of confusion yield one question; clearing is what stops the
 count going stale, so a player who gets back on track still earns their question
 the next time they are lost.

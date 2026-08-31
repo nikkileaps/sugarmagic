@@ -89,13 +89,16 @@ export interface BasePromptContext {
   persona: {
     personaCard: Array<{ heading: string; slug: string; content: string }>;
     coreKnowledge: Array<{ heading: string; slug: string; content: string }>;
-    /**
-     * `## Recovery` as authored -- the brief for what this character does when
-     * it cannot understand the player. Rendered as an instruction, so the
-     * judge never sees it.
-     */
-    recoverySections: Array<{ heading: string; slug: string; content: string }>;
   } | null;
+
+  /**
+   * What this character does when it cannot understand the player, authored on
+   * the NPC. Rendered as an instruction, so the judge is never handed the
+   * character's own list as though it were true about the world.
+   *
+   * Structural (not the domain type) to keep the builder pure.
+   */
+  recoveryStrategies: Array<{ strategy: string; note: string }>;
 
   /**
    * Plan 073.3 — the NPC's memory of this player, digested from the
