@@ -77,12 +77,6 @@ interface LoreChunk {
   title: string;
   sectionHeading: string;
   sectionSlug: string;
-  /**
-   * Where this section sits on its page, counting from 0. Attributes are the
-   * only thing that survives into the store, so without this a page rebuilt
-   * from its chunks comes back in whatever order the list endpoint returns.
-   */
-  sectionIndex: number;
   relativePath: string;
   embeddingText: string;
   canonLevel: LoreCanonLevel;
@@ -416,17 +410,28 @@ async function parseApiJsonResponse(response: Response, label: string): Promise<
   return payload;
 }
 
+/**
+ * Longest any upstream call may take before it is abandoned.
+ *
+ * Generous, because a slow generation is still a good one. The point is that a
+ * hung socket cannot wedge a request forever: an abandoned fetch THROWS, which
+ * is what every caller's degrade path is waiting for. Without it a stalled
+ * upstream leaves a conversation that never opens and never fails.
+ */
+const UPSTREAM_TIMEOUT_MS = 120_000;
+
 async function requestJson(
   url: string,
   options: RequestInit,
-  label: string
+  label: string,
+  timeoutMs: number = UPSTREAM_TIMEOUT_MS
 ): Promise<{ payload: unknown; headers: Headers }> {
   logInfo("upstream:request", {
     label,
     url,
     method: options?.method ?? "GET"
   });
-  const response = await fetch(url, options);
+  const response = await fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
   const raw = await response.text();
   let payload: unknown = null;
   if (raw.trim()) {
@@ -817,27 +822,24 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
         title,
         sectionHeading: title,
         sectionSlug: SOFT_PAGE_CHUNK_SLUG,
-        sectionIndex: 0,
         relativePath,
-        embeddingText: ["Page ID: " + pageId, "Title: " + title].join("\n\n"),
+        embeddingText: composeChunkText({ pageId, title }),
         canonLevel
       });
       continue;
     }
 
-    sections.forEach((section, sectionIndex) => {
+    for (const section of sections) {
       // A secret never enters the vector index: it must not leak through a
       // search hit. It stays in `pages[].sections`; only the chunks exclude it.
-      if (isSecretSection(section)) return;
+      if (isSecretSection(section)) continue;
       const chunkId = pageId + "#" + section.slug;
-      const embeddingText = [
-        "Page ID: " + pageId,
-        "Title: " + title,
-        "Section: " + section.heading,
-        section.content
-      ]
-        .filter(Boolean)
-        .join("\n\n");
+      const embeddingText = composeChunkText({
+        pageId,
+        title,
+        sectionHeading: section.heading,
+        content: section.content
+      });
 
       chunks.push({
         pageId,
@@ -845,12 +847,11 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
         title,
         sectionHeading: section.heading,
         sectionSlug: section.slug,
-        sectionIndex,
         relativePath,
         embeddingText,
         canonLevel
       });
-    });
+    }
   }
 
   pages.sort((left, right) => left.pageId.localeCompare(right.pageId));
@@ -1013,6 +1014,13 @@ const MAX_FILES_PER_BATCH = 2000;
 const LORE_CHUNK_FETCH_CONCURRENCY = 8;
 
 /**
+ * Budget for one chunk read. Much shorter than a generation's, because this
+ * runs while a player waits for a conversation to open and there are a dozen
+ * of them.
+ */
+const LORE_FETCH_TIMEOUT_MS = 20_000;
+
+/**
  * How many chunk files upload at once.
  *
  * The uploads are independent, so this is only a politeness/rate-limit dial.
@@ -1046,9 +1054,8 @@ export function chunkContentHash(chunk: LoreChunk): string {
  * `content_hash` is its VERSION. Address plus version, like a file path and the
  * hash of its contents: you do not rename a file because you edited it.
  *
- * Nine of an allowed sixteen keys, values well inside the 512-character limit
- * (openai-node `VectorStoreFile`). Attribute values are strings, so
- * `section_index` is written as one and read back with `Number`.
+ * Eight of an allowed sixteen keys, values well inside the 512-character limit
+ * (openai-node `VectorStoreFile`).
  *
  * `content_hash` covers the embedding text only, so adding a key here does not
  * re-upload chunks that are already indexed. A new attribute appears on a
@@ -1062,9 +1069,14 @@ export function chunkContentHash(chunk: LoreChunk): string {
  * markdown on disk is an authoring input to ingest, not a runtime source, and a
  * deployed gateway has none.
  *
- * What comes back differs from the page on disk in two ways, both correct:
- * `## Secrets` is absent because it is never chunked, and a `canon_level: soft`
- * page yields its identity only, because that is all it indexes.
+ * What comes back differs from the page on disk in three ways, all correct:
+ * `## Secrets` is absent because it is never chunked, a `canon_level: soft`
+ * page yields no sections because it indexes only its identity, and sections
+ * arrive in the store's order rather than the author's. Nothing reads them
+ * positionally -- the persona card and the drift digest both pick by slug, and
+ * sugarlang folds them into a set -- so the page carries an author's order
+ * nowhere, and an attribute to restore it would be a second copy of a fact
+ * only the markdown holds.
  */
 async function fetchChunkText(
   vectorStoreId: string,
@@ -1072,39 +1084,79 @@ async function fetchChunkText(
 ): Promise<string> {
   // `/v1/files/{id}/content` refuses a `user_data` file with a 400; the
   // vector-store-scoped route is the one that serves chunk text back.
-  const { payload } = await requestJson(
-    "https://api.openai.com/v1/vector_stores/" +
-      vectorStoreId +
-      "/files/" +
-      fileId +
-      "/content",
-    {
-      method: "GET",
-      headers: {
-        authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
-      }
-    },
-    "OpenAI vector store file content"
-  );
-  const data = (payload as { data?: unknown })?.data;
-  if (!Array.isArray(data)) return "";
-  return data
-    .map((part) =>
-      typeof (part as { text?: unknown })?.text === "string"
-        ? (part as { text: string }).text
-        : ""
-    )
-    .join("");
+  const parts: string[] = [];
+  let after = "";
+  while (true) {
+    const { payload } = await requestJson(
+      "https://api.openai.com/v1/vector_stores/" +
+        vectorStoreId +
+        "/files/" +
+        fileId +
+        "/content" +
+        (after ? "?after=" + encodeURIComponent(after) : ""),
+      {
+        method: "GET",
+        headers: {
+          authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
+        }
+      },
+      "OpenAI vector store file content",
+      LORE_FETCH_TIMEOUT_MS
+    );
+    const data = (payload as { data?: unknown })?.data;
+    if (!Array.isArray(data)) break;
+    for (const part of data) {
+      const text = (part as { text?: unknown })?.text;
+      if (typeof text === "string") parts.push(text);
+    }
+    const next = (payload as { next_page?: unknown })?.next_page;
+    if (!(payload as { has_more?: boolean })?.has_more || typeof next !== "string" || !next) {
+      break;
+    }
+    after = next;
+  }
+  // A chunk split across parts is one continuous document; joining with a
+  // separator would invent a break the author did not write.
+  return parts.join("");
 }
 
 /**
- * Strip the header ingest writes ahead of every chunk (`Page ID:`, `Title:`,
- * `Section:`) and hand back the section body the author wrote.
+ * The exact text a chunk is embedded and stored as: a short header naming the
+ * page and section, then the author's content.
+ *
+ * [LAW:one-source-of-truth] Ingest writes this and `stripChunkHeader` reads it
+ * back; the format lives here so the two cannot drift apart. `chunkContentHash`
+ * hashes the result, so editing this function re-uploads every chunk.
+ */
+export function composeChunkText(parts: {
+  pageId: string;
+  title: string;
+  sectionHeading?: string;
+  content?: string;
+}): string {
+  return [
+    "Page ID: " + parts.pageId,
+    "Title: " + parts.title,
+    parts.sectionHeading ? "Section: " + parts.sectionHeading : "",
+    parts.content ?? ""
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/**
+ * The inverse of `composeChunkText`: hand back the section body the author
+ * wrote, without the header ingest put in front of it.
+ *
+ * A chunk with a header but no content (a soft page's identity chunk) yields
+ * "". Text that carries no header at all -- something uploaded to the store by
+ * hand -- is returned as-is rather than emptied, because guessing it into a
+ * section would put words in the author's mouth.
  */
 export function stripChunkHeader(text: string): string {
   const marker = "\n\nSection: ";
   const at = text.indexOf(marker);
-  if (at < 0) return text.trim();
+  if (at < 0) return text.startsWith("Page ID: ") ? "" : text.trim();
   const afterHeading = text.indexOf("\n\n", at + marker.length);
   return afterHeading < 0 ? "" : text.slice(afterHeading + 2).trim();
 }
@@ -1115,7 +1167,6 @@ interface StoreChunkRef {
   title: string;
   sectionSlug: string;
   sectionHeading: string;
-  sectionIndex: number;
   relativePath: string;
 }
 
@@ -1135,9 +1186,6 @@ function readChunkRef(file: Record<string, unknown>): StoreChunkRef | null {
     title: read("title") || pageId,
     sectionSlug: read("section_slug"),
     sectionHeading: read("section_heading"),
-    // Chunks indexed before section_index existed sort last rather than
-    // scrambling the ones that have it.
-    sectionIndex: Number(read("section_index") || Number.MAX_SAFE_INTEGER),
     relativePath: read("relative_path")
   };
 }
@@ -1159,20 +1207,35 @@ export async function readLorePagesFromStore(
     .map(readChunkRef)
     .filter((ref): ref is StoreChunkRef => ref !== null && wanted.has(ref.pageId));
 
-  const texts = await mapWithConcurrency(refs, LORE_CHUNK_FETCH_CONCURRENCY, (ref) =>
-    fetchChunkText(vectorStoreId, ref.fileId)
-  );
+  // One unreadable chunk loses its section, not the character. A re-ingest
+  // deletes and re-uploads files, so a conversation opening mid-run can ask for
+  // a file that existed when the list was taken and is gone by the fetch --
+  // failing the whole page there would take an NPC's persona out over one
+  // paragraph. Loud in the log, and the section simply is not there.
+  const texts = await mapWithConcurrency(refs, LORE_CHUNK_FETCH_CONCURRENCY, async (ref) => {
+    try {
+      return await fetchChunkText(vectorStoreId, ref.fileId);
+    } catch (error) {
+      logError("lore chunk unreadable", error, {
+        pageId: ref.pageId,
+        sectionSlug: ref.sectionSlug,
+        fileId: ref.fileId
+      });
+      return null;
+    }
+  });
 
   const byPage = new Map<string, { ref: StoreChunkRef; content: string }[]>();
   refs.forEach((ref, index) => {
+    const text = texts[index];
+    if (text === null || text === undefined) return;
     const entries = byPage.get(ref.pageId) ?? [];
-    entries.push({ ref, content: stripChunkHeader(texts[index] ?? "") });
+    entries.push({ ref, content: stripChunkHeader(text) });
     byPage.set(ref.pageId, entries);
   });
 
   const pages: LorePage[] = [];
   for (const [pageId, entries] of byPage) {
-    entries.sort((left, right) => left.ref.sectionIndex - right.ref.sectionIndex);
     const sections = entries
       .filter((entry) => entry.ref.sectionSlug !== SOFT_PAGE_CHUNK_SLUG)
       .map((entry) => ({
@@ -1198,7 +1261,6 @@ export function chunkAttributes(chunk: LoreChunk): Record<string, string> {
     page_id: chunk.pageId,
     chunk_id: chunk.chunkId,
     section_slug: chunk.sectionSlug,
-    section_index: String(chunk.sectionIndex),
     section_heading: chunk.sectionHeading,
     title: chunk.title,
     relative_path: chunk.relativePath,

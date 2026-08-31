@@ -85,9 +85,12 @@ function validatesAgainstSugarlangGuard(page: unknown): boolean {
 describe("lore/resolve reads pages from the vector store", () => {
   const savedStore = process.env["SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID"];
   const savedKey = process.env["SUGARMAGIC_OPENAI_API_KEY"];
+  const savedLorePath = process.env["SUGARMAGIC_LORE_SOURCE_PATH"];
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    if (savedLorePath === undefined) delete process.env["SUGARMAGIC_LORE_SOURCE_PATH"];
+    else process.env["SUGARMAGIC_LORE_SOURCE_PATH"] = savedLorePath;
     if (savedStore === undefined) delete process.env["SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID"];
     else process.env["SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID"] = savedStore;
     if (savedKey === undefined) delete process.env["SUGARMAGIC_OPENAI_API_KEY"];
@@ -163,21 +166,49 @@ describe("lore/resolve reads pages from the vector store", () => {
     return JSON.parse(res.body) as ResolveResponse;
   }
 
-  it("rebuilds a page from its chunks, in authored section order", async () => {
+  it("rebuilds a page from every chunk indexed for it", async () => {
     stubStore();
     const out = await resolve(["lore.npc.maren"]);
     const page = out.pages.find((p) => p.pageId === "lore.npc.maren")!;
-    // section_index decides order, not the order the store listed the files.
-    expect(page.sections.map((s) => s.slug)).toEqual(["persona", "work"]);
+    // Order is the store's, not the author's -- nothing reads sections
+    // positionally -- so assert the SET rather than a sequence.
+    expect(page.sections.map((s) => s.slug).sort()).toEqual(["persona", "work"]);
     expect(page.title).toBe("Maren");
     expect(page.sectionCount).toBe(2);
+  });
+
+  it("walks every page of the file list, not just the first", async () => {
+    stubStore();
+    await resolve(["lore.npc.maren"]);
+    const calls = (globalThis.fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const listCalls = calls.filter((c) => !String(c[0]).includes("/content"));
+    // limit=100 is what keeps one store from becoming five round trips at
+    // conversation open.
+    expect(listCalls.every((c) => String(c[0]).includes("limit=100"))).toBe(true);
+  });
+
+  it("loses one unreadable chunk, not the whole character", async () => {
+    stubStore();
+    const realFetch = globalThis.fetch as unknown as (...a: unknown[]) => Promise<Response>;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/content") && url.includes("work")) {
+        return new Response("gone", { status: 404 });
+      }
+      return realFetch(input, init as never);
+    }));
+    const out = await resolve(["lore.npc.maren"]);
+    const page = out.pages.find((p) => p.pageId === "lore.npc.maren")!;
+    expect(page.sections.map((s) => s.slug)).toEqual(["persona"]);
   });
 
   it("strips the ingest header so a section carries only what the author wrote", async () => {
     stubStore();
     const out = await resolve(["lore.npc.maren"]);
     const page = out.pages.find((p) => p.pageId === "lore.npc.maren")!;
-    expect(page.sections[0]!.content).toBe("Warm and brisk.");
+    expect(page.sections.find((s) => s.slug === "persona")!.content).toBe(
+      "Warm and brisk."
+    );
     expect(page.body).not.toContain("Page ID:");
     expect(page.body).toContain("Warm and brisk.");
   });

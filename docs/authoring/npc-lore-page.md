@@ -100,8 +100,11 @@ Indexing only the identity removes the competition without removing the page. A
 player asking about the *Handbook for the Recently Transported* still finds it,
 because that query matches its title.
 
-The full text is untouched either way: the page keeps all its sections and can
-still be fetched whole by id. Only the search index is shallow.
+The markdown is untouched either way. What the game can reach is not: it reads
+lore only from the search index, so a `soft` page reaches it as an identity and
+nothing else. An NPC bound to one loads no persona at all and falls back to its
+name and the game's tone. Use `soft` for in-world media, never for a character
+someone talks to.
 
 `## Secrets` exclusion applies at both levels.
 

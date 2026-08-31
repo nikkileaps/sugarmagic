@@ -25,7 +25,12 @@ import {
   parseRelationshipEntries,
   type DesignatableLoreSection
 } from "./lore-designation";
-import { readLorePages, splitLoreSections } from "./core";
+import {
+  composeChunkText,
+  readLorePages,
+  splitLoreSections,
+  stripChunkHeader
+} from "./core";
 
 function section(
   slug: string,
@@ -125,6 +130,34 @@ describe("designateLoreSections -- a leftover ## Recovery section", () => {
     ]);
     expect(result.personaCard.map((s) => s.slug)).toEqual(["persona"]);
     expect(result.secrets).toEqual([]);
+  });
+});
+
+describe("chunk header round trip", () => {
+  // The format is written by one function and read by another. A test that
+  // hand-copies the header would pass while the pair drifted apart, so this
+  // composes with the real writer and reads with the real reader.
+  it("gives back exactly the content that was composed", () => {
+    const content = "Warm and brisk.\n\nProud of her sourdough.";
+    const text = composeChunkText({
+      pageId: "lore.npc.maren",
+      title: "Maren",
+      sectionHeading: "Persona",
+      content
+    });
+    expect(text.startsWith("Page ID: lore.npc.maren")).toBe(true);
+    expect(stripChunkHeader(text)).toBe(content);
+  });
+
+  it("yields nothing for a soft page's identity-only chunk", () => {
+    const text = composeChunkText({ pageId: "lore.media.pod", title: "Pod" });
+    expect(stripChunkHeader(text)).toBe("");
+  });
+
+  it("returns text that carries no header as-is", () => {
+    // Something uploaded to the store by hand. Emptying it would put words in
+    // an author's mouth.
+    expect(stripChunkHeader("just some prose")).toBe("just some prose");
   });
 });
 

@@ -117,9 +117,10 @@ function buildStableSystemLines(
   // One line per authored strategy: the name the planner acts on, plus the
   // writer's note when there is one.
   const recoveryBrief = context.recoveryStrategies
-    .map((entry) =>
-      entry.note ? `- ${entry.strategy} -- ${entry.note}` : `- ${entry.strategy}`
-    )
+    .map((entry) => {
+      const note = entry.note.trim();
+      return note ? `- ${entry.strategy} -- ${note}` : `- ${entry.strategy}`;
+    })
     .join("\n");
 
   // Voice directive prefers an authored `## Voice` section (D5); the plugin-wide

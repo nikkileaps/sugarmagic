@@ -17,6 +17,18 @@ section headings (see `deployment/gateway/lore-designation.ts`):
 | 2. Core knowledge | every other section | same fetch | system prompt (stable) |
 | 3. World lore | the rest of the wiki | per-turn vector search | user message (evidence) |
 
+All three come from the vector store. The running game never reads lore off a
+filesystem: `lore/resolve` rebuilds a page from the chunks indexed against its
+`page_id`, which is a lookup rather than a search -- no query is embedded, no
+relevance floor applies. The markdown on disk is an input to ingest, and a
+deployed gateway has none of it.
+
+Two consequences worth knowing. Sections arrive in the store's order, not the
+author's, because nothing reads them positionally -- the persona card and the
+drift digest both pick by slug. And a `canon_level: soft` page indexes only its
+identity, so it resolves with no sections at all; `loadPersona` treats that as
+degraded rather than reporting an empty character as loaded.
+
 One heading is withheld from all three layers — kept out of the persona card,
 out of core knowledge, and out of the ingest chunks / vector index:
 
@@ -24,7 +36,8 @@ out of core knowledge, and out of the ingest chunks / vector index:
   quest-stage-gated revelation is a later epic.
 
 `isSecretSection` (`deployment/gateway/lore-designation.ts`) is that test, and
-it drives both the ingest skip and the `sections` filter on resolve.
+it drives the ingest skip. Resolve needs no filter of its own: a secret is
+never chunked, so the store has nothing to hand back.
 
 ## Recovery strategies are not on the page
 
@@ -43,9 +56,9 @@ one; the prompt builder renders the same entries — name plus the writer's note
 
 `SugarAgentGatewayPersonaProvider.loadPersona` (`runtime/clients.ts`) is called
 once from `startSession` before the first turn. It hits the existing gateway
-route `POST /api/sugaragent/lore/resolve` (which drops `## Secrets`), runs
-`designateLoreSections` over `sections` to split persona card vs core
-knowledge, and stores a `LoadedPersona` in provider session state. Missing/unfetchable page degrades (never throws):
+route `POST /api/sugaragent/lore/resolve`, runs `designateLoreSections` over
+`sections` to split persona card vs core knowledge, and stores a
+`LoadedPersona` in provider session state. Missing/unfetchable page degrades (never throws):
 `loaded: false`, empty layers, `fallbackReason: "persona-unavailable"` — the
 conversation still runs on name + game tone. `degradedPersona` in
 `runtime/clients.ts` is the one builder for that state; the provider's

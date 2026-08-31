@@ -181,9 +181,13 @@ function normalizeRecoveryStrategies(value: unknown): NPCRecoveryStrategy[] {
 
     seen.add(strategy);
     const note = entry["note"];
+    // Stored exactly as typed, like `description`. Trimming here would run on
+    // every keystroke -- normalize is on the write path -- and the editor reads
+    // its value back out of the store, so the author could never type a space.
+    // The prompt builder trims when it renders the brief.
     entries.push({
       strategy,
-      note: typeof note === "string" ? note.trim() : ""
+      note: typeof note === "string" ? note : ""
     });
   }
 

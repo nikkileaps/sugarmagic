@@ -576,8 +576,14 @@ export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
     }
     const result = await this.client.resolve({ pageIds: [trimmed] });
     const page = result.pages.find((entry) => entry.pageId === trimmed);
-    if (!page) {
+    if (!page || page.sections.length === 0) {
       // A page in missingPageIds (or absent) IS the degraded path (D3).
+      //
+      // A page that resolves with no sections is the same outcome by a
+      // different route: a `canon_level: soft` page indexes only its identity,
+      // so the store can say it exists and nothing more. Reporting that as
+      // loaded would give the NPC an empty persona card and no fallback
+      // reason -- a character with no personality and no sign of why.
       return degradedPersona(trimmed);
     }
     // `page.sections` matches DesignatableLoreSection structurally.

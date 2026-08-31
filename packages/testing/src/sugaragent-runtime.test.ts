@@ -1139,6 +1139,56 @@ describe("SugarAgent runtime provider", () => {
     expect(recovery?.diagnostics).toMatchObject({ consecutiveFallbackTurns: 0 });
   });
 
+  it("recovers in character even when the lore page will not load", async () => {
+    // The point of moving strategies onto the NPC: they travel in the project
+    // file, so they do not depend on a lore page resolving. This is the
+    // deployed-gateway case, where resolve found nothing.
+    const generatePrompts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.endsWith("/api/sugaragent/lore/resolve")) {
+          return new Response(
+            JSON.stringify({ ok: true, pages: [], missingPageIds: ["lore.finnick"] }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.endsWith("/api/sugaragent/retrieve/search")) {
+          return new Response(JSON.stringify({ results: [], requestId: "s" }), {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          });
+        }
+        if (url.endsWith("/api/sugaragent/generate")) {
+          generatePrompts.push(String(init?.body ?? ""));
+          return new Response(
+            JSON.stringify({ text: "Anyway, that reminds me of a wheel.", requestId: "g" }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        throw new Error("Unexpected fetch in test: " + url);
+      })
+    );
+
+    const host = await startFinnick([
+      { strategy: "change-subject", note: "He talks about cheese instead." }
+    ]);
+
+    await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+    const recovery = await host.submitInput({ kind: "free_text", text: "qqq zzz" });
+
+    expect(planOf(recovery)["responseIntent"]).toBe("recover");
+    expect(planOf(recovery)["recoveryStrategy"]).toBe("change-subject");
+    // And the writer's note still reaches the prompt, with no page behind it.
+    const last = JSON.parse(generatePrompts.at(-1) ?? "{}") as {
+      systemBlocks?: Array<{ text?: string }>;
+    };
+    expect(
+      (last.systemBlocks ?? []).map((b) => b.text ?? "").join("\n")
+    ).toContain("He talks about cheese instead.");
+  });
+
   it("resets the clarify count on a pre-placement turn, where the reply is not the planner's", async () => {
     stubRecoveryGateway();
     // Sugarlang's pre-placement opening line makes GenerateStage return a

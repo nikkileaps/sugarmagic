@@ -8,7 +8,53 @@
  * Status: active
  */
 
-import { describe, expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
+import { describe, expect, it, vi } from "vitest";
+
+// Stand-ins for the chrome, so the assertions are about this component's own
+// output rather than Mantine's markup (and so Menu does not demand a provider).
+vi.mock("@mantine/core", () => {
+  const passthrough = (tag: string) =>
+    ({ children }: { children?: ReactNode }) => <div data-el={tag}>{children}</div>;
+  const Menu = Object.assign(passthrough("menu"), {
+    Target: passthrough("menu-target"),
+    Dropdown: passthrough("menu-dropdown"),
+    Item: ({ children }: { children?: ReactNode }) => <li>{children}</li>
+  });
+  return {
+    ActionIcon: ({ children, ...rest }: { children?: ReactNode; "aria-label"?: string }) => (
+      <button aria-label={rest["aria-label"]}>{children}</button>
+    ),
+    Button: passthrough("button"),
+    Group: passthrough("group"),
+    Menu,
+    Stack: passthrough("stack"),
+    Text: passthrough("text"),
+    Textarea: ({ value }: { value?: string }) => <textarea defaultValue={value} />
+  };
+});
+vi.mock("@sugarmagic/ui", () => ({
+  SortableList: ({
+    items,
+    renderActions,
+    renderItem
+  }: {
+    items: Array<{ id: string; label: string }>;
+    renderActions?: (item: { id: string }, index: number) => ReactNode;
+    renderItem?: (item: { id: string }, index: number) => ReactNode;
+  }) => (
+    <ul>
+      {items.map((item, index) => (
+        <li key={item.id}>
+          <span>{item.label}</span>
+          {renderActions?.(item, index)}
+          {renderItem?.(item, index)}
+        </li>
+      ))}
+    </ul>
+  )
+}));
 import { createDefaultNPCDefinition } from "@sugarmagic/domain";
 import type { NPCDefinition, NPCRecoveryStrategy } from "@sugarmagic/domain";
 import {
@@ -131,12 +177,17 @@ describe("the section is contributed to the NPC inspector", () => {
     ).toBeNull();
   });
 
-  it("renders an element for a selected NPC", () => {
+  it("renders the authored strategies for a selected NPC", () => {
     const npc: NPCDefinition = {
       ...createDefaultNPCDefinition({ displayName: "Finnick" }),
-      recoveryStrategies: [{ strategy: "gossip", note: "About Mim." }]
+      recoveryStrategies: [
+        { strategy: "gossip", note: "About Mim." },
+        { strategy: "joke", note: "" }
+      ]
     };
-    expect(
+    // Rendered, not just constructed: a non-null element proves nothing, since
+    // createElement never runs the component.
+    const html = renderToStaticMarkup(
       section?.render({
         workspaceKind: "npcs",
         gameProjectId: null,
@@ -148,7 +199,11 @@ describe("the section is contributed to the NPC inspector", () => {
         onCommand: () => {},
         selectedNPC: npc,
         updateNPC: () => {}
-      })
-    ).not.toBeNull();
+      }) as never
+    );
+    expect(html).toContain("gossip");
+    expect(html).toContain("joke");
+    // The one helper line, because order is load-bearing and nothing else says so.
+    expect(html).toContain("Tried in order.");
   });
 });
