@@ -77,6 +77,12 @@ interface LoreChunk {
   title: string;
   sectionHeading: string;
   sectionSlug: string;
+  /**
+   * Where this section sits on its page, counting from 0. Attributes are the
+   * only thing that survives into the store, so without this a page rebuilt
+   * from its chunks comes back in whatever order the list endpoint returns.
+   */
+  sectionIndex: number;
   relativePath: string;
   embeddingText: string;
   canonLevel: LoreCanonLevel;
@@ -811,6 +817,7 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
         title,
         sectionHeading: title,
         sectionSlug: SOFT_PAGE_CHUNK_SLUG,
+        sectionIndex: 0,
         relativePath,
         embeddingText: ["Page ID: " + pageId, "Title: " + title].join("\n\n"),
         canonLevel
@@ -818,10 +825,10 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
       continue;
     }
 
-    for (const section of sections) {
+    sections.forEach((section, sectionIndex) => {
       // A secret never enters the vector index: it must not leak through a
       // search hit. It stays in `pages[].sections`; only the chunks exclude it.
-      if (isSecretSection(section)) continue;
+      if (isSecretSection(section)) return;
       const chunkId = pageId + "#" + section.slug;
       const embeddingText = [
         "Page ID: " + pageId,
@@ -838,11 +845,12 @@ export function readLorePages(): { source: LoreSource; pages: LorePage[]; chunks
         title,
         sectionHeading: section.heading,
         sectionSlug: section.slug,
+        sectionIndex,
         relativePath,
         embeddingText,
         canonLevel
       });
-    }
+    });
   }
 
   pages.sort((left, right) => left.pageId.localeCompare(right.pageId));
@@ -887,7 +895,9 @@ async function listVectorStoreFiles(vectorStoreId: string): Promise<Record<strin
   let after = "";
 
   while (true) {
-    const query = after ? "?after=" + encodeURIComponent(after) : "";
+    // 100 is the endpoint's maximum. The default of 20 turns one store into
+    // five round trips, and this runs when a conversation opens.
+    const query = "?limit=100" + (after ? "&after=" + encodeURIComponent(after) : "");
     const { payload } = await requestJson(
       "https://api.openai.com/v1/vector_stores/" + vectorStoreId + "/files" + query,
       {
@@ -999,6 +1009,9 @@ async function deleteVectorStoreFile(vectorStoreId: string, vectorStoreFileId: s
  */
 const MAX_FILES_PER_BATCH = 2000;
 
+/** How many chunk files a page rebuild reads at once. */
+const LORE_CHUNK_FETCH_CONCURRENCY = 8;
+
 /**
  * How many chunk files upload at once.
  *
@@ -1033,19 +1046,159 @@ export function chunkContentHash(chunk: LoreChunk): string {
  * `content_hash` is its VERSION. Address plus version, like a file path and the
  * hash of its contents: you do not rename a file because you edited it.
  *
- * Eight of an allowed sixteen keys, values well inside the 512-character limit
- * (openai-node `VectorStoreFile`).
+ * Nine of an allowed sixteen keys, values well inside the 512-character limit
+ * (openai-node `VectorStoreFile`). Attribute values are strings, so
+ * `section_index` is written as one and read back with `Number`.
  *
  * `content_hash` covers the embedding text only, so adding a key here does not
  * re-upload chunks that are already indexed. A new attribute appears on a
  * chunk the next time its text changes, or on every chunk after a full
  * overwrite ingest.
  */
+/**
+ * A page rebuilt from the chunks indexed for it.
+ *
+ * The vector store is the only place the running game reads lore from. The
+ * markdown on disk is an authoring input to ingest, not a runtime source, and a
+ * deployed gateway has none.
+ *
+ * What comes back differs from the page on disk in two ways, both correct:
+ * `## Secrets` is absent because it is never chunked, and a `canon_level: soft`
+ * page yields its identity only, because that is all it indexes.
+ */
+async function fetchChunkText(
+  vectorStoreId: string,
+  fileId: string
+): Promise<string> {
+  // `/v1/files/{id}/content` refuses a `user_data` file with a 400; the
+  // vector-store-scoped route is the one that serves chunk text back.
+  const { payload } = await requestJson(
+    "https://api.openai.com/v1/vector_stores/" +
+      vectorStoreId +
+      "/files/" +
+      fileId +
+      "/content",
+    {
+      method: "GET",
+      headers: {
+        authorization: "Bearer " + requireEnv("SUGARMAGIC_OPENAI_API_KEY")
+      }
+    },
+    "OpenAI vector store file content"
+  );
+  const data = (payload as { data?: unknown })?.data;
+  if (!Array.isArray(data)) return "";
+  return data
+    .map((part) =>
+      typeof (part as { text?: unknown })?.text === "string"
+        ? (part as { text: string }).text
+        : ""
+    )
+    .join("");
+}
+
+/**
+ * Strip the header ingest writes ahead of every chunk (`Page ID:`, `Title:`,
+ * `Section:`) and hand back the section body the author wrote.
+ */
+export function stripChunkHeader(text: string): string {
+  const marker = "\n\nSection: ";
+  const at = text.indexOf(marker);
+  if (at < 0) return text.trim();
+  const afterHeading = text.indexOf("\n\n", at + marker.length);
+  return afterHeading < 0 ? "" : text.slice(afterHeading + 2).trim();
+}
+
+interface StoreChunkRef {
+  fileId: string;
+  pageId: string;
+  title: string;
+  sectionSlug: string;
+  sectionHeading: string;
+  sectionIndex: number;
+  relativePath: string;
+}
+
+function readChunkRef(file: Record<string, unknown>): StoreChunkRef | null {
+  const attributes = file["attributes"];
+  if (typeof attributes !== "object" || attributes === null) return null;
+  const read = (key: string): string => {
+    const value = (attributes as Record<string, unknown>)[key];
+    return typeof value === "string" ? value : "";
+  };
+  const pageId = read("page_id");
+  const fileId = typeof file["id"] === "string" ? file["id"] : "";
+  if (!pageId || !fileId) return null;
+  return {
+    fileId,
+    pageId,
+    title: read("title") || pageId,
+    sectionSlug: read("section_slug"),
+    sectionHeading: read("section_heading"),
+    // Chunks indexed before section_index existed sort last rather than
+    // scrambling the ones that have it.
+    sectionIndex: Number(read("section_index") || Number.MAX_SAFE_INTEGER),
+    relativePath: read("relative_path")
+  };
+}
+
+/**
+ * Rebuild whole pages from the vector store, by id.
+ *
+ * An id lookup, not a search: the attribute says which chunks belong to the
+ * page, so nothing here embeds a query, ranks a result, or applies a relevance
+ * floor. Asking a similarity ranker for "the page with this id" would make the
+ * answer depend on how well some query text happened to score.
+ */
+export async function readLorePagesFromStore(
+  vectorStoreId: string,
+  pageIds: string[]
+): Promise<LorePage[]> {
+  const wanted = new Set(pageIds);
+  const refs = (await listVectorStoreFiles(vectorStoreId))
+    .map(readChunkRef)
+    .filter((ref): ref is StoreChunkRef => ref !== null && wanted.has(ref.pageId));
+
+  const texts = await mapWithConcurrency(refs, LORE_CHUNK_FETCH_CONCURRENCY, (ref) =>
+    fetchChunkText(vectorStoreId, ref.fileId)
+  );
+
+  const byPage = new Map<string, { ref: StoreChunkRef; content: string }[]>();
+  refs.forEach((ref, index) => {
+    const entries = byPage.get(ref.pageId) ?? [];
+    entries.push({ ref, content: stripChunkHeader(texts[index] ?? "") });
+    byPage.set(ref.pageId, entries);
+  });
+
+  const pages: LorePage[] = [];
+  for (const [pageId, entries] of byPage) {
+    entries.sort((left, right) => left.ref.sectionIndex - right.ref.sectionIndex);
+    const sections = entries
+      .filter((entry) => entry.ref.sectionSlug !== SOFT_PAGE_CHUNK_SLUG)
+      .map((entry) => ({
+        heading: entry.ref.sectionHeading,
+        slug: entry.ref.sectionSlug,
+        content: entry.content
+      }));
+    const first = entries[0]!.ref;
+    pages.push({
+      pageId,
+      title: first.title,
+      relativePath: first.relativePath,
+      sectionCount: sections.length,
+      body: composeLoreBody(sections),
+      sections
+    });
+  }
+  return pages;
+}
+
 export function chunkAttributes(chunk: LoreChunk): Record<string, string> {
   return {
     page_id: chunk.pageId,
     chunk_id: chunk.chunkId,
     section_slug: chunk.sectionSlug,
+    section_index: String(chunk.sectionIndex),
     section_heading: chunk.sectionHeading,
     title: chunk.title,
     relative_path: chunk.relativePath,
@@ -2296,49 +2449,43 @@ export async function handleSugarAgentLoreResolve(
     return;
   }
 
-  const lore = readLorePages();
-  const pagesById = new Map(
-    lore.pages.map((page) => [page.pageId, page])
-  );
+  const vectorStoreId = resolveEnv("SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID");
+  if (!vectorStoreId) {
+    sendJson(res, 503, {
+      ok: false,
+      error: "LoreStoreUnavailable",
+      message:
+        "SUGARMAGIC_SUGARAGENT_OPENAI_VECTOR_STORE_ID is not configured, so no lore page can be read. Set it in the SugarAgent plugin settings and redeploy."
+    });
+    return;
+  }
+
+  // Lore reaches the running game through the vector store and no other way.
+  // `## Secrets` is absent because ingest never chunks it -- the exclusion is
+  // upstream now rather than a filter here.
+  //
+  // DEFERRED (revisit epic C/D): quest-stage-scoped knowledge gating. Filtering
+  // the rebuilt sections by story stage is the natural gate, and this is where
+  // it goes.
+  const pages = await readLorePagesFromStore(vectorStoreId, pageIds);
+  const pagesById = new Map(pages.map((page) => [page.pageId, page]));
   const resolvedPages: LorePage[] = [];
   const missingPageIds: string[] = [];
 
   for (const pageId of pageIds) {
     const page = pagesById.get(pageId);
-    if (!page) {
+    if (page) {
+      resolvedPages.push(page);
+    } else {
       missingPageIds.push(pageId);
-      continue;
     }
-    // `## Secrets` must not leave the gateway at all.
-    //
-    // DEFERRED (revisit epic C/D): quest-stage-scoped knowledge gating. This
-    // exclusion point is the natural gate -- when quest state + memory feed the
-    // card fetch, filter sections by story stage here (an NPC knows different
-    // things at different points). `## Secrets` is the static precursor of that
-    // dynamic gate.
-    const sections = page.sections.filter(
-      (section) => !isSecretSection(section)
-    );
-    resolvedPages.push({
-      pageId: page.pageId,
-      title: page.title,
-      relativePath: page.relativePath,
-      sectionCount: sections.length,
-      // A page with no secrets ships its raw markdown untouched; recomposing
-      // would round-trip the author's formatting for no reason.
-      body:
-        sections.length === page.sections.length
-          ? page.body
-          : composeLoreBody(sections),
-      sections
-    });
   }
 
   sendJson(res, 200, {
     ok: true,
     pages: resolvedPages,
     missingPageIds,
-    warnings: lore.warnings
+    warnings: []
   });
 }
 
