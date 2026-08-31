@@ -225,8 +225,27 @@ export function buildFallbackReply(input: {
   interpret: InterpretResult;
   responseIntent: PlanResult["responseIntent"];
   activeQuestDisplayName: string | null;
+  /** The move a `recover` turn was making, so its fallback matches it. */
+  recoveryStrategy?: PlanResult["recoveryStrategy"];
 }): string {
-  const { interpret, responseIntent, activeQuestDisplayName } = input;
+  const {
+    interpret,
+    responseIntent,
+    activeQuestDisplayName,
+    recoveryStrategy
+  } = input;
+  // A RECOVERY TURN MUST NOT FALL BACK TO A QUESTION.
+  //
+  // The catch-all at the end of this function asks the player for more to go
+  // on, which is the single thing a recovery turn exists to stop doing -- the
+  // NPC has already asked once and got nowhere. Worse on `curt-exit`: the
+  // close is decided from the plan, so without this the player read "I need a
+  // little more to go on" and then had the panel shut on them.
+  if (responseIntent === "recover") {
+    return recoveryStrategy === "curt-exit"
+      ? "I should get on. We'll talk another time."
+      : "Anyway. Let me tell you what I've been up to.";
+  }
   if (responseIntent === "greet") {
     return "Hello. What can I help you with today?";
   }

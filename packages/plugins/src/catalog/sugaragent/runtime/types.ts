@@ -3,6 +3,10 @@ import type {
   ConversationSelectionContext,
   ConversationTurnEnvelope
 } from "@sugarmagic/runtime-core";
+// The gateway owns what a recovery strategy is; the runtime consumes the same
+// definition rather than restating it. `lore-designation` is the deliberately
+// import-free module both sides share.
+import type { RecoveryStrategy } from "../../../deployment/gateway/lore-designation";
 
 export type TurnStageStatus = "ok" | "degraded" | "failed";
 
@@ -187,12 +191,52 @@ export interface LoadedPersona {
    * degraded or no persona sections authored.
    */
   digest: string;
+  /**
+   * The moves this character can make when it does not understand the player,
+   * read from `## Recovery`. Empty for a character with no such section, which
+   * is every character until one is written -- the planner supplies a default.
+   *
+   * Required rather than optional so a persona built anywhere has to say what
+   * it holds.
+   */
+  recoveryStrategies: RecoveryStrategy[];
+  /**
+   * The `## Recovery` prose as authored, for the prompt. The strategy names
+   * above are the same text read as data; this is what the writer sees.
+   */
+  recoverySections: LoreCardSection[];
 }
 
 export interface SugarAgentProviderState {
   sessionId: string;
   turnCount: number;
   consecutiveFallbackTurns: number;
+  /**
+   * Clarifying questions asked since the last real exchange. Separate from
+   * `consecutiveFallbackTurns` because the two answer different questions: a
+   * stalled turn means the machinery failed, a clarifying question means it
+   * worked and the player was not understood. Read by the Plan stage to cap
+   * how many times in a row an NPC may ask.
+   *
+   * A recovery turn HOLDS this rather than clearing it, so a run of confusion
+   * yields one clarifying question however long it lasts. Only a turn that is
+   * neither a clarify nor a recovery clears it -- the player said something
+   * that landed, and the next stretch of confusion earns its own question.
+   */
+  consecutiveClarifyTurns: number;
+  /**
+   * Recovery moves made this conversation. Indexes the character's
+   * `## Recovery` list so several authored moves are used in turn instead of
+   * the first one repeating.
+   */
+  recoveryTurnCount: number;
+  /**
+   * Who the player is, from the `## Summary` of the character page the project
+   * points at. Loaded once at session start. `null` means no page, no summary,
+   * or the fetch failed -- the NPC talks to a stranger, as it always did.
+   * `undefined` means the load has not run yet.
+   */
+  playerIdentity?: string | null;
   /** Plan 075.2 -- 3-strike governor: consecutive turns where judge failed and regen ran */
   consecutiveJudgeFailures: number;
   closeRequested: boolean;
@@ -358,7 +402,18 @@ export interface PlanResult {
     | "redirect"
     | "goodbye"
     | "clarify"
-    | "abstain";
+    | "abstain"
+    | "recover";
+  /**
+   * Which move a `recover` turn makes, from the NPC's `## Recovery` list.
+   * Absent on every other intent.
+   *
+   * A separate axis from the intent: `recover` says the NPC stopped asking and
+   * did something instead, this says what. Keeping it off `responseIntent`
+   * means the five moves do not each need a goal sentence, an audit cue and an
+   * initiative action of their own.
+   */
+  recoveryStrategy?: RecoveryStrategy;
   responseGoal: string;
   responseSpecificity: "grounded" | "generic-only";
   turnPath: TurnPath;

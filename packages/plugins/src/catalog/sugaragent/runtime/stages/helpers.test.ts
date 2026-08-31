@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { findStageDirectionViolations, normalizeNpcSpeech, normalizeRetrievedEvidenceText } from "./helpers";
+import { buildFallbackReply, findStageDirectionViolations, normalizeNpcSpeech, normalizeRetrievedEvidenceText } from "./helpers";
 
 describe("normalizeRetrievedEvidenceText", () => {
   it("strips ALL leading ingest headers even when separated by blank lines", () => {
@@ -106,5 +106,48 @@ describe("findStageDirectionViolations", () => {
     expect(
       findStageDirectionViolations("Hola. Me llamo Bo. Como estas?")
     ).not.toContain("contains-narration-around-speech");
+  });
+});
+
+describe("buildFallbackReply -- a recovery turn (#233)", () => {
+  const interpret = {
+    userText: "qqq zzz",
+    shouldCloseAfterReply: false,
+    interpretation: { intent: "unclear" }
+  } as never;
+
+  it("does not ask the player for more, which is what recover exists to stop", () => {
+    const text = buildFallbackReply({
+      interpret,
+      responseIntent: "recover",
+      recoveryStrategy: "change-subject",
+      activeQuestDisplayName: null
+    });
+    expect(text).not.toContain("more to go on");
+    expect(text).not.toContain("?");
+  });
+
+  it("reads as leaving when the move was to leave", () => {
+    // The close is decided from the plan, so a curt-exit turn whose text got
+    // replaced would otherwise pair "tell me more" with a 2.2s auto-close --
+    // the NPC asking a question and then walking out mid-sentence.
+    const text = buildFallbackReply({
+      interpret,
+      responseIntent: "recover",
+      recoveryStrategy: "curt-exit",
+      activeQuestDisplayName: null
+    });
+    expect(text).toContain("another time");
+    expect(text).not.toContain("?");
+  });
+
+  it("leaves the other intents' lines alone", () => {
+    expect(
+      buildFallbackReply({
+        interpret,
+        responseIntent: "clarify",
+        activeQuestDisplayName: null
+      })
+    ).toContain("clearer question");
   });
 });

@@ -24,6 +24,7 @@ import {
   SugarAgentGatewayPersonaProvider,
   SugarAgentGatewayVectorStoreClient,
   SugarAgentGatewayVectorStoreProvider,
+  degradedPersona,
   type BearerTokenGetter,
   type JudgeProvider,
   type LLMProvider,
@@ -80,6 +81,8 @@ function ensureProviderState(
     playerDeclaredNames: [],
     turnCount: 0,
     consecutiveFallbackTurns: 0,
+    consecutiveClarifyTurns: 0,
+    recoveryTurnCount: 0,
     consecutiveJudgeFailures: 0,
     closeRequested: false,
     history: [],
@@ -148,12 +151,19 @@ function isStalledTurn(
     return true;
   }
 
-  return responseIntent === "clarify";
+  // A clarifying question is not a stall. The NPC understood its job and did
+  // it; the player is the one who has to answer. Counting it here put an
+  // outage and a misunderstanding on the same three-strike close, which meant
+  // the cap on clarifying questions could not move without also closing a
+  // conversation on one bad model call. `state.consecutiveClarifyTurns`
+  // counts them separately.
+  return false;
 }
 
 function shouldAutoCloseAfterTurn(
   diagnostics: Record<string, TurnStageDiagnostics>,
-  actionProposals: ConversationTurnEnvelope["proposedActions"] | undefined
+  actionProposals: ConversationTurnEnvelope["proposedActions"] | undefined,
+  isCurtExit: boolean
 ): boolean {
   const hasCloseProposal = Boolean(
     actionProposals?.some((proposal) => proposal.kind === "request-close")
@@ -162,7 +172,12 @@ function shouldAutoCloseAfterTurn(
     return false;
   }
 
+  // A character walking off mid-conversation means it: the panel closes on a
+  // timer rather than leaving the player to click past someone who just left.
+  // Without this the close still happens -- the proposal ends the session on
+  // the next advance -- but only after the player presses on.
   return (
+    isCurtExit ||
     diagnostics.Generate?.fallbackReason === "llm-retry-exhausted" ||
     diagnostics.Regenerate?.fallbackReason === "llm-retry-exhausted"
   );
@@ -245,6 +260,7 @@ function resolveProviders(
   judgeProvider: JudgeProvider | null;
   vectorStoreProvider: VectorStoreProvider | null;
   personaLoader: PersonaLoader;
+  lorePageResolver: LorePageResolver;
 } {
   const baseUrl = config.proxyBaseUrl.trim();
   // Story 47.9.5 — token source depends on gateway auth mode:
@@ -279,7 +295,10 @@ function resolveProviders(
     vectorStoreProvider: createSugarAgentVectorStoreProvider(config),
     personaLoader: new SugarAgentGatewayPersonaProvider(
       new SugarAgentGatewayLoreClient(baseUrl, getBearerToken)
-    )
+    ),
+    // Same factory the quest-context middleware is given, so page fetching has
+    // one construction site rather than two that can drift.
+    lorePageResolver: createSugarAgentLorePageResolver(config)
   };
 }
 
@@ -337,14 +356,7 @@ async function loadPersonaOnce(args: {
   try {
     state.persona = await personaLoader.loadPersona(lorePageId);
   } catch (error) {
-    state.persona = {
-      pageId: lorePageId,
-      loaded: false,
-      fallbackReason: "persona-unavailable",
-      personaCard: [],
-      coreKnowledge: [],
-      digest: ""
-    };
+    state.persona = degradedPersona(lorePageId);
     logger.logPluginEvent("persona-load-failed", {
       pageId: lorePageId,
       error: error instanceof Error ? error.message : String(error)
@@ -356,6 +368,57 @@ async function loadPersonaOnce(args: {
     fallbackReason: state.persona.fallbackReason,
     personaSectionCount: state.persona.personaCard.length,
     coreSectionCount: state.persona.coreKnowledge.length
+  });
+}
+
+/**
+ * The one section of a player's page an NPC is given. A character page carries
+ * material for two different readers, and only this part is something another
+ * person could plausibly have heard.
+ */
+const PLAYER_SUMMARY_SECTION_SLUG = "summary";
+
+/**
+ * Who the player is, read once at session start from the character page the
+ * project points `PlayerDefinition.lorePageId` at.
+ *
+ * Only `## Summary` is taken. The rest of a player page is written for whoever
+ * writes that character -- habits, blind spots, notes on what not to invent --
+ * and handing an NPC that material would tell it things no character could
+ * know. The summary is the part another person could plausibly have heard.
+ *
+ * Never throws. No page, no summary, or an unreachable gateway all mean the
+ * same thing to a conversation: the NPC simply does not know who it is talking
+ * to, which is where every NPC stood before this existed.
+ */
+async function loadPlayerIdentityOnce(args: {
+  lorePageResolver: LorePageResolver;
+  playerLorePageId: string | null;
+  state: SugarAgentProviderState;
+  logger: SugarAgentLogger;
+}): Promise<void> {
+  const { lorePageResolver, playerLorePageId, state, logger } = args;
+  if (state.playerIdentity !== undefined) return;
+  state.playerIdentity = null;
+
+  const pageId = playerLorePageId?.trim() ?? "";
+  if (!pageId) return;
+
+  try {
+    const [page] = await lorePageResolver.resolvePages([pageId]);
+    const summary = page?.sections.find(
+      (section) => section.slug === PLAYER_SUMMARY_SECTION_SLUG
+    );
+    state.playerIdentity = summary?.content.trim() || null;
+  } catch (error) {
+    logger.logPluginEvent("player-identity-load-failed", {
+      pageId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+  logger.logPluginEvent("player-identity-loaded", {
+    pageId,
+    loaded: state.playerIdentity !== null
   });
 }
 
@@ -437,6 +500,9 @@ async function executePipeline(args: {
       Generate: generateDiagnostics
     };
     state.consecutiveFallbackTurns = 0;
+    // The reply the player reads is the override, not the planner's, so
+    // whatever Plan chose this turn the NPC neither asked nor recovered.
+    state.consecutiveClarifyTurns = 0;
     state.closeRequested = Boolean(
       generate.envelopeOverride.proposedActions?.some(
         (proposal) =>
@@ -478,6 +544,7 @@ async function executePipeline(args: {
         historyLength: state.history.length,
         llmBackend: generate.llmBackend,
         consecutiveFallbackTurns: state.consecutiveFallbackTurns,
+        consecutiveClarifyTurns: state.consecutiveClarifyTurns,
         persona: summarizePersona(state.persona)
       }
     };
@@ -529,6 +596,21 @@ async function executePipeline(args: {
   state.consecutiveFallbackTurns = turnStalled
     ? state.consecutiveFallbackTurns + 1
     : 0;
+  // A clarify adds one; a recovery move holds the count; anything else clears
+  // it. Holding is what makes a long run of confusion yield exactly one
+  // clarifying question -- clearing on the recovery move instead lets the next
+  // turn ask again, which is the clarify / recover alternation this epic is
+  // meant to remove. Clearing on a real exchange is what stops the count going
+  // stale, so a player who gets back on track still earns their one question
+  // the next time they are lost.
+  if (plan.responseIntent === "clarify") {
+    state.consecutiveClarifyTurns += 1;
+  } else if (plan.responseIntent !== "recover") {
+    state.consecutiveClarifyTurns = 0;
+  }
+  if (plan.recoveryStrategy) {
+    state.recoveryTurnCount += 1;
+  }
 
   let finalText = repair.text;
   let finalActionProposals = repair.actionProposals;
@@ -539,6 +621,19 @@ async function executePipeline(args: {
   // which left the most severe degraded turn as the only one carrying no
   // label at all.
   let terminalClose = false;
+
+  // A character whose recovery is to leave has to actually leave. Plan says
+  // which move it made; the close itself is this proposal, read back below
+  // into `closeRequested`.
+  const isCurtExit = plan.recoveryStrategy === "curt-exit";
+  if (isCurtExit) {
+    finalActionProposals = [
+      ...repair.actionProposals.filter(
+        (proposal) => proposal.kind !== "request-close"
+      ),
+      { kind: "request-close" }
+    ];
+  }
 
   if (state.consecutiveFallbackTurns >= 3) {
     finalText = buildTerminalFallbackReply({
@@ -556,7 +651,11 @@ async function executePipeline(args: {
 
   if (
     autoCloseAfterMs === null &&
-    shouldAutoCloseAfterTurn(state.lastTurnDiagnostics, finalActionProposals)
+    shouldAutoCloseAfterTurn(
+      state.lastTurnDiagnostics,
+      finalActionProposals,
+      isCurtExit
+    )
   ) {
     autoCloseAfterMs = 2200;
   }
@@ -613,6 +712,7 @@ async function executePipeline(args: {
       historyLength: state.history.length,
       llmBackend: finalLlmBackend,
       consecutiveFallbackTurns: state.consecutiveFallbackTurns,
+      consecutiveClarifyTurns: state.consecutiveClarifyTurns,
       persona: summarizePersona(state.persona)
     }
   };
@@ -631,7 +731,13 @@ export function createSugarAgentConversationProvider(
   // (mandatory) proxyBaseUrl, which pinned logging always-on and made the
   // setting a no-op. Now stage logging + the prompt dump follow the flag.
   const logger = createSugarAgentLogger(config.debugLogging);
-  const { llmProvider, judgeProvider, vectorStoreProvider, personaLoader } = resolveProviders(
+  const {
+    llmProvider,
+    judgeProvider,
+    vectorStoreProvider,
+    personaLoader,
+    lorePageResolver
+  } = resolveProviders(
     config,
     logger
   );
@@ -675,6 +781,15 @@ export function createSugarAgentConversationProvider(
       await loadPersonaOnce({
         personaLoader,
         lorePageId: context.selection.lorePageId ?? null,
+        state,
+        logger
+      });
+
+      // Who the NPC is talking to. Same once-per-conversation shape, and just
+      // as optional -- a project that points at nothing keeps working.
+      await loadPlayerIdentityOnce({
+        lorePageResolver,
+        playerLorePageId: context.selection.playerLorePageId ?? null,
         state,
         logger
       });

@@ -21,6 +21,7 @@ function baseContext(
     mode: "agent",
     npcDisplayName: "Maren",
     npcDescription: null,
+    playerIdentity: null,
     tone: "cozy",
     responseIntent: "chat",
     responseSpecificity: "grounded",
@@ -52,7 +53,8 @@ function baseContext(
       ],
       coreKnowledge: [
         { heading: "Work", slug: "work", content: "Runs the bakery on the square." }
-      ]
+      ],
+      recoverySections: []
     },
     personaDigest: "Warm, brisk, proud.\nVoice: Short sentences; says 'love'.",
     constraintReminder: "",
@@ -185,7 +187,8 @@ describe("buildGeneratePrompt — cache-boundary restructure (072.4)", () => {
         personaCard: [
           { heading: "Persona", slug: "persona", content: "Warm." }
         ],
-        coreKnowledge: []
+        coreKnowledge: [],
+      recoverySections: []
       }
     });
     const { systemPrompt } = buildGeneratePrompt(ctx);
@@ -459,7 +462,7 @@ describe("buildGeneratePrompt — no-lore description fallback", () => {
   it("injects npcDescription as identity anchor when persona card and core knowledge are empty", () => {
     const { systemPrompt } = buildGeneratePrompt(
       baseContext({
-        persona: { personaCard: [], coreKnowledge: [] },
+        persona: { personaCard: [], coreKnowledge: [], recoverySections: [] },
         npcDescription: "A stressed passenger worried about lost luggage."
       })
     );
@@ -478,7 +481,7 @@ describe("buildGeneratePrompt — no-lore description fallback", () => {
   it("does not inject npcDescription when npcDescription is null", () => {
     const { systemPrompt } = buildGeneratePrompt(
       baseContext({
-        persona: { personaCard: [], coreKnowledge: [] },
+        persona: { personaCard: [], coreKnowledge: [], recoverySections: [] },
         npcDescription: null
       })
     );
@@ -572,5 +575,28 @@ describe("buildGeneratePrompt -- constraint reminder (083.5)", () => {
       baseContext({ constraintReminder: "Language constraint: ~85% Spanish, A1 level." })
     );
     expect(systemPrompt).not.toContain("Language constraint:");
+  });
+});
+
+describe("who the NPC is talking to (#250)", () => {
+  it("carries the player's summary, and the judge sees it", () => {
+    const { systemPrompt, judgeContext } = buildGeneratePrompt(
+      baseContext({
+        playerIdentity:
+          "Mim is an anthropomorphic squirrel and a young history mage."
+      })
+    );
+    expect(systemPrompt).toContain("Who you are talking to:");
+    expect(systemPrompt).toContain("young history mage");
+    // A FACT, not a brief. Without it the judge scores "you're the history
+    // mage" as an invention, because nothing told it that was true.
+    expect(judgeContext).toContain("young history mage");
+  });
+
+  it("says nothing at all when no player page is set", () => {
+    const { systemPrompt } = buildGeneratePrompt(
+      baseContext({ playerIdentity: null })
+    );
+    expect(systemPrompt).not.toContain("Who you are talking to");
   });
 });

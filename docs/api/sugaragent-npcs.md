@@ -439,6 +439,40 @@ skips a turn only when Generate produced no prompt at all
 **Files:** `ConversationSelectionContext.npcDescription` (runtime-core),
 `buildStableSystemLines` in `prompt/builder.ts`.
 
+## Who the NPC is talking to
+
+A project can point at the lore page for the character the player is playing:
+`PlayerDefinition.lorePageId`, set in **Design > Player > Lore Page ID**. The
+wiki page it names is an ordinary character page -- the wiki does not know a
+game exists -- and this field is where the game-specific fact lives.
+
+The provider loads it once at session start, beside the NPC's own persona, and
+puts **only the page's `## Summary`** into the cached system half:
+
+```
+Who you are talking to:
+<the player page's ## Summary>
+```
+
+Summary only, because a character page carries material for two readers. The
+rest -- habits, blind spots, notes on what not to invent about them -- is
+direction for whoever writes that character, and handing it to an NPC would tell
+it things nobody could have told it.
+
+It is a **fact**, not an instruction, so the judge is given it too. Without
+that, the first time an NPC said "you're the history mage" the judge would score
+it as an invention.
+
+Absent page, absent summary, or an unreachable gateway all read the same way:
+the NPC does not know who it is talking to, which is where every NPC stood
+before this existed. The `gossip` recovery move is withheld entirely in that
+state rather than left to invent a person.
+
+**Files:** `PlayerDefinition.lorePageId` (domain),
+`ConversationSelectionContext.playerLorePageId` (runtime-core),
+`loadPlayerIdentityOnce` in `runtime/provider.ts`, `playerIdentity` in
+`prompt/context.ts`.
+
 ## World Events: Compose Existing Machinery (D5)
 
 Quest-gated scene changes use existing seams, not new infrastructure:
@@ -560,6 +594,15 @@ Replaces RepairStage. Decision tree (priority order):
 5. `consecutiveJudgeFailures >= 3` -> 3-strike governor -> deterministic fallback
 6. No LLM provider -> deterministic fallback
 7. Attempt one LLM regen (max 200 tokens). Re-lint with regex. Pass or fallback.
+
+**The deterministic fallback is per-intent** (`buildFallbackReply`,
+`stages/helpers.ts`). Every intent needs its own line, because the catch-all
+asks the player for more to go on -- and on a `recover` turn that is the one
+thing the turn exists to stop doing. A recovery turn takes the move into
+account too: `curt-exit` gets a line that reads as leaving, since the close is
+decided from the plan and would otherwise pair "tell me more" with a 2.2s
+auto-close. **Adding an intent means adding its fallback**; nothing in the type
+system catches the omission.
 
 **Cost cap:** at most 2 generate invocations + 1 judge call per turn. No
 second judge call after regen (latency/cost constraint per plan D2).

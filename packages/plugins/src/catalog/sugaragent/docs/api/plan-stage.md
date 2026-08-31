@@ -28,6 +28,9 @@ Plan writes no prose and calls no model. It is a pure decision:
       in reality recognises
     - is a quest active, did quest lore resolve, is a scripted line waiting
     - the conversation so far
+    - the NPC's recovery moves, from its `## Recovery` section
+    - clarifying questions asked since the last real exchange
+    - recovery moves made so far this conversation (indexes the list)
 
 ## Step 1 -- work out what there is to go on
 
@@ -61,33 +64,149 @@ conversational shape the turn happens to take.
 
 Only GREET (no message to check) and GOODBYE (they are leaving) come first.
 
-## Step 3 -- one override, for going in circles
+## Step 3 -- one clarifying question, then the character does something
+
+    if the reply is CLARIFY
+       AND the NPC has already asked once since the last real exchange
+           -> RECOVER, plus one move from the NPC's `## Recovery` list
+
+Placed after the whole ladder, so all three routes to CLARIFY are capped by one
+rule -- including the route derived from the NPC's own previous reply. A
+recovery move containing the word "which" sets a clarify expectation for the
+next turn; without the cap sitting above that, the conversation alternates
+between asking and recovering forever.
+
+Asking once is deliberate. It gives a language learner a second try at saying
+it. Asking twice cannot succeed: on an unclear turn with no evidence the NPC has
+nothing to answer from.
+
+The move comes from the character's `## Recovery` section, walked in written
+order and wrapping, so several authored moves are used in turn. A character with
+no section gets `self-disclosure` -- never `curt-exit`, which would make every
+unwritten character walk away.
+
+A move with nothing behind it is dropped from the menu before selection rather
+than attempted. Today that is `gossip`, which is about the player and so needs
+the project to have said who the player is. A character whose whole list is
+unavailable falls to `self-disclosure`.
+
+## Step 4 -- one override, for going in circles
 
     if there is no evidence AND the conversation is repeating itself
-       AND the reply is not already GOODBYE or REDIRECT
-           -> force CLARIFY
+       AND the reply is not already GOODBYE, REDIRECT, ABSTAIN or RECOVER
+           -> RECOVER, using the same move selection as step 3
 
 This is about repetition, not knowledge, which is why it ignores everything
 step 2 decided.
 
-## Step 4 -- decide how specific the reply may be
+It runs after the cap and never undoes it. A turn can be both unclear and
+repeating; when it is, the move chosen in step 3 wins, because turning it back
+into a clarifying question is the loop this whole design removes. ABSTAIN is
+exempt for a different reason: an NPC that should say "I have never heard of
+Brindlebear's Book Emporium" must not change the subject instead.
+
+**When this can fire, measured.** "Repeating itself" needs both halves: the
+player repeating their message word for word, AND two of the NPC's last three
+replies collapsing to one string. A generated reply is never byte-identical to
+an earlier one, so the second half only happens when the NPC is already on the
+deterministic canned path -- no lore page, no evidence. Driven against a live
+gateway on 2026-08-30, an NPC with a page never triggered it across six
+identical player turns; an NPC without one triggered it on the fourth.
+
+So this branch only ever affects characters nobody has written a page for. What
+it changes is what the interrupting turn says: it stops asking a player who is
+plainly out of words to supply more, and hands them something to react to. It
+does not fix the underlying repetition -- the following turn returns to the
+canned path.
+
+## Step 5 -- decide how specific the reply may be
 
     if nothing grounded the turn (no evidence, no memory, no quest lore)
        AND the reply is GREET, CHAT or ANSWER
            -> "generic-only"    (stay vague, do not reach for detail)
     else   -> "grounded"
 
-KNOWN WRINKLE: `hasPersonaPage` is not in that list. A turn grounded only by the
-NPC's own page is still told to stay generic. Nothing observed has depended on
-it, but it is inconsistent with step 2, which does count the page.
+RECOVER is not in that list, so a recovery turn is always grounded. That is
+load-bearing rather than incidental: a generic-only reply counts toward the
+three-strike close, so a borrowed CHAT intent would have closed the conversation
+after three recoveries.
 
-## Step 5 -- what Plan hands back
+KNOWN WRINKLE: `hasPersonaPage` is not in that list either. A turn grounded only
+by the NPC's own page is still told to stay generic. Nothing observed has
+depended on it, but it is inconsistent with step 2, which does count the page.
+
+## Step 6 -- what Plan hands back
 
     - the kind of reply       -> becomes "Intent:" in the generate prompt
+    - the recovery move       -> present only on a RECOVER turn
     - how specific to be      -> grounded vs generic
     - the goal sentence       -> becomes "Goal:" in the generate prompt
     - who speaks next, what the input box does, its placeholder
     - the repetition state, carried into the next turn
+
+## Five conversations
+
+What the steps above add up to, turn by turn. `count` is the clarifying
+questions asked since the last real exchange.
+
+**1. A confused player and a character whose list is `change-subject`,
+`playful-probe`.**
+
+| turn | player says | reply | move | count | conversation |
+|---|---|---|---|---|---|
+| 1 | "qqq zzz" | CLARIFY | -- | 1 | open |
+| 2 | "qqq zzz" | RECOVER | `change-subject` | 1 | open |
+| 3 | "qqq zzz" | RECOVER | `playful-probe` | 1 | open |
+| 4 | "qqq zzz" | RECOVER | `change-subject` | 1 | open |
+
+One question for the whole run of confusion. The list wraps.
+
+**2. The same player, a character whose list is `curt-exit`.**
+
+| turn | player says | reply | move | count | conversation |
+|---|---|---|---|---|---|
+| 1 | "qqq zzz" | CLARIFY | -- | 1 | open |
+| 2 | "qqq zzz" | RECOVER | `curt-exit` | 1 | closes |
+
+The exit sets a close proposal and a 2.2s auto-close. The line is generated from
+the character's page; the player never reads one written by the engine.
+
+**3. The same player, a character with no `## Recovery` section.**
+
+| turn | player says | reply | move | count | conversation |
+|---|---|---|---|---|---|
+| 1 | "qqq zzz" | CLARIFY | -- | 1 | open |
+| 2 | "qqq zzz" | RECOVER | `self-disclosure` | 1 | open |
+| 3 | "qqq zzz" | RECOVER | `self-disclosure` | 1 | open |
+
+Never closes. Nothing varies the content between turns 2 and 3 -- the novelty
+signals that could are computed every turn and branched on by nothing.
+
+**4. Confusion, then the player gets it right.**
+
+| turn | player says | reply | move | count | conversation |
+|---|---|---|---|---|---|
+| 1 | "qqq zzz" | CLARIFY | -- | 1 | open |
+| 2 | "qqq zzz" | RECOVER | `change-subject` | 1 | open |
+| 3 | "hello!" | CHAT | -- | **0** | open |
+| 4 | "hjkl" | CLARIFY | -- | 1 | open |
+
+The count is HELD by a recovery move and CLEARED by a real exchange. Holding is
+what makes one run of confusion yield one question; clearing is what stops the
+count going stale, so a player who gets back on track still earns their question
+the next time they are lost.
+
+**5. The model goes down.**
+
+| turn | reply | fallback count | conversation |
+|---|---|---|---|
+| 1 | canned, degraded | 1 | open |
+| 2 | canned, degraded | 2 | open |
+| 3 | canned, degraded | 3 | closes |
+
+Untouched by any of the above. A fixed line survives here and only here, because
+without a model there is nothing to render a character voice with. A recovery
+turn never contributes to this counter, per step 5.
 
 ## Two questions, not one
 

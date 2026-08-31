@@ -438,3 +438,166 @@ describe("findUnrecognisedNames -- a capital owed to position is not a name (#18
     expect(findUnrecognisedNames("Buenas tardes! Hola Finnick!", CORPUS)).toEqual([]);
   });
 });
+
+describe("resolvePlanDecision -- going in circles (#242)", () => {
+  // `exhausted` needs BOTH halves: the player repeating themselves verbatim,
+  // and two of the NPC's last three replies collapsing to one string. Measured
+  // live: only the deterministic canned path produces the second half.
+  const circling = [
+    { role: "assistant" as const, text: "I'm listening." },
+    { role: "user" as const, text: "wakka wakka" },
+    { role: "assistant" as const, text: "I'm listening." },
+    { role: "user" as const, text: "wakka wakka" }
+  ];
+
+  type PlanInput = Parameters<typeof resolvePlanDecision>[0];
+
+  function circlingTurn(overrides: Partial<PlanInput> = {}) {
+    return resolvePlanDecision({
+      interpret: baseInterpret({ userText: "wakka wakka" }),
+      hasEvidence: false,
+      hasMemory: false,
+      hasActiveQuest: false,
+      hasScriptedFollowup: false,
+      npcDisplayName: "Nobody",
+      history: circling,
+      ...overrides
+    });
+  }
+
+  it("talks about itself instead of asking what the player meant", () => {
+    const decision = circlingTurn();
+    expect(decision.noveltyState.exhausted).toBe(true);
+    expect(decision.responseIntent).toBe("recover");
+    expect(decision.recoveryStrategy).toBe("self-disclosure");
+  });
+
+  it("still reaches the writer rather than the canned short-circuit", () => {
+    // Guards a property this change must not lose, NOT one it adds: the
+    // outgoing `clarify` was already grounded, because only greet, chat and
+    // answer can be generic-only. Passes before and after by design.
+    expect(circlingTurn().responseSpecificity).toBe("grounded");
+  });
+
+  it("uses the character's own move when one is authored", () => {
+    const decision = circlingTurn({
+      recoveryStrategies: ["change-subject", "joke"],
+      recoveryTurnCount: 1
+    });
+    expect(decision.recoveryStrategy).toBe("joke");
+  });
+
+  it("never converts a refusal -- 'I have never heard of it' survives", () => {
+    const decision = circlingTurn({
+      interpret: baseInterpret({
+        userText: "wakka wakka",
+        interpretation: {
+          ...baseInterpret().interpretation,
+          intent: "lore_world"
+        },
+        turnRouting: {
+          path: "grounded",
+          socialFastPathEligible: false,
+          factualRiskSignals: []
+        }
+      }),
+      unknownNamedEntities: ["Brindlebear's Book Emporium"]
+    });
+    expect(decision.noveltyState.exhausted).toBe(true);
+    expect(decision.responseIntent).toBe("abstain");
+    expect(decision.recoveryStrategy).toBeUndefined();
+  });
+
+  it("leaves goodbye alone", () => {
+    const goodbye = circlingTurn({
+      interpret: baseInterpret({ userText: "wakka wakka", shouldCloseAfterReply: true })
+    });
+    expect(goodbye.responseIntent).toBe("goodbye");
+  });
+
+  it("leaves redirect alone", () => {
+    // quest_guidance with an active quest resolves to `redirect` in the ladder.
+    const redirect = circlingTurn({
+      interpret: baseInterpret({
+        userText: "wakka wakka",
+        interpretation: {
+          ...baseInterpret().interpretation,
+          intent: "quest_guidance"
+        },
+        turnRouting: {
+          path: "grounded",
+          socialFastPathEligible: false,
+          factualRiskSignals: []
+        }
+      }),
+      hasActiveQuest: true
+    });
+    expect(redirect.responseIntent).toBe("redirect");
+    expect(redirect.recoveryStrategy).toBeUndefined();
+  });
+});
+
+describe("resolvePlanDecision -- gossip (#249)", () => {
+  type PlanInput = Parameters<typeof resolvePlanDecision>[0];
+  const circling = [
+    { role: "assistant" as const, text: "I'm listening." },
+    { role: "user" as const, text: "wakka wakka" },
+    { role: "assistant" as const, text: "I'm listening." },
+    { role: "user" as const, text: "wakka wakka" }
+  ];
+  function turn(overrides: Partial<PlanInput> = {}) {
+    return resolvePlanDecision({
+      interpret: baseInterpret({ userText: "wakka wakka" }),
+      hasEvidence: false,
+      hasMemory: false,
+      hasActiveQuest: false,
+      hasScriptedFollowup: false,
+      npcDisplayName: "Finnick",
+      history: circling,
+      ...overrides
+    });
+  }
+
+  it("gossips when the NPC has been told who the player is", () => {
+    const decision = turn({
+      recoveryStrategies: ["gossip"],
+      knowsWhoThePlayerIs: true
+    });
+    expect(decision.recoveryStrategy).toBe("gossip");
+    expect(decision.responseGoal).toContain("person you are talking to");
+    expect(decision.responseGoal).toContain("Do not invent");
+  });
+
+  it("drops gossip from the menu when it would have to invent a person", () => {
+    const decision = turn({
+      recoveryStrategies: ["gossip", "change-subject"],
+      knowsWhoThePlayerIs: false
+    });
+    expect(decision.recoveryStrategy).toBe("change-subject");
+  });
+
+  it("falls back to self-disclosure when gossip was the only move", () => {
+    const decision = turn({
+      recoveryStrategies: ["gossip"],
+      knowsWhoThePlayerIs: false
+    });
+    expect(decision.recoveryStrategy).toBe("self-disclosure");
+  });
+
+  it("keeps rotating over the moves that remain", () => {
+    const list: ("gossip" | "change-subject" | "joke")[] = [
+      "gossip",
+      "change-subject",
+      "joke"
+    ];
+    const picks = [0, 1, 2].map(
+      (n) =>
+        turn({
+          recoveryStrategies: list,
+          knowsWhoThePlayerIs: false,
+          recoveryTurnCount: n
+        }).recoveryStrategy
+    );
+    expect(picks).toEqual(["change-subject", "joke", "change-subject"]);
+  });
+});

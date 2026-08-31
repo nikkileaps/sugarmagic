@@ -337,9 +337,11 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
         persona: input.state.persona
           ? {
               personaCard: input.state.persona.personaCard,
-              coreKnowledge: input.state.persona.coreKnowledge
+              coreKnowledge: input.state.persona.coreKnowledge,
+              recoverySections: input.state.persona.recoverySections
             }
           : null,
+        playerIdentity: input.state.playerIdentity ?? null,
         // Plan 073.3 — memory digest, loaded once by the memory middleware and
         // memoized in execution.state; slots into the byte-stable system half.
         memoryDigest:
@@ -451,6 +453,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
           text = normalizeNpcSpeech(buildFallbackReply({
             interpret: input.interpret,
             responseIntent: input.plan.responseIntent,
+            ...(input.plan.recoveryStrategy
+              ? { recoveryStrategy: input.plan.recoveryStrategy }
+              : {}),
             activeQuestDisplayName
           }));
         }
@@ -461,6 +466,9 @@ export class GenerateStage implements TurnStage<GenerateStageInput, GenerateResu
       text = normalizeNpcSpeech(buildFallbackReply({
         interpret: input.interpret,
         responseIntent: input.plan.responseIntent,
+        ...(input.plan.recoveryStrategy
+          ? { recoveryStrategy: input.plan.recoveryStrategy }
+          : {}),
         activeQuestDisplayName
       }));
     }

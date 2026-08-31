@@ -350,6 +350,18 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
   })();
   const actionsDisabled = actionState.running || actionsDisabledReason != null;
 
+  // Every lore response reports what the reader skipped -- a page with no
+  // frontmatter id, an unknown recovery strategy, an unreadable source path.
+  // One list rather than one per result box, deduped because the same warning
+  // legitimately rides out on both the status and the ingest answer.
+  const loreWarnings = [
+    ...new Set([
+      ...(actionState.status?.warnings ?? []),
+      ...(actionState.status?.ingest?.warnings ?? []),
+      ...(actionState.ingest?.warnings ?? [])
+    ])
+  ];
+
   return (
     <Stack gap="lg" p="xl" h="100%" style={{ minHeight: 0, overflowY: "auto" }}>
       <Alert color="blue" variant="light" title="Where SugarAgent config lives">
@@ -438,6 +450,18 @@ function SugarAgentCenterPanel(props: SugarAgentCenterPanelProps) {
             <Code block style={{ whiteSpace: "pre-wrap" }}>{actionState.error}</Code>
           </Stack>
         </Box>
+      ) : null}
+
+      {loreWarnings.length > 0 ? (
+        <Alert color="yellow" variant="light" title="Lore Warnings">
+          <Stack gap={4}>
+            {loreWarnings.map((warning) => (
+              <Text key={warning} size="sm">
+                {warning}
+              </Text>
+            ))}
+          </Stack>
+        </Alert>
       ) : null}
 
       {actionState.ping ? (

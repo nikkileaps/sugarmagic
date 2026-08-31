@@ -46,6 +46,12 @@ export interface ConversationSelectionContext {
   npcDescription?: string | null;
   interactionMode?: ConversationInteractionMode;
   lorePageId?: string | null;
+  /**
+   * The lore page for the character the PLAYER is playing, so a provider can
+   * tell an NPC who it is talking to. Distinct from `lorePageId`, which is the
+   * NPC's own page.
+   */
+  playerLorePageId?: string | null;
   activeQuest?: ConversationActiveQuestContext | null;
   scriptedFollowupDialogueDefinitionId?: string | null;
   targetLanguage?: string | null;

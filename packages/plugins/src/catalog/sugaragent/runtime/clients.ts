@@ -4,6 +4,7 @@ import type { LoadedPersona, LoreCardSection, RetrievedEvidenceItem } from "./ty
 // it is the "third consumer" (the card fetch) named in Plan 072.1.
 import {
   designateLoreSections,
+  parseRecoveryStrategies,
   type DesignatableLoreSection
 } from "../../../deployment/gateway/lore-designation";
 
@@ -453,6 +454,13 @@ export interface ResolvedLorePage {
   sectionCount: number;
   body: string;
   sections: ResolvedLorePageSection[];
+  /**
+   * `## Recovery`, delivered separately from `sections` so that only the
+   * conversation runtime sees it. Absent when the page has none, and absent
+   * from a gateway that predates the split -- which reads as a character with
+   * no authored moves, the same as not writing the section.
+   */
+  recoverySections?: ResolvedLorePageSection[];
 }
 
 export interface LoreResolveResult {
@@ -517,14 +525,23 @@ export class SugarAgentGatewayLorePageResolver implements LorePageResolver {
   }
 }
 
-function degradedPersona(pageId: string | null): LoadedPersona {
+/**
+ * The persona a conversation runs on when the page could not be read: name and
+ * game tone only. The one builder for it, so a new layer cannot be added to
+ * some construction sites and missed at others.
+ *
+ * [LAW:one-source-of-truth] The provider's session-start loader calls this too.
+ */
+export function degradedPersona(pageId: string | null): LoadedPersona {
   return {
     pageId,
     loaded: false,
     fallbackReason: "persona-unavailable",
     personaCard: [],
     coreKnowledge: [],
-    digest: ""
+    digest: "",
+    recoveryStrategies: [],
+    recoverySections: []
   };
 }
 
@@ -577,6 +594,10 @@ export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
     const { personaCard, coreKnowledge } = designateLoreSections(
       page.sections as DesignatableLoreSection[]
     );
+    // Recovery arrives on its own field: the resolve route keeps it out of
+    // `sections` so no other consumer of that array is handed a brief meant
+    // for whoever writes this character.
+    const recovery = (page.recoverySections ?? []) as DesignatableLoreSection[];
     const toCardSection = (section: DesignatableLoreSection) => ({
       heading: section.heading,
       slug: section.slug,
@@ -589,7 +610,13 @@ export class SugarAgentGatewayPersonaProvider implements PersonaLoader {
       fallbackReason: null,
       personaCard: card,
       coreKnowledge: coreKnowledge.map(toCardSection),
-      digest: buildPersonaDigest(card)
+      digest: buildPersonaDigest(card),
+      // A name the page asks for that is not a move is dropped here and
+      // reported by the lore reader, where the author is the one looking.
+      recoveryStrategies: recovery.flatMap(
+        (section) => parseRecoveryStrategies(section.content).strategies
+      ),
+      recoverySections: recovery.map(toCardSection)
     };
   }
 }
